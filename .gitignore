@@ -1,0 +1,37 @@
+# Rust
+target/
+Cargo.lock
+
+# Environment
+.env
+uploads/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Node (frontend)
+node_modules/
+frontend/.svelte-kit/
+frontend/build/
+frontend/.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Debug / dev artifacts
+*.stats.json
+.pantheon-workflow/
+.oh-my-opencode-pi*
+.oh-my-opencode-pi-debug/
+.ruff_cache/
+
+# Plans / handover (not source code)
+PLAN.md
+HANDOVER.md
+
+# sqlx offline cache
+.sqlx/

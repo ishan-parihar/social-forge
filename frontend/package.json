@@ -1,0 +1,20 @@
+{
+  "name": "postiz-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev --port 4200",
+    "build": "vite build",
+    "preview": "vite preview --port 4200"
+  },
+  "devDependencies": {
+    "@sveltejs/adapter-static": "^3.0.8",
+    "@sveltejs/kit": "^2.20.2",
+    "@sveltejs/vite-plugin-svelte": "^5.0.3",
+    "autoprefixer": "^10.4.20",
+    "svelte": "^5.25.8",
+    "tailwindcss": "^3.4.17",
+    "vite": "^6.3.1"
+  }
+}

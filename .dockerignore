@@ -1,0 +1,33 @@
+# Secrets
+.env
+.env.*
+
+# Build artifacts
+target/
+
+# Frontend
+frontend/node_modules
+frontend/.svelte-kit
+frontend/build
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Media uploads (not needed for build)
+uploads/
+
+# Tests
+tests/
+docs/
+*.md

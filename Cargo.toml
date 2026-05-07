@@ -1,0 +1,96 @@
+[package]
+name = "postiz-rust"
+version = "0.1.0"
+edition = "2021"
+description = "Social media scheduling platform — Rust backend with axum REST API + rmcp MCP server, JWT auth, SSE realtime, and in-process scheduler"
+authors = ["Ishan Parihar"]
+license = "MIT"
+repository = "https://github.com/ishan-parihar/postiz-rust"
+homepage = "https://github.com/ishan-parihar/postiz-rust"
+keywords = ["mcp", "social-media", "scheduler", "axum", "postiz"]
+categories = ["command-line-utilities", "web-programming::http-server"]
+
+[[bin]]
+name = "postiz-rust"
+path = "src/main.rs"
+
+[dependencies]
+# Web framework
+axum = { version = "0.8", features = ["macros"] }
+mime = "0.3"
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "fs", "limit", "trace"] }
+
+# MCP
+rmcp = { version = "1.6", features = [
+  "server",
+  "macros",
+  "transport-io",
+  "schemars",
+] }
+schemars = { version = "1.0", features = ["derive", "chrono04", "uuid1"] }
+
+# Database
+sqlx = { version = "0.8", features = [
+  "runtime-tokio",
+  "postgres",
+  "uuid",
+  "chrono",
+  "json",
+  "migrate",
+] }
+
+# Auth
+argon2 = "0.5"
+jsonwebtoken = "9"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_with = "3"
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+async-trait = "0.1"
+futures = "0.3"
+tokio-stream = { version = "0.1", features = ["sync"] }
+
+# HTTP client
+reqwest = { version = "0.12", default-features = false, features = [
+  "json",
+  "rustls-tls",
+] }
+
+# Time + UUID
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+
+# Error handling
+thiserror = "2"
+anyhow = "1"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# Crypto
+rand = "0.8"
+base64 = { version = "0.22", features = ["std"] }
+sha2 = "0.10"
+hex = "0.4"
+
+# SSE + async streaming
+async-stream = "0.3"
+
+# Config
+dotenvy = "0.15"
+
+# Multipart (media uploads)
+axum-extra = { version = "0.10", features = ["multipart"] }
+
+# MIME type detection for uploads
+mime_guess = "2"
+
+# URL encoding for OAuth
+url = { version = "2", features = ["serde"] }
+urlencoding = "2"
