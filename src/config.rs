@@ -22,9 +22,29 @@ pub struct Config {
     pub facebook_client_secret: Option<String>,
     pub instagram_client_id: Option<String>,
     pub instagram_client_secret: Option<String>,
+    pub threads_client_id: Option<String>,
+    pub threads_client_secret: Option<String>,
+    pub youtube_client_id: Option<String>,
+    pub youtube_client_secret: Option<String>,
+    pub reddit_client_id: Option<String>,
+    pub reddit_client_secret: Option<String>,
+    pub reddit_username: Option<String>,
+    pub reddit_password: Option<String>,
+    pub reddit_access_token: Option<String>,
+    pub reddit_refresh_token: Option<String>,
+    pub discord_client_id: Option<String>,
+    pub discord_client_secret: Option<String>,
+    pub discord_bot_token: Option<String>,
+    pub telegram_token: Option<String>,
+    pub pinterest_client_id: Option<String>,
+    pub pinterest_client_secret: Option<String>,
+    pub instagram_app_id: Option<String>,
+    pub instagram_app_secret: Option<String>,
+
+    // Token encryption at rest
+    pub token_encryption_key: Option<String>,
 
     // Media storage
-    pub media_storage: String,
     pub media_dir: String,
 }
 
@@ -45,7 +65,25 @@ impl Config {
             facebook_client_secret: opt("FACEBOOK_CLIENT_SECRET"),
             instagram_client_id: opt("INSTAGRAM_CLIENT_ID"),
             instagram_client_secret: opt("INSTAGRAM_CLIENT_SECRET"),
-            media_storage: opt("MEDIA_STORAGE").unwrap_or_else(|| "local".into()),
+            threads_client_id: opt("THREADS_CLIENT_ID"),
+            threads_client_secret: opt("THREADS_CLIENT_SECRET"),
+            youtube_client_id: opt("YOUTUBE_CLIENT_ID"),
+            youtube_client_secret: opt("YOUTUBE_CLIENT_SECRET"),
+            reddit_client_id: opt("REDDIT_CLIENT_ID"),
+            reddit_client_secret: opt("REDDIT_CLIENT_SECRET"),
+            reddit_username: opt("REDDIT_USERNAME"),
+            reddit_password: opt("REDDIT_PASSWORD"),
+            reddit_access_token: opt("REDDIT_ACCESS_TOKEN"),
+            reddit_refresh_token: opt("REDDIT_REFRESH_TOKEN"),
+            discord_client_id: opt("DISCORD_CLIENT_ID"),
+            discord_client_secret: opt("DISCORD_CLIENT_SECRET"),
+            discord_bot_token: opt("DISCORD_BOT_TOKEN"),
+            telegram_token: opt("TELEGRAM_TOKEN"),
+            pinterest_client_id: opt("PINTEREST_CLIENT_ID"),
+            pinterest_client_secret: opt("PINTEREST_CLIENT_SECRET"),
+            instagram_app_id: opt("INSTAGRAM_APP_ID"),
+            instagram_app_secret: opt("INSTAGRAM_APP_SECRET"),
+            token_encryption_key: opt("TOKEN_ENCRYPTION_KEY"),
             media_dir: opt("MEDIA_DIR").unwrap_or_else(|| "./uploads".into()),
         })
     }
@@ -55,6 +93,10 @@ impl Config {
         match provider {
             "x" => Some((self.x_client_id.clone()?, self.x_client_secret.clone()?)),
             "linkedin" => Some((
+                self.linkedin_client_id.clone()?,
+                self.linkedin_client_secret.clone()?,
+            )),
+            "linkedin-page" => Some((
                 self.linkedin_client_id.clone()?,
                 self.linkedin_client_secret.clone()?,
             )),
@@ -70,8 +112,55 @@ impl Config {
                 self.instagram_client_id.clone()?,
                 self.instagram_client_secret.clone()?,
             )),
+            "instagram-standalone" => Some((
+                self.instagram_app_id.clone()?,
+                self.instagram_app_secret.clone()?,
+            )),
+            "threads" => Some((
+                self.threads_client_id.clone()?,
+                self.threads_client_secret.clone()?,
+            )),
+            "youtube" => Some((
+                self.youtube_client_id.clone()?,
+                self.youtube_client_secret.clone()?,
+            )),
+            "reddit" => {
+                let id = self.reddit_client_id.clone()?;
+                let secret = self.reddit_client_secret.clone()?;
+                Some((id, secret))
+            }
+            "discord" => Some((
+                self.discord_client_id.clone()?,
+                self.discord_client_secret.clone()?,
+            )),
+            "telegram" => Some(("".into(), self.telegram_token.clone()?)),
+            "pinterest" => Some((
+                self.pinterest_client_id.clone()?,
+                self.pinterest_client_secret.clone()?,
+            )),
+            "skool" => Some(("skool".into(), "chrome_extension".into())),
             _ => None,
         }
+    }
+
+    /// Returns Reddit username for password grant auth
+    pub fn reddit_username(&self) -> Option<String> {
+        self.reddit_username.clone()
+    }
+
+    /// Returns Reddit password for password grant auth
+    pub fn reddit_password(&self) -> Option<String> {
+        self.reddit_password.clone()
+    }
+
+    /// Returns Reddit access token (pre-authorized via auth code flow)
+    pub fn reddit_access_token(&self) -> Option<String> {
+        self.reddit_access_token.clone()
+    }
+
+    /// Returns Reddit refresh token (obtained via auth code flow)
+    pub fn reddit_refresh_token(&self) -> Option<String> {
+        self.reddit_refresh_token.clone()
     }
 }
 

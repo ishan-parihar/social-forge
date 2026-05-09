@@ -58,33 +58,50 @@ def ok_val(name, condition):
         FAIL += 1
 
 
-def get_int_id():
-    """Create a test integration and return its UUID."""
-    env = {**os.environ, "PGPASSWORD": "postiz"}
+PG_ENV = {**os.environ, "PGPASSWORD": "postiz"}
+
+
+def psql(sql):
+    """Run a psql command and return stdout."""
     r = subprocess.run(
-        [
-            "psql",
-            "-h",
-            "localhost",
-            "-U",
-            "postiz",
-            "-d",
-            "postiz",
-            "-tA",
-            "-c",
-            "INSERT INTO integrations (user_id, provider_identifier, provider_name, internal_id, access_token) "
-            "SELECT id, 'x', 'X (Twitter)', 'test123', 'test-token' "
-            "FROM users WHERE email = 'test@postiz.dev' RETURNING id;",
-        ],
+        ["psql", "-h", "localhost", "-U", "postiz", "-d", "postiz", "-tA", "-c", sql],
         capture_output=True,
         text=True,
-        env=env,
+        env=PG_ENV,
     )
-    # Strip any whitespace/newlines from psql output
     val = r.stdout.strip().splitlines()[0].strip() if r.stdout.strip() else ""
+    return val
+
+
+def cleanup_test_user():
+    """Remove any pre-existing test data."""
+    psql(
+        "DELETE FROM media WHERE user_id IN (SELECT id FROM users WHERE email = 'test@postiz.dev')"
+    )
+    psql(
+        "DELETE FROM integrations WHERE user_id IN (SELECT id FROM users WHERE email = 'test@postiz.dev')"
+    )
+    psql(
+        "DELETE FROM posts WHERE user_id IN (SELECT id FROM users WHERE email = 'test@postiz.dev')"
+    )
+    psql("DELETE FROM users WHERE email = 'test@postiz.dev'")
+    print("  Cleaned up any pre-existing test data")
+
+
+def get_int_id():
+    """Create a test integration and return its UUID."""
+    val = psql(
+        "INSERT INTO integrations (user_id, provider_identifier, provider_name, internal_id, access_token) "
+        "SELECT id, 'x', 'X (Twitter)', 'test123', 'test-token' "
+        "FROM users WHERE email = 'test@postiz.dev' RETURNING id;"
+    )
     print(f"    INT_ID={val}")
     return val
 
+
+# ── Setup: Clean test user ─────────────────────
+print("── Setup ──")
+cleanup_test_user()
 
 # ── 1. Health ────────────────────────────────────
 print("── 1. Health Check ──")

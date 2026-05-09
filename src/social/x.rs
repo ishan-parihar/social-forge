@@ -49,6 +49,13 @@ impl SocialProvider for XProvider {
             "tweet.write".into(),
             "users.read".into(),
             "offline.access".into(),
+            "bookmark.read".into(),
+            "bookmark.write".into(),
+            "like.read".into(),
+            "like.write".into(),
+            "follows.read".into(),
+            "follows.write".into(),
+            "list.read".into(),
         ]
     }
 
@@ -88,16 +95,26 @@ impl SocialProvider for XProvider {
         code_verifier: &str,
         redirect_uri: &str,
     ) -> Result<AuthToken, ProviderError> {
-        let json = common::exchange_code_for_token(
-            &self.http,
-            self.oauth_token_endpoint(),
-            &self.client_id,
-            &self.client_secret,
-            code,
-            code_verifier,
-            redirect_uri,
-        )
-        .await?;
+        // X/Twitter OAuth 2.0 PKCE — public client, no client_secret needed
+        let credentials = base64::Engine::encode(
+            &base64::engine::general_purpose::STANDARD,
+            format!("{}:{}", self.client_id, self.client_secret),
+        );
+        let json: serde_json::Value = self
+            .http
+            .post(self.oauth_token_endpoint())
+            .header("Authorization", format!("Basic {credentials}"))
+            .form(&[
+                ("grant_type", "authorization_code"),
+                ("code", code),
+                ("code_verifier", code_verifier),
+                ("redirect_uri", redirect_uri),
+                ("client_id", &self.client_id),
+            ])
+            .send()
+            .await?
+            .json()
+            .await?;
 
         let access_token = json["access_token"]
             .as_str()
@@ -139,14 +156,23 @@ impl SocialProvider for XProvider {
         &self,
         refresh_token: &str,
     ) -> Result<AuthToken, ProviderError> {
-        let json = common::refresh_access_token(
-            &self.http,
-            self.oauth_token_endpoint(),
-            &self.client_id,
-            &self.client_secret,
-            refresh_token,
-        )
-        .await?;
+        let credentials = base64::Engine::encode(
+            &base64::engine::general_purpose::STANDARD,
+            format!("{}:{}", self.client_id, self.client_secret),
+        );
+        let json: serde_json::Value = self
+            .http
+            .post(self.oauth_token_endpoint())
+            .header("Authorization", format!("Basic {credentials}"))
+            .form(&[
+                ("grant_type", "refresh_token"),
+                ("refresh_token", refresh_token),
+                ("client_id", &self.client_id),
+            ])
+            .send()
+            .await?
+            .json()
+            .await?;
 
         let access_token = json["access_token"]
             .as_str()
@@ -217,16 +243,765 @@ impl SocialProvider for XProvider {
             ))
         }
     }
+
+    async fn fetch_page_info(
+        &self,
+        _access_token: &str,
+        _page_id: &str,
+    ) -> Result<PageInfo, ProviderError> {
+        Err(ProviderError::Api("X does not support page management".into()))
+    }
 }
 
 impl XProvider {
+    /// Download media from URL or read from local filesystem
+    async fn fetch_media_bytes(&self, url: &str) -> Result<Vec<u8>, ProviderError> {
+        if url.starts_with("http://") || url.starts_with("https://") {
+            let resp = self.http.get(url).send().await.map_err(|e| {
+                ProviderError::Api(format!("Failed to fetch media from {url}: {e}"))
+            })?;
+            let status = resp.status();
+            if !status.is_success() {
+                return Err(ProviderError::Api(format!(
+                    "Failed to fetch media: HTTP {status}"
+                )));
+            }
+            resp.bytes()
+                .await
+                .map(|b| b.to_vec())
+                .map_err(|e| ProviderError::Api(format!("Failed to read media body: {e}")))
+        } else {
+            // Local filesystem path
+            tokio::fs::read(url)
+                .await
+                .map_err(|e| ProviderError::Api(format!("Failed to read local media {url}: {e}")))
+        }
+    }
+
+    /// Upload media to Twitter using v1.1 media/upload (INIT → APPEND → FINALIZE)
+    async fn upload_single_media(
+        &self,
+        access_token: &str,
+        media_url: &str,
+        mime_type: &str,
+    ) -> Result<String, ProviderError> {
+        let bytes = self.fetch_media_bytes(media_url).await?;
+        let total_bytes = bytes.len();
+
+        // Determine media category for Twitter
+        let media_category = if mime_type.starts_with("video/") {
+            "tweet_video"
+        } else if mime_type == "image/gif" {
+            "tweet_gif"
+        } else {
+            "tweet_image"
+        };
+
+        let api_base = "https://upload.twitter.com/1.1/media/upload.json";
+
+        // ── INIT ────────────────────────────────────────────
+        let init_resp: serde_json::Value = self
+            .http
+            .post(api_base)
+            .header("Authorization", format!("Bearer {access_token}"))
+            .form(&[
+                ("command", "INIT"),
+                ("total_bytes", &total_bytes.to_string()),
+                ("media_type", mime_type),
+                ("media_category", media_category),
+            ])
+            .send()
+            .await?
+            .json()
+            .await?;
+
+        let media_id = init_resp["media_id_string"]
+            .as_str()
+            .ok_or_else(|| {
+                ProviderError::Api(format!(
+                    "Twitter INIT failed: {:?}",
+                    init_resp
+                ))
+            })?
+            .to_string();
+
+        // ── APPEND ──────────────────────────────────────────
+        use reqwest::multipart;
+
+        let mid = media_id.clone();
+        let part = multipart::Part::bytes(bytes.clone())
+            .mime_str(mime_type)
+            .map_err(|e| ProviderError::Api(e.to_string()))?
+            .file_name("media");
+
+        self.http
+            .post(api_base)
+            .header("Authorization", format!("Bearer {access_token}"))
+            .multipart(
+                multipart::Form::new()
+                    .text("command", "APPEND")
+                    .text("media_id", mid.clone())
+                    .text("segment_index", "0")
+                    .part("media", part),
+            )
+            .send()
+            .await?;
+
+        // ── FINALIZE ────────────────────────────────────────
+        let finalize_resp: serde_json::Value = self
+            .http
+            .post(api_base)
+            .header("Authorization", format!("Bearer {access_token}"))
+            .form(&[
+                ("command", "FINALIZE"),
+                ("media_id", &mid),
+            ])
+            .send()
+            .await?
+            .json()
+            .await?;
+
+        // Check for processing_info (async video processing may be needed)
+        if let Some(processing_info) = finalize_resp
+            .get("processing_info")
+            .and_then(|p| p.get("state"))
+        {
+            if processing_info == "pending" || processing_info == "in_progress" {
+                // For MVP, poll briefly or accept the media ID
+                tracing::warn!(
+                    "Media processing still {processing_info} for media_id={media_id}"
+                );
+            }
+        }
+
+        Ok(media_id)
+    }
+
     async fn upload_media(
         &self,
-        _access_token: &str,
-        _media: &[MediaAttachment],
+        access_token: &str,
+        media: &[MediaAttachment],
     ) -> Result<Vec<String>, ProviderError> {
-        // X/Twitter media upload requires chunked upload via
-        // media/upload (async) endpoint. Simplified for MVP.
-        Ok(vec![])
+        if media.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let mut media_ids = Vec::with_capacity(media.len());
+        for attachment in media {
+            let id = self
+                .upload_single_media(access_token, &attachment.url, &attachment.mime_type)
+                .await?;
+            media_ids.push(id);
+        }
+
+        Ok(media_ids)
+    }
+
+    // ── X API v2 methods ────────────────────────────────────────
+
+    pub async fn get_me(&self, access_token: &str) -> Result<serde_json::Value, ProviderError> {
+        let resp = self
+            .http
+            .get("https://api.twitter.com/2/users/me?user.fields=profile_image_url,description")
+            .header("Authorization", format!("Bearer {access_token}"))
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 429 {
+            Err(ProviderError::RateLimited("X API rate limit".into()))
+        } else if json.get("title").and_then(|t| t.as_str()) == Some("Unauthorized")
+            || status == 401
+        {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let detail = json.get("detail").and_then(|d| d.as_str()).unwrap_or("Unknown API error");
+            Err(ProviderError::Api(detail.to_string()))
+        }
+    }
+
+    pub async fn user_lookup(&self, access_token: &str, user_id: &str) -> Result<serde_json::Value, ProviderError> {
+        let resp = self
+            .http
+            .get(format!("https://api.twitter.com/2/users/{user_id}?user.fields=profile_image_url,description,public_metrics"))
+            .header("Authorization", format!("Bearer {access_token}"))
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 429 {
+            Err(ProviderError::RateLimited("X API rate limit".into()))
+        } else if json.get("title").and_then(|t| t.as_str()) == Some("Unauthorized")
+            || status == 401
+        {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let detail = json.get("detail").and_then(|d| d.as_str()).unwrap_or("Unknown API error");
+            Err(ProviderError::Api(detail.to_string()))
+        }
+    }
+
+    pub async fn user_lookup_by_username(&self, access_token: &str, username: &str) -> Result<serde_json::Value, ProviderError> {
+        let resp = self
+            .http
+            .get(format!("https://api.twitter.com/2/users/by/username/{username}?user.fields=profile_image_url,description,public_metrics"))
+            .header("Authorization", format!("Bearer {access_token}"))
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 429 {
+            Err(ProviderError::RateLimited("X API rate limit".into()))
+        } else if json.get("title").and_then(|t| t.as_str()) == Some("Unauthorized")
+            || status == 401
+        {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let detail = json.get("detail").and_then(|d| d.as_str()).unwrap_or("Unknown API error");
+            Err(ProviderError::Api(detail.to_string()))
+        }
+    }
+
+    pub async fn home_timeline(
+        &self,
+        access_token: &str,
+        user_id: &str,
+        max_results: u32,
+        pagination_token: Option<&str>,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let max_results = max_results.min(100);
+        let mut url = format!(
+            "https://api.twitter.com/2/users/{user_id}/timelines/reverse_chronological?max_results={max_results}&tweet.fields=created_at,public_metrics,attachments&user.fields=profile_image_url&expansions=author_id,attachments.media_keys&media.fields=url,preview_image_url"
+        );
+        if let Some(token) = pagination_token {
+            url.push_str(&format!("&pagination_token={token}"));
+        }
+        let resp = self
+            .http
+            .get(url)
+            .header("Authorization", format!("Bearer {access_token}"))
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 429 {
+            Err(ProviderError::RateLimited("X API rate limit".into()))
+        } else if json.get("title").and_then(|t| t.as_str()) == Some("Unauthorized")
+            || status == 401
+        {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let detail = json.get("detail").and_then(|d| d.as_str()).unwrap_or("Unknown API error");
+            Err(ProviderError::Api(detail.to_string()))
+        }
+    }
+
+    pub async fn user_tweets(
+        &self,
+        access_token: &str,
+        user_id: &str,
+        max_results: u32,
+        pagination_token: Option<&str>,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let max_results = max_results.min(100);
+        let mut url = format!(
+            "https://api.twitter.com/2/users/{user_id}/tweets?max_results={max_results}&tweet.fields=created_at,public_metrics&expansions=attachments.media_keys&media.fields=url,preview_image_url"
+        );
+        if let Some(token) = pagination_token {
+            url.push_str(&format!("&pagination_token={token}"));
+        }
+        let resp = self
+            .http
+            .get(url)
+            .header("Authorization", format!("Bearer {access_token}"))
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 429 {
+            Err(ProviderError::RateLimited("X API rate limit".into()))
+        } else if json.get("title").and_then(|t| t.as_str()) == Some("Unauthorized")
+            || status == 401
+        {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let detail = json.get("detail").and_then(|d| d.as_str()).unwrap_or("Unknown API error");
+            Err(ProviderError::Api(detail.to_string()))
+        }
+    }
+
+    pub async fn tweet_detail(
+        &self,
+        access_token: &str,
+        tweet_id: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let resp = self
+            .http
+            .get(format!("https://api.twitter.com/2/tweets/{tweet_id}?tweet.fields=created_at,public_metrics,attachments,referenced_tweets&expansions=author_id,attachments.media_keys,referenced_tweets.id&user.fields=profile_image_url&media.fields=url,preview_image_url"))
+            .header("Authorization", format!("Bearer {access_token}"))
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 429 {
+            Err(ProviderError::RateLimited("X API rate limit".into()))
+        } else if json.get("title").and_then(|t| t.as_str()) == Some("Unauthorized")
+            || status == 401
+        {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let detail = json.get("detail").and_then(|d| d.as_str()).unwrap_or("Unknown API error");
+            Err(ProviderError::Api(detail.to_string()))
+        }
+    }
+
+    pub async fn search_tweets(
+        &self,
+        access_token: &str,
+        query: &str,
+        max_results: u32,
+        next_token: Option<&str>,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let max_results = max_results.min(100);
+        let encoded_query = urlencoding::encode(query);
+        let mut url = format!(
+            "https://api.twitter.com/2/tweets/search/recent?query={encoded_query}&max_results={max_results}&tweet.fields=created_at,public_metrics,attachments&expansions=author_id,attachments.media_keys&user.fields=profile_image_url&media.fields=url,preview_image_url"
+        );
+        if let Some(token) = next_token {
+            url.push_str(&format!("&next_token={token}"));
+        }
+        let resp = self
+            .http
+            .get(url)
+            .header("Authorization", format!("Bearer {access_token}"))
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 429 {
+            Err(ProviderError::RateLimited("X API rate limit".into()))
+        } else if json.get("title").and_then(|t| t.as_str()) == Some("Unauthorized")
+            || status == 401
+        {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let detail = json.get("detail").and_then(|d| d.as_str()).unwrap_or("Unknown API error");
+            Err(ProviderError::Api(detail.to_string()))
+        }
+    }
+
+    pub async fn delete_tweet(
+        &self,
+        access_token: &str,
+        tweet_id: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let resp = self
+            .http
+            .delete(format!("https://api.twitter.com/2/tweets/{tweet_id}"))
+            .header("Authorization", format!("Bearer {access_token}"))
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 429 {
+            Err(ProviderError::RateLimited("X API rate limit".into()))
+        } else if json.get("title").and_then(|t| t.as_str()) == Some("Unauthorized")
+            || status == 401
+        {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let detail = json.get("detail").and_then(|d| d.as_str()).unwrap_or("Unknown API error");
+            Err(ProviderError::Api(detail.to_string()))
+        }
+    }
+
+    // ── Write operations (may need expanded scopes) ──
+
+    pub async fn like_tweet(
+        &self,
+        access_token: &str,
+        user_id: &str,
+        tweet_id: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let resp = self
+            .http
+            .post(format!("https://api.twitter.com/2/users/{user_id}/likes"))
+            .header("Authorization", format!("Bearer {access_token}"))
+            .json(&serde_json::json!({"tweet_id": tweet_id}))
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 429 {
+            Err(ProviderError::RateLimited("X API rate limit".into()))
+        } else if json.get("title").and_then(|t| t.as_str()) == Some("Unauthorized")
+            || status == 401
+        {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let detail = json.get("detail").and_then(|d| d.as_str()).unwrap_or("Unknown API error");
+            Err(ProviderError::Api(detail.to_string()))
+        }
+    }
+
+    pub async fn unlike_tweet(
+        &self,
+        access_token: &str,
+        user_id: &str,
+        tweet_id: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let resp = self
+            .http
+            .delete(format!("https://api.twitter.com/2/users/{user_id}/likes/{tweet_id}"))
+            .header("Authorization", format!("Bearer {access_token}"))
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 429 {
+            Err(ProviderError::RateLimited("X API rate limit".into()))
+        } else if json.get("title").and_then(|t| t.as_str()) == Some("Unauthorized")
+            || status == 401
+        {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let detail = json.get("detail").and_then(|d| d.as_str()).unwrap_or("Unknown API error");
+            Err(ProviderError::Api(detail.to_string()))
+        }
+    }
+
+    pub async fn retweet(
+        &self,
+        access_token: &str,
+        user_id: &str,
+        tweet_id: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let resp = self
+            .http
+            .post(format!("https://api.twitter.com/2/users/{user_id}/retweets"))
+            .header("Authorization", format!("Bearer {access_token}"))
+            .json(&serde_json::json!({"tweet_id": tweet_id}))
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 429 {
+            Err(ProviderError::RateLimited("X API rate limit".into()))
+        } else if json.get("title").and_then(|t| t.as_str()) == Some("Unauthorized")
+            || status == 401
+        {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let detail = json.get("detail").and_then(|d| d.as_str()).unwrap_or("Unknown API error");
+            Err(ProviderError::Api(detail.to_string()))
+        }
+    }
+
+    pub async fn unretweet(
+        &self,
+        access_token: &str,
+        user_id: &str,
+        tweet_id: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let resp = self
+            .http
+            .delete(format!("https://api.twitter.com/2/users/{user_id}/retweets/{tweet_id}"))
+            .header("Authorization", format!("Bearer {access_token}"))
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 429 {
+            Err(ProviderError::RateLimited("X API rate limit".into()))
+        } else if json.get("title").and_then(|t| t.as_str()) == Some("Unauthorized")
+            || status == 401
+        {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let detail = json.get("detail").and_then(|d| d.as_str()).unwrap_or("Unknown API error");
+            Err(ProviderError::Api(detail.to_string()))
+        }
+    }
+
+    pub async fn bookmarks(
+        &self,
+        access_token: &str,
+        user_id: &str,
+        max_results: u32,
+        pagination_token: Option<&str>,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let max_results = max_results.min(100);
+        let mut url = format!(
+            "https://api.twitter.com/2/users/{user_id}/bookmarks?max_results={max_results}&tweet.fields=created_at,public_metrics,attachments&expansions=author_id,attachments.media_keys&media.fields=url,preview_image_url&user.fields=profile_image_url"
+        );
+        if let Some(token) = pagination_token {
+            url.push_str(&format!("&pagination_token={token}"));
+        }
+        let resp = self
+            .http
+            .get(url)
+            .header("Authorization", format!("Bearer {access_token}"))
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 429 {
+            Err(ProviderError::RateLimited("X API rate limit".into()))
+        } else if json.get("title").and_then(|t| t.as_str()) == Some("Unauthorized")
+            || status == 401
+        {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let detail = json.get("detail").and_then(|d| d.as_str()).unwrap_or("Unknown API error");
+            Err(ProviderError::Api(detail.to_string()))
+        }
+    }
+
+    pub async fn bookmark_tweet(
+        &self,
+        access_token: &str,
+        user_id: &str,
+        tweet_id: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let resp = self
+            .http
+            .post(format!("https://api.twitter.com/2/users/{user_id}/bookmarks"))
+            .header("Authorization", format!("Bearer {access_token}"))
+            .json(&serde_json::json!({"tweet_id": tweet_id}))
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 429 {
+            Err(ProviderError::RateLimited("X API rate limit".into()))
+        } else if json.get("title").and_then(|t| t.as_str()) == Some("Unauthorized")
+            || status == 401
+        {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let detail = json.get("detail").and_then(|d| d.as_str()).unwrap_or("Unknown API error");
+            Err(ProviderError::Api(detail.to_string()))
+        }
+    }
+
+    pub async fn unbookmark_tweet(
+        &self,
+        access_token: &str,
+        user_id: &str,
+        tweet_id: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let resp = self
+            .http
+            .delete(format!("https://api.twitter.com/2/users/{user_id}/bookmarks/{tweet_id}"))
+            .header("Authorization", format!("Bearer {access_token}"))
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 429 {
+            Err(ProviderError::RateLimited("X API rate limit".into()))
+        } else if json.get("title").and_then(|t| t.as_str()) == Some("Unauthorized")
+            || status == 401
+        {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let detail = json.get("detail").and_then(|d| d.as_str()).unwrap_or("Unknown API error");
+            Err(ProviderError::Api(detail.to_string()))
+        }
+    }
+
+    pub async fn followers(
+        &self,
+        access_token: &str,
+        user_id: &str,
+        max_results: u32,
+        pagination_token: Option<&str>,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let max_results = max_results.min(100);
+        let mut url = format!(
+            "https://api.twitter.com/2/users/{user_id}/followers?max_results={max_results}&user.fields=profile_image_url,description,public_metrics"
+        );
+        if let Some(token) = pagination_token {
+            url.push_str(&format!("&pagination_token={token}"));
+        }
+        let resp = self
+            .http
+            .get(url)
+            .header("Authorization", format!("Bearer {access_token}"))
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 429 {
+            Err(ProviderError::RateLimited("X API rate limit".into()))
+        } else if json.get("title").and_then(|t| t.as_str()) == Some("Unauthorized")
+            || status == 401
+        {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let detail = json.get("detail").and_then(|d| d.as_str()).unwrap_or("Unknown API error");
+            Err(ProviderError::Api(detail.to_string()))
+        }
+    }
+
+    pub async fn following(
+        &self,
+        access_token: &str,
+        user_id: &str,
+        max_results: u32,
+        pagination_token: Option<&str>,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let max_results = max_results.min(100);
+        let mut url = format!(
+            "https://api.twitter.com/2/users/{user_id}/following?max_results={max_results}&user.fields=profile_image_url,description,public_metrics"
+        );
+        if let Some(token) = pagination_token {
+            url.push_str(&format!("&pagination_token={token}"));
+        }
+        let resp = self
+            .http
+            .get(url)
+            .header("Authorization", format!("Bearer {access_token}"))
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 429 {
+            Err(ProviderError::RateLimited("X API rate limit".into()))
+        } else if json.get("title").and_then(|t| t.as_str()) == Some("Unauthorized")
+            || status == 401
+        {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let detail = json.get("detail").and_then(|d| d.as_str()).unwrap_or("Unknown API error");
+            Err(ProviderError::Api(detail.to_string()))
+        }
+    }
+
+    pub async fn follow_user(
+        &self,
+        access_token: &str,
+        user_id: &str,
+        target_user_id: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let resp = self
+            .http
+            .post(format!("https://api.twitter.com/2/users/{user_id}/following"))
+            .header("Authorization", format!("Bearer {access_token}"))
+            .json(&serde_json::json!({"target_user_id": target_user_id}))
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 429 {
+            Err(ProviderError::RateLimited("X API rate limit".into()))
+        } else if json.get("title").and_then(|t| t.as_str()) == Some("Unauthorized")
+            || status == 401
+        {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let detail = json.get("detail").and_then(|d| d.as_str()).unwrap_or("Unknown API error");
+            Err(ProviderError::Api(detail.to_string()))
+        }
+    }
+
+    pub async fn unfollow_user(
+        &self,
+        access_token: &str,
+        user_id: &str,
+        target_user_id: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let resp = self
+            .http
+            .delete(format!("https://api.twitter.com/2/users/{user_id}/following/{target_user_id}"))
+            .header("Authorization", format!("Bearer {access_token}"))
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 429 {
+            Err(ProviderError::RateLimited("X API rate limit".into()))
+        } else if json.get("title").and_then(|t| t.as_str()) == Some("Unauthorized")
+            || status == 401
+        {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let detail = json.get("detail").and_then(|d| d.as_str()).unwrap_or("Unknown API error");
+            Err(ProviderError::Api(detail.to_string()))
+        }
+    }
+
+    pub async fn list_timeline(
+        &self,
+        access_token: &str,
+        list_id: &str,
+        max_results: u32,
+        pagination_token: Option<&str>,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let max_results = max_results.min(100);
+        let mut url = format!(
+            "https://api.twitter.com/2/lists/{list_id}/tweets?max_results={max_results}&tweet.fields=created_at,public_metrics&expansions=author_id&user.fields=profile_image_url"
+        );
+        if let Some(token) = pagination_token {
+            url.push_str(&format!("&pagination_token={token}"));
+        }
+        let resp = self
+            .http
+            .get(url)
+            .header("Authorization", format!("Bearer {access_token}"))
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 429 {
+            Err(ProviderError::RateLimited("X API rate limit".into()))
+        } else if json.get("title").and_then(|t| t.as_str()) == Some("Unauthorized")
+            || status == 401
+        {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let detail = json.get("detail").and_then(|d| d.as_str()).unwrap_or("Unknown API error");
+            Err(ProviderError::Api(detail.to_string()))
+        }
     }
 }

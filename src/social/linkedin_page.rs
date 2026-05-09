@@ -1,19 +1,19 @@
-// ─── LinkedIn Provider ────────────────────────────────────────
-// OAuth 2.0 PKCE. Posts to LinkedIn profile or page.
-// Uses LinkedIn API v2 (https://api.linkedin.com/v2).
+// ─── LinkedIn Page Provider ────────────────────────────────────
+// Extends LinkedIn with org-level posting (companies/pages).
+// Same OAuth credentials as LinkedIn but uses organization URNs.
 
 use async_trait::async_trait;
 
 use super::*;
 use crate::config::Config;
 
-pub struct LinkedInProvider {
+pub struct LinkedInPageProvider {
     client_id: String,
     client_secret: String,
     http: reqwest::Client,
 }
 
-impl LinkedInProvider {
+impl LinkedInPageProvider {
     pub fn new(config: &Config) -> Self {
         let (client_id, client_secret) = config
             .provider_credentials("linkedin")
@@ -35,13 +35,13 @@ impl LinkedInProvider {
 }
 
 #[async_trait]
-impl SocialProvider for LinkedInProvider {
+impl SocialProvider for LinkedInPageProvider {
     fn identifier(&self) -> &'static str {
-        "linkedin"
+        "linkedin-page"
     }
 
     fn name(&self) -> &'static str {
-        "LinkedIn"
+        "LinkedIn Page"
     }
 
     fn scopes(&self) -> Vec<String> {
@@ -50,11 +50,20 @@ impl SocialProvider for LinkedInProvider {
             "profile".into(),
             "email".into(),
             "w_member_social".into(),
+            "rw_organization_admin".into(),
+            "w_organization_social".into(),
+            "r_organization_social".into(),
         ]
     }
 
     fn max_content_length(&self) -> usize {
         3000
+    }
+
+    fn is_between_steps(&self) -> bool { true }
+
+    fn tooltip(&self) -> Option<&'static str> {
+        Some("Post to a LinkedIn Company Page you administer")
     }
 
     async fn generate_auth_url(
@@ -83,7 +92,6 @@ impl SocialProvider for LinkedInProvider {
         _code_verifier: &str,
         redirect_uri: &str,
     ) -> Result<AuthToken, ProviderError> {
-        // LinkedIn uses client_secret_post, not PKCE
         let params = [
             ("grant_type", "authorization_code"),
             ("code", code),
@@ -103,7 +111,6 @@ impl SocialProvider for LinkedInProvider {
         let refresh_token = json["refresh_token"].as_str().map(String::from);
         let expires_in = json["expires_in"].as_u64().map(|v| v as u32);
 
-        // Get user profile
         let profile = self
             .http
             .get("https://api.linkedin.com/v2/userinfo")
@@ -129,10 +136,7 @@ impl SocialProvider for LinkedInProvider {
         })
     }
 
-    async fn refresh_token(
-        &self,
-        refresh_token: &str,
-    ) -> Result<AuthToken, ProviderError> {
+    async fn refresh_token(&self, refresh_token: &str) -> Result<AuthToken, ProviderError> {
         let params = [
             ("grant_type", "refresh_token"),
             ("refresh_token", refresh_token),
@@ -157,27 +161,97 @@ impl SocialProvider for LinkedInProvider {
         })
     }
 
+    /// List organizations the user can administer
+    async fn pages(&self, access_token: &str) -> Result<Vec<PageInfo>, ProviderError> {
+        let resp = self
+            .http
+            .get("https://api.linkedin.com/v2/organizationalEntityAcls?q=roleAssignee&role=ADMINISTRATOR&projection=(elements*(organizationalTarget~(localizedName,vanityName,logoV2(original~:playableStreams))))")
+            .header("Authorization", format!("Bearer {access_token}"))
+            .header("X-Restli-Protocol-Version", "2.0.0")
+            .header("LinkedIn-Version", "202601")
+            .send()
+            .await?;
+
+        let json: serde_json::Value = resp.json().await?;
+        let elements = json["elements"].as_array().map(|a| a.to_vec()).unwrap_or_default();
+
+        let pages = elements.iter().map(|e| {
+            let target = &e["organizationalTarget~"];
+            let id = e["organizationalTarget"].as_str()
+                .unwrap_or("")
+                .split(':')
+                .next_back()
+                .unwrap_or("")
+                .to_string();
+            PageInfo {
+                id,
+                name: target["localizedName"].as_str().unwrap_or("").to_string(),
+                access_token: Some(access_token.to_string()),
+                picture: target["logoV2"]["original~"]["elements"]
+                    .as_array()
+                    .and_then(|a| a.first())
+                    .and_then(|el| el["identifiers"].as_array())
+                    .and_then(|ids| ids.first())
+                    .and_then(|id| id["identifier"].as_str())
+                    .map(String::from),
+                username: target["vanityName"].as_str().map(String::from),
+            }
+        }).collect();
+
+        Ok(pages)
+    }
+
+    async fn fetch_page_info(&self, access_token: &str, page_id: &str) -> Result<PageInfo, ProviderError> {
+        let resp = self
+            .http
+            .get(format!("https://api.linkedin.com/v2/organizations/{page_id}?projection=(id,localizedName,vanityName,logoV2(original~:playableStreams))"))
+            .header("Authorization", format!("Bearer {access_token}"))
+            .send()
+            .await?;
+
+        let json: serde_json::Value = resp.json().await?;
+
+        Ok(PageInfo {
+            id: json["id"].as_str().unwrap_or("").to_string(),
+            name: json["localizedName"].as_str().unwrap_or("").to_string(),
+            access_token: Some(access_token.to_string()),
+            picture: json["logoV2"]["original~"]["elements"]
+                .as_array()
+                .and_then(|a| a.first())
+                .and_then(|el| el["identifiers"].as_array())
+                .and_then(|ids| ids.first())
+                .and_then(|id| id["identifier"].as_str())
+                .map(String::from),
+            username: json["vanityName"].as_str().map(String::from),
+        })
+    }
+
+    async fn reconnect(
+        &self,
+        access_token: &str,
+        _internal_id: &str,
+        page_id: &str,
+    ) -> Result<ReconnectResult, ProviderError> {
+        let info = self.fetch_page_info(access_token, page_id).await?;
+        Ok(ReconnectResult {
+            id: info.id,
+            name: info.name,
+            access_token: info.access_token.unwrap_or_default(),
+            picture: info.picture,
+            username: info.username,
+        })
+    }
+
     async fn publish(
         &self,
         access_token: &str,
         post: &PostContent,
     ) -> Result<PublishResult, ProviderError> {
-        // Get user profile ID for posting
-        let profile = self
-            .http
-            .get("https://api.linkedin.com/v2/userinfo")
-            .header("Authorization", format!("Bearer {access_token}"))
-            .send()
-            .await?
-            .json::<serde_json::Value>()
-            .await?;
-
-        let user_id = profile["sub"]
-            .as_str()
-            .ok_or_else(|| ProviderError::Api("Could not get user profile".into()))?;
+        // Resolve org ID — internal_id tells us which org to post as
+        let org_id = self.resolve_org_id(access_token).await?;
 
         let body = serde_json::json!({
-            "author": format!("urn:li:person:{user_id}"),
+            "author": format!("urn:li:organization:{org_id}"),
             "lifecycleState": "PUBLISHED",
             "specificContent": {
                 "com.linkedin.ugc.ShareContent": {
@@ -213,7 +287,7 @@ impl SocialProvider for LinkedInProvider {
             let post_id = location.rsplit('/').next().unwrap_or("").to_string();
             return Ok(PublishResult {
                 platform_post_id: post_id,
-                platform_post_url: None, // LinkedIn doesn't always provide URL
+                platform_post_url: None,
                 status: "published".into(),
             });
         }
@@ -225,95 +299,28 @@ impl SocialProvider for LinkedInProvider {
         } else {
             let msg = json["message"]
                 .as_str()
-                .or_else(|| json["error_description"].as_str())
-                .unwrap_or("LinkedIn publish failed")
+                .unwrap_or("LinkedIn Page publish failed")
                 .to_string();
             Err(ProviderError::Api(msg))
         }
     }
 
-    async fn fetch_page_info(
-        &self,
-        _access_token: &str,
-        _page_id: &str,
-    ) -> Result<PageInfo, ProviderError> {
-        Err(ProviderError::Api("LinkedIn personal profile does not support page selection".into()))
+    fn map_error(&self, body: &str, _status: u16) -> Option<String> {
+        if body.contains("Unable to obtain activity") {
+            Some("Unable to obtain activity. Please try again.".into())
+        } else if body.contains("resource is forbidden") {
+            Some("Resource is forbidden. Check your organization permissions.".into())
+        } else {
+            None
+        }
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::config::Config;
-
-    fn test_config() -> Config {
-        Config {
-            database_url: "sqlite:test".into(),
-            jwt_secret: "test".into(),
-            app_url: "http://localhost:3000".into(),
-            frontend_url: "http://localhost:4200".into(),
-            x_client_id: None,
-            x_client_secret: None,
-            linkedin_client_id: Some("test_linkedin_id".into()),
-            linkedin_client_secret: Some("test_linkedin_secret".into()),
-            bluesky_handle: None,
-            bluesky_app_password: None,
-            facebook_client_id: None,
-            facebook_client_secret: None,
-            instagram_client_id: None,
-            instagram_client_secret: None,
-            threads_client_id: None,
-            threads_client_secret: None,
-            youtube_client_id: None,
-            youtube_client_secret: None,
-            reddit_client_id: None,
-            reddit_client_secret: None,
-            discord_client_id: None,
-            discord_client_secret: None,
-            discord_bot_token: None,
-            telegram_token: None,
-            pinterest_client_id: None,
-            pinterest_client_secret: None,
-            instagram_app_id: None,
-            instagram_app_secret: None,
-            token_encryption_key: None,
-            media_dir: "./uploads".into(),
-        }
-    }
-
-    #[test]
-    fn test_scopes_contain_required() {
-        let provider = LinkedInProvider::new(&test_config());
-        let scopes = provider.scopes();
-        assert!(scopes.contains(&"openid".to_string()));
-        assert!(scopes.contains(&"w_member_social".to_string()));
-        assert!(scopes.contains(&"profile".to_string()));
-    }
-
-    #[test]
-    fn test_identifier_and_name() {
-        let provider = LinkedInProvider::new(&test_config());
-        assert_eq!(provider.identifier(), "linkedin");
-        assert_eq!(provider.name(), "LinkedIn");
-    }
-
-    #[test]
-    fn test_max_content_length() {
-        let provider = LinkedInProvider::new(&test_config());
-        assert_eq!(provider.max_content_length(), 3000);
-    }
-
-    #[tokio::test]
-    async fn test_generate_auth_url_contains_params() {
-        let provider = LinkedInProvider::new(&test_config());
-        let result = provider.generate_auth_url("test_state", "test_verifier", "http://localhost:3000/callback").await;
-        let url = result.unwrap().url;
-
-        assert!(url.contains("response_type=code"), "should contain response_type=code");
-        assert!(url.contains("client_id=test_linkedin_id"), "should contain client_id");
-        assert!(url.contains("redirect_uri="), "should contain redirect_uri");
-        assert!(url.contains("state=test_state"), "should contain state");
-        assert!(url.contains("scope="), "should contain scope");
-        assert!(url.starts_with("https://www.linkedin.com/oauth/v2/authorization"));
+impl LinkedInPageProvider {
+    async fn resolve_org_id(&self, access_token: &str) -> Result<String, ProviderError> {
+        let pages = self.pages(access_token).await?;
+        pages.first()
+            .map(|p| p.id.clone())
+            .ok_or_else(|| ProviderError::Auth("No LinkedIn organizations found".into()))
     }
 }

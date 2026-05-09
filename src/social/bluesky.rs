@@ -193,6 +193,14 @@ impl SocialProvider for BlueskyProvider {
             ))
         }
     }
+
+    async fn fetch_page_info(
+        &self,
+        _access_token: &str,
+        _page_id: &str,
+    ) -> Result<PageInfo, ProviderError> {
+        Err(ProviderError::Api("Bluesky does not support page management".into()))
+    }
 }
 
 impl BlueskyProvider {

@@ -58,7 +58,10 @@ tokio-stream = { version = "0.1", features = ["sync"] }
 # HTTP client
 reqwest = { version = "0.12", default-features = false, features = [
   "json",
+  "multipart",
   "rustls-tls",
+  "cookies",
+  "gzip",
 ] }
 
 # Time + UUID
@@ -78,6 +81,7 @@ rand = "0.8"
 base64 = { version = "0.22", features = ["std"] }
 sha2 = "0.10"
 hex = "0.4"
+aes-gcm = "0.10"
 
 # SSE + async streaming
 async-stream = "0.3"

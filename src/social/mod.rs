@@ -4,15 +4,25 @@
 
 pub mod bluesky;
 pub mod common;
+pub mod discord;
 pub mod facebook;
 pub mod instagram;
+pub mod instagram_standalone;
 pub mod linkedin;
+pub mod linkedin_page;
+pub mod pinterest;
+pub mod reddit;
 pub mod registry;
+pub mod skool;
+pub mod telegram;
+pub mod threads;
 pub mod x;
+pub mod youtube;
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use schemars::JsonSchema;
+
 
 // ── Common Types ────────────────────────────────────────────
 
@@ -53,6 +63,83 @@ pub struct PublishResult {
     pub status: String,
 }
 
+// ── Additional Common Types ─────────────────────────────────
+
+/// Editor type for content creation
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
+pub enum EditorType {
+    #[serde(rename = "none")]
+    None,
+    #[serde(rename = "normal")]
+    Normal,
+    #[serde(rename = "markdown")]
+    Markdown,
+    #[serde(rename = "html")]
+    Html,
+}
+
+/// Page/channel info for multi-step auth (isBetweenSteps providers)
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct PageInfo {
+    pub id: String,
+    pub name: String,
+    pub access_token: Option<String>,
+    pub picture: Option<String>,
+    pub username: Option<String>,
+}
+
+/// Result of reconnecting after re-authentication
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct ReconnectResult {
+    pub id: String,
+    pub name: String,
+    pub access_token: String,
+    pub picture: Option<String>,
+    pub username: Option<String>,
+}
+
+/// Analytics data for dashboards
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct AnalyticsData {
+    pub label: String,
+    pub data: Vec<AnalyticsDataPoint>,
+    pub percentage_change: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct AnalyticsDataPoint {
+    pub total: String,
+    pub date: String,
+}
+
+/// @mention autocomplete result
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct MentionResult {
+    pub id: String,
+    pub label: String,
+    pub image: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub do_not_cache: Option<bool>,
+}
+
+/// Extra fields for provider OAuth config
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct CustomField {
+    pub key: String,
+    pub label: String,
+    pub default_value: Option<String>,
+    pub validation: String,
+    pub field_type: CustomFieldType,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
+pub enum CustomFieldType {
+    #[serde(rename = "text")]
+    Text,
+    #[serde(rename = "password")]
+    Password,
+}
+
 // ── Trait ───────────────────────────────────────────────────
 
 #[async_trait]
@@ -69,9 +156,35 @@ pub trait SocialProvider: Send + Sync {
     /// Max content length (characters)
     fn max_content_length(&self) -> usize;
 
+    /// Tooltip shown in UI
+    fn tooltip(&self) -> Option<&'static str> { None }
+
+    /// Editor type for content creation
+    fn editor_type(&self) -> EditorType { EditorType::Normal }
+
+    /// Does this provider have multi-step auth (page selection after OAuth)?
+    fn is_between_steps(&self) -> bool { false }
+
+    /// Does this provider use a Chrome extension for auth?
+    fn is_chrome_extension(&self) -> bool { false }
+
+    /// Does this provider need proactive cron-based token refresh?
+    fn needs_cron_refresh(&self) -> bool { false }
+
+    /// Should we wait for refresh to complete before publishing?
+    fn refresh_wait(&self) -> bool { false }
+
+    /// Is this a one-time token provider?
+    fn one_time_token(&self) -> bool { false }
+
+    /// Custom fields for OAuth config
+    async fn custom_fields(&self) -> Vec<CustomField> { vec![] }
+
+    /// Extension cookies needed (for Chrome extension providers like Skool)
+    fn extension_cookies(&self) -> Vec<(&'static str, &'static str)> { vec![] }
+
     /// Generate the OAuth authorization URL
     /// `code_verifier` is the PKCE code verifier (S256 challenge will be derived from it).
-    /// Providers that don't use PKCE can ignore this parameter.
     async fn generate_auth_url(
         &self,
         state: &str,
@@ -80,10 +193,7 @@ pub trait SocialProvider: Send + Sync {
     ) -> Result<AuthUrlResponse, ProviderError>;
 
     /// Check if this provider uses OAuth (vs direct API key / app password).
-    /// Non-OAuth providers (like Bluesky) need a different connection flow.
-    fn uses_oauth(&self) -> bool {
-        true
-    }
+    fn uses_oauth(&self) -> bool { true }
 
     /// Exchange authorization code for access token
     async fn exchange_code(
@@ -106,8 +216,86 @@ pub trait SocialProvider: Send + Sync {
         post: &PostContent,
     ) -> Result<PublishResult, ProviderError>;
 
+    /// Post a comment/reply to an existing post
+    async fn comment(
+        &self,
+        _access_token: &str,
+        _post_id: &str,
+        _last_comment_id: Option<&str>,
+        _post: &PostContent,
+    ) -> Result<PublishResult, ProviderError> {
+        Err(ProviderError::Api("Comments not supported by this provider".into()))
+    }
+
+    /// Get analytics for a time range (dashboard)
+    async fn analytics(
+        &self,
+        _access_token: &str,
+        _internal_id: &str,
+        _days: u32,
+    ) -> Result<Vec<AnalyticsData>, ProviderError> {
+        Ok(vec![])
+    }
+
+    /// Get per-post analytics
+    async fn post_analytics(
+        &self,
+        _access_token: &str,
+        _platform_post_id: &str,
+    ) -> Result<Vec<AnalyticsData>, ProviderError> {
+        Ok(vec![])
+    }
+
+    /// List manageable pages/channels (for isBetweenSteps providers)
+    async fn pages(
+        &self,
+        _access_token: &str,
+    ) -> Result<Vec<PageInfo>, ProviderError> {
+        Ok(vec![])
+    }
+
+    /// Fetch page information by ID (for reConnect)
+    async fn fetch_page_info(
+        &self,
+        access_token: &str,
+        page_id: &str,
+    ) -> Result<PageInfo, ProviderError>;
+
+    /// Reconnect/re-bind after re-authentication
+    async fn reconnect(
+        &self,
+        access_token: &str,
+        _internal_id: &str,
+        page_id: &str,
+    ) -> Result<ReconnectResult, ProviderError> {
+        let info = self.fetch_page_info(access_token, page_id).await?;
+        Ok(ReconnectResult {
+            id: info.id,
+            name: info.name,
+            access_token: info.access_token.unwrap_or_default(),
+            picture: info.picture,
+            username: info.username,
+        })
+    }
+
+    /// Search for @mentions
+    async fn search_mention(
+        &self,
+        _access_token: &str,
+        _query: &str,
+    ) -> Result<Vec<MentionResult>, ProviderError> {
+        Ok(vec![])
+    }
+
+    /// Format an @mention string for this provider
+    fn format_mention(&self, id_or_handle: &str, _name: &str) -> String {
+        format!("@{}", id_or_handle)
+    }
+
+    /// Map provider API error body/status to user-friendly message
+    fn map_error(&self, _body: &str, _status: u16) -> Option<String> { None }
+
     /// Validate content against platform-specific limits before publishing.
-    /// Returns Ok(()) or Err with a user-friendly message.
     fn validate_post(&self, post: &PostContent) -> Result<(), String> {
         if post.content.len() > self.max_content_length() {
             return Err(format!(

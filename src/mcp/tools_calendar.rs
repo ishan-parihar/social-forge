@@ -14,7 +14,6 @@ use crate::db::queries;
 pub struct CalendarInput {
     pub start: String,
     pub end: String,
-    pub token: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]

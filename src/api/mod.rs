@@ -4,6 +4,7 @@
 
 use axum::{middleware, Extension, Router};
 use tower_http::cors::CorsLayer;
+use tower_http::limit::RequestBodyLimitLayer;
 use tower_http::trace::TraceLayer;
 
 use crate::auth::middleware::{auth_middleware, JwtSecret};
@@ -18,6 +19,7 @@ mod auth;
 mod calendar;
 mod integrations;
 mod media;
+mod onboard;
 mod posts;
 pub mod rate_limiter;
 mod sse;
@@ -30,6 +32,8 @@ pub struct AppState {
     pub broadcast: Broadcaster,
     pub providers: ProviderRegistry,
     pub rate_limiter: AuthRateLimiter,
+    /// Optional AES-256 key for token encryption at rest (32 bytes)
+    pub token_key: Option<[u8; 32]>,
 }
 
 /// Build the axum router with all routes
@@ -55,13 +59,19 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/auth/register", axum::routing::post(auth::register))
         .route("/api/auth/login", axum::routing::post(auth::login))
         .route("/api/auth/callback", axum::routing::get(integrations::oauth_callback))
+        .route("/api/auth/callback/{provider}", axum::routing::get(integrations::oauth_callback))
+        .route("/integrations/social/{provider}", axum::routing::get(integrations::oauth_callback))
         .route("/api/events", axum::routing::get(sse::sse_handler))
-        .route("/api/media/{id}", axum::routing::get(media::serve_media));
+        .route("/api/media/{id}", axum::routing::get(media::serve_media))
+        // Public onboarding — browser-accessible OAuth flow (no JWT header needed)
+        .route("/", axum::routing::get(onboard::onboard_page))
+        .route("/api/public/connect/{provider}", axum::routing::get(onboard::public_connect));
 
     // Protected routes — auth required
     let protected_routes = Router::new()
         .route("/api/auth/me", axum::routing::get(auth::me))
         .route("/api/posts", axum::routing::get(posts::list).post(posts::create))
+        .route("/api/providers", axum::routing::get(integrations::list_providers))
         .route(
             "/api/posts/{id}",
             axum::routing::get(posts::get)
@@ -69,21 +79,28 @@ pub fn build_router(state: AppState) -> Router {
                 .delete(posts::delete),
         )
         .route("/api/posts/{id}/schedule", axum::routing::post(posts::schedule))
+        .route("/api/posts/{id}/publish", axum::routing::post(posts::publish_post))
         .route("/api/posts/find-slot", axum::routing::get(posts::find_slot))
         .route("/api/integrations", axum::routing::get(integrations::list))
         .route("/api/integrations/connect/{provider}", axum::routing::get(integrations::connect))
         .route("/api/integrations/{id}", axum::routing::delete(integrations::delete))
+        .route("/api/integrations/{id}/available-pages", axum::routing::get(integrations::available_pages))
+        .route("/api/integrations/{parent_id}/connect-page/{page_id}", axum::routing::post(integrations::connect_page))
         .route("/api/calendar", axum::routing::get(calendar::get))
         .route("/api/media", axum::routing::get(media::list).post(media::upload))
         // Auth middleware chain: inject secret first, then validate
         .layer(middleware::from_fn(auth_middleware))
         .layer(Extension(jwt_secret));
 
+    // Global middleware stack
     Router::new()
         .merge(public_routes)
         .merge(protected_routes)
         .layer(cors_layer)
         .layer(TraceLayer::new_for_http())
+        .layer(RequestBodyLimitLayer::new(
+            10 * 1024 * 1024, // 10 MB limit
+        ))
         .with_state(state)
 }
 

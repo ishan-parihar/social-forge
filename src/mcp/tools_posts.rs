@@ -1,5 +1,6 @@
 // ─── MCP Post Tools ───────────────────────────────────────────
 // Tool handlers for post CRUD and scheduling.
+// Thin wrappers over the shared PostService.
 
 use chrono::{DateTime, Utc};
 use rmcp::{Json, schemars::JsonSchema};
@@ -7,8 +8,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::api::AppState;
-use crate::db::models::PostState;
-use crate::db::queries;
+use crate::services::posts::{PostService, UpdatePostInput as SvcUpdatePostInput};
 
 // ── Input/Output Types ──────────────────────────────────────
 
@@ -119,21 +119,9 @@ pub async fn create_post(
     state: &AppState,
     input: &CreatePostInput,
 ) -> Result<Json<CreatePostOutput>, String> {
-    // Resolve user from token (MCP passes JWT via token)
-    // TODO: accept JWT token as parameter in all tools
     let user_id = resolve_first_user(state).await?;
-
     let integration_id = Uuid::parse_str(&input.integration_id)
         .map_err(|_| "Invalid integration_id format".to_string())?;
-
-    let integ = queries::get_integration(&state.db, integration_id, user_id)
-        .await
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| "Integration not found".to_string())?;
-
-    if integ.disabled {
-        return Err("Integration is disabled".into());
-    }
 
     let scheduled_at = match &input.scheduled_at {
         Some(s) => {
@@ -144,29 +132,19 @@ pub async fn create_post(
         None => None,
     };
 
-    let media = input.media.clone().unwrap_or(serde_json::json!([]));
-    let settings = input.settings.clone().unwrap_or(serde_json::json!({}));
-    let state_enum = if scheduled_at.is_some() {
-        Some(PostState::Queued)
-    } else {
-        Some(PostState::Draft)
-    };
-
-    let post = queries::create_post(
+    let post = PostService::create(
         &state.db,
-        user_id,
-        integration_id,
-        &input.content,
-        input.title.as_deref(),
-        &media,
-        &settings,
-        scheduled_at,
-        state_enum,
-    )
-    .await
-    .map_err(|e| e.to_string())?;
-
-    state.broadcast.send("post_created", &post);
+        &state.broadcast,
+        crate::services::posts::CreatePostInput {
+            user_id,
+            integration_id,
+            content: input.content.clone(),
+            title: input.title.clone(),
+            media_urls: input.media.clone().unwrap_or(serde_json::json!([])),
+            scheduled_at,
+            settings: input.settings.clone().unwrap_or(serde_json::json!({})),
+        },
+    ).await?;
 
     Ok(Json(CreatePostOutput {
         id: post.id.to_string(),
@@ -184,34 +162,43 @@ pub async fn list_posts(
     let limit = input.limit.unwrap_or(50).min(200) as i64;
     let offset = input.offset.unwrap_or(0) as i64;
 
-    let posts = queries::list_posts(&state.db, user_id, input.state.as_deref(), limit, offset)
-        .await
-        .map_err(|e| e.to_string())?;
+    let posts = PostService::list(
+        &state.db,
+        user_id,
+        input.state.as_deref(),
+        limit,
+        offset,
+        true,
+    ).await?;
 
-    let mut summaries = Vec::with_capacity(posts.len());
-    for p in posts {
-        let integration_name = queries::get_integration(&state.db, p.integration_id, user_id)
-            .await
-            .ok()
-            .flatten()
-            .map(|i| i.provider_name)
-            .unwrap_or_else(|| "Unknown".into());
+    let mut summaries = Vec::with_capacity(posts.0.len());
+    for p in &posts.0 {
+        let integration_name = crate::db::queries::get_integration(
+            &state.db,
+            p.integration_id,
+            user_id,
+        )
+        .await
+        .ok()
+        .flatten()
+        .map(|i| i.provider_name)
+        .unwrap_or_else(|| "Unknown".into());
 
         summaries.push(PostSummary {
             id: p.id.to_string(),
             integration_name,
             state: p.state.to_string(),
-            content: p.content,
-            title: p.title,
+            content: p.content.clone(),
+            title: p.title.clone(),
             scheduled_at: p.scheduled_at.map(|d| d.to_rfc3339()),
-            platform_post_url: p.platform_post_url,
-            error_message: p.error_message,
+            platform_post_url: p.platform_post_url.clone(),
+            error_message: p.error_message.clone(),
             created_at: p.created_at.to_rfc3339(),
         });
     }
 
     Ok(Json(ListPostsOutput {
-        total: summaries.len() as i32,
+        total: posts.1.unwrap_or(0) as i32,
         posts: summaries,
     }))
 }
@@ -223,17 +210,18 @@ pub async fn get_post(
     let user_id = resolve_first_user(state).await?;
     let post_id = Uuid::parse_str(&input.id).map_err(|_| "Invalid post ID".to_string())?;
 
-    let post = queries::get_post(&state.db, post_id, user_id)
-        .await
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| "Post not found".to_string())?;
+    let post = PostService::get(&state.db, user_id, post_id).await?;
 
-    let integration_name = queries::get_integration(&state.db, post.integration_id, user_id)
-        .await
-        .ok()
-        .flatten()
-        .map(|i| i.provider_name)
-        .unwrap_or_else(|| "Unknown".into());
+    let integration_name = crate::db::queries::get_integration(
+        &state.db,
+        post.integration_id,
+        user_id,
+    )
+    .await
+    .ok()
+    .flatten()
+    .map(|i| i.provider_name)
+    .unwrap_or_else(|| "Unknown".into());
 
     Ok(Json(GetPostOutput {
         post: PostSummary {
@@ -261,12 +249,13 @@ pub async fn schedule_post(
         .map_err(|_| "Invalid date format, use ISO8601".to_string())?
         .with_timezone(&Utc);
 
-    let post = queries::schedule_post(&state.db, post_id, user_id, scheduled_at)
-        .await
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| "Post not found".to_string())?;
-
-    state.broadcast.send("post_scheduled", &post);
+    let post = PostService::schedule(
+        &state.db,
+        &state.broadcast,
+        user_id,
+        post_id,
+        scheduled_at,
+    ).await?;
 
     Ok(Json(SchedulePostOutput {
         id: post.id.to_string(),
@@ -282,17 +271,12 @@ pub async fn delete_post(
     let user_id = resolve_first_user(state).await?;
     let post_id = Uuid::parse_str(&input.id).map_err(|_| "Invalid post ID".to_string())?;
 
-    let deleted = queries::delete_post(&state.db, post_id, user_id)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    if !deleted {
-        return Err("Post not found".into());
-    }
-
-    state
-        .broadcast
-        .send("post_deleted", &serde_json::json!({"id": input.id}));
+    PostService::delete(
+        &state.db,
+        &state.broadcast,
+        user_id,
+        post_id,
+    ).await?;
 
     Ok(Json(super::SuccessOutput {
         success: true,
@@ -307,10 +291,7 @@ pub async fn find_slot(
     let user_id = resolve_first_user(state).await?;
     let integration_id = input.integration_id.as_ref()
         .and_then(|s| Uuid::parse_str(s).ok());
-    let slot = queries::find_next_free_slot(&state.db, user_id, integration_id)
-        .await
-        .map_err(|e| e.to_string())?
-        .unwrap_or_else(Utc::now);
+    let slot = PostService::find_slot(&state.db, user_id, integration_id).await?;
 
     Ok(Json(FindSlotOutput {
         date: slot.to_rfc3339(),
@@ -324,24 +305,18 @@ pub async fn update_post(
     let user_id = resolve_first_user(state).await?;
     let post_id = Uuid::parse_str(&input.id).map_err(|_| "Invalid post ID".to_string())?;
 
-    let content = input.content.clone().unwrap_or_default();
-    let media = input.media.clone().unwrap_or(serde_json::json!([]));
-    let settings = input.settings.clone().unwrap_or(serde_json::json!({}));
-
-    let post = queries::update_post_content(
+    let post = PostService::update(
         &state.db,
-        post_id,
+        &state.broadcast,
         user_id,
-        &content,
-        input.title.as_deref(),
-        &media,
-        &settings,
-    )
-    .await
-    .map_err(|e| e.to_string())?
-    .ok_or_else(|| "Post not found".to_string())?;
-
-    state.broadcast.send("post_updated", &post);
+        post_id,
+        SvcUpdatePostInput {
+            content: input.content.clone(),
+            title: input.title.clone(),
+            media: input.media.clone(),
+            settings: input.settings.clone(),
+        },
+    ).await?;
 
     Ok(Json(UpdatePostOutput {
         id: post.id.to_string(),
@@ -353,11 +328,30 @@ pub async fn update_post(
     }))
 }
 
-/// For MCP single-user mode: get the first user. In multi-user, this would
-/// extract from JWT auth header or per-tool token parameter.
+pub async fn publish_post(
+    state: &AppState,
+    input: &GetPostInput,
+) -> Result<Json<SchedulePostOutput>, String> {
+    let user_id = resolve_first_user(state).await?;
+    let post_id = Uuid::parse_str(&input.id).map_err(|_| "Invalid post ID".to_string())?;
+
+    let _platform_url = PostService::publish(
+        &state.db,
+        &state.providers,
+        &state.broadcast,
+        user_id,
+        post_id,
+    ).await?;
+
+    Ok(Json(SchedulePostOutput {
+        id: post_id.to_string(),
+        state: "published".into(),
+        scheduled_at: chrono::Utc::now().to_rfc3339(),
+    }))
+}
+
+/// For MCP single-user mode: get the first user.
 pub(crate) async fn resolve_first_user(state: &AppState) -> Result<Uuid, String> {
-    // MCP single-user: find the only user in the system
-    // Scans users table and returns the first one
     sqlx::query_scalar::<_, Uuid>("SELECT id FROM users LIMIT 1")
         .fetch_optional(&state.db)
         .await

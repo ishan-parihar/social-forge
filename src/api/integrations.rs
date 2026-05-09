@@ -3,15 +3,19 @@
 
 use axum::{
     extract::{Path, Query, State},
+    response::{IntoResponse, Redirect},
     Json,
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::auth::jwt;
 use crate::auth::middleware::AuthenticatedUser;
 use crate::db::models::IntegrationPublic;
 use crate::db::queries;
 use crate::error::AppError;
+use crate::services::integrations::IntegrationService;
+use crate::social::PageInfo;
 
 use super::AppState;
 
@@ -73,19 +77,34 @@ pub async fn connect(
         .get(&provider)
         .ok_or_else(|| AppError::BadRequest(format!("Unknown provider: {provider}")))?;
 
-    // Handle non-OAuth providers (e.g., Bluesky with app passwords)
+    // Handle non-OAuth providers (e.g., Bluesky, Telegram)
     if !provider_obj.uses_oauth() {
-        // For non-OAuth providers, call exchange code directly to auto-connect
         let redirect_uri = query
             .redirect_uri
             .unwrap_or_else(|| format!("{}/api/auth/callback", state.config.app_url));
+
+        // For one-time-token providers (Telegram), give instructions
+        if provider_obj.one_time_token() {
+            // Generate a one-time code that the user will send in the chat
+            let code = uuid::Uuid::new_v4().to_string();
+            return Ok(Json(ConnectResponse {
+                url: format!(
+                    "Open Telegram, start a chat with this bot, and send: /connect {}",
+                    code
+                ),
+                state: "one-time-token".into(),
+            }));
+        }
 
         let token = provider_obj
             .exchange_code("", "", &redirect_uri)
             .await
             .map_err(|e| {
                 tracing::error!("Direct connect failed for {}: {e}", provider);
-                AppError::Provider(format!("Failed to connect {provider}: {e}. Check your env vars."))
+                AppError::Provider(format!(
+                    "Failed to connect {}. Make sure the provider env vars are set. Error: {e}",
+                    provider
+                ))
             })?;
 
         queries::create_integration(
@@ -101,6 +120,7 @@ pub async fn connect(
             }),
             Some(&token.name),
             token.picture.as_deref(),
+            None,
             None,
         )
         .await?;
@@ -148,82 +168,64 @@ pub async fn connect(
 }
 
 /// GET /api/auth/callback — complete OAuth flow
+///
+/// For single-step providers: redirects to onboarding page at {app_url}/?connected=...
+/// For multi-step providers (isBetweenSteps): redirects to page-picker at {app_url}/?pending=...
 pub async fn oauth_callback(
     State(state): State<AppState>,
     Query(query): Query<CallbackQuery>,
-) -> Result<Json<serde_json::Value>, AppError> {
-    // Retrieve stored OAuth state
-    let stored = queries::get_oauth_state(&state.db, &query.state)
-        .await?
-        .ok_or_else(|| AppError::BadRequest("Invalid or expired OAuth state".into()))?;
+) -> Result<impl IntoResponse, AppError> {
+    let app_url = state.config.app_url.clone();
 
-    // Parse user_id from redirect_uri (stored as "user_id:redirect_uri")
-    let user_id_str = stored
-        .redirect_uri
-        .as_ref()
-        .and_then(|r| r.split(':').next())
-        .and_then(|s| Uuid::parse_str(s).ok())
-        .ok_or_else(|| AppError::BadRequest("Invalid OAuth state data".into()))?;
-
-    // Exchange code for token
-    let provider_obj = state
-        .providers
-        .get(&stored.provider)
-        .ok_or_else(|| AppError::BadRequest("Provider not found".into()))?;
-
-    let token = provider_obj
-        .exchange_code(&query.code, &stored.code_verifier, "")
-        .await
-        .map_err(|e| {
-            tracing::error!("Token exchange failed for {}: {e}", stored.provider);
-            AppError::Provider("Failed to exchange authorization code".into())
-        })?;
-
-    // Save integration
-    queries::create_integration(
+    match IntegrationService::complete_connect(
         &state.db,
-        user_id_str,
-        &stored.provider,
-        &token.name,
-        &token.provider_user_id,
-        &token.access_token,
-        token.refresh_token.as_deref(),
-        token.expires_in.map(|exp| {
-            chrono::Utc::now() + chrono::Duration::seconds(exp as i64)
-        }),
-        Some(&token.name),
-        token.picture.as_deref(),
-        None,
+        &state.providers,
+        &state.broadcast,
+        &query.state,
+        &query.code,
+        state.token_key.as_ref(),
     )
-    .await?;
+    .await
+    {
+        Ok(integration) => {
+            tracing::info!(
+                "Integration connected: {} ({}) for user {}",
+                integration.provider_identifier,
+                integration.provider_name,
+                integration.user_id
+            );
 
-    // Clean up OAuth state
-    queries::delete_oauth_state(&state.db, &query.state).await?;
+            // Multi-step providers (isBetweenSteps) redirect to page-picker
+            if let Some(provider_obj) = state.providers.get(&integration.provider_identifier) {
+                if provider_obj.is_between_steps() {
+                    let token = jwt::create_token(integration.user_id, &state.config.jwt_secret)
+                        .map_err(|e| AppError::Internal(format!("JWT creation: {e}")))?;
+                    return Ok(Redirect::to(&format!(
+                        "{}/?pending={}&integration_id={}&token={}",
+                        app_url,
+                        integration.provider_identifier,
+                        integration.id,
+                        token,
+                    )));
+                }
+            }
 
-    tracing::info!(
-        "Integration connected: {} ({}) for user {}",
-        stored.provider,
-        token.name,
-        user_id_str
-    );
-
-    // Notify via broadcast
-    state.broadcast.send(
-        "integration_connected",
-        &serde_json::json!({
-            "provider": stored.provider,
-            "name": token.name,
-        }),
-    );
-
-    // Redirect to frontend
-    let frontend_url = state.config.frontend_url.clone();
-    Ok(Json(serde_json::json!({
-        "success": true,
-        "provider": stored.provider,
-        "name": token.name,
-        "redirect": format!("{}/channels", frontend_url),
-    })))
+            Ok(Redirect::to(&format!(
+                "{}/?connected={}&name={}",
+                app_url,
+                integration.provider_identifier,
+                urlencoding::encode(&integration.provider_name),
+            )))
+        }
+        Err(e) => {
+            tracing::error!("OAuth callback failed: {e}");
+            Ok(Redirect::to(&format!(
+                "{}/?error={}",
+                app_url,
+                urlencoding::encode(&e.to_string()),
+            )))
+        }
+    }
 }
 
 /// DELETE /api/integrations/:id — remove a connected channel
@@ -245,4 +247,185 @@ pub async fn delete(
 
     Ok(Json(serde_json::json!({"deleted": true})))
 }
-// rebuild
+
+// ── Provider Status ────────────────────────────────────────
+
+#[derive(Debug, Serialize)]
+pub struct ProviderStatus {
+    pub identifier: String,
+    pub name: String,
+    pub configured: bool,
+    pub oauth: bool,
+    pub has_credentials: bool,
+    pub editor_type: String,
+    pub redirect_uri: String,
+}
+
+/// GET /api/providers — list all providers with config status
+pub async fn list_providers(
+    State(state): State<AppState>,
+    _auth: AuthenticatedUser,
+) -> Result<Json<Vec<ProviderStatus>>, AppError> {
+    let all = state.providers.all();
+    let mut statuses = Vec::new();
+    for provider in all {
+        let id = provider.identifier();
+        let has_creds = state.config.provider_credentials(id).is_some();
+        statuses.push(ProviderStatus {
+            identifier: id.to_string(),
+            name: provider.name().to_string(),
+            configured: has_creds,
+            oauth: provider.uses_oauth(),
+            has_credentials: has_creds,
+            editor_type: format!("{:?}", provider.editor_type()),
+            redirect_uri: if provider.uses_oauth() {
+                format!("{}/api/auth/callback", state.config.app_url)
+            } else {
+                "N/A (non-OAuth)".into()
+            },
+        });
+    }
+    statuses.sort_by(|a, b| a.identifier.cmp(&b.identifier));
+    Ok(Json(statuses))
+}
+// ── Multi-Account Pages API ──────────────────────────────────
+
+#[derive(Debug, Serialize)]
+pub struct AvailablePagesResponse {
+    pub pages: Vec<PageInfo>,
+    pub parent_integration_id: String,
+    pub provider: String,
+}
+
+/// GET /api/integrations/{id}/available-pages — list sub-accounts for a provider
+///
+/// Uses provider.pages() to discover connectable pages/channels.
+/// For multi-step providers (isBetweenSteps), access_token is the user-level token.
+pub async fn available_pages(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(id): Path<Uuid>,
+) -> Result<Json<AvailablePagesResponse>, AppError> {
+    let integration = queries::get_integration(&state.db, id, auth.user_id)
+        .await?
+        .ok_or_else(|| AppError::NotFound("Integration not found".into()))?;
+
+    let provider_obj = state
+        .providers
+        .get(&integration.provider_identifier)
+        .ok_or_else(|| AppError::BadRequest("Provider not found in registry".into()))?;
+
+    // Facebook/Instagram store the user-level token in refresh_token for page discovery.
+    // Other multi-step providers (LinkedIn Page) use access_token directly.
+    let token = if integration.provider_identifier == "facebook"
+        || integration.provider_identifier == "instagram"
+    {
+        integration
+            .refresh_token
+            .as_deref()
+            .filter(|t| !t.is_empty())
+            .unwrap_or(&integration.access_token)
+    } else {
+        &integration.access_token
+    };
+
+    let pages = provider_obj
+        .pages(token)
+        .await
+        .map_err(|e| AppError::Provider(format!("Failed to list pages: {e}")))?;
+
+    Ok(Json(AvailablePagesResponse {
+        pages,
+        parent_integration_id: integration.id.to_string(),
+        provider: integration.provider_identifier,
+    }))
+}
+
+#[derive(Debug, Serialize)]
+pub struct ConnectPageResponse {
+    pub integration: IntegrationPublic,
+    pub parent_id: String,
+}
+
+/// POST /api/integrations/{parent_id}/connect-page/{page_id} — connect a sub-account
+///
+/// Creates a new integration linked to the parent via root_internal_id.
+/// The page token is obtained from provider.pages().
+pub async fn connect_page(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path((parent_id, page_id)): Path<(Uuid, String)>,
+) -> Result<Json<ConnectPageResponse>, AppError> {
+    let parent = queries::get_integration(&state.db, parent_id, auth.user_id)
+        .await?
+        .ok_or_else(|| AppError::NotFound("Integration not found".into()))?;
+
+    let provider_obj = state
+        .providers
+        .get(&parent.provider_identifier)
+        .ok_or_else(|| AppError::BadRequest("Provider not found in registry".into()))?;
+
+    // Same token discovery logic as available_pages
+    let token = if parent.provider_identifier == "facebook"
+        || parent.provider_identifier == "instagram"
+    {
+        parent
+            .refresh_token
+            .as_deref()
+            .filter(|t| !t.is_empty())
+            .unwrap_or(&parent.access_token)
+    } else {
+        &parent.access_token
+    };
+
+    // Fetch all pages and find the matching one
+    let pages = provider_obj
+        .pages(token)
+        .await
+        .map_err(|e| AppError::Provider(format!("Failed to list pages: {e}")))?;
+
+    let page = pages
+        .into_iter()
+        .find(|p| p.id == page_id)
+        .ok_or_else(|| AppError::BadRequest("Page not found or not accessible with this token".into()))?;
+
+    let page_token = page.access_token.unwrap_or_default();
+
+    let integration = queries::create_integration(
+        &state.db,
+        auth.user_id,
+        &parent.provider_identifier,
+        provider_obj.name(),
+        &page.id,
+        &page_token,
+        parent.refresh_token.as_deref(),
+        None,
+        Some(&page.name),
+        page.picture.as_deref(),
+        None,
+        Some(&parent.internal_id),
+    )
+    .await?;
+
+    state.broadcast.send(
+        "integration_connected",
+        &serde_json::json!({
+            "id": integration.id.to_string(),
+            "provider": parent.provider_identifier,
+            "parent_id": parent_id.to_string(),
+        }),
+    );
+
+    tracing::info!(
+        "Sub-account connected: {} page '{}' ({}) under parent {}",
+        parent.provider_identifier,
+        page.name,
+        page.id,
+        parent.internal_id,
+    );
+
+    Ok(Json(ConnectPageResponse {
+        integration: integration.into(),
+        parent_id: parent.id.to_string(),
+    }))
+}

@@ -12,6 +12,7 @@ use uuid::Uuid;
 use crate::auth::middleware::AuthenticatedUser;
 use crate::db::models::PostPublic;
 use crate::db::queries;
+use crate::services::posts::PostService;
 
 
 use super::AppState;
@@ -250,11 +251,12 @@ pub async fn delete(
     auth: AuthenticatedUser,
     Path(id): Path<Uuid>,
 ) -> Result<Json<serde_json::Value>, crate::error::AppError> {
-    let deleted = queries::delete_post(&state.db, id, auth.user_id).await?;
+    let deleted = PostService::delete(&state.db, &state.broadcast, auth.user_id, id)
+        .await
+        .map_err(crate::error::AppError::BadRequest)?;
     if !deleted {
         return Err(crate::error::AppError::NotFound("Post not found".into()));
     }
-    state.broadcast.send("post_deleted", &serde_json::json!({"id": id}));
     Ok(Json(serde_json::json!({"deleted": true})))
 }
 
@@ -275,5 +277,35 @@ pub async fn find_slot(
 
     Ok(Json(FindSlotResponse {
         date: slot.to_rfc3339(),
+    }))
+}
+
+/// POST /api/posts/{id}/publish — publish a post now or retry a failed post
+#[derive(Debug, Serialize)]
+pub struct PublishResponse {
+    pub id: String,
+    pub state: String,
+    pub platform_post_url: String,
+}
+
+pub async fn publish_post(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(id): Path<Uuid>,
+) -> Result<Json<PublishResponse>, crate::error::AppError> {
+    let platform_url = crate::services::posts::PostService::publish(
+        &state.db,
+        &state.providers,
+        &state.broadcast,
+        auth.user_id,
+        id,
+    )
+    .await
+    .map_err(crate::error::AppError::BadRequest)?;
+
+    Ok(Json(PublishResponse {
+        id: id.to_string(),
+        state: "published".into(),
+        platform_post_url: platform_url,
     }))
 }

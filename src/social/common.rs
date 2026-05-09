@@ -75,3 +75,78 @@ pub async fn refresh_access_token(
     let json: serde_json::Value = resp.json().await?;
     Ok(json)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_generate_code_verifier_length() {
+        let verifier = generate_code_verifier();
+        assert_eq!(verifier.len(), 128, "verifier should be 128 chars");
+    }
+
+    #[test]
+    fn test_generate_code_verifier_charset() {
+        let verifier = generate_code_verifier();
+        // All chars should be from the allowed set
+        for c in verifier.chars() {
+            assert!(
+                (c.is_ascii_alphanumeric()) || c == '-' || c == '.' || c == '_' || c == '~',
+                "illegal char '{}' in verifier",
+                c
+            );
+        }
+    }
+
+    #[test]
+    fn test_generate_code_verifier_unique() {
+        let v1 = generate_code_verifier();
+        let v2 = generate_code_verifier();
+        assert_ne!(
+            v1, v2,
+            "two consecutive verifiers should differ (random salt)"
+        );
+    }
+
+    #[test]
+    fn test_generate_code_challenge_deterministic() {
+        let verifier = "test-verifier-string-1234567890abcdefghijklmnopqrstuvwxyz";
+        let c1 = generate_code_challenge(verifier);
+        let c2 = generate_code_challenge(verifier);
+        assert_eq!(
+            c1, c2,
+            "same verifier should produce same challenge"
+        );
+    }
+
+    #[test]
+    fn test_generate_code_challenge_length() {
+        let verifier = "short";
+        let challenge = generate_code_challenge(verifier);
+        // SHA256 base64url = 43 chars (no padding)
+        assert_eq!(challenge.len(), 43, "SHA256 base64url challenge should be 43 chars");
+    }
+
+    #[test]
+    fn test_generate_state_length() {
+        let state = generate_state();
+        // 32 bytes hex = 64 chars
+        assert_eq!(state.len(), 64, "state should be 64 hex chars");
+    }
+
+    #[test]
+    fn test_generate_state_hex_chars() {
+        let state = generate_state();
+        for c in state.chars() {
+            assert!(c.is_ascii_hexdigit(), "state char '{}' is not hex", c);
+        }
+    }
+
+    #[test]
+    fn test_generate_state_unique() {
+        let s1 = generate_state();
+        let s2 = generate_state();
+        assert_ne!(s1, s2, "states should be unique");
+    }
+}

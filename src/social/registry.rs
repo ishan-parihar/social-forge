@@ -19,6 +19,7 @@ impl ProviderRegistry {
     pub fn new(config: &Config) -> Self {
         let mut providers: HashMap<&'static str, Arc<dyn SocialProvider>> = HashMap::new();
 
+        // Current providers
         providers.insert("x", Arc::new(x::XProvider::new(config)));
         providers.insert(
             "linkedin",
@@ -33,6 +34,50 @@ impl ProviderRegistry {
             "instagram",
             Arc::new(instagram::InstagramProvider::new(config)),
         );
+
+        // New providers (with credentials)
+        let linkedin_page = linkedin_page::LinkedInPageProvider::new(config);
+        // Only add if credential check passes — LinkedIn page uses same credentials as LinkedIn
+        if config.linkedin_client_id.is_some() {
+            providers.insert("linkedin-page", Arc::new(linkedin_page));
+        }
+
+        if config.instagram_app_id.is_some() {
+            providers.insert(
+                "instagram-standalone",
+                Arc::new(instagram_standalone::InstagramStandaloneProvider::new(
+                    config,
+                )),
+            );
+        }
+
+        if config.threads_client_id.is_some() {
+            providers.insert("threads", Arc::new(threads::ThreadsProvider::new(config)));
+        }
+
+        if config.youtube_client_id.is_some() {
+            providers.insert("youtube", Arc::new(youtube::YoutubeProvider::new(config)));
+        }
+
+        // Always registered (show on frontend even without credentials)
+        providers.insert("reddit", Arc::new(reddit::RedditProvider::new(config)));
+
+        if config.discord_client_id.is_some() {
+            providers.insert("discord", Arc::new(discord::DiscordProvider::new(config)));
+        }
+
+        if config.telegram_token.is_some() {
+            providers.insert(
+                "telegram",
+                Arc::new(telegram::TelegramProvider::new(config)),
+            );
+        }
+
+        // Always registered (show on frontend even without credentials)
+        providers.insert("pinterest", Arc::new(pinterest::PinterestProvider::new(config)));
+
+        // Chrome extension-based provider (no OAuth credentials needed)
+        providers.insert("skool", Arc::new(skool::SkoolProvider::new()));
 
         tracing::info!(
             "Provider registry initialized with: {}",
@@ -50,13 +95,11 @@ impl ProviderRegistry {
     }
 
     /// List all registered provider identifiers
-    #[allow(dead_code)]
     pub fn list(&self) -> Vec<&'static str> {
         self.providers.keys().copied().collect()
     }
 
     /// Get all providers
-    #[allow(dead_code)]
     pub fn all(&self) -> Vec<Arc<dyn SocialProvider>> {
         self.providers.values().cloned().collect()
     }

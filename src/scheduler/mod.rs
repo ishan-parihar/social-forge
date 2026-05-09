@@ -15,12 +15,14 @@ use crate::social::ProviderError;
 use crate::social::{PostContent, SocialProvider};
 
 use super::db::queries;
-
 /// How often to poll for due posts
 const POLL_INTERVAL_SECS: u64 = 30;
 
 /// Maximum publish retries per post
 const MAX_RETRIES: u32 = 3;
+
+/// Max posts processed per scheduler tick
+const DUE_POSTS_LIMIT: i64 = 50;
 
 /// Backoff delay between retries (seconds)
 const RETRY_BACKOFF_SECS: u64 = 10;
@@ -28,23 +30,36 @@ const RETRY_BACKOFF_SECS: u64 = 10;
 /// How far ahead to consider a token "expired" and refresh preemptively
 const TOKEN_REFRESH_BUFFER_SECS: i64 = 300; // 5 minutes
 
-/// Start the scheduler background task
+/// Start the scheduler background task.
+/// Pass a watch::Receiver that resolves to `true` to trigger graceful shutdown.
 pub fn start_scheduler(
     db: PgPool,
     providers: Arc<ProviderRegistry>,
     broadcaster: Broadcaster,
+    token_key: Option<[u8; 32]>,
+    mut shutdown: tokio::sync::watch::Receiver<bool>,
 ) {
     // Main post publishing scheduler
     let db1 = db.clone();
+    let mut shutdown1 = shutdown.clone();
     tokio::spawn(async move {
         tracing::info!("Scheduler started (poll interval: {POLL_INTERVAL_SECS}s)");
         let mut interval = tokio::time::interval(Duration::from_secs(POLL_INTERVAL_SECS));
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
         loop {
-            interval.tick().await;
-            if let Err(e) = process_due_posts(&db1, &providers, &broadcaster).await {
-                tracing::error!("Scheduler tick error: {e}");
+            tokio::select! {
+                _ = shutdown1.changed() => {
+                    if *shutdown1.borrow() {
+                        tracing::info!("Scheduler shutting down...");
+                        break;
+                    }
+                }
+                _ = interval.tick() => {
+                    if let Err(e) = process_due_posts(&db1, &providers, &broadcaster, token_key).await {
+                        tracing::error!("Scheduler tick error: {e}");
+                    }
+                }
             }
         }
     });
@@ -54,14 +69,23 @@ pub fn start_scheduler(
         let mut interval = tokio::time::interval(Duration::from_secs(600));
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         loop {
-            interval.tick().await;
-            match queries::cleanup_expired_oauth_states(&db).await {
-                Ok(count) if count > 0 => {
-                    tracing::info!("Cleaned up {count} expired OAuth state(s)");
+            tokio::select! {
+                _ = shutdown.changed() => {
+                    if *shutdown.borrow() {
+                        tracing::info!("OAuth cleanup task shutting down...");
+                        break;
+                    }
                 }
-                Ok(_) => {}
-                Err(e) => {
-                    tracing::error!("Failed to cleanup OAuth states: {e}");
+                _ = interval.tick() => {
+                    match queries::cleanup_expired_oauth_states(&db).await {
+                        Ok(count) if count > 0 => {
+                            tracing::info!("Cleaned up {count} expired OAuth state(s)");
+                        }
+                        Ok(_) => {}
+                        Err(e) => {
+                            tracing::error!("Failed to cleanup OAuth states: {e}");
+                        }
+                    }
                 }
             }
         }
@@ -73,8 +97,23 @@ async fn process_due_posts(
     db: &PgPool,
     providers: &ProviderRegistry,
     broadcaster: &Broadcaster,
+    token_key: Option<[u8; 32]>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let posts = queries::get_due_posts(db).await?;
+    let mut posts = queries::get_due_posts(db, DUE_POSTS_LIMIT).await?;
+
+    // Decrypt tokens in-place if token_key is configured
+    if let Some(key) = token_key {
+        for post in &mut posts {
+            if let Ok(decrypted) = crate::crypto::decrypt_string(&post.access_token, &key) {
+                post.access_token = decrypted;
+            }
+            if let Some(ref rt) = post.refresh_token {
+                if let Ok(decrypted) = crate::crypto::decrypt_string(rt, &key) {
+                    post.refresh_token = Some(decrypted);
+                }
+            }
+        }
+    }
 
     if posts.is_empty() {
         return Ok(());
@@ -101,8 +140,9 @@ async fn process_due_posts(
         let provider_clone = provider.clone();
         let post_clone = post.clone();
         let bcast = broadcaster.clone();
+        let tk = token_key; // Copy (Option<[u8; 32]> implements Copy)
         tokio::spawn(async move {
-            if let Err(e) = publish_post(&db_clone, provider_clone.as_ref(), &post_clone, &bcast).await {
+            if let Err(e) = publish_post(&db_clone, provider_clone.as_ref(), &post_clone, &bcast, tk).await {
                 tracing::error!("Failed to publish post {}: {e}", post_clone.id);
                 let err_str = e.to_string();
                 mark_post_error(&db_clone, post_clone.id, &err_str).await;
@@ -129,6 +169,7 @@ async fn publish_post(
     provider: &dyn SocialProvider,
     post: &PostWithIntegration,
     broadcaster: &Broadcaster,
+    token_key: Option<[u8; 32]>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Resolve access token, potentially refreshed
     let mut access_token = resolve_token(db, provider, post).await?;
@@ -186,10 +227,17 @@ async fn publish_post(
                     post.refresh_token.as_deref().unwrap_or(""),
                 ).await {
                     Ok(t) => {
+                                        // Encrypt token before storing if encryption key is configured
+                        let enc_access_token = if let Some(ref k) = token_key {
+                            crate::crypto::encrypt_string(&t.access_token, k)
+                                .unwrap_or_else(|_| t.access_token.clone())
+                        } else {
+                            t.access_token.clone()
+                        };
                         queries::update_integration_token(
                             db,
                             post.integration_id,
-                            &t.access_token,
+                            &enc_access_token,
                             t.refresh_token.as_deref(),
                             t.expires_in.map(|e| Utc::now() + chrono::Duration::seconds(e as i64)),
                         ).await?;
@@ -226,48 +274,6 @@ async fn publish_post(
     }
 
     Err(last_error.unwrap_or_else(|| "Max retries exceeded".to_string()).into())
-}
-
-/// Publish with a known-good access token (used after refresh — now integrated into publish_post)
-#[allow(dead_code)]
-async fn publish_with_token(
-    db: &PgPool,
-    provider: &dyn SocialProvider,
-    access_token: &str,
-    post: &PostWithIntegration,
-    broadcaster: &Broadcaster,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let content = PostContent {
-        content: post.content.clone(),
-        media: vec![],
-        settings: post.settings.clone(),
-    };
-
-    match provider.publish(access_token, &content).await {
-        Ok(result) => {
-            queries::update_post_state(
-                db,
-                post.id,
-                PostState::Published,
-                Some(&result.platform_post_id),
-                result.platform_post_url.as_deref(),
-                None,
-            )
-            .await?;
-
-            broadcaster.send(
-                "post_published",
-                &serde_json::json!({
-                    "id": post.id.to_string(),
-                    "platform_post_url": result.platform_post_url,
-                    "provider": post.provider_identifier,
-                }),
-            );
-
-            Ok(())
-        }
-        Err(e) => Err(e.into()),
-    }
 }
 
 /// Resolve a valid access token, refreshing if necessary

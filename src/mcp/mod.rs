@@ -24,12 +24,8 @@ use crate::db::queries;
 mod tools_calendar;
 mod tools_integrations;
 mod tools_posts;
-
-/// Shared state passed to both API and MCP layers
-#[derive(Clone)]
-pub struct McpState {
-    pub state: AppState,
-}
+mod tools_reddit;
+mod tools_x;
 
 // ══════════════════════════════════════════════════════════════
 // AUTH TOOLS
@@ -100,6 +96,9 @@ impl PostizMcpServer {
         params: Parameters<RegisterInput>,
     ) -> Result<Json<RegisterOutput>, String> {
         let input = params.0;
+        // Rate limit by email
+        self.state.rate_limiter.check(&input.email).await.map_err(|e| format!("Rate limited: {e}"))?;
+
         if input.email.is_empty() || !input.email.contains('@') {
             return Err("Invalid email".into());
         }
@@ -136,6 +135,9 @@ impl PostizMcpServer {
         params: Parameters<LoginInput>,
     ) -> Result<Json<LoginOutput>, String> {
         let input = params.0;
+        // Rate limit by email
+        self.state.rate_limiter.check(&input.email).await.map_err(|e| format!("Rate limited: {e}"))?;
+
         let user = queries::get_user_by_email(&self.state.db, &input.email)
             .await
             .map_err(|e| e.to_string())?
@@ -192,6 +194,14 @@ impl PostizMcpServer {
 
     // ── Integration Tools ────────────────────────────────────
 
+    #[tool(description = "List all available social media providers with their configuration status")]
+    async fn integrations_list_providers(
+        &self,
+        params: Parameters<tools_integrations::ListProvidersInput>,
+    ) -> Result<Json<tools_integrations::ListProvidersOutput>, String> {
+        tools_integrations::list_providers(&self.state, &params.0).await
+    }
+
     #[tool(description = "List all connected social media channels")]
     async fn integrations_list(
         &self,
@@ -206,6 +216,14 @@ impl PostizMcpServer {
         params: Parameters<tools_integrations::ConnectInput>,
     ) -> Result<Json<tools_integrations::ConnectOutput>, String> {
         tools_integrations::connect_integration(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Complete OAuth connection after authorizing in browser. Pass code and state from the callback URL.")]
+    async fn integrations_connect_complete(
+        &self,
+        params: Parameters<tools_integrations::ConnectCompleteInput>,
+    ) -> Result<Json<SuccessOutput>, String> {
+        tools_integrations::complete_connect_integration(&self.state, &params.0).await
     }
 
     #[tool(description = "Disconnect/remove a social media channel")]
@@ -250,6 +268,14 @@ impl PostizMcpServer {
         tools_posts::schedule_post(&self.state, &params.0).await
     }
 
+    #[tool(description = "Publish a post immediately. Accepts queued or errored posts.")]
+    async fn posts_publish(
+        &self,
+        params: Parameters<tools_posts::GetPostInput>,
+    ) -> Result<Json<tools_posts::SchedulePostOutput>, String> {
+        tools_posts::publish_post(&self.state, &params.0).await
+    }
+
     #[tool(description = "Delete a post by ID")]
     async fn posts_delete(
         &self,
@@ -272,6 +298,228 @@ impl PostizMcpServer {
         params: Parameters<tools_posts::UpdatePostInput>,
     ) -> Result<Json<tools_posts::UpdatePostOutput>, String> {
         tools_posts::update_post(&self.state, &params.0).await
+    }
+
+    // ── Reddit Read/Query Tools ──────────────────────────────────
+
+    #[tool(description = "Browse a subreddit and list posts. Sort options: hot, new, top, rising, controversial. For top/controversial, set time to: hour, day, week, month, year, all.")]
+    async fn reddit_browse(
+        &self,
+        params: Parameters<tools_reddit::RedditBrowseInput>,
+    ) -> Result<Json<tools_reddit::RedditBrowseOutput>, String> {
+        tools_reddit::reddit_browse(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Search Reddit. Optionally restrict to a subreddit. Sort: relevance, hot, top, new, comments. Time: hour, day, week, month, year, all.")]
+    async fn reddit_search(
+        &self,
+        params: Parameters<tools_reddit::RedditSearchInput>,
+    ) -> Result<Json<tools_reddit::RedditSearchOutput>, String> {
+        tools_reddit::reddit_search(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get a Reddit post's full content with nested comments. Pass post_id as the base36 ID or full URL.")]
+    async fn reddit_post_detail(
+        &self,
+        params: Parameters<tools_reddit::RedditPostDetailInput>,
+    ) -> Result<Json<tools_reddit::RedditPostDetailOutput>, String> {
+        tools_reddit::reddit_post_detail(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get Reddit user info with optional posts and comments.")]
+    async fn reddit_user_info(
+        &self,
+        params: Parameters<tools_reddit::RedditUserInfoInput>,
+    ) -> Result<Json<tools_reddit::RedditUserInfoOutput>, String> {
+        tools_reddit::reddit_user_info(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Send a direct message to a Reddit user.")]
+    async fn reddit_send_dm(
+        &self,
+        params: Parameters<tools_reddit::RedditSendDmInput>,
+    ) -> Result<Json<tools_reddit::RedditSendDmOutput>, String> {
+        tools_reddit::reddit_send_dm(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Read Reddit inbox. Folders: inbox, unread, sent, messages, mentions, comments, selfreply.")]
+    async fn reddit_inbox(
+        &self,
+        params: Parameters<tools_reddit::RedditInboxInput>,
+    ) -> Result<Json<tools_reddit::RedditInboxOutput>, String> {
+        tools_reddit::reddit_inbox(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get comments for a Reddit post with sort option. Sort: confidence (default), top, new, controversial, old, qa.")]
+    async fn reddit_get_comments(
+        &self,
+        params: Parameters<tools_reddit::RedditGetCommentsInput>,
+    ) -> Result<Json<tools_reddit::RedditGetCommentsOutput>, String> {
+        tools_reddit::reddit_get_comments(&self.state, &params.0).await
+    }
+
+    // ── X/Twitter Read Tools ─────────────────────────────────────
+
+    #[tool(description = "Get the authenticated X/Twitter user's profile")]
+    async fn x_get_me(
+        &self,
+        _params: Parameters<()>,
+    ) -> Result<Json<tools_x::XGetMeOutput>, String> {
+        tools_x::x_get_me(&self.state).await
+    }
+
+    #[tool(description = "Get X/Twitter home timeline (reverse chronological). Shows recent tweets from people you follow.")]
+    async fn x_home_timeline(
+        &self,
+        params: Parameters<tools_x::XHomeTimelineInput>,
+    ) -> Result<Json<tools_x::XHomeTimelineOutput>, String> {
+        tools_x::x_home_timeline(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Lookup an X/Twitter user by their numeric user ID")]
+    async fn x_user_lookup(
+        &self,
+        params: Parameters<tools_x::XUserLookupInput>,
+    ) -> Result<Json<tools_x::XUserLookupOutput>, String> {
+        tools_x::x_user_lookup(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Lookup an X/Twitter user by their @username")]
+    async fn x_user_lookup_by_username(
+        &self,
+        params: Parameters<tools_x::XUserLookupByUsernameInput>,
+    ) -> Result<Json<tools_x::XUserLookupByUsernameOutput>, String> {
+        tools_x::x_user_lookup_by_username(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get tweets from a specific X/Twitter user by their user ID")]
+    async fn x_user_tweets(
+        &self,
+        params: Parameters<tools_x::XUserTweetsInput>,
+    ) -> Result<Json<tools_x::XUserTweetsOutput>, String> {
+        tools_x::x_user_tweets(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get a single X/Twitter tweet with full details, author info, and media")]
+    async fn x_tweet_detail(
+        &self,
+        params: Parameters<tools_x::XTweetDetailInput>,
+    ) -> Result<Json<tools_x::XTweetDetailOutput>, String> {
+        tools_x::x_tweet_detail(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Search recent X/Twitter tweets. Query supports standard Twitter search syntax (from:user, #hashtag, etc.).")]
+    async fn x_search_tweets(
+        &self,
+        params: Parameters<tools_x::XSearchTweetsInput>,
+    ) -> Result<Json<tools_x::XSearchTweetsOutput>, String> {
+        tools_x::x_search_tweets(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get followers of an X/Twitter user")]
+    async fn x_followers(
+        &self,
+        params: Parameters<tools_x::XFollowersInput>,
+    ) -> Result<Json<tools_x::XFollowersOutput>, String> {
+        tools_x::x_followers(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get who an X/Twitter user is following")]
+    async fn x_following(
+        &self,
+        params: Parameters<tools_x::XFollowingInput>,
+    ) -> Result<Json<tools_x::XFollowingOutput>, String> {
+        tools_x::x_following(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get bookmarked X/Twitter tweets")]
+    async fn x_bookmarks(
+        &self,
+        params: Parameters<tools_x::XBookmarksInput>,
+    ) -> Result<Json<tools_x::XBookmarksOutput>, String> {
+        tools_x::x_bookmarks(&self.state, &params.0).await
+    }
+
+    // ── X/Twitter Write Tools ────────────────────────────────────
+
+    #[tool(description = "Delete an X/Twitter tweet by its ID")]
+    async fn x_delete_tweet(
+        &self,
+        params: Parameters<tools_x::XDeleteTweetInput>,
+    ) -> Result<Json<tools_x::XDeleteTweetOutput>, String> {
+        tools_x::x_delete_tweet(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Like a tweet on X/Twitter")]
+    async fn x_like_tweet(
+        &self,
+        params: Parameters<tools_x::XLikeTweetInput>,
+    ) -> Result<Json<tools_x::XLikeTweetOutput>, String> {
+        tools_x::x_like_tweet(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Unlike a tweet on X/Twitter")]
+    async fn x_unlike_tweet(
+        &self,
+        params: Parameters<tools_x::XUnlikeTweetInput>,
+    ) -> Result<Json<tools_x::XUnlikeTweetOutput>, String> {
+        tools_x::x_unlike_tweet(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Retweet a tweet on X/Twitter")]
+    async fn x_retweet(
+        &self,
+        params: Parameters<tools_x::XRetweetInput>,
+    ) -> Result<Json<tools_x::XRetweetOutput>, String> {
+        tools_x::x_retweet(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Unretweet (remove retweet of) a tweet on X/Twitter")]
+    async fn x_unretweet(
+        &self,
+        params: Parameters<tools_x::XUnretweetInput>,
+    ) -> Result<Json<tools_x::XUnretweetOutput>, String> {
+        tools_x::x_unretweet(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Bookmark a tweet on X/Twitter")]
+    async fn x_bookmark_tweet(
+        &self,
+        params: Parameters<tools_x::XBookmarkTweetInput>,
+    ) -> Result<Json<tools_x::XBookmarkTweetOutput>, String> {
+        tools_x::x_bookmark_tweet(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Remove a bookmark from a tweet on X/Twitter")]
+    async fn x_unbookmark_tweet(
+        &self,
+        params: Parameters<tools_x::XUnbookmarkTweetInput>,
+    ) -> Result<Json<tools_x::XUnbookmarkTweetOutput>, String> {
+        tools_x::x_unbookmark_tweet(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Follow a user on X/Twitter by their user ID")]
+    async fn x_follow_user(
+        &self,
+        params: Parameters<tools_x::XFollowUserInput>,
+    ) -> Result<Json<tools_x::XFollowUserOutput>, String> {
+        tools_x::x_follow_user(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Unfollow a user on X/Twitter by their user ID")]
+    async fn x_unfollow_user(
+        &self,
+        params: Parameters<tools_x::XUnfollowUserInput>,
+    ) -> Result<Json<tools_x::XUnfollowUserOutput>, String> {
+        tools_x::x_unfollow_user(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get tweets from an X/Twitter List by list ID")]
+    async fn x_list_timeline(
+        &self,
+        params: Parameters<tools_x::XListTimelineInput>,
+    ) -> Result<Json<tools_x::XListTimelineOutput>, String> {
+        tools_x::x_list_timeline(&self.state, &params.0).await
     }
 }
 

@@ -58,3 +58,122 @@ pub fn validate_token(token: &str, secret: &str) -> Result<Claims, jsonwebtoken:
     )?;
     Ok(token_data.claims)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_hash_password_round_trip() {
+        let password = "my_secure_password_123!";
+        let hash = hash_password(password).expect("hash should succeed");
+        assert!(verify_password(password, &hash).expect("verify should succeed"));
+    }
+
+    #[test]
+    fn test_wrong_password_rejected() {
+        let hash = hash_password("correct_password").expect("hash should succeed");
+        let result = verify_password("wrong_password", &hash).expect("verify should succeed");
+        assert!(!result, "wrong password should not verify");
+    }
+
+    #[test]
+    fn test_different_hashes_produced() {
+        let pw = "same_password";
+        let hash1 = hash_password(pw).expect("hash1");
+        let hash2 = hash_password(pw).expect("hash2");
+        // Argon2 generates random salt each time
+        assert_ne!(hash1, hash2, "hashes should differ due to random salt");
+    }
+
+    #[test]
+    fn test_invalid_hash_fails() {
+        let result = verify_password("anything", "not-a-valid-hash");
+        assert!(result.is_err(), "invalid hash should error");
+    }
+
+    #[test]
+    fn test_create_and_validate_token() {
+        let user_id = Uuid::new_v4();
+        let secret = "test-secret-key-that-is-long-enough-for-hmac";
+        
+        let token = create_token(user_id, secret).expect("create token");
+        let claims = validate_token(&token, secret).expect("validate token");
+        
+        assert_eq!(claims.sub, user_id.to_string(), "subject should match user_id");
+        assert!(claims.exp > 0, "expiry should be set");
+        assert!(claims.iat > 0, "issued-at should be set");
+    }
+
+    #[test]
+    fn test_wrong_secret_rejected() {
+        let token = create_token(Uuid::new_v4(), "correct-secret-for-signing-tokens")
+            .expect("create token");
+        let result = validate_token(&token, "wrong-secret-for-validation");
+        assert!(result.is_err(), "wrong secret should fail validation");
+    }
+
+    #[test]
+    fn test_tampered_token_rejected() {
+        let secret = "test-secret-for-hmac";
+        let token = create_token(Uuid::new_v4(), secret).expect("create token");
+        
+        // Tamper with the payload portion
+        let mut parts: Vec<&str> = token.split('.').collect();
+        if parts.len() == 3 {
+            parts[1] = "eyJzdWIiOiJmYWtlIn0"; // base64 of {"sub":"fake"}
+            let tampered = parts.join(".");
+            let result = validate_token(&tampered, secret);
+            assert!(result.is_err(), "tampered token should fail validation");
+        }
+    }
+
+    #[test]
+    fn test_token_contains_correct_user_id() {
+        let user_id = Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap();
+        let secret = "another-test-key-for-validating-subject";
+        
+        let token = create_token(user_id, secret).expect("create token");
+        let claims = validate_token(&token, secret).expect("validate token");
+        
+        assert_eq!(claims.sub, "550e8400-e29b-41d4-a716-446655440000");
+    }
+
+    #[test]
+    fn test_token_expiry_is_about_30_days() {
+        let user_id = Uuid::new_v4();
+        let secret = "test-key-for-expiry-check";
+        
+        let token = create_token(user_id, secret).expect("create token");
+        let claims = validate_token(&token, secret).expect("validate token");
+        
+        let now = Utc::now().timestamp() as usize;
+        let thirty_days_secs = 30 * 24 * 60 * 60;
+        
+        // Allow 5 second tolerance for test execution time
+        assert!(
+            claims.exp >= now + thirty_days_secs - 5,
+            "expiry should be ~30 days from now (exp={}, now={})",
+            claims.exp, now
+        );
+        assert!(
+            claims.exp <= now + thirty_days_secs + 5,
+            "expiry should not exceed 30 days + 5s tolerance"
+        );
+    }
+
+    #[test]
+    fn test_iat_is_recent() {
+        let user_id = Uuid::new_v4();
+        let secret = "test-key-for-iat-check";
+        
+        let token = create_token(user_id, secret).expect("create token");
+        let claims = validate_token(&token, secret).expect("validate token");
+        
+        let now = Utc::now().timestamp() as usize;
+        assert!(
+            claims.iat <= now && claims.iat >= now - 5,
+            "iat should be within 5s of now"
+        );
+    }
+}

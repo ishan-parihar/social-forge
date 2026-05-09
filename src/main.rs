@@ -11,23 +11,19 @@
 //   1. Humans via SvelteKit frontend (HTTP + SSE)
 //   2. AI agents via MCP tools (stdio/SSE)
 
-mod api;
-mod auth;
-mod config;
-mod db;
-mod error;
-mod mcp;
-mod realtime;
-mod scheduler;
-mod social;
-
 use std::sync::Arc;
+
+use postiz_rust::api;
+use postiz_rust::config;
+use postiz_rust::db;
+use postiz_rust::mcp;
+use postiz_rust::scheduler;
 
 use anyhow::Context;
 
-use crate::api::AppState;
-use crate::realtime::Broadcaster;
-use crate::social::registry::ProviderRegistry;
+use postiz_rust::api::AppState;
+use postiz_rust::realtime::Broadcaster;
+use postiz_rust::social::registry::ProviderRegistry;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -62,46 +58,80 @@ async fn main() -> anyhow::Result<()> {
     // ── Shared app state ─────────────────────────────────────
     let rate_limiter = api::rate_limiter::AuthRateLimiter::new(5, 60); // 5 attempts per 60 seconds
 
+    // Parse optional token encryption key (64 hex chars = 32 bytes)
+    let token_key = config
+        .token_encryption_key
+        .as_ref()
+        .and_then(|k| postiz_rust::crypto::decode_hex_key(k).ok());
+    if token_key.is_some() {
+        tracing::info!("Token encryption at rest: ENABLED");
+    } else {
+        tracing::warn!("Token encryption at rest: DISABLED (set TOKEN_ENCRYPTION_KEY for production)");
+    }
+
+    // ── Build shared state (clone for MCP if needed) ──────────
     let state = AppState {
         db: db.clone(),
         config: config.clone(),
         broadcast: broadcaster.clone(),
         providers: (*providers_arc).clone(),
         rate_limiter,
+        token_key,
     };
+    let state_for_mcp = state.clone();
 
     // ── Start scheduler ───────────────────────────────────────
-    scheduler::start_scheduler(db.clone(), providers_arc.clone(), broadcaster.clone());
+    let (_shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
+    scheduler::start_scheduler(
+        db.clone(),
+        providers_arc.clone(),
+        broadcaster.clone(),
+        token_key,
+        shutdown_rx,
+    );
 
     // ── Build HTTP router ─────────────────────────────────────
-    let app = api::build_router(state.clone());
+    let app = api::build_router(state);
 
-    // ── Start servers ─────────────────────────────────────────
+    // ── Start HTTP server ────────────────────────────────────
     let http_port = std::env::var("PORT").unwrap_or_else(|_| "3000".into());
     let http_addr = format!("0.0.0.0:{http_port}");
-
-    tracing::info!("Starting HTTP server on {http_addr}");
-    tracing::info!("REST API: http://{http_addr}/api/");
-    tracing::info!("SSE events: http://{http_addr}/api/events");
-    tracing::info!("Health check: http://{http_addr}/health");
-    tracing::info!("MCP server available on stdio (--mcp flag)");
-    tracing::info!("Frontend URL: {}", config.frontend_url);
 
     let listener = tokio::net::TcpListener::bind(&http_addr)
         .await
         .context("Failed to bind HTTP listener")?;
 
-    // ── Start MCP on stdio if --mcp flag ──────────────────────
+    tokio::spawn(async move {
+        if let Err(e) = axum::serve(listener, app).await {
+            tracing::error!("HTTP server error: {e}");
+        }
+    });
+
+    tracing::info!("REST API: http://{http_addr}/api/");
+    tracing::info!("SSE events: http://{http_addr}/api/events");
+    tracing::info!("Health check: http://{http_addr}/health");
+    tracing::info!("Frontend URL: {}", config.frontend_url);
+
+    // ── MCP mode: also start MCP stdio server ────────────────
     let args: Vec<String> = std::env::args().collect();
     if args.contains(&"--mcp".to_string()) {
-        tracing::info!("Starting in MCP stdio mode");
-        mcp::run_mcp_stdio(state).await?;
-    } else {
-        // Normal HTTP server mode
-        axum::serve(listener, app)
-            .await
-            .context("HTTP server error")?;
+        tracing::info!("Starting in MERGED mode: HTTP on {http_addr} + MCP on stdio");
+        tokio::spawn(async move {
+            tracing::info!("MCP server started on stdio");
+            if let Err(e) = mcp::run_mcp_stdio(state_for_mcp).await {
+                tracing::error!("MCP server error: {e}");
+            }
+        });
     }
 
+    // ── Keep process alive ───────────────────────────────────
+    // Spawned tasks (HTTP + scheduler + optional MCP) keep the
+    // tokio runtime alive. In interactive terminals, Ctrl+C
+    // aborts the process. In Docker/CI, orchestrator sends
+    // SIGTERM. Graceful shutdown is not used here because
+    // tokio::signal::ctrl_c() does not work in non-TTY shells.
+    let () = std::future::pending().await;
+
+    tracing::info!("Server shut down gracefully");
     Ok(())
 }

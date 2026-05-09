@@ -39,11 +39,14 @@ impl SocialProvider for FacebookProvider {
         "Facebook"
     }
 
+    fn is_between_steps(&self) -> bool { true }
+
     fn scopes(&self) -> Vec<String> {
         vec![
             "pages_show_list".into(),
             "pages_read_engagement".into(),
             "pages_manage_posts".into(),
+            "business_management".into(),
             "public_profile".into(),
         ]
     }
@@ -125,36 +128,38 @@ impl SocialProvider for FacebookProvider {
             .to_string();
         let expires_in = long_json["expires_in"].as_u64().map(|v| v as u32);
 
-        // Get user's pages
-        let pages: serde_json::Value = self
+        // Get Facebook user info (name + picture) for the root integration
+        let me: serde_json::Value = self
             .http
-            .get(format!("{}/me/accounts", self.graph_url()))
+            .get(format!("{}/me?fields=id,name,picture.type(large)", self.graph_url()))
             .query(&[("access_token", &access_token)])
             .send()
             .await?
             .json()
             .await?;
 
-        // Pick first page (MVP). Multi-page support later.
-        if let Some(page) = pages["data"].as_array().and_then(|a| a.first()) {
-            let page_id = page["id"].as_str().unwrap_or("").to_string();
-            let page_name = page["name"].as_str().unwrap_or("").to_string();
-            let page_token = page["access_token"].as_str().unwrap_or("").to_string();
-            let picture = page["picture"]["data"]["url"].as_str().map(String::from);
+        let user_id = me["id"].as_str().unwrap_or("me").to_string();
+        let user_name = me["name"].as_str().unwrap_or("Facebook User").to_string();
+        let user_pic = me["picture"]["data"]["url"].as_str().map(String::from);
 
-            let name = page_name.clone();
-            return Ok(AuthToken {
-                access_token: page_token,
-                refresh_token: None,
-                expires_in,
-                provider_user_id: page_id,
-                name,
-                username: page_name,
-                picture,
-            });
-        }
+        tracing::info!(
+            "Facebook OAuth: user '{}' ({}). Use available-pages + connect-page to link specific pages.",
+            user_name, user_id
+        );
 
-        Err(ProviderError::Auth("No Facebook pages found. Create a Page first.".into()))
+        // Return the user-level token. The caller (is_between_steps = true) will
+        // store this as a root integration. The user then calls:
+        //   GET  /api/integrations/{id}/available-pages  — list all pages
+        //   POST /api/integrations/{parent_id}/connect-page/{page_id} — connect a page
+        return Ok(AuthToken {
+            access_token,  // user-level token for listing pages via me/accounts
+            refresh_token: None,
+            expires_in,
+            provider_user_id: user_id,
+            name: user_name.clone(),
+            username: user_name,
+            picture: user_pic,
+        });
     }
 
     async fn refresh_token(
@@ -208,6 +213,126 @@ impl SocialProvider for FacebookProvider {
             ))
         }
     }
+
+    async fn pages(&self, access_token: &str) -> Result<Vec<PageInfo>, ProviderError> {
+        let fields = "id,access_token,username,name,picture.type(large)";
+        let mut pages_map: std::collections::HashMap<String, serde_json::Value> = std::collections::HashMap::new();
+
+        // Paginated fetch helper
+        async fn collect_pages(
+            http: &reqwest::Client,
+            url: &str,
+            access_token: &str,
+            map: &mut std::collections::HashMap<String, serde_json::Value>,
+        ) -> Result<(), ProviderError> {
+            let mut current = url.to_string();
+            loop {
+                let resp = http
+                    .get(&current)
+                    .query(&[("access_token", access_token)])
+                    .send()
+                    .await?;
+
+                let json: serde_json::Value = resp.json().await?;
+
+                if let Some(err) = json["error"].as_object() {
+                    tracing::warn!("collect_pages skipped ({:?}): {}", url, err["message"].as_str().unwrap_or(""));
+                    return Ok(());
+                }
+
+                if let Some(data) = json["data"].as_array() {
+                    for page in data {
+                        if let Some(pid) = page["id"].as_str() {
+                            map.entry(pid.to_string()).or_insert_with(|| page.clone());
+                        }
+                    }
+                }
+
+                if let Some(next) = json["paging"]["next"].as_str() {
+                    current = next.to_string();
+                } else {
+                    break;
+                }
+            }
+            Ok(())
+        }
+
+        // Phase 1: /me/accounts — pages user selected in OAuth
+        let me_url = format!(
+            "{}/me/accounts?fields={}&limit=100",
+            self.graph_url(),
+            fields
+        );
+        collect_pages(&self.http, &me_url, access_token, &mut pages_map).await?;
+
+        // Phase 2: /me/businesses → owned_pages + client_pages — Business Manager pages
+        let biz_resp = self
+            .http
+            .get(format!("{}/me/businesses", self.graph_url()))
+            .query(&[("access_token", access_token)])
+            .send()
+            .await?;
+
+        let biz_json: serde_json::Value = biz_resp.json().await?;
+
+        if biz_json["error"].is_null() {
+            if let Some(businesses) = biz_json["data"].as_array() {
+                for biz in businesses {
+                    let biz_id = match biz["id"].as_str() {
+                        Some(id) if !id.is_empty() => id,
+                        _ => continue,
+                    };
+
+                    for endpoint in &["owned_pages", "client_pages"] {
+                        let biz_url = format!(
+                            "{}/{biz_id}/{endpoint}?fields={fields}&limit=100",
+                            self.graph_url(),
+                        );
+                        if let Err(e) = collect_pages(&self.http, &biz_url, access_token, &mut pages_map).await {
+                            tracing::warn!("Business Manager {endpoint} for {biz_id}: {e:?}");
+                        }
+                    }
+                }
+            }
+        } else {
+            tracing::debug!("/me/businesses not available: {:?}", biz_json["error"]["message"]);
+        }
+
+        let mut result: Vec<PageInfo> = pages_map
+            .into_values()
+            .map(|page| PageInfo {
+                id: page["id"].as_str().unwrap_or("").to_string(),
+                name: page["name"].as_str().unwrap_or("").to_string(),
+                access_token: page["access_token"].as_str().map(String::from),
+                picture: page["picture"]["data"]["url"].as_str().map(String::from),
+                username: page["username"].as_str().map(String::from),
+            })
+            .collect();
+
+        result.sort_by(|a, b| a.name.cmp(&b.name));
+        Ok(result)
+    }
+
+    async fn fetch_page_info(
+        &self,
+        access_token: &str,
+        page_id: &str,
+    ) -> Result<PageInfo, ProviderError> {
+        let resp = self
+            .http
+            .get(format!("{}/{page_id}?fields=id,name,picture.type(large)", self.graph_url()))
+            .query(&[("access_token", access_token)])
+            .send()
+            .await?;
+        let json: serde_json::Value = resp.json().await?;
+        Ok(PageInfo {
+            id: json["id"].as_str().unwrap_or("").to_string(),
+            name: json["name"].as_str().unwrap_or("").to_string(),
+            access_token: None,
+            picture: json["picture"]["data"]["url"].as_str().map(String::from),
+            username: json["username"].as_str().map(String::from),
+        })
+    }
 }
 
 impl FacebookProvider {
@@ -228,5 +353,82 @@ impl FacebookProvider {
         pages.first()
             .and_then(|page| page["id"].as_str().map(String::from))
             .ok_or_else(|| ProviderError::Auth("Could not resolve page ID from token.".into()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::Config;
+
+    fn test_config() -> Config {
+        Config {
+            database_url: "sqlite:test".into(),
+            jwt_secret: "test".into(),
+            app_url: "http://localhost:3000".into(),
+            frontend_url: "http://localhost:4200".into(),
+            x_client_id: None,
+            x_client_secret: None,
+            linkedin_client_id: None,
+            linkedin_client_secret: None,
+            bluesky_handle: None,
+            bluesky_app_password: None,
+            facebook_client_id: Some("test_fb_id".into()),
+            facebook_client_secret: Some("test_fb_secret".into()),
+            instagram_client_id: None,
+            instagram_client_secret: None,
+            threads_client_id: None,
+            threads_client_secret: None,
+            youtube_client_id: None,
+            youtube_client_secret: None,
+            reddit_client_id: None,
+            reddit_client_secret: None,
+            discord_client_id: None,
+            discord_client_secret: None,
+            discord_bot_token: None,
+            telegram_token: None,
+            pinterest_client_id: None,
+            pinterest_client_secret: None,
+            instagram_app_id: None,
+            instagram_app_secret: None,
+            token_encryption_key: None,
+            media_dir: "./uploads".into(),
+        }
+    }
+
+    #[test]
+    fn test_scopes_contain_required() {
+        let provider = FacebookProvider::new(&test_config());
+        let scopes = provider.scopes();
+        assert!(scopes.contains(&"pages_show_list".to_string()));
+        assert!(scopes.contains(&"pages_manage_posts".to_string()));
+        assert!(scopes.contains(&"public_profile".to_string()));
+    }
+
+    #[test]
+    fn test_identifier_and_name() {
+        let provider = FacebookProvider::new(&test_config());
+        assert_eq!(provider.identifier(), "facebook");
+        assert_eq!(provider.name(), "Facebook");
+    }
+
+    #[test]
+    fn test_max_content_length() {
+        let provider = FacebookProvider::new(&test_config());
+        assert_eq!(provider.max_content_length(), 63206);
+    }
+
+    #[tokio::test]
+    async fn test_generate_auth_url_contains_params() {
+        let provider = FacebookProvider::new(&test_config());
+        let result = provider.generate_auth_url("test_state", "test_verifier", "http://localhost:3000/callback").await;
+        let url = result.unwrap().url;
+
+        assert!(url.contains("client_id=test_fb_id"), "should contain client_id");
+        assert!(url.contains("redirect_uri="), "should contain redirect_uri");
+        assert!(url.contains("state=test_state"), "should contain state");
+        assert!(url.contains("scope="), "should contain scope");
+        assert!(url.contains("response_type=code"), "should contain response_type");
+        assert!(url.starts_with("https://www.facebook.com/v21.0/dialog/oauth"));
     }
 }

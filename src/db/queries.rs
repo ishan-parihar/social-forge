@@ -67,24 +67,27 @@ pub async fn create_integration(
     profile_name: Option<&str>,
     profile_picture: Option<&str>,
     profile_url: Option<&str>,
+    root_internal_id: Option<&str>,
 ) -> Result<Integration, sqlx::Error> {
     sqlx::query_as!(
         Integration,
         r#"INSERT INTO integrations
            (user_id, provider_identifier, provider_name, internal_id,
             access_token, refresh_token, token_expires_at,
-            profile_name, profile_picture, profile_url)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            profile_name, profile_picture, profile_url,
+            root_internal_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
            ON CONFLICT (user_id, provider_identifier, internal_id)
            DO UPDATE SET access_token = $5, refresh_token = $6,
              token_expires_at = $7, profile_name = $8,
              profile_picture = $9, profile_url = $10,
+             root_internal_id = COALESCE($11, integrations.root_internal_id),
              refresh_needed = false, disabled = false,
              updated_at = now()
            RETURNING id, user_id, provider_identifier, provider_name,
              internal_id, access_token, refresh_token, token_expires_at,
              profile_name, profile_picture, profile_url, disabled,
-             refresh_needed, posting_times, created_at, updated_at"#,
+             refresh_needed, root_internal_id, posting_times, created_at, updated_at"#,
         user_id,
         provider_identifier,
         provider_name,
@@ -95,6 +98,7 @@ pub async fn create_integration(
         profile_name,
         profile_picture,
         profile_url,
+        root_internal_id,
     )
     .fetch_one(pool)
     .await
@@ -109,7 +113,7 @@ pub async fn list_integrations(
         "SELECT id, user_id, provider_identifier, provider_name, internal_id,
                 access_token, refresh_token, token_expires_at,
                 profile_name, profile_picture, profile_url, disabled,
-                refresh_needed, posting_times, created_at, updated_at
+                refresh_needed, root_internal_id, posting_times, created_at, updated_at
          FROM integrations WHERE user_id = $1 ORDER BY created_at DESC",
         user_id,
     )
@@ -127,24 +131,10 @@ pub async fn get_integration(
         "SELECT id, user_id, provider_identifier, provider_name, internal_id,
                 access_token, refresh_token, token_expires_at,
                 profile_name, profile_picture, profile_url, disabled,
-                refresh_needed, posting_times, created_at, updated_at
+                refresh_needed, root_internal_id, posting_times, created_at, updated_at
          FROM integrations WHERE id = $1 AND user_id = $2",
         id,
         user_id,
-    )
-    .fetch_optional(pool)
-    .await
-}
-
-pub async fn get_integration_by_id(pool: &PgPool, id: Uuid) -> Result<Option<Integration>, sqlx::Error> {
-    sqlx::query_as!(
-        Integration,
-        "SELECT id, user_id, provider_identifier, provider_name, internal_id,
-                access_token, refresh_token, token_expires_at,
-                profile_name, profile_picture, profile_url, disabled,
-                refresh_needed, posting_times, created_at, updated_at
-         FROM integrations WHERE id = $1",
-        id,
     )
     .fetch_optional(pool)
     .await
@@ -433,8 +423,39 @@ pub async fn delete_post(pool: &PgPool, id: Uuid, user_id: Uuid) -> Result<bool,
     Ok(r.rows_affected() > 0)
 }
 
+/// Get a single post with its integration details (used for retry/publish now)
+pub async fn get_post_with_integration(
+    pool: &PgPool,
+    post_id: Uuid,
+    user_id: Uuid,
+) -> Result<Option<PostWithIntegration>, sqlx::Error> {
+    sqlx::query_as!(
+        PostWithIntegration,
+        r#"SELECT p.id, p.user_id, p.integration_id,
+           p.state as "state: PostState",
+           p.content, p.title, p.media, p.settings,
+           p.scheduled_at, p.published_at,
+           p.platform_post_id, p.platform_post_url, p.error_message,
+           p.created_at, p.updated_at,
+           i.provider_identifier, i.access_token,
+           i.refresh_token, i.token_expires_at,
+           i.disabled as "integration_disabled",
+           i.refresh_needed as "integration_refresh_needed"
+         FROM posts p
+         JOIN integrations i ON p.integration_id = i.id
+         WHERE p.id = $1 AND p.user_id = $2"#,
+        post_id,
+        user_id,
+    )
+    .fetch_optional(pool)
+    .await
+}
+
 /// Get posts due for publishing
-pub async fn get_due_posts(pool: &PgPool) -> Result<Vec<PostWithIntegration>, sqlx::Error> {
+pub async fn get_due_posts(
+    pool: &PgPool,
+    limit: i64,
+) -> Result<Vec<PostWithIntegration>, sqlx::Error> {
     sqlx::query_as!(
         PostWithIntegration,
         r#"SELECT p.id, p.user_id, p.integration_id,
@@ -453,7 +474,8 @@ pub async fn get_due_posts(pool: &PgPool) -> Result<Vec<PostWithIntegration>, sq
            AND p.scheduled_at <= NOW()
            AND i.disabled = false
          ORDER BY p.scheduled_at ASC
-         LIMIT 10"#,
+         LIMIT $1"#,
+        limit,
     )
     .fetch_all(pool)
     .await
@@ -576,6 +598,23 @@ pub async fn get_media(pool: &PgPool, id: Uuid) -> Result<Option<MediaEntry>, sq
                 file_size, width, height, created_at
          FROM media WHERE id = $1",
         id,
+    )
+    .fetch_optional(pool)
+    .await
+}
+
+pub async fn get_media_user(
+    pool: &PgPool,
+    id: Uuid,
+    user_id: Uuid,
+) -> Result<Option<MediaEntry>, sqlx::Error> {
+    sqlx::query_as!(
+        MediaEntry,
+        "SELECT id, user_id, original_name, storage_path, mime_type,
+                file_size, width, height, created_at
+         FROM media WHERE id = $1 AND user_id = $2",
+        id,
+        user_id,
     )
     .fetch_optional(pool)
     .await

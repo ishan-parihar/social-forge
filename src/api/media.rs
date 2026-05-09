@@ -3,14 +3,16 @@
 
 use axum::{
     body::{Body, HttpBody},
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::{header, Response},
     Json,
 };
 use axum_extra::extract::Multipart;
+use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::auth::middleware::AuthenticatedUser;
+use crate::auth::jwt;
 use crate::db::models::MediaPublic;
 use crate::db::queries;
 use crate::error::AppError;
@@ -104,12 +106,46 @@ pub async fn list(
     Ok(Json(entries.into_iter().map(MediaPublic::from).collect()))
 }
 
-/// GET /api/media/:id — serve a media file
+/// Query params for media serving — supports JWT token for auth
+#[derive(Debug, Deserialize)]
+pub struct MediaServeQuery {
+    pub token: Option<String>,
+}
+
+/// Verify auth and resolve user_id from either Bearer header or ?token= query param
+fn resolve_media_user(
+    state: &AppState,
+    token_query: Option<&str>,
+    auth_header: Option<&str>,
+) -> Result<Uuid, AppError> {
+    let token = token_query
+        .or(auth_header)
+        .ok_or_else(|| AppError::Unauthorized("Authentication required. Use ?token=JWT or Authorization header.".into()))?;
+
+    let claims = jwt::validate_token(token, &state.config.jwt_secret)
+        .map_err(|_| AppError::Unauthorized("Invalid or expired token".into()))?;
+
+    Uuid::parse_str(&claims.sub)
+        .map_err(|_| AppError::Unauthorized("Invalid user ID in token".into()))
+}
+
+/// GET /api/media/:id — serve a media file (auth required via ?token=JWT or Authorization header)
 pub async fn serve_media(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
+    Query(query): Query<MediaServeQuery>,
+    headers: axum::http::HeaderMap,
 ) -> Result<Response<Body>, AppError> {
-    let entry = queries::get_media(&state.db, id)
+    // Extract Bearer token from Authorization header
+    let auth_token = headers
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "));
+
+    // Resolve user: ?token= (for <img> tags) or Authorization: Bearer
+    let user_id = resolve_media_user(&state, query.token.as_deref(), auth_token)?;
+
+    let entry = queries::get_media_user(&state.db, id, user_id)
         .await?
         .ok_or_else(|| AppError::NotFound("Media not found".into()))?;
 

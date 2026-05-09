@@ -1,0 +1,400 @@
+// ─── Threads Provider ─────────────────────────────────────────
+// Meta Threads API v1.0 via graph.threads.net.
+
+use async_trait::async_trait;
+
+use super::*;
+use crate::config::Config;
+
+pub struct ThreadsProvider {
+    client_id: String,
+    client_secret: String,
+    http: reqwest::Client,
+}
+
+impl ThreadsProvider {
+    pub fn new(config: &Config) -> Self {
+        let (client_id, client_secret) =
+            config.provider_credentials("threads").unwrap_or_default();
+        Self {
+            client_id,
+            client_secret,
+            http: reqwest::Client::new(),
+        }
+    }
+
+    fn graph_url(&self) -> &'static str {
+        "https://graph.threads.net/v1.0"
+    }
+}
+
+#[async_trait]
+impl SocialProvider for ThreadsProvider {
+    fn identifier(&self) -> &'static str {
+        "threads"
+    }
+
+    fn name(&self) -> &'static str {
+        "Threads"
+    }
+
+    fn scopes(&self) -> Vec<String> {
+        vec![
+            "threads_basic".into(),
+            "threads_content_publish".into(),
+            "threads_manage_replies".into(),
+            "threads_manage_insights".into(),
+        ]
+    }
+
+    fn max_content_length(&self) -> usize {
+        500
+    }
+
+    fn needs_cron_refresh(&self) -> bool {
+        true
+    }
+
+    async fn generate_auth_url(
+        &self,
+        state: &str,
+        _code_verifier: &str,
+        redirect_uri: &str,
+    ) -> Result<AuthUrlResponse, ProviderError> {
+        let scope = self.scopes().join(",");
+        let https_uri = self.ensure_https_redirect_uri(redirect_uri);
+        let params: Vec<(&str, &str)> = vec![
+            ("client_id", self.client_id.as_str()),
+            ("redirect_uri", &https_uri),
+            ("response_type", "code"),
+            ("state", state),
+            ("scope", scope.as_str()),
+        ];
+
+        let url = url::Url::parse_with_params(
+            "https://www.threads.net/oauth/authorize",
+            &params,
+        )
+        .map_err(|e| ProviderError::Auth(format!("URL parse: {e}")))?;
+
+        Ok(AuthUrlResponse { url: url.to_string() })
+    }
+
+    async fn exchange_code(
+        &self,
+        code: &str,
+        _code_verifier: &str,
+        redirect_uri: &str,
+    ) -> Result<AuthToken, ProviderError> {
+        let https_uri = self.ensure_https_redirect_uri(redirect_uri);
+        // Step 1: Exchange code for short-lived token
+        let token_params: Vec<(&str, &str)> = vec![
+            ("client_id", self.client_id.as_str()),
+            ("redirect_uri", &https_uri),
+            ("grant_type", "authorization_code"),
+            ("client_secret", self.client_secret.as_str()),
+            ("code", code),
+        ];
+
+        let resp = self
+            .http
+            .get("https://graph.threads.net/oauth/access_token")
+            .query(&token_params)
+            .send()
+            .await?;
+
+        let json: serde_json::Value = resp.json().await?;
+        let short_token = json["access_token"]
+            .as_str()
+            .ok_or_else(|| ProviderError::Auth("Missing access_token".into()))?
+            .to_string();
+
+        // Step 2: Exchange for long-lived token (60 days)
+        let long_params: Vec<(&str, &str)> = vec![
+            ("grant_type", "th_exchange_token"),
+            ("client_secret", self.client_secret.as_str()),
+            ("access_token", short_token.as_str()),
+        ];
+
+        let long_resp = self
+            .http
+            .get("https://graph.threads.net/access_token")
+            .query(&long_params)
+            .send()
+            .await?;
+
+        let long_json: serde_json::Value = long_resp.json().await?;
+        let access_token = long_json["access_token"]
+            .as_str()
+            .unwrap_or(&short_token)
+            .to_string();
+        let expires_in = long_json["expires_in"].as_u64().map(|v| v as u32);
+
+        // Get user info
+        let user: serde_json::Value = self
+            .http
+            .get(format!("{}/me", self.graph_url()))
+            .query(&[
+                ("fields", "id,username,threads_profile_picture_url"),
+                ("access_token", &access_token),
+            ])
+            .send()
+            .await?
+            .json()
+            .await?;
+
+        let at = access_token.clone();
+        Ok(AuthToken {
+            access_token,
+            refresh_token: Some(at),
+            expires_in,
+            provider_user_id: user["id"].as_str().unwrap_or("").to_string(),
+            name: user["username"].as_str().unwrap_or("").to_string(),
+            username: user["username"].as_str().unwrap_or("").to_string(),
+            picture: user["threads_profile_picture_url"]
+                .as_str()
+                .map(String::from),
+        })
+    }
+
+    async fn refresh_token(&self, refresh_token: &str) -> Result<AuthToken, ProviderError> {
+        let params: Vec<(&str, &str)> = vec![
+            ("grant_type", "th_refresh_token"),
+            ("access_token", refresh_token),
+        ];
+
+        let resp = self
+            .http
+            .get("https://graph.threads.net/refresh_access_token")
+            .query(&params)
+            .send()
+            .await?;
+
+        let json: serde_json::Value = resp.json().await?;
+        let access_token = json["access_token"]
+            .as_str()
+            .ok_or_else(|| ProviderError::Auth("Missing access_token".into()))?
+            .to_string();
+        let expires_in = json["expires_in"].as_u64().map(|v| v as u32);
+
+        let user: serde_json::Value = self
+            .http
+            .get(format!("{}/me", self.graph_url()))
+            .query(&[
+                ("fields", "id,username,threads_profile_picture_url"),
+                ("access_token", &access_token),
+            ])
+            .send()
+            .await?
+            .json()
+            .await?;
+
+        Ok(AuthToken {
+            access_token: access_token.clone(),
+            refresh_token: Some(access_token),
+            expires_in,
+            provider_user_id: user["id"].as_str().unwrap_or("").to_string(),
+            name: user["username"].as_str().unwrap_or("").to_string(),
+            username: user["username"].as_str().unwrap_or("").to_string(),
+            picture: user["threads_profile_picture_url"]
+                .as_str()
+                .map(String::from),
+        })
+    }
+
+    async fn publish(
+        &self,
+        access_token: &str,
+        post: &PostContent,
+    ) -> Result<PublishResult, ProviderError> {
+        let user_id = self.resolve_user_id(access_token).await?;
+
+        // Build media params based on content type
+        let (media_type, url_key): (&str, &str) = if post.media.is_empty() {
+            ("TEXT", "")
+        } else if post.media.len() == 1 && post.media[0].url.contains(".mp4") {
+            ("VIDEO", "video_url")
+        } else if post.media.len() == 1 {
+            ("IMAGE", "image_url")
+        } else {
+            // Carousel: create child containers first
+            return self.publish_carousel(&user_id, access_token, post).await;
+        };
+
+        // Create container
+        let mut form: Vec<(&str, &str)> = vec![
+            ("media_type", media_type),
+            ("text", &post.content),
+            ("access_token", access_token),
+        ];
+
+        if !url_key.is_empty() {
+            form.push((url_key, post.media[0].url.as_str()));
+        }
+
+        let resp = self
+            .http
+            .post(format!("{}/{user_id}/threads", self.graph_url()))
+            .form(&form)
+            .send()
+            .await?;
+
+        let json: serde_json::Value = resp.json().await?;
+        let creation_id = json["id"]
+            .as_str()
+            .ok_or_else(|| ProviderError::Api(format!("No creation ID: {json:?}")))?
+            .to_string();
+
+        // Publish
+        let pub_resp = self
+            .http
+            .post(format!(
+                "{}/{user_id}/threads_publish",
+                self.graph_url()
+            ))
+            .form(&[("creation_id", creation_id.as_str()), ("access_token", access_token)])
+            .send()
+            .await?;
+
+        let pub_json: serde_json::Value = pub_resp.json().await?;
+        let thread_id = pub_json["id"]
+            .as_str()
+            .ok_or_else(|| ProviderError::Api(format!("Publish failed: {pub_json:?}")))?
+            .to_string();
+
+        let permalink = pub_json["permalink"]
+            .as_str()
+            .unwrap_or("")
+            .to_string();
+
+        Ok(PublishResult {
+            platform_post_id: thread_id,
+            platform_post_url: Some(permalink),
+            status: "published".into(),
+        })
+    }
+
+    async fn fetch_page_info(
+        &self,
+        _access_token: &str,
+        _page_id: &str,
+    ) -> Result<PageInfo, ProviderError> {
+        Err(ProviderError::Api(
+            "Threads does not support page management".into(),
+        ))
+    }
+
+    fn map_error(&self, body: &str, _status: u16) -> Option<String> {
+        if body.contains("Error validating access token") {
+            Some("Threads access token expired".into())
+        } else if body.contains("text must be at most 500 characters") {
+            Some("Post text exceeds 500 characters limit".into())
+        } else {
+            None
+        }
+    }
+}
+
+impl ThreadsProvider {
+    fn ensure_https_redirect_uri(&self, uri: &str) -> String {
+        if uri.starts_with("http://") {
+            format!("https://redirectmeto.com/{}", uri)
+        } else {
+            uri.to_string()
+        }
+    }
+
+    async fn resolve_user_id(&self, access_token: &str) -> Result<String, ProviderError> {
+        let user: serde_json::Value = self
+            .http
+            .get(format!("{}/me", self.graph_url()))
+            .query(&[("fields", "id"), ("access_token", access_token)])
+            .send()
+            .await?
+            .json()
+            .await?;
+
+        user["id"]
+            .as_str()
+            .map(String::from)
+            .ok_or_else(|| ProviderError::Auth("Could not resolve Threads user ID".into()))
+    }
+
+    async fn publish_carousel(
+        &self,
+        user_id: &str,
+        access_token: &str,
+        post: &PostContent,
+    ) -> Result<PublishResult, ProviderError> {
+        // Create child containers
+        let mut child_ids = Vec::new();
+        for media in &post.media {
+            let is_video = media.url.contains(".mp4");
+            let media_type = if is_video { "VIDEO" } else { "IMAGE" };
+            let url_key = if is_video { "video_url" } else { "image_url" };
+
+            let resp = self
+                .http
+                .post(format!("{}/{user_id}/threads", self.graph_url()))
+                .form(&[
+                    ("media_type", media_type),
+                    (url_key, media.url.as_str()),
+                    ("is_carousel_item", "true"),
+                    ("access_token", access_token),
+                ])
+                .send()
+                .await?;
+
+            let json: serde_json::Value = resp.json().await?;
+            let child_id = json["id"]
+                .as_str()
+                .ok_or_else(|| ProviderError::Api(format!("Carousel child fail: {json:?}")))?
+                .to_string();
+            child_ids.push(child_id);
+        }
+
+        // Create CAROUSEL container
+        let children_csv = child_ids.join(",");
+        let car_resp = self
+            .http
+            .post(format!("{}/{user_id}/threads", self.graph_url()))
+            .form(&[
+                ("media_type", "CAROUSEL"),
+                ("text", &post.content),
+                ("children", &children_csv),
+                ("access_token", access_token),
+            ])
+            .send()
+            .await?;
+
+        let car_json: serde_json::Value = car_resp.json().await?;
+        let creation_id = car_json["id"]
+            .as_str()
+            .ok_or_else(|| ProviderError::Api(format!("Carousel fail: {car_json:?}")))?
+            .to_string();
+
+        // Publish
+        let pub_resp = self
+            .http
+            .post(format!(
+                "{}/{user_id}/threads_publish",
+                self.graph_url()
+            ))
+            .form(&[("creation_id", creation_id.as_str()), ("access_token", access_token)])
+            .send()
+            .await?;
+
+        let pub_json: serde_json::Value = pub_resp.json().await?;
+
+        Ok(PublishResult {
+            platform_post_id: pub_json["id"]
+                .as_str()
+                .unwrap_or("")
+                .to_string(),
+            platform_post_url: pub_json["permalink"]
+                .as_str()
+                .map(String::from),
+            status: "published".into(),
+        })
+    }
+}

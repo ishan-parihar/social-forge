@@ -15,8 +15,9 @@ pub struct InstagramProvider {
 
 impl InstagramProvider {
     pub fn new(config: &Config) -> Self {
+        // Instagram Graph API uses Facebook Login OAuth — needs Facebook App credentials
         let (client_id, client_secret) = config
-            .provider_credentials("instagram")
+            .provider_credentials("facebook")
             .unwrap_or_default();
         Self {
             client_id,
@@ -44,10 +45,15 @@ impl SocialProvider for InstagramProvider {
         vec![
             "instagram_basic".into(),
             "instagram_content_publish".into(),
+            "instagram_manage_comments".into(),
+            "instagram_manage_insights".into(),
             "pages_show_list".into(),
+            "pages_read_engagement".into(),
             "business_management".into(),
         ]
     }
+
+    fn is_between_steps(&self) -> bool { true }
 
     fn max_content_length(&self) -> usize {
         2200
@@ -127,54 +133,30 @@ impl SocialProvider for InstagramProvider {
 
         let expires_in = long_json["expires_in"].as_u64().map(|v| v as u32);
 
-        // Find Instagram Business account
-        let accounts: serde_json::Value = self
+        // Get Facebook user info for display
+        let me: serde_json::Value = self
             .http
-            .get(format!("{}/me/accounts", self.graph_url()))
+            .get(format!("{}/me?fields=id,name,picture.type(large)", self.graph_url()))
             .query(&[("access_token", &access_token)])
             .send()
             .await?
             .json()
             .await?;
 
-        // For each page, look for Instagram Business account
-        if let Some(pages) = accounts["data"].as_array() {
-            for page in pages {
-                let page_id = page["id"].as_str().unwrap_or("");
-                let page_token = page["access_token"].as_str().unwrap_or("");
+        let fb_id = me["id"].as_str().unwrap_or("").to_string();
+        let fb_name = me["name"].as_str().unwrap_or("Instagram").to_string();
+        let fb_picture = me["picture"]["data"]["url"].as_str().map(String::from);
 
-                let ig: serde_json::Value = self
-                    .http
-                    .get(format!("{}/{}/instagram_business_account", self.graph_url(), page_id))
-                    .query(&[("access_token", page_token)])
-                    .send()
-                    .await?
-                    .json()
-                    .await?;
-
-                if let Some(ig_obj) = ig["instagram_business_account"].as_object() {
-                    let ig_id = ig_obj["id"].as_str().unwrap_or("").to_string();
-                    let name = ig_obj["username"].as_str().unwrap_or("").to_string();
-                    let profile_pic = ig_obj["profile_picture_url"].as_str().map(String::from);
-
-                    return Ok(AuthToken {
-                        access_token: page_token.to_string(),
-                        refresh_token: None,
-                        expires_in,
-                        provider_user_id: ig_id,
-                        name: name.clone(),
-                        username: name,
-                        picture: profile_pic,
-                    });
-                }
-            }
-        }
-
-        Err(ProviderError::Auth(
-            "No Instagram Business account found. \
-             Link Instagram to a Facebook Page first, then reconnect."
-                .into(),
-        ))
+        // Return user-level token so pages() + page-picker can discover IG accounts
+        Ok(AuthToken {
+            access_token,             // user-level token for page discovery
+            refresh_token: None,      // page token will be set when user picks an account
+            expires_in,
+            provider_user_id: fb_id,
+            name: fb_name,
+            username: String::new(),
+            picture: fb_picture,
+        })
     }
 
     async fn refresh_token(
@@ -191,98 +173,360 @@ impl SocialProvider for InstagramProvider {
         access_token: &str,
         post: &PostContent,
     ) -> Result<PublishResult, ProviderError> {
-        // Resolve the IG Business Account ID from the page-scoped token
+        if post.media.is_empty() {
+            return Err(ProviderError::InvalidRequest(
+                "Instagram Feed posts require at least one media attachment (image or video).".into()
+            ));
+        }
+
         let ig_id = self.resolve_ig_business_account(access_token).await
             .map_err(|e| ProviderError::Api(format!("Cannot resolve IG business account: {e}")))?;
 
-        // Instagram requires media (image/video) for Feed posts
-        // For MVP: post a caption-only container if no media provided
-        let container_resp = if !post.media.is_empty() {
-            // Upload first media item as image container
-            let media_url = &post.media[0].url;
-            self.http
-                .post(format!("{}/{}/media", self.graph_url(), ig_id))
-                .form(&[
-                    ("image_url", media_url.as_str()),
-                    ("caption", post.content.as_str()),
-                    ("access_token", access_token),
-                ])
-                .send()
-                .await?
-        } else {
-            // Text-only not ideal for IG but post as IMAGE type with just caption
-            self.http
-                .post(format!("{}/{}/media", self.graph_url(), ig_id))
-                .form(&[
-                    ("media_type", "IMAGE"),
-                    ("caption", post.content.as_str()),
-                    ("access_token", access_token),
-                ])
-                .send()
-                .await?
-        };
+        if post.media.len() == 1 {
+            // Single image: simpler IMAGE container
+            let container_id = self.create_single_media_container(
+                &ig_id, access_token, &post.media[0].url, &post.content, false,
+            ).await?;
 
-        let container_json: serde_json::Value = container_resp.json().await?;
-        
-        // Check for container creation errors
-        if let Some(err) = container_json["error"].as_object() {
+            let platform_post_id = self.publish_container(&ig_id, access_token, &container_id).await?;
+            Ok(PublishResult {
+                platform_post_url: Some(format!("https://instagram.com/p/{platform_post_id}")),
+                platform_post_id,
+                status: "published".into(),
+            })
+        } else {
+            // Multiple images: CAROUSEL flow
+            let mut children_ids = Vec::with_capacity(post.media.len());
+            for media in &post.media {
+                let child_id = self.create_single_media_container(
+                    &ig_id, access_token, &media.url, "", true,
+                ).await?;
+                children_ids.push(child_id);
+            }
+
+            // Create CAROUSEL container with children
+            let children_str = children_ids.join(",");
+            let carousel_resp = self
+                .http
+                .post(format!("{}/{}/media", self.graph_url(), ig_id))
+                .form(&[
+                    ("media_type", "CAROUSEL"),
+                    ("children", &children_str),
+                    ("caption", &post.content),
+                    ("access_token", access_token),
+                ])
+                .send()
+                .await?;
+
+            let carousel_json: serde_json::Value = carousel_resp.json().await?;
+
+            if let Some(err) = carousel_json["error"].as_object() {
+                let msg = err["message"].as_str().unwrap_or("Carousel creation failed");
+                return Err(ProviderError::Api(msg.to_string()));
+            }
+
+            let carousel_id = carousel_json["id"]
+                .as_str()
+                .ok_or_else(|| ProviderError::Api(
+                    format!("Instagram did not return carousel container ID: {carousel_json:?}")
+                ))?;
+
+            let platform_post_id = self.publish_container(&ig_id, access_token, carousel_id).await?;
+            Ok(PublishResult {
+                platform_post_url: Some(format!("https://instagram.com/p/{platform_post_id}")),
+                platform_post_id,
+                status: "published".into(),
+            })
+        }
+    }
+
+    /// List Instagram Business accounts from the user's Facebook pages.
+    ///
+    /// Discovers FB pages via two phases:
+    ///   Phase 1 - `/me/accounts` — pages the user selected in the OAuth dialog
+    ///   Phase 2 - `/me/businesses` → `owned_pages` + `client_pages` — pages from Business Manager
+    ///
+    /// Filters to only pages with a linked Instagram Business account (either via the
+    /// `instagram_business_account` field or the `/{page_id}/instagram_business_account`
+    /// endpoint) and resolves IG account details.
+    async fn pages(&self, access_token: &str) -> Result<Vec<PageInfo>, ProviderError> {
+        let fields = "id,instagram_business_account,access_token,username,name,picture.type(large)";
+        let mut pages_map: std::collections::HashMap<String, serde_json::Value> = std::collections::HashMap::new();
+
+        // ── Helper: paginated fetch ──────────────────────────────────────────
+        async fn collect_pages(
+            http: &reqwest::Client,
+            url: &str,
+            access_token: &str,
+            map: &mut std::collections::HashMap<String, serde_json::Value>,
+        ) -> Result<(), ProviderError> {
+            let mut current = url.to_string();
+
+            loop {
+                let resp = http
+                    .get(&current)
+                    .query(&[("access_token", access_token)])
+                    .send()
+                    .await?;
+
+                let json: serde_json::Value = resp.json().await?;
+
+                if let Some(err) = json["error"].as_object() {
+                    // Non-fatal: skip this endpoint (e.g. /me/businesses may not be available)
+                    tracing::warn!("collect_pages skipped ({:?}): {}", url, err["message"].as_str().unwrap_or(""));
+                    return Ok(());
+                }
+
+                if let Some(data) = json["data"].as_array() {
+                    for page in data {
+                        if let Some(pid) = page["id"].as_str() {
+                            map.entry(pid.to_string()).or_insert_with(|| page.clone());
+                        }
+                    }
+                }
+
+                if let Some(next) = json["paging"]["next"].as_str() {
+                    current = next.to_string();
+                } else {
+                    break;
+                }
+            }
+
+            Ok(())
+        }
+
+        // ── Phase 1: /me/accounts ────────────────────────────────────────────
+        let me_url = format!(
+            "{}/me/accounts?fields={}&limit=100",
+            self.graph_url(),
+            fields
+        );
+        collect_pages(&self.http, &me_url, access_token, &mut pages_map).await?;
+
+        // ── Phase 2: /me/businesses → owned_pages + client_pages ─────────────
+        let biz_resp = self
+            .http
+            .get(format!("{}/me/businesses", self.graph_url()))
+            .query(&[("access_token", access_token)])
+            .send()
+            .await?;
+
+        let biz_json: serde_json::Value = biz_resp.json().await?;
+
+        if biz_json["error"].is_null() {
+            if let Some(businesses) = biz_json["data"].as_array() {
+                for biz in businesses {
+                    let biz_id = match biz["id"].as_str() {
+                        Some(id) if !id.is_empty() => id,
+                        _ => continue,
+                    };
+
+                    for endpoint in &["owned_pages", "client_pages"] {
+                        let biz_url = format!(
+                            "{}/{biz_id}/{endpoint}?fields={fields}&limit=100",
+                            self.graph_url(),
+                        );
+                        if let Err(e) = collect_pages(&self.http, &biz_url, access_token, &mut pages_map).await {
+                            tracing::warn!("Business Manager {endpoint} for {biz_id}: {e:?}");
+                        }
+                    }
+                }
+            }
+        } else {
+            tracing::debug!("/me/businesses not available: {:?}", biz_json["error"]["message"]);
+        }
+
+        // ── Resolve IG Business accounts from collected pages ─────────────────
+        let mut result = Vec::new();
+
+        for (_page_id, page) in &pages_map {
+            let page_token = page["access_token"].as_str().unwrap_or(access_token);
+
+            // Try to get the IG Business account ID (prefer the inline field)
+            let ig_id = page["instagram_business_account"]["id"]
+                .as_str()
+                .map(String::from);
+
+            let ig_id = if let Some(id) = ig_id {
+                Some(id)
+            } else {
+                // Fallback: call /{page_id}/instagram_business_account
+                let ig_resp = self
+                    .http
+                    .get(format!(
+                        "{}/{}/instagram_business_account",
+                        self.graph_url(),
+                        page["id"].as_str().unwrap_or("")
+                    ))
+                    .query(&[("access_token", page_token)])
+                    .send()
+                    .await?;
+
+                let ig: serde_json::Value = ig_resp.json().await?;
+                if ig["error"].is_null() {
+                    ig["id"].as_str().map(String::from)
+                } else {
+                    continue; // No IG account for this page
+                }
+            };
+
+            if let Some(ig_id) = ig_id {
+                // Resolve IG account details
+                let ig_resp = self
+                    .http
+                    .get(format!(
+                        "{}/{}?fields=id,username,name,profile_picture_url",
+                        self.graph_url(),
+                        ig_id
+                    ))
+                    .query(&[("access_token", page_token)])
+                    .send()
+                    .await?;
+
+                let ig_json: serde_json::Value = ig_resp.json().await?;
+
+                if let Some(e) = ig_json["error"].as_object() {
+                    tracing::warn!("IG detail fetch for {ig_id}: {}", e["message"].as_str().unwrap_or(""));
+                    continue;
+                }
+
+                let name = ig_json["username"]
+                    .as_str()
+                    .or_else(|| ig_json["name"].as_str())
+                    .unwrap_or("")
+                    .to_string();
+
+                let profile_pic = ig_json["profile_picture_url"].as_str().map(String::from);
+
+                result.push(PageInfo {
+                    id: ig_id,
+                    name,
+                    access_token: Some(page_token.to_string()),
+                    picture: profile_pic,
+                    username: None,
+                });
+            }
+        }
+
+        Ok(result)
+    }
+
+    async fn fetch_page_info(
+        &self,
+        access_token: &str,
+        page_id: &str,
+    ) -> Result<PageInfo, ProviderError> {
+        let resp = self
+            .http
+            .get(format!("{}/{page_id}?fields=id,username,name,profile_picture_url", self.graph_url()))
+            .query(&[("access_token", access_token)])
+            .send()
+            .await?;
+        let json: serde_json::Value = resp.json().await?;
+        Ok(PageInfo {
+            id: json["id"].as_str().unwrap_or("").to_string(),
+            name: json["name"].as_str().unwrap_or("").to_string(),
+            access_token: None,
+            picture: json["profile_picture_url"].as_str().map(String::from),
+            username: json["username"].as_str().map(String::from),
+        })
+    }
+}
+
+impl InstagramProvider {
+    /// Create a single IMAGE container and return its container ID.
+    async fn create_single_media_container(
+        &self,
+        ig_id: &str,
+        access_token: &str,
+        media_url: &str,
+        caption: &str,
+        is_carousel_item: bool,
+    ) -> Result<String, ProviderError> {
+        let mut params = vec![
+            ("image_url", media_url),
+            ("access_token", access_token),
+        ];
+        if is_carousel_item {
+            params.push(("is_carousel_item", "true"));
+        } else {
+            params.push(("caption", caption));
+        }
+
+        let resp = self
+            .http
+            .post(format!("{}/{}/media", self.graph_url(), ig_id))
+            .form(&params)
+            .send()
+            .await?;
+
+        let json: serde_json::Value = resp.json().await?;
+
+        if let Some(err) = json["error"].as_object() {
             let msg = err["message"].as_str().unwrap_or("Container creation failed");
             return Err(ProviderError::Api(msg.to_string()));
         }
 
-        let container_id = match container_json["id"].as_str() {
-            Some(id) => id.to_string(),
-            None => return Err(ProviderError::Api(
-                format!("Instagram did not return a container ID: {:?}", container_json)
-            )),
-        };
+        json["id"]
+            .as_str()
+            .map(String::from)
+            .ok_or_else(|| {
+                ProviderError::Api(format!("Instagram did not return container ID: {json:?}"))
+            })
+    }
 
-        // Publish the container
-        let publish_resp = self
+    /// Publish a container (single image or carousel) and return the IG media ID.
+    async fn publish_container(
+        &self,
+        ig_id: &str,
+        access_token: &str,
+        creation_id: &str,
+    ) -> Result<String, ProviderError> {
+        let resp = self
             .http
             .post(format!("{}/{}/media_publish", self.graph_url(), ig_id))
             .form(&[
-                ("creation_id", container_id.as_str()),
+                ("creation_id", creation_id),
                 ("access_token", access_token),
             ])
             .send()
             .await?;
 
-        let publish_json: serde_json::Value = publish_resp.json().await?;
+        let json: serde_json::Value = resp.json().await?;
 
-        if let Some(err) = publish_json["error"].as_object() {
+        if let Some(err) = json["error"].as_object() {
             let msg = err["message"].as_str().unwrap_or("Publish failed");
             return Err(ProviderError::Api(msg.to_string()));
         }
 
-        if let Some(post_id) = publish_json["id"].as_str() {
-            Ok(PublishResult {
-                platform_post_id: post_id.to_string(),
-                platform_post_url: Some(format!("https://instagram.com/p/{post_id}")),
-                status: "published".into(),
+        json["id"]
+            .as_str()
+            .map(String::from)
+            .ok_or_else(|| {
+                ProviderError::Api(format!("Instagram publish unexpected response: {json:?}"))
             })
-        } else {
-            Err(ProviderError::Api(
-                format!("Instagram publish unexpected response: {:?}", publish_json)
-            ))
-        }
     }
-}
 
-impl InstagramProvider {
     /// Resolve the Instagram Business Account ID from a page-scoped token.
     async fn resolve_ig_business_account(&self, access_token: &str) -> Result<String, String> {
         // Get the user's Facebook pages
-        let accounts: serde_json::Value = self
+        let resp = self
             .http
             .get(format!("{}/me/accounts", self.graph_url()))
             .query(&[("access_token", access_token)])
             .send()
             .await
-            .map_err(|e| format!("Failed to get Facebook pages: {e}"))?
-            .json()
-            .await
+            .map_err(|e| format!("Failed to get Facebook pages: {e}"))?;
+
+        let accounts: serde_json::Value = resp.json().await
             .map_err(|e| format!("Failed to parse pages response: {e}"))?;
+
+        if let Some(err) = accounts["error"].as_object() {
+            return Err(format!(
+                "Facebook API error: {}",
+                err["message"].as_str().unwrap_or("unknown")
+            ));
+        }
 
         let pages = accounts["data"].as_array()
             .ok_or_else(|| "No Facebook pages found for this token.".to_string())?;
@@ -304,17 +548,8 @@ impl InstagramProvider {
 
             if let Some(ig_obj) = ig.as_object() {
                 if let Some(ig_id) = ig_obj.get("id").and_then(|v| v.as_str()) {
-                    // Check for expected structure
-                    if ig_obj.contains_key("instagram_business_account") {
-                        if let Some(biz) = ig_obj["instagram_business_account"].as_object() {
-                            if let Some(id) = biz.get("id").and_then(|v| v.as_str()) {
-                                return Ok(id.to_string());
-                            }
-                        }
-                    } else if ig_obj.contains_key("id") {
-                        // Direct response from /{page_id}/instagram_business_account includes id at top level
-                        return Ok(ig_id.to_string());
-                    }
+                    // The IG Business Account API returns the ID at the top level
+                    return Ok(ig_id.to_string());
                 }
             }
         }
