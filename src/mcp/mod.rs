@@ -760,13 +760,6 @@ impl PostizMcpServer {
         tools_instagram::handle_ig_business_discovery(&self.state, &params.0).await
     }
 
-    #[tool(description = "Get mentions of an Instagram business account")]
-    async fn ig_get_mentions(
-        &self,
-        params: Parameters<tools_instagram::IgGetMentionsInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_instagram::handle_ig_get_mentions(&self.state, &params.0).await
-    }
 
     #[tool(description = "Get audience insights for an Instagram business account")]
     async fn ig_get_insights_audience(

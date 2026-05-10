@@ -95,10 +95,6 @@ pub struct IgBusinessDiscoveryInput {
     pub target_username: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, JsonSchema)]
-pub struct IgGetMentionsInput {
-    pub ig_id: String,
-}
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct IgGetInsightsAudienceInput {
@@ -184,7 +180,13 @@ pub async fn handle_ig_search_hashtag(
     let result = provider
         .search_hashtag(&token, &input.ig_id, &input.query)
         .await
-        .map_err(|e| format!("Instagram search hashtag failed: {e}"))?;
+        .map_err(|e| {
+            if e.to_string().contains("permission") || e.to_string().contains("OAuth") {
+                format!("Instagram search hashtag failed: {e}. This tool requires 'Instagram Public Content Access' permission via Meta App Review.")
+            } else {
+                format!("Instagram search hashtag failed: {e}")
+            }
+        })?;
     Ok(Json(serde_json::json!({ "data": result })))
 }
 
@@ -198,7 +200,13 @@ pub async fn handle_ig_get_hashtag_media(
     let result = provider
         .get_hashtag_media(&token, &input.hashtag_id)
         .await
-        .map_err(|e| format!("Instagram get hashtag media failed: {e}"))?;
+        .map_err(|e| {
+            if e.to_string().contains("permission") || e.to_string().contains("OAuth") {
+                format!("Instagram get hashtag media failed: {e}. This tool requires 'Instagram Public Content Access' permission via Meta App Review.")
+            } else {
+                format!("Instagram get hashtag media failed: {e}")
+            }
+        })?;
     Ok(Json(serde_json::json!({ "data": result })))
 }
 
@@ -225,7 +233,7 @@ pub async fn handle_ig_get_insights(
         "reposts", "quotes", "threads_followers", "threads_follower_demographics",
         "content_views", "threads_views", "threads_clicks", "threads_reposts",
     ].into_iter().collect();
-    let requested: std::collections::HashSet<_> = resolved_metric.split(',').map(str::trim).collect();
+    let requested: Vec<&str> = resolved_metric.split(',').map(|s| s.trim()).collect();
     let invalid: Vec<_> = requested.iter().filter(|m| !valid_metrics.contains(*m)).collect();
     if !invalid.is_empty() {
         let invalid_str: String = invalid.iter().map(|s| s.to_string()).collect::<Vec<_>>().join(", ");
@@ -240,12 +248,24 @@ pub async fn handle_ig_get_insights(
             invalid_str
         ));
     }
-    let period = input.period.as_deref().unwrap_or("day");
-    let result = provider
-        .get_ig_insights(&token, &input.ig_id, resolved_metric, period)
-        .await
-        .map_err(|e| format!("Instagram get insights failed: {e}"))?;
-    Ok(Json(serde_json::json!({ "data": result })))
+    
+    let mut all_results = serde_json::Map::new();
+    for metric in requested {
+        let period = if metric == "follower_count" {
+            "day"
+        } else {
+            input.period.as_deref().unwrap_or("day")
+        };
+        
+        let result = provider
+            .get_ig_insights(&token, &input.ig_id, metric, period)
+            .await
+            .map_err(|e| format!("Instagram get insights failed for metric {metric}: {e}"))?;
+        
+        all_results.insert(metric.to_string(), result);
+    }
+    
+    Ok(Json(serde_json::json!({ "data": all_results })))
 }
 
 pub async fn handle_ig_get_tagged(
@@ -360,19 +380,6 @@ pub async fn handle_ig_business_discovery(
     Ok(Json(serde_json::json!({ "data": result })))
 }
 
-pub async fn handle_ig_get_mentions(
-    state: &AppState,
-    input: &IgGetMentionsInput,
-) -> Result<Json<serde_json::Value>, String> {
-    let user_id = super::tools_posts::resolve_first_user(state).await?;
-    let token = find_instagram_token(state, user_id, &input.ig_id).await?;
-    let provider = create_provider(state);
-    let result = provider
-        .get_ig_mentions(&token, &input.ig_id)
-        .await
-        .map_err(|e| format!("Instagram get mentions failed: {e}"))?;
-    Ok(Json(serde_json::json!({ "data": result })))
-}
 
 pub async fn handle_ig_get_insights_audience(
     state: &AppState,

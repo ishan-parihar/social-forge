@@ -297,23 +297,34 @@ pub async fn handle_fb_page_insights(
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_page_token(state, user_id, &input.page_id).await?;
     let provider = create_provider(state);
-    let metric = if input.metric.is_empty() {
+    
+    let metrics_str = if input.metric.is_empty() {
         "page_post_engagements"
     } else {
         &input.metric
     };
-    let result = provider
-        .get_page_insights(
-            &token,
-            &input.page_id,
-            metric,
-            input.period.as_deref().unwrap_or("week"),
-            input.since.as_deref(),
-            input.until.as_deref(),
-        )
-        .await
-        .map_err(|e| format!("Facebook page insights failed: {e}"))?;
-    Ok(Json(serde_json::json!({ "data": result })))
+    
+    let metrics: Vec<&str> = metrics_str.split(',').map(|s| s.trim()).collect();
+    let mut all_results = serde_json::Map::new();
+    
+    for metric in metrics {
+        if metric.is_empty() { continue; }
+        let result = provider
+            .get_page_insights(
+                &token,
+                &input.page_id,
+                metric,
+                input.period.as_deref().unwrap_or("week"),
+                input.since.as_deref(),
+                input.until.as_deref(),
+            )
+            .await
+            .map_err(|e| format!("Facebook page insights failed for metric {metric}: {e}"))?;
+        
+        all_results.insert(metric.to_string(), result);
+    }
+    
+    Ok(Json(serde_json::json!({ "data": all_results })))
 }
 
 pub async fn handle_fb_conversations(
