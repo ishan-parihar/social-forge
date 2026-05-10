@@ -35,3 +35,6 @@ HANDOVER.md
 
 # sqlx offline cache
 .sqlx/
+.contexty
+.memsearch
+.hive
