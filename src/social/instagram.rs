@@ -50,6 +50,10 @@ impl SocialProvider for InstagramProvider {
             "pages_show_list".into(),
             "pages_read_engagement".into(),
             "business_management".into(),
+            "pages_manage_engagement".into(),
+            "pages_manage_metadata".into(),
+            "pages_read_user_content".into(),
+            "read_insights".into(),
         ]
     }
 
@@ -555,5 +559,386 @@ impl InstagramProvider {
         }
 
         Err("No Instagram Business account found. Link Instagram to a Facebook Page first.".to_string())
+    }
+}
+
+impl InstagramProvider {
+    pub async fn get_ig_media(&self, access_token: &str, ig_id: &str, limit: u32) -> Result<serde_json::Value, ProviderError> {
+        let limit = limit.min(100);
+        let url = format!("{}/{ig_id}/media", self.graph_url());
+        let resp = self
+            .http
+            .get(&url)
+            .query(&[("fields", "id,caption,media_type,media_url,permalink,timestamp,like_count,comments_count"), ("limit", &limit.to_string())])
+            .header("Authorization", format!("Bearer {access_token}"))
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 429 {
+            Err(ProviderError::RateLimited("Instagram API rate limit".into()))
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let detail = json["error"]["message"].as_str().unwrap_or("Instagram API error").to_string();
+            Err(ProviderError::Api(detail))
+        }
+    }
+
+    pub async fn get_ig_media_detail(&self, access_token: &str, media_id: &str) -> Result<serde_json::Value, ProviderError> {
+        let url = format!("{}/{media_id}", self.graph_url());
+        let resp = self
+            .http
+            .get(&url)
+            .query(&[("fields", "id,caption,media_type,media_url,permalink,timestamp,username,like_count,comments_count,children{id,media_url,media_type}")])
+            .header("Authorization", format!("Bearer {access_token}"))
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 429 {
+            Err(ProviderError::RateLimited("Instagram API rate limit".into()))
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let detail = json["error"]["message"].as_str().unwrap_or("Instagram API error").to_string();
+            Err(ProviderError::Api(detail))
+        }
+    }
+
+    pub async fn get_ig_media_comments(&self, access_token: &str, media_id: &str) -> Result<serde_json::Value, ProviderError> {
+        let url = format!("{}/{media_id}/comments", self.graph_url());
+        let resp = self
+            .http
+            .get(&url)
+            .query(&[("fields", "id,text,timestamp,username,like_count,replies")])
+            .header("Authorization", format!("Bearer {access_token}"))
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 429 {
+            Err(ProviderError::RateLimited("Instagram API rate limit".into()))
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let detail = json["error"]["message"].as_str().unwrap_or("Instagram API error").to_string();
+            Err(ProviderError::Api(detail))
+        }
+    }
+
+    pub async fn search_hashtag(&self, access_token: &str, ig_id: &str, query: &str) -> Result<serde_json::Value, ProviderError> {
+        let url = format!("{}/ig_hashtag_search", self.graph_url());
+        let resp = self
+            .http
+            .get(&url)
+            .query(&[("user_id", ig_id), ("q", query)])
+            .header("Authorization", format!("Bearer {access_token}"))
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 429 {
+            Err(ProviderError::RateLimited("Instagram API rate limit".into()))
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let detail = json["error"]["message"].as_str().unwrap_or("Instagram API error").to_string();
+            Err(ProviderError::Api(detail))
+        }
+    }
+
+    pub async fn get_hashtag_media(&self, access_token: &str, hashtag_id: &str) -> Result<serde_json::Value, ProviderError> {
+        let url = format!("{}/{hashtag_id}/recent_media", self.graph_url());
+        let resp = self
+            .http
+            .get(&url)
+            .query(&[("fields", "id,caption,media_type,media_url,permalink,timestamp,like_count,comments_count")])
+            .header("Authorization", format!("Bearer {access_token}"))
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 429 {
+            Err(ProviderError::RateLimited("Instagram API rate limit".into()))
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let detail = json["error"]["message"].as_str().unwrap_or("Instagram API error").to_string();
+            Err(ProviderError::Api(detail))
+        }
+    }
+
+    pub async fn get_ig_insights(&self, access_token: &str, ig_id: &str, metric: &str, period: &str) -> Result<serde_json::Value, ProviderError> {
+        let url = format!("{}/{ig_id}/insights", self.graph_url());
+        let resp = self
+            .http
+            .get(&url)
+            .query(&[("metric", metric), ("period", period)])
+            .header("Authorization", format!("Bearer {access_token}"))
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 429 {
+            Err(ProviderError::RateLimited("Instagram API rate limit".into()))
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let detail = json["error"]["message"].as_str().unwrap_or("Instagram API error").to_string();
+            Err(ProviderError::Api(detail))
+        }
+    }
+
+    pub async fn get_ig_tagged(&self, access_token: &str, ig_id: &str) -> Result<serde_json::Value, ProviderError> {
+        let url = format!("{}/{ig_id}/tagged", self.graph_url());
+        let resp = self
+            .http
+            .get(&url)
+            .query(&[("fields", "id,caption,media_type,media_url,permalink,timestamp")])
+            .header("Authorization", format!("Bearer {access_token}"))
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 429 {
+            Err(ProviderError::RateLimited("Instagram API rate limit".into()))
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let detail = json["error"]["message"].as_str().unwrap_or("Instagram API error").to_string();
+            Err(ProviderError::Api(detail))
+        }
+    }
+
+    pub async fn create_ig_container(&self, access_token: &str, ig_id: &str, media_type: &str, media_url: &str, caption: &str) -> Result<serde_json::Value, ProviderError> {
+        let url = format!("{}/{ig_id}/media", self.graph_url());
+        let mut params = vec![
+            ("media_type", media_type),
+            ("caption", caption),
+            ("access_token", access_token),
+        ];
+        if media_type == "IMAGE" {
+            params.push(("image_url", media_url));
+        } else {
+            params.push(("media_url", media_url));
+        }
+        let resp = self
+            .http
+            .post(&url)
+            .header("Authorization", format!("Bearer {access_token}"))
+            .form(&params)
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 429 {
+            Err(ProviderError::RateLimited("Instagram API rate limit".into()))
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let detail = json["error"]["message"].as_str().unwrap_or("Instagram API error").to_string();
+            Err(ProviderError::Api(detail))
+        }
+    }
+
+    pub async fn publish_ig_container(&self, access_token: &str, ig_id: &str, creation_id: &str) -> Result<serde_json::Value, ProviderError> {
+        let url = format!("{}/{ig_id}/media_publish", self.graph_url());
+        let resp = self
+            .http
+            .post(&url)
+            .header("Authorization", format!("Bearer {access_token}"))
+            .form(&[("creation_id", creation_id), ("access_token", access_token)])
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 429 {
+            Err(ProviderError::RateLimited("Instagram API rate limit".into()))
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let detail = json["error"]["message"].as_str().unwrap_or("Instagram API error").to_string();
+            Err(ProviderError::Api(detail))
+        }
+    }
+
+    pub async fn reply_to_ig_comment(&self, access_token: &str, comment_id: &str, message: &str) -> Result<serde_json::Value, ProviderError> {
+        let url = format!("{}/{comment_id}/replies", self.graph_url());
+        let resp = self
+            .http
+            .post(&url)
+            .header("Authorization", format!("Bearer {access_token}"))
+            .form(&[("message", message), ("access_token", access_token)])
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 429 {
+            Err(ProviderError::RateLimited("Instagram API rate limit".into()))
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let detail = json["error"]["message"].as_str().unwrap_or("Instagram API error").to_string();
+            Err(ProviderError::Api(detail))
+        }
+    }
+
+    pub async fn get_ig_reels(&self, access_token: &str, ig_id: &str) -> Result<serde_json::Value, ProviderError> {
+        let url = format!("{}/{ig_id}/media", self.graph_url());
+        let resp = self
+            .http
+            .get(&url)
+            .query(&[("fields", "id,caption,media_type,media_url,permalink,timestamp"), ("media_type", "REELS")])
+            .header("Authorization", format!("Bearer {access_token}"))
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 429 {
+            Err(ProviderError::RateLimited("Instagram API rate limit".into()))
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let detail = json["error"]["message"].as_str().unwrap_or("Instagram API error").to_string();
+            Err(ProviderError::Api(detail))
+        }
+    }
+
+    pub async fn get_ig_stories(&self, access_token: &str, ig_id: &str) -> Result<serde_json::Value, ProviderError> {
+        let url = format!("{}/{ig_id}/stories", self.graph_url());
+        let resp = self
+            .http
+            .get(&url)
+            .query(&[("fields", "id,media_type,media_url,permalink,timestamp")])
+            .header("Authorization", format!("Bearer {access_token}"))
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 429 {
+            Err(ProviderError::RateLimited("Instagram API rate limit".into()))
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let detail = json["error"]["message"].as_str().unwrap_or("Instagram API error").to_string();
+            Err(ProviderError::Api(detail))
+        }
+    }
+
+    pub async fn get_ig_followers(&self, access_token: &str, ig_id: &str) -> Result<serde_json::Value, ProviderError> {
+        let url = format!("{}/{ig_id}", self.graph_url());
+        let resp = self
+            .http
+            .get(&url)
+            .query(&[("fields", "name,username,followers_count,follows_count,media_count,profile_picture_url")])
+            .header("Authorization", format!("Bearer {access_token}"))
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 429 {
+            Err(ProviderError::RateLimited("Instagram API rate limit".into()))
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let detail = json["error"]["message"].as_str().unwrap_or("Instagram API error").to_string();
+            Err(ProviderError::Api(detail))
+        }
+    }
+
+    pub async fn get_ig_business_discovery(&self, access_token: &str, ig_id: &str, target_username: &str) -> Result<serde_json::Value, ProviderError> {
+        let url = format!("{}/{ig_id}/business_discovery", self.graph_url());
+        let resp = self
+            .http
+            .get(&url)
+            .query(&[("username", target_username), ("fields", "biography,followers_count,follows_count,media_count,profile_picture_url,username,name,media{id,caption,media_type,media_url,permalink,timestamp,like_count,comments_count}")])
+            .header("Authorization", format!("Bearer {access_token}"))
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 429 {
+            Err(ProviderError::RateLimited("Instagram API rate limit".into()))
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let detail = json["error"]["message"].as_str().unwrap_or("Instagram API error").to_string();
+            Err(ProviderError::Api(detail))
+        }
+    }
+
+    pub async fn get_ig_mentions(&self, access_token: &str, ig_id: &str) -> Result<serde_json::Value, ProviderError> {
+        let url = format!("{}/{ig_id}/mentions", self.graph_url());
+        let resp = self
+            .http
+            .get(&url)
+            .query(&[("fields", "id,caption,media_type,media_url,permalink,timestamp")])
+            .header("Authorization", format!("Bearer {access_token}"))
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 429 {
+            Err(ProviderError::RateLimited("Instagram API rate limit".into()))
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let detail = json["error"]["message"].as_str().unwrap_or("Instagram API error").to_string();
+            Err(ProviderError::Api(detail))
+        }
+    }
+
+    pub async fn get_ig_insights_audience(&self, access_token: &str, ig_id: &str) -> Result<serde_json::Value, ProviderError> {
+        let url = format!("{}/{ig_id}/insights", self.graph_url());
+        let resp = self
+            .http
+            .get(&url)
+            .query(&[("metric", "audience_city,audience_country,audience_gender,audience_age_range"), ("period", "lifetime")])
+            .header("Authorization", format!("Bearer {access_token}"))
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 429 {
+            Err(ProviderError::RateLimited("Instagram API rate limit".into()))
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let detail = json["error"]["message"].as_str().unwrap_or("Instagram API error").to_string();
+            Err(ProviderError::Api(detail))
+        }
     }
 }

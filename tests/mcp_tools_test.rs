@@ -208,7 +208,7 @@ async fn test_mcp_tools_registration() {
     assert!(server.state.config.provider_credentials("reddit").is_some(), "Reddit credentials should be loaded");
 
     println!("✅ MCP server: PostizMcpServer instantiated successfully");
-    println!("✅ MCP tools: All {} #[tool] entries compile", 27); // 7 reddit + 20 x
+    println!("✅ MCP tools: All {} #[tool] entries compile", 58); // 7 reddit + 20 x + 15 fb + 16 ig
 }
 
 // ── Test 8: DB connectivity and existing integrations ───────────
@@ -246,4 +246,76 @@ async fn test_db_has_x_and_reddit_integrations() {
         .await
         .expect("Failed to query child integrations");
     println!("✅ Multi-account (root_internal_id set): {}", multi_count.0);
+}
+
+// ── Test 9: FacebookProvider creation and scopes ─────────────────
+
+#[tokio::test]
+async fn test_facebook_provider_creation() {
+    let config = get_config();
+    let registry = get_registry(&config);
+
+    let fb = registry.get("facebook").expect("Facebook provider should exist");
+    assert_eq!(fb.identifier(), "facebook");
+    assert_eq!(fb.name(), "Facebook");
+
+    let scopes = fb.scopes();
+    assert!(scopes.contains(&"pages_show_list".to_string()));
+    assert!(scopes.contains(&"pages_manage_posts".to_string()));
+    assert!(scopes.contains(&"pages_manage_engagement".to_string()), "Should have pages_manage_engagement scope");
+    assert!(scopes.contains(&"pages_manage_metadata".to_string()), "Should have pages_manage_metadata scope");
+    assert!(scopes.contains(&"pages_read_user_content".to_string()), "Should have pages_read_user_content scope");
+    assert!(scopes.contains(&"read_insights".to_string()), "Should have read_insights scope");
+    assert!(scopes.contains(&"business_management".to_string()), "Should have business_management scope");
+
+    println!("✅ FacebookProvider: {} scopes configured ({})", scopes.len(), scopes.join(", "));
+}
+
+// ── Test 10: InstagramProvider creation and scopes ────────────────
+
+#[tokio::test]
+async fn test_instagram_provider_creation() {
+    let config = get_config();
+    let registry = get_registry(&config);
+
+    let ig = registry.get("instagram").expect("Instagram provider should exist");
+    assert_eq!(ig.identifier(), "instagram");
+    assert_eq!(ig.name(), "Instagram");
+
+    let scopes = ig.scopes();
+    assert!(scopes.contains(&"instagram_basic".to_string()));
+    assert!(scopes.contains(&"instagram_content_publish".to_string()));
+    assert!(scopes.contains(&"instagram_manage_comments".to_string()));
+    assert!(scopes.contains(&"instagram_manage_insights".to_string()));
+    assert!(scopes.contains(&"pages_manage_engagement".to_string()), "Should have pages_manage_engagement scope");
+    assert!(scopes.contains(&"pages_read_user_content".to_string()), "Should have pages_read_user_content scope");
+    assert!(scopes.contains(&"read_insights".to_string()), "Should have read_insights scope");
+
+    println!("✅ InstagramProvider: {} scopes configured ({})", scopes.len(), scopes.join(", "));
+}
+
+// ── Test 11: FacebookProvider multi-step (is_between_steps) ──────
+
+#[tokio::test]
+async fn test_facebook_is_between_steps() {
+    let config = get_config();
+    let registry = get_registry(&config);
+
+    let fb = registry.get("facebook").expect("Facebook provider should exist");
+    assert!(fb.is_between_steps(), "Facebook should be multi-step (exchange_code returns user-level token)");
+
+    println!("✅ FacebookProvider: is_between_steps() = {}", fb.is_between_steps());
+}
+
+// ── Test 12: InstagramProvider multi-step (is_between_steps) ─────
+
+#[tokio::test]
+async fn test_instagram_is_between_steps() {
+    let config = get_config();
+    let registry = get_registry(&config);
+
+    let ig = registry.get("instagram").expect("Instagram provider should exist");
+    assert!(ig.is_between_steps(), "Instagram should be multi-step (exchange_code returns user-level token)");
+
+    println!("✅ InstagramProvider: is_between_steps() = {}", ig.is_between_steps());
 }

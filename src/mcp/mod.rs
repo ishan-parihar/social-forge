@@ -22,6 +22,8 @@ use crate::db::queries;
 
 
 mod tools_calendar;
+mod tools_facebook;
+mod tools_instagram;
 mod tools_integrations;
 mod tools_posts;
 mod tools_reddit;
@@ -520,6 +522,258 @@ impl PostizMcpServer {
         params: Parameters<tools_x::XListTimelineInput>,
     ) -> Result<Json<tools_x::XListTimelineOutput>, String> {
         tools_x::x_list_timeline(&self.state, &params.0).await
+    }
+
+    // ── Facebook Tools ──────────────────────────────────────────────
+
+    #[tool(description = "Get a Facebook page's feed (recent posts)")]
+    async fn fb_get_feed(
+        &self,
+        params: Parameters<tools_facebook::FbGetFeedInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_facebook::handle_fb_get_feed(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get a single Facebook post by ID")]
+    async fn fb_get_post(
+        &self,
+        params: Parameters<tools_facebook::FbGetPostInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_facebook::handle_fb_get_post(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get comments on a Facebook post")]
+    async fn fb_get_comments(
+        &self,
+        params: Parameters<tools_facebook::FbGetCommentsInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_facebook::handle_fb_get_comments(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Create a text/link post on a Facebook page")]
+    async fn fb_create_post(
+        &self,
+        params: Parameters<tools_facebook::FbCreatePostInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_facebook::handle_fb_create_post(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Create a photo post on a Facebook page")]
+    async fn fb_create_photo(
+        &self,
+        params: Parameters<tools_facebook::FbCreatePhotoInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_facebook::handle_fb_create_photo(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Create a video post on a Facebook page")]
+    async fn fb_create_video(
+        &self,
+        params: Parameters<tools_facebook::FbCreateVideoInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_facebook::handle_fb_create_video(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Delete a Facebook post by ID")]
+    async fn fb_delete_post(
+        &self,
+        params: Parameters<tools_facebook::FbDeletePostInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_facebook::handle_fb_delete_post(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Comment on a Facebook post")]
+    async fn fb_comment(
+        &self,
+        params: Parameters<tools_facebook::FbCommentInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_facebook::handle_fb_comment(&self.state, &params.0).await
+    }
+
+    #[tool(description = "React to a Facebook post (LIKE, LOVE, WOW, HAHA, SAD, ANGRY)")]
+    async fn fb_react(
+        &self,
+        params: Parameters<tools_facebook::FbReactInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_facebook::handle_fb_react(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get insights/analytics for a Facebook page")]
+    async fn fb_page_insights(
+        &self,
+        params: Parameters<tools_facebook::FbPageInsightsInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_facebook::handle_fb_page_insights(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get conversations (inbox) for a Facebook page")]
+    async fn fb_conversations(
+        &self,
+        params: Parameters<tools_facebook::FbConversationsInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_facebook::handle_fb_conversations(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get messages in a Facebook conversation")]
+    async fn fb_conversation_messages(
+        &self,
+        params: Parameters<tools_facebook::FbConversationMsgsInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_facebook::handle_fb_conversation_msgs(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Send a message to a Facebook conversation")]
+    async fn fb_send_message(
+        &self,
+        params: Parameters<tools_facebook::FbSendMessageInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_facebook::handle_fb_send_message(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Search for public Facebook pages by name")]
+    async fn fb_search_pages(
+        &self,
+        params: Parameters<tools_facebook::FbSearchPagesInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_facebook::handle_fb_search_pages(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get albums from a Facebook page")]
+    async fn fb_albums(
+        &self,
+        params: Parameters<tools_facebook::FbAlbumsInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_facebook::handle_fb_albums(&self.state, &params.0).await
+    }
+
+    // ── Instagram Tools ─────────────────────────────────────────────
+
+    #[tool(description = "Get Instagram media (posts/reels) for a business account")]
+    async fn ig_get_media(
+        &self,
+        params: Parameters<tools_instagram::IgGetMediaInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_instagram::handle_ig_get_media(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get details of a specific Instagram media item")]
+    async fn ig_get_media_detail(
+        &self,
+        params: Parameters<tools_instagram::IgGetMediaDetailInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_instagram::handle_ig_get_media_detail(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get comments on an Instagram media item")]
+    async fn ig_get_comments(
+        &self,
+        params: Parameters<tools_instagram::IgGetCommentsInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_instagram::handle_ig_get_comments(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Search for Instagram hashtags by name")]
+    async fn ig_search_hashtag(
+        &self,
+        params: Parameters<tools_instagram::IgSearchHashtagInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_instagram::handle_ig_search_hashtag(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get recent media for an Instagram hashtag")]
+    async fn ig_get_hashtag_media(
+        &self,
+        params: Parameters<tools_instagram::IgGetHashtagMediaInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_instagram::handle_ig_get_hashtag_media(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get insights for an Instagram business account")]
+    async fn ig_get_insights(
+        &self,
+        params: Parameters<tools_instagram::IgGetInsightsInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_instagram::handle_ig_get_insights(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get media where the Instagram account is tagged")]
+    async fn ig_get_tagged(
+        &self,
+        params: Parameters<tools_instagram::IgGetTaggedInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_instagram::handle_ig_get_tagged(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Create an Instagram media container (step 1 of publish)")]
+    async fn ig_create_container(
+        &self,
+        params: Parameters<tools_instagram::IgCreateContainerInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_instagram::handle_ig_create_container(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Publish an Instagram media container (step 2 of publish)")]
+    async fn ig_publish_container(
+        &self,
+        params: Parameters<tools_instagram::IgPublishContainerInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_instagram::handle_ig_publish_container(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Reply to an Instagram comment")]
+    async fn ig_reply_to_comment(
+        &self,
+        params: Parameters<tools_instagram::IgReplyToCommentInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_instagram::handle_ig_reply_to_comment(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get Instagram reels for a business account")]
+    async fn ig_get_reels(
+        &self,
+        params: Parameters<tools_instagram::IgGetReelsInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_instagram::handle_ig_get_reels(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get Instagram stories for a business account")]
+    async fn ig_get_stories(
+        &self,
+        params: Parameters<tools_instagram::IgGetStoriesInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_instagram::handle_ig_get_stories(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get followers of an Instagram business account")]
+    async fn ig_get_followers(
+        &self,
+        params: Parameters<tools_instagram::IgGetFollowersInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_instagram::handle_ig_get_followers(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Discover an Instagram business account by username")]
+    async fn ig_business_discovery(
+        &self,
+        params: Parameters<tools_instagram::IgBusinessDiscoveryInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_instagram::handle_ig_business_discovery(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get mentions of an Instagram business account")]
+    async fn ig_get_mentions(
+        &self,
+        params: Parameters<tools_instagram::IgGetMentionsInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_instagram::handle_ig_get_mentions(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get audience insights for an Instagram business account")]
+    async fn ig_get_insights_audience(
+        &self,
+        params: Parameters<tools_instagram::IgGetInsightsAudienceInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_instagram::handle_ig_get_insights_audience(&self.state, &params.0).await
     }
 }
 

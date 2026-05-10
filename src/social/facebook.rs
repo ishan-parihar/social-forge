@@ -47,7 +47,11 @@ impl SocialProvider for FacebookProvider {
             "pages_read_engagement".into(),
             "pages_manage_posts".into(),
             "business_management".into(),
+            "pages_manage_engagement".into(),
+            "pages_manage_metadata".into(),
+            "pages_read_user_content".into(),
             "public_profile".into(),
+            "read_insights".into(),
         ]
     }
 
@@ -356,6 +360,422 @@ impl FacebookProvider {
     }
 }
 
+// ── Inherent Graph API Methods ──────────────────────────────────
+impl FacebookProvider {
+    /// Get the page's feed (posts).
+    pub async fn get_page_feed(
+        &self, access_token: &str, page_id: &str, limit: u32,
+        since: Option<&str>, until: Option<&str>
+    ) -> Result<serde_json::Value, ProviderError> {
+        let limit = limit.min(100);
+        let mut url = format!(
+            "{}/{page_id}/feed?fields=message,created_time,story,attachments&limit={limit}",
+            self.graph_url()
+        );
+        if let Some(s) = since {
+            url.push_str(&format!("&since={s}"));
+        }
+        if let Some(u) = until {
+            url.push_str(&format!("&until={u}"));
+        }
+        let resp = self.http.get(&url)
+            .header("Authorization", format!("Bearer {access_token}"))
+            .send().await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 429 {
+            Err(ProviderError::RateLimited("Facebook API rate limit".into()))
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            Err(ProviderError::Api(
+                json["error"]["message"].as_str().unwrap_or("Facebook API error").to_string()
+            ))
+        }
+    }
+
+    /// Get a single post by ID.
+    pub async fn get_page_post(
+        &self, access_token: &str, post_id: &str
+    ) -> Result<serde_json::Value, ProviderError> {
+        let url = format!(
+            "{}/{post_id}?fields=id,message,created_time,permalink_url,comments.summary(true),reactions.summary(true)",
+            self.graph_url()
+        );
+        let resp = self.http.get(&url)
+            .header("Authorization", format!("Bearer {access_token}"))
+            .send().await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 429 {
+            Err(ProviderError::RateLimited("Facebook API rate limit".into()))
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            Err(ProviderError::Api(
+                json["error"]["message"].as_str().unwrap_or("Facebook API error").to_string()
+            ))
+        }
+    }
+
+    /// Get comments on a post.
+    pub async fn get_post_comments(
+        &self, access_token: &str, post_id: &str
+    ) -> Result<serde_json::Value, ProviderError> {
+        let url = format!(
+            "{}/{post_id}/comments?fields=id,message,from,created_time",
+            self.graph_url()
+        );
+        let resp = self.http.get(&url)
+            .header("Authorization", format!("Bearer {access_token}"))
+            .send().await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 429 {
+            Err(ProviderError::RateLimited("Facebook API rate limit".into()))
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            Err(ProviderError::Api(
+                json["error"]["message"].as_str().unwrap_or("Facebook API error").to_string()
+            ))
+        }
+    }
+
+    /// Create a text/link post on a page.
+    pub async fn create_post(
+        &self, access_token: &str, page_id: &str, message: &str, link: Option<&str>
+    ) -> Result<serde_json::Value, ProviderError> {
+        let mut params: Vec<(&str, &str)> = vec![
+            ("message", message),
+            ("access_token", access_token),
+        ];
+        if let Some(l) = link {
+            params.push(("link", l));
+        }
+        let resp = self.http.post(format!("{}/{page_id}/feed", self.graph_url()))
+            .header("Authorization", format!("Bearer {access_token}"))
+            .form(&params)
+            .send().await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 429 {
+            Err(ProviderError::RateLimited("Facebook API rate limit".into()))
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            Err(ProviderError::Api(
+                json["error"]["message"].as_str().unwrap_or("Facebook API error").to_string()
+            ))
+        }
+    }
+
+    /// Create a photo post on a page.
+    pub async fn create_photo_post(
+        &self, access_token: &str, page_id: &str, url: &str, caption: &str
+    ) -> Result<serde_json::Value, ProviderError> {
+        let params: Vec<(&str, &str)> = vec![
+            ("url", url),
+            ("caption", caption),
+            ("access_token", access_token),
+        ];
+        let resp = self.http.post(format!("{}/{page_id}/photos", self.graph_url()))
+            .header("Authorization", format!("Bearer {access_token}"))
+            .form(&params)
+            .send().await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 429 {
+            Err(ProviderError::RateLimited("Facebook API rate limit".into()))
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            Err(ProviderError::Api(
+                json["error"]["message"].as_str().unwrap_or("Facebook API error").to_string()
+            ))
+        }
+    }
+
+    /// Create a video post on a page.
+    pub async fn create_video_post(
+        &self, access_token: &str, page_id: &str, file_url: &str, title: &str, description: &str
+    ) -> Result<serde_json::Value, ProviderError> {
+        let params: Vec<(&str, &str)> = vec![
+            ("file_url", file_url),
+            ("title", title),
+            ("description", description),
+            ("access_token", access_token),
+        ];
+        let resp = self.http.post(format!("{}/{page_id}/videos", self.graph_url()))
+            .header("Authorization", format!("Bearer {access_token}"))
+            .form(&params)
+            .send().await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 429 {
+            Err(ProviderError::RateLimited("Facebook API rate limit".into()))
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            Err(ProviderError::Api(
+                json["error"]["message"].as_str().unwrap_or("Facebook API error").to_string()
+            ))
+        }
+    }
+
+    /// Delete a post by ID.
+    pub async fn delete_post(
+        &self, access_token: &str, post_id: &str
+    ) -> Result<serde_json::Value, ProviderError> {
+        let url = format!("{}/{post_id}", self.graph_url());
+        let resp = self.http.delete(&url)
+            .header("Authorization", format!("Bearer {access_token}"))
+            .query(&[("access_token", access_token)])
+            .send().await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 429 {
+            Err(ProviderError::RateLimited("Facebook API rate limit".into()))
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            Err(ProviderError::Api(
+                json["error"]["message"].as_str().unwrap_or("Facebook API error").to_string()
+            ))
+        }
+    }
+
+    /// Comment on a post.
+    pub async fn comment_on_post(
+        &self, access_token: &str, post_id: &str, message: &str
+    ) -> Result<serde_json::Value, ProviderError> {
+        let params: Vec<(&str, &str)> = vec![
+            ("message", message),
+            ("access_token", access_token),
+        ];
+        let resp = self.http.post(format!("{}/{post_id}/comments", self.graph_url()))
+            .header("Authorization", format!("Bearer {access_token}"))
+            .form(&params)
+            .send().await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 429 {
+            Err(ProviderError::RateLimited("Facebook API rate limit".into()))
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            Err(ProviderError::Api(
+                json["error"]["message"].as_str().unwrap_or("Facebook API error").to_string()
+            ))
+        }
+    }
+
+    /// React to a post (LIKE, LOVE, WOW, HAHA, SAD, ANGRY).
+    pub async fn react_to_post(
+        &self, access_token: &str, post_id: &str, reaction_type: &str
+    ) -> Result<serde_json::Value, ProviderError> {
+        let params: Vec<(&str, &str)> = vec![
+            ("type", reaction_type),
+            ("access_token", access_token),
+        ];
+        let resp = self.http.post(format!("{}/{post_id}/reactions", self.graph_url()))
+            .header("Authorization", format!("Bearer {access_token}"))
+            .form(&params)
+            .send().await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 429 {
+            Err(ProviderError::RateLimited("Facebook API rate limit".into()))
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            Err(ProviderError::Api(
+                json["error"]["message"].as_str().unwrap_or("Facebook API error").to_string()
+            ))
+        }
+    }
+
+    /// Get page insights for a given metric and period.
+    pub async fn get_page_insights(
+        &self, access_token: &str, page_id: &str, metric: &str, period: &str,
+        since: Option<&str>, until: Option<&str>
+    ) -> Result<serde_json::Value, ProviderError> {
+        let mut url = format!(
+            "{}/{page_id}/insights?metric={metric}&period={period}",
+            self.graph_url()
+        );
+        if let Some(s) = since {
+            url.push_str(&format!("&since={s}"));
+        }
+        if let Some(u) = until {
+            url.push_str(&format!("&until={u}"));
+        }
+        let resp = self.http.get(&url)
+            .header("Authorization", format!("Bearer {access_token}"))
+            .send().await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 429 {
+            Err(ProviderError::RateLimited("Facebook API rate limit".into()))
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            Err(ProviderError::Api(
+                json["error"]["message"].as_str().unwrap_or("Facebook API error").to_string()
+            ))
+        }
+    }
+
+    /// Get page conversations (inbox).
+    pub async fn get_page_conversations(
+        &self, access_token: &str, page_id: &str
+    ) -> Result<serde_json::Value, ProviderError> {
+        let url = format!(
+            "{}/{page_id}/conversations?fields=id,snippet,updated_time,participants,message_count",
+            self.graph_url()
+        );
+        let resp = self.http.get(&url)
+            .header("Authorization", format!("Bearer {access_token}"))
+            .send().await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 429 {
+            Err(ProviderError::RateLimited("Facebook API rate limit".into()))
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            Err(ProviderError::Api(
+                json["error"]["message"].as_str().unwrap_or("Facebook API error").to_string()
+            ))
+        }
+    }
+
+    /// Get messages in a conversation.
+    pub async fn get_conversation_messages(
+        &self, access_token: &str, conversation_id: &str
+    ) -> Result<serde_json::Value, ProviderError> {
+        let url = format!(
+            "{}/{conversation_id}/messages?fields=id,message,from,created_time",
+            self.graph_url()
+        );
+        let resp = self.http.get(&url)
+            .header("Authorization", format!("Bearer {access_token}"))
+            .send().await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 429 {
+            Err(ProviderError::RateLimited("Facebook API rate limit".into()))
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            Err(ProviderError::Api(
+                json["error"]["message"].as_str().unwrap_or("Facebook API error").to_string()
+            ))
+        }
+    }
+
+    /// Send a message in a conversation.
+    pub async fn send_message(
+        &self, access_token: &str, conversation_id: &str, message: &str
+    ) -> Result<serde_json::Value, ProviderError> {
+        let params: Vec<(&str, &str)> = vec![
+            ("message", message),
+            ("access_token", access_token),
+        ];
+        let resp = self.http.post(format!("{}/{conversation_id}/messages", self.graph_url()))
+            .header("Authorization", format!("Bearer {access_token}"))
+            .form(&params)
+            .send().await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 429 {
+            Err(ProviderError::RateLimited("Facebook API rate limit".into()))
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            Err(ProviderError::Api(
+                json["error"]["message"].as_str().unwrap_or("Facebook API error").to_string()
+            ))
+        }
+    }
+
+    /// Search for Facebook pages by query string.
+    pub async fn search_pages(
+        &self, access_token: &str, query: &str
+    ) -> Result<serde_json::Value, ProviderError> {
+        let resp = self.http
+            .get(format!("{}/search", self.graph_url()))
+            .query(&[("q", query), ("type", "page")])
+            .header("Authorization", format!("Bearer {access_token}"))
+            .send().await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 429 {
+            Err(ProviderError::RateLimited("Facebook API rate limit".into()))
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            Err(ProviderError::Api(
+                json["error"]["message"].as_str().unwrap_or("Facebook API error").to_string()
+            ))
+        }
+    }
+
+    /// Get albums for a page.
+    pub async fn get_page_albums(
+        &self, access_token: &str, page_id: &str
+    ) -> Result<serde_json::Value, ProviderError> {
+        let url = format!(
+            "{}/{page_id}/albums?fields=id,name,count,cover_photo,created_time",
+            self.graph_url()
+        );
+        let resp = self.http.get(&url)
+            .header("Authorization", format!("Bearer {access_token}"))
+            .send().await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 429 {
+            Err(ProviderError::RateLimited("Facebook API rate limit".into()))
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            Err(ProviderError::Api(
+                json["error"]["message"].as_str().unwrap_or("Facebook API error").to_string()
+            ))
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -363,34 +783,38 @@ mod tests {
 
     fn test_config() -> Config {
         Config {
-            database_url: "sqlite:test".into(),
+            database_url: "test".into(),
             jwt_secret: "test".into(),
             app_url: "http://localhost:3000".into(),
             frontend_url: "http://localhost:4200".into(),
-            x_client_id: None,
-            x_client_secret: None,
-            linkedin_client_id: None,
-            linkedin_client_secret: None,
+            x_client_id: Some("test".into()),
+            x_client_secret: Some("test".into()),
+            linkedin_client_id: Some("test".into()),
+            linkedin_client_secret: Some("test".into()),
             bluesky_handle: None,
             bluesky_app_password: None,
-            facebook_client_id: Some("test_fb_id".into()),
-            facebook_client_secret: Some("test_fb_secret".into()),
-            instagram_client_id: None,
-            instagram_client_secret: None,
-            threads_client_id: None,
-            threads_client_secret: None,
-            youtube_client_id: None,
-            youtube_client_secret: None,
-            reddit_client_id: None,
-            reddit_client_secret: None,
+            facebook_client_id: Some("test".into()),
+            facebook_client_secret: Some("test".into()),
+            instagram_client_id: Some("test".into()),
+            instagram_client_secret: Some("test".into()),
+            threads_client_id: Some("test".into()),
+            threads_client_secret: Some("test".into()),
+            youtube_client_id: Some("test".into()),
+            youtube_client_secret: Some("test".into()),
+            reddit_client_id: Some("test".into()),
+            reddit_client_secret: Some("test".into()),
+            reddit_username: Some("test".into()),
+            reddit_password: Some("test".into()),
+            reddit_access_token: Some("test".into()),
+            reddit_refresh_token: Some("test".into()),
             discord_client_id: None,
             discord_client_secret: None,
             discord_bot_token: None,
-            telegram_token: None,
+            telegram_token: Some("test".into()),
             pinterest_client_id: None,
             pinterest_client_secret: None,
-            instagram_app_id: None,
-            instagram_app_secret: None,
+            instagram_app_id: Some("test".into()),
+            instagram_app_secret: Some("test".into()),
             token_encryption_key: None,
             media_dir: "./uploads".into(),
         }
@@ -424,7 +848,7 @@ mod tests {
         let result = provider.generate_auth_url("test_state", "test_verifier", "http://localhost:3000/callback").await;
         let url = result.unwrap().url;
 
-        assert!(url.contains("client_id=test_fb_id"), "should contain client_id");
+        assert!(url.contains("client_id=test"), "should contain client_id");
         assert!(url.contains("redirect_uri="), "should contain redirect_uri");
         assert!(url.contains("state=test_state"), "should contain state");
         assert!(url.contains("scope="), "should contain scope");
