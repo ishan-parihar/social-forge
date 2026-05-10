@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "sessionID": "ses_1f35e333effehcL5zItiqPNb4p",
+  "timestamp": "2026-05-09T12:10:47.315Z",
+  "tokens": {
+    "input": 272954,
+    "output": 8822,
+    "reasoning": 453,
+    "cacheRead": 563968,
+    "cacheWrite": 0
+  },
+  "files": [],
+  "tools": [
+    {
+      "name": "tavily_tavily-search",
+      "count": 11,
+      "successCount": 11,
+      "failCount": 0
+    },
+    {
+      "name": "todowrite",
+      "count": 2,
+      "successCount": 2,
+      "failCount": 0
+    }
+  ],
+  "acpm": {
+    "activePreset": null,
+    "allowCount": 3654,
+    "denyCount": 0,
+    "sanitizeCount": 0,
+    "deniedByCategory": {},
+    "folderAccessDistribution": {
+      "denied": 0,
+      "read-only": 0,
+      "read-write": 0
+    },
+    "toolCategoryStatus": []
+  }
+}

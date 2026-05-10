@@ -1,0 +1,856 @@
+{
+  "parts": [
+    {
+      "type": "tool",
+      "tool": "read",
+      "callID": "call_00_gSYSKJl2t0evM01zCs1f8766",
+      "state": {
+        "status": "completed",
+        "input": {
+          "filePath": "/home/ishanp/Documents/GitHub/postiz-rust/src/social/x.rs",
+          "offset": 40,
+          "limit": 20
+        },
+        "output": "<path>/home/ishanp/Documents/GitHub/postiz-rust/src/social/x.rs</path>\n<type>file</type>\n<content>\n40:     }\n41: \n42:     fn name(&self) -> &'static str {\n43:         \"X (Twitter)\"\n44:     }\n45: \n46:     fn scopes(&self) -> Vec<String> {\n47:         vec![\n48:             \"tweet.read\".into(),\n49:             \"tweet.write\".into(),\n50:             \"users.read\".into(),\n51:             \"offline.access\".into(),\n52:         ]\n53:     }\n54: \n55:     fn max_content_length(&self) -> usize {\n56:         4000\n57:     }\n58: \n59:     async fn generate_auth_url(\n\n(Showing lines 40-59 of 392. Use offset=60 to continue.)\n</content>\n\n[Project README: /home/ishanp/Documents/GitHub/postiz-rust/README.md]\n# Postiz Rust — Social Media Scheduling Platform\n\n[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)\n![Rust](https://img.shields.io/badge/rust-1.85%2B-dea584?logo=rust)\n[![CI](https://github.com/ishanpm/postiz-rust/actions/workflows/ci.yml/badge.svg)](https://github.com/ishanpm/postiz-rust/actions/workflows/ci.yml)\n[![Docker](https://img.shields.io/badge/docker-multi--arch-blue?logo=docker)](Dockerfile)\n\n**Postiz Rust** is a dual-interface social media scheduling engine written in Rust. It exposes the same business logic through two protocols simultaneously:\n\n- **REST API** (axum 0.8) — consumed by human users via a SvelteKit frontend dashboard\n- **MCP** (rmcp / Model Context Protocol) — consumed by AI agents for programmatic scheduling and oversight\n\nAn in-process tokio scheduler polls the database every 30 seconds, publishes due posts across 5 social providers (X/Twitter, LinkedIn, Bluesky, Facebook, Instagram), and emits real-time events via Server-Sent Events.\n\n---\n\n## Architecture\n\n```\n┌─────────────────────────────────────────────────────────────────┐\n│                         postiz-rust                              │\n│                                                                  │\n│  ┌──────────────┐    ┌──────────────────┐                       │\n│  │  Human Users  │    │   AI Agents      │                       │\n│  │  (SvelteKit)  │    │  (Claude, etc.)  │                       │\n│  └──────┬───────┘    └────────┬─────────┘                       │\n│         │                     │                                  │\n│  ┌──────▼─────────────────────▼─────────┐                       │\n│  │         axum 0.8 HTTP Router         │                       │\n│  │                                      │                       │\n│  │  ┌────────────────┐  ┌────────────┐  │                       │\n│  │  │  REST API       │  │  MCP SSE   │  │  Port 3000           │\n│  │  │  /api/auth/*    │  │  /mcp/sse  │  │  Port 3001 (MCP)     │\n│  │  │  /api/posts/*   │  │            │  │                      │\n│  │  │  /api/accounts/*│  │  rmcp      │  │                      │\n│  │  │  /api/media/*   │  │  stdio     │  │                      │\n│  │  │  /api/events    │  │  transport │  │                      │\n│  │  └────────┬───────┘  └──────┬─────┘  │                       │\n│  └───────────┼──────────────────┼────────┘                       │\n│              │                  │                                │\n│  ┌───────────▼──────────────────▼────────┐                       │\n│  │          AppState (Arc<RwLock<...>>)  │                       │\n│  │                                       │                       │\n│  │  ┌──────────┐  ┌──────────────────┐   │                       │\n│  │  │ Provider  │  │   Scheduler      │   │                       │\n│  │  │ Registry  │  │   (tokio::spawn) │   │                       │\n│  │  │           │  │   30s poll +     │   │                       │\n│  │  │ X/Twitter │  │   exp. backoff   │   │                       │\n│  │  │ LinkedIn  │  │                  │   │                       │\n│  │  │ Bluesky   │  │   ┌──────────┐   │   │                       │\n│  │  │ Facebook  │  │   │ Broadcast │   │   │                       │\n│  │  │ Instagram │  │   │  Channel  │   │   │                       │\n│  │  └──────────┘  │   └──────────┘   │   │                       │\n│  └────────────────────────────────────┘   │                       │\n│                                           │                       │\n│  ┌────────────────────────────────────┐   │                       │\n│  │          PostgreSQL (sqlx)         │   │                       │\n│  │  users | accounts | posts | media  │   │                       │\n│  │  scheduled_posts                   │   │                       │\n│  └────────────────────────────────────┘   │                       │\n└─────────────────────────────────────────────────────────────────┘\n```\n\n### Dual-Interface Design\n\n| Interface     | Protocol                   | Audience                | Port            |\n| ------------- | -------------------------- | ----------------------- | --------------- |\n| **REST API**  | HTTP/JSON (axum)           | Human users (SvelteKit) | `3000`          |\n| **MCP SSE**   | Server-Sent Events (rmcp)  | AI agents               | `3000 /mcp/sse` |\n| **MCP Stdio** | JSON-RPC over stdio (rmcp) | AI agents (subprocess)  | —               |\n\nBoth interfaces share the same `AppState` — no code duplication between REST and MCP paths. Every social provider implements a single `SocialProvider` trait used by both.\n\n---\n\n## Features\n\n- **Dual-Interface Architecture** — REST for humans, MCP for AI agents, one codebase\n- **5 Social Providers** — X/Twitter, LinkedIn, Bluesky, Facebook, Instagram via `SocialProvider` trait\n- **Pluggable Provider System** — `ProviderRegistry` with `#[async_trait]` for adding new networks\n- **In-Process Scheduler** — tokio `spawn` + 30s interval + exponential-backoff retry + token refresh\n- **Real-Time Events** — SSE via `tokio::sync::broadcast` for post status, errors, schedule updates\n- **JWT Authentication** — Bearer tokens, Argon2 password hashing, `Extension<UserId>` middleware\n- **Multi-Account Profiles** — per-user profile system for managing multiple social accounts\n- **Media Upload** — Multipart upload API with metadata extraction\n- **Multi-Arch Docker** — Single Dockerfile builds for `linux/amd64` and `linux/arm64` via musl\n- **12-Factor Config** — Environment-driven with `dotenvy` for local dev\n\n### Size & Performance\n\n| Metric       | Postiz Rust       | Python Equivalent | Node.js Equivalent |\n| ------------ | ----------------- | ----------------- | ------------------ |\n| Binary Size  | ~12 MB (stripped) | —                 | —                  |\n| Docker Image | ~15 MB            | ~150–300 MB       | ~200–400 MB        |\n| Idle RSS     | ~4 MB             | ~30–60 MB         | ~25–50 MB          |\n| Cold Start   | < 100 ms          | ~2–8 s            | ~500 ms–2 s        |\n| Throughput   | ~10k req/s (est.) | ~1–2k req/s       | ~5–10k req/s       |\n\n---\n\n## API Reference\n\n### REST Endpoints\n\n| Method   | Path                       | Auth | Description                             |\n| -------- | -------------------------- | ---- | --------------------------------------- |\n| `POST`   | `/api/auth/register`       | —    | Register user (Argon2 hash)             |\n| `POST`   | `/api/auth/login`          | —    | Login, returns JWT                      |\n| `GET`    | `/api/auth/me`             | JWT  | Current user info                       |\n| `GET`    | `/api/posts`               | JWT  | List scheduled posts                    |\n| `POST`   | `/api/posts`               | JWT  | Create scheduled post                   |\n| `GET`    | `/api/posts/:id`           | JWT  | Get post details                        |\n| `PUT`    | `/api/posts/:id`           | JWT  | Update scheduled post                   |\n| `DELETE` | `/api/posts/:id`           | JWT  | Cancel scheduled post                   |\n| `GET`    | `/api/accounts`            | JWT  | List connected social accounts          |\n| `POST`   | `/api/accounts`            | JWT  | Connect social account (OAuth callback) |\n| `DELETE` | `/api/accounts/:id`        | JWT  | Disconnect social account               |\n| `POST`   | `/api/profiles`            | JWT  | Create multi-account profile            |\n| `GET`    | `/api/profiles`            | JWT  | List profiles                           |\n| `PUT`    | `/api/profiles/:id/active` | JWT  | Switch active profile                   |\n| `POST`   | `/api/media/upload`        | JWT  | Upload media file (multipart)           |\n| `GET`    | `/api/events`              | JWT  | SSE event stream (sse-rs)               |\n\n### MCP Tools (rmcp)\n\nAvailable to AI agents via the `--mcp` flag or SSE transport:\n\n| Tool                                                  | Description                                                       |\n| ----------------------------------------------------- | ----------------------------------------------------------------- |\n| `list_posts(filter)`                                  | Query scheduled/accepted posts with optional status filter        |\n| `create_post(text, media?, schedule_at?, accounts[])` | Schedule a new post                                               |\n| `get_post(id)`                                        | Full detail including retry history and publish log               |\n| `cancel_post(id)`                                     | Remove a pending post from the scheduler queue                    |\n| `update_post(id, fields...)`                          | Partial update: reschedule, edit text, reassign accounts          |\n| `list_accounts()`                                     | Connected social accounts with auth status                        |\n| `connect_account(provider, auth_code)`                | Initiate OAuth connection for a provider                          |\n| `disconnect_account(id)`                              | Remove a connected social account                                 |\n| `list_profiles()`                                     | List multi-account profiles                                       |\n| `switch_profile(name)`                                | Switch the active profile                                         |\n| `list_providers()`                                    | List enabled SocialProvider implementations                       |\n| `get_scheduler_status()`                              | Current scheduler state: running/paused, pending count, last poll |\n| `subscribe_events()`                                  | Live stream of post-publish, error, and token-refresh events      |\n\n---\n\n## Quick Start\n\n### Prerequisites\n\n- Rust 1.85+\n- PostgreSQL 16+\n- Docker & Docker Compose (optional)\n\n### 1. Clone and configure\n\n```bash\ngit clone https://github.com/ishanpm/postiz-rust.git\ncd postiz-rust\ncp .env.example .env\n```\n\n### 2. Database\n\n```bash\n# Using Docker for Postgres\ndocker compose up -d postgres\n\n# Or local Postgres\ncreatedb postiz\npsql postiz < migrations/0001_initial.sql\n```\n\n### 3. Build and run\n\n```bash\n# Development (hot-reload with cargo-watch)\ncargo watch -x run\n\n# Release build (~12 MB binary)\ncargo build --release\n./target/release/postiz-rust\n```\n\n### 4. Verify\n\n```bash\n# REST API\ncurl http://localhost:3000/api/health\n\n# MCP over stdio\necho '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}' | ./target/release/postiz-rust --mcp\n```\n\n---\n\n### Docker\n\n```bash\n# Build (multi-stage, ~15 MB final image)\ndocker build -t postiz-rust .\n\n# Run with Docker Compose (Postgres + app)\ndocker compose up --build\n```\n\n### Docker Compose Stack\n\n```yaml\nservices:\n  postgres:\n    image: postgres:16-alpine\n    environment:\n      POSTGRES_DB: postiz\n      POSTGRES_PASSWORD: postiz\n    ports:\n      - \"5432:5432\"\n    healthcheck:\n      test: [\"CMD-SHELL\", \"pg_isready -U postiz\"]\n      interval: 5s\n      timeout: 3s\n      retries: 5\n\n  app:\n    build: .\n    ports:\n      - \"3000:3000\"\n    env_file: .env\n    depends_on:\n      postgres:\n        condition: service_healthy\n```\n\n---\n\n## Authentication & OAuth\n\n### JWT Authentication\n\nPostiz Rust uses **JSON Web Tokens** (jsonwebtoken crate) with Argon2 password hashing:\n\n1. User registers → password hashed with Argon2 (`argon2` crate)\n2. User logs in → password verified, JWT returned (signed with `JWT_SECRET`)\n3. Subsequent requests → `Authorization: Bearer <token>` header\n4. axum middleware validates token, injects `Extension(UserId)` into handlers\n5. Optional `FromRequestParts` impl for ergonomic handler extraction\n\n### Social Provider OAuth\n\nEach provider follows its platform's OAuth flow. The `SocialProvider` trait abstracts the common pattern:\n\n```rust\n#[async_trait]\npub trait SocialProvider: Send + Sync {\n    fn name(&self) -> &'static str;\n    async fn authorize(&self, auth_code: &str) -> Result<ProviderToken, AppError>;\n    async fn refresh_token(&self, token: &ProviderToken) -> Result<ProviderToken, AppError>;\n    async fn publish_post(&self, post: &ScheduledPost, token: &ProviderToken) -> Result<String, AppError>;\n    async fn validate_token(&self, token: &ProviderToken) -> Result<bool, AppError>;\n}\n```\n\n| Provider      | Flow                       | Token Lifecycle               | Notes                               |\n| ------------- | -------------------------- | ----------------------------- | ----------------------------------- |\n| **Facebook**  | OAuth 2.0 + Meta Graph API | 60-day page tokens            | No refresh_token; re-auth at expiry |\n| **Instagram** | OAuth 2.0 (via Facebook)   | 60-day via fb_exchange_token  | Container → publish two-phase       |\n| **LinkedIn**  | OAuth 2.0 (Voyager)        | Session-based cookie auth     | `li_at` cookie profile              |\n| **Bluesky**   | AT Protocol (ATP)          | Session JWT                   | `auth_token` cookie profile         |\n| **X/Twitter** | OAuth 2.0 PKCE             | 2-hour access + refresh token | v2 API                              |\n\n---\n\n## Multi-Account Profiles\n\nPostiz Rust supports managing multiple social accounts across all providers through a profile system:\n\n```\n~/.postiz-rust/profiles/\n├── default/\n│   └── cookies.json        # li_at, auth_token, sessionid, etc.\n├── work/\n│   └── cookies.json\n└── personal/\n    └── cookies.json\n```\n\n- **Profile Manager** — manages cookie storage per profile\n- **MCP Tools** — `list_profiles`, `switch_profile`, `delete_profile`\n- **Fallback Chain** — `--profile` CLI flag → active profile file → `default`\n- **Cookie Auth** — Supports Chromium AES-GCM and Firefox plaintext cookie import\n\n---\n\n## Project Structure\n\n```\npostiz-rust/\n├── Cargo.toml                  # Workspace (or single crate)\n├── Cargo.lock\n├── Dockerfile                  # Multi-stage musl build\n├── docker-compose.yml          # Postgres + app stack\n├── .env.example                # 20+ env vars with docs\n├── LICENSE\n│\n├── src/\n│   ├── main.rs                 # Entry: HTTP server + MCP stdio + scheduler spawn\n│   ├── lib.rs                  # Module re-exports\n│   ├── config.rs               # 12-factor env config (figment + env vars)\n│   ├── error.rs                # Unified AppError → HTTP status (thiserror + IntoResponse)\n│   │\n│   ├── api/                    # axum HTTP Router (REST for humans)\n│   │   ├── mod.rs              # Router composition + middleware chain\n│   │   ├── auth.rs             # POST login, register, GET me\n│   │   ├── posts.rs            # CRUD scheduled posts\n│   │   ├── accounts.rs         # Connect/list/disconnect social accounts\n│   │   ├── media.rs            # Multipart upload\n│   │   ├── profiles.rs         # Multi-account profile management\n│   │   └── health.rs           # Health check endpoint\n│   │\n│   ├── mcp/                    # rmcp MCP Server (tools for AI agents)\n│   │   ├── mod.rs              # Router → tool dispatcher\n│   │   ├── tools.rs            # Tool definitions + call_tool match\n│   │   └── types.rs            # JSON-RPC type wrappers\n│   │\n│   ├── auth/                   # Authentication & authorization\n│   │   ├── mod.rs\n│   │   ├── jwt.rs              # Token creation/validation (jsonwebtoken)\n│   │   ├── password.rs         # Argon2 hashing + verification\n│   │   └── middleware.rs       # axum from_fn auth middleware\n│   │\n│   ├── social/                 # Social provider system\n│   │   ├── mod.rs              # SocialProvider trait + ProviderRegistry\n│   │   ├── twitter.rs          # X/Twitter v2 API client (OAuth 2.0 PKCE)\n│   │   ├── linkedin.rs         # LinkedIn Voyager API client (cookie auth)\n│   │   ├── bluesky.rs          # Bluesky AT Protocol client\n│   │   ├── facebook.rs         # Meta Graph API client (page tokens)\n│   │   └── instagram.rs        # Instagram Graph API client (container + publish)\n│   │\n│   ├── scheduler/              # In-process task scheduler\n│   │   ├── mod.rs              # tokio::spawn + 30s interval + broadcast\n│   │   └── worker.rs           # Poll + dispatch + retry + token refresh\n│   │\n│   ├── realtime/               # Real-time event system\n│   │   ├── mod.rs              # ServerEvent enum (serde)\n│   │   └── sse.rs              # SSE response stream (BroadcastStream)\n│   │\n│   ├── db/                     # Database access\n│   │   ├── mod.rs              # Pool setup (sqlx::PgPool)\n│   │   └── models.rs           # User, Account, Post, Media, ScheduledPost\n│   │\n│   └── middleware/             # Shared middleware\n│       └── mod.rs              # CORS, logging, rate limiting\n│\n├── migrations/                 # SQL migrations\n│   ├── 0001_initial.sql        # users, accounts, posts, media, scheduled_posts\n│   └── ...\n│\n└── tests/                      # Integration tests\n    ├── api_tests.rs            # REST endpoint tests via reqwest\n    └── mcp_tests.rs            # MCP stdio tests via Python subprocess\n```\n\n---\n\n## Configuration\n\nAll configuration is driven by environment variables (12-factor app pattern). See `.env.example` for defaults.\n\n| Variable                  | Required | Default   | Description                                |\n| ------------------------- | -------- | --------- | ------------------------------------------ |\n| `DATABASE_URL`            | Yes      | —         | PostgreSQL connection string               |\n| `JWT_SECRET`              | Yes      | —         | HMAC secret for JWT signing (min 32 chars) |\n| `HOST`                    | No       | `0.0.0.0` | HTTP bind address                          |\n| `PORT`                    | No       | `3000`    | HTTP port                                  |\n| `RUST_LOG`                | No       | `info`    | Log level (env_logger)                     |\n| `SCHEDULER_INTERVAL_MS`   | No       | `30000`   | Scheduler poll interval                    |\n| `SCHEDULER_MAX_RETRIES`   | No       | `3`       | Max publish retries per post               |\n| `SCHEDULER_RETRY_BASE_MS` | No       | `1000`    | Exponential backoff base                   |\n| `MAX_UPLOAD_SIZE_MB`      | No       | `10`      | Media upload limit                         |\n| `TWITTER_CLIENT_ID`       | —\\*      | —         | X/Twitter OAuth 2.0 client ID              |\n| `TWITTER_CLIENT_SECRET`   | —\\*      | —         | X/Twitter OAuth 2.0 client secret          |\n| `LINKEDIN_COOKIE`         | —\\*      | —         | LinkedIn `li_at` session cookie            |\n| `BLUESKY_HANDLE`          | —\\*      | —         | Bluesky account handle                     |\n| `BLUESKY_APP_PASSWORD`    | —\\*      | —         | Bluesky app password                       |\n| `FACEBOOK_CLIENT_ID`      | —\\*      | —         | Meta app ID                                |\n| `FACEBOOK_CLIENT_SECRET`  | —\\*      | —         | Meta app secret                            |\n| `INSTAGRAM_CLIENT_ID`     | —\\*      | —         | Instagram app ID                           |\n| `INSTAGRAM_CLIENT_SECRET` | —\\*      | —         | Instagram app secret                       |\n\n\\*Required per provider you enable.\n\n---\n\n## Key Design Decisions\n\n### 1. Dual Interface Over Shared Logic\n\n**Decision:** A single binary serves both REST and MCP from the same `AppState` instead of two separate services.\n\n**Trade-off:** Slightly larger binary; eliminates sync/drift problems between human-facing and agent-facing APIs. Both interfaces hit identical provider and database code paths.\n\n### 2. In-Process Scheduler vs External Queue\n\n**Decision:** `tokio::spawn` + periodic DB polling instead of Redis/Celery/Sidekiq.\n\n**Trade-off:** Simpler deployment (no Redis dependency) at the cost of no persistent queue across restarts. For a single-instance scheduler serving <10k accounts, DB polling at 30s is sufficient. External queue can be added later behind the same trait.\n\n### 3. Trait-Based Provider System\n\n**Decision:** `SocialProvider` trait with dynamic dispatch via `ProviderRegistry`.\n\n**Trade-off:** Slight runtime overhead from trait objects vs compile-time monomorphization. Gain: adding a new network requires exactly one file and one `register()` call. The trait is shared by REST handlers, MCP tools, and the scheduler — cross-cutting concerns (rate limiting, retry) live in the trait wrapper, not per-provider.\n\n### 4. Cookie-Based Auth for LinkedIn\n\n**Decision:** LinkedIn uses session cookie auth (`li_at`) instead of OAuth 2.0.\n\n**Rationale:** LinkedIn's Voyager API (used by first-party clients) has no stable OAuth for non-enterprise. Cookie auth works reliably for single-account setups. Multi-account profiles bridge the gap.\n\n### 5. SSE via Broadcast Channel\n\n**Decision:** `tokio::sync::broadcast` feedings `axum::response::sse::Sse` with `tokio_stream::wrappers::BroadcastStream`.\n\n**Rationale:** Zero external deps for real-time events. Clients subscribe with `EventSource` (browser) or SSE client (AI agents). The broadcast channel is subscriber-count-aware — it drops `Receiver` when clients disconnect, preventing unbounded channel growth.\n\n### 6. Unified Error Handling\n\n**Decision:** Single `AppError` enum (thiserror) with `IntoResponse` for HTTP + JSON error body.\n\n**Rationale:** Both REST handlers and MCP tools can return `Result<_, AppError>`. Error JSON format is consistent across the entire API. `From` impls for sqlx, jsonwebtoken, argon2, and anyhow keep handler code clean.\n\n### 7. Multi-Arch Docker via musl\n\n**Decision:** Build with `x86_64-unknown-linux-musl` / `aarch64-unknown-linux-musl` targets for Alpine.\n\n**Rationale:** ~15 MB final image (vs ~800 MB for debian-based). Static linking eliminates libc dependency. `TARGETARCH` build arg detects architecture at build time.\n\n---\n\n## Docker Multi-Stage Build\n\n```dockerfile\n# Stage 1: Build\nFROM rust:alpine AS builder\nRUN apk add --no-cache musl-dev pkgconfig openssl-dev\nWORKDIR /app\nCOPY Cargo.toml Cargo.lock ./\nCOPY src/ src/\nRUN cargo build --release --target x86_64-unknown-linux-musl\n\n# Stage 2: Runtime\nFROM scratch\nCOPY --from=builder /app/target/release/postiz-rust /postiz-rust\nEXPOSE 3000\nENTRYPOINT [\"/postiz-rust\"]\n```\n\n- **Multi-architecture:** `docker buildx build --platform linux/amd64,linux/arm64 ...`\n- **Image size:** ~15 MB compressed\n- **RSS:** ~4 MB idle (single tenant)\n- **Startup:** near-instant (< 100 ms from cold)\n\n---\n\n## Testing\n\n```bash\n# Unit + integration tests\ncargo test\n\n# With specific database for integration tests\nDATABASE_URL=postgres://postiz:postiz@localhost/postiz cargo test --test api_tests\n\n# MCP protocol-level tests (Python subprocess)\npython tests/mcp_protocol_test.py\n```\n\nThe test suite includes:\n\n- Rust `#[cfg(test)]` unit tests for validation, JWT, config parsing\n- Rust integration tests for REST endpoints via `reqwest`\n- Python subprocess tests for MCP stdio protocol compliance (JSON-RPC initialise → tool list → call → response)\n\n---\n\n## License\n\nMIT — see [LICENSE](LICENSE).\n\n---\n\n_Built with [axum](https://github.com/tokio-rs/axum), [rmcp](https://github.com/modelcontextprotocol/rust-sdk), [sqlx](https://github.com/launchbadge/sqlx), and [tokio](https://github.com/tokio-rs/tokio)._\n",
+        "metadata": {
+          "preview": "    }\n\n    fn name(&self) -> &'static str {\n        \"X (Twitter)\"\n    }\n\n    fn scopes(&self) -> Vec<String> {\n        vec![\n            \"tweet.read\".into(),\n            \"tweet.write\".into(),\n            \"users.read\".into(),\n            \"offline.access\".into(),\n        ]\n    }\n\n    fn max_content_length(&self) -> usize {\n        4000\n    }\n\n    async fn generate_auth_url(",
+          "truncated": true,
+          "loaded": []
+        },
+        "title": "src/social/x.rs",
+        "time": {
+          "start": 1778325310554,
+          "end": 1778325310892
+        }
+      },
+      "id": "prt_e0c72c8130017piYZyW6U467HQ",
+      "sessionID": "ses_1f38d48ddffet3IHiwtZAUod1k",
+      "messageID": "msg_e0c72b851001Jein6X56UN2Ymy"
+    },
+    {
+      "type": "tool",
+      "tool": "edit",
+      "callID": "call_00_S4EoKjy8U0IHKLIS3KQ28223",
+      "state": {
+        "status": "completed",
+        "input": {
+          "filePath": "/home/ishanp/Documents/GitHub/postiz-rust/src/social/x.rs",
+          "oldString": "    fn scopes(&self) -> Vec<String> {\n        vec![\n            \"tweet.read\".into(),\n            \"tweet.write\".into(),\n            \"users.read\".into(),\n            \"offline.access\".into(),\n        ]\n    }",
+          "newString": "    fn scopes(&self) -> Vec<String> {\n        vec![\n            \"tweet.read\".into(),\n            \"tweet.write\".into(),\n            \"users.read\".into(),\n            \"offline.access\".into(),\n            \"bookmark.read\".into(),\n            \"bookmark.write\".into(),\n            \"like.read\".into(),\n            \"like.write\".into(),\n            \"follows.read\".into(),\n            \"follows.write\".into(),\n            \"list.read\".into(),\n        ]\n    }"
+        },
+        "output": "Edit applied successfully.",
+        "metadata": {
+          "diagnostics": {
+            "/home/ishanp/Documents/GitHub/postiz-rust/src/api/rate_limiter.rs": [
+              {
+                "range": {
+                  "start": {
+                    "line": 108,
+                    "character": 12
+                  },
+                  "end": {
+                    "line": 108,
+                    "character": 13
+                  }
+                },
+                "severity": 2,
+                "code": "unused_variables",
+                "source": "rustc",
+                "message": "unused variable: `i`\n`#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default",
+                "relatedInformation": [
+                  {
+                    "location": {
+                      "uri": "file:///home/ishanp/Documents/GitHub/postiz-rust/src/api/rate_limiter.rs",
+                      "range": {
+                        "start": {
+                          "line": 108,
+                          "character": 12
+                        },
+                        "end": {
+                          "line": 108,
+                          "character": 13
+                        }
+                      }
+                    },
+                    "message": "if this is intentional, prefix it with an underscore: `_i`"
+                  }
+                ],
+                "tags": [
+                  1
+                ],
+                "data": {
+                  "rendered": "warning: unused variable: `i`\n   --> src/api/rate_limiter.rs:109:13\n    |\n109 |         for i in 0..10 {\n    |             ^ help: if this is intentional, prefix it with an underscore: `_i`\n    |\n    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default\n\n"
+                }
+              },
+              {
+                "range": {
+                  "start": {
+                    "line": 108,
+                    "character": 12
+                  },
+                  "end": {
+                    "line": 108,
+                    "character": 13
+                  }
+                },
+                "severity": 4,
+                "code": "unused_variables",
+                "source": "rustc",
+                "message": "if this is intentional, prefix it with an underscore: `_i`",
+                "relatedInformation": [
+                  {
+                    "location": {
+                      "uri": "file:///home/ishanp/Documents/GitHub/postiz-rust/src/api/rate_limiter.rs",
+                      "range": {
+                        "start": {
+                          "line": 108,
+                          "character": 12
+                        },
+                        "end": {
+                          "line": 108,
+                          "character": 13
+                        }
+                      }
+                    },
+                    "message": "original diagnostic"
+                  }
+                ]
+              }
+            ],
+            "/home/ishanp/Documents/GitHub/postiz-rust/src/auth/middleware.rs": [
+              {
+                "range": {
+                  "start": {
+                    "line": 111,
+                    "character": 41
+                  },
+                  "end": {
+                    "line": 111,
+                    "character": 55
+                  }
+                },
+                "severity": 2,
+                "code": "unused_imports",
+                "source": "rustc",
+                "message": "unused import: `validate_token`\n`#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default",
+                "relatedInformation": [
+                  {
+                    "location": {
+                      "uri": "file:///home/ishanp/Documents/GitHub/postiz-rust/src/auth/middleware.rs",
+                      "range": {
+                        "start": {
+                          "line": 111,
+                          "character": 39
+                        },
+                        "end": {
+                          "line": 111,
+                          "character": 55
+                        }
+                      }
+                    },
+                    "message": "remove the unused import"
+                  }
+                ],
+                "tags": [
+                  1
+                ],
+                "data": {
+                  "rendered": "warning: unused import: `validate_token`\n   --> src/auth/middleware.rs:112:42\n    |\n112 |     use crate::auth::jwt::{create_token, validate_token};\n    |                                          ^^^^^^^^^^^^^^\n    |\n    = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default\n\n"
+                }
+              },
+              {
+                "range": {
+                  "start": {
+                    "line": 111,
+                    "character": 39
+                  },
+                  "end": {
+                    "line": 111,
+                    "character": 55
+                  }
+                },
+                "severity": 4,
+                "code": "unused_imports",
+                "source": "rustc",
+                "message": "remove the unused import",
+                "relatedInformation": [
+                  {
+                    "location": {
+                      "uri": "file:///home/ishanp/Documents/GitHub/postiz-rust/src/auth/middleware.rs",
+                      "range": {
+                        "start": {
+                          "line": 111,
+                          "character": 41
+                        },
+                        "end": {
+                          "line": 111,
+                          "character": 55
+                        }
+                      }
+                    },
+                    "message": "original diagnostic"
+                  }
+                ]
+              }
+            ],
+            "/home/ishanp/Documents/GitHub/postiz-rust/src/social/reddit.rs": [
+              {
+                "range": {
+                  "start": {
+                    "line": 143,
+                    "character": 30
+                  },
+                  "end": {
+                    "line": 143,
+                    "character": 34
+                  }
+                },
+                "severity": 1,
+                "code": "E0308",
+                "codeDescription": {
+                  "href": "https://doc.rust-lang.org/error-index.html#E0308"
+                },
+                "source": "rustc",
+                "message": "mismatched types\nexpected reference `&std::string::String`\n   found reference `&str`",
+                "data": {
+                  "rendered": "error[E0308]: mismatched types\n   --> src/social/reddit.rs:144:31\n    |\n144 |             params.push((\"t\", time));\n    |                               ^^^^ expected `&String`, found `&str`\n    |\n    = note: expected reference `&std::string::String`\n               found reference `&str`\n\n"
+                }
+              },
+              {
+                "range": {
+                  "start": {
+                    "line": 145,
+                    "character": 41
+                  },
+                  "end": {
+                    "line": 145,
+                    "character": 48
+                  }
+                },
+                "severity": 1,
+                "code": "E0308",
+                "codeDescription": {
+                  "href": "https://doc.rust-lang.org/error-index.html#E0308"
+                },
+                "source": "rustc",
+                "message": "mismatched types\nexpected reference `&[(&str, &str)]`\n   found reference `&Vec<(&str, &std::string::String)>`",
+                "relatedInformation": [
+                  {
+                    "location": {
+                      "uri": "file:///home/ishanp/Documents/GitHub/postiz-rust/src/social/reddit.rs",
+                      "range": {
+                        "start": {
+                          "line": 145,
+                          "character": 13
+                        },
+                        "end": {
+                          "line": 145,
+                          "character": 22
+                        }
+                      }
+                    },
+                    "message": "arguments to this method are incorrect"
+                  },
+                  {
+                    "location": {
+                      "uri": "file:///home/ishanp/Documents/GitHub/postiz-rust/src/social/reddit.rs",
+                      "range": {
+                        "start": {
+                          "line": 101,
+                          "character": 13
+                        },
+                        "end": {
+                          "line": 101,
+                          "character": 22
+                        }
+                      }
+                    },
+                    "message": "method defined here"
+                  }
+                ],
+                "data": {
+                  "rendered": "error[E0308]: mismatched types\n   --> src/social/reddit.rs:146:42\n    |\n146 |         self.get_oauth(token, &endpoint, &params).await\n    |              ---------                   ^^^^^^^ expected `&[(&str, &str)]`, found `&Vec<(&str, &String)>`\n    |              |\n    |              arguments to this method are incorrect\n    |\n    = note: expected reference `&[(&str, &str)]`\n               found reference `&Vec<(&str, &std::string::String)>`\nnote: method defined here\n   --> src/social/reddit.rs:102:14\n    |\n102 |     async fn get_oauth(\n    |              ^^^^^^^^^\n...\n106 |         params: &[(&str, &str)],\n    |         -----------------------\n\n"
+                }
+              },
+              {
+                "range": {
+                  "start": {
+                    "line": 145,
+                    "character": 13
+                  },
+                  "end": {
+                    "line": 145,
+                    "character": 22
+                  }
+                },
+                "severity": 4,
+                "code": "E0308",
+                "codeDescription": {
+                  "href": "https://doc.rust-lang.org/error-index.html#E0308"
+                },
+                "source": "rustc",
+                "message": "arguments to this method are incorrect",
+                "relatedInformation": [
+                  {
+                    "location": {
+                      "uri": "file:///home/ishanp/Documents/GitHub/postiz-rust/src/social/reddit.rs",
+                      "range": {
+                        "start": {
+                          "line": 145,
+                          "character": 41
+                        },
+                        "end": {
+                          "line": 145,
+                          "character": 48
+                        }
+                      }
+                    },
+                    "message": "original diagnostic"
+                  }
+                ]
+              },
+              {
+                "range": {
+                  "start": {
+                    "line": 101,
+                    "character": 13
+                  },
+                  "end": {
+                    "line": 101,
+                    "character": 22
+                  }
+                },
+                "severity": 4,
+                "code": "E0308",
+                "codeDescription": {
+                  "href": "https://doc.rust-lang.org/error-index.html#E0308"
+                },
+                "source": "rustc",
+                "message": "method defined here",
+                "relatedInformation": [
+                  {
+                    "location": {
+                      "uri": "file:///home/ishanp/Documents/GitHub/postiz-rust/src/social/reddit.rs",
+                      "range": {
+                        "start": {
+                          "line": 145,
+                          "character": 41
+                        },
+                        "end": {
+                          "line": 145,
+                          "character": 48
+                        }
+                      }
+                    },
+                    "message": "original diagnostic"
+                  }
+                ]
+              },
+              {
+                "range": {
+                  "start": {
+                    "line": 168,
+                    "character": 23
+                  },
+                  "end": {
+                    "line": 168,
+                    "character": 40
+                  }
+                },
+                "severity": 1,
+                "code": "E0716",
+                "codeDescription": {
+                  "href": "https://doc.rust-lang.org/error-index.html#E0716"
+                },
+                "source": "rustc",
+                "message": "temporary value dropped while borrowed\nconsider using a `let` binding to create a longer lived value",
+                "relatedInformation": [
+                  {
+                    "location": {
+                      "uri": "file:///home/ishanp/Documents/GitHub/postiz-rust/src/social/reddit.rs",
+                      "range": {
+                        "start": {
+                          "line": 171,
+                          "character": 9
+                        },
+                        "end": {
+                          "line": 171,
+                          "character": 10
+                        }
+                      }
+                    },
+                    "message": "temporary value is freed at the end of this statement"
+                  },
+                  {
+                    "location": {
+                      "uri": "file:///home/ishanp/Documents/GitHub/postiz-rust/src/social/reddit.rs",
+                      "range": {
+                        "start": {
+                          "line": 172,
+                          "character": 41
+                        },
+                        "end": {
+                          "line": 172,
+                          "character": 48
+                        }
+                      }
+                    },
+                    "message": "borrow later used here"
+                  }
+                ],
+                "data": {
+                  "rendered": "error[E0716]: temporary value dropped while borrowed\n   --> src/social/reddit.rs:169:24\n    |\n169 |             (\"limit\", &limit.to_string()),\n    |                        ^^^^^^^^^^^^^^^^^ creates a temporary value which is freed while still in use\n...\n172 |         ];\n    |          - temporary value is freed at the end of this statement\n173 |         self.get_oauth(token, &endpoint, &params).await\n    |                                          ------- borrow later used here\n    |\n    = note: consider using a `let` binding to create a longer lived value\n\n"
+                }
+              },
+              {
+                "range": {
+                  "start": {
+                    "line": 171,
+                    "character": 9
+                  },
+                  "end": {
+                    "line": 171,
+                    "character": 10
+                  }
+                },
+                "severity": 4,
+                "code": "E0716",
+                "codeDescription": {
+                  "href": "https://doc.rust-lang.org/error-index.html#E0716"
+                },
+                "source": "rustc",
+                "message": "temporary value is freed at the end of this statement",
+                "relatedInformation": [
+                  {
+                    "location": {
+                      "uri": "file:///home/ishanp/Documents/GitHub/postiz-rust/src/social/reddit.rs",
+                      "range": {
+                        "start": {
+                          "line": 168,
+                          "character": 23
+                        },
+                        "end": {
+                          "line": 168,
+                          "character": 40
+                        }
+                      }
+                    },
+                    "message": "original diagnostic"
+                  }
+                ]
+              },
+              {
+                "range": {
+                  "start": {
+                    "line": 172,
+                    "character": 41
+                  },
+                  "end": {
+                    "line": 172,
+                    "character": 48
+                  }
+                },
+                "severity": 4,
+                "code": "E0716",
+                "codeDescription": {
+                  "href": "https://doc.rust-lang.org/error-index.html#E0716"
+                },
+                "source": "rustc",
+                "message": "borrow later used here",
+                "relatedInformation": [
+                  {
+                    "location": {
+                      "uri": "file:///home/ishanp/Documents/GitHub/postiz-rust/src/social/reddit.rs",
+                      "range": {
+                        "start": {
+                          "line": 168,
+                          "character": 23
+                        },
+                        "end": {
+                          "line": 168,
+                          "character": 40
+                        }
+                      }
+                    },
+                    "message": "original diagnostic"
+                  }
+                ]
+              },
+              {
+                "range": {
+                  "start": {
+                    "line": 200,
+                    "character": 23
+                  },
+                  "end": {
+                    "line": 200,
+                    "character": 40
+                  }
+                },
+                "severity": 1,
+                "code": "E0716",
+                "codeDescription": {
+                  "href": "https://doc.rust-lang.org/error-index.html#E0716"
+                },
+                "source": "rustc",
+                "message": "temporary value dropped while borrowed\nconsider using a `let` binding to create a longer lived value",
+                "relatedInformation": [
+                  {
+                    "location": {
+                      "uri": "file:///home/ishanp/Documents/GitHub/postiz-rust/src/social/reddit.rs",
+                      "range": {
+                        "start": {
+                          "line": 202,
+                          "character": 9
+                        },
+                        "end": {
+                          "line": 202,
+                          "character": 10
+                        }
+                      }
+                    },
+                    "message": "temporary value is freed at the end of this statement"
+                  },
+                  {
+                    "location": {
+                      "uri": "file:///home/ishanp/Documents/GitHub/postiz-rust/src/social/reddit.rs",
+                      "range": {
+                        "start": {
+                          "line": 203,
+                          "character": 41
+                        },
+                        "end": {
+                          "line": 203,
+                          "character": 48
+                        }
+                      }
+                    },
+                    "message": "borrow later used here"
+                  }
+                ],
+                "data": {
+                  "rendered": "error[E0716]: temporary value dropped while borrowed\n   --> src/social/reddit.rs:201:24\n    |\n201 |             (\"limit\", &limit.to_string()),\n    |                        ^^^^^^^^^^^^^^^^^ creates a temporary value which is freed while still in use\n202 |             (\"depth\", &depth.to_string()),\n203 |         ];\n    |          - temporary value is freed at the end of this statement\n204 |         self.get_oauth(token, &endpoint, &params).await\n    |                                          ------- borrow later used here\n    |\n    = note: consider using a `let` binding to create a longer lived value\n\n"
+                }
+              },
+              {
+                "range": {
+                  "start": {
+                    "line": 202,
+                    "character": 9
+                  },
+                  "end": {
+                    "line": 202,
+                    "character": 10
+                  }
+                },
+                "severity": 4,
+                "code": "E0716",
+                "codeDescription": {
+                  "href": "https://doc.rust-lang.org/error-index.html#E0716"
+                },
+                "source": "rustc",
+                "message": "temporary value is freed at the end of this statement",
+                "relatedInformation": [
+                  {
+                    "location": {
+                      "uri": "file:///home/ishanp/Documents/GitHub/postiz-rust/src/social/reddit.rs",
+                      "range": {
+                        "start": {
+                          "line": 200,
+                          "character": 23
+                        },
+                        "end": {
+                          "line": 200,
+                          "character": 40
+                        }
+                      }
+                    },
+                    "message": "original diagnostic"
+                  }
+                ]
+              },
+              {
+                "range": {
+                  "start": {
+                    "line": 203,
+                    "character": 41
+                  },
+                  "end": {
+                    "line": 203,
+                    "character": 48
+                  }
+                },
+                "severity": 4,
+                "code": "E0716",
+                "codeDescription": {
+                  "href": "https://doc.rust-lang.org/error-index.html#E0716"
+                },
+                "source": "rustc",
+                "message": "borrow later used here",
+                "relatedInformation": [
+                  {
+                    "location": {
+                      "uri": "file:///home/ishanp/Documents/GitHub/postiz-rust/src/social/reddit.rs",
+                      "range": {
+                        "start": {
+                          "line": 200,
+                          "character": 23
+                        },
+                        "end": {
+                          "line": 200,
+                          "character": 40
+                        }
+                      }
+                    },
+                    "message": "original diagnostic"
+                  }
+                ]
+              },
+              {
+                "range": {
+                  "start": {
+                    "line": 201,
+                    "character": 23
+                  },
+                  "end": {
+                    "line": 201,
+                    "character": 40
+                  }
+                },
+                "severity": 1,
+                "code": "E0716",
+                "codeDescription": {
+                  "href": "https://doc.rust-lang.org/error-index.html#E0716"
+                },
+                "source": "rustc",
+                "message": "temporary value dropped while borrowed\nconsider using a `let` binding to create a longer lived value",
+                "relatedInformation": [
+                  {
+                    "location": {
+                      "uri": "file:///home/ishanp/Documents/GitHub/postiz-rust/src/social/reddit.rs",
+                      "range": {
+                        "start": {
+                          "line": 202,
+                          "character": 9
+                        },
+                        "end": {
+                          "line": 202,
+                          "character": 10
+                        }
+                      }
+                    },
+                    "message": "temporary value is freed at the end of this statement"
+                  },
+                  {
+                    "location": {
+                      "uri": "file:///home/ishanp/Documents/GitHub/postiz-rust/src/social/reddit.rs",
+                      "range": {
+                        "start": {
+                          "line": 203,
+                          "character": 41
+                        },
+                        "end": {
+                          "line": 203,
+                          "character": 48
+                        }
+                      }
+                    },
+                    "message": "borrow later used here"
+                  }
+                ],
+                "data": {
+                  "rendered": "error[E0716]: temporary value dropped while borrowed\n   --> src/social/reddit.rs:202:24\n    |\n202 |             (\"depth\", &depth.to_string()),\n    |                        ^^^^^^^^^^^^^^^^^ creates a temporary value which is freed while still in use\n203 |         ];\n    |          - temporary value is freed at the end of this statement\n204 |         self.get_oauth(token, &endpoint, &params).await\n    |                                          ------- borrow later used here\n    |\n    = note: consider using a `let` binding to create a longer lived value\n\n"
+                }
+              }
+            ],
+            "/home/ishanp/Documents/GitHub/postiz-rust/src/social/facebook.rs": [
+              {
+                "range": {
+                  "start": {
+                    "line": 364,
+                    "character": 8
+                  },
+                  "end": {
+                    "line": 364,
+                    "character": 14
+                  }
+                },
+                "severity": 1,
+                "code": "E0063",
+                "codeDescription": {
+                  "href": "https://doc.rust-lang.org/error-index.html#E0063"
+                },
+                "source": "rustc",
+                "message": "missing fields `reddit_access_token`, `reddit_password`, `reddit_refresh_token` and 1 other field in initializer of `config::Config`\nmissing `reddit_access_token`, `reddit_password`, `reddit_refresh_token` and 1 other field",
+                "data": {
+                  "rendered": "error[E0063]: missing fields `reddit_access_token`, `reddit_password`, `reddit_refresh_token` and 1 other field in initializer of `config::Config`\n   --> src/social/facebook.rs:365:9\n    |\n365 |         Config {\n    |         ^^^^^^ missing `reddit_access_token`, `reddit_password`, `reddit_refresh_token` and 1 other field\n\n"
+                }
+              }
+            ],
+            "/home/ishanp/Documents/GitHub/postiz-rust/src/social/linkedin.rs": [
+              {
+                "range": {
+                  "start": {
+                    "line": 249,
+                    "character": 8
+                  },
+                  "end": {
+                    "line": 249,
+                    "character": 14
+                  }
+                },
+                "severity": 1,
+                "code": "E0063",
+                "codeDescription": {
+                  "href": "https://doc.rust-lang.org/error-index.html#E0063"
+                },
+                "source": "rustc",
+                "message": "missing fields `reddit_access_token`, `reddit_password`, `reddit_refresh_token` and 1 other field in initializer of `config::Config`\nmissing `reddit_access_token`, `reddit_password`, `reddit_refresh_token` and 1 other field",
+                "data": {
+                  "rendered": "error[E0063]: missing fields `reddit_access_token`, `reddit_password`, `reddit_refresh_token` and 1 other field in initializer of `config::Config`\n   --> src/social/linkedin.rs:250:9\n    |\n250 |         Config {\n    |         ^^^^^^ missing `reddit_access_token`, `reddit_password`, `reddit_refresh_token` and 1 other field\n\n"
+                }
+              }
+            ],
+            "/home/ishanp/Documents/GitHub/postiz-rust/src/services/integrations.rs": [],
+            "/home/ishanp/Documents/GitHub/postiz-rust/src/mcp/tools_integrations.rs": [],
+            "/home/ishanp/Documents/GitHub/postiz-rust/src/social/instagram.rs": [],
+            "/home/ishanp/Documents/GitHub/postiz-rust/src/social/threads.rs": [],
+            "/home/ishanp/Documents/GitHub/postiz-rust/src/social/instagram_standalone.rs": [],
+            "/home/ishanp/Documents/GitHub/postiz-rust/src/api/onboard.rs": [],
+            "/home/ishanp/Documents/GitHub/postiz-rust/src/api/mod.rs": [],
+            "/home/ishanp/Documents/GitHub/postiz-rust/src/db/queries.rs": [
+              {
+                "range": {
+                  "start": {
+                    "line": 71,
+                    "character": 4
+                  },
+                  "end": {
+                    "line": 71,
+                    "character": 19
+                  }
+                },
+                "severity": 1,
+                "code": "macro-error",
+                "codeDescription": {
+                  "href": "https://rust-analyzer.github.io/book/diagnostics.html#macro-error"
+                },
+                "source": "rust-analyzer",
+                "message": "error returned from database: column \"root_internal_id\" of relation \"integrations\" does not exist"
+              },
+              {
+                "range": {
+                  "start": {
+                    "line": 110,
+                    "character": 4
+                  },
+                  "end": {
+                    "line": 110,
+                    "character": 19
+                  }
+                },
+                "severity": 1,
+                "code": "macro-error",
+                "codeDescription": {
+                  "href": "https://rust-analyzer.github.io/book/diagnostics.html#macro-error"
+                },
+                "source": "rust-analyzer",
+                "message": "error returned from database: column \"root_internal_id\" does not exist"
+              },
+              {
+                "range": {
+                  "start": {
+                    "line": 128,
+                    "character": 4
+                  },
+                  "end": {
+                    "line": 128,
+                    "character": 19
+                  }
+                },
+                "severity": 1,
+                "code": "macro-error",
+                "codeDescription": {
+                  "href": "https://rust-analyzer.github.io/book/diagnostics.html#macro-error"
+                },
+                "source": "rust-analyzer",
+                "message": "error returned from database: column \"root_internal_id\" does not exist"
+              }
+            ],
+            "/home/ishanp/Documents/GitHub/postiz-rust/src/api/integrations.rs": [],
+            "/home/ishanp/Documents/GitHub/postiz-rust/src/db/models.rs": [],
+            "/home/ishanp/Documents/GitHub/postiz-rust/src/social/registry.rs": [],
+            "/home/ishanp/Documents/GitHub/postiz-rust/src/config.rs": [],
+            "/home/ishanp/Documents/GitHub/postiz-rust/src/social/mod.rs": [
+              {
+                "range": {
+                  "start": {
+                    "line": 15,
+                    "character": 0
+                  },
+                  "end": {
+                    "line": 15,
+                    "character": 14
+                  }
+                },
+                "severity": 1,
+                "code": "E0583",
+                "codeDescription": {
+                  "href": "https://doc.rust-lang.org/stable/error_codes/E0583.html"
+                },
+                "source": "rust-analyzer",
+                "message": "unresolved module, can't find module file: skool.rs, or skool/mod.rs"
+              }
+            ],
+            "/home/ishanp/Documents/GitHub/postiz-rust/src/mcp/mod.rs": []
+          },
+          "diff": "Index: /home/ishanp/Documents/GitHub/postiz-rust/src/social/x.rs\n===================================================================\n--- /home/ishanp/Documents/GitHub/postiz-rust/src/social/x.rs\n+++ /home/ishanp/Documents/GitHub/postiz-rust/src/social/x.rs\n@@ -48,8 +48,15 @@\n         \"tweet.read\".into(),\n         \"tweet.write\".into(),\n         \"users.read\".into(),\n         \"offline.access\".into(),\n+        \"bookmark.read\".into(),\n+        \"bookmark.write\".into(),\n+        \"like.read\".into(),\n+        \"like.write\".into(),\n+        \"follows.read\".into(),\n+        \"follows.write\".into(),\n+        \"list.read\".into(),\n     ]\n }\n \n fn max_content_length(&self) -> usize {\n",
+          "filediff": {
+            "file": "/home/ishanp/Documents/GitHub/postiz-rust/src/social/x.rs",
+            "patch": "Index: /home/ishanp/Documents/GitHub/postiz-rust/src/social/x.rs\n===================================================================\n--- /home/ishanp/Documents/GitHub/postiz-rust/src/social/x.rs\n+++ /home/ishanp/Documents/GitHub/postiz-rust/src/social/x.rs\n@@ -48,8 +48,15 @@\n         \"tweet.read\".into(),\n         \"tweet.write\".into(),\n         \"users.read\".into(),\n         \"offline.access\".into(),\n+        \"bookmark.read\".into(),\n+        \"bookmark.write\".into(),\n+        \"like.read\".into(),\n+        \"like.write\".into(),\n+        \"follows.read\".into(),\n+        \"follows.write\".into(),\n+        \"list.read\".into(),\n     ]\n }\n \n fn max_content_length(&self) -> usize {\n",
+            "additions": 7,
+            "deletions": 0
+          },
+          "truncated": false
+        },
+        "title": "src/social/x.rs",
+        "time": {
+          "start": 1778325317304,
+          "end": 1778325322353
+        }
+      },
+      "id": "prt_e0c72d9c80019OVV96fHexB8vv",
+      "sessionID": "ses_1f38d48ddffet3IHiwtZAUod1k",
+      "messageID": "msg_e0c72cdf7001KvD60dn1v28yXP"
+    },
+    {
+      "type": "tool",
+      "tool": "bash",
+      "callID": "call_00_2Pft3wgULV0lhKhdmBEy4913",
+      "state": {
+        "status": "completed",
+        "input": {
+          "command": "cargo check 2>&1",
+          "description": "Check compilation after scopes edit",
+          "workdir": "/home/ishanp/Documents/GitHub/postiz-rust",
+          "timeout": 120000
+        },
+        "output": "    Checking postiz-rust v0.1.0 (/home/ishanp/Documents/GitHub/postiz-rust)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.37s\n\n[Category+Skill Reminder]\n\n**Built-in**: playwright, frontend-ui-ux, git-master, dev-browser, review-work, ai-slop-remover\n**⚡ YOUR SKILLS (PRIORITY)**: minimax-pdf, graphify, happy-notes, text-to-image-prompt-optimizer, context7, supabase-postgres-best-practices, notion-api, notion-knowledge-capture (+102 more)\n\n> User-installed skills OVERRIDE built-in defaults. ALWAYS prefer YOUR SKILLS when domain matches.\n\n```typescript\ntask(category=\"visual-engineering\", load_skills=[\"minimax-pdf\"], run_in_background=true)\n```\n",
+        "metadata": {
+          "output": "    Checking postiz-rust v0.1.0 (/home/ishanp/Documents/GitHub/postiz-rust)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.37s\n",
+          "exit": 0,
+          "description": "Check compilation after scopes edit",
+          "truncated": false
+        },
+        "title": "Check compilation after scopes edit",
+        "time": {
+          "start": 1778325329956,
+          "end": 1778325330003
+        }
+      },
+      "id": "prt_e0c730603001lOQ75qxTMVn6S5",
+      "sessionID": "ses_1f38d48ddffet3IHiwtZAUod1k",
+      "messageID": "msg_e0c72faa40019AEvG12FLWpog3"
+    }
+  ]
+}

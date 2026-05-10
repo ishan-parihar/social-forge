@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "sessionID": "ses_1f38bb105ffer3CTYZ3owsQFIn",
+  "timestamp": "2026-05-09T11:18:33.110Z",
+  "tokens": {
+    "input": 106449,
+    "output": 3786,
+    "reasoning": 358,
+    "cacheRead": 408704,
+    "cacheWrite": 0
+  },
+  "files": [],
+  "tools": [
+    {
+      "name": "read",
+      "count": 3,
+      "successCount": 3,
+      "failCount": 0
+    },
+    {
+      "name": "edit",
+      "count": 1,
+      "successCount": 1,
+      "failCount": 0
+    },
+    {
+      "name": "bash",
+      "count": 2,
+      "successCount": 2,
+      "failCount": 0
+    }
+  ],
+  "acpm": {
+    "activePreset": null,
+    "allowCount": 3163,
+    "denyCount": 0,
+    "sanitizeCount": 0,
+    "deniedByCategory": {},
+    "folderAccessDistribution": {
+      "denied": 0,
+      "read-only": 0,
+      "read-write": 0
+    },
+    "toolCategoryStatus": []
+  }
+}

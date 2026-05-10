@@ -1,0 +1,94 @@
+{
+  "version": 1,
+  "sessionID": "ses_1fe418f6bffe2ZFpDcU5lIxtxF",
+  "timestamp": "2026-05-10T15:13:19.486Z",
+  "tokens": {
+    "input": 637746,
+    "output": 7226,
+    "reasoning": 1949,
+    "cacheRead": 1421121,
+    "cacheWrite": 0
+  },
+  "files": [],
+  "tools": [
+    {
+      "name": "bash",
+      "count": 4,
+      "successCount": 4,
+      "failCount": 0
+    },
+    {
+      "name": "read",
+      "count": 5,
+      "successCount": 4,
+      "failCount": 1
+    },
+    {
+      "name": "envsitter_keys",
+      "count": 1,
+      "successCount": 1,
+      "failCount": 0
+    },
+    {
+      "name": "compress",
+      "count": 1,
+      "successCount": 1,
+      "failCount": 0
+    },
+    {
+      "name": "hive_agents_md",
+      "count": 1,
+      "successCount": 1,
+      "failCount": 0
+    },
+    {
+      "name": "write",
+      "count": 1,
+      "successCount": 1,
+      "failCount": 0
+    },
+    {
+      "name": "task",
+      "count": 1,
+      "successCount": 1,
+      "failCount": 0
+    },
+    {
+      "name": "edit",
+      "count": 1,
+      "successCount": 1,
+      "failCount": 0
+    },
+    {
+      "name": "glob",
+      "count": 2,
+      "successCount": 2,
+      "failCount": 0
+    },
+    {
+      "name": "context7_resolve-library-id",
+      "count": 1,
+      "successCount": 1,
+      "failCount": 0
+    },
+    {
+      "name": "context7_query-docs",
+      "count": 4,
+      "successCount": 4,
+      "failCount": 0
+    }
+  ],
+  "acpm": {
+    "activePreset": null,
+    "allowCount": 500,
+    "denyCount": 0,
+    "sanitizeCount": 0,
+    "deniedByCategory": {},
+    "folderAccessDistribution": {
+      "denied": 0,
+      "read-only": 0,
+      "read-write": 0
+    },
+    "toolCategoryStatus": []
+  }
+}

@@ -1,0 +1,291 @@
+{
+  "sessions": [
+    {
+      "sessionId": "ses_1fe418f6bffe2ZFpDcU5lIxtxF",
+      "startedAt": "2026-05-07T09:21:58.698Z",
+      "lastActiveAt": "2026-05-10T15:11:31.579Z",
+      "agent": "​Sisyphus - Ultraworker",
+      "sessionKind": "unknown"
+    },
+    {
+      "sessionId": "ses_1fdd33ebdffe6l9VSwr6vDahZx",
+      "startedAt": "2026-05-07T11:22:28.040Z",
+      "lastActiveAt": "2026-05-07T11:22:28.040Z",
+      "agent": "explore",
+      "sessionKind": "unknown"
+    },
+    {
+      "sessionId": "ses_1fdd323a7ffeITkX2n08bbG4WK",
+      "startedAt": "2026-05-07T11:22:34.971Z",
+      "lastActiveAt": "2026-05-07T11:22:34.971Z",
+      "agent": "explore",
+      "sessionKind": "unknown"
+    },
+    {
+      "sessionId": "ses_1fdd310fbffe2HOKCSzsLnUNUb",
+      "startedAt": "2026-05-07T11:22:39.752Z",
+      "lastActiveAt": "2026-05-07T11:22:39.752Z",
+      "agent": "explore",
+      "sessionKind": "unknown"
+    },
+    {
+      "sessionId": "ses_1fc9aa555ffevaBWtalcTWUhD4",
+      "startedAt": "2026-05-07T17:03:54.680Z",
+      "lastActiveAt": "2026-05-07T17:04:58.736Z",
+      "agent": "​Sisyphus - Ultraworker",
+      "sessionKind": "unknown"
+    },
+    {
+      "sessionId": "ses_1f7c7b502ffe85c5rDJ0LusJYg",
+      "startedAt": "2026-05-08T15:32:47.496Z",
+      "lastActiveAt": "2026-05-08T15:32:47.496Z",
+      "agent": "explore",
+      "sessionKind": "unknown"
+    },
+    {
+      "sessionId": "ses_1f7c7a200ffeIroqCdTR1xj6r1",
+      "startedAt": "2026-05-08T15:32:52.354Z",
+      "lastActiveAt": "2026-05-08T15:32:52.354Z",
+      "agent": "explore",
+      "sessionKind": "unknown"
+    },
+    {
+      "sessionId": "ses_1f7c78cdfffeKh8dkeLZ4gjZoi",
+      "startedAt": "2026-05-08T15:32:57.764Z",
+      "lastActiveAt": "2026-05-08T15:32:57.764Z",
+      "agent": "explore",
+      "sessionKind": "unknown"
+    },
+    {
+      "sessionId": "ses_1f7c77776ffekfJ9iZZyOlQ9cd",
+      "startedAt": "2026-05-08T15:33:03.244Z",
+      "lastActiveAt": "2026-05-08T15:33:03.244Z",
+      "agent": "explore",
+      "sessionKind": "unknown"
+    },
+    {
+      "sessionId": "ses_1f6cc9475ffeLWS02UO4pGTn41",
+      "startedAt": "2026-05-08T20:07:05.359Z",
+      "lastActiveAt": "2026-05-08T20:07:05.359Z",
+      "agent": "explore",
+      "sessionKind": "unknown"
+    },
+    {
+      "sessionId": "ses_1f6cc6a86ffe1J7gNwqh9JRuSq",
+      "startedAt": "2026-05-08T20:07:16.092Z",
+      "lastActiveAt": "2026-05-08T20:07:16.092Z",
+      "agent": "explore",
+      "sessionKind": "unknown"
+    },
+    {
+      "sessionId": "ses_1f4906b32ffehE85taDiEDVBOG",
+      "startedAt": "2026-05-09T06:32:02.516Z",
+      "lastActiveAt": "2026-05-09T06:32:02.516Z",
+      "agent": "explore",
+      "sessionKind": "unknown"
+    },
+    {
+      "sessionId": "ses_1f44fcc0cffeyVt6Fzl7A7m47m",
+      "startedAt": "2026-05-09T07:42:37.563Z",
+      "lastActiveAt": "2026-05-09T07:42:37.563Z",
+      "agent": "explore",
+      "sessionKind": "unknown"
+    },
+    {
+      "sessionId": "ses_1f4438407ffebj5l4gd2rJu4hK",
+      "startedAt": "2026-05-09T07:56:02.431Z",
+      "lastActiveAt": "2026-05-09T07:56:02.431Z",
+      "agent": "explore",
+      "sessionKind": "unknown"
+    },
+    {
+      "sessionId": "ses_1f4437165ffe1zq3zax5EE0sk3",
+      "startedAt": "2026-05-09T07:56:07.215Z",
+      "lastActiveAt": "2026-05-09T07:56:07.215Z",
+      "agent": "librarian",
+      "sessionKind": "unknown"
+    },
+    {
+      "sessionId": "ses_1f409437affeL0T2LZaUd7muHn",
+      "startedAt": "2026-05-09T08:59:40.045Z",
+      "lastActiveAt": "2026-05-09T08:59:40.045Z",
+      "agent": "explore",
+      "sessionKind": "unknown"
+    },
+    {
+      "sessionId": "ses_1f4092c9affddq8zlFy3URp2mS",
+      "startedAt": "2026-05-09T08:59:45.898Z",
+      "lastActiveAt": "2026-05-09T08:59:45.898Z",
+      "agent": "explore",
+      "sessionKind": "unknown"
+    },
+    {
+      "sessionId": "ses_1f408ff1dffezW0kcuQujHYwjK",
+      "startedAt": "2026-05-09T08:59:57.544Z",
+      "lastActiveAt": "2026-05-09T08:59:57.544Z",
+      "agent": "explore",
+      "sessionKind": "unknown"
+    },
+    {
+      "sessionId": "ses_1f38d48ddffet3IHiwtZAUod1k",
+      "startedAt": "2026-05-09T11:15:05.371Z",
+      "lastActiveAt": "2026-05-09T11:15:05.371Z",
+      "agent": "Sisyphus-Junior",
+      "sessionKind": "unknown"
+    },
+    {
+      "sessionId": "ses_1f38bb105ffer3CTYZ3owsQFIn",
+      "startedAt": "2026-05-09T11:16:49.891Z",
+      "lastActiveAt": "2026-05-09T11:16:49.891Z",
+      "agent": "Sisyphus-Junior",
+      "sessionKind": "unknown"
+    },
+    {
+      "sessionId": "ses_1f3898bb1ffeuWk3bHHo9k92Xf",
+      "startedAt": "2026-05-09T11:19:10.379Z",
+      "lastActiveAt": "2026-05-09T11:19:10.379Z",
+      "agent": "Sisyphus-Junior",
+      "sessionKind": "unknown"
+    },
+    {
+      "sessionId": "ses_1f387f14dffeJrS5JdwoFVgKdJ",
+      "startedAt": "2026-05-09T11:20:55.460Z",
+      "lastActiveAt": "2026-05-09T11:20:55.460Z",
+      "agent": "Sisyphus-Junior",
+      "sessionKind": "unknown"
+    },
+    {
+      "sessionId": "ses_1f386b887ffegzm2MuAqYEOzRG",
+      "startedAt": "2026-05-09T11:22:15.509Z",
+      "lastActiveAt": "2026-05-09T11:22:15.509Z",
+      "agent": "Sisyphus-Junior",
+      "sessionKind": "unknown"
+    },
+    {
+      "sessionId": "ses_1f3822a60ffekf08GGdgUSDthR",
+      "startedAt": "2026-05-09T11:27:14.041Z",
+      "lastActiveAt": "2026-05-09T11:27:14.041Z",
+      "agent": "Sisyphus-Junior",
+      "sessionKind": "unknown"
+    },
+    {
+      "sessionId": "ses_1f35e7e6effeXX49qICJKcyoZF",
+      "startedAt": "2026-05-09T12:06:11.618Z",
+      "lastActiveAt": "2026-05-09T12:06:11.618Z",
+      "agent": "explore",
+      "sessionKind": "unknown"
+    },
+    {
+      "sessionId": "ses_1f35e639cffeX3cu0wSoz9uJQk",
+      "startedAt": "2026-05-09T12:06:18.470Z",
+      "lastActiveAt": "2026-05-09T12:06:18.470Z",
+      "agent": "explore",
+      "sessionKind": "unknown"
+    },
+    {
+      "sessionId": "ses_1f35e333effehcL5zItiqPNb4p",
+      "startedAt": "2026-05-09T12:06:30.865Z",
+      "lastActiveAt": "2026-05-09T12:10:26.800Z",
+      "agent": "librarian",
+      "sessionKind": "unknown"
+    },
+    {
+      "sessionId": "ses_1f34c4170fferO9Dn24W9CGSyY",
+      "startedAt": "2026-05-09T12:26:06.907Z",
+      "lastActiveAt": "2026-05-09T12:26:06.907Z",
+      "agent": "librarian",
+      "sessionKind": "unknown"
+    },
+    {
+      "sessionId": "ses_1f3376c1effeJaU66y51WRuUvy",
+      "startedAt": "2026-05-09T12:48:52.406Z",
+      "lastActiveAt": "2026-05-09T12:48:52.406Z",
+      "agent": "Sisyphus-Junior",
+      "sessionKind": "unknown"
+    },
+    {
+      "sessionId": "ses_1f335ea4fffekAbXaIHyqSMDtq",
+      "startedAt": "2026-05-09T12:50:31.171Z",
+      "lastActiveAt": "2026-05-09T12:50:31.171Z",
+      "agent": "Sisyphus-Junior",
+      "sessionKind": "unknown"
+    },
+    {
+      "sessionId": "ses_1f332b231ffeNOG80V0OGCfErS",
+      "startedAt": "2026-05-09T12:54:02.144Z",
+      "lastActiveAt": "2026-05-09T12:54:02.144Z",
+      "agent": "Sisyphus-Junior",
+      "sessionKind": "unknown"
+    },
+    {
+      "sessionId": "ses_1f3302486ffep8WAaBjjbBx5QB",
+      "startedAt": "2026-05-09T12:56:49.483Z",
+      "lastActiveAt": "2026-05-09T12:56:49.483Z",
+      "agent": "Sisyphus-Junior",
+      "sessionKind": "unknown"
+    },
+    {
+      "sessionId": "ses_1f32d9a81ffeGPuUyKoxNVcqxN",
+      "startedAt": "2026-05-09T12:59:35.887Z",
+      "lastActiveAt": "2026-05-09T12:59:35.887Z",
+      "agent": "Sisyphus-Junior",
+      "sessionKind": "unknown"
+    },
+    {
+      "sessionId": "ses_1f32c3006ffe97yYJPJHOPUtvx",
+      "startedAt": "2026-05-09T13:01:08.687Z",
+      "lastActiveAt": "2026-05-09T13:01:08.687Z",
+      "agent": "Sisyphus-Junior",
+      "sessionKind": "unknown"
+    },
+    {
+      "sessionId": "ses_1f328772cffeO2yVjGYAZLDXpe",
+      "startedAt": "2026-05-09T13:05:12.612Z",
+      "lastActiveAt": "2026-05-09T13:11:41.005Z",
+      "agent": "Sisyphus-Junior",
+      "sessionKind": "unknown"
+    },
+    {
+      "sessionId": "ses_1f324a86affesGurwvPEWIKHpT",
+      "startedAt": "2026-05-09T13:09:21.948Z",
+      "lastActiveAt": "2026-05-09T13:09:21.948Z",
+      "agent": "general",
+      "sessionKind": "unknown"
+    },
+    {
+      "sessionId": "ses_1f31e442dffe1WExbRmp8jppIo",
+      "startedAt": "2026-05-09T13:16:20.823Z",
+      "lastActiveAt": "2026-05-09T13:16:20.823Z",
+      "agent": "Sisyphus-Junior",
+      "sessionKind": "unknown"
+    },
+    {
+      "sessionId": "ses_1f31db838ffebN4KdSRELXipUz",
+      "startedAt": "2026-05-09T13:16:56.652Z",
+      "lastActiveAt": "2026-05-09T13:16:56.652Z",
+      "agent": "Sisyphus-Junior",
+      "sessionKind": "unknown"
+    },
+    {
+      "sessionId": "ses_1edcb4247ffe750cAvBNTsGphd",
+      "startedAt": "2026-05-10T14:05:06.879Z",
+      "lastActiveAt": "2026-05-10T14:05:06.879Z",
+      "agent": "Sisyphus-Junior",
+      "sessionKind": "unknown"
+    },
+    {
+      "sessionId": "ses_1ed9aaf8efferYK8gsVpDAWMav",
+      "startedAt": "2026-05-10T14:58:10.169Z",
+      "lastActiveAt": "2026-05-10T14:58:10.169Z",
+      "agent": "Sisyphus-Junior",
+      "sessionKind": "unknown"
+    },
+    {
+      "sessionId": "ses_1ed9aa491ffeR1w7JsQQ32tBVU",
+      "startedAt": "2026-05-10T14:58:12.982Z",
+      "lastActiveAt": "2026-05-10T14:58:12.982Z",
+      "agent": "Sisyphus-Junior",
+      "sessionKind": "unknown"
+    }
+  ]
+}
