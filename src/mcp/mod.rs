@@ -22,8 +22,8 @@ use crate::db::queries;
 
 
 mod tools_calendar;
-mod tools_facebook;
-mod tools_instagram;
+pub mod tools_facebook;
+pub mod tools_instagram;
 mod tools_integrations;
 mod tools_posts;
 mod tools_reddit;
@@ -527,7 +527,7 @@ impl PostizMcpServer {
     // ── Facebook Tools ──────────────────────────────────────────────
 
     #[tool(description = "Get a Facebook page's feed (recent posts)")]
-    async fn fb_get_feed(
+    pub async fn fb_get_feed(
         &self,
         params: Parameters<tools_facebook::FbGetFeedInput>,
     ) -> Result<Json<serde_json::Value>, String> {
@@ -535,7 +535,7 @@ impl PostizMcpServer {
     }
 
     #[tool(description = "Get a single Facebook post by ID")]
-    async fn fb_get_post(
+    pub async fn fb_get_post(
         &self,
         params: Parameters<tools_facebook::FbGetPostInput>,
     ) -> Result<Json<serde_json::Value>, String> {
@@ -543,7 +543,7 @@ impl PostizMcpServer {
     }
 
     #[tool(description = "Get comments on a Facebook post")]
-    async fn fb_get_comments(
+    pub async fn fb_get_comments(
         &self,
         params: Parameters<tools_facebook::FbGetCommentsInput>,
     ) -> Result<Json<serde_json::Value>, String> {
@@ -551,7 +551,7 @@ impl PostizMcpServer {
     }
 
     #[tool(description = "Create a text/link post on a Facebook page")]
-    async fn fb_create_post(
+    pub async fn fb_create_post(
         &self,
         params: Parameters<tools_facebook::FbCreatePostInput>,
     ) -> Result<Json<serde_json::Value>, String> {
@@ -559,7 +559,7 @@ impl PostizMcpServer {
     }
 
     #[tool(description = "Create a photo post on a Facebook page")]
-    async fn fb_create_photo(
+    pub async fn fb_create_photo(
         &self,
         params: Parameters<tools_facebook::FbCreatePhotoInput>,
     ) -> Result<Json<serde_json::Value>, String> {
@@ -567,7 +567,7 @@ impl PostizMcpServer {
     }
 
     #[tool(description = "Create a video post on a Facebook page")]
-    async fn fb_create_video(
+    pub async fn fb_create_video(
         &self,
         params: Parameters<tools_facebook::FbCreateVideoInput>,
     ) -> Result<Json<serde_json::Value>, String> {
@@ -575,7 +575,7 @@ impl PostizMcpServer {
     }
 
     #[tool(description = "Delete a Facebook post by ID")]
-    async fn fb_delete_post(
+    pub async fn fb_delete_post(
         &self,
         params: Parameters<tools_facebook::FbDeletePostInput>,
     ) -> Result<Json<serde_json::Value>, String> {
@@ -583,7 +583,7 @@ impl PostizMcpServer {
     }
 
     #[tool(description = "Comment on a Facebook post")]
-    async fn fb_comment(
+    pub async fn fb_comment(
         &self,
         params: Parameters<tools_facebook::FbCommentInput>,
     ) -> Result<Json<serde_json::Value>, String> {
@@ -591,7 +591,7 @@ impl PostizMcpServer {
     }
 
     #[tool(description = "React to a Facebook post (LIKE, LOVE, WOW, HAHA, SAD, ANGRY)")]
-    async fn fb_react(
+    pub async fn fb_react(
         &self,
         params: Parameters<tools_facebook::FbReactInput>,
     ) -> Result<Json<serde_json::Value>, String> {
@@ -599,7 +599,7 @@ impl PostizMcpServer {
     }
 
     #[tool(description = "Get insights/analytics for a Facebook page")]
-    async fn fb_page_insights(
+    pub async fn fb_page_insights(
         &self,
         params: Parameters<tools_facebook::FbPageInsightsInput>,
     ) -> Result<Json<serde_json::Value>, String> {
@@ -607,7 +607,7 @@ impl PostizMcpServer {
     }
 
     #[tool(description = "Get conversations (inbox) for a Facebook page")]
-    async fn fb_conversations(
+    pub async fn fb_conversations(
         &self,
         params: Parameters<tools_facebook::FbConversationsInput>,
     ) -> Result<Json<serde_json::Value>, String> {
@@ -615,7 +615,7 @@ impl PostizMcpServer {
     }
 
     #[tool(description = "Get messages in a Facebook conversation")]
-    async fn fb_conversation_messages(
+    pub async fn fb_conversation_messages(
         &self,
         params: Parameters<tools_facebook::FbConversationMsgsInput>,
     ) -> Result<Json<serde_json::Value>, String> {
@@ -623,7 +623,7 @@ impl PostizMcpServer {
     }
 
     #[tool(description = "Send a message to a Facebook conversation")]
-    async fn fb_send_message(
+    pub async fn fb_send_message(
         &self,
         params: Parameters<tools_facebook::FbSendMessageInput>,
     ) -> Result<Json<serde_json::Value>, String> {
@@ -631,7 +631,7 @@ impl PostizMcpServer {
     }
 
     #[tool(description = "Search for public Facebook pages by name")]
-    async fn fb_search_pages(
+    pub async fn fb_search_pages(
         &self,
         params: Parameters<tools_facebook::FbSearchPagesInput>,
     ) -> Result<Json<serde_json::Value>, String> {
@@ -639,7 +639,7 @@ impl PostizMcpServer {
     }
 
     #[tool(description = "Get albums from a Facebook page")]
-    async fn fb_albums(
+    pub async fn fb_albums(
         &self,
         params: Parameters<tools_facebook::FbAlbumsInput>,
     ) -> Result<Json<serde_json::Value>, String> {
@@ -649,7 +649,7 @@ impl PostizMcpServer {
     // ── Instagram Tools ─────────────────────────────────────────────
 
     #[tool(description = "Get Instagram media (posts/reels) for a business account")]
-    async fn ig_get_media(
+    pub async fn ig_get_media(
         &self,
         params: Parameters<tools_instagram::IgGetMediaInput>,
     ) -> Result<Json<serde_json::Value>, String> {
@@ -657,7 +657,7 @@ impl PostizMcpServer {
     }
 
     #[tool(description = "Get details of a specific Instagram media item")]
-    async fn ig_get_media_detail(
+    pub async fn ig_get_media_detail(
         &self,
         params: Parameters<tools_instagram::IgGetMediaDetailInput>,
     ) -> Result<Json<serde_json::Value>, String> {
@@ -665,7 +665,7 @@ impl PostizMcpServer {
     }
 
     #[tool(description = "Get comments on an Instagram media item")]
-    async fn ig_get_comments(
+    pub async fn ig_get_comments(
         &self,
         params: Parameters<tools_instagram::IgGetCommentsInput>,
     ) -> Result<Json<serde_json::Value>, String> {
@@ -673,7 +673,7 @@ impl PostizMcpServer {
     }
 
     #[tool(description = "Search for Instagram hashtags by name")]
-    async fn ig_search_hashtag(
+    pub async fn ig_search_hashtag(
         &self,
         params: Parameters<tools_instagram::IgSearchHashtagInput>,
     ) -> Result<Json<serde_json::Value>, String> {
@@ -681,7 +681,7 @@ impl PostizMcpServer {
     }
 
     #[tool(description = "Get recent media for an Instagram hashtag")]
-    async fn ig_get_hashtag_media(
+    pub async fn ig_get_hashtag_media(
         &self,
         params: Parameters<tools_instagram::IgGetHashtagMediaInput>,
     ) -> Result<Json<serde_json::Value>, String> {
@@ -689,7 +689,7 @@ impl PostizMcpServer {
     }
 
     #[tool(description = "Get insights for an Instagram business account")]
-    async fn ig_get_insights(
+    pub async fn ig_get_insights(
         &self,
         params: Parameters<tools_instagram::IgGetInsightsInput>,
     ) -> Result<Json<serde_json::Value>, String> {
@@ -697,7 +697,7 @@ impl PostizMcpServer {
     }
 
     #[tool(description = "Get media where the Instagram account is tagged")]
-    async fn ig_get_tagged(
+    pub async fn ig_get_tagged(
         &self,
         params: Parameters<tools_instagram::IgGetTaggedInput>,
     ) -> Result<Json<serde_json::Value>, String> {
@@ -705,7 +705,7 @@ impl PostizMcpServer {
     }
 
     #[tool(description = "Create an Instagram media container (step 1 of publish)")]
-    async fn ig_create_container(
+    pub async fn ig_create_container(
         &self,
         params: Parameters<tools_instagram::IgCreateContainerInput>,
     ) -> Result<Json<serde_json::Value>, String> {
@@ -713,7 +713,7 @@ impl PostizMcpServer {
     }
 
     #[tool(description = "Publish an Instagram media container (step 2 of publish)")]
-    async fn ig_publish_container(
+    pub async fn ig_publish_container(
         &self,
         params: Parameters<tools_instagram::IgPublishContainerInput>,
     ) -> Result<Json<serde_json::Value>, String> {
@@ -721,7 +721,7 @@ impl PostizMcpServer {
     }
 
     #[tool(description = "Reply to an Instagram comment")]
-    async fn ig_reply_to_comment(
+    pub async fn ig_reply_to_comment(
         &self,
         params: Parameters<tools_instagram::IgReplyToCommentInput>,
     ) -> Result<Json<serde_json::Value>, String> {
@@ -729,7 +729,7 @@ impl PostizMcpServer {
     }
 
     #[tool(description = "Get Instagram reels for a business account")]
-    async fn ig_get_reels(
+    pub async fn ig_get_reels(
         &self,
         params: Parameters<tools_instagram::IgGetReelsInput>,
     ) -> Result<Json<serde_json::Value>, String> {
@@ -737,7 +737,7 @@ impl PostizMcpServer {
     }
 
     #[tool(description = "Get Instagram stories for a business account")]
-    async fn ig_get_stories(
+    pub async fn ig_get_stories(
         &self,
         params: Parameters<tools_instagram::IgGetStoriesInput>,
     ) -> Result<Json<serde_json::Value>, String> {
@@ -745,7 +745,7 @@ impl PostizMcpServer {
     }
 
     #[tool(description = "Get followers of an Instagram business account")]
-    async fn ig_get_followers(
+    pub async fn ig_get_followers(
         &self,
         params: Parameters<tools_instagram::IgGetFollowersInput>,
     ) -> Result<Json<serde_json::Value>, String> {
@@ -753,7 +753,7 @@ impl PostizMcpServer {
     }
 
     #[tool(description = "Discover an Instagram business account by username")]
-    async fn ig_business_discovery(
+    pub async fn ig_business_discovery(
         &self,
         params: Parameters<tools_instagram::IgBusinessDiscoveryInput>,
     ) -> Result<Json<serde_json::Value>, String> {
@@ -762,7 +762,7 @@ impl PostizMcpServer {
 
 
     #[tool(description = "Get audience insights for an Instagram business account")]
-    async fn ig_get_insights_audience(
+    pub async fn ig_get_insights_audience(
         &self,
         params: Parameters<tools_instagram::IgGetInsightsAudienceInput>,
     ) -> Result<Json<serde_json::Value>, String> {
