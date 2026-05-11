@@ -5,6 +5,8 @@ use async_trait::async_trait;
 
 use super::*;
 use crate::config::Config;
+use reqwest::StatusCode;
+use serde_json::{json, Value};
 
 pub struct PinterestProvider {
     client_id: String,
@@ -21,6 +23,179 @@ impl PinterestProvider {
             client_secret,
             http: reqwest::Client::new(),
         }
+    }
+
+    pub async fn get_user_account(&self, access_token: &str) -> Result<serde_json::Value, ProviderError> {
+        let resp = self
+            .http
+            .get("https://api.pinterest.com/v5/user_account")
+            .header("Authorization", format!("Bearer {access_token}"))
+            .send()
+            .await?;
+
+        let status = resp.status();
+        let json = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let msg = json["message"].as_str().unwrap_or("Pinterest API error").to_string();
+            Err(ProviderError::Api(msg))
+        }
+    }
+
+    pub async fn get_board(
+        &self,
+        access_token: &str,
+        board_id: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let url = format!("https://api.pinterest.com/v5/boards/{board_id}");
+        let resp = self
+            .http
+            .get(&url)
+            .header("Authorization", format!("Bearer {access_token}"))
+            .send()
+            .await?;
+
+        let status = resp.status();
+        let json = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let msg = json["message"].as_str().unwrap_or("Pinterest API error").to_string();
+            Err(ProviderError::Api(msg))
+        }
+    }
+
+    pub async fn get_board_pins(
+        &self,
+        access_token: &str,
+        board_id: &str,
+        limit: u32,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let url = format!("https://api.pinterest.com/v5/boards/{board_id}/pins");
+        let resp = self
+            .http
+            .get(&url)
+            .header("Authorization", format!("Bearer {access_token}"))
+            .query(&[("page_size", &limit.clamp(1, 100).to_string())])
+            .send()
+            .await?;
+
+        let status = resp.status();
+        let json = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let msg = json["message"].as_str().unwrap_or("Pinterest API error").to_string();
+            Err(ProviderError::Api(msg))
+        }
+    }
+
+    pub async fn get_pin(
+        &self,
+        access_token: &str,
+        pin_id: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let url = format!("https://api.pinterest.com/v5/pins/{pin_id}");
+        let resp = self
+            .http
+            .get(&url)
+            .header("Authorization", format!("Bearer {access_token}"))
+            .send()
+            .await?;
+
+        let status = resp.status();
+        let json = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let msg = json["message"].as_str().unwrap_or("Pinterest API error").to_string();
+            Err(ProviderError::Api(msg))
+        }
+    }
+
+    pub async fn get_board_analytics(
+        &self,
+        access_token: &str,
+        board_id: &str,
+        start_date: &str,
+        end_date: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let url = format!("https://api.pinterest.com/v5/boards/{board_id}/analytics");
+        let resp = self
+            .http
+            .get(&url)
+            .header("Authorization", format!("Bearer {access_token}"))
+            .query(&[("start_date", start_date), ("end_date", end_date)])
+            .send()
+            .await?;
+
+        let status = resp.status();
+        let json = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let msg = json["message"].as_str().unwrap_or("Pinterest API error").to_string();
+            Err(ProviderError::Api(msg))
+        }
+    }
+
+    pub async fn get_pin_analytics(
+        &self,
+        access_token: &str,
+        pin_id: &str,
+        start_date: &str,
+        end_date: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let url = format!("https://api.pinterest.com/v5/pins/{pin_id}/analytics");
+        let resp = self
+            .http
+            .get(&url)
+            .header("Authorization", format!("Bearer {access_token}"))
+            .query(&[("start_date", start_date), ("end_date", end_date)])
+            .send()
+            .await?;
+
+        let status = resp.status();
+        let json = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let msg = json["message"].as_str().unwrap_or("Pinterest API error").to_string();
+            Err(ProviderError::Api(msg))
+        }
+    }
+
+    /// Search pins by keyword using Pinterest API v5
+    pub async fn search_pins(&self, access_token: &str, query: &str, limit: Option<u32>) -> Result<Value, ProviderError> {
+        let max = limit.unwrap_or(25).min(100);
+        let encoded_query: String = url::form_urlencoded::byte_serialize(query.as_bytes()).collect();
+        let url = format!(
+            "https://api.pinterest.com/v5/pins/search?query={}&page_size={}",
+            encoded_query, max
+        );
+        let response = self.http.get(&url)
+            .header("Authorization", format!("Bearer {}", access_token))
+            .send().await.map_err(|e| ProviderError::Api(e.to_string()))?;
+        let status = response.status();
+        let text = response.text().await.map_err(|e| ProviderError::Api(e.to_string()))?;
+        let v: Value = serde_json::from_str(&text).unwrap_or(json!({"raw": text}));
+        if status.is_success() { Ok(v) }
+        else if status == StatusCode::UNAUTHORIZED { Err(ProviderError::TokenExpired) }
+        else if status == StatusCode::FORBIDDEN { Err(ProviderError::Auth(v["message"].as_str().unwrap_or("forbidden").into())) }
+        else { Err(ProviderError::Api(v["message"].as_str().unwrap_or(&text).into())) }
     }
 }
 

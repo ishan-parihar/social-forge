@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use serde_json::{json, Value};
 
 use super::*;
 
@@ -18,6 +19,93 @@ impl SkoolProvider {
 
     fn api_url(&self, path: &str) -> String {
         format!("https://api2.skool.com{}", path)
+    }
+
+    /// Fetch the Next.js buildId from a Skool community page.
+    /// Required for constructing Next.js data route URLs.
+    async fn get_build_id(&self, slug: &str, access_token: &str) -> Result<String, ProviderError> {
+        let url = format!("https://www.skool.com/{}", slug);
+        let response = self.http.get(&url)
+            .header("Cookie", format!("auth_token={}", access_token))
+            .header("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+            .send().await.map_err(|e| ProviderError::Api(e.to_string()))?;
+        let html = response.text().await.map_err(|e| ProviderError::Api(e.to_string()))?;
+        // Extract buildId from __NEXT_DATA__ JSON embedded in HTML
+        let marker = "\"buildId\":\"";
+        let start = html.find(marker).ok_or_else(|| ProviderError::Api("buildId not found in page".into()))?;
+        let value_start = start + marker.len();
+        let value_end = html[value_start..].find('"').ok_or_else(|| ProviderError::Api("buildId malformed".into()))?;
+        Ok(html[value_start..value_start + value_end].to_string())
+    }
+
+    /// Get community info (name, description, member count, etc.)
+    pub async fn get_community_info(&self, slug: &str, access_token: &str) -> Result<Value, ProviderError> {
+        let build_id = self.get_build_id(slug, access_token).await?;
+        let url = format!("https://www.skool.com/_next/data/{}/{}/about.json", build_id, slug);
+        let response = self.http.get(&url)
+            .header("Cookie", format!("auth_token={}", access_token))
+            .send().await.map_err(|e| ProviderError::Api(e.to_string()))?;
+        let status = response.status();
+        let text = response.text().await.map_err(|e| ProviderError::Api(e.to_string()))?;
+        let v: Value = serde_json::from_str(&text).unwrap_or(json!({"raw": text}));
+        if status.is_success() { Ok(v) }
+        else { Err(ProviderError::Api(v["message"].as_str().unwrap_or(&text).into())) }
+    }
+
+    /// List posts in a community, with optional pagination/sort/category filter
+    pub async fn list_posts(&self, slug: &str, access_token: &str, page: Option<u32>, sort: Option<&str>, category: Option<&str>) -> Result<Value, ProviderError> {
+        let build_id = self.get_build_id(slug, access_token).await?;
+        let mut url = format!("https://www.skool.com/_next/data/{}/{}.json", build_id, slug);
+        let mut params: Vec<String> = Vec::new();
+        if let Some(p) = page { params.push(format!("p={}", p)); }
+        if let Some(s) = sort { params.push(format!("s={}", s)); }
+        if let Some(c) = category { params.push(format!("c={}", c)); }
+        if !params.is_empty() {
+            url.push('?');
+            url.push_str(&params.join("&"));
+        }
+        let response = self.http.get(&url)
+            .header("Cookie", format!("auth_token={}", access_token))
+            .send().await.map_err(|e| ProviderError::Api(e.to_string()))?;
+        let status = response.status();
+        let text = response.text().await.map_err(|e| ProviderError::Api(e.to_string()))?;
+        let v: Value = serde_json::from_str(&text).unwrap_or(json!({"raw": text}));
+        if status.is_success() { Ok(v) }
+        else { Err(ProviderError::Api(v["message"].as_str().unwrap_or(&text).into())) }
+    }
+
+    /// Get a single post by community slug and post slug
+    pub async fn get_post(&self, slug: &str, post_slug: &str, access_token: &str) -> Result<Value, ProviderError> {
+        let build_id = self.get_build_id(slug, access_token).await?;
+        let url = format!("https://www.skool.com/_next/data/{}/{}/p/{}.json", build_id, slug, post_slug);
+        let response = self.http.get(&url)
+            .header("Cookie", format!("auth_token={}", access_token))
+            .send().await.map_err(|e| ProviderError::Api(e.to_string()))?;
+        let status = response.status();
+        let text = response.text().await.map_err(|e| ProviderError::Api(e.to_string()))?;
+        let v: Value = serde_json::from_str(&text).unwrap_or(json!({"raw": text}));
+        if status.is_success() { Ok(v) }
+        else { Err(ProviderError::Api(v["message"].as_str().unwrap_or(&text).into())) }
+    }
+
+    /// Create a comment on a post via api2.skool.com
+    pub async fn create_comment(&self, post_id: &str, group_id: &str, content: &str, access_token: &str) -> Result<Value, ProviderError> {
+        let url = format!("{}/comments", self.api_url(""));
+        let body = json!({
+            "post_id": post_id,
+            "group_id": group_id,
+            "metadata": {"content": content}
+        });
+        let response = self.http.post(&url)
+            .header("Content-Type", "application/json")
+            .header("Cookie", format!("auth_token={}", access_token))
+            .json(&body)
+            .send().await.map_err(|e| ProviderError::Api(e.to_string()))?;
+        let status = response.status();
+        let text = response.text().await.map_err(|e| ProviderError::Api(e.to_string()))?;
+        let v: Value = serde_json::from_str(&text).unwrap_or(json!({"raw": text}));
+        if status.is_success() { Ok(v) }
+        else { Err(ProviderError::Api(v["message"].as_str().unwrap_or(&text).into())) }
     }
 }
 
