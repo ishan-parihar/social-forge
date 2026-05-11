@@ -13,10 +13,14 @@ use std::sync::Arc;
 
 use postiz_rust::config::Config;
 use postiz_rust::db;
+use postiz_rust::social::discord::DiscordProvider;
 use postiz_rust::social::instagram_standalone::InstagramStandaloneProvider;
 use postiz_rust::social::linkedin::LinkedInProvider;
 use postiz_rust::social::linkedin_page::LinkedInPageProvider;
+use postiz_rust::social::pinterest::PinterestProvider;
+use postiz_rust::social::skool::SkoolProvider;
 use postiz_rust::social::threads::ThreadsProvider;
+use postiz_rust::social::youtube::YoutubeProvider;
 use postiz_rust::social::SocialProvider;
 
 fn get_config() -> Config {
@@ -798,4 +802,120 @@ async fn test_ias_and_threads_credentials_loaded() {
     assert!(!cid2.is_empty(), "Threads client_id should not be empty");
     assert!(!secret2.is_empty(), "Threads client_secret should not be empty");
     println!("✅ Threads credentials loaded (client_id: {}...)", &cid2[..5]);
+}
+
+// ── Discord Provider Method Tests ──────────────────────────────
+
+#[tokio::test]
+async fn test_discord_send_message() {
+    let config = get_config();
+    let provider = DiscordProvider::new(&config);
+    let result = provider.send_message("0", "test message").await;
+    assert!(result.is_err(), "Should fail with bad token/channel");
+    println!("✅ discord_send_message: Properly handled API error");
+}
+
+#[tokio::test]
+async fn test_discord_delete_message() {
+    let config = get_config();
+    let provider = DiscordProvider::new(&config);
+    let result = provider.delete_message("0", "0").await;
+    assert!(result.is_err());
+    println!("✅ discord_delete_message: Properly handled API error");
+}
+
+#[tokio::test]
+async fn test_discord_add_reaction() {
+    let config = get_config();
+    let provider = DiscordProvider::new(&config);
+    let result = provider.add_reaction("0", "0", "👍").await;
+    assert!(result.is_err());
+    println!("✅ discord_add_reaction: Properly handled API error");
+}
+
+#[tokio::test]
+async fn test_discord_get_guild_channels() {
+    let config = get_config();
+    let provider = DiscordProvider::new(&config);
+    let result = provider.get_guild_channels("0").await;
+    assert!(result.is_err());
+    println!("✅ discord_get_guild_channels: Properly handled API error");
+}
+
+#[tokio::test]
+async fn test_discord_get_server_info() {
+    let config = get_config();
+    let provider = DiscordProvider::new(&config);
+    let result = provider.get_server_info("0").await;
+    assert!(result.is_err());
+    println!("✅ discord_get_server_info: Properly handled API error");
+}
+
+#[tokio::test]
+async fn test_discord_create_forum_post() {
+    let config = get_config();
+    let provider = DiscordProvider::new(&config);
+    let result = provider.create_forum_post("0", "Test Post", "Body text", &[]).await;
+    assert!(result.is_err());
+    println!("✅ discord_create_forum_post: Properly handled API error");
+}
+
+// ── Skool Provider Method Tests ────────────────────────────────
+
+#[tokio::test]
+async fn test_skool_get_community_info() {
+    let provider = SkoolProvider::new();
+    let result = provider.get_community_info("test", "bad-token").await;
+    match &result {
+        Err(e) => println!("✅ skool_get_community_info: Got error (expected with bad token): {e}"),
+        Ok(v) => println!("⚠️  skool_get_community_info: Returned data (skool.com may not require auth): {v:?}"),
+    }
+}
+
+#[tokio::test]
+async fn test_skool_list_posts() {
+    let provider = SkoolProvider::new();
+    let result = provider.list_posts("test", "bad-token", None, None, None).await;
+    match &result {
+        Err(e) => println!("✅ skool_list_posts: Got error (expected with bad token): {e}"),
+        Ok(v) => println!("⚠️  skool_list_posts: Returned data (skool.com may not require auth): {v:?}"),
+    }
+}
+
+#[tokio::test]
+async fn test_skool_get_post() {
+    let provider = SkoolProvider::new();
+    let result = provider.get_post("test", "test-post", "bad-token").await;
+    assert!(result.is_err());
+    println!("✅ skool_get_post: Properly handled API error");
+}
+
+#[tokio::test]
+async fn test_skool_create_comment() {
+    let provider = SkoolProvider::new();
+    let result = provider.create_comment("post1", "group1", "hello", "bad-token").await;
+    assert!(result.is_err());
+    println!("✅ skool_create_comment: Properly handled API error");
+}
+
+// ── YouTube Provider Method Tests ──────────────────────────────
+
+#[tokio::test]
+async fn test_youtube_find_creators() {
+    let config = get_config();
+    let provider = YoutubeProvider::new(&config);
+    let result = provider.find_creators("bad-token", "rust programming", None, None).await;
+    assert!(result.is_err());
+    println!("✅ youtube_find_creators: Properly handled API error");
+}
+
+// ── Pinterest Provider Method Tests ────────────────────────────
+
+#[tokio::test]
+async fn test_pinterest_search_pins() {
+    let config = get_config();
+    let provider = PinterestProvider::new(&config);
+    let result = provider.search_pins("bad-token", "landscape", None).await;
+    assert!(result.is_err());
+    println!("✅ pinterest_search_pins: Properly handled API error");
 }
