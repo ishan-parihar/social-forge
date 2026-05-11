@@ -221,11 +221,18 @@ pub async fn handle_fb_create_photo(
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_page_token(state, user_id, &input.page_id).await?;
     let provider = create_provider(state);
+
     let result = provider
         .create_photo_post(&token, &input.page_id, &input.url, &input.caption.as_deref().unwrap_or(""))
         .await
-        .map_err(|e| format!("Facebook create photo failed: {e}"))?;
-    Ok(Json(serde_json::json!({ "data": result })))
+        .map_err(|e| format!("Facebook photo publish failed: {e}"))?;
+
+    let post_id = result["id"].as_str().unwrap_or("unknown");
+    Ok(Json(serde_json::json!({
+        "success": true,
+        "message": format!("Photo published to Facebook page {} successfully.", input.page_id),
+        "post_id": post_id
+    })))
 }
 
 pub async fn handle_fb_create_video(

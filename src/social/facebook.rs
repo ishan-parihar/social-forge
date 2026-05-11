@@ -811,10 +811,13 @@ mod tests {
             discord_client_secret: None,
             discord_bot_token: None,
             telegram_token: Some("test".into()),
+            telegram_bot_tokens: None,
+            telegram_user_store_dir: None,
             pinterest_client_id: None,
             pinterest_client_secret: None,
             instagram_app_id: Some("test".into()),
             instagram_app_secret: Some("test".into()),
+            whatsapp_store_dir: None,
             token_encryption_key: None,
             media_dir: "./uploads".into(),
         }

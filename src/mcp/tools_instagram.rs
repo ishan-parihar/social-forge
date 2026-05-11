@@ -249,8 +249,40 @@ pub async fn handle_ig_get_insights(
         ));
     }
     
+    let basic_metrics = ["reach", "follower_count"];
+    let total_value_compatible = ["website_clicks", "profile_views", "online_followers", "accounts_engaged",
+        "total_interactions", "likes", "comments", "shares", "saves", "replies",
+        "follows_and_unfollows", "profile_links_taps"];
+    
+    let basic: Vec<&str> = requested.iter().filter(|m| basic_metrics.contains(m)).copied().collect();
+    let total_value: Vec<&str> = requested.iter()
+        .filter(|m| total_value_compatible.contains(m))
+        .copied().collect();
+    let other: Vec<&str> = requested.iter()
+        .filter(|m| !basic_metrics.contains(m) && !total_value_compatible.contains(m))
+        .copied().collect();
+    
     let mut all_results = serde_json::Map::new();
-    for metric in requested {
+    
+    if !basic.is_empty() {
+        let metrics_str = basic.join(",");
+        let result = provider
+            .get_ig_insights(&token, &input.ig_id, &metrics_str, "day")
+            .await
+            .map_err(|e| format!("Instagram get insights failed for basic metrics: {e}"))?;
+        all_results.insert("basic".to_string(), result);
+    }
+    
+    if !total_value.is_empty() {
+        let metrics_str = total_value.join(",");
+        let result = provider
+            .get_ig_insights(&token, &input.ig_id, &metrics_str, "total_value")
+            .await
+            .map_err(|e| format!("Instagram get insights failed for total_value metrics: {e}"))?;
+        all_results.insert("total_value".to_string(), result);
+    }
+    
+    for metric in other {
         let period = if metric == "follower_count" {
             "day"
         } else {
@@ -278,7 +310,13 @@ pub async fn handle_ig_get_tagged(
     let result = provider
         .get_ig_tagged(&token, &input.ig_id)
         .await
-        .map_err(|e| format!("Instagram get tagged failed: {e}"))?;
+        .map_err(|e| {
+            if e.to_string().contains("permission") || e.to_string().contains("OAuth") {
+                format!("Instagram get tagged failed: {e}. This tool requires 'Instagram Public Content Access' permission via Meta App Review.")
+            } else {
+                format!("Instagram get tagged failed: {e}")
+            }
+        })?;
     Ok(Json(serde_json::json!({ "data": result })))
 }
 
@@ -293,6 +331,7 @@ pub async fn handle_ig_create_container(
         .create_ig_container(&token, &input.ig_id, &input.media_type, &input.media_url, &input.caption)
         .await
         .map_err(|e| format!("Instagram create container failed: {e}"))?;
+
     Ok(Json(serde_json::json!({ "data": result })))
 }
 
@@ -376,7 +415,13 @@ pub async fn handle_ig_business_discovery(
     let result = provider
         .get_ig_business_discovery(&token, &input.ig_id, &input.target_username)
         .await
-        .map_err(|e| format!("Instagram business discovery failed: {e}"))?;
+        .map_err(|e| {
+            if e.to_string().contains("permission") || e.to_string().contains("OAuth") {
+                format!("Instagram business discovery failed: {e}. This tool requires 'Instagram Public Content Access' permission via Meta App Review.")
+            } else {
+                format!("Instagram business discovery failed: {e}")
+            }
+        })?;
     Ok(Json(serde_json::json!({ "data": result })))
 }
 
@@ -391,6 +436,12 @@ pub async fn handle_ig_get_insights_audience(
     let result = provider
         .get_ig_insights_audience(&token, &input.ig_id)
         .await
-        .map_err(|e| format!("Instagram get insights audience failed: {e}"))?;
+        .map_err(|e| {
+            if e.to_string().contains("permission") || e.to_string().contains("OAuth") {
+                format!("Instagram get insights audience failed: {e}. This tool requires 'Instagram Public Content Access' permission via Meta App Review.")
+            } else {
+                format!("Instagram get insights audience failed: {e}")
+            }
+        })?;
     Ok(Json(serde_json::json!({ "data": result })))
 }
