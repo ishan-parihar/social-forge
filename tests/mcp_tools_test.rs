@@ -208,7 +208,7 @@ async fn test_mcp_tools_registration() {
     assert!(server.state.config.provider_credentials("reddit").is_some(), "Reddit credentials should be loaded");
 
     println!("✅ MCP server: PostizMcpServer instantiated successfully");
-    println!("✅ MCP tools: All {} #[tool] entries compile", 84); // 7 reddit + 20 x + 16 fb + 17 ig + 7 ias + 9 th + 6 li + 4 lip
+    println!("✅ MCP tools: All {} #[tool] entries compile", 115); // 7 reddit + 20 x + 16 fb + 17 ig + 7 ias + 9 th + 6 li + 4 lip + 9 yt + 7 pi + 10 di + 5 sk
 }
 
 // ── Test 8: DB connectivity and existing integrations ───────────
@@ -396,4 +396,81 @@ async fn test_linkedin_page_provider_creation() {
 
     println!("✅ LinkedInPageProvider: {} scopes configured ({})", scopes.len(), scopes.join(", "));
     assert!(lip.is_between_steps(), "LinkedIn Page should be multi-step");
+}
+
+// ── Test 17: YouTube provider creation and scopes ────────────────
+
+#[tokio::test]
+async fn test_youtube_provider_creation() {
+    let config = get_config();
+    let registry = get_registry(&config);
+
+    let yt = registry.get("youtube").expect("YouTube provider should exist");
+    assert_eq!(yt.identifier(), "youtube");
+    assert_eq!(yt.name(), "YouTube");
+
+    let scopes = yt.scopes();
+    assert!(scopes.contains(&"https://www.googleapis.com/auth/youtube.force-ssl".to_string()));
+
+    println!("✅ YouTubeProvider: {} scopes configured ({})", scopes.len(), scopes.join(", "));
+}
+
+// ── Test 18: Pinterest provider creation and scopes ──────────────
+
+#[tokio::test]
+async fn test_pinterest_provider_creation() {
+    let config = get_config();
+    let registry = get_registry(&config);
+
+    let pi = registry.get("pinterest").expect("Pinterest provider should exist");
+    assert_eq!(pi.identifier(), "pinterest");
+    assert_eq!(pi.name(), "Pinterest");
+
+    let scopes = pi.scopes();
+    assert!(scopes.contains(&"boards:read".to_string()));
+    assert!(scopes.contains(&"pins:read".to_string()));
+
+    println!("✅ PinterestProvider: {} scopes configured ({})", scopes.len(), scopes.join(", "));
+}
+
+// ── Test 19: Discord provider creation and scopes ────────────────
+
+#[tokio::test]
+async fn test_discord_provider_creation() {
+    let config = get_config();
+    let registry = get_registry(&config);
+
+    let di = match registry.get("discord") {
+        Some(p) => p,
+        None => {
+            println!("⚠️ Discord provider not configured (DISCORD_CLIENT_ID not set) — skipping");
+            return;
+        }
+    };
+    assert_eq!(di.identifier(), "discord");
+    assert_eq!(di.name(), "Discord");
+
+    let scopes = di.scopes();
+    assert!(scopes.contains(&"identify".to_string()));
+    assert!(scopes.contains(&"guilds".to_string()));
+
+    println!("✅ DiscordProvider: {} scopes configured ({})", scopes.len(), scopes.join(", "));
+}
+
+// ── Test 20: Skool provider creation and scopes ──────────────────
+
+#[tokio::test]
+async fn test_skool_provider_creation() {
+    let config = get_config();
+    let registry = get_registry(&config);
+
+    let sk = registry.get("skool").expect("Skool provider should exist");
+    assert_eq!(sk.identifier(), "skool");
+    assert_eq!(sk.name(), "Skool");
+
+    // Skool uses Chrome extension auth (no OAuth scopes)
+    assert!(!sk.uses_oauth(), "Skool should not use OAuth");
+    assert!(sk.is_chrome_extension(), "Skool should be Chrome extension");
+
+    println!("✅ SkoolProvider: uses_oauth={}, is_chrome_extension={}", sk.uses_oauth(), sk.is_chrome_extension());
 }
