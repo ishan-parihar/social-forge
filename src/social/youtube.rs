@@ -24,6 +24,352 @@ impl YoutubeProvider {
             http: reqwest::Client::new(),
         }
     }
+
+    pub async fn search_videos(
+        &self,
+        access_token: &str,
+        query: &str,
+        max_results: u32,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let mr = max_results.clamp(1, 50).to_string();
+        let resp = self
+            .http
+            .get("https://youtube.googleapis.com/youtube/v3/search")
+            .query(&[
+                ("part", "snippet"),
+                ("q", query),
+                ("maxResults", &mr),
+                ("type", "video"),
+                ("access_token", access_token),
+            ])
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let msg = json["error"]["message"]
+                .as_str()
+                .unwrap_or("Unknown error")
+                .to_string();
+            Err(ProviderError::Api(msg))
+        }
+    }
+
+    pub async fn get_video(
+        &self,
+        access_token: &str,
+        video_id: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let resp = self
+            .http
+            .get("https://youtube.googleapis.com/youtube/v3/videos")
+            .query(&[
+                ("part", "snippet,statistics,contentDetails"),
+                ("id", video_id),
+                ("access_token", access_token),
+            ])
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let msg = json["error"]["message"]
+                .as_str()
+                .unwrap_or("Unknown error")
+                .to_string();
+            Err(ProviderError::Api(msg))
+        }
+    }
+
+    pub async fn get_playlists(
+        &self,
+        access_token: &str,
+        channel_id: &str,
+        max_results: u32,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let mr = max_results.clamp(1, 50).to_string();
+        let resp = self
+            .http
+            .get("https://youtube.googleapis.com/youtube/v3/playlists")
+            .query(&[
+                ("part", "snippet,contentDetails"),
+                ("channelId", channel_id),
+                ("maxResults", &mr),
+                ("access_token", access_token),
+            ])
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let msg = json["error"]["message"]
+                .as_str()
+                .unwrap_or("Unknown error")
+                .to_string();
+            Err(ProviderError::Api(msg))
+        }
+    }
+
+    pub async fn get_playlist_items(
+        &self,
+        access_token: &str,
+        playlist_id: &str,
+        max_results: u32,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let mr = max_results.clamp(1, 50).to_string();
+        let resp = self
+            .http
+            .get("https://youtube.googleapis.com/youtube/v3/playlistItems")
+            .query(&[
+                ("part", "snippet"),
+                ("playlistId", playlist_id),
+                ("maxResults", &mr),
+                ("access_token", access_token),
+            ])
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let msg = json["error"]["message"]
+                .as_str()
+                .unwrap_or("Unknown error")
+                .to_string();
+            Err(ProviderError::Api(msg))
+        }
+    }
+
+    pub async fn get_comments(
+        &self,
+        access_token: &str,
+        video_id: &str,
+        max_results: u32,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let mr = max_results.clamp(1, 100).to_string();
+        let resp = self
+            .http
+            .get("https://youtube.googleapis.com/youtube/v3/commentThreads")
+            .query(&[
+                ("part", "snippet"),
+                ("videoId", video_id),
+                ("maxResults", &mr),
+                ("access_token", access_token),
+            ])
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let msg = json["error"]["message"]
+                .as_str()
+                .unwrap_or("Unknown error")
+                .to_string();
+            Err(ProviderError::Api(msg))
+        }
+    }
+
+    pub async fn get_channel_stats(
+        &self,
+        access_token: &str,
+        channel_id: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let resp = self
+            .http
+            .get("https://youtube.googleapis.com/youtube/v3/channels")
+            .query(&[
+                ("part", "snippet,statistics"),
+                ("id", channel_id),
+                ("access_token", access_token),
+            ])
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let msg = json["error"]["message"]
+                .as_str()
+                .unwrap_or("Unknown error")
+                .to_string();
+            Err(ProviderError::Api(msg))
+        }
+    }
+
+    pub async fn get_analytics(
+        &self,
+        access_token: &str,
+        channel_id: &str,
+        metrics: &str,
+        start_date: &str,
+        end_date: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let ids = format!("channel=={}", channel_id);
+        let resp = self
+            .http
+            .get("https://youtubeanalytics.googleapis.com/v2/reports")
+            .query(&[
+                ("ids", ids.as_str()),
+                ("metrics", metrics),
+                ("startDate", start_date),
+                ("endDate", end_date),
+                ("access_token", access_token),
+            ])
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let msg = json["error"]["message"]
+                .as_str()
+                .unwrap_or("Unknown error")
+                .to_string();
+            Err(ProviderError::Api(msg))
+        }
+    }
+
+    pub async fn get_subscriptions(
+        &self,
+        access_token: &str,
+        channel_id: &str,
+        max_results: u32,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let mr = max_results.clamp(1, 50).to_string();
+        let resp = self
+            .http
+            .get("https://youtube.googleapis.com/youtube/v3/subscriptions")
+            .query(&[
+                ("part", "snippet"),
+                ("channelId", channel_id),
+                ("maxResults", &mr),
+                ("access_token", access_token),
+            ])
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let msg = json["error"]["message"]
+                .as_str()
+                .unwrap_or("Unknown error")
+                .to_string();
+            Err(ProviderError::Api(msg))
+        }
+    }
+
+    /// Search for creators on a topic. Searches videos by query, groups by channel,
+    /// and enriches each channel with subscriber count, email from description.
+    pub async fn find_creators(&self, access_token: &str, query: &str, min_subscribers: Option<u32>, max_results: Option<u32>) -> Result<serde_json::Value, ProviderError> {
+        let limit = max_results.unwrap_or(10).min(50);
+        let encoded_query: String = url::form_urlencoded::byte_serialize(query.as_bytes()).collect();
+        let search_url = format!(
+            "https://www.googleapis.com/youtube/v3/search?part=snippet&q={}&type=video&maxResults={}&access_token={}",
+            encoded_query, limit, access_token
+        );
+        let search_resp = self.http.get(&search_url)
+            .send().await.map_err(|e| ProviderError::Api(e.to_string()))?;
+        let search_status = search_resp.status();
+        let search_text = search_resp.text().await.map_err(|e| ProviderError::Api(e.to_string()))?;
+        if !search_status.is_success() {
+            let v: serde_json::Value = serde_json::from_str(&search_text).unwrap_or_default();
+            return Err(ProviderError::Api(v["error"]["message"].as_str().unwrap_or(&search_text).into()));
+        }
+        let search_data: serde_json::Value = serde_json::from_str(&search_text).unwrap_or_default();
+
+        let mut channel_ids: Vec<String> = Vec::new();
+        if let Some(items) = search_data["items"].as_array() {
+            for item in items {
+                if let Some(ch_id) = item["snippet"]["channelId"].as_str() {
+                    let id = ch_id.to_string();
+                    if !channel_ids.contains(&id) {
+                        channel_ids.push(id);
+                    }
+                }
+            }
+        }
+
+        if channel_ids.is_empty() {
+            return Ok(serde_json::json!({"creators": [], "total_videos": 0}));
+        }
+
+        let ids_param = channel_ids.join(",");
+        let stats_url = format!(
+            "https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id={}&access_token={}",
+            ids_param, access_token
+        );
+        let stats_resp = self.http.get(&stats_url)
+            .send().await.map_err(|e| ProviderError::Api(e.to_string()))?;
+        let stats_status = stats_resp.status();
+        let stats_text = stats_resp.text().await.map_err(|e| ProviderError::Api(e.to_string()))?;
+        if !stats_status.is_success() {
+            let v: serde_json::Value = serde_json::from_str(&stats_text).unwrap_or_default();
+            return Err(ProviderError::Api(v["error"]["message"].as_str().unwrap_or(&stats_text).into()));
+        }
+        let stats_data: serde_json::Value = serde_json::from_str(&stats_text).unwrap_or_default();
+
+        let min_subs = min_subscribers.unwrap_or(0) as i64;
+        let mut creators = Vec::new();
+        if let Some(channels) = stats_data["items"].as_array() {
+            for ch in channels {
+                let sub_count: i64 = ch["statistics"]["subscriberCount"].as_str()
+                    .and_then(|s| s.parse().ok()).unwrap_or(0);
+                if sub_count >= min_subs {
+                    let description = ch["snippet"]["description"].as_str().unwrap_or("");
+                    let email = description.split_whitespace()
+                        .find(|w| w.contains('@') && w.contains('.'))
+                        .map(|e| e.trim_end_matches('.').trim_end_matches(',').to_string());
+                    creators.push(serde_json::json!({
+                        "channel_id": ch["id"],
+                        "title": ch["snippet"]["title"],
+                        "description": ch["snippet"]["description"],
+                        "subscriber_count": sub_count,
+                        "video_count": ch["statistics"]["videoCount"],
+                        "view_count": ch["statistics"]["viewCount"],
+                        "thumbnail": ch["snippet"]["thumbnails"]["default"]["url"],
+                        "email": email,
+                        "country": ch["snippet"]["country"],
+                        "published_at": ch["snippet"]["publishedAt"]
+                    }));
+                }
+            }
+        }
+
+        Ok(serde_json::json!({
+            "creators": creators,
+            "total_videos": search_data["pageInfo"]["totalResults"],
+            "query": query
+        }))
+    }
 }
 
 #[async_trait]
