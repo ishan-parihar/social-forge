@@ -314,6 +314,166 @@ impl SocialProvider for LinkedInPageProvider {
             None
         }
     }
+
+    async fn analytics(
+        &self,
+        access_token: &str,
+        _internal_id: &str,
+        _days: u32,
+    ) -> Result<Vec<AnalyticsData>, ProviderError> {
+        let org_id = self.resolve_org_id(access_token).await?;
+        let org_urn = format!("urn:li:organization:{org_id}");
+
+        let mut results = Vec::new();
+
+        // Share statistics
+        let share_url = format!(
+            "https://api.linkedin.com/rest/organizationalEntityShareStatistics?q=organizationalEntity&organizationalEntity={org_urn}"
+        );
+        let resp = self
+            .http
+            .get(&share_url)
+            .header("Authorization", format!("Bearer {access_token}"))
+            .header("LinkedIn-Version", "202601")
+            .header("X-Restli-Protocol-Version", "2.0.0")
+            .send()
+            .await?;
+
+        let status = resp.status();
+        if status == 401 {
+            return Err(ProviderError::TokenExpired);
+        }
+        if status == 429 {
+            return Err(ProviderError::RateLimited("LinkedIn API rate limit".into()));
+        }
+
+        let json: serde_json::Value = resp.json().await.unwrap_or_default();
+        if !status.is_success() {
+            let msg = json["message"]
+                .as_str()
+                .unwrap_or("LinkedIn share statistics error")
+                .to_string();
+            return Err(ProviderError::Api(msg));
+        }
+
+        if let Some(elements) = json["elements"].as_array() {
+            for element in elements {
+                if let Some(stats) = element["totalShareStatistics"].as_object() {
+                    for (key, val) in stats {
+                        if let Some(n) = val.as_u64() {
+                            results.push(AnalyticsData {
+                                label: key.clone(),
+                                data: vec![AnalyticsDataPoint {
+                                    total: n.to_string(),
+                                    date: chrono::Utc::now().format("%Y-%m-%d").to_string(),
+                                }],
+                                percentage_change: 0.0,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        // Follower count
+        let follower_url = format!(
+            "https://api.linkedin.com/rest/networkSizes/{org_urn}?edgeType=CompanyFollowedByMember"
+        );
+        let resp = self
+            .http
+            .get(&follower_url)
+            .header("Authorization", format!("Bearer {access_token}"))
+            .header("LinkedIn-Version", "202601")
+            .header("X-Restli-Protocol-Version", "2.0.0")
+            .send()
+            .await?;
+
+        let status = resp.status();
+        if status == 401 {
+            return Err(ProviderError::TokenExpired);
+        }
+        if status == 429 {
+            return Err(ProviderError::RateLimited("LinkedIn API rate limit".into()));
+        }
+
+        if status.is_success() {
+            let json: serde_json::Value = resp.json().await.unwrap_or_default();
+            if let Some(elements) = json["elements"].as_array() {
+                if let Some(elem) = elements.first() {
+                    if let Some(count) = elem["firstDegreeSize"].as_u64() {
+                        results.push(AnalyticsData {
+                            label: "followerCount".into(),
+                            data: vec![AnalyticsDataPoint {
+                                total: count.to_string(),
+                                date: chrono::Utc::now().format("%Y-%m-%d").to_string(),
+                            }],
+                            percentage_change: 0.0,
+                        });
+                    }
+                }
+            }
+        }
+
+        Ok(results)
+    }
+
+    async fn post_analytics(
+        &self,
+        access_token: &str,
+        platform_post_id: &str,
+    ) -> Result<Vec<AnalyticsData>, ProviderError> {
+        let url = format!(
+            "https://api.linkedin.com/rest/shares/{platform_post_id}/shareStatistics"
+        );
+        let resp = self
+            .http
+            .get(&url)
+            .header("Authorization", format!("Bearer {access_token}"))
+            .header("LinkedIn-Version", "202601")
+            .header("X-Restli-Protocol-Version", "2.0.0")
+            .send()
+            .await?;
+
+        let status = resp.status();
+        if status == 401 {
+            return Err(ProviderError::TokenExpired);
+        }
+        if status == 429 {
+            return Err(ProviderError::RateLimited("LinkedIn API rate limit".into()));
+        }
+
+        let json: serde_json::Value = resp.json().await.unwrap_or_default();
+        if !status.is_success() {
+            let msg = json["message"]
+                .as_str()
+                .unwrap_or("LinkedIn post statistics error")
+                .to_string();
+            return Err(ProviderError::Api(msg));
+        }
+
+        let mut results = Vec::new();
+
+        if let Some(elements) = json["elements"].as_array() {
+            for element in elements {
+                if let Some(stats) = element["totalShareStatistics"].as_object() {
+                    for (key, val) in stats {
+                        if let Some(n) = val.as_u64() {
+                            results.push(AnalyticsData {
+                                label: key.clone(),
+                                data: vec![AnalyticsDataPoint {
+                                    total: n.to_string(),
+                                    date: chrono::Utc::now().format("%Y-%m-%d").to_string(),
+                                }],
+                                percentage_change: 0.0,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(results)
+    }
 }
 
 impl LinkedInPageProvider {

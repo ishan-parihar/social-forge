@@ -586,8 +586,10 @@ impl SocialProvider for RedditProvider {
             post_data.push(("url", post.media[0].url.as_str()));
         }
 
-        if let Some(flair) = post.settings["flair"].as_str() {
-            post_data.push(("flair_id", flair));
+        if let Some(flair_id) = post.settings["flair_id"].as_str() {
+            post_data.push(("flair_id", flair_id));
+        } else if let Some(flair_text) = post.settings["flair_text"].as_str() {
+            post_data.push(("flair_text", flair_text));
         }
 
         let resp = self
@@ -744,6 +746,84 @@ impl SocialProvider for RedditProvider {
                 });
             }
         }
+
+        Ok(result)
+    }
+
+    async fn post_analytics(
+        &self,
+        access_token: &str,
+        platform_post_id: &str,
+    ) -> Result<Vec<AnalyticsData>, ProviderError> {
+        let fullname = if platform_post_id.starts_with("t3_") {
+            platform_post_id.to_string()
+        } else {
+            format!("t3_{}", platform_post_id)
+        };
+
+        let resp = self
+            .http
+            .get(format!("https://oauth.reddit.com/by_id/{}", fullname))
+            .header("Authorization", format!("Bearer {access_token}"))
+            .header("User-Agent", "postiz-rust:v0.1.0 (by /u/postiz_rust)")
+            .send()
+            .await?;
+
+        let status = resp.status();
+        if !status.is_success() {
+            return Ok(vec![]);
+        }
+
+        let json: serde_json::Value = resp.json().await.unwrap_or_default();
+        let data = &json["data"]["children"][0]["data"];
+
+        let score = data["score"].as_i64().unwrap_or(0);
+        let upvote_ratio = data["upvote_ratio"].as_f64().unwrap_or(0.0);
+        let num_comments = data["num_comments"].as_i64().unwrap_or(0);
+        let gilded = data["gilded"].as_i64().unwrap_or(0);
+        let total_awards = data["total_awards_received"].as_i64().unwrap_or(0);
+
+        let mut result = Vec::new();
+        result.push(AnalyticsData {
+            label: "score".into(),
+            data: vec![AnalyticsDataPoint {
+                total: score.to_string(),
+                date: String::new(),
+            }],
+            percentage_change: 0.0,
+        });
+        result.push(AnalyticsData {
+            label: "upvote_ratio".into(),
+            data: vec![AnalyticsDataPoint {
+                total: format!("{:.2}", upvote_ratio),
+                date: String::new(),
+            }],
+            percentage_change: 0.0,
+        });
+        result.push(AnalyticsData {
+            label: "num_comments".into(),
+            data: vec![AnalyticsDataPoint {
+                total: num_comments.to_string(),
+                date: String::new(),
+            }],
+            percentage_change: 0.0,
+        });
+        result.push(AnalyticsData {
+            label: "gilded".into(),
+            data: vec![AnalyticsDataPoint {
+                total: gilded.to_string(),
+                date: String::new(),
+            }],
+            percentage_change: 0.0,
+        });
+        result.push(AnalyticsData {
+            label: "total_awards_received".into(),
+            data: vec![AnalyticsDataPoint {
+                total: total_awards.to_string(),
+                date: String::new(),
+            }],
+            percentage_change: 0.0,
+        });
 
         Ok(result)
     }

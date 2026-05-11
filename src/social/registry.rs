@@ -102,6 +102,11 @@ impl ProviderRegistry {
             providers.insert("devto", Arc::new(devto::DevtoProvider::new(config)));
         }
 
+        // Hashnode — API key-based blogging
+        if config.hashnode_api_key.is_some() {
+            providers.insert("hashnode", Arc::new(hashnode::HashnodeProvider::new(config)));
+        }
+
         // Chrome extension-based provider (no OAuth credentials needed)
         providers.insert("skool", Arc::new(skool::SkoolProvider::new()));
 
