@@ -208,7 +208,7 @@ async fn test_mcp_tools_registration() {
     assert!(server.state.config.provider_credentials("reddit").is_some(), "Reddit credentials should be loaded");
 
     println!("✅ MCP server: PostizMcpServer instantiated successfully");
-    println!("✅ MCP tools: All {} #[tool] entries compile", 58); // 7 reddit + 20 x + 15 fb + 16 ig
+    println!("✅ MCP tools: All {} #[tool] entries compile", 74); // 7 reddit + 20 x + 15 fb + 16 ig + 7 ias + 9 th
 }
 
 // ── Test 8: DB connectivity and existing integrations ───────────
@@ -318,4 +318,41 @@ async fn test_instagram_is_between_steps() {
     assert!(ig.is_between_steps(), "Instagram should be multi-step (exchange_code returns user-level token)");
 
     println!("✅ InstagramProvider: is_between_steps() = {}", ig.is_between_steps());
+}
+
+// ── Test 13: InstagramStandaloneProvider creation and scopes ─────
+
+#[tokio::test]
+async fn test_instagram_standalone_provider_creation() {
+    let config = get_config();
+    let registry = get_registry(&config);
+
+    let ias = registry.get("instagram-standalone").expect("Instagram Standalone provider should exist");
+    assert_eq!(ias.identifier(), "instagram-standalone");
+
+    let scopes = ias.scopes();
+    assert!(scopes.contains(&"instagram_business_basic".to_string()));
+    assert!(scopes.contains(&"instagram_business_content_publish".to_string()));
+    assert!(scopes.contains(&"instagram_business_manage_comments".to_string()));
+
+    println!("✅ InstagramStandaloneProvider: {} scopes configured ({})", scopes.len(), scopes.join(", "));
+}
+
+// ── Test 14: ThreadsProvider creation and scopes ─────────────────
+
+#[tokio::test]
+async fn test_threads_provider_creation() {
+    let config = get_config();
+    let registry = get_registry(&config);
+
+    let threads = registry.get("threads").expect("Threads provider should exist");
+    assert_eq!(threads.identifier(), "threads");
+
+    let scopes = threads.scopes();
+    assert!(scopes.contains(&"threads_basic".to_string()));
+    assert!(scopes.contains(&"threads_content_publish".to_string()));
+    assert!(scopes.contains(&"threads_manage_replies".to_string()));
+    assert!(scopes.contains(&"threads_manage_insights".to_string()));
+
+    println!("✅ ThreadsProvider: {} scopes configured ({})", scopes.len(), scopes.join(", "));
 }

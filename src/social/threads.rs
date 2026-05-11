@@ -320,6 +320,167 @@ impl ThreadsProvider {
             .ok_or_else(|| ProviderError::Auth("Could not resolve Threads user ID".into()))
     }
 
+    pub async fn get_profile(&self, access_token: &str) -> Result<serde_json::Value, ProviderError> {
+        let resp = self
+            .http
+            .get(format!("{}/me", self.graph_url()))
+            .query(&[
+                ("fields", "id,username,name,threads_profile_picture_url"),
+                ("access_token", access_token),
+            ])
+            .send()
+            .await?;
+
+        if !resp.status().is_success() {
+            let body = resp.text().await?;
+            return Err(ProviderError::Api(format!("get_profile failed: {}", body)));
+        }
+
+        let json: serde_json::Value = resp.json().await?;
+        Ok(json)
+    }
+
+    pub async fn get_threads(
+        &self,
+        access_token: &str,
+        user_id: &str,
+        limit: u32,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let effective_limit = if limit < 100 { 100 } else { limit };
+        let resp = self
+            .http
+            .get(format!("{}/{user_id}/threads", self.graph_url()))
+            .query(&[
+                ("fields", "id,text,media_type,media_url,permalink,timestamp,like_count,reply_count"),
+                ("access_token", access_token),
+            ])
+            .query(&[("limit", effective_limit.to_string())])
+            .send()
+            .await?;
+
+        if !resp.status().is_success() {
+            let body = resp.text().await?;
+            return Err(ProviderError::Api(format!("get_threads failed: {}", body)));
+        }
+
+        let json: serde_json::Value = resp.json().await?;
+        Ok(json)
+    }
+
+    pub async fn get_thread_detail(
+        &self,
+        access_token: &str,
+        media_id: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let resp = self
+            .http
+            .get(format!("{}/{}", self.graph_url(), media_id))
+            .query(&[
+                ("fields", "id,text,media_type,media_url,permalink,timestamp,username,like_count,reply_count,children{id,media_url,media_type}"),
+                ("access_token", access_token),
+            ])
+            .send()
+            .await?;
+
+        if !resp.status().is_success() {
+            let body = resp.text().await?;
+            return Err(ProviderError::Api(format!("get_thread_detail failed: {}", body)));
+        }
+
+        let json: serde_json::Value = resp.json().await?;
+        Ok(json)
+    }
+
+    pub async fn get_thread_replies(
+        &self,
+        access_token: &str,
+        media_id: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let resp = self
+            .http
+            .get(format!("{}/{}/replies", self.graph_url(), media_id))
+            .query(&[
+                ("fields", "id,text,timestamp,username,like_count"),
+                ("access_token", access_token),
+            ])
+            .send()
+            .await?;
+
+        if !resp.status().is_success() {
+            let body = resp.text().await?;
+            return Err(ProviderError::Api(format!("get_thread_replies failed: {}", body)));
+        }
+
+        let json: serde_json::Value = resp.json().await?;
+        Ok(json)
+    }
+
+    pub async fn reply_to_thread(
+        &self,
+        access_token: &str,
+        media_id: &str,
+        message: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let resp = self
+            .http
+            .post(format!("{}/{}/replies", self.graph_url(), media_id))
+            .form(&[("text", message), ("access_token", access_token)])
+            .send()
+            .await?;
+
+        if !resp.status().is_success() {
+            let body = resp.text().await?;
+            return Err(ProviderError::Api(format!("reply_to_thread failed: {}", body)));
+        }
+
+        let json: serde_json::Value = resp.json().await?;
+        Ok(json)
+    }
+
+    pub async fn get_insights(
+        &self,
+        access_token: &str,
+        user_id: &str,
+        metric: &str,
+        period: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let resp = self
+            .http
+            .get(format!("{}/{}/insights", self.graph_url(), user_id))
+            .query(&[("metric", metric), ("period", period), ("access_token", access_token)])
+            .send()
+            .await?;
+
+        if !resp.status().is_success() {
+            let body = resp.text().await?;
+            return Err(ProviderError::Api(format!("get_insights failed: {}", body)));
+        }
+
+        let json: serde_json::Value = resp.json().await?;
+        Ok(json)
+    }
+
+    pub async fn delete_thread(
+        &self,
+        access_token: &str,
+        media_id: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let resp = self
+            .http
+            .delete(format!("{}/{}", self.graph_url(), media_id))
+            .query(&[("access_token", access_token)])
+            .send()
+            .await?;
+
+        if !resp.status().is_success() {
+            let body = resp.text().await?;
+            return Err(ProviderError::Api(format!("delete_thread failed: {}", body)));
+        }
+
+        let json: serde_json::Value = resp.json().await?;
+        Ok(json)
+    }
+
     async fn publish_carousel(
         &self,
         user_id: &str,
