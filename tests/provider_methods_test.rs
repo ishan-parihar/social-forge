@@ -451,15 +451,14 @@ async fn test_linkedin_get_posts_with_bad_token() {
 
     match &result {
         Err(e) => {
-            let err_str = format!("{e}");
+            let err_str = format!("{e}").to_lowercase();
             assert!(
-                err_str.contains("Invalid")
-                    || err_str.contains("invalid")
+                err_str.contains("invalid")
                     || err_str.contains("token")
                     || err_str.contains("error"),
                 "Expected API error, got: {err_str}"
             );
-            println!("✅ li_get_posts: Properly handled API error: {err_str}");
+            println!("✅ li_get_posts: Properly handled API error: {e}");
         }
         Ok(v) => println!("⚠️  li_get_posts: Unexpected success: {v:?}"),
     }
