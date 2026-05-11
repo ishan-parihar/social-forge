@@ -5,6 +5,10 @@ use async_trait::async_trait;
 
 use super::*;
 use crate::config::Config;
+use reqwest::StatusCode;
+use serde_json::{json, Value};
+
+const DISCORD_API_BASE: &str = "https://discord.com/api/v10";
 
 pub struct DiscordProvider {
     client_id: String,
@@ -24,6 +28,207 @@ impl DiscordProvider {
             bot_token,
             http: reqwest::Client::new(),
         }
+    }
+
+    pub async fn get_channel(
+        &self,
+        access_token: &str,
+        channel_id: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let resp = self
+            .http
+            .get(format!("https://discord.com/api/channels/{channel_id}"))
+            .header("Authorization", format!("Bot {}", self.bot_token))
+            .send()
+            .await?;
+        let status = resp.status();
+        let json = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 401 || status == 403 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let msg = json["message"]
+                .as_str()
+                .unwrap_or("Discord API error")
+                .to_string();
+            Err(ProviderError::Api(msg))
+        }
+    }
+
+    pub async fn get_channel_messages(
+        &self,
+        access_token: &str,
+        channel_id: &str,
+        limit: u32,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let resp = self
+            .http
+            .get(format!(
+                "https://discord.com/api/channels/{channel_id}/messages"
+            ))
+            .header("Authorization", format!("Bot {}", self.bot_token))
+            .query(&[("limit", &limit.clamp(1, 100).to_string())])
+            .send()
+            .await?;
+        let status = resp.status();
+        let json = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 401 || status == 403 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let msg = json["message"]
+                .as_str()
+                .unwrap_or("Discord API error")
+                .to_string();
+            Err(ProviderError::Api(msg))
+        }
+    }
+
+    pub async fn get_guild(
+        &self,
+        access_token: &str,
+        guild_id: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let resp = self
+            .http
+            .get(format!("https://discord.com/api/guilds/{guild_id}"))
+            .header("Authorization", format!("Bot {}", self.bot_token))
+            .send()
+            .await?;
+        let status = resp.status();
+        let json = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 401 || status == 403 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let msg = json["message"]
+                .as_str()
+                .unwrap_or("Discord API error")
+                .to_string();
+            Err(ProviderError::Api(msg))
+        }
+    }
+
+    pub async fn get_thread_members(
+        &self,
+        access_token: &str,
+        thread_id: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let resp = self
+            .http
+            .get(format!(
+                "https://discord.com/api/channels/{thread_id}/thread-members"
+            ))
+            .header("Authorization", format!("Bot {}", self.bot_token))
+            .send()
+            .await?;
+        let status = resp.status();
+        let json = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 401 || status == 403 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let msg = json["message"]
+                .as_str()
+                .unwrap_or("Discord API error")
+                .to_string();
+            Err(ProviderError::Api(msg))
+        }
+    }
+
+    pub async fn send_message(&self, channel_id: &str, content: &str) -> Result<Value, ProviderError> {
+        let url = format!("{}/channels/{}/messages", DISCORD_API_BASE, channel_id);
+        let body = json!({"content": content});
+        let response = self.http.post(&url)
+            .header("Authorization", format!("Bot {}", self.bot_token))
+            .header("Content-Type", "application/json")
+            .json(&body)
+            .send().await.map_err(|e| ProviderError::Api(e.to_string()))?;
+        let status = response.status();
+        let text = response.text().await.map_err(|e| ProviderError::Api(e.to_string()))?;
+        let v: Value = serde_json::from_str(&text).unwrap_or(json!({"raw": text}));
+        if status.is_success() { Ok(v) }
+        else if status == StatusCode::FORBIDDEN { Err(ProviderError::Auth(v["message"].as_str().unwrap_or("forbidden").into())) }
+        else { Err(ProviderError::Api(v["message"].as_str().unwrap_or(&text).into())) }
+    }
+
+    pub async fn delete_message(&self, channel_id: &str, message_id: &str) -> Result<Value, ProviderError> {
+        let url = format!("{}/channels/{}/messages/{}", DISCORD_API_BASE, channel_id, message_id);
+        let response = self.http.delete(&url)
+            .header("Authorization", format!("Bot {}", self.bot_token))
+            .send().await.map_err(|e| ProviderError::Api(e.to_string()))?;
+        let status = response.status();
+        if status.is_success() { Ok(json!({"deleted": true})) }
+        else {
+            let text = response.text().await.unwrap_or_default();
+            Err(ProviderError::Api(text))
+        }
+    }
+
+    pub async fn add_reaction(&self, channel_id: &str, message_id: &str, emoji: &str) -> Result<Value, ProviderError> {
+        let encoded: String = url::form_urlencoded::byte_serialize(emoji.as_bytes()).collect();
+        let url = format!("{}/channels/{}/messages/{}/reactions/{}/@me", DISCORD_API_BASE, channel_id, message_id, encoded);
+        let response = self.http.put(&url)
+            .header("Authorization", format!("Bot {}", self.bot_token))
+            .send().await.map_err(|e| ProviderError::Api(e.to_string()))?;
+        let status = response.status();
+        if status.is_success() || status == StatusCode::NO_CONTENT { Ok(json!({"success": true})) }
+        else {
+            let text = response.text().await.unwrap_or_default();
+            Err(ProviderError::Api(text))
+        }
+    }
+
+    pub async fn get_guild_channels(&self, guild_id: &str) -> Result<Value, ProviderError> {
+        let url = format!("{}/guilds/{}/channels", DISCORD_API_BASE, guild_id);
+        let response = self.http.get(&url)
+            .header("Authorization", format!("Bot {}", self.bot_token))
+            .send().await.map_err(|e| ProviderError::Api(e.to_string()))?;
+        let status = response.status();
+        let text = response.text().await.map_err(|e| ProviderError::Api(e.to_string()))?;
+        let v: Value = serde_json::from_str(&text).unwrap_or(json!({"raw": text}));
+        if status.is_success() { Ok(v) }
+        else if status == StatusCode::FORBIDDEN { Err(ProviderError::Auth("Missing permissions".into())) }
+        else { Err(ProviderError::Api(v["message"].as_str().unwrap_or(&text).into())) }
+    }
+
+    pub async fn get_server_info(&self, guild_id: &str) -> Result<Value, ProviderError> {
+        let url = format!("{}/guilds/{}?with_counts=true", DISCORD_API_BASE, guild_id);
+        let response = self.http.get(&url)
+            .header("Authorization", format!("Bot {}", self.bot_token))
+            .send().await.map_err(|e| ProviderError::Api(e.to_string()))?;
+        let status = response.status();
+        let text = response.text().await.map_err(|e| ProviderError::Api(e.to_string()))?;
+        let v: Value = serde_json::from_str(&text).unwrap_or(json!({"raw": text}));
+        if status.is_success() { Ok(v) }
+        else if status == StatusCode::FORBIDDEN { Err(ProviderError::Auth("Missing permissions".into())) }
+        else { Err(ProviderError::Api(v["message"].as_str().unwrap_or(&text).into())) }
+    }
+
+    pub async fn create_forum_post(&self, channel_id: &str, name: &str, content: &str, applied_tags: &[String]) -> Result<Value, ProviderError> {
+        let url = format!("{}/channels/{}/threads", DISCORD_API_BASE, channel_id);
+        let mut body = json!({
+            "name": name,
+            "message": {"content": content}
+        });
+        if !applied_tags.is_empty() {
+            body["applied_tags"] = json!(applied_tags);
+        }
+        let response = self.http.post(&url)
+            .header("Authorization", format!("Bot {}", self.bot_token))
+            .header("Content-Type", "application/json")
+            .json(&body)
+            .send().await.map_err(|e| ProviderError::Api(e.to_string()))?;
+        let status = response.status();
+        let text = response.text().await.map_err(|e| ProviderError::Api(e.to_string()))?;
+        let v: Value = serde_json::from_str(&text).unwrap_or(json!({"raw": text}));
+        if status.is_success() { Ok(v) }
+        else if status == StatusCode::FORBIDDEN { Err(ProviderError::Auth("Missing permissions".into())) }
+        else { Err(ProviderError::Api(v["message"].as_str().unwrap_or(&text).into())) }
     }
 }
 
