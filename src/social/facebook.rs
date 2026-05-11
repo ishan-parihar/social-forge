@@ -317,6 +317,109 @@ impl SocialProvider for FacebookProvider {
         Ok(result)
     }
 
+    async fn analytics(
+        &self,
+        access_token: &str,
+        _internal_id: &str,
+        days: u32,
+    ) -> Result<Vec<AnalyticsData>, ProviderError> {
+        let page_id = self.resolve_page_id(access_token).await?;
+
+        let since = chrono::Utc::now()
+            .checked_sub_signed(chrono::Duration::days(days as i64))
+            .unwrap_or_default()
+            .format("%Y-%m-%d")
+            .to_string();
+        let until = chrono::Utc::now().format("%Y-%m-%d").to_string();
+
+        let json = self.get_page_insights(
+            access_token,
+            &page_id,
+            "page_impressions,page_engaged_users,page_fans",
+            "day",
+            Some(&since),
+            Some(&until),
+        ).await?;
+
+        let mut result = Vec::new();
+        if let Some(data) = json["data"].as_array() {
+            for entry in data {
+                let name = entry["name"].as_str().unwrap_or("unknown").to_string();
+                let mut points = Vec::new();
+                if let Some(values) = entry["values"].as_array() {
+                    for v in values {
+                        points.push(AnalyticsDataPoint {
+                            total: v["value"].as_i64().unwrap_or(0).to_string(),
+                            date: v["end_time"].as_str().unwrap_or("").to_string(),
+                        });
+                    }
+                }
+                result.push(AnalyticsData {
+                    label: name,
+                    data: points,
+                    percentage_change: 0.0,
+                });
+            }
+        }
+
+        Ok(result)
+    }
+
+    async fn post_analytics(
+        &self,
+        access_token: &str,
+        platform_post_id: &str,
+    ) -> Result<Vec<AnalyticsData>, ProviderError> {
+        let url = format!("{}/{platform_post_id}/insights", self.graph_url());
+        let resp = self
+            .http
+            .get(&url)
+            .query(&[
+                ("metric", "post_impressions,post_engaged_users,post_reactions_by_type_total"),
+                ("period", "lifetime"),
+                ("access_token", access_token),
+            ])
+            .send()
+            .await?;
+
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if !status.is_success() {
+            if status == 429 {
+                return Err(ProviderError::RateLimited("Facebook API rate limit".into()));
+            } else if status == 401 {
+                return Err(ProviderError::TokenExpired);
+            } else {
+                return Err(ProviderError::Api(
+                    json["error"]["message"].as_str().unwrap_or("Facebook API error").to_string()
+                ));
+            }
+        }
+
+        let mut result = Vec::new();
+        if let Some(data) = json["data"].as_array() {
+            for entry in data {
+                let name = entry["name"].as_str().unwrap_or("unknown").to_string();
+                let mut points = Vec::new();
+                if let Some(values) = entry["values"].as_array() {
+                    for v in values {
+                        points.push(AnalyticsDataPoint {
+                            total: v["value"].as_i64().unwrap_or(0).to_string(),
+                            date: v["end_time"].as_str().unwrap_or("").to_string(),
+                        });
+                    }
+                }
+                result.push(AnalyticsData {
+                    label: name,
+                    data: points,
+                    percentage_change: 0.0,
+                });
+            }
+        }
+
+        Ok(result)
+    }
+
     async fn fetch_page_info(
         &self,
         access_token: &str,

@@ -7,6 +7,7 @@ pub mod common;
 pub mod devto;
 pub mod discord;
 pub mod facebook;
+pub mod hashnode;
 pub mod instagram;
 pub mod instagram_standalone;
 pub mod linkedin;

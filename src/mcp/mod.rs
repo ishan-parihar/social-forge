@@ -32,6 +32,7 @@ mod tools_integrations;
 pub mod tools_linkedin;
 pub mod tools_linkedin_page;
 mod tools_medium;
+mod tools_hashnode;
 pub mod tools_pinterest;
 mod tools_posts;
 pub mod tools_discord;
@@ -1459,6 +1460,32 @@ impl PostizMcpServer {
         params: Parameters<tools_medium::MdGetPostInput>,
     ) -> Result<Json<serde_json::Value>, String> {
         tools_medium::handle_md_get_post(&self.state, &params.0).await
+    }
+
+    // ── Hashnode Tools ────────────────────────────────────────────────
+
+    #[tool(description = "Create a new Hashnode story (post)")]
+    pub async fn hn_create_post(
+        &self,
+        params: Parameters<tools_hashnode::HnCreatePostInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_hashnode::handle_hn_create_post(&self.state, &params.0).await
+    }
+
+    #[tool(description = "List Hashnode posts for a publication")]
+    pub async fn hn_list_posts(
+        &self,
+        params: Parameters<tools_hashnode::HnListPostsInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_hashnode::handle_hn_list_posts(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get a single Hashnode post by post ID")]
+    pub async fn hn_get_post(
+        &self,
+        params: Parameters<tools_hashnode::HnGetPostInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_hashnode::handle_hn_get_post(&self.state, &params.0).await
     }
 
     // ── Dev.to Tools ─────────────────────────────────────────────────

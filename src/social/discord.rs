@@ -444,6 +444,8 @@ impl SocialProvider for DiscordProvider {
             }]);
         }
 
+        payload["allowed_mentions"] = serde_json::json!({"parse": ["users", "roles"]});
+
         let resp = self
             .http
             .post(format!(

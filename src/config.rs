@@ -56,6 +56,9 @@ pub struct Config {
     // Dev.to (API key-based)
     pub devto_api_key: Option<String>,
 
+    // Hashnode (API key-based)
+    pub hashnode_api_key: Option<String>,
+
     // Token encryption at rest
     pub token_encryption_key: Option<String>,
 
@@ -107,6 +110,7 @@ impl Config {
             tiktok_client_secret: opt("TIKTOK_CLIENT_SECRET"),
             medium_access_token: opt("MEDIUM_ACCESS_TOKEN"),
             devto_api_key: opt("DEVTO_API_KEY"),
+            hashnode_api_key: opt("HASHNODE_API_KEY"),
             token_encryption_key: opt("TOKEN_ENCRYPTION_KEY"),
             media_dir: opt("MEDIA_DIR").unwrap_or_else(|| "./uploads".into()),
         })
@@ -168,6 +172,7 @@ impl Config {
             "tiktok" => Some((self.tiktok_client_id.clone()?, self.tiktok_client_secret.clone()?)),
             "medium" => Some(("api-key".into(), self.medium_access_token.clone()?)),
             "devto" => Some(("api-key".into(), self.devto_api_key.clone()?)),
+            "hashnode" => Some(("api-key".into(), self.hashnode_api_key.clone()?)),
             _ => None,
         }
     }

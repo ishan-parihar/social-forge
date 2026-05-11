@@ -5,6 +5,7 @@ use async_trait::async_trait;
 
 use super::*;
 use crate::config::Config;
+use chrono::Utc;
 
 pub struct XProvider {
     client_id: String,
@@ -250,6 +251,157 @@ impl SocialProvider for XProvider {
         _page_id: &str,
     ) -> Result<PageInfo, ProviderError> {
         Err(ProviderError::Api("X does not support page management".into()))
+    }
+
+    async fn analytics(
+        &self,
+        access_token: &str,
+        _internal_id: &str,
+        _days: u32,
+    ) -> Result<Vec<AnalyticsData>, ProviderError> {
+        let resp = self
+            .http
+            .get("https://api.twitter.com/2/users/me?user.fields=public_metrics")
+            .header("Authorization", format!("Bearer {access_token}"))
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            let today = Utc::now().format("%Y-%m-%d").to_string();
+            let metrics = &json["data"]["public_metrics"];
+            let mut result = Vec::new();
+            if let Some(followers) = metrics["followers_count"].as_i64() {
+                result.push(AnalyticsData {
+                    label: "Followers".into(),
+                    data: vec![AnalyticsDataPoint {
+                        total: followers.to_string(),
+                        date: today.clone(),
+                    }],
+                    percentage_change: 0.0,
+                });
+            }
+            if let Some(following) = metrics["following_count"].as_i64() {
+                result.push(AnalyticsData {
+                    label: "Following".into(),
+                    data: vec![AnalyticsDataPoint {
+                        total: following.to_string(),
+                        date: today.clone(),
+                    }],
+                    percentage_change: 0.0,
+                });
+            }
+            if let Some(tweets) = metrics["tweet_count"].as_i64() {
+                result.push(AnalyticsData {
+                    label: "Tweets".into(),
+                    data: vec![AnalyticsDataPoint {
+                        total: tweets.to_string(),
+                        date: today.clone(),
+                    }],
+                    percentage_change: 0.0,
+                });
+            }
+            if let Some(listed) = metrics["listed_count"].as_i64() {
+                result.push(AnalyticsData {
+                    label: "Listed".into(),
+                    data: vec![AnalyticsDataPoint {
+                        total: listed.to_string(),
+                        date: today,
+                    }],
+                    percentage_change: 0.0,
+                });
+            }
+            Ok(result)
+        } else if status == 429 {
+            Err(ProviderError::RateLimited("X API rate limit".into()))
+        } else if json.get("title").and_then(|t| t.as_str()) == Some("Unauthorized")
+            || status == 401
+        {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let detail = json.get("detail").and_then(|d| d.as_str()).unwrap_or("Unknown API error");
+            Err(ProviderError::Api(detail.to_string()))
+        }
+    }
+
+    async fn post_analytics(
+        &self,
+        access_token: &str,
+        platform_post_id: &str,
+    ) -> Result<Vec<AnalyticsData>, ProviderError> {
+        let resp = self
+            .http
+            .get(format!("https://api.twitter.com/2/tweets/{platform_post_id}?tweet.fields=public_metrics"))
+            .header("Authorization", format!("Bearer {access_token}"))
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            let today = Utc::now().format("%Y-%m-%d").to_string();
+            let metrics = &json["data"]["public_metrics"];
+            let mut result = Vec::new();
+            if let Some(likes) = metrics["like_count"].as_i64() {
+                result.push(AnalyticsData {
+                    label: "Likes".into(),
+                    data: vec![AnalyticsDataPoint {
+                        total: likes.to_string(),
+                        date: today.clone(),
+                    }],
+                    percentage_change: 0.0,
+                });
+            }
+            if let Some(retweets) = metrics["retweet_count"].as_i64() {
+                result.push(AnalyticsData {
+                    label: "Retweets".into(),
+                    data: vec![AnalyticsDataPoint {
+                        total: retweets.to_string(),
+                        date: today.clone(),
+                    }],
+                    percentage_change: 0.0,
+                });
+            }
+            if let Some(replies) = metrics["reply_count"].as_i64() {
+                result.push(AnalyticsData {
+                    label: "Replies".into(),
+                    data: vec![AnalyticsDataPoint {
+                        total: replies.to_string(),
+                        date: today.clone(),
+                    }],
+                    percentage_change: 0.0,
+                });
+            }
+            if let Some(quotes) = metrics["quote_count"].as_i64() {
+                result.push(AnalyticsData {
+                    label: "Quotes".into(),
+                    data: vec![AnalyticsDataPoint {
+                        total: quotes.to_string(),
+                        date: today.clone(),
+                    }],
+                    percentage_change: 0.0,
+                });
+            }
+            if let Some(impressions) = metrics["impression_count"].as_i64() {
+                result.push(AnalyticsData {
+                    label: "Impressions".into(),
+                    data: vec![AnalyticsDataPoint {
+                        total: impressions.to_string(),
+                        date: today,
+                    }],
+                    percentage_change: 0.0,
+                });
+            }
+            Ok(result)
+        } else if status == 429 {
+            Err(ProviderError::RateLimited("X API rate limit".into()))
+        } else if json.get("title").and_then(|t| t.as_str()) == Some("Unauthorized")
+            || status == 401
+        {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let detail = json.get("detail").and_then(|d| d.as_str()).unwrap_or("Unknown API error");
+            Err(ProviderError::Api(detail.to_string()))
+        }
     }
 }
 
