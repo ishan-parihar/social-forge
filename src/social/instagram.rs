@@ -435,6 +435,114 @@ impl SocialProvider for InstagramProvider {
             username: json["username"].as_str().map(String::from),
         })
     }
+
+    async fn analytics(
+        &self,
+        access_token: &str,
+        _internal_id: &str,
+        days: u32,
+    ) -> Result<Vec<AnalyticsData>, ProviderError> {
+        let ig_id = self
+            .resolve_ig_business_account(access_token)
+            .await
+            .map_err(|e| ProviderError::Api(format!("Failed to resolve IG business account: {e}")))?;
+
+        let since = chrono::Utc::now()
+            .checked_sub_signed(chrono::Duration::days(days as i64))
+            .unwrap_or_default()
+            .format("%Y-%m-%d")
+            .to_string();
+        let until = chrono::Utc::now().format("%Y-%m-%d").to_string();
+
+        let url = format!("{}/{ig_id}/insights", self.graph_url());
+        let resp = self
+            .http
+            .get(&url)
+            .query(&[
+                ("metric", "impressions,reach,profile_views,follower_count"),
+                ("period", "day"),
+                ("since", since.as_str()),
+                ("until", until.as_str()),
+                ("access_token", access_token),
+            ])
+            .send()
+            .await?;
+
+        if !resp.status().is_success() {
+            return Ok(vec![]);
+        }
+
+        let json: serde_json::Value = resp.json().await.unwrap_or_default();
+        let mut result = Vec::new();
+
+        if let Some(data) = json["data"].as_array() {
+            for entry in data {
+                let name = entry["name"].as_str().unwrap_or("unknown").to_string();
+                let mut points = Vec::new();
+                if let Some(values) = entry["values"].as_array() {
+                    for v in values {
+                        points.push(AnalyticsDataPoint {
+                            total: v["value"].as_i64().unwrap_or(0).to_string(),
+                            date: v["end_time"].as_str().unwrap_or("").to_string(),
+                        });
+                    }
+                }
+                result.push(AnalyticsData {
+                    label: name,
+                    data: points,
+                    percentage_change: 0.0,
+                });
+            }
+        }
+
+        Ok(result)
+    }
+
+    async fn post_analytics(
+        &self,
+        access_token: &str,
+        platform_post_id: &str,
+    ) -> Result<Vec<AnalyticsData>, ProviderError> {
+        let url = format!("{}/{platform_post_id}/insights", self.graph_url());
+        let resp = self
+            .http
+            .get(&url)
+            .query(&[
+                ("metric", "engagement,impressions,reach,saved"),
+                ("access_token", access_token),
+            ])
+            .send()
+            .await?;
+
+        if !resp.status().is_success() {
+            return Ok(vec![]);
+        }
+
+        let json: serde_json::Value = resp.json().await.unwrap_or_default();
+        let mut result = Vec::new();
+
+        if let Some(data) = json["data"].as_array() {
+            for entry in data {
+                let name = entry["name"].as_str().unwrap_or("unknown").to_string();
+                let mut points = Vec::new();
+                if let Some(values) = entry["values"].as_array() {
+                    for v in values {
+                        points.push(AnalyticsDataPoint {
+                            total: v["value"].as_i64().unwrap_or(0).to_string(),
+                            date: v["end_time"].as_str().unwrap_or("").to_string(),
+                        });
+                    }
+                }
+                result.push(AnalyticsData {
+                    label: name,
+                    data: points,
+                    percentage_change: 0.0,
+                });
+            }
+        }
+
+        Ok(result)
+    }
 }
 
 impl InstagramProvider {

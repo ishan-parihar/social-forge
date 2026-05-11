@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use super::*;
 use crate::config::Config;
+use crate::services::telegram_client::TelegramClientManager;
 
 /// Thread-safe provider registry
 #[derive(Clone)]
@@ -16,7 +17,7 @@ pub struct ProviderRegistry {
 
 impl ProviderRegistry {
     /// Build registry with all providers, given app config for credentials
-    pub fn new(config: &Config) -> Self {
+    pub fn new(config: &Config, telegram_client_manager: Option<Arc<TelegramClientManager>>) -> Self {
         let mut providers: HashMap<&'static str, Arc<dyn SocialProvider>> = HashMap::new();
 
         // Current providers
@@ -74,14 +75,32 @@ impl ProviderRegistry {
             );
         }
 
-        // Telegram User — daemon-based via telegram-cli sidecar (always registered)
-        providers.insert("telegram-user", Arc::new(telegram_user::TelegramUserProvider::new(config)));
+        // Telegram User — Grammers-based MTProto client (always registered)
+        providers.insert(
+            "telegram-user",
+            Arc::new(telegram_user::TelegramUserProvider::new(config, telegram_client_manager.clone())),
+        );
 
         // Always registered (show on frontend even without credentials)
         providers.insert("pinterest", Arc::new(pinterest::PinterestProvider::new(config)));
 
         // WhatsApp — daemon-based provider via wacli sidecar
         providers.insert("whatsapp", Arc::new(whatsapp::WhatsAppProvider::new(config)));
+
+        // TikTok — OAuth-based video platform
+        if config.tiktok_client_id.is_some() {
+            providers.insert("tiktok", Arc::new(tiktok::TikTokProvider::new(config)));
+        }
+
+        // Medium — API key-based publishing
+        if config.medium_access_token.is_some() {
+            providers.insert("medium", Arc::new(medium::MediumProvider::new(config)));
+        }
+
+        // Dev.to — API key-based publishing
+        if config.devto_api_key.is_some() {
+            providers.insert("devto", Arc::new(devto::DevtoProvider::new(config)));
+        }
 
         // Chrome extension-based provider (no OAuth credentials needed)
         providers.insert("skool", Arc::new(skool::SkoolProvider::new()));

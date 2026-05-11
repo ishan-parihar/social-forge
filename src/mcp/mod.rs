@@ -21,22 +21,29 @@ use crate::auth::jwt;
 use crate::db::queries;
 
 
+mod tools_analytics;
+mod tools_bluesky;
 mod tools_calendar;
+mod tools_devto;
 pub mod tools_facebook;
 pub mod tools_instagram;
 pub mod tools_instagram_standalone;
 mod tools_integrations;
 pub mod tools_linkedin;
 pub mod tools_linkedin_page;
+mod tools_medium;
 pub mod tools_pinterest;
 mod tools_posts;
 pub mod tools_discord;
 mod tools_reddit;
 mod tools_skool;
+mod tools_tags;
 pub mod tools_telegram_bot;
 pub mod tools_telegram_user;
 pub mod tools_threads;
+pub mod tools_tiktok;
 pub mod tools_whatsapp;
+mod tools_webhooks;
 pub mod tools_youtube;
 mod tools_x;
 
@@ -1302,6 +1309,22 @@ impl PostizMcpServer {
         tools_telegram_user::handle_tu_search(&self.state, &params.0).await
     }
 
+    #[tool(description = "Request a login code for Telegram user account (Grammers MTProto)")]
+    pub async fn tu_request_code(
+        &self,
+        params: Parameters<tools_telegram_user::TuRequestCodeInput>,
+    ) -> Result<Json<tools_telegram_user::TuRequestCodeOutput>, String> {
+        tools_telegram_user::handle_tu_request_code(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Sign in to Telegram user account with code from tu_request_code")]
+    pub async fn tu_sign_in(
+        &self,
+        params: Parameters<tools_telegram_user::TuSignInInput>,
+    ) -> Result<Json<tools_telegram_user::TuSignInOutput>, String> {
+        tools_telegram_user::handle_tu_sign_in(&self.state, &params.0).await
+    }
+
     // ── Skool Tools ─────────────────────────────────────────────────
 
     #[tool(description = "Publish a post to a Skool group. Requires group_id, title, content. Optionally set a label.")]
@@ -1342,6 +1365,236 @@ impl PostizMcpServer {
         params: Parameters<tools_skool::SkCreateCommentInput>,
     ) -> Result<Json<serde_json::Value>, String> {
         tools_skool::handle_sk_create_comment(&self.state, &params.0).await
+    }
+
+    // ── Bluesky Tools ─────────────────────────────────────────────────
+
+    #[tool(description = "Get a Bluesky user's profile by handle or DID")]
+    pub async fn bs_profile(
+        &self,
+        params: Parameters<tools_bluesky::BsProfileInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_bluesky::handle_bs_profile(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get the Bluesky home timeline")]
+    pub async fn bs_timeline(
+        &self,
+        params: Parameters<tools_bluesky::BsTimelineInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_bluesky::handle_bs_timeline(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Create a new Bluesky post (text with optional images)")]
+    pub async fn bs_create_post(
+        &self,
+        params: Parameters<tools_bluesky::BsCreatePostInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_bluesky::handle_bs_create_post(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Search Bluesky for posts and users")]
+    pub async fn bs_search(
+        &self,
+        params: Parameters<tools_bluesky::BsSearchInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_bluesky::handle_bs_search(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get the Bluesky feed (popular/recent posts)")]
+    pub async fn bs_feed(
+        &self,
+        params: Parameters<tools_bluesky::BsFeedInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_bluesky::handle_bs_feed(&self.state, &params.0).await
+    }
+
+    // ── TikTok Tools ─────────────────────────────────────────────────
+
+    #[tool(description = "Get TikTok user profile info")]
+    pub async fn tt_profile(
+        &self,
+        params: Parameters<tools_tiktok::TtProfileInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_tiktok::handle_tt_profile(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Create and publish a TikTok video")]
+    pub async fn tt_create_post(
+        &self,
+        params: Parameters<tools_tiktok::TtCreatePostInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_tiktok::handle_tt_create_post(&self.state, &params.0).await
+    }
+
+    #[tool(description = "List TikTok videos for the authenticated user")]
+    pub async fn tt_list_videos(
+        &self,
+        params: Parameters<tools_tiktok::TtListVideosInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_tiktok::handle_tt_list_videos(&self.state, &params.0).await
+    }
+
+    // ── Medium Tools ─────────────────────────────────────────────────
+
+    #[tool(description = "Create a new Medium story (post)")]
+    pub async fn md_create_post(
+        &self,
+        params: Parameters<tools_medium::MdCreatePostInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_medium::handle_md_create_post(&self.state, &params.0).await
+    }
+
+    #[tool(description = "List Medium posts for the authenticated user")]
+    pub async fn md_list_posts(
+        &self,
+        params: Parameters<tools_medium::MdListPostsInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_medium::handle_md_list_posts(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get a single Medium post by post ID")]
+    pub async fn md_get_post(
+        &self,
+        params: Parameters<tools_medium::MdGetPostInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_medium::handle_md_get_post(&self.state, &params.0).await
+    }
+
+    // ── Dev.to Tools ─────────────────────────────────────────────────
+
+    #[tool(description = "Create a new Dev.to article (post)")]
+    pub async fn dv_create_post(
+        &self,
+        params: Parameters<tools_devto::DvCreatePostInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_devto::handle_dv_create_post(&self.state, &params.0).await
+    }
+
+    #[tool(description = "List Dev.to articles for the authenticated user")]
+    pub async fn dv_list_posts(
+        &self,
+        params: Parameters<tools_devto::DvListPostsInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_devto::handle_dv_list_posts(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get a single Dev.to article by article ID")]
+    pub async fn dv_get_post(
+        &self,
+        params: Parameters<tools_devto::DvGetPostInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_devto::handle_dv_get_post(&self.state, &params.0).await
+    }
+
+    // ── Analytics Tools ──────────────────────────────────────────────
+
+    #[tool(description = "Get analytics data for a connected social provider")]
+    pub async fn analytics_get(
+        &self,
+        params: Parameters<tools_analytics::AnalyticsGetInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_analytics::handle_analytics_get(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get analytics data for a specific post")]
+    pub async fn analytics_get_post(
+        &self,
+        params: Parameters<tools_analytics::AnalyticsPostInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_analytics::handle_analytics_get_post(&self.state, &params.0).await
+    }
+
+    // ── Tags Tools ──────────────────────────────────────────────────
+
+    #[tool(description = "Create a new tag")]
+    pub async fn tag_create(
+        &self,
+        params: Parameters<tools_tags::TagCreateInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_tags::handle_tag_create(&self.state, &params.0).await
+    }
+
+    #[tool(description = "List all tags for the authenticated user")]
+    pub async fn tag_list(
+        &self,
+        params: Parameters<tools_tags::TagListInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_tags::handle_tag_list(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get a single tag by ID")]
+    pub async fn tag_get(
+        &self,
+        params: Parameters<tools_tags::TagGetInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_tags::handle_tag_get(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Update an existing tag")]
+    pub async fn tag_update(
+        &self,
+        params: Parameters<tools_tags::TagUpdateInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_tags::handle_tag_update(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Delete a tag")]
+    pub async fn tag_delete(
+        &self,
+        params: Parameters<tools_tags::TagDeleteInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_tags::handle_tag_delete(&self.state, &params.0).await
+    }
+
+    // ── Webhooks Tools ──────────────────────────────────────────────
+
+    #[tool(description = "Create a new outgoing webhook")]
+    pub async fn wh_create(
+        &self,
+        params: Parameters<tools_webhooks::WhCreateInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_webhooks::handle_wh_create(&self.state, &params.0).await
+    }
+
+    #[tool(description = "List all outgoing webhooks")]
+    pub async fn wh_list(
+        &self,
+        params: Parameters<tools_webhooks::WhListInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_webhooks::handle_wh_list(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get a single webhook by ID")]
+    pub async fn wh_get(
+        &self,
+        params: Parameters<tools_webhooks::WhGetInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_webhooks::handle_wh_get(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Update an existing webhook")]
+    pub async fn wh_update(
+        &self,
+        params: Parameters<tools_webhooks::WhUpdateInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_webhooks::handle_wh_update(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Delete a webhook")]
+    pub async fn wh_delete(
+        &self,
+        params: Parameters<tools_webhooks::WhDeleteInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_webhooks::handle_wh_delete(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Test a webhook by sending a sample event")]
+    pub async fn wh_test(
+        &self,
+        params: Parameters<tools_webhooks::WhTestInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_webhooks::handle_wh_test(&self.state, &params.0).await
     }
 }
 

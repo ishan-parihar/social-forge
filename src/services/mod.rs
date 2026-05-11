@@ -5,7 +5,8 @@
 
 pub mod posts;
 pub mod integrations;
-pub mod telegram_daemon;
+pub mod telegram_client;
+pub mod webhook_dispatcher;
 pub mod whatsapp_daemon;
 
 pub use posts::PostService;

@@ -68,6 +68,13 @@ reqwest = { version = "0.12", default-features = false, features = [
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 
+# Telegram MTProto (Grammers — pure Rust, no C deps)
+grammers-client = "0.7"
+grammers-mtproto = "0.7"
+grammers-mtsender = "0.7"
+grammers-session = "0.7"
+grammers-tl-types = "0.7"
+
 # Error handling
 thiserror = "2"
 anyhow = "1"

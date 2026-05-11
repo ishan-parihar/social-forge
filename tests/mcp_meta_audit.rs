@@ -28,7 +28,7 @@ async fn setup_state() -> AppState {
         .expect("Failed to connect to DB");
     
     let broadcaster = Broadcaster::new();
-    let providers = ProviderRegistry::new(&config);
+    let providers = ProviderRegistry::new(&config, None);
     let rate_limiter = AuthRateLimiter::new(100, 60); // High limit for audit
 
     AppState {
@@ -38,6 +38,7 @@ async fn setup_state() -> AppState {
         providers,
         rate_limiter,
         token_key: None,
+        telegram_client_manager: None,
     }
 }
 

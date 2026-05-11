@@ -37,12 +37,24 @@ pub struct Config {
     pub discord_bot_token: Option<String>,
     pub telegram_token: Option<String>,
     pub telegram_bot_tokens: Option<String>,
-    pub telegram_user_store_dir: Option<String>,
+    pub telegram_api_id: Option<String>,
+    pub telegram_api_hash: Option<String>,
+    pub telegram_session_dir: Option<String>,
     pub pinterest_client_id: Option<String>,
     pub pinterest_client_secret: Option<String>,
     pub instagram_app_id: Option<String>,
     pub instagram_app_secret: Option<String>,
     pub whatsapp_store_dir: Option<String>,
+
+    // TikTok
+    pub tiktok_client_id: Option<String>,
+    pub tiktok_client_secret: Option<String>,
+
+    // Medium (API key-based)
+    pub medium_access_token: Option<String>,
+
+    // Dev.to (API key-based)
+    pub devto_api_key: Option<String>,
 
     // Token encryption at rest
     pub token_encryption_key: Option<String>,
@@ -82,13 +94,19 @@ impl Config {
             discord_client_secret: opt("DISCORD_CLIENT_SECRET"),
             discord_bot_token: opt("DISCORD_BOT_TOKEN"),
             telegram_token: opt("TELEGRAM_TOKEN"),
+            telegram_bot_tokens: opt("TELEGRAM_BOT_TOKENS"),
+            telegram_api_id: opt("TELEGRAM_API_ID"),
+            telegram_api_hash: opt("TELEGRAM_API_HASH"),
+            telegram_session_dir: opt("TELEGRAM_SESSION_DIR"),
             pinterest_client_id: opt("PINTEREST_CLIENT_ID"),
             pinterest_client_secret: opt("PINTEREST_CLIENT_SECRET"),
             instagram_app_id: opt("INSTAGRAM_APP_ID"),
             instagram_app_secret: opt("INSTAGRAM_APP_SECRET"),
-            telegram_bot_tokens: opt("TELEGRAM_BOT_TOKENS"),
-            telegram_user_store_dir: opt("TELEGRAM_USER_STORE_DIR"),
             whatsapp_store_dir: opt("WHATSAPP_STORE_DIR"),
+            tiktok_client_id: opt("TIKTOK_CLIENT_ID"),
+            tiktok_client_secret: opt("TIKTOK_CLIENT_SECRET"),
+            medium_access_token: opt("MEDIUM_ACCESS_TOKEN"),
+            devto_api_key: opt("DEVTO_API_KEY"),
             token_encryption_key: opt("TOKEN_ENCRYPTION_KEY"),
             media_dir: opt("MEDIA_DIR").unwrap_or_else(|| "./uploads".into()),
         })
@@ -147,6 +165,9 @@ impl Config {
                 self.pinterest_client_secret.clone()?,
             )),
             "skool" => Some(("skool".into(), "chrome_extension".into())),
+            "tiktok" => Some((self.tiktok_client_id.clone()?, self.tiktok_client_secret.clone()?)),
+            "medium" => Some(("api-key".into(), self.medium_access_token.clone()?)),
+            "devto" => Some(("api-key".into(), self.devto_api_key.clone()?)),
             _ => None,
         }
     }
