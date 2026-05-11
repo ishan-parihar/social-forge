@@ -374,8 +374,79 @@
     {
       "sessionId": "ses_1eacd7f1fffeIV0THbSBjiMOON",
       "startedAt": "2026-05-11T04:01:31.987Z",
-      "lastActiveAt": "2026-05-11T04:01:31.987Z",
+      "lastActiveAt": "2026-05-11T04:42:40.867Z",
       "agent": "​Sisyphus - Ultraworker",
+      "sessionKind": "unknown",
+      "featureName": "01_ig-standalone-threads-mcp-tools"
+    },
+    {
+      "sessionId": "ses_1eaccd283ffetY7uXFJ0IQ4fEm",
+      "startedAt": "2026-05-11T04:02:16.069Z",
+      "lastActiveAt": "2026-05-11T04:02:16.069Z",
+      "agent": "explore",
+      "sessionKind": "unknown"
+    },
+    {
+      "sessionId": "ses_1eaccac9effeD6CHqeehB5GrIZ",
+      "startedAt": "2026-05-11T04:02:25.767Z",
+      "lastActiveAt": "2026-05-11T04:02:25.767Z",
+      "agent": "explore",
+      "sessionKind": "unknown"
+    },
+    {
+      "sessionId": "ses_1eac72c0bffeMPEG5uy0LaX9XZ",
+      "startedAt": "2026-05-11T04:08:26.373Z",
+      "lastActiveAt": "2026-05-11T04:08:26.373Z",
+      "agent": "Sisyphus-Junior",
+      "sessionKind": "unknown"
+    },
+    {
+      "sessionId": "ses_1eac6f47effeevhY11DBsO2cI2",
+      "startedAt": "2026-05-11T04:08:40.580Z",
+      "lastActiveAt": "2026-05-11T04:08:40.580Z",
+      "agent": "Sisyphus-Junior",
+      "sessionKind": "unknown"
+    },
+    {
+      "sessionId": "ses_1eac4e21effefhDpNwXZGfoye5",
+      "startedAt": "2026-05-11T04:10:56.363Z",
+      "lastActiveAt": "2026-05-11T04:10:56.363Z",
+      "agent": "Sisyphus-Junior",
+      "sessionKind": "unknown"
+    },
+    {
+      "sessionId": "ses_1eac47794ffejzPeEQY3420To2",
+      "startedAt": "2026-05-11T04:11:23.635Z",
+      "lastActiveAt": "2026-05-11T04:11:23.635Z",
+      "agent": "Sisyphus-Junior",
+      "sessionKind": "unknown"
+    },
+    {
+      "sessionId": "ses_1eabbff96ffemyPXLEb2n5ua2G",
+      "startedAt": "2026-05-11T04:20:38.876Z",
+      "lastActiveAt": "2026-05-11T04:20:38.876Z",
+      "agent": "explore",
+      "sessionKind": "unknown"
+    },
+    {
+      "sessionId": "ses_1eaa9b960ffe8m1kT1ImAaw2Ur",
+      "startedAt": "2026-05-11T04:40:36.268Z",
+      "lastActiveAt": "2026-05-11T04:40:36.268Z",
+      "agent": "explore",
+      "sessionKind": "unknown"
+    },
+    {
+      "sessionId": "ses_1eaa99431ffeIt11rbmQgNk8t4",
+      "startedAt": "2026-05-11T04:40:45.781Z",
+      "lastActiveAt": "2026-05-11T04:40:45.781Z",
+      "agent": "explore",
+      "sessionKind": "unknown"
+    },
+    {
+      "sessionId": "ses_1eaa969b6ffeC8LbK3dOsb9t7u",
+      "startedAt": "2026-05-11T04:40:56.655Z",
+      "lastActiveAt": "2026-05-11T04:40:56.655Z",
+      "agent": "explore",
       "sessionKind": "unknown"
     }
   ]

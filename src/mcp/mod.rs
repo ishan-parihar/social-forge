@@ -24,11 +24,13 @@ use crate::db::queries;
 mod tools_calendar;
 pub mod tools_facebook;
 pub mod tools_instagram;
+pub mod tools_instagram_standalone;
 mod tools_integrations;
 mod tools_posts;
 mod tools_reddit;
 pub mod tools_telegram_bot;
 pub mod tools_telegram_user;
+pub mod tools_threads;
 pub mod tools_whatsapp;
 mod tools_x;
 
@@ -772,6 +774,64 @@ impl PostizMcpServer {
         tools_instagram::handle_ig_get_insights_audience(&self.state, &params.0).await
     }
 
+    // ── Instagram Standalone (Basic Display API) Tools ─────────────────
+
+    #[tool(description = "Get Instagram media feed for a personal (Basic Display API) account")]
+    pub async fn ias_get_media(
+        &self,
+        params: Parameters<tools_instagram_standalone::IasGetMediaInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_instagram_standalone::handle_ias_get_media(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get details of a specific Instagram media item (Basic Display API)")]
+    pub async fn ias_get_media_detail(
+        &self,
+        params: Parameters<tools_instagram_standalone::IasGetMediaDetailInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_instagram_standalone::handle_ias_get_media_detail(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get comments on an Instagram media item (Basic Display API)")]
+    pub async fn ias_get_comments(
+        &self,
+        params: Parameters<tools_instagram_standalone::IasGetCommentsInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_instagram_standalone::handle_ias_get_comments(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Reply to an Instagram comment (Basic Display API)")]
+    pub async fn ias_reply_to_comment(
+        &self,
+        params: Parameters<tools_instagram_standalone::IasReplyToCommentInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_instagram_standalone::handle_ias_reply_to_comment(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Create an Instagram media container (step 1 of publish, Basic Display API)")]
+    pub async fn ias_create_container(
+        &self,
+        params: Parameters<tools_instagram_standalone::IasCreateContainerInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_instagram_standalone::handle_ias_create_container(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Publish an Instagram media container (step 2 of publish, Basic Display API)")]
+    pub async fn ias_publish_container(
+        &self,
+        params: Parameters<tools_instagram_standalone::IasPublishContainerInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_instagram_standalone::handle_ias_publish_container(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Poll Instagram container publish status (Basic Display API)")]
+    pub async fn ias_poll_container(
+        &self,
+        params: Parameters<tools_instagram_standalone::IasPollContainerInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_instagram_standalone::handle_ias_poll_container(&self.state, &params.0).await
+    }
+
     // ── WhatsApp Tools ───────────────────────────────────────────
 
     #[tool(description = "Check WhatsApp authentication status")]
@@ -804,6 +864,80 @@ impl PostizMcpServer {
         params: Parameters<tools_whatsapp::WaContactsInput>,
     ) -> Result<Json<tools_whatsapp::WaContactsOutput>, String> {
         tools_whatsapp::handle_wa_contacts(&self.state, &params.0).await
+    }
+
+    // ── Threads Tools ─────────────────────────────────────────────────
+
+    #[tool(description = "Get your Threads profile")]
+    pub async fn th_get_profile(
+        &self,
+        params: Parameters<tools_threads::ThreadsGetProfileInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_threads::handle_th_get_profile(&self.state, &params.0).await
+    }
+
+    #[tool(description = "List Threads threads (posts) for your account")]
+    pub async fn th_get_threads(
+        &self,
+        params: Parameters<tools_threads::ThreadsGetThreadsInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_threads::handle_th_get_threads(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get details of a specific Threads thread (post)")]
+    pub async fn th_get_thread_detail(
+        &self,
+        params: Parameters<tools_threads::ThreadsGetThreadDetailInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_threads::handle_th_get_thread_detail(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get replies on a Threads thread")]
+    pub async fn th_get_replies(
+        &self,
+        params: Parameters<tools_threads::ThreadsGetRepliesInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_threads::handle_th_get_replies(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Reply to a Threads thread")]
+    pub async fn th_reply_to_thread(
+        &self,
+        params: Parameters<tools_threads::ThreadsReplyToThreadInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_threads::handle_th_reply_to_thread(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Create and publish a new Threads post (text, image, or video)")]
+    pub async fn th_create_thread(
+        &self,
+        params: Parameters<tools_threads::ThreadsCreateThreadInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_threads::handle_th_create_thread(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Delete a Threads thread (post)")]
+    pub async fn th_delete_thread(
+        &self,
+        params: Parameters<tools_threads::ThreadsDeleteThreadInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_threads::handle_th_delete_thread(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get insights/analytics for your Threads account")]
+    pub async fn th_get_insights(
+        &self,
+        params: Parameters<tools_threads::ThreadsGetInsightsInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_threads::handle_th_get_insights(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Poll publish status of a Threads creation ID")]
+    pub async fn th_poll_publish_status(
+        &self,
+        params: Parameters<tools_threads::ThreadsPollStatusInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_threads::handle_th_poll_publish_status(&self.state, &params.0).await
     }
 
     // ── Telegram Bot Tools ───────────────────────────────────────
