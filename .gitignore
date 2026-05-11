@@ -33,6 +33,15 @@ Thumbs.db
 PLAN.md
 HANDOVER.md
 
+# Cloned submodule repos (keep on disk, not tracked in git)
+tg/
+gogcli/
+
+# Tracked junk / secrets
+server.log
+data/whatsapp/
+.envsitter/
+
 # sqlx offline cache
 .sqlx/
 .contexty
