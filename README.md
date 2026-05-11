@@ -10,7 +10,7 @@
 
 `Postiz Rust` is a high-performance social media orchestration engine that implements a unique **Dual-Interface Architecture**. It exposes a single, unified business logic layer through two distinct protocols: a **REST API** for human-operated dashboards and an **MCP (Model Context Protocol)** server for AI-driven automation.
 
-By rewriting a complex scheduling platform in Rust, `Postiz Rust` eliminates the "runtime bloat" of traditional JS/Python backends, providing sub-millisecond response times and a tiny memory footprint while maintaining a massive feature set across 5+ social providers.
+By rewriting a complex scheduling platform in Rust, `Postiz Rust` eliminates the "runtime bloat" of traditional JS/Python backends, providing sub-millisecond response times and a tiny memory footprint while maintaining **16 social providers** with **115+ MCP tools**.
 
 ---
 
