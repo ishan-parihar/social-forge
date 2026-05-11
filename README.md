@@ -1,16 +1,16 @@
-# Postiz Rust 🚀
+# Social Forge 🚀
 
 **A Dual-Interface Social Media Scheduling Engine for Humans and AI.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 ![Rust](https://img.shields.io/badge/rust-1.85%2B-dea584?logo=rust)
-[![CI](https://github.com/ishanpm/postiz-rust/actions/workflows/ci.yml/badge.svg)](https://github.com/ishanpm/postiz-rust/actions/workflows/ci.yml)
+[![CI](https://github.com/ishanpm/social-forge/actions/workflows/ci.yml/badge.svg)](https://github.com/ishanpm/social-forge/actions/workflows/ci.yml)
 [![MCP](https://img.shields.io/badge/Protocol-MCP-purple.svg)](https://modelcontextprotocol.io/)
 [![Axum](https://img.shields.io/badge/Framework-Axum-blue)](https://github.com/tokio-rs/axum)
 
-`Postiz Rust` is a high-performance social media orchestration engine that implements a unique **Dual-Interface Architecture**. It exposes a single, unified business logic layer through two distinct protocols: a **REST API** for human-operated dashboards and an **MCP (Model Context Protocol)** server for AI-driven automation.
+`Social Forge` is a high-performance social media orchestration engine that implements a unique **Dual-Interface Architecture**. It exposes a single, unified business logic layer through two distinct protocols: a **REST API** for human-operated dashboards and an **MCP (Model Context Protocol)** server for AI-driven automation.
 
-By rewriting a complex scheduling platform in Rust, `Postiz Rust` eliminates the "runtime bloat" of traditional JS/Python backends, providing sub-millisecond response times and a tiny memory footprint while maintaining **16 social providers** with **115+ MCP tools**.
+By rewriting a complex scheduling platform in Rust, `Social Forge` eliminates the "runtime bloat" of traditional JS/Python backends, providing sub-millisecond response times and a tiny memory footprint while maintaining **16 social providers** with **115+ MCP tools**.
 
 ---
 
@@ -27,7 +27,7 @@ Furthermore, scheduling platforms often struggle with **Execution Reliability**:
 
 ## 💡 The Solution: A Unified Orchestration Substrate
 
-`Postiz Rust` breaks the silo by implementing a **Shared AppState Architecture**.
+`Social Forge` breaks the silo by implementing a **Shared AppState Architecture**.
 
 ### The Dual-Interface Pipeline
 `Request` $\to$ `Protocol Adapter (REST or MCP)` $\to$ `Shared Business Logic` $\to$ `Provider Registry` $\to$ `Social API`
@@ -57,7 +57,7 @@ Furthermore, scheduling platforms often struggle with **Execution Reliability**:
 
 ## 🌌 Potentialities & Future Scope
 
-`Postiz Rust` is designed to be the foundation for **Algorithmic Content Distribution**:
+`Social Forge` is designed to be the foundation for **Algorithmic Content Distribution**:
 
 - **AI-Driven Scheduling**: Integrating a "Best-Time-to-Post" agent that analyzes engagement data and autonomously shifts the schedule.
 - **Multi-Tenant SaaS**: Evolving the `AppState` to support a multi-tenant architecture with partitioned PostgreSQL schemas.
@@ -70,8 +70,8 @@ Furthermore, scheduling platforms often struggle with **Execution Reliability**:
 
 ### Installation
 ```bash
-git clone https://github.com/ishan-parihar/postiz-rust.git
-cd postiz-rust
+git clone https://github.com/ishan-parihar/social-forge.git
+cd social-forge
 cp .env.example .env
 ```
 
@@ -90,7 +90,7 @@ cargo watch -x run
 
 # Production build
 cargo build --release
-./target/release/postiz-rust
+./target/release/social-forge
 ```
 
 ## 🛠 Tech Stack
