@@ -32,6 +32,176 @@ impl LinkedInProvider {
     fn authorize_url(&self) -> &'static str {
         "https://www.linkedin.com/oauth/v2/authorization"
     }
+
+    // ─── API Methods ──────────────────────────────────────────
+
+    pub async fn get_profile(&self, access_token: &str) -> Result<serde_json::Value, ProviderError> {
+        let url = "https://api.linkedin.com/v2/userinfo";
+        let resp = self
+            .http
+            .get(url)
+            .header("Authorization", format!("Bearer {access_token}"))
+            .header("X-Restli-Protocol-Version", "2.0.0")
+            .header("LinkedIn-Version", "202601")
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let msg = json["message"]
+                .as_str()
+                .unwrap_or("LinkedIn API error")
+                .to_string();
+            Err(ProviderError::Api(msg))
+        }
+    }
+
+    pub async fn get_user_id(&self, access_token: &str) -> Result<String, ProviderError> {
+        let profile = self.get_profile(access_token).await?;
+        let user_id = profile["sub"]
+            .as_str()
+            .ok_or_else(|| ProviderError::Api("Could not get LinkedIn user ID".into()))?
+            .to_string();
+        Ok(user_id)
+    }
+
+    pub async fn get_posts(
+        &self,
+        access_token: &str,
+        author_urn: &str,
+        limit: u32,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let limit = limit.clamp(1, 100);
+        let url = format!(
+            "https://api.linkedin.com/v2/rest/posts?author={author_urn}&count={limit}"
+        );
+        let resp = self
+            .http
+            .get(&url)
+            .header("Authorization", format!("Bearer {access_token}"))
+            .header("X-Restli-Protocol-Version", "2.0.0")
+            .header("LinkedIn-Version", "202601")
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let msg = json["message"]
+                .as_str()
+                .unwrap_or("LinkedIn API error")
+                .to_string();
+            Err(ProviderError::Api(msg))
+        }
+    }
+
+    pub async fn get_post_detail(
+        &self,
+        access_token: &str,
+        post_urn: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let url = format!("https://api.linkedin.com/v2/rest/posts/{post_urn}");
+        let resp = self
+            .http
+            .get(&url)
+            .header("Authorization", format!("Bearer {access_token}"))
+            .header("X-Restli-Protocol-Version", "2.0.0")
+            .header("LinkedIn-Version", "202601")
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let msg = json["message"]
+                .as_str()
+                .unwrap_or("LinkedIn API error")
+                .to_string();
+            Err(ProviderError::Api(msg))
+        }
+    }
+
+    pub async fn get_post_comments(
+        &self,
+        access_token: &str,
+        post_urn: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let url = format!(
+            "https://api.linkedin.com/v2/rest/socialActions/{post_urn}/comments"
+        );
+        let resp = self
+            .http
+            .get(&url)
+            .header("Authorization", format!("Bearer {access_token}"))
+            .header("X-Restli-Protocol-Version", "2.0.0")
+            .header("LinkedIn-Version", "202601")
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let msg = json["message"]
+                .as_str()
+                .unwrap_or("LinkedIn API error")
+                .to_string();
+            Err(ProviderError::Api(msg))
+        }
+    }
+
+    pub async fn create_comment(
+        &self,
+        access_token: &str,
+        post_urn: &str,
+        actor_urn: &str,
+        message: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let url = format!(
+            "https://api.linkedin.com/v2/rest/socialActions/{post_urn}/comments"
+        );
+        let body = serde_json::json!({
+            "actor": actor_urn,
+            "message": {
+                "text": message,
+            },
+            "object": post_urn,
+        });
+        let resp = self
+            .http
+            .post(&url)
+            .header("Authorization", format!("Bearer {access_token}"))
+            .header("X-Restli-Protocol-Version", "2.0.0")
+            .header("LinkedIn-Version", "202601")
+            .json(&body)
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status == 201 {
+            Ok(json)
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let msg = json["message"]
+                .as_str()
+                .unwrap_or("LinkedIn API error")
+                .to_string();
+            Err(ProviderError::Api(msg))
+        }
+    }
 }
 
 #[async_trait]

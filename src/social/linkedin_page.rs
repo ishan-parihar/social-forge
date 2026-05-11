@@ -323,4 +323,63 @@ impl LinkedInPageProvider {
             .map(|p| p.id.clone())
             .ok_or_else(|| ProviderError::Auth("No LinkedIn organizations found".into()))
     }
+
+    pub async fn get_page_posts(&self, access_token: &str, page_id: &str, limit: u32) -> Result<serde_json::Value, ProviderError> {
+        let limit = limit.clamp(1, 100);
+        let url = format!("https://api.linkedin.com/v2/rest/posts?author=urn:li:organization:{page_id}&count={limit}");
+        let resp = self
+            .http
+            .get(&url)
+            .header("Authorization", format!("Bearer {access_token}"))
+            .header("X-Restli-Protocol-Version", "2.0.0")
+            .header("LinkedIn-Version", "202601")
+            .send()
+            .await?;
+
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+
+        if status == 200 {
+            Ok(json)
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let msg = json["message"].as_str().unwrap_or("LinkedIn Page API error").to_string();
+            Err(ProviderError::Api(msg))
+        }
+    }
+
+    pub async fn create_comment(&self, access_token: &str, post_urn: &str, page_urn: &str, message: &str) -> Result<serde_json::Value, ProviderError> {
+        let url = format!("https://api.linkedin.com/v2/rest/socialActions/{post_urn}/comments");
+        let body = serde_json::json!({
+            "actor": page_urn,
+            "message": { "text": message },
+            "object": post_urn
+        });
+        let resp = self
+            .http
+            .post(&url)
+            .header("Authorization", format!("Bearer {access_token}"))
+            .header("X-Restli-Protocol-Version", "2.0.0")
+            .header("LinkedIn-Version", "202601")
+            .header("Content-Type", "application/json")
+            .json(&body)
+            .send()
+            .await?;
+
+        let status = resp.status();
+
+        if status == 201 {
+            let json: serde_json::Value = resp.json().await?;
+            Ok(json)
+        } else {
+            let json: serde_json::Value = resp.json().await?;
+            if status == 401 {
+                Err(ProviderError::TokenExpired)
+            } else {
+                let msg = json["message"].as_str().unwrap_or("LinkedIn Page API error").to_string();
+                Err(ProviderError::Api(msg))
+            }
+        }
+    }
 }

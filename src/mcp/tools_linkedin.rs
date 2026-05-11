@@ -1,0 +1,189 @@
+// ─── MCP LinkedIn Personal Tools ─────────────────────────────────
+// LinkedIn personal profile tools via LinkedIn API v2.
+
+use rmcp::{Json, schemars::JsonSchema};
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+
+use crate::api::AppState;
+use crate::social::linkedin::LinkedInProvider;
+use crate::social::SocialProvider;
+
+// ── Input/Output Types ──────────────────────────────────────
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct LiGetProfileInput {
+    pub user_id: Uuid,
+    pub li_id: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct LiGetPostsInput {
+    pub user_id: Uuid,
+    pub li_id: String,
+    pub author_urn: String,
+    #[serde(default = "default_limit")]
+    pub limit: u32,
+}
+
+fn default_limit() -> u32 {
+    10
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct LiGetPostDetailInput {
+    pub user_id: Uuid,
+    pub li_id: String,
+    pub post_urn: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct LiGetCommentsInput {
+    pub user_id: Uuid,
+    pub li_id: String,
+    pub post_urn: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct LiCreateCommentInput {
+    pub user_id: Uuid,
+    pub li_id: String,
+    pub post_urn: String,
+    pub message: String,
+    pub actor_urn: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct LiCreatePostInput {
+    pub user_id: Uuid,
+    pub li_id: String,
+    pub content: String,
+}
+
+// ── Helpers ──────────────────────────────────────────────────
+
+async fn find_linkedin_token(
+    state: &AppState,
+    user_id: Uuid,
+    li_id: &str,
+) -> Result<String, String> {
+    let integrations = crate::db::queries::list_integrations(&state.db, user_id)
+        .await
+        .map_err(|e| format!("DB error: {e}"))?;
+
+    let li = integrations
+        .iter()
+        .find(|i| i.provider_identifier == "linkedin" && i.internal_id == li_id)
+        .ok_or_else(|| {
+            format!(
+                "LinkedIn account '{li_id}' not connected. Connect it via the onboarding page first."
+            )
+        })?;
+
+    Ok(li.access_token.clone())
+}
+
+fn create_provider(state: &AppState) -> LinkedInProvider {
+    LinkedInProvider::new(&state.config)
+}
+
+// ── Tool Implementations ─────────────────────────────────────
+
+pub async fn handle_li_get_profile(
+    state: &AppState,
+    input: &LiGetProfileInput,
+) -> Result<Json<serde_json::Value>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let token = find_linkedin_token(state, user_id, &input.li_id).await?;
+    let provider = create_provider(state);
+    let result = provider
+        .get_profile(&token)
+        .await
+        .map_err(|e| format!("LinkedIn get profile failed: {e}"))?;
+    Ok(Json(serde_json::json!({ "data": result })))
+}
+
+pub async fn handle_li_get_posts(
+    state: &AppState,
+    input: &LiGetPostsInput,
+) -> Result<Json<serde_json::Value>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let token = find_linkedin_token(state, user_id, &input.li_id).await?;
+    let provider = create_provider(state);
+    let limit = input.limit.min(100);
+    let result = provider
+        .get_posts(&token, &input.author_urn, limit)
+        .await
+        .map_err(|e| format!("LinkedIn get posts failed: {e}"))?;
+    Ok(Json(serde_json::json!({ "data": result })))
+}
+
+pub async fn handle_li_get_post_detail(
+    state: &AppState,
+    input: &LiGetPostDetailInput,
+) -> Result<Json<serde_json::Value>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let token = find_linkedin_token(state, user_id, &input.li_id).await?;
+    let provider = create_provider(state);
+    let result = provider
+        .get_post_detail(&token, &input.post_urn)
+        .await
+        .map_err(|e| format!("LinkedIn get post detail failed: {e}"))?;
+    Ok(Json(serde_json::json!({ "data": result })))
+}
+
+pub async fn handle_li_get_comments(
+    state: &AppState,
+    input: &LiGetCommentsInput,
+) -> Result<Json<serde_json::Value>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let token = find_linkedin_token(state, user_id, &input.li_id).await?;
+    let provider = create_provider(state);
+    let result = provider
+        .get_post_comments(&token, &input.post_urn)
+        .await
+        .map_err(|e| format!("LinkedIn get comments failed: {e}"))?;
+    Ok(Json(serde_json::json!({ "data": result })))
+}
+
+pub async fn handle_li_create_comment(
+    state: &AppState,
+    input: &LiCreateCommentInput,
+) -> Result<Json<serde_json::Value>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let token = find_linkedin_token(state, user_id, &input.li_id).await?;
+    let provider = create_provider(state);
+    let result = provider
+        .create_comment(&token, &input.post_urn, &input.actor_urn, &input.message)
+        .await
+        .map_err(|e| format!("LinkedIn create comment failed: {e}"))?;
+    Ok(Json(serde_json::json!({ "data": result })))
+}
+
+pub async fn handle_li_create_post(
+    state: &AppState,
+    input: &LiCreatePostInput,
+) -> Result<Json<serde_json::Value>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let token = find_linkedin_token(state, user_id, &input.li_id).await?;
+    let provider = create_provider(state);
+
+    let post = crate::social::PostContent {
+        content: input.content.clone(),
+        media: vec![],
+        settings: serde_json::Value::Object(serde_json::Map::new()),
+    };
+
+    let result = provider
+        .publish(&token, &post)
+        .await
+        .map_err(|e| format!("LinkedIn create post failed: {e}"))?;
+
+    Ok(Json(serde_json::json!({
+        "data": {
+            "id": result.platform_post_id,
+            "url": result.platform_post_url,
+            "status": result.status,
+        }
+    })))
+}
