@@ -21,6 +21,7 @@ mod auth;
 mod calendar;
 mod integrations;
 mod media;
+mod notifications;
 mod onboard;
 mod posts;
 pub mod rate_limiter;
@@ -101,6 +102,11 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/webhooks", axum::routing::get(webhooks::list).post(webhooks::create))
         .route("/api/webhooks/{id}", axum::routing::get(webhooks::get).put(webhooks::update).delete(webhooks::delete))
         .route("/api/webhooks/{id}/test", axum::routing::post(webhooks::test))
+        .route("/api/notifications", axum::routing::get(notifications::list))
+        .route("/api/notifications/unread-count", axum::routing::get(notifications::unread_count))
+        .route("/api/notifications/{id}/read", axum::routing::put(notifications::mark_read))
+        .route("/api/notifications/read-all", axum::routing::put(notifications::mark_all_read))
+        .route("/api/notifications/{id}", axum::routing::delete(notifications::delete))
         // Auth middleware chain: inject secret first, then validate
         .layer(middleware::from_fn(auth_middleware))
         .layer(Extension(jwt_secret));

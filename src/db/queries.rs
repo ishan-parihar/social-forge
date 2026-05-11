@@ -668,3 +668,101 @@ pub async fn cleanup_expired_oauth_states(pool: &PgPool) -> Result<u64, sqlx::Er
         .await?;
     Ok(r.rows_affected())
 }
+
+// ══════════════════════════════════════════════════════════════
+// NOTIFICATIONS
+// ══════════════════════════════════════════════════════════════
+
+pub async fn create_notification(
+    pool: &PgPool,
+    user_id: Uuid,
+    title: &str,
+    body: &str,
+    notification_type: &str,
+    reference_type: Option<&str>,
+    reference_id: Option<&str>,
+) -> Result<Notification, sqlx::Error> {
+    sqlx::query_as::<_, Notification>(
+        r#"INSERT INTO notifications (user_id, title, body, notification_type, reference_type, reference_id)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           RETURNING id, user_id, title, body, notification_type, reference_type, reference_id, is_read, created_at"#,
+    )
+    .bind(user_id)
+    .bind(title)
+    .bind(body)
+    .bind(notification_type)
+    .bind(reference_type)
+    .bind(reference_id)
+    .fetch_one(pool)
+    .await
+}
+
+pub async fn list_notifications(
+    pool: &PgPool,
+    user_id: Uuid,
+    limit: i64,
+    offset: i64,
+) -> Result<Vec<Notification>, sqlx::Error> {
+    sqlx::query_as::<_, Notification>(
+        r#"SELECT id, user_id, title, body, notification_type, reference_type, reference_id, is_read, created_at
+           FROM notifications WHERE user_id = $1
+           ORDER BY created_at DESC
+           LIMIT $2 OFFSET $3"#,
+    )
+    .bind(user_id)
+    .bind(limit)
+    .bind(offset)
+    .fetch_all(pool)
+    .await
+}
+
+pub async fn count_unread_notifications(pool: &PgPool, user_id: Uuid) -> Result<i64, sqlx::Error> {
+    let row: Option<i64> = sqlx::query_scalar(
+        r#"SELECT COUNT(*)::bigint FROM notifications WHERE user_id = $1 AND is_read = false"#,
+    )
+    .bind(user_id)
+    .fetch_one(pool)
+    .await?;
+    Ok(row.unwrap_or(0))
+}
+
+pub async fn mark_notification_read(
+    pool: &PgPool,
+    id: Uuid,
+    user_id: Uuid,
+) -> Result<Option<Notification>, sqlx::Error> {
+    sqlx::query_as::<_, Notification>(
+        r#"UPDATE notifications SET is_read = true
+           WHERE id = $1 AND user_id = $2
+           RETURNING id, user_id, title, body, notification_type, reference_type, reference_id, is_read, created_at"#,
+    )
+    .bind(id)
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await
+}
+
+pub async fn mark_all_notifications_read(pool: &PgPool, user_id: Uuid) -> Result<u64, sqlx::Error> {
+    let r = sqlx::query(
+        r#"UPDATE notifications SET is_read = true WHERE user_id = $1 AND is_read = false"#,
+    )
+    .bind(user_id)
+    .execute(pool)
+    .await?;
+    Ok(r.rows_affected())
+}
+
+pub async fn delete_notification(
+    pool: &PgPool,
+    id: Uuid,
+    user_id: Uuid,
+) -> Result<bool, sqlx::Error> {
+    let r = sqlx::query(
+        r#"DELETE FROM notifications WHERE id = $1 AND user_id = $2"#,
+    )
+    .bind(id)
+    .bind(user_id)
+    .execute(pool)
+    .await?;
+    Ok(r.rows_affected() > 0)
+}

@@ -38,11 +38,12 @@ async fn test_provider_registry_has_all_providers() {
     let mut expected: Vec<&str> = vec![
         "x", "linkedin", "bluesky", "facebook", "instagram",
         "linkedin-page", "instagram-standalone", "threads", "youtube",
-        "reddit", "telegram-bot", "telegram-user", "pinterest", "skool", "whatsapp",
+        "reddit", "telegram-bot", "telegram-user", "pinterest", "skool",
+        "whatsapp", "wordpress",
     ];
     expected.sort();
 
-    assert_eq!(ids, expected, "Provider registry should contain all 15 providers");
+    assert_eq!(ids, expected, "Provider registry should contain all 16 providers");
     println!("✅ Provider registry: {} providers registered", ids.len());
 }
 

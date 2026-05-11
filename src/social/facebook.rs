@@ -52,6 +52,8 @@ impl SocialProvider for FacebookProvider {
             "pages_read_user_content".into(),
             "public_profile".into(),
             "read_insights".into(),
+            "publish_to_page".into(),
+            "pages_messaging".into(),
         ]
     }
 
@@ -913,7 +915,7 @@ mod tests {
             discord_client_id: None,
             discord_client_secret: None,
             discord_bot_token: None,
-            telegram_token: Some("test".into()),
+
             telegram_bot_tokens: None,
             telegram_session_dir: None,
             telegram_api_id: None,
@@ -927,6 +929,12 @@ mod tests {
             instagram_app_id: Some("test".into()),
             instagram_app_secret: Some("test".into()),
             whatsapp_store_dir: None,
+            slack_client_id: None,
+            slack_client_secret: None,
+            mastodon_client_id: None,
+            mastodon_client_secret: None,
+            mastodon_instance_url: None,
+            hashnode_api_key: None,
             token_encryption_key: None,
             media_dir: "./uploads".into(),
         }

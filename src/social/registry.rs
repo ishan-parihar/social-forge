@@ -6,6 +6,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use super::*;
+use super::mastodon;
+use super::slack;
 use crate::config::Config;
 use crate::services::telegram_client::TelegramClientManager;
 
@@ -92,6 +94,11 @@ impl ProviderRegistry {
             providers.insert("tiktok", Arc::new(tiktok::TikTokProvider::new(config)));
         }
 
+        // Mastodon — OAuth-based microblogging (with app registration)
+        if config.mastodon_client_id.is_some() {
+            providers.insert("mastodon", Arc::new(mastodon::MastodonProvider::new(config)));
+        }
+
         // Medium — API key-based publishing
         if config.medium_access_token.is_some() {
             providers.insert("medium", Arc::new(medium::MediumProvider::new(config)));
@@ -109,6 +116,14 @@ impl ProviderRegistry {
 
         // Chrome extension-based provider (no OAuth credentials needed)
         providers.insert("skool", Arc::new(skool::SkoolProvider::new()));
+
+        // WordPress — REST API + Application Password (always registered, no global credentials)
+        providers.insert("wordpress", Arc::new(wordpress::WordPressProvider::new(config)));
+
+        // Slack — OAuth-based messaging workspace provider
+        if config.slack_client_id.is_some() {
+            providers.insert("slack", Arc::new(slack::SlackProvider::new(config)));
+        }
 
         tracing::info!(
             "Provider registry initialized with: {}",

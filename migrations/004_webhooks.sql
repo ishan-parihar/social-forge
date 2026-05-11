@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS webhooks (
     updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_webhooks_user ON webhooks(user_id);
+CREATE INDEX IF NOT EXISTS idx_webhooks_user ON webhooks(user_id);
 
 -- Event delivery log
 CREATE TABLE IF NOT EXISTS webhook_deliveries (
@@ -29,5 +29,5 @@ CREATE TABLE IF NOT EXISTS webhook_deliveries (
     delivered_at  TIMESTAMPTZ
 );
 
-CREATE INDEX idx_webhook_deliveries_webhook ON webhook_deliveries(webhook_id);
-CREATE INDEX idx_webhook_deliveries_status ON webhook_deliveries(status);
+CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_webhook ON webhook_deliveries(webhook_id);
+CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_status ON webhook_deliveries(status);

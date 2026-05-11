@@ -31,6 +31,7 @@ pub mod tools_instagram_standalone;
 mod tools_integrations;
 pub mod tools_linkedin;
 pub mod tools_linkedin_page;
+pub mod tools_mastodon;
 mod tools_medium;
 mod tools_hashnode;
 pub mod tools_pinterest;
@@ -38,13 +39,16 @@ mod tools_posts;
 pub mod tools_discord;
 mod tools_reddit;
 mod tools_skool;
+pub mod tools_slack;
 mod tools_tags;
 pub mod tools_telegram_bot;
 pub mod tools_telegram_user;
 pub mod tools_threads;
 pub mod tools_tiktok;
 pub mod tools_whatsapp;
+mod tools_notifications;
 mod tools_webhooks;
+pub mod tools_wordpress;
 pub mod tools_youtube;
 mod tools_x;
 
@@ -1094,6 +1098,40 @@ impl PostizMcpServer {
         tools_whatsapp::handle_wa_contacts(&self.state, &params.0).await
     }
 
+    // ── WordPress Tools ───────────────────────────────────────────────
+
+    #[tool(description = "Create a new WordPress post. Requires a connected WordPress integration (site URL + Application Password).")]
+    pub async fn wp_create_post(
+        &self,
+        params: Parameters<tools_wordpress::WpCreatePostInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_wordpress::handle_wp_create_post(&self.state, &params.0).await
+    }
+
+    #[tool(description = "List WordPress posts with optional status filter and pagination")]
+    pub async fn wp_list_posts(
+        &self,
+        params: Parameters<tools_wordpress::WpListPostsInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_wordpress::handle_wp_list_posts(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get a single WordPress post by ID")]
+    pub async fn wp_get_post(
+        &self,
+        params: Parameters<tools_wordpress::WpGetPostInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_wordpress::handle_wp_get_post(&self.state, &params.0).await
+    }
+
+    #[tool(description = "List categories for a WordPress site")]
+    pub async fn wp_list_categories(
+        &self,
+        params: Parameters<tools_wordpress::WpListCategoriesInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_wordpress::handle_wp_list_categories(&self.state, &params.0).await
+    }
+
     // ── Threads Tools ─────────────────────────────────────────────────
 
     #[tool(description = "Get your Threads profile")]
@@ -1253,6 +1291,7 @@ impl PostizMcpServer {
     }
 
     // ── Telegram Bot Tools ───────────────────────────────────────
+    #[tool(description = "Send a message via Telegram Bot API using a configured bot token.")]
     pub async fn tb_send_message(
         &self,
         params: Parameters<tools_telegram_bot::TbSendMessageInput>,
@@ -1368,6 +1407,40 @@ impl PostizMcpServer {
         tools_skool::handle_sk_create_comment(&self.state, &params.0).await
     }
 
+    // ── Slack Tools ─────────────────────────────────────────────────
+
+    #[tool(description = "Send a message to a Slack channel. Provide channel ID (e.g. C01234ABCD) or channel name (e.g. #general).")]
+    pub async fn sl_send_message(
+        &self,
+        params: Parameters<tools_slack::SlSendMessageInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_slack::handle_sl_send_message(&self.state, &params.0).await
+    }
+
+    #[tool(description = "List all public and private channels in the Slack workspace")]
+    pub async fn sl_list_channels(
+        &self,
+        params: Parameters<tools_slack::SlListChannelsInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_slack::handle_sl_list_channels(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get message history for a Slack channel. Specify channel ID and optional limit.")]
+    pub async fn sl_channel_history(
+        &self,
+        params: Parameters<tools_slack::SlChannelHistoryInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_slack::handle_sl_channel_history(&self.state, &params.0).await
+    }
+
+    #[tool(description = "List all users in the Slack workspace")]
+    pub async fn sl_list_users(
+        &self,
+        params: Parameters<tools_slack::SlListUsersInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_slack::handle_sl_list_users(&self.state, &params.0).await
+    }
+
     // ── Bluesky Tools ─────────────────────────────────────────────────
 
     #[tool(description = "Get a Bluesky user's profile by handle or DID")]
@@ -1434,6 +1507,40 @@ impl PostizMcpServer {
         params: Parameters<tools_tiktok::TtListVideosInput>,
     ) -> Result<Json<serde_json::Value>, String> {
         tools_tiktok::handle_tt_list_videos(&self.state, &params.0).await
+    }
+
+    // ── Mastodon Tools ───────────────────────────────────────────────
+
+    #[tool(description = "Create a new Mastodon post (toot) with optional media, visibility settings, and content warnings")]
+    pub async fn ms_create_post(
+        &self,
+        params: Parameters<tools_mastodon::MsCreatePostInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_mastodon::handle_ms_create_post(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get Mastodon timeline (home, local, trending, or public)")]
+    pub async fn ms_get_timeline(
+        &self,
+        params: Parameters<tools_mastodon::MsGetTimelineInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_mastodon::handle_ms_get_timeline(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get a single Mastodon post/status by ID")]
+    pub async fn ms_get_post(
+        &self,
+        params: Parameters<tools_mastodon::MsGetPostInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_mastodon::handle_ms_get_post(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Search across Mastodon for accounts, statuses, and hashtags")]
+    pub async fn ms_search(
+        &self,
+        params: Parameters<tools_mastodon::MsSearchInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_mastodon::handle_ms_search(&self.state, &params.0).await
     }
 
     // ── Medium Tools ─────────────────────────────────────────────────
@@ -1622,6 +1729,40 @@ impl PostizMcpServer {
         params: Parameters<tools_webhooks::WhTestInput>,
     ) -> Result<Json<serde_json::Value>, String> {
         tools_webhooks::handle_wh_test(&self.state, &params.0).await
+    }
+
+    // ── Notification Tools ─────────────────────────────────────
+
+    #[tool(description = "List notifications with optional limit and offset")]
+    async fn notif_list(
+        &self,
+        params: Parameters<tools_notifications::NotifListInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_notifications::handle_notif_list(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Mark a notification as read by its ID")]
+    async fn notif_mark_read(
+        &self,
+        params: Parameters<tools_notifications::NotifMarkReadInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_notifications::handle_notif_mark_read(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Mark all notifications as read")]
+    async fn notif_mark_all_read(
+        &self,
+        params: Parameters<tools_notifications::NotifMarkAllReadInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_notifications::handle_notif_mark_all_read(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Create a notification (for testing or programmatic alerts)")]
+    async fn notif_create(
+        &self,
+        params: Parameters<tools_notifications::NotifCreateInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_notifications::handle_notif_create(&self.state, &params.0).await
     }
 }
 

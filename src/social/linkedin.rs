@@ -445,7 +445,7 @@ mod tests {
             discord_client_id: None,
             discord_client_secret: None,
             discord_bot_token: None,
-            telegram_token: None,
+
             telegram_bot_tokens: None,
             telegram_session_dir: None,
             telegram_api_id: None,
@@ -457,8 +457,14 @@ mod tests {
             pinterest_client_id: None,
             pinterest_client_secret: None,
             whatsapp_store_dir: None,
+            slack_client_id: None,
+            slack_client_secret: None,
             instagram_app_id: None,
             instagram_app_secret: None,
+            mastodon_client_id: None,
+            mastodon_client_secret: None,
+            mastodon_instance_url: None,
+            hashnode_api_key: None,
             token_encryption_key: None,
             media_dir: "./uploads".into(),
         }
