@@ -103,3 +103,5 @@ cargo build --release
 
 ---
 Developed by [Ishan Parihar](https://github.com/ishan-parihar) as an exploration into dual-interface system design and high-performance automation.
+
+If you find this project useful, [consider supporting its development](https://rzp.io/rzp/ishan-parihar)

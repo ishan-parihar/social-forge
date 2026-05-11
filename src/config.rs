@@ -36,10 +36,13 @@ pub struct Config {
     pub discord_client_secret: Option<String>,
     pub discord_bot_token: Option<String>,
     pub telegram_token: Option<String>,
+    pub telegram_bot_tokens: Option<String>,
+    pub telegram_user_store_dir: Option<String>,
     pub pinterest_client_id: Option<String>,
     pub pinterest_client_secret: Option<String>,
     pub instagram_app_id: Option<String>,
     pub instagram_app_secret: Option<String>,
+    pub whatsapp_store_dir: Option<String>,
 
     // Token encryption at rest
     pub token_encryption_key: Option<String>,
@@ -83,6 +86,9 @@ impl Config {
             pinterest_client_secret: opt("PINTEREST_CLIENT_SECRET"),
             instagram_app_id: opt("INSTAGRAM_APP_ID"),
             instagram_app_secret: opt("INSTAGRAM_APP_SECRET"),
+            telegram_bot_tokens: opt("TELEGRAM_BOT_TOKENS"),
+            telegram_user_store_dir: opt("TELEGRAM_USER_STORE_DIR"),
+            whatsapp_store_dir: opt("WHATSAPP_STORE_DIR"),
             token_encryption_key: opt("TOKEN_ENCRYPTION_KEY"),
             media_dir: opt("MEDIA_DIR").unwrap_or_else(|| "./uploads".into()),
         })
@@ -133,6 +139,8 @@ impl Config {
                 self.discord_client_id.clone()?,
                 self.discord_client_secret.clone()?,
             )),
+            "telegram-bot" => Some(("bot".into(), self.telegram_bot_tokens.clone()?)),
+            "telegram-user" => Some(("user".into(), "daemon".into())),
             "telegram" => Some(("".into(), self.telegram_token.clone()?)),
             "pinterest" => Some((
                 self.pinterest_client_id.clone()?,

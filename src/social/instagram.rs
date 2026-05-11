@@ -941,4 +941,28 @@ impl InstagramProvider {
             Err(ProviderError::Api(detail))
         }
     }
+
+    pub async fn poll_container_status(
+        &self,
+        access_token: &str,
+        creation_id: &str,
+    ) -> Result<String, ProviderError> {
+        let url = format!("{}/{}", self.graph_url(), creation_id);
+        let resp = self
+            .http
+            .get(&url)
+            .query(&[("fields", "id,status_code")])
+            .header("Authorization", format!("Bearer {access_token}"))
+            .send()
+            .await?;
+        let json: serde_json::Value = resp.json().await?;
+        if let Some(err) = json["error"].as_object() {
+            let msg = err["message"].as_str().unwrap_or("Container status check failed");
+            return Err(ProviderError::Api(msg.to_string()));
+        }
+        let status_code = json["status_code"]
+            .as_str()
+            .unwrap_or("IN_PROGRESS");
+        Ok(status_code.to_string())
+    }
 }

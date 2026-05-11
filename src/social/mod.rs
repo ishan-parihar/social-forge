@@ -14,8 +14,10 @@ pub mod pinterest;
 pub mod reddit;
 pub mod registry;
 pub mod skool;
-pub mod telegram;
+pub mod telegram_bot;
+pub mod telegram_user;
 pub mod threads;
+pub mod whatsapp;
 pub mod x;
 pub mod youtube;
 

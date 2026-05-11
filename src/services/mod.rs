@@ -5,6 +5,8 @@
 
 pub mod posts;
 pub mod integrations;
+pub mod telegram_daemon;
+pub mod whatsapp_daemon;
 
 pub use posts::PostService;
 pub use integrations::IntegrationService;

@@ -66,15 +66,22 @@ impl ProviderRegistry {
             providers.insert("discord", Arc::new(discord::DiscordProvider::new(config)));
         }
 
-        if config.telegram_token.is_some() {
+        // Telegram Bot — token-based accounts (comma-separated TELEGRAM_BOT_TOKENS)
+        if config.telegram_bot_tokens.is_some() {
             providers.insert(
-                "telegram",
-                Arc::new(telegram::TelegramProvider::new(config)),
+                "telegram-bot",
+                Arc::new(telegram_bot::TelegramBotProvider::new(config)),
             );
         }
 
+        // Telegram User — daemon-based via telegram-cli sidecar (always registered)
+        providers.insert("telegram-user", Arc::new(telegram_user::TelegramUserProvider::new(config)));
+
         // Always registered (show on frontend even without credentials)
         providers.insert("pinterest", Arc::new(pinterest::PinterestProvider::new(config)));
+
+        // WhatsApp — daemon-based provider via wacli sidecar
+        providers.insert("whatsapp", Arc::new(whatsapp::WhatsAppProvider::new(config)));
 
         // Chrome extension-based provider (no OAuth credentials needed)
         providers.insert("skool", Arc::new(skool::SkoolProvider::new()));

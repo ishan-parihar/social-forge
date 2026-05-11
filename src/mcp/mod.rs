@@ -27,6 +27,9 @@ pub mod tools_instagram;
 mod tools_integrations;
 mod tools_posts;
 mod tools_reddit;
+pub mod tools_telegram_bot;
+pub mod tools_telegram_user;
+pub mod tools_whatsapp;
 mod tools_x;
 
 // ══════════════════════════════════════════════════════════════
@@ -767,6 +770,100 @@ impl PostizMcpServer {
         params: Parameters<tools_instagram::IgGetInsightsAudienceInput>,
     ) -> Result<Json<serde_json::Value>, String> {
         tools_instagram::handle_ig_get_insights_audience(&self.state, &params.0).await
+    }
+
+    // ── WhatsApp Tools ───────────────────────────────────────────
+
+    #[tool(description = "Check WhatsApp authentication status")]
+    pub async fn wa_auth_status(
+        &self,
+        _params: Parameters<()>,
+    ) -> Result<Json<tools_whatsapp::WaAuthStatusOutput>, String> {
+        tools_whatsapp::handle_wa_auth_status(&self.state).await
+    }
+
+    #[tool(description = "Send a text message via WhatsApp")]
+    pub async fn wa_send_text(
+        &self,
+        params: Parameters<tools_whatsapp::WaSendTextInput>,
+    ) -> Result<Json<tools_whatsapp::WaSendTextOutput>, String> {
+        tools_whatsapp::handle_wa_send_text(&self.state, &params.0).await
+    }
+
+    #[tool(description = "List WhatsApp chats")]
+    pub async fn wa_chats(
+        &self,
+        params: Parameters<tools_whatsapp::WaChatsInput>,
+    ) -> Result<Json<tools_whatsapp::WaChatsOutput>, String> {
+        tools_whatsapp::handle_wa_chats(&self.state, &params.0).await
+    }
+
+    #[tool(description = "List WhatsApp contacts")]
+    pub async fn wa_contacts(
+        &self,
+        params: Parameters<tools_whatsapp::WaContactsInput>,
+    ) -> Result<Json<tools_whatsapp::WaContactsOutput>, String> {
+        tools_whatsapp::handle_wa_contacts(&self.state, &params.0).await
+    }
+
+    // ── Telegram Bot Tools ───────────────────────────────────────
+
+    #[tool(description = "Send a message via Telegram Bot API. Use token_index to select which bot account (0 = first).")]
+    pub async fn tb_send_message(
+        &self,
+        params: Parameters<tools_telegram_bot::TbSendMessageInput>,
+    ) -> Result<Json<tools_telegram_bot::TbSendMessageOutput>, String> {
+        tools_telegram_bot::handle_tb_send_message(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get updates from Telegram Bot API for a specific bot account by token_index.")]
+    pub async fn tb_get_updates(
+        &self,
+        params: Parameters<tools_telegram_bot::TbGetUpdatesInput>,
+    ) -> Result<Json<tools_telegram_bot::TbGetUpdatesOutput>, String> {
+        tools_telegram_bot::handle_tb_get_updates(&self.state, &params.0).await
+    }
+
+    // ── Telegram User Tools ──────────────────────────────────────
+
+    #[tool(description = "Check Telegram user client authentication status (via telegram-cli daemon)")]
+    pub async fn tu_auth_status(
+        &self,
+        _params: Parameters<()>,
+    ) -> Result<Json<tools_telegram_user::TuAuthStatusOutput>, String> {
+        tools_telegram_user::handle_tu_auth_status(&self.state).await
+    }
+
+    #[tool(description = "Send a message via Telegram user client (telegram-cli daemon)")]
+    pub async fn tu_send_message(
+        &self,
+        params: Parameters<tools_telegram_user::TuSendMessageInput>,
+    ) -> Result<Json<tools_telegram_user::TuSendMessageOutput>, String> {
+        tools_telegram_user::handle_tu_send_message(&self.state, &params.0).await
+    }
+
+    #[tool(description = "List dialogs/conversations via Telegram user client")]
+    pub async fn tu_list_dialogs(
+        &self,
+        params: Parameters<tools_telegram_user::TuListDialogsInput>,
+    ) -> Result<Json<tools_telegram_user::TuListDialogsOutput>, String> {
+        tools_telegram_user::handle_tu_list_dialogs(&self.state, &params.0).await
+    }
+
+    #[tool(description = "List contacts via Telegram user client")]
+    pub async fn tu_list_contacts(
+        &self,
+        params: Parameters<tools_telegram_user::TuListContactsInput>,
+    ) -> Result<Json<tools_telegram_user::TuListContactsOutput>, String> {
+        tools_telegram_user::handle_tu_list_contacts(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Search Telegram user client (contacts, dialogs, messages)")]
+    pub async fn tu_search(
+        &self,
+        params: Parameters<tools_telegram_user::TuSearchInput>,
+    ) -> Result<Json<tools_telegram_user::TuSearchOutput>, String> {
+        tools_telegram_user::handle_tu_search(&self.state, &params.0).await
     }
 }
 
