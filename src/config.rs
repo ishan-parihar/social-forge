@@ -35,7 +35,6 @@ pub struct Config {
     pub discord_client_id: Option<String>,
     pub discord_client_secret: Option<String>,
     pub discord_bot_token: Option<String>,
-    pub telegram_token: Option<String>,
     pub telegram_bot_tokens: Option<String>,
     pub telegram_api_id: Option<String>,
     pub telegram_api_hash: Option<String>,
@@ -46,9 +45,18 @@ pub struct Config {
     pub instagram_app_secret: Option<String>,
     pub whatsapp_store_dir: Option<String>,
 
+    // Slack
+    pub slack_client_id: Option<String>,
+    pub slack_client_secret: Option<String>,
+
     // TikTok
     pub tiktok_client_id: Option<String>,
     pub tiktok_client_secret: Option<String>,
+
+    // Mastodon
+    pub mastodon_client_id: Option<String>,
+    pub mastodon_client_secret: Option<String>,
+    pub mastodon_instance_url: Option<String>,
 
     // Medium (API key-based)
     pub medium_access_token: Option<String>,
@@ -96,7 +104,6 @@ impl Config {
             discord_client_id: opt("DISCORD_CLIENT_ID"),
             discord_client_secret: opt("DISCORD_CLIENT_SECRET"),
             discord_bot_token: opt("DISCORD_BOT_TOKEN"),
-            telegram_token: opt("TELEGRAM_TOKEN"),
             telegram_bot_tokens: opt("TELEGRAM_BOT_TOKENS"),
             telegram_api_id: opt("TELEGRAM_API_ID"),
             telegram_api_hash: opt("TELEGRAM_API_HASH"),
@@ -106,8 +113,13 @@ impl Config {
             instagram_app_id: opt("INSTAGRAM_APP_ID"),
             instagram_app_secret: opt("INSTAGRAM_APP_SECRET"),
             whatsapp_store_dir: opt("WHATSAPP_STORE_DIR"),
+            slack_client_id: opt("SLACK_CLIENT_ID"),
+            slack_client_secret: opt("SLACK_CLIENT_SECRET"),
             tiktok_client_id: opt("TIKTOK_CLIENT_ID"),
             tiktok_client_secret: opt("TIKTOK_CLIENT_SECRET"),
+            mastodon_client_id: opt("MASTODON_CLIENT_ID"),
+            mastodon_client_secret: opt("MASTODON_CLIENT_SECRET"),
+            mastodon_instance_url: opt("MASTODON_INSTANCE_URL"),
             medium_access_token: opt("MEDIUM_ACCESS_TOKEN"),
             devto_api_key: opt("DEVTO_API_KEY"),
             hashnode_api_key: opt("HASHNODE_API_KEY"),
@@ -163,12 +175,13 @@ impl Config {
             )),
             "telegram-bot" => Some(("bot".into(), self.telegram_bot_tokens.clone()?)),
             "telegram-user" => Some(("user".into(), "daemon".into())),
-            "telegram" => Some(("".into(), self.telegram_token.clone()?)),
             "pinterest" => Some((
                 self.pinterest_client_id.clone()?,
                 self.pinterest_client_secret.clone()?,
             )),
             "skool" => Some(("skool".into(), "chrome_extension".into())),
+            "slack" => Some((self.slack_client_id.clone()?, self.slack_client_secret.clone()?)),
+            "mastodon" => Some((self.mastodon_client_id.clone()?, self.mastodon_client_secret.clone()?)),
             "tiktok" => Some((self.tiktok_client_id.clone()?, self.tiktok_client_secret.clone()?)),
             "medium" => Some(("api-key".into(), self.medium_access_token.clone()?)),
             "devto" => Some(("api-key".into(), self.devto_api_key.clone()?)),

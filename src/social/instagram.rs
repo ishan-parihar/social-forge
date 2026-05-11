@@ -54,6 +54,8 @@ impl SocialProvider for InstagramProvider {
             "pages_manage_metadata".into(),
             "pages_read_user_content".into(),
             "read_insights".into(),
+            "publish_to_page".into(),
+            "pages_messaging".into(),
         ]
     }
 

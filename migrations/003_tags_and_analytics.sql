@@ -28,5 +28,5 @@ CREATE TABLE IF NOT EXISTS analytics_cache (
     expires_at        TIMESTAMPTZ NOT NULL DEFAULT now() + interval '1 hour'
 );
 
-CREATE INDEX idx_analytics_cache_user_provider ON analytics_cache(user_id, provider);
-CREATE INDEX idx_analytics_cache_expires ON analytics_cache(expires_at);
+CREATE INDEX IF NOT EXISTS idx_analytics_cache_user_provider ON analytics_cache(user_id, provider);
+CREATE INDEX IF NOT EXISTS idx_analytics_cache_expires ON analytics_cache(expires_at);

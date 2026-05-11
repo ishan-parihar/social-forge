@@ -3,6 +3,7 @@
 // Eliminates code duplication by providing a single entry point
 // for post CRUD, integration management, and calendar operations.
 
+pub mod notifications;
 pub mod posts;
 pub mod integrations;
 pub mod telegram_client;

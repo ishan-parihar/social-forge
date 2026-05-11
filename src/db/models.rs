@@ -247,4 +247,46 @@ pub struct OAuthState {
     pub expires_at: DateTime<Utc>,
 }
 
+// ── Notification ───────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct Notification {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub title: String,
+    pub body: String,
+    pub notification_type: String,
+    pub reference_type: Option<String>,
+    pub reference_id: Option<String>,
+    pub is_read: bool,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct NotificationPublic {
+    pub id: Uuid,
+    pub title: String,
+    pub body: String,
+    pub notification_type: String,
+    pub reference_type: Option<String>,
+    pub reference_id: Option<String>,
+    pub is_read: bool,
+    pub created_at: String,
+}
+
+impl From<Notification> for NotificationPublic {
+    fn from(n: Notification) -> Self {
+        Self {
+            id: n.id,
+            title: n.title,
+            body: n.body,
+            notification_type: n.notification_type,
+            reference_type: n.reference_type,
+            reference_id: n.reference_id,
+            is_read: n.is_read,
+            created_at: n.created_at.to_rfc3339(),
+        }
+    }
+}
+
 use schemars::JsonSchema;
