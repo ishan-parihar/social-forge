@@ -374,7 +374,7 @@
     {
       "sessionId": "ses_1eacd7f1fffeIV0THbSBjiMOON",
       "startedAt": "2026-05-11T04:01:31.987Z",
-      "lastActiveAt": "2026-05-11T10:13:14.025Z",
+      "lastActiveAt": "2026-05-11T10:26:54.277Z",
       "agent": "​Sisyphus - Ultraworker",
       "sessionKind": "unknown",
       "featureName": "01_ig-standalone-threads-mcp-tools"
@@ -461,6 +461,34 @@
       "startedAt": "2026-05-11T04:54:07.377Z",
       "lastActiveAt": "2026-05-11T04:54:07.377Z",
       "agent": "explore",
+      "sessionKind": "unknown"
+    },
+    {
+      "sessionId": "ses_1e975c45fffeh3F0K0fN214FoB",
+      "startedAt": "2026-05-11T10:16:58.538Z",
+      "lastActiveAt": "2026-05-11T10:16:58.538Z",
+      "agent": "Sisyphus-Junior",
+      "sessionKind": "unknown"
+    },
+    {
+      "sessionId": "ses_1e9759b48ffeGoS6xXJeclRB9H",
+      "startedAt": "2026-05-11T10:17:09.054Z",
+      "lastActiveAt": "2026-05-11T10:17:09.054Z",
+      "agent": "Sisyphus-Junior",
+      "sessionKind": "unknown"
+    },
+    {
+      "sessionId": "ses_1e973f190ffe75CRS8oKIolN9o",
+      "startedAt": "2026-05-11T10:18:58.038Z",
+      "lastActiveAt": "2026-05-11T10:18:58.038Z",
+      "agent": "Sisyphus-Junior",
+      "sessionKind": "unknown"
+    },
+    {
+      "sessionId": "ses_1e973c9aaffesjIK8ze8dF4Xo2",
+      "startedAt": "2026-05-11T10:19:08.253Z",
+      "lastActiveAt": "2026-05-11T10:19:08.253Z",
+      "agent": "Sisyphus-Junior",
       "sessionKind": "unknown"
     }
   ]

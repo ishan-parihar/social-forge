@@ -26,6 +26,8 @@ pub mod tools_facebook;
 pub mod tools_instagram;
 pub mod tools_instagram_standalone;
 mod tools_integrations;
+pub mod tools_linkedin;
+pub mod tools_linkedin_page;
 mod tools_posts;
 mod tools_reddit;
 pub mod tools_telegram_bot;
@@ -940,9 +942,91 @@ impl PostizMcpServer {
         tools_threads::handle_th_poll_publish_status(&self.state, &params.0).await
     }
 
-    // ── Telegram Bot Tools ───────────────────────────────────────
+    // ── LinkedIn Personal Tools ─────────────────────────────────
 
-    #[tool(description = "Send a message via Telegram Bot API. Use token_index to select which bot account (0 = first).")]
+    #[tool(description = "Get your LinkedIn profile information (name, headline, industry, etc.)")]
+    pub async fn li_get_profile(
+        &self,
+        params: Parameters<tools_linkedin::LiGetProfileInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_linkedin::handle_li_get_profile(&self.state, &params.0).await
+    }
+
+    #[tool(description = "List LinkedIn posts for an author URN (e.g. urn:li:person:abc). Use this to fetch your recent posts.")]
+    pub async fn li_get_posts(
+        &self,
+        params: Parameters<tools_linkedin::LiGetPostsInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_linkedin::handle_li_get_posts(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get details of a specific LinkedIn post by its URN (e.g. urn:li:activity:xyz)")]
+    pub async fn li_get_post_detail(
+        &self,
+        params: Parameters<tools_linkedin::LiGetPostDetailInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_linkedin::handle_li_get_post_detail(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get comments on a LinkedIn post by its URN")]
+    pub async fn li_get_comments(
+        &self,
+        params: Parameters<tools_linkedin::LiGetCommentsInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_linkedin::handle_li_get_comments(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Create a comment on a LinkedIn post. Provide your actor URN (e.g. urn:li:person:abc) and the message text.")]
+    pub async fn li_create_comment(
+        &self,
+        params: Parameters<tools_linkedin::LiCreateCommentInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_linkedin::handle_li_create_comment(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Create a new LinkedIn post (text-only). Content will be published immediately to your LinkedIn profile.")]
+    pub async fn li_create_post(
+        &self,
+        params: Parameters<tools_linkedin::LiCreatePostInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_linkedin::handle_li_create_post(&self.state, &params.0).await
+    }
+
+    // ── LinkedIn Page Tools ────────────────────────────────────
+
+    #[tool(description = "List LinkedIn company pages you administer. Returns page IDs and names needed for page operations.")]
+    pub async fn lip_list_pages(
+        &self,
+        params: Parameters<tools_linkedin_page::LipListPagesInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_linkedin_page::handle_lip_list_pages(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get details of a LinkedIn company page by its page ID")]
+    pub async fn lip_get_page(
+        &self,
+        params: Parameters<tools_linkedin_page::LipGetPageInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_linkedin_page::handle_lip_get_page(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get posts from a LinkedIn company page by page ID")]
+    pub async fn lip_get_page_posts(
+        &self,
+        params: Parameters<tools_linkedin_page::LipGetPagePostsInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_linkedin_page::handle_lip_get_page_posts(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Create a comment on a LinkedIn post as a company page. Provide the page URN, post URN, and message.")]
+    pub async fn lip_create_comment(
+        &self,
+        params: Parameters<tools_linkedin_page::LipCreateCommentInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_linkedin_page::handle_lip_create_comment(&self.state, &params.0).await
+    }
+
+    // ── Telegram Bot Tools ───────────────────────────────────────
     pub async fn tb_send_message(
         &self,
         params: Parameters<tools_telegram_bot::TbSendMessageInput>,

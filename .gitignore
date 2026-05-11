@@ -38,3 +38,8 @@ HANDOVER.md
 .contexty
 .memsearch
 .hive
+
+# OpenCode
+.hive/
+.memsearch/
+.sisyphus/

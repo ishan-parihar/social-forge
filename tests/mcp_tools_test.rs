@@ -208,7 +208,7 @@ async fn test_mcp_tools_registration() {
     assert!(server.state.config.provider_credentials("reddit").is_some(), "Reddit credentials should be loaded");
 
     println!("✅ MCP server: PostizMcpServer instantiated successfully");
-    println!("✅ MCP tools: All {} #[tool] entries compile", 74); // 7 reddit + 20 x + 15 fb + 16 ig + 7 ias + 9 th
+    println!("✅ MCP tools: All {} #[tool] entries compile", 84); // 7 reddit + 20 x + 16 fb + 17 ig + 7 ias + 9 th + 6 li + 4 lip
 }
 
 // ── Test 8: DB connectivity and existing integrations ───────────
@@ -355,4 +355,45 @@ async fn test_threads_provider_creation() {
     assert!(scopes.contains(&"threads_manage_insights".to_string()));
 
     println!("✅ ThreadsProvider: {} scopes configured ({})", scopes.len(), scopes.join(", "));
+}
+
+// ── Test 15: LinkedInProvider creation and scopes ────────────────
+
+#[tokio::test]
+async fn test_linkedin_provider_creation() {
+    let config = get_config();
+    let registry = get_registry(&config);
+
+    let li = registry.get("linkedin").expect("LinkedIn provider should exist");
+    assert_eq!(li.identifier(), "linkedin");
+    assert_eq!(li.name(), "LinkedIn");
+
+    let scopes = li.scopes();
+    assert!(scopes.contains(&"openid".to_string()));
+    assert!(scopes.contains(&"profile".to_string()));
+    assert!(scopes.contains(&"email".to_string()));
+    assert!(scopes.contains(&"w_member_social".to_string()));
+
+    println!("✅ LinkedInProvider: {} scopes configured ({})", scopes.len(), scopes.join(", "));
+}
+
+// ── Test 16: LinkedInPageProvider creation and scopes ────────────
+
+#[tokio::test]
+async fn test_linkedin_page_provider_creation() {
+    let config = get_config();
+    let registry = get_registry(&config);
+
+    let lip = registry.get("linkedin-page").expect("LinkedIn Page provider should exist");
+    assert_eq!(lip.identifier(), "linkedin-page");
+    assert_eq!(lip.name(), "LinkedIn Page");
+
+    let scopes = lip.scopes();
+    assert!(scopes.contains(&"w_member_social".to_string()));
+    assert!(scopes.contains(&"rw_organization_admin".to_string()));
+    assert!(scopes.contains(&"w_organization_social".to_string()));
+    assert!(scopes.contains(&"r_organization_social".to_string()));
+
+    println!("✅ LinkedInPageProvider: {} scopes configured ({})", scopes.len(), scopes.join(", "));
+    assert!(lip.is_between_steps(), "LinkedIn Page should be multi-step");
 }

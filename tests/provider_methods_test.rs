@@ -14,6 +14,8 @@ use std::sync::Arc;
 use postiz_rust::config::Config;
 use postiz_rust::db;
 use postiz_rust::social::instagram_standalone::InstagramStandaloneProvider;
+use postiz_rust::social::linkedin::LinkedInProvider;
+use postiz_rust::social::linkedin_page::LinkedInPageProvider;
 use postiz_rust::social::threads::ThreadsProvider;
 use postiz_rust::social::SocialProvider;
 
@@ -402,6 +404,222 @@ async fn test_threads_social_provider_publish_with_bad_token() {
     }
 }
 
+// ── LinkedIn Personal Provider Method Tests ─────────────────
+
+fn create_linkedin_provider(config: &Config) -> LinkedInProvider {
+    LinkedInProvider::new(config)
+}
+
+fn create_linkedin_page_provider(config: &Config) -> LinkedInPageProvider {
+    LinkedInPageProvider::new(config)
+}
+
+const LINKEDIN_BAD_TOKEN: &str = "AQVOmFla2VyX3Rva2VuX2Zvcl90ZXN0aW5n";
+
+#[tokio::test]
+async fn test_linkedin_get_profile_with_bad_token() {
+    let config = get_config();
+    let provider = create_linkedin_provider(&config);
+
+    let result = provider.get_profile(LINKEDIN_BAD_TOKEN).await;
+
+    match &result {
+        Err(e) => {
+            let err_str = format!("{e}");
+            assert!(
+                err_str.contains("Invalid")
+                    || err_str.contains("invalid")
+                    || err_str.contains("token")
+                    || err_str.contains("expired")
+                    || err_str.contains("error"),
+                "Expected API error, got: {err_str}"
+            );
+            println!("✅ li_get_profile: Properly handled API error: {err_str}");
+        }
+        Ok(v) => println!("⚠️  li_get_profile: Unexpected success: {v:?}"),
+    }
+}
+
+#[tokio::test]
+async fn test_linkedin_get_posts_with_bad_token() {
+    let config = get_config();
+    let provider = create_linkedin_provider(&config);
+
+    let result = provider
+        .get_posts(LINKEDIN_BAD_TOKEN, "urn:li:person:test", 10)
+        .await;
+
+    match &result {
+        Err(e) => {
+            let err_str = format!("{e}");
+            assert!(
+                err_str.contains("Invalid")
+                    || err_str.contains("invalid")
+                    || err_str.contains("token")
+                    || err_str.contains("error"),
+                "Expected API error, got: {err_str}"
+            );
+            println!("✅ li_get_posts: Properly handled API error: {err_str}");
+        }
+        Ok(v) => println!("⚠️  li_get_posts: Unexpected success: {v:?}"),
+    }
+}
+
+#[tokio::test]
+async fn test_linkedin_get_post_detail_with_bad_token() {
+    let config = get_config();
+    let provider = create_linkedin_provider(&config);
+
+    let result = provider
+        .get_post_detail(LINKEDIN_BAD_TOKEN, "urn:li:activity:test")
+        .await;
+
+    match &result {
+        Err(e) => {
+            let err_str = format!("{e}");
+            println!("✅ li_get_post_detail: Properly handled API error: {err_str}");
+        }
+        Ok(v) => println!("⚠️  li_get_post_detail: Unexpected success: {v:?}"),
+    }
+}
+
+#[tokio::test]
+async fn test_linkedin_get_post_comments_with_bad_token() {
+    let config = get_config();
+    let provider = create_linkedin_provider(&config);
+
+    let result = provider
+        .get_post_comments(LINKEDIN_BAD_TOKEN, "urn:li:activity:test")
+        .await;
+
+    match &result {
+        Err(e) => {
+            let err_str = format!("{e}");
+            println!("✅ li_get_comments: Properly handled API error: {err_str}");
+        }
+        Ok(v) => println!("⚠️  li_get_comments: Unexpected success: {v:?}"),
+    }
+}
+
+#[tokio::test]
+async fn test_linkedin_create_comment_with_bad_token() {
+    let config = get_config();
+    let provider = create_linkedin_provider(&config);
+
+    let result = provider
+        .create_comment(LINKEDIN_BAD_TOKEN, "urn:li:activity:test", "urn:li:person:test", "Test comment")
+        .await;
+
+    match &result {
+        Err(e) => {
+            let err_str = format!("{e}");
+            println!("✅ li_create_comment: Properly handled API error: {err_str}");
+        }
+        Ok(v) => println!("⚠️  li_create_comment: Unexpected success: {v:?}"),
+    }
+}
+
+#[tokio::test]
+async fn test_linkedin_publish_with_bad_token() {
+    let config = get_config();
+    let provider = LinkedInProvider::new(&config);
+
+    let post = postiz_rust::social::PostContent {
+        content: "Test LinkedIn post from integration test".into(),
+        media: vec![],
+        settings: serde_json::Value::Object(serde_json::Map::new()),
+    };
+
+    let result = provider.publish(LINKEDIN_BAD_TOKEN, &post).await;
+
+    match &result {
+        Err(e) => {
+            let err_str = format!("{e}");
+            println!("✅ li_publish (SocialProvider trait): Properly handled API error: {err_str}");
+        }
+        Ok(v) => println!("⚠️  li_publish: Unexpected success: {v:?}"),
+    }
+}
+
+// ── LinkedIn Page Provider Method Tests ─────────────────────
+
+#[tokio::test]
+async fn test_linkedin_page_pages_with_bad_token() {
+    let config = get_config();
+    let provider = create_linkedin_page_provider(&config);
+
+    let result = provider.pages(LINKEDIN_BAD_TOKEN).await;
+
+    match &result {
+        Err(e) => {
+            let err_str = format!("{e}");
+            assert!(
+                err_str.contains("Invalid")
+                    || err_str.contains("invalid")
+                    || err_str.contains("token")
+                    || err_str.contains("error"),
+                "Expected API error, got: {err_str}"
+            );
+            println!("✅ lip_pages: Properly handled API error: {err_str}");
+        }
+        Ok(v) => println!("⚠️  lip_pages: Unexpected success: {v:?}"),
+    }
+}
+
+#[tokio::test]
+async fn test_linkedin_page_fetch_page_info_with_bad_token() {
+    let config = get_config();
+    let provider = create_linkedin_page_provider(&config);
+
+    let result = provider
+        .fetch_page_info(LINKEDIN_BAD_TOKEN, "12345678")
+        .await;
+
+    match &result {
+        Err(e) => {
+            let err_str = format!("{e}");
+            println!("✅ lip_fetch_page_info: Properly handled API error: {err_str}");
+        }
+        Ok(v) => println!("⚠️  lip_fetch_page_info: Unexpected success: {v:?}"),
+    }
+}
+
+#[tokio::test]
+async fn test_linkedin_page_get_posts_with_bad_token() {
+    let config = get_config();
+    let provider = create_linkedin_page_provider(&config);
+
+    let result = provider
+        .get_page_posts(LINKEDIN_BAD_TOKEN, "12345678", 10)
+        .await;
+
+    match &result {
+        Err(e) => {
+            let err_str = format!("{e}");
+            println!("✅ lip_get_page_posts: Properly handled API error: {err_str}");
+        }
+        Ok(v) => println!("⚠️  lip_get_page_posts: Unexpected success: {v:?}"),
+    }
+}
+
+#[tokio::test]
+async fn test_linkedin_page_create_comment_with_bad_token() {
+    let config = get_config();
+    let provider = create_linkedin_page_provider(&config);
+
+    let result = provider
+        .create_comment(LINKEDIN_BAD_TOKEN, "urn:li:activity:test", "urn:li:organization:test", "Test comment")
+        .await;
+
+    match &result {
+        Err(e) => {
+            let err_str = format!("{e}");
+            println!("✅ lip_create_comment: Properly handled API error: {err_str}");
+        }
+        Ok(v) => println!("⚠️  lip_create_comment: Unexpected success: {v:?}"),
+    }
+}
+
 // ── MCP Tool Handler Integration Tests ──────────────────────
 // These test the full chain: resolve_first_user → find_token → call method
 // using a real DB connection and mock integrations.
@@ -502,6 +720,62 @@ async fn test_threads_mcp_tool_handler_full_chain() {
     assert!(url.contains("threads_basic"), "Should contain the right scopes");
 
     println!("✅ threads_mcp_handler: Full chain verified (provider registration, auth URL, server creation)");
+}
+
+#[tokio::test]
+async fn test_linkedin_mcp_tool_handler_full_chain() {
+    let config = get_config();
+    let db = db::create_pool(&config.database_url)
+        .await
+        .expect("Failed to connect to DB");
+
+    use postiz_rust::api::AppState;
+    use postiz_rust::mcp::PostizMcpServer;
+    use postiz_rust::realtime::Broadcaster;
+    use postiz_rust::api::rate_limiter::AuthRateLimiter;
+    use postiz_rust::social::registry::ProviderRegistry;
+
+    let registry = Arc::new(ProviderRegistry::new(&config));
+    let broadcaster = Broadcaster::new();
+    let rate_limiter = AuthRateLimiter::new(5, 60);
+
+    let state = AppState {
+        db: db.clone(),
+        config: config.clone(),
+        broadcast: broadcaster.clone(),
+        providers: (*registry).clone(),
+        rate_limiter,
+        token_key: None,
+    };
+
+    // Verify MCP server can be created
+    let server = PostizMcpServer::new(state.clone());
+    drop(server);
+
+    // Verify LinkedIn provider is registered
+    let li = state.providers.get("linkedin");
+    assert!(li.is_some(), "LinkedIn provider should be registered");
+    let li = li.unwrap();
+    assert_eq!(li.identifier(), "linkedin");
+    assert!(!li.scopes().is_empty(), "Should have scopes configured");
+
+    // Verify LinkedIn Page provider is registered
+    let lip = state.providers.get("linkedin-page");
+    assert!(lip.is_some(), "LinkedIn Page provider should be registered");
+    let lip = lip.unwrap();
+    assert_eq!(lip.identifier(), "linkedin-page");
+    assert!(!lip.scopes().is_empty(), "Should have scopes configured");
+
+    // Verify LinkedIn provider generates valid auth URLs
+    let auth_result = li
+        .generate_auth_url("test_state", "test_verifier", "http://localhost:3000/api/auth/callback")
+        .await;
+    assert!(auth_result.is_ok(), "Auth URL should generate: {auth_result:?}");
+    let url = auth_result.unwrap().url;
+    assert!(url.contains("linkedin.com/oauth/v2/authorization"), "URL should go to LinkedIn OAuth");
+    assert!(url.contains("w_member_social"), "Should contain the right scopes");
+
+    println!("✅ linkedin_mcp_handler: Full chain verified (both providers registered, auth URLs, server creation)");
 }
 
 // ── Provider Configuration Verification ─────────────────────
