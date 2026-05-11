@@ -47,7 +47,7 @@ fn create_test_store_dir() -> PathBuf {
 fn test_whatsapp_provider_metadata() {
     std::env::set_var("WHATSAPP_STORE_DIR", "/tmp/nonexistent-wa-store-test");
     let config = get_config();
-    let registry = ProviderRegistry::new(&config);
+    let registry = ProviderRegistry::new(&config, None);
     let wa = registry.get("whatsapp").expect("WhatsApp provider should exist");
 
     assert_eq!(wa.identifier(), "whatsapp");
@@ -92,7 +92,7 @@ fn test_whatsapp_provider_metadata() {
 fn test_whatsapp_provider_registration() {
     std::env::set_var("WHATSAPP_STORE_DIR", "/tmp/nonexistent-wa-store-test-2");
     let config = get_config();
-    let registry = ProviderRegistry::new(&config);
+    let registry = ProviderRegistry::new(&config, None);
     let ids = registry.list();
 
     assert!(
@@ -289,7 +289,7 @@ async fn test_whatsapp_mcp_tool_compilation() {
     use postiz_rust::realtime::Broadcaster;
 
     let broadcaster = Broadcaster::new();
-    let registry = ProviderRegistry::new(&config);
+    let registry = ProviderRegistry::new(&config, None);
     let rate_limiter = postiz_rust::api::rate_limiter::AuthRateLimiter::new(5, 60);
 
     let state = AppState {
@@ -299,6 +299,7 @@ async fn test_whatsapp_mcp_tool_compilation() {
         providers: registry,
         rate_limiter,
         token_key: None,
+        telegram_client_manager: None,
     };
 
     let server = PostizMcpServer::new(state.clone());
@@ -324,7 +325,7 @@ async fn test_whatsapp_mcp_handler_functions() {
     use postiz_rust::realtime::Broadcaster;
 
     let broadcaster = Broadcaster::new();
-    let registry = ProviderRegistry::new(&config);
+    let registry = ProviderRegistry::new(&config, None);
     let rate_limiter = postiz_rust::api::rate_limiter::AuthRateLimiter::new(5, 60);
 
     let state = AppState {
@@ -334,6 +335,7 @@ async fn test_whatsapp_mcp_handler_functions() {
         providers: registry,
         rate_limiter,
         token_key: None,
+        telegram_client_manager: None,
     };
 
     let send_input = tools_whatsapp::WaSendTextInput {

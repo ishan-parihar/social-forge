@@ -4,12 +4,14 @@
 
 pub mod bluesky;
 pub mod common;
+pub mod devto;
 pub mod discord;
 pub mod facebook;
 pub mod instagram;
 pub mod instagram_standalone;
 pub mod linkedin;
 pub mod linkedin_page;
+pub mod medium;
 pub mod pinterest;
 pub mod reddit;
 pub mod registry;
@@ -17,6 +19,7 @@ pub mod skool;
 pub mod telegram_bot;
 pub mod telegram_user;
 pub mod threads;
+pub mod tiktok;
 pub mod whatsapp;
 pub mod x;
 pub mod youtube;

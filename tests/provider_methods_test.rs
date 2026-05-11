@@ -640,7 +640,7 @@ async fn test_ias_mcp_tool_handler_full_chain() {
     use postiz_rust::api::rate_limiter::AuthRateLimiter;
     use postiz_rust::social::registry::ProviderRegistry;
 
-    let registry = Arc::new(ProviderRegistry::new(&config));
+    let registry = Arc::new(ProviderRegistry::new(&config, None));
     let broadcaster = Broadcaster::new();
     let rate_limiter = AuthRateLimiter::new(5, 60);
 
@@ -651,6 +651,7 @@ async fn test_ias_mcp_tool_handler_full_chain() {
         providers: (*registry).clone(),
         rate_limiter,
         token_key: None,
+        telegram_client_manager: None,
     };
 
     // Verify MCP server can be created (all #[tool] macros compile)
@@ -689,7 +690,7 @@ async fn test_threads_mcp_tool_handler_full_chain() {
     use postiz_rust::api::rate_limiter::AuthRateLimiter;
     use postiz_rust::social::registry::ProviderRegistry;
 
-    let registry = Arc::new(ProviderRegistry::new(&config));
+    let registry = Arc::new(ProviderRegistry::new(&config, None));
     let broadcaster = Broadcaster::new();
     let rate_limiter = AuthRateLimiter::new(5, 60);
 
@@ -700,6 +701,7 @@ async fn test_threads_mcp_tool_handler_full_chain() {
         providers: (*registry).clone(),
         rate_limiter,
         token_key: None,
+        telegram_client_manager: None,
     };
 
     // Verify MCP server can be created
@@ -738,7 +740,7 @@ async fn test_linkedin_mcp_tool_handler_full_chain() {
     use postiz_rust::api::rate_limiter::AuthRateLimiter;
     use postiz_rust::social::registry::ProviderRegistry;
 
-    let registry = Arc::new(ProviderRegistry::new(&config));
+    let registry = Arc::new(ProviderRegistry::new(&config, None));
     let broadcaster = Broadcaster::new();
     let rate_limiter = AuthRateLimiter::new(5, 60);
 
@@ -749,6 +751,7 @@ async fn test_linkedin_mcp_tool_handler_full_chain() {
         providers: (*registry).clone(),
         rate_limiter,
         token_key: None,
+        telegram_client_manager: None,
     };
 
     // Verify MCP server can be created

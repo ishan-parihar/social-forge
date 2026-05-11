@@ -11,6 +11,7 @@
 //   1. Humans via SvelteKit frontend (HTTP + SSE)
 //   2. AI agents via MCP tools (stdio/SSE)
 
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use postiz_rust::api;
@@ -23,6 +24,7 @@ use anyhow::Context;
 
 use postiz_rust::api::AppState;
 use postiz_rust::realtime::Broadcaster;
+use postiz_rust::services::telegram_client::TelegramClientManager;
 use postiz_rust::social::registry::ProviderRegistry;
 
 #[tokio::main]
@@ -51,8 +53,31 @@ async fn main() -> anyhow::Result<()> {
     // ── Realtime broadcaster ──────────────────────────────────
     let broadcaster = Broadcaster::new();
 
+    // ── Telegram user client (Grammers) ──────────────────────
+    let telegram_client_manager = if let (Some(api_id_str), Some(api_hash)) =
+        (&config.telegram_api_id, &config.telegram_api_hash)
+    {
+        let api_id: i32 = api_id_str.parse().map_err(|e| {
+            anyhow::anyhow!("Invalid TELEGRAM_API_ID: expected numeric, got {api_id_str}: {e}")
+        })?;
+        let session_dir = config
+            .telegram_session_dir
+            .clone()
+            .unwrap_or_else(|| "./data/telegram".into());
+        Some(Arc::new(TelegramClientManager::new(
+            api_id,
+            api_hash.clone(),
+            PathBuf::from(session_dir),
+        )))
+    } else {
+        tracing::warn!(
+            "TELEGRAM_API_ID / TELEGRAM_API_HASH not set — Telegram user client disabled"
+        );
+        None
+    };
+
     // ── Provider registry ─────────────────────────────────────
-    let providers = ProviderRegistry::new(&config);
+    let providers = ProviderRegistry::new(&config, telegram_client_manager.clone());
     let providers_arc = Arc::new(providers);
 
     // ── Shared app state ─────────────────────────────────────
@@ -77,6 +102,7 @@ async fn main() -> anyhow::Result<()> {
         providers: (*providers_arc).clone(),
         rate_limiter,
         token_key,
+        telegram_client_manager: telegram_client_manager.clone(),
     };
     let state_for_mcp = state.clone();
 

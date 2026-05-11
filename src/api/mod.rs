@@ -11,10 +11,12 @@ use crate::auth::middleware::{auth_middleware, JwtSecret};
 use crate::config::Config;
 use crate::db::PgPool;
 use crate::realtime::Broadcaster;
+use crate::services::telegram_client::OptionalTelegramClient;
 use crate::social::registry::ProviderRegistry;
 
 use self::rate_limiter::AuthRateLimiter;
 
+mod analytics;
 mod auth;
 mod calendar;
 mod integrations;
@@ -23,6 +25,8 @@ mod onboard;
 mod posts;
 pub mod rate_limiter;
 mod sse;
+mod tags;
+mod webhooks;
 
 /// Shared application state available to all handlers
 #[derive(Clone)]
@@ -34,6 +38,8 @@ pub struct AppState {
     pub rate_limiter: AuthRateLimiter,
     /// Optional AES-256 key for token encryption at rest (32 bytes)
     pub token_key: Option<[u8; 32]>,
+    /// Shared Telegram user client (Grammers-based, lazy init)
+    pub telegram_client_manager: OptionalTelegramClient,
 }
 
 /// Build the axum router with all routes
@@ -88,6 +94,13 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/integrations/{parent_id}/connect-page/{page_id}", axum::routing::post(integrations::connect_page))
         .route("/api/calendar", axum::routing::get(calendar::get))
         .route("/api/media", axum::routing::get(media::list).post(media::upload))
+        .route("/api/analytics", axum::routing::get(analytics::get))
+        .route("/api/analytics/post/{id}", axum::routing::get(analytics::get_post))
+        .route("/api/tags", axum::routing::get(tags::list).post(tags::create))
+        .route("/api/tags/{id}", axum::routing::get(tags::get).put(tags::update).delete(tags::delete))
+        .route("/api/webhooks", axum::routing::get(webhooks::list).post(webhooks::create))
+        .route("/api/webhooks/{id}", axum::routing::get(webhooks::get).put(webhooks::update).delete(webhooks::delete))
+        .route("/api/webhooks/{id}/test", axum::routing::post(webhooks::test))
         // Auth middleware chain: inject secret first, then validate
         .layer(middleware::from_fn(auth_middleware))
         .layer(Extension(jwt_secret));

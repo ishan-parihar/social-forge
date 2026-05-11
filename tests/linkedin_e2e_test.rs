@@ -32,7 +32,7 @@ fn get_config() -> Config {
 }
 
 fn get_registry(config: &Config) -> ProviderRegistry {
-    ProviderRegistry::new(config)
+    ProviderRegistry::new(config, None)
 }
 
 async fn create_test_state(config: &Config) -> AppState {
@@ -51,6 +51,7 @@ async fn create_test_state(config: &Config) -> AppState {
         providers: (*registry).clone(),
         rate_limiter,
         token_key: None,
+        telegram_client_manager: None,
     }
 }
 
