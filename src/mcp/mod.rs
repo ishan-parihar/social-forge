@@ -28,12 +28,16 @@ pub mod tools_instagram_standalone;
 mod tools_integrations;
 pub mod tools_linkedin;
 pub mod tools_linkedin_page;
+pub mod tools_pinterest;
 mod tools_posts;
+pub mod tools_discord;
 mod tools_reddit;
+mod tools_skool;
 pub mod tools_telegram_bot;
 pub mod tools_telegram_user;
 pub mod tools_threads;
 pub mod tools_whatsapp;
+pub mod tools_youtube;
 mod tools_x;
 
 // ══════════════════════════════════════════════════════════════
@@ -834,6 +838,220 @@ impl PostizMcpServer {
         tools_instagram_standalone::handle_ias_poll_container(&self.state, &params.0).await
     }
 
+    // ── YouTube Tools ──────────────────────────────────────────────
+
+    #[tool(description = "Search YouTube videos by query")]
+    pub async fn yt_search_videos(
+        &self,
+        params: Parameters<tools_youtube::YtSearchVideosInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_youtube::handle_yt_search_videos(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get details of a specific YouTube video by video ID")]
+    pub async fn yt_get_video(
+        &self,
+        params: Parameters<tools_youtube::YtGetVideoInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_youtube::handle_yt_get_video(&self.state, &params.0).await
+    }
+
+    #[tool(description = "List playlists for a YouTube channel")]
+    pub async fn yt_list_playlists(
+        &self,
+        params: Parameters<tools_youtube::YtListPlaylistsInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_youtube::handle_yt_list_playlists(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get items in a YouTube playlist")]
+    pub async fn yt_get_playlist_items(
+        &self,
+        params: Parameters<tools_youtube::YtGetPlaylistItemsInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_youtube::handle_yt_get_playlist_items(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get comments on a YouTube video")]
+    pub async fn yt_get_comments(
+        &self,
+        params: Parameters<tools_youtube::YtGetCommentsInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_youtube::handle_yt_get_comments(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get statistics for a YouTube channel (subscribers, views, videos)")]
+    pub async fn yt_get_channel_stats(
+        &self,
+        params: Parameters<tools_youtube::YtGetChannelStatsInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_youtube::handle_yt_get_channel_stats(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get YouTube Analytics reports for a channel (views, watch time, etc.)")]
+    pub async fn yt_get_analytics(
+        &self,
+        params: Parameters<tools_youtube::YtGetAnalyticsInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_youtube::handle_yt_get_analytics(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get subscriptions for a YouTube channel")]
+    pub async fn yt_get_subscriptions(
+        &self,
+        params: Parameters<tools_youtube::YtGetSubscriptionsInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_youtube::handle_yt_get_subscriptions(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Find YouTube creators by topic. Searches videos, groups by channel, enriches with subscriber counts and email detection.")]
+    pub async fn yt_find_creators(
+        &self,
+        params: Parameters<tools_youtube::YtFindCreatorsInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_youtube::handle_yt_find_creators(&self.state, &params.0).await
+    }
+
+    // ── Pinterest Tools ──────────────────────────────────────────
+
+    #[tool(description = "Get Pinterest user account info")]
+    pub async fn pi_get_user_account(
+        &self,
+        params: Parameters<tools_pinterest::PiGetUserAccountInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_pinterest::handle_pi_get_user_account(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get Pinterest board details")]
+    pub async fn pi_get_board(
+        &self,
+        params: Parameters<tools_pinterest::PiGetBoardInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_pinterest::handle_pi_get_board(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get pins on a Pinterest board")]
+    pub async fn pi_get_board_pins(
+        &self,
+        params: Parameters<tools_pinterest::PiGetBoardPinsInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_pinterest::handle_pi_get_board_pins(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get a single Pinterest pin")]
+    pub async fn pi_get_pin(
+        &self,
+        params: Parameters<tools_pinterest::PiGetPinInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_pinterest::handle_pi_get_pin(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get analytics for a Pinterest board")]
+    pub async fn pi_get_board_analytics(
+        &self,
+        params: Parameters<tools_pinterest::PiGetBoardAnalyticsInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_pinterest::handle_pi_get_board_analytics(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get analytics for a Pinterest pin within a board")]
+    pub async fn pi_get_pin_analytics(
+        &self,
+        params: Parameters<tools_pinterest::PiGetPinAnalyticsInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_pinterest::handle_pi_get_pin_analytics(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Search Pinterest pins by keyword using Pinterest API v5")]
+    pub async fn pi_search_pins(
+        &self,
+        params: Parameters<tools_pinterest::PiSearchPinsInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_pinterest::handle_pi_search_pins(&self.state, &params.0).await
+    }
+
+    // ── Discord Tools ───────────────────────────────────────────
+
+    #[tool(description = "Get Discord channel info")]
+    pub async fn di_get_channel(
+        &self,
+        params: Parameters<tools_discord::DiGetChannelInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_discord::handle_di_get_channel(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get messages from a Discord channel")]
+    pub async fn di_get_messages(
+        &self,
+        params: Parameters<tools_discord::DiGetMessagesInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_discord::handle_di_get_messages(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get Discord guild/server info")]
+    pub async fn di_get_guild(
+        &self,
+        params: Parameters<tools_discord::DiGetGuildInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_discord::handle_di_get_guild(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get thread members in a Discord channel")]
+    pub async fn di_get_thread_members(
+        &self,
+        params: Parameters<tools_discord::DiGetThreadMembersInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_discord::handle_di_get_thread_members(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Send a message to a Discord channel")]
+    pub async fn di_send_message(
+        &self,
+        params: Parameters<tools_discord::DiSendMessageInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_discord::handle_di_send_message(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Delete a message from a Discord channel")]
+    pub async fn di_delete_message(
+        &self,
+        params: Parameters<tools_discord::DiDeleteMessageInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_discord::handle_di_delete_message(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Add a reaction (emoji) to a Discord message")]
+    pub async fn di_add_reaction(
+        &self,
+        params: Parameters<tools_discord::DiAddReactionInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_discord::handle_di_add_reaction(&self.state, &params.0).await
+    }
+
+    #[tool(description = "List all channels in a Discord guild/server")]
+    pub async fn di_get_guild_channels(
+        &self,
+        params: Parameters<tools_discord::DiGetGuildChannelsInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_discord::handle_di_get_guild_channels(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get detailed info about a Discord guild/server including member counts")]
+    pub async fn di_get_server_info(
+        &self,
+        params: Parameters<tools_discord::DiGetServerInfoInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_discord::handle_di_get_server_info(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Create a forum post in a Discord forum channel")]
+    pub async fn di_create_forum_post(
+        &self,
+        params: Parameters<tools_discord::DiCreateForumPostInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_discord::handle_di_create_forum_post(&self.state, &params.0).await
+    }
+
     // ── WhatsApp Tools ───────────────────────────────────────────
 
     #[tool(description = "Check WhatsApp authentication status")]
@@ -1082,6 +1300,48 @@ impl PostizMcpServer {
         params: Parameters<tools_telegram_user::TuSearchInput>,
     ) -> Result<Json<tools_telegram_user::TuSearchOutput>, String> {
         tools_telegram_user::handle_tu_search(&self.state, &params.0).await
+    }
+
+    // ── Skool Tools ─────────────────────────────────────────────────
+
+    #[tool(description = "Publish a post to a Skool group. Requires group_id, title, content. Optionally set a label.")]
+    pub async fn sk_publish(
+        &self,
+        params: Parameters<tools_skool::SkPublishInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_skool::handle_sk_publish(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get Skool community info (name, description, member count)")]
+    pub async fn sk_get_info(
+        &self,
+        params: Parameters<tools_skool::SkGetInfoInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_skool::handle_sk_get_info(&self.state, &params.0).await
+    }
+
+    #[tool(description = "List posts in a Skool community with optional pagination/sort/category")]
+    pub async fn sk_list_posts(
+        &self,
+        params: Parameters<tools_skool::SkListPostsInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_skool::handle_sk_list_posts(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get a single Skool post by community slug and post slug")]
+    pub async fn sk_get_post(
+        &self,
+        params: Parameters<tools_skool::SkGetPostInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_skool::handle_sk_get_post(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Create a comment on a Skool post")]
+    pub async fn sk_create_comment(
+        &self,
+        params: Parameters<tools_skool::SkCreateCommentInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_skool::handle_sk_create_comment(&self.state, &params.0).await
     }
 }
 
