@@ -1,0 +1,17 @@
+<script lang="ts">
+  let { provider = "", size = "md" }: { provider?: string; size?: "sm" | "md" | "lg" } = $props();
+
+  const icons: Record<string, string> = {
+    x: "🐦", facebook: "📘", instagram: "📷", threads: "🧵",
+    linkedin: "💼", linkedin_page: "🏢", youtube: "▶️", pinterest: "📌",
+    reddit: "👽", bluesky: "🦋", discord: "💬", telegram: "✈️",
+    whatsapp: "💚", skool: "🎓",
+  };
+
+  const dims = { sm: "w-6 h-6 text-sm", md: "w-8 h-8 text-base", lg: "w-10 h-10 text-lg" };
+  const icon = $derived(icons[provider] || "🔌");
+</script>
+
+<div class="rounded-full bg-[#1e2435] flex items-center justify-center {dims[size]}">
+  {icon}
+</div>

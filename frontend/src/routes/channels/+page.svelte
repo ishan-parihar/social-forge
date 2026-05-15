@@ -1,89 +1,82 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import { integrationsApi, type Integration } from '$lib/api';
-  import { toast } from '$lib/stores/toast';
+  import { integrationsApi, type Integration } from "$lib/api/integrations";
+  import { onMount } from "svelte";
+  import ChannelCard from "$lib/channels/ChannelCard.svelte";
+  import ProviderIcon from "$lib/channels/ProviderIcon.svelte";
 
-  let channels = $state<Integration[]>([]);
-  let connecting = $state('');
+  let integrations = $state<Integration[]>([]);
+  let loading = $state(true);
+  let availableProviders = $state([
+    "x", "facebook", "instagram", "threads", "linkedin", "linkedin-page",
+    "youtube", "pinterest", "reddit", "bluesky", "discord", "telegram", "whatsapp", "skool",
+  ]);
 
-  const providers = [
-    { id: 'x', name: 'X / Twitter', icon: '𝕏', color: '#000' },
-    { id: 'linkedin', name: 'LinkedIn', icon: 'in', color: '#0a66c2' },
-    { id: 'bluesky', name: 'Bluesky', icon: '☁️', color: '#0085ff' },
-    { id: 'facebook', name: 'Facebook', icon: 'f', color: '#1877f2' },
-    { id: 'instagram', name: 'Instagram', icon: '📷', color: '#e4405f' },
-  ];
-
-  onMount(async () => { const r = await integrationsApi.list(); if (r.data) channels = r.data.integrations; });
-
-  async function connect(provider: string) {
-    connecting = provider;
-    const r = await integrationsApi.connect(provider);
-    connecting = '';
-    if (r.data?.url) {
-      window.open(r.data.url, '_blank', 'width=600,height=700');
-      toast('Authorization window opened. Complete the OAuth flow to connect.', 'info');
-      setTimeout(async () => {
-        const r2 = await integrationsApi.list();
-        if (r2.data) channels = r2.data.integrations;
-        toast('Channels refreshed', 'success');
-      }, 5000);
-    } else {
-      toast(r.error || 'Connection failed', 'error');
+  let groups = $derived.by(() => {
+    const g = new Map<string, Integration[]>();
+    for (const int of integrations) {
+      const key = int.provider_name || int.provider_identifier;
+      const existing = g.get(key) || [];
+      existing.push(int);
+      g.set(key, existing);
     }
+    return g;
+  });
+
+  async function load() {
+    loading = true;
+    const r = await integrationsApi.list();
+    if (r.data) integrations = r.data.integrations;
+    loading = false;
   }
 
   async function disconnect(id: string) {
-    if (!confirm('Remove this channel?')) return;
     await integrationsApi.disconnect(id);
-    channels = channels.filter(c => c.id !== id);
-    toast('Channel removed', 'success');
+    await load();
   }
+
+  async function connect(provider: string) {
+    const r = await integrationsApi.connect(provider);
+    if (r.data?.url) window.open(r.data.url, "_blank");
+  }
+
+  onMount(load);
 </script>
 
 <div class="space-y-6">
-  <div>
-    <h2 class="text-xl font-semibold">Connected Channels</h2>
-    <p class="text-sm text-[#6b7280] mt-1">Manage your social media accounts</p>
-  </div>
+  <h2 class="text-xl font-semibold">Channel Management</h2>
 
-  {#if channels.length > 0}
-    <div class="grid gap-3 md:grid-cols-2">
-      {#each channels as ch}
-        <div class="bg-[#131720] border border-[#1e2435] rounded-xl p-4 flex items-center gap-3">
-          <div class="w-10 h-10 rounded-lg flex items-center justify-center text-lg font-bold" style="background: {providers.find(p => p.id === ch.provider_identifier)?.color || '#333'}20; color: {providers.find(p => p.id === ch.provider_identifier)?.color || '#fff'}">
-            {providers.find(p => p.id === ch.provider_identifier)?.icon || ch.provider_identifier[0].toUpperCase()}
+  <!-- Connected channels -->
+  <div class="bg-[#131720] border border-[#1e2435] rounded-xl p-4">
+    <h3 class="text-sm font-semibold text-[#6b7280] uppercase tracking-wider mb-3">Connected Channels</h3>
+    {#if loading}
+      <div class="text-center text-sm text-[#6b7280] py-8">Loading...</div>
+    {:else if integrations.length === 0}
+      <div class="text-center text-sm text-[#6b7280] py-8">No channels connected yet. Select a provider below to connect.</div>
+    {:else}
+      {#each [...groups.entries()] as [name, ints]}
+        <div class="mb-4 last:mb-0">
+          <div class="text-xs text-[#6b7280] px-1 mb-1">{name} ({ints.length})</div>
+          <div class="space-y-0.5">
+            {#each ints as int}
+              <ChannelCard integration={int} onDisconnect={disconnect} />
+            {/each}
           </div>
-          <div class="flex-1 min-w-0">
-            <p class="text-sm font-medium truncate">{ch.provider_name}</p>
-            <p class="text-xs text-[#6b7280] truncate">{ch.profile_name || ch.provider_identifier}</p>
-          </div>
-          {#if ch.refresh_needed}<span class="text-[10px] px-2 py-0.5 rounded badge-error">Refresh needed</span>{/if}
-          <button onclick={() => disconnect(ch.id)} class="text-xs text-red-400 hover:text-red-300">Remove</button>
         </div>
       {/each}
-    </div>
-  {:else}
-    <div class="bg-[#131720] border border-[#1e2435] rounded-xl p-8 text-center">
-      <p class="text-sm text-[#6b7280]">No channels connected yet.</p>
-      <p class="text-xs text-[#6b7280] mt-1">Connect a social media account below to start posting.</p>
-    </div>
-  {/if}
+    {/if}
+  </div>
 
-  <div>
-    <h3 class="text-sm font-medium mb-3">Available Providers</h3>
-    <div class="grid gap-2 md:grid-cols-3">
-      {#each providers as p}
-        <button onclick={() => connect(p.id)} disabled={!!connecting}
-          class="bg-[#131720] hover:bg-[#1a1f2e] border border-[#1e2435] rounded-xl p-4 text-left transition-colors disabled:opacity-50"
+  <!-- Available providers grid -->
+  <div class="bg-[#131720] border border-[#1e2435] rounded-xl p-4">
+    <h3 class="text-sm font-semibold text-[#6b7280] uppercase tracking-wider mb-3">Available Providers</h3>
+    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+      {#each availableProviders as provider}
+        <button
+          onclick={() => connect(provider)}
+          class="flex flex-col items-center gap-2 p-4 bg-[#0d1117] border border-[#1e2435] rounded-xl hover:border-indigo-500/50 transition-colors"
         >
-          <div class="flex items-center gap-3">
-            <div class="w-8 h-8 rounded-lg flex items-center justify-center font-bold" style="background: {p.color}20; color: {p.color}">{p.icon}</div>
-            <div>
-              <div class="text-sm font-medium">{p.name}</div>
-              <div class="text-xs text-[#6b7280]">{connecting === p.id ? 'Connecting...' : 'Connect account'}</div>
-            </div>
-          </div>
+          <ProviderIcon {provider} size="lg" />
+          <span class="text-xs capitalize">{provider.replace("-", " ")}</span>
         </button>
       {/each}
     </div>
