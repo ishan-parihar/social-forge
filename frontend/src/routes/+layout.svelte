@@ -1,16 +1,19 @@
 <script lang="ts">
   import '../app.css';
-  import { loadToken, getToken, setToken, auth } from '$lib/api';
+  import { initializeAuth, clearAuth, currentUser, isAuthenticated } from '$lib/stores/auth';
+  import { auth } from '$lib/api/auth';
   import { realtime } from '$lib/stores/realtime';
   import Toast from '$lib/components/Toast.svelte';
   import { page } from '$app/stores';
+  import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
 
   let { children } = $props();
-  let user = $state<{ email: string; name: string } | null>(null);
-  let hasToken = $state(false);
 
-  function logout() { setToken(null); hasToken = false; user = null; window.location.href = '/login'; }
+  function logout() {
+    clearAuth();
+    goto('/login');
+  }
 
   const nav = [
     { href: '/', label: 'Dashboard', icon: '▦' },
@@ -22,20 +25,24 @@
   ];
 
   onMount(() => {
-    loadToken();
-    if (!getToken()) return;
-    hasToken = true;
+    initializeAuth();
+    if (!$isAuthenticated) return;
     auth.me().then(r => {
-      if (r.data) { user = r.data; realtime.connect(); }
-      // Don't clear token on failure — it may be transient (backend restart, etc.)
+      if (r.data) { currentUser.set(r.data); realtime.connect(); }
+      // Don't clear auth on failure — it may be transient (backend restart, etc.)
       // API calls will fail individually if the token is truly invalid
     });
+
+    // Listen for unauthorized events from API client
+    const onUnauthorized = () => { clearAuth(); goto('/login'); };
+    window.addEventListener('auth:unauthorized', onUnauthorized);
+    return () => window.removeEventListener('auth:unauthorized', onUnauthorized);
   });
 </script>
 
 <Toast />
 
-{#if $page.url.pathname === '/login' || !hasToken}
+{#if $page.url.pathname === '/login' || !$isAuthenticated}
   <main class="min-h-screen bg-[#0b0e14]">{@render children()}</main>
 {:else}
   <div class="flex h-screen overflow-hidden bg-[#0b0e14]">
@@ -55,8 +62,8 @@
         {/each}
       </nav>
       <div class="p-4 border-t border-[#1e2435]">
-        {#if user}
-          <div class="text-xs text-[#6b7280] mb-2 truncate">{user.email}</div>
+        {#if $currentUser}
+          <div class="text-xs text-[#6b7280] mb-2 truncate">{$currentUser.email}</div>
         {/if}
         <button onclick={logout} class="text-xs text-[#6b7280] hover:text-red-400 transition-colors">Logout</button>
       </div>
