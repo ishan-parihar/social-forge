@@ -64,10 +64,6 @@ impl ProviderRegistry {
             providers.insert("threads", Arc::new(threads::ThreadsProvider::new(config)));
         }
 
-        if config.youtube_client_id.is_some() {
-            providers.insert("youtube", Arc::new(youtube::YoutubeProvider::new(config)));
-        }
-
         // Always registered (show on frontend even without credentials)
         providers.insert("reddit", Arc::new(reddit::RedditProvider::new(config)));
 
@@ -125,11 +121,10 @@ impl ProviderRegistry {
             providers.insert("github", Arc::new(github::GithubProvider::new(config)));
         }
 
-        // Google services — each reuses YOUTUBE_CLIENT_ID / YOUTUBE_CLIENT_SECRET
+        // Google Suite — unified provider for YouTube, Gmail, Calendar, Drive
+        // Uses YOUTUBE_CLIENT_ID / YOUTUBE_CLIENT_SECRET for all Google OAuth scopes
         if config.youtube_client_id.is_some() {
-            providers.insert("gmail", Arc::new(gmail::GmailProvider::new(config)));
-            providers.insert("calendar", Arc::new(calendar::CalendarProvider::new(config)));
-            providers.insert("drive", Arc::new(drive::DriveProvider::new(config)));
+            providers.insert("google", Arc::new(google::GoogleProvider::new(config)));
         }
 
         // Chrome extension-based provider (no OAuth credentials needed)

@@ -37,14 +37,14 @@ async fn test_provider_registry_has_all_providers() {
 
     let mut expected: Vec<&str> = vec![
         "x", "linkedin", "bluesky", "facebook", "instagram",
-        "linkedin-page", "instagram-standalone", "threads", "youtube",
+        "linkedin-page", "instagram-standalone", "threads",
         "reddit", "telegram-bot", "telegram-user", "pinterest", "skool",
         "whatsapp", "wordpress",
-        "gmail", "calendar", "drive",
+        "github", "google",
     ];
     expected.sort();
 
-    assert_eq!(ids, expected, "Provider registry should contain all 19 providers");
+    assert_eq!(ids, expected, "Provider registry should contain all 17 providers");
     println!("✅ Provider registry: {} providers registered", ids.len());
 }
 
@@ -405,18 +405,21 @@ async fn test_linkedin_page_provider_creation() {
 // ── Test 17: YouTube provider creation and scopes ────────────────
 
 #[tokio::test]
-async fn test_youtube_provider_creation() {
+async fn test_google_provider_creation() {
     let config = get_config();
     let registry = get_registry(&config);
 
-    let yt = registry.get("youtube").expect("YouTube provider should exist");
-    assert_eq!(yt.identifier(), "youtube");
-    assert_eq!(yt.name(), "YouTube");
+    let google = registry.get("google").expect("Google Suite provider should exist");
+    assert_eq!(google.identifier(), "google");
+    assert_eq!(google.name(), "Google Suite");
 
-    let scopes = yt.scopes();
+    let scopes = google.scopes();
     assert!(scopes.contains(&"https://www.googleapis.com/auth/youtube.force-ssl".to_string()));
+    assert!(scopes.contains(&"https://www.googleapis.com/auth/gmail.readonly".to_string()));
+    assert!(scopes.contains(&"https://www.googleapis.com/auth/calendar".to_string()));
+    assert!(scopes.contains(&"https://www.googleapis.com/auth/drive.readonly".to_string()));
 
-    println!("✅ YouTubeProvider: {} scopes configured ({})", scopes.len(), scopes.join(", "));
+    println!("✅ GoogleSuite: {} scopes configured ({})", scopes.len(), scopes.join(", "));
 }
 
 // ── Test 18: Pinterest provider creation and scopes ──────────────
