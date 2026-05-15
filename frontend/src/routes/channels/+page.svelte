@@ -35,7 +35,7 @@
 
   async function disconnect(id: string) {
     if (!confirm('Remove this channel?')) return;
-    await integrationsApi.delete(id);
+    await integrationsApi.disconnect(id);
     channels = channels.filter(c => c.id !== id);
     toast('Channel removed', 'success');
   }
