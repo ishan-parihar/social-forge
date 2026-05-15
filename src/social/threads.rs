@@ -62,10 +62,9 @@ impl SocialProvider for ThreadsProvider {
         redirect_uri: &str,
     ) -> Result<AuthUrlResponse, ProviderError> {
         let scope = self.scopes().join(",");
-        let https_uri = self.ensure_https_redirect_uri(redirect_uri);
         let params: Vec<(&str, &str)> = vec![
             ("client_id", self.client_id.as_str()),
-            ("redirect_uri", &https_uri),
+            ("redirect_uri", redirect_uri),
             ("response_type", "code"),
             ("state", state),
             ("scope", scope.as_str()),
@@ -86,11 +85,10 @@ impl SocialProvider for ThreadsProvider {
         _code_verifier: &str,
         redirect_uri: &str,
     ) -> Result<AuthToken, ProviderError> {
-        let https_uri = self.ensure_https_redirect_uri(redirect_uri);
         // Step 1: Exchange code for short-lived token
         let token_params: Vec<(&str, &str)> = vec![
             ("client_id", self.client_id.as_str()),
-            ("redirect_uri", &https_uri),
+            ("redirect_uri", redirect_uri),
             ("grant_type", "authorization_code"),
             ("client_secret", self.client_secret.as_str()),
             ("code", code),
@@ -103,10 +101,23 @@ impl SocialProvider for ThreadsProvider {
             .send()
             .await?;
 
+        let status = resp.status();
         let json: serde_json::Value = resp.json().await?;
+        if !status.is_success() {
+            let err_msg = json["error"]["message"]
+                .as_str()
+                .unwrap_or("Unknown error");
+            let err_code = json["error"]["code"].as_u64().unwrap_or(0);
+            return Err(ProviderError::Api(format!(
+                "Threads token exchange failed (code {err_code}): {err_msg}"
+            )));
+        }
         let short_token = json["access_token"]
             .as_str()
-            .ok_or_else(|| ProviderError::Auth("Missing access_token".into()))?
+            .ok_or_else(|| {
+                let err = serde_json::to_string(&json).unwrap_or_default();
+                ProviderError::Auth(format!("Missing access_token in response: {err}"))
+            })?
             .to_string();
 
         // Step 2: Exchange for long-lived token (60 days)
@@ -123,7 +134,16 @@ impl SocialProvider for ThreadsProvider {
             .send()
             .await?;
 
+        let long_status = long_resp.status();
         let long_json: serde_json::Value = long_resp.json().await?;
+        if !long_status.is_success() {
+            let err_msg = long_json["error"]["message"]
+                .as_str()
+                .unwrap_or("Unknown error");
+            return Err(ProviderError::Api(format!(
+                "Threads long-lived token exchange failed: {err_msg}"
+            )));
+        }
         let access_token = long_json["access_token"]
             .as_str()
             .unwrap_or(&short_token)
@@ -390,14 +410,6 @@ impl SocialProvider for ThreadsProvider {
 }
 
 impl ThreadsProvider {
-    fn ensure_https_redirect_uri(&self, uri: &str) -> String {
-        if uri.starts_with("http://") {
-            format!("https://redirectmeto.com/{}", uri)
-        } else {
-            uri.to_string()
-        }
-    }
-
     async fn resolve_user_id(&self, access_token: &str) -> Result<String, ProviderError> {
         let user: serde_json::Value = self
             .http

@@ -145,8 +145,8 @@ async fn main() -> anyhow::Result<()> {
     let app = api::build_router(state);
 
     // ── Start HTTP server ────────────────────────────────────
-    // Server MUST always run on port 3000. Callback URLs are hardcoded to localhost:3000.
-    let http_addr = "0.0.0.0:3000".to_string();
+    // HTTP on 3443 (internal). HTTPS on 3000 via socat TLS proxy.
+    let http_addr = "0.0.0.0:3443".to_string();
 
     let listener = tokio::net::TcpListener::bind(&http_addr)
         .await
