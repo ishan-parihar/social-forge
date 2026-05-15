@@ -4,7 +4,8 @@ let _token: string | null = null;
 const isBrowser = typeof window !== "undefined" && typeof localStorage !== "undefined";
 
 export function getToken() {
-  return _token;
+  // Read from localStorage directly so auth.ts and stores/auth.ts share one source of truth
+  return isBrowser ? localStorage.getItem("token") : _token;
 }
 export function setToken(t: string | null) {
   _token = t;
