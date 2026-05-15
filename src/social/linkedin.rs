@@ -467,6 +467,7 @@ mod tests {
             mastodon_client_secret: None,
             mastodon_instance_url: None,
             hashnode_api_key: None,
+            github_token: None,
             token_encryption_key: None,
             media_dir: "./uploads".into(),
         }
