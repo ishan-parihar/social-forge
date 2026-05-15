@@ -30,7 +30,7 @@
   </button>
   {#if open}
     <div class="dropdown-menu {align === 'right' ? 'right-0' : 'left-0'}" role="menu">
-      {#each items as item}
+      {#each items as item (item.label)}
         <button
           role="menuitem"
           onclick={() => handleClick(item.onclick)}

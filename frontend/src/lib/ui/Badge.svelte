@@ -1,5 +1,5 @@
 <script lang="ts">
-  let { state = "draft" }: { state?: string } = $props();
+  let { state = "draft" }: { state?: "draft" | "queued" | "published" | "error" } = $props();
   const colors: Record<string, string> = {
     draft: "bg-gray-500/20 text-gray-400",
     queued: "bg-blue-500/20 text-blue-400",
