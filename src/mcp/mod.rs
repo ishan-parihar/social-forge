@@ -2086,6 +2086,22 @@ impl PostizMcpServer {
         tools_github::handle_gh_get_repo_content(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
+    #[tool(description = "Close a GitHub issue")]
+    pub async fn gh_close_issue(
+        &self,
+        params: Parameters<tools_github::GhCloseIssueInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_github::handle_gh_close_issue(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "List repositories for the authenticated user")]
+    pub async fn gh_list_my_repos(
+        &self,
+        params: Parameters<tools_github::GhListMyReposInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_github::handle_gh_list_my_repos(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
 
 }
 
