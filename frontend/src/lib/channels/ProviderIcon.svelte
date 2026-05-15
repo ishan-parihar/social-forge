@@ -13,6 +13,6 @@
   const icon = $derived(icons[provider] || "🔌");
 </script>
 
-<div class="rounded-full bg-[#1e2435] flex items-center justify-center {dims[size]}">
+<div class="rounded-full bg-[#1e2435] flex items-center justify-center {dims[size]}" aria-hidden="true">
   {icon}
 </div>

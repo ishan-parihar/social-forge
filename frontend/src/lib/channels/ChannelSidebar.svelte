@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { integrationsApi, type Integration } from "$lib/api/integrations";
+  import { groupIntegrations } from "./group-integrations";
   import ChannelCard from "./ChannelCard.svelte";
 
   let { onConnect, onDisconnect: externalDisconnect }: {
@@ -9,23 +10,19 @@
   } = $props();
   let integrations = $state<Integration[]>([]);
   let loading = $state(true);
+  let error = $state("");
 
-  // Group integrations by provider_identifier prefix
-  let groups = $derived.by(() => {
-    const g = new Map<string, Integration[]>();
-    for (const int of integrations) {
-      const key = int.provider_name || int.provider_identifier;
-      const existing = g.get(key) || [];
-      existing.push(int);
-      g.set(key, existing);
-    }
-    return g;
-  });
+  let groups = $derived.by(() => groupIntegrations(integrations));
 
   async function load() {
     loading = true;
-    const r = await integrationsApi.list();
-    if (r.data) integrations = r.data.integrations;
+    error = "";
+    try {
+      const r = await integrationsApi.list();
+      if (r.data) integrations = r.data.integrations;
+    } catch {
+      error = "Failed to load channels";
+    }
     loading = false;
   }
 
@@ -53,6 +50,8 @@
 
   {#if loading}
     <div class="text-center text-sm text-[#6b7280] py-4">Loading...</div>
+  {:else if error}
+    <div class="text-center text-sm text-red-400 py-4">{error}</div>
   {:else if integrations.length === 0}
     <div class="text-center text-sm text-[#6b7280] py-4">
       <p>No channels connected</p>
