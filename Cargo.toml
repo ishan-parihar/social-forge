@@ -55,7 +55,7 @@ async-trait = "0.1"
 futures = "0.3"
 tokio-stream = { version = "0.1", features = ["sync"] }
 
-# HTTP client
+# HTTP client (reqwest for most providers)
 reqwest = { version = "0.12", default-features = false, features = [
   "json",
   "multipart",
@@ -63,6 +63,15 @@ reqwest = { version = "0.12", default-features = false, features = [
   "cookies",
   "gzip",
 ] }
+
+# wreq — reqwest fork with JA3/JA4/TLS fingerprinting for X/Twitter GraphQL API
+wreq = { version = "6.0.0-rc.23", default-features = false, features = [
+  "json",
+  "cookies",
+  "gzip",
+  "brotli",
+] }
+wreq-util = "3.0.0-rc.10"
 
 # Time + UUID
 chrono = { version = "0.4", features = ["serde"] }
@@ -74,6 +83,11 @@ grammers-mtproto = "0.7"
 grammers-mtsender = "0.7"
 grammers-session = "0.7"
 grammers-tl-types = "0.7"
+
+# WhatsApp Web (replaces external Go wacli sidecar)
+wa-rs = "0.2.0"
+wa-rs-sqlite-storage = "0.2.0"
+rusqlite = { version = "0.32", features = ["bundled"] }
 
 # Error handling
 thiserror = "2"

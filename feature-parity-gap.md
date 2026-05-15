@@ -52,7 +52,7 @@
 
 | Provider | Our Status | Postiz-app |
 |---|---|---|
-| **WhatsApp** (4 tools) | ✅ Daemon (wacli)—Messages, Templates, Contacts, Chats | ❌ Not in Postiz-app |
+| **WhatsApp** (4 tools) | ✅ Native (wa-rs)—Messages, Chats, Contacts, Groups | ❌ Not in Postiz-app |
 
 #### 20 Providers Exclusive to Postiz-app (Our Differentiator)
 

@@ -13,6 +13,7 @@ use crate::db::PgPool;
 use crate::realtime::Broadcaster;
 use crate::services::telegram_client::OptionalTelegramClient;
 use crate::social::registry::ProviderRegistry;
+use crate::wa::OptionalWhaClient;
 
 use self::rate_limiter::AuthRateLimiter;
 
@@ -41,6 +42,8 @@ pub struct AppState {
     pub token_key: Option<[u8; 32]>,
     /// Shared Telegram user client (Grammers-based, lazy init)
     pub telegram_client_manager: OptionalTelegramClient,
+    /// Shared WhatsApp Web client (wa-rs-based, replaces Go wacli sidecar)
+    pub wa_client: OptionalWhaClient,
 }
 
 /// Build the axum router with all routes
@@ -72,6 +75,8 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/media/{id}", axum::routing::get(media::serve_media))
         // Public onboarding — browser-accessible OAuth flow (no JWT header needed)
         .route("/", axum::routing::get(onboard::onboard_page))
+        .route("/api/public/connect/x-cookies", axum::routing::get(onboard::x_cookies_form).post(onboard::x_cookies_submit))
+.route("/api/public/connect/x-cookies/import", axum::routing::post(onboard::x_cookies_import))
         .route("/api/public/connect/{provider}", axum::routing::get(onboard::public_connect));
 
     // Protected routes — auth required

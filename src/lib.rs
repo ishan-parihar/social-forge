@@ -11,3 +11,4 @@ pub mod realtime;
 pub mod scheduler;
 pub mod services;
 pub mod social;
+pub mod wa;

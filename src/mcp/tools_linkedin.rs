@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::api::AppState;
+use crate::crypto;
 use crate::social::linkedin::LinkedInProvider;
 use crate::social::SocialProvider;
 
@@ -80,7 +81,11 @@ async fn find_linkedin_token(
             )
         })?;
 
-    Ok(li.access_token.clone())
+    let __tok = li.access_token.clone();
+    let __tok = state.token_key.as_ref()
+        .and_then(|k| crate::crypto::decrypt_string(&__tok, k).ok())
+        .unwrap_or(__tok);
+    Ok(__tok)
 }
 
 fn create_provider(state: &AppState) -> LinkedInProvider {

@@ -8,6 +8,7 @@ use serde_json::{json, Value};
 use uuid::Uuid;
 
 use crate::api::AppState;
+use crate::crypto;
 use crate::social::slack::SlackProvider;
 use crate::social::SocialProvider;
 
@@ -63,7 +64,11 @@ async fn find_slack_token(
             "Slack not connected. Connect Slack first via integrations_connect.".to_string()
         })?;
 
-    Ok(integration.access_token.clone())
+    let __tok = integration.access_token.clone();
+    let __tok = state.token_key.as_ref()
+        .and_then(|k| crate::crypto::decrypt_string(&__tok, k).ok())
+        .unwrap_or(__tok);
+    Ok(__tok)
 }
 
 fn create_slack_provider(state: &AppState) -> SlackProvider {

@@ -23,7 +23,7 @@ fn get_config() -> Config {
 }
 
 fn get_registry(config: &Config) -> ProviderRegistry {
-    ProviderRegistry::new(config, None)
+    ProviderRegistry::new(config, None, None)
 }
 
 // ── Test 1: Provider Registry has all 14 providers ───────────────
@@ -202,6 +202,7 @@ async fn test_mcp_tools_registration() {
         rate_limiter,
         token_key: None,
         telegram_client_manager: None,
+        wa_client: None,
     };
 
     let server = PostizMcpServer::new(state.clone());

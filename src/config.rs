@@ -14,6 +14,8 @@ pub struct Config {
     // Social provider credentials
     pub x_client_id: Option<String>,
     pub x_client_secret: Option<String>,
+    pub x_auth_token: Option<String>,
+    pub x_ct0: Option<String>,
     pub linkedin_client_id: Option<String>,
     pub linkedin_client_secret: Option<String>,
     pub bluesky_handle: Option<String>,
@@ -83,6 +85,8 @@ impl Config {
             frontend_url: env("FRONTEND_URL")?,
             x_client_id: opt("X_CLIENT_ID"),
             x_client_secret: opt("X_CLIENT_SECRET"),
+            x_auth_token: opt("X_AUTH_TOKEN"),
+            x_ct0: opt("X_CT0"),
             linkedin_client_id: opt("LINKEDIN_CLIENT_ID"),
             linkedin_client_secret: opt("LINKEDIN_CLIENT_SECRET"),
             bluesky_handle: opt("BLUESKY_HANDLE"),

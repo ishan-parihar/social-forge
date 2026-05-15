@@ -11,6 +11,7 @@ use uuid::Uuid;
 
 use crate::auth::jwt;
 use crate::auth::middleware::AuthenticatedUser;
+use crate::crypto;
 use crate::db::models::IntegrationPublic;
 use crate::db::queries;
 use crate::error::AppError;
@@ -315,9 +316,16 @@ pub async fn available_pages(
         .get(&integration.provider_identifier)
         .ok_or_else(|| AppError::BadRequest("Provider not found in registry".into()))?;
 
+    // Decrypt the stored token if encryption is enabled
+    let resolve_token = |token: &str| -> String {
+        state.token_key.as_ref()
+            .and_then(|key| crypto::decrypt_string(token, key).ok())
+            .unwrap_or_else(|| token.to_string())
+    };
+
     // Facebook/Instagram store the user-level token in refresh_token for page discovery.
     // Other multi-step providers (LinkedIn Page) use access_token directly.
-    let token = if integration.provider_identifier == "facebook"
+    let raw_token = if integration.provider_identifier == "facebook"
         || integration.provider_identifier == "instagram"
     {
         integration
@@ -328,9 +336,10 @@ pub async fn available_pages(
     } else {
         &integration.access_token
     };
+    let token = resolve_token(raw_token);
 
     let pages = provider_obj
-        .pages(token)
+        .pages(&token)
         .await
         .map_err(|e| AppError::Provider(format!("Failed to list pages: {e}")))?;
 
@@ -365,8 +374,14 @@ pub async fn connect_page(
         .get(&parent.provider_identifier)
         .ok_or_else(|| AppError::BadRequest("Provider not found in registry".into()))?;
 
+    let resolve_token = |token: &str| -> String {
+        state.token_key.as_ref()
+            .and_then(|key| crypto::decrypt_string(token, key).ok())
+            .unwrap_or_else(|| token.to_string())
+    };
+
     // Same token discovery logic as available_pages
-    let token = if parent.provider_identifier == "facebook"
+    let raw_token = if parent.provider_identifier == "facebook"
         || parent.provider_identifier == "instagram"
     {
         parent
@@ -377,10 +392,11 @@ pub async fn connect_page(
     } else {
         &parent.access_token
     };
+    let token = resolve_token(raw_token);
 
     // Fetch all pages and find the matching one
     let pages = provider_obj
-        .pages(token)
+        .pages(&token)
         .await
         .map_err(|e| AppError::Provider(format!("Failed to list pages: {e}")))?;
 

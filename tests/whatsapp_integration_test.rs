@@ -7,32 +7,12 @@ use postiz_rust::social::registry::ProviderRegistry;
 use postiz_rust::social::whatsapp::WhatsAppProvider;
 use postiz_rust::social::SocialProvider;
 use postiz_rust::mcp::tools_whatsapp;
+use postiz_rust::wa::chats;
 use rmcp::Json;
 
 fn get_config() -> Config {
     dotenvy::dotenv().ok();
     Config::from_env().expect("Failed to load config from .env")
-}
-
-fn find_wacli_binary() -> Option<PathBuf> {
-    let candidates = vec![
-        PathBuf::from("./wacli/dist/wacli"),
-        PathBuf::from("../wacli/dist/wacli"),
-    ];
-    for c in &candidates {
-        if c.exists() {
-            return Some(c.canonicalize().unwrap_or_else(|_| c.clone()));
-        }
-    }
-    if let Ok(path) = std::env::var("PATH") {
-        for dir in path.split(':') {
-            let candidate = PathBuf::from(dir).join("wacli");
-            if candidate.exists() {
-                return Some(candidate);
-            }
-        }
-    }
-    None
 }
 
 fn create_test_store_dir() -> PathBuf {
@@ -43,11 +23,29 @@ fn create_test_store_dir() -> PathBuf {
     dir
 }
 
+/// Helper: seed a chat_summaries row into the meta DB at `store_dir`.
+fn insert_chat(store_dir: &PathBuf, jid: &str, name: &str, unread: u32, last_msg: Option<&str>) {
+    let db = chats::ensure_meta_db(store_dir).expect("ensure_meta_db");
+    db.execute(
+        "INSERT OR REPLACE INTO chat_summaries (jid, name, unread_count, last_message_text) VALUES (?1, ?2, ?3, ?4)",
+        rusqlite::params![jid, name, unread, last_msg],
+    ).expect("insert chat");
+}
+
+/// Helper: seed a contact_entries row into the meta DB at `store_dir`.
+fn insert_contact(store_dir: &PathBuf, jid: &str, name: &str, push_name: &str) {
+    let db = chats::ensure_meta_db(store_dir).expect("ensure_meta_db");
+    db.execute(
+        "INSERT OR REPLACE INTO contact_entries (jid, name, push_name) VALUES (?1, ?2, ?3)",
+        rusqlite::params![jid, name, push_name],
+    ).expect("insert contact");
+}
+
 #[test]
 fn test_whatsapp_provider_metadata() {
     std::env::set_var("WHATSAPP_STORE_DIR", "/tmp/nonexistent-wa-store-test");
     let config = get_config();
-    let registry = ProviderRegistry::new(&config, None);
+    let registry = ProviderRegistry::new(&config, None, None);
     let wa = registry.get("whatsapp").expect("WhatsApp provider should exist");
 
     assert_eq!(wa.identifier(), "whatsapp");
@@ -92,7 +90,7 @@ fn test_whatsapp_provider_metadata() {
 fn test_whatsapp_provider_registration() {
     std::env::set_var("WHATSAPP_STORE_DIR", "/tmp/nonexistent-wa-store-test-2");
     let config = get_config();
-    let registry = ProviderRegistry::new(&config, None);
+    let registry = ProviderRegistry::new(&config, None, None);
     let ids = registry.list();
 
     assert!(
@@ -110,85 +108,123 @@ fn test_whatsapp_provider_registration() {
 }
 
 #[test]
-fn test_whatsapp_daemon_ipc_ping() {
-    let wacli_path = find_wacli_binary()
-        .expect("wacli binary required. Build with: cd wacli && pnpm build");
-
+fn test_wa_meta_db_chat_crud() {
     let store_dir = create_test_store_dir();
 
-    let daemon = WhatsAppDaemon::start_with_binary(wacli_path, store_dir)
-        .expect("WhatsAppDaemon should start successfully");
+    // Fresh store → empty
+    let chats_empty = chats::list_chats_store(&store_dir, None).expect("list_chats_store");
+    assert!(chats_empty.is_empty(), "Fresh meta DB should have no chats");
 
-    assert!(daemon.is_running(), "wacli server process should be running");
+    // Seed 2 chats
+    insert_chat(&store_dir, "111@s.whatsapp.net", "Alice", 3, Some("Hey!"));
+    insert_chat(&store_dir, "222@s.whatsapp.net", "Bob", 0, None);
 
-    let result = daemon.send_request("ping", None);
-    assert!(result.is_ok(), "ping should succeed: {:?}", result.err());
-    assert_eq!(
-        result.unwrap(),
-        serde_json::Value::String("pong".to_string()),
-        "ping should return 'pong'"
-    );
+    let chats = chats::list_chats_store(&store_dir, None).expect("list_chats_store");
+    assert_eq!(chats.len(), 2);
+    assert_eq!(chats[0].name, "Alice");
+    assert_eq!(chats[0].unread_count, 3);
+    assert_eq!(chats[0].last_message_text.as_deref(), Some("Hey!"));
+    assert_eq!(chats[1].name, "Bob");
+    assert_eq!(chats[1].unread_count, 0);
+    assert!(chats[1].last_message_text.is_none());
 
-    daemon.stop().expect("stop should succeed");
-    assert!(!daemon.is_running(), "daemon should not be running after stop");
-
-    println!("PASS: WhatsAppDaemon IPC Ping/Pong");
+    println!("PASS: wa-rs meta DB chat CRUD — 2 chats stored & retrieved");
 }
 
 #[test]
-fn test_whatsapp_daemon_auth_status_unauthenticated() {
-    let wacli_path = find_wacli_binary()
-        .expect("wacli binary required for this test");
-
+fn test_wa_meta_db_contact_crud() {
     let store_dir = create_test_store_dir();
 
-    let daemon = WhatsAppDaemon::start_with_binary(wacli_path, store_dir)
-        .expect("WhatsAppDaemon should start successfully");
+    let contacts_empty = chats::list_contacts_store(&store_dir, None).expect("list_contacts_store");
+    assert!(contacts_empty.is_empty(), "Fresh meta DB should have no contacts");
 
-    let status = daemon.auth_status();
-    assert!(status.is_ok(), "auth_status should not error: {:?}", status.err());
+    insert_contact(&store_dir, "333@s.whatsapp.net", "Charlie", "Charlie P.");
+    insert_contact(&store_dir, "444@s.whatsapp.net", "Diana", "Diana Q.");
 
-    let val = status.unwrap();
-    let authenticated = val["authenticated"].as_bool().unwrap_or(true);
-    assert!(!authenticated, "auth_status should report not authenticated");
+    let contacts = chats::list_contacts_store(&store_dir, None).expect("list_contacts_store");
+    assert_eq!(contacts.len(), 2);
+    assert_eq!(contacts[0].name, "Charlie");
+    assert_eq!(contacts[0].push_name, "Charlie P.");
+    assert_eq!(contacts[1].name, "Diana");
 
-    println!("PASS: WhatsAppDaemon auth_status correctly reports unauthenticated");
-    println!("   Response: {}", serde_json::to_string(&val).unwrap());
+    println!("PASS: wa-rs meta DB contact CRUD — 2 contacts stored & retrieved");
 }
 
 #[test]
-fn test_whatsapp_daemon_list_chats_unauthenticated() {
-    let wacli_path = find_wacli_binary()
-        .expect("wacli binary required for this test");
-
+fn test_wa_meta_db_empty_on_fresh_store() {
     let store_dir = create_test_store_dir();
 
-    let daemon = WhatsAppDaemon::start_with_binary(wacli_path, store_dir)
-        .expect("WhatsAppDaemon should start successfully");
+    let chats = chats::list_chats_store(&store_dir, Some(50)).expect("list_chats_store");
+    assert!(chats.is_empty(), "Fresh meta DB should return empty chats");
 
-    let chats = daemon.list_chats(Some(10), None);
-    assert!(
-        chats.is_err(),
-        "list_chats without auth should fail. Got: {:?}",
-        chats
-    );
-    let err_msg = chats.err().unwrap();
-    assert!(
-        err_msg.contains("not logged in") || err_msg.contains("auth"),
-        "Error should mention auth: {}",
-        err_msg
-    );
-    println!("PASS: WhatsAppDaemon list_chats correctly rejected (unauthenticated)");
-    println!("   Error: {}", err_msg);
+    let contacts = chats::list_contacts_store(&store_dir, Some(50)).expect("list_contacts_store");
+    assert!(contacts.is_empty(), "Fresh meta DB should return empty contacts");
 
-    let contacts = daemon.list_contacts(Some(10), None);
-    // contacts are stored locally in the DB — accessible without auth
-    if let Ok(val) = &contacts {
-        println!("   contacts accessible without auth (local store): {:?}", val);
-        println!("   (this is expected — contacts are read from local SQLite DB)");
-    } else {
-        println!("   contacts also rejected (daemon requires auth even for local ops)");
+    println!("PASS: wa-rs meta DB empty results on fresh store");
+}
+
+#[test]
+fn test_wa_meta_db_limit_respected() {
+    let store_dir = create_test_store_dir();
+
+    for i in 0..10 {
+        let jid = format!("{}@s.whatsapp.net", 1000 + i);
+        insert_chat(&store_dir, &jid, &format!("User {}", i), 0, None);
+        insert_contact(&store_dir, &jid, &format!("User {}", i), "");
     }
+
+    let limited = chats::list_chats_store(&store_dir, Some(3)).expect("list_chats_store");
+    assert_eq!(limited.len(), 3, "limit=3 should return 3 chats");
+
+    let all = chats::list_chats_store(&store_dir, None).expect("list_chats_store");
+    assert_eq!(all.len(), 10, "default limit should return all 10");
+
+    let contacts_limited = chats::list_contacts_store(&store_dir, Some(5)).expect("list_contacts_store");
+    assert_eq!(contacts_limited.len(), 5, "limit=5 should return 5 contacts");
+
+    println!("PASS: wa-rs meta DB LIMIT respected (chats={}, contacts={})", limited.len(), contacts_limited.len());
+}
+
+#[test]
+fn test_wa_meta_db_structure() {
+    let store_dir = create_test_store_dir();
+
+    // ensure_meta_db creates tables on first call
+    let _db = chats::ensure_meta_db(&store_dir).expect("ensure_meta_db");
+
+    // Verify tables exist by inserting via raw rusqlite and reading via store API
+    insert_chat(&store_dir, "555@s.whatsapp.net", "Eve", 1, Some("Hello"));
+    let results = chats::list_chats_store(&store_dir, None).expect("list_chats_store");
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].jid, "555@s.whatsapp.net");
+
+    // Verify it's a real SQLite DB file
+    let db_path = store_dir.join("wa-meta.db");
+    assert!(db_path.exists(), "wa-meta.db should exist on disk");
+    let meta = std::fs::metadata(&db_path).expect("metadata");
+    assert!(meta.len() > 0, "wa-meta.db should have content");
+
+    println!("PASS: wa-rs meta DB schema & structure verified");
+    println!("   DB path: {} ({} bytes)", db_path.display(), meta.len());
+}
+
+#[test]
+fn test_wa_meta_db_upsert() {
+    let store_dir = create_test_store_dir();
+
+    // Insert then update
+    insert_chat(&store_dir, "666@s.whatsapp.net", "First", 1, Some("initial"));
+    let c1 = chats::list_chats_store(&store_dir, None).expect("list_chats_store");
+    assert_eq!(c1.len(), 1);
+    assert_eq!(c1[0].name, "First");
+
+    insert_chat(&store_dir, "666@s.whatsapp.net", "Updated", 5, Some("modified"));
+    let c2 = chats::list_chats_store(&store_dir, None).expect("list_chats_store");
+    assert_eq!(c2.len(), 1, "upsert should keep 1 row");
+    assert_eq!(c2[0].name, "Updated");
+    assert_eq!(c2[0].unread_count, 5);
+
+    println!("PASS: wa-rs meta DB upsert works correctly");
 }
 
 #[test]
@@ -212,61 +248,41 @@ fn test_whatsapp_daemon_not_found() {
 }
 
 #[test]
-fn test_whatsapp_daemon_lifecycle() {
-    let wacli_path = find_wacli_binary()
-        .expect("wacli binary required for this test");
-
+fn test_wa_meta_db_concurrent_tables() {
     let store_dir = create_test_store_dir();
 
-    let daemon = WhatsAppDaemon::start_with_binary(wacli_path.clone(), store_dir.clone())
-        .expect("start daemon");
-    assert!(daemon.is_running(), "should be running after start");
+    // Both tables coexist independently
+    insert_chat(&store_dir, "777@s.whatsapp.net", "ChatOne", 2, Some("msg"));
+    insert_contact(&store_dir, "777@s.whatsapp.net", "ContactOne", "C1");
+    insert_contact(&store_dir, "888@s.whatsapp.net", "ContactTwo", "C2");
 
-    let ping = daemon.send_request("ping", None);
-    assert!(ping.is_ok(), "server should respond to ping: {:?}", ping.err());
-    assert_eq!(ping.unwrap(), serde_json::Value::String("pong".to_string()));
-    println!("PASS: Lifecycle - server responsive after start");
+    let chats = chats::list_chats_store(&store_dir, None).expect("list_chats_store");
+    assert_eq!(chats.len(), 1);
 
-    daemon.stop().expect("stop daemon");
-    assert!(!daemon.is_running(), "should not be running after stop");
-    println!("PASS: Lifecycle - server stopped cleanly");
+    let contacts = chats::list_contacts_store(&store_dir, None).expect("list_contacts_store");
+    assert_eq!(contacts.len(), 2);
 
-    let daemon2 = WhatsAppDaemon::start_with_binary(wacli_path, store_dir)
-        .expect("restart daemon");
-    assert!(daemon2.is_running(), "should be running after restart");
-
-    let ping2 = daemon2.send_request("ping", None);
-    assert!(ping2.is_ok(), "server should respond after restart");
-    assert_eq!(ping2.unwrap(), serde_json::Value::String("pong".to_string()));
-    println!("PASS: Lifecycle - server restarted successfully");
+    println!("PASS: wa-rs meta DB — chats & contacts tables coexist independently");
 }
 
 #[test]
-fn test_whatsapp_daemon_rpc_error_unknown_method() {
-    let wacli_path = find_wacli_binary()
-        .expect("wacli binary required for this test");
+fn test_wa_meta_db_error_on_bad_path() {
+    let bad_dir = PathBuf::from("/proc/nonexistent_wa_test_dir_12345");
 
-    let store_dir = create_test_store_dir();
+    let chats = chats::list_chats_store(&bad_dir, None);
+    assert!(chats.is_err(), "bad path should produce error");
 
-    let daemon = WhatsAppDaemon::start_with_binary(wacli_path, store_dir)
-        .expect("start daemon");
+    let contacts = chats::list_contacts_store(&bad_dir, None);
+    assert!(contacts.is_err(), "bad path should produce error");
 
-    let result = daemon.send_request("nonexistent_method_xyz", None);
-    assert!(result.is_err(), "Unknown method should return error");
-    let err = result.err().unwrap();
-    assert!(
-        err.contains("unknown method"),
-        "Error should mention unknown method. Got: {}",
-        err
-    );
-    println!("PASS: WhatsAppDaemon unknown method correctly rejected");
-    println!("   Error: {}", err);
+    println!("PASS: wa-rs meta DB — bad path properly errors");
+    println!("   chats error: {:?}", chats.err());
 }
 
 #[test]
 fn test_whatsapp_provider_creation_with_real_config() {
     let config = get_config();
-    let wa = WhatsAppProvider::new(&config);
+    let wa = WhatsAppProvider::new(&config, None);
 
     assert_eq!(wa.identifier(), "whatsapp");
     assert_eq!(wa.name(), "WhatsApp");
@@ -289,7 +305,7 @@ async fn test_whatsapp_mcp_tool_compilation() {
     use postiz_rust::realtime::Broadcaster;
 
     let broadcaster = Broadcaster::new();
-    let registry = ProviderRegistry::new(&config, None);
+    let registry = ProviderRegistry::new(&config, None, None);
     let rate_limiter = postiz_rust::api::rate_limiter::AuthRateLimiter::new(5, 60);
 
     let state = AppState {
@@ -300,6 +316,7 @@ async fn test_whatsapp_mcp_tool_compilation() {
         rate_limiter,
         token_key: None,
         telegram_client_manager: None,
+        wa_client: None,
     };
 
     let server = PostizMcpServer::new(state.clone());
@@ -325,7 +342,7 @@ async fn test_whatsapp_mcp_handler_functions() {
     use postiz_rust::realtime::Broadcaster;
 
     let broadcaster = Broadcaster::new();
-    let registry = ProviderRegistry::new(&config, None);
+    let registry = ProviderRegistry::new(&config, None, None);
     let rate_limiter = postiz_rust::api::rate_limiter::AuthRateLimiter::new(5, 60);
 
     let state = AppState {
@@ -336,6 +353,7 @@ async fn test_whatsapp_mcp_handler_functions() {
         rate_limiter,
         token_key: None,
         telegram_client_manager: None,
+        wa_client: None,
     };
 
     let send_input = tools_whatsapp::WaSendTextInput {

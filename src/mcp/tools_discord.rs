@@ -9,6 +9,7 @@ use serde_json::{json, Value};
 use uuid::Uuid;
 
 use crate::api::AppState;
+use crate::crypto;
 use crate::social::discord::DiscordProvider;
 
 // ── Input Types ───────────────────────────────────────────────
@@ -54,7 +55,11 @@ async fn find_di_token(state: &AppState, user_id: Uuid, channel_id: &str) -> Res
             )
         })?;
 
-    Ok(discord.access_token.clone())
+    let __tok = discord.access_token.clone();
+    let __tok = state.token_key.as_ref()
+        .and_then(|k| crate::crypto::decrypt_string(&__tok, k).ok())
+        .unwrap_or(__tok);
+    Ok(__tok)
 }
 
 /// Create a DiscordProvider from the app config (bot_token sourced from config.discord_bot_token).

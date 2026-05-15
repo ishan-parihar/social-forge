@@ -26,6 +26,7 @@ use postiz_rust::api::AppState;
 use postiz_rust::realtime::Broadcaster;
 use postiz_rust::services::telegram_client::TelegramClientManager;
 use postiz_rust::social::registry::ProviderRegistry;
+use postiz_rust::wa::WhaClient;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -76,8 +77,31 @@ async fn main() -> anyhow::Result<()> {
         None
     };
 
+    // ── WhatsApp Web client (wa-rs replaces Go wacli sidecar) ──
+    let wa_client: postiz_rust::wa::OptionalWhaClient =
+        if let Some(dir) = &config.whatsapp_store_dir {
+            let store_dir = PathBuf::from(dir);
+            match WhaClient::new(store_dir).await {
+                Ok(client) => {
+                    tracing::info!("WhatsApp Web client (wa-rs): initialized");
+                    Some(Arc::new(tokio::sync::Mutex::new(client)))
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to initialize WhatsApp client: {e}");
+                    None
+                }
+            }
+        } else {
+            tracing::warn!("WHATSAPP_STORE_DIR not set -- WhatsApp tools disabled");
+            None
+        };
+
     // ── Provider registry ─────────────────────────────────────
-    let providers = ProviderRegistry::new(&config, telegram_client_manager.clone());
+    let providers = ProviderRegistry::new(
+        &config,
+        telegram_client_manager.clone(),
+        wa_client.clone(),
+    );
     let providers_arc = Arc::new(providers);
 
     // ── Shared app state ─────────────────────────────────────
@@ -103,6 +127,7 @@ async fn main() -> anyhow::Result<()> {
         rate_limiter,
         token_key,
         telegram_client_manager: telegram_client_manager.clone(),
+        wa_client,
     };
     let state_for_mcp = state.clone();
 
@@ -120,8 +145,8 @@ async fn main() -> anyhow::Result<()> {
     let app = api::build_router(state);
 
     // ── Start HTTP server ────────────────────────────────────
-    let http_port = std::env::var("PORT").unwrap_or_else(|_| "3000".into());
-    let http_addr = format!("0.0.0.0:{http_port}");
+    // Server MUST always run on port 3000. Callback URLs are hardcoded to localhost:3000.
+    let http_addr = "0.0.0.0:3000".to_string();
 
     let listener = tokio::net::TcpListener::bind(&http_addr)
         .await

@@ -7,6 +7,7 @@ use serde_json::json;
 use uuid::Uuid;
 
 use crate::api::AppState;
+use crate::crypto;
 use crate::social::medium::MediumProvider;
 use crate::social::{PostContent, SocialProvider};
 

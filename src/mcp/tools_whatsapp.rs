@@ -1,11 +1,15 @@
 use rmcp::{Json, schemars::JsonSchema};
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 use crate::api::AppState;
+use crate::wa::{WhaClient, chats, messages};
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct WaAuthStatusOutput {
-    pub data: serde_json::Value,
+    pub authenticated: bool,
+    pub jid: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
@@ -16,7 +20,7 @@ pub struct WaSendTextInput {
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct WaSendTextOutput {
-    pub data: serde_json::Value,
+    pub message_id: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
@@ -26,7 +30,7 @@ pub struct WaChatsInput {
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct WaChatsOutput {
-    pub data: serde_json::Value,
+    pub data: Vec<chats::ChatSummary>,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
@@ -37,46 +41,52 @@ pub struct WaContactsInput {
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct WaContactsOutput {
-    pub data: serde_json::Value,
+    pub data: Vec<chats::ContactEntry>,
 }
 
-async fn find_whatsapp_daemon(state: &AppState) -> Result<std::sync::Arc<crate::services::whatsapp_daemon::WhatsAppDaemon>, String> {
-    let store_dir = state
-        .config
-        .whatsapp_store_dir
-        .clone()
-        .unwrap_or_else(|| "./data/whatsapp".into());
-    crate::services::whatsapp_daemon::WhatsAppDaemon::start(std::path::PathBuf::from(store_dir))
+/// Get the native WhaClient guard, or error.
+fn get_wa_client<'a>(
+    state: &'a AppState,
+) -> Result<&'a Arc<Mutex<WhaClient>>, String> {
+    state
+        .wa_client
+        .as_ref()
+        .ok_or_else(|| "WhatsApp client not configured (set WHATSAPP_STORE_DIR)".to_string())
 }
 
 pub async fn handle_wa_auth_status(
     state: &AppState,
 ) -> Result<Json<WaAuthStatusOutput>, String> {
-    let daemon = find_whatsapp_daemon(state).await?;
-    let result = daemon
-        .auth_status()
-        .map_err(|e| format!("WhatsApp auth status failed: {e}"))?;
-    Ok(Json(WaAuthStatusOutput { data: result }))
+    let client = get_wa_client(state)?;
+    let locked = client.lock().await;
+    let authenticated = locked.is_authenticated();
+    let jid = locked
+        .inner()
+        .get_pn()
+        .await
+        .map(|j| j.to_string());
+    Ok(Json(WaAuthStatusOutput { authenticated, jid }))
 }
 
 pub async fn handle_wa_send_text(
     state: &AppState,
     input: &WaSendTextInput,
 ) -> Result<Json<WaSendTextOutput>, String> {
-    let daemon = find_whatsapp_daemon(state).await?;
-    let result = daemon
-        .send_text(&input.to, &input.text)
+    let client = get_wa_client(state)?;
+    let jid = wa_rs::Jid::pn(&input.to);
+    let msg_id = messages::send_text(client, &jid, &input.text)
+        .await
         .map_err(|e| format!("WhatsApp send failed: {e}"))?;
-    Ok(Json(WaSendTextOutput { data: result }))
+    Ok(Json(WaSendTextOutput { message_id: msg_id }))
 }
 
 pub async fn handle_wa_chats(
     state: &AppState,
     input: &WaChatsInput,
 ) -> Result<Json<WaChatsOutput>, String> {
-    let daemon = find_whatsapp_daemon(state).await?;
-    let result = daemon
-        .list_chats(input.limit.map(|l| l as u64), None)
+    let client = get_wa_client(state)?;
+    let result = chats::list_chats(client, input.limit)
+        .await
         .map_err(|e| format!("WhatsApp list chats failed: {e}"))?;
     Ok(Json(WaChatsOutput { data: result }))
 }
@@ -85,9 +95,9 @@ pub async fn handle_wa_contacts(
     state: &AppState,
     input: &WaContactsInput,
 ) -> Result<Json<WaContactsOutput>, String> {
-    let daemon = find_whatsapp_daemon(state).await?;
-    let result = daemon
-        .list_contacts(input.limit.map(|l| l as u64), input.query.clone())
+    let client = get_wa_client(state)?;
+    let result = chats::list_contacts(client, input.limit)
+        .await
         .map_err(|e| format!("WhatsApp list contacts failed: {e}"))?;
     Ok(Json(WaContactsOutput { data: result }))
 }

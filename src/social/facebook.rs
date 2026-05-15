@@ -52,7 +52,6 @@ impl SocialProvider for FacebookProvider {
             "pages_read_user_content".into(),
             "public_profile".into(),
             "read_insights".into(),
-            "publish_to_page".into(),
             "pages_messaging".into(),
         ]
     }
@@ -894,6 +893,8 @@ mod tests {
             frontend_url: "http://localhost:4200".into(),
             x_client_id: Some("test".into()),
             x_client_secret: Some("test".into()),
+            x_auth_token: None,
+            x_ct0: None,
             linkedin_client_id: Some("test".into()),
             linkedin_client_secret: Some("test".into()),
             bluesky_handle: None,
