@@ -3,7 +3,10 @@
   import { integrationsApi, type Integration } from "$lib/api/integrations";
   import ChannelCard from "./ChannelCard.svelte";
 
-  let { onConnect }: { onConnect?: (provider: string) => void } = $props();
+  let { onConnect, onDisconnect: externalDisconnect }: {
+    onConnect?: (provider: string) => void;
+    onDisconnect?: (id: string) => void;
+  } = $props();
   let integrations = $state<Integration[]>([]);
   let loading = $state(true);
 
@@ -27,8 +30,16 @@
   }
 
   async function disconnect(id: string) {
-    await integrationsApi.disconnect(id);
-    await load();
+    if (externalDisconnect) {
+      externalDisconnect(id);
+    } else {
+      await integrationsApi.disconnect(id);
+      await load();
+    }
+  }
+
+  export function reloadIntegrations() {
+    return load();
   }
 
   onMount(load);

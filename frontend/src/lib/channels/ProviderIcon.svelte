@@ -3,7 +3,8 @@
 
   const icons: Record<string, string> = {
     x: "🐦", facebook: "📘", instagram: "📷", threads: "🧵",
-    linkedin: "💼", linkedin_page: "🏢", youtube: "▶️", pinterest: "📌",
+    linkedin: "💼", linkedin_page: "🏢", "linkedin-page": "🏢",
+    youtube: "▶️", pinterest: "📌",
     reddit: "👽", bluesky: "🦋", discord: "💬", telegram: "✈️",
     whatsapp: "💚", skool: "🎓",
   };
