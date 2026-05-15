@@ -12,7 +12,9 @@ export function getMonthDays(year: number, month: number): Date[] {
 
 export function getWeekDays(date: Date): Date[] {
   const start = new Date(date);
-  start.setDate(start.getDate() - start.getDay());
+  const day = start.getDay();
+  const diff = day === 0 ? 6 : day - 1;
+  start.setDate(start.getDate() - diff);
   const days: Date[] = [];
   for (let i = 0; i < 7; i++) {
     const d = new Date(start);
@@ -48,13 +50,15 @@ export function dateKey(date: Date): string {
 }
 
 export function buildWeekDays(referenceDate: Date, events: CalendarEvent[]): WeekDay[] {
+  const refMonth = referenceDate.getMonth();
+  const refYear = referenceDate.getFullYear();
   return getWeekDays(referenceDate).map(d => {
     const key = formatDateKey(d);
     return {
       date: d,
       dateStr: key,
       isToday: isToday(d),
-      isCurrentMonth: true,
+      isCurrentMonth: d.getMonth() === refMonth && d.getFullYear() === refYear,
       events: events.filter(e => e.date === key),
     };
   });
