@@ -102,6 +102,17 @@ pub struct IgGetInsightsAudienceInput {
     pub ig_id: String,
 }
 
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct IgGetMentionsInput {
+    pub ig_id: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct IgPollContainerInput {
+    pub ig_id: String,
+    pub creation_id: String,
+}
+
 // ── Helpers ──────────────────────────────────────────────────
 
 async fn find_instagram_token(state: &AppState, user_id: Uuid, ig_id: &str) -> Result<String, String> {
@@ -449,4 +460,32 @@ pub async fn handle_ig_get_insights_audience(
             }
         })?;
     Ok(Json(serde_json::json!({ "data": result })))
+}
+
+pub async fn handle_ig_get_mentions(
+    state: &AppState,
+    input: &IgGetMentionsInput,
+) -> Result<Json<serde_json::Value>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let token = find_instagram_token(state, user_id, &input.ig_id).await?;
+    let provider = create_provider(state);
+    let result = provider
+        .get_ig_mentions(&token, &input.ig_id)
+        .await
+        .map_err(|e| format!("Instagram get mentions failed: {e}"))?;
+    Ok(Json(serde_json::json!({ "data": result })))
+}
+
+pub async fn handle_ig_poll_container(
+    state: &AppState,
+    input: &IgPollContainerInput,
+) -> Result<Json<serde_json::Value>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let token = find_instagram_token(state, user_id, &input.ig_id).await?;
+    let provider = create_provider(state);
+    let status = provider
+        .poll_container_status(&token, &input.creation_id)
+        .await
+        .map_err(|e| format!("Instagram poll container failed: {e}"))?;
+    Ok(Json(serde_json::json!({ "status": status })))
 }
