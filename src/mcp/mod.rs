@@ -52,9 +52,7 @@ pub mod tools_wordpress;
 pub mod tools_youtube;
 pub mod tools_x;
 pub mod tools_github;
-pub mod tools_gmail;
-pub mod tools_gcal;
-pub mod tools_drive;
+pub mod tools_google;
 
 // ══════════════════════════════════════════════════════════════
 // AUTH TOOLS
@@ -893,78 +891,229 @@ impl PostizMcpServer {
         tools_instagram_standalone::handle_ias_poll_container(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    // ── YouTube Tools ──────────────────────────────────────────────
+    // ── Google Suite Tools ─────────────────────────────────────────
+    // YouTube, Gmail, Calendar, Drive — all use Google OAuth single sign-on
 
     #[tool(description = "Search YouTube videos by query")]
-    pub async fn yt_search_videos(
+    pub async fn goog_search_videos(
         &self,
-        params: Parameters<tools_youtube::YtSearchVideosInput>,
+        params: Parameters<tools_google::YtSearchVideosInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_youtube::handle_yt_search_videos(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_google::handle_goog_search_videos(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get details of a specific YouTube video by video ID")]
-    pub async fn yt_get_video(
+    pub async fn goog_get_video(
         &self,
-        params: Parameters<tools_youtube::YtGetVideoInput>,
+        params: Parameters<tools_google::YtGetVideoInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_youtube::handle_yt_get_video(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_google::handle_goog_get_video(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "List playlists for a YouTube channel")]
-    pub async fn yt_list_playlists(
+    pub async fn goog_list_playlists(
         &self,
-        params: Parameters<tools_youtube::YtListPlaylistsInput>,
+        params: Parameters<tools_google::YtListPlaylistsInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_youtube::handle_yt_list_playlists(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_google::handle_goog_get_playlists(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get items in a YouTube playlist")]
-    pub async fn yt_get_playlist_items(
+    pub async fn goog_get_playlist_items(
         &self,
-        params: Parameters<tools_youtube::YtGetPlaylistItemsInput>,
+        params: Parameters<tools_google::YtGetPlaylistItemsInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_youtube::handle_yt_get_playlist_items(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_google::handle_goog_get_playlist_items(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get comments on a YouTube video")]
-    pub async fn yt_get_comments(
+    pub async fn goog_get_comments(
         &self,
-        params: Parameters<tools_youtube::YtGetCommentsInput>,
+        params: Parameters<tools_google::YtGetCommentsInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_youtube::handle_yt_get_comments(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_google::handle_goog_get_comments(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get statistics for a YouTube channel (subscribers, views, videos)")]
-    pub async fn yt_get_channel_stats(
+    pub async fn goog_get_channel_stats(
         &self,
-        params: Parameters<tools_youtube::YtGetChannelStatsInput>,
+        params: Parameters<tools_google::YtGetChannelStatsInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_youtube::handle_yt_get_channel_stats(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_google::handle_goog_get_channel_stats(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get YouTube Analytics reports for a channel (views, watch time, etc.)")]
-    pub async fn yt_get_analytics(
+    pub async fn goog_get_analytics(
         &self,
-        params: Parameters<tools_youtube::YtGetAnalyticsInput>,
+        params: Parameters<tools_google::YtGetAnalyticsInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_youtube::handle_yt_get_analytics(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_google::handle_goog_get_analytics(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get subscriptions for a YouTube channel")]
-    pub async fn yt_get_subscriptions(
+    pub async fn goog_get_subscriptions(
         &self,
-        params: Parameters<tools_youtube::YtGetSubscriptionsInput>,
+        params: Parameters<tools_google::YtGetSubscriptionsInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_youtube::handle_yt_get_subscriptions(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_google::handle_goog_get_subscriptions(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Find YouTube creators by topic. Searches videos, groups by channel, enriches with subscriber counts and email detection.")]
-    pub async fn yt_find_creators(
+    #[tool(description = "Find YouTube creators by topic")]
+    pub async fn goog_find_creators(
         &self,
-        params: Parameters<tools_youtube::YtFindCreatorsInput>,
+        params: Parameters<tools_google::YtFindCreatorsInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_youtube::handle_yt_find_creators(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_google::handle_goog_find_creators(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Get Gmail profile info")]
+    pub async fn goog_get_profile(
+        &self,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_google::handle_goog_get_profile(&self.state, &()).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "List Gmail messages with optional search query")]
+    pub async fn goog_list_messages(
+        &self,
+        params: Parameters<tools_google::GmListMessagesInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_google::handle_goog_list_messages(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Get a single Gmail message by ID")]
+    pub async fn goog_get_message(
+        &self,
+        params: Parameters<tools_google::GmGetMessageInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_google::handle_goog_get_message(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Send an email via Gmail")]
+    pub async fn goog_send_message(
+        &self,
+        params: Parameters<tools_google::GmSendMessageInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_google::handle_goog_send_message(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "List Gmail labels")]
+    pub async fn goog_list_labels(
+        &self,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_google::handle_goog_list_labels(&self.state, &()).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Get a Gmail thread by ID")]
+    pub async fn goog_get_thread(
+        &self,
+        params: Parameters<tools_google::GmGetThreadInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_google::handle_goog_get_thread(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Search Gmail messages with a query")]
+    pub async fn goog_search_messages(
+        &self,
+        params: Parameters<tools_google::GmSearchMessagesInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_google::handle_goog_search_messages(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "List Google calendars")]
+    pub async fn goog_list_calendars(
+        &self,
+        params: Parameters<tools_google::GcalListCalendarsInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_google::handle_goog_list_calendars(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "List calendar events")]
+    pub async fn goog_list_events(
+        &self,
+        params: Parameters<tools_google::GcalListEventsInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_google::handle_goog_list_events(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Get a single calendar event")]
+    pub async fn goog_get_event(
+        &self,
+        params: Parameters<tools_google::GcalGetEventInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_google::handle_goog_get_event(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Create a new calendar event")]
+    pub async fn goog_create_event(
+        &self,
+        params: Parameters<tools_google::GcalCreateEventInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_google::handle_goog_create_event(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Update a calendar event")]
+    pub async fn goog_update_event(
+        &self,
+        params: Parameters<tools_google::GcalUpdateEventInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_google::handle_goog_update_event(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Delete a calendar event")]
+    pub async fn goog_delete_event(
+        &self,
+        params: Parameters<tools_google::GcalDeleteEventInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_google::handle_goog_delete_event(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "List files in Google Drive")]
+    pub async fn goog_list_files(
+        &self,
+        params: Parameters<tools_google::DrListFilesInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_google::handle_goog_list_files(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Get a file from Google Drive by ID")]
+    pub async fn goog_get_file(
+        &self,
+        params: Parameters<tools_google::DrGetFileInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_google::handle_goog_get_file(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Search files in Google Drive")]
+    pub async fn goog_search_files(
+        &self,
+        params: Parameters<tools_google::DrSearchFilesInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_google::handle_goog_search_files(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "List folders in Google Drive")]
+    pub async fn goog_list_folders(
+        &self,
+        params: Parameters<tools_google::DrListFoldersInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_google::handle_goog_list_folders(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Get file metadata from Google Drive")]
+    pub async fn goog_get_file_metadata(
+        &self,
+        params: Parameters<tools_google::DrGetFileMetadataInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_google::handle_goog_get_file_metadata(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Export a Google Drive file to a target format")]
+    pub async fn goog_export_file(
+        &self,
+        params: Parameters<tools_google::DrExportFileInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_google::handle_goog_export_file(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     // ── Pinterest Tools ──────────────────────────────────────────
@@ -1937,161 +2086,7 @@ impl PostizMcpServer {
         tools_github::handle_gh_get_repo_content(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    // ── Gmail Tools ──────────────────────────────────────────────
 
-    #[tool(description = "Get Gmail profile info")]
-    pub async fn gm_get_profile(
-        &self,
-    ) -> Result<Json<McpJsonValue>, String> {
-        tools_gmail::handle_gm_get_profile(&self.state, &()).await.map(|Json(v)| Json(McpJsonValue(v)))
-    }
-
-    #[tool(description = "List Gmail messages with optional search query")]
-    pub async fn gm_list_messages(
-        &self,
-        params: Parameters<tools_gmail::GmListMessagesInput>,
-    ) -> Result<Json<McpJsonValue>, String> {
-        tools_gmail::handle_gm_list_messages(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
-    }
-
-    #[tool(description = "Get a single Gmail message by ID")]
-    pub async fn gm_get_message(
-        &self,
-        params: Parameters<tools_gmail::GmGetMessageInput>,
-    ) -> Result<Json<McpJsonValue>, String> {
-        tools_gmail::handle_gm_get_message(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
-    }
-
-    #[tool(description = "Send an email via Gmail")]
-    pub async fn gm_send_message(
-        &self,
-        params: Parameters<tools_gmail::GmSendMessageInput>,
-    ) -> Result<Json<McpJsonValue>, String> {
-        tools_gmail::handle_gm_send_message(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
-    }
-
-    #[tool(description = "List Gmail labels")]
-    pub async fn gm_list_labels(
-        &self,
-    ) -> Result<Json<McpJsonValue>, String> {
-        tools_gmail::handle_gm_list_labels(&self.state, &()).await.map(|Json(v)| Json(McpJsonValue(v)))
-    }
-
-    #[tool(description = "Get a Gmail thread by ID")]
-    pub async fn gm_get_thread(
-        &self,
-        params: Parameters<tools_gmail::GmGetThreadInput>,
-    ) -> Result<Json<McpJsonValue>, String> {
-        tools_gmail::handle_gm_get_thread(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
-    }
-
-    #[tool(description = "Search Gmail messages with a query")]
-    pub async fn gm_search_messages(
-        &self,
-        params: Parameters<tools_gmail::GmSearchMessagesInput>,
-    ) -> Result<Json<McpJsonValue>, String> {
-        tools_gmail::handle_gm_search_messages(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
-    }
-
-    // ── Google Calendar Tools ────────────────────────────────────
-
-    #[tool(description = "List Google calendars")]
-    pub async fn gcal_list_calendars(
-        &self,
-        params: Parameters<tools_gcal::GcalListCalendarsInput>,
-    ) -> Result<Json<McpJsonValue>, String> {
-        tools_gcal::handle_gcal_list_calendars(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
-    }
-
-    #[tool(description = "List calendar events")]
-    pub async fn gcal_list_events(
-        &self,
-        params: Parameters<tools_gcal::GcalListEventsInput>,
-    ) -> Result<Json<McpJsonValue>, String> {
-        tools_gcal::handle_gcal_list_events(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
-    }
-
-    #[tool(description = "Get a single calendar event")]
-    pub async fn gcal_get_event(
-        &self,
-        params: Parameters<tools_gcal::GcalGetEventInput>,
-    ) -> Result<Json<McpJsonValue>, String> {
-        tools_gcal::handle_gcal_get_event(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
-    }
-
-    #[tool(description = "Create a new calendar event")]
-    pub async fn gcal_create_event(
-        &self,
-        params: Parameters<tools_gcal::GcalCreateEventInput>,
-    ) -> Result<Json<McpJsonValue>, String> {
-        tools_gcal::handle_gcal_create_event(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
-    }
-
-    #[tool(description = "Update a calendar event")]
-    pub async fn gcal_update_event(
-        &self,
-        params: Parameters<tools_gcal::GcalUpdateEventInput>,
-    ) -> Result<Json<McpJsonValue>, String> {
-        tools_gcal::handle_gcal_update_event(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
-    }
-
-    #[tool(description = "Delete a calendar event")]
-    pub async fn gcal_delete_event(
-        &self,
-        params: Parameters<tools_gcal::GcalDeleteEventInput>,
-    ) -> Result<Json<McpJsonValue>, String> {
-        tools_gcal::handle_gcal_delete_event(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
-    }
-
-    // ── Google Drive Tools ───────────────────────────────────────
-
-    #[tool(description = "List files in Google Drive")]
-    pub async fn dr_list_files(
-        &self,
-        params: Parameters<tools_drive::DrListFilesInput>,
-    ) -> Result<Json<McpJsonValue>, String> {
-        tools_drive::handle_dr_list_files(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
-    }
-
-    #[tool(description = "Get a file from Google Drive by ID")]
-    pub async fn dr_get_file(
-        &self,
-        params: Parameters<tools_drive::DrGetFileInput>,
-    ) -> Result<Json<McpJsonValue>, String> {
-        tools_drive::handle_dr_get_file(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
-    }
-
-    #[tool(description = "Search files in Google Drive")]
-    pub async fn dr_search_files(
-        &self,
-        params: Parameters<tools_drive::DrSearchFilesInput>,
-    ) -> Result<Json<McpJsonValue>, String> {
-        tools_drive::handle_dr_search_files(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
-    }
-
-    #[tool(description = "List folders in Google Drive")]
-    pub async fn dr_list_folders(
-        &self,
-        params: Parameters<tools_drive::DrListFoldersInput>,
-    ) -> Result<Json<McpJsonValue>, String> {
-        tools_drive::handle_dr_list_folders(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
-    }
-
-    #[tool(description = "Get file metadata from Google Drive")]
-    pub async fn dr_get_file_metadata(
-        &self,
-        params: Parameters<tools_drive::DrGetFileMetadataInput>,
-    ) -> Result<Json<McpJsonValue>, String> {
-        tools_drive::handle_dr_get_file_metadata(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
-    }
-
-    #[tool(description = "Export a Google Drive file to a target format")]
-    pub async fn dr_export_file(
-        &self,
-        params: Parameters<tools_drive::DrExportFileInput>,
-    ) -> Result<Json<McpJsonValue>, String> {
-        tools_drive::handle_dr_export_file(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
-    }
 }
 
 // ══════════════════════════════════════════════════════════════

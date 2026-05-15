@@ -464,12 +464,12 @@ impl SocialProvider for GithubProvider {
 
     async fn exchange_code(
         &self,
-        code: &str,
+        _code: &str,
         _code_verifier: &str,
         _redirect_uri: &str,
     ) -> Result<AuthToken, ProviderError> {
-        // `code` is the GitHub PAT from the config
-        let token = code.to_string();
+        // Use the PAT from self.token (set via Config), not the code param
+        let token = self.token.clone();
 
         // Fetch user info to populate AuthToken fields
         let resp = self

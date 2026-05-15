@@ -11,6 +11,7 @@ pub mod drive;
 pub mod facebook;
 pub mod github;
 pub mod gmail;
+pub mod google;
 pub mod hashnode;
 pub mod instagram;
 pub mod instagram_standalone;

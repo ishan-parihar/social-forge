@@ -80,6 +80,8 @@ pub async fn onboard_page(
             "linkedin-page" => "LinkedIn Page",
             "bluesky" => "Bluesky",
             "skool" => "Skool",
+            "github" => "GitHub",
+            "google" => "Google Suite",
             _ => pid.as_str(),
         };
 
@@ -160,12 +162,13 @@ pub async fn onboard_page(
                 "facebook" | "instagram" => "Requires: FACEBOOK_CLIENT_ID + FACEBOOK_CLIENT_SECRET",
                 "instagram-standalone" => "Requires: INSTAGRAM_APP_ID + INSTAGRAM_APP_SECRET",
                 "threads" => "Requires: THREADS_APP_ID + THREADS_APP_SECRET",
-                "youtube" => "Requires: YOUTUBE_CLIENT_ID + YOUTUBE_CLIENT_SECRET",
+                "youtube" | "google" => "Requires: YOUTUBE_CLIENT_ID + YOUTUBE_CLIENT_SECRET",
                 "telegram-bot" => "Requires: TELEGRAM_BOT_TOKENS",
                 "telegram-user" => "Requires: TELEGRAM_CLI_PATH (or tg in PATH)",
                 "reddit" => "Requires: REDDIT_CLIENT_ID + REDDIT_CLIENT_SECRET + REDDIT_USERNAME + REDDIT_PASSWORD",
                 "bluesky" => "Requires: BLUESKY_HANDLE + BLUESKY_APP_PASSWORD",
                 "skool" => "Requires Chrome extension — install, login to Skool, extract auth_token cookie",
+                "github" => "Requires: GITHUB_TOKEN",
                 _ => "Missing environment variables",
             }.into();
             action_html = format!(r#"<a href="/api/public/connect/{}" class="btn btn-disabled">Not Available</a>"#, id);
@@ -489,10 +492,11 @@ fn provider_icon(id: &str) -> &'static str {
         "facebook" | "instagram" => "📘",
         "instagram-standalone" => "📸",
         "threads" => "🧵",
-        "youtube" => "▶️",
+        "youtube" | "google" => "▶️",
         "telegram-bot" | "telegram-user" => "✈️",
         "bluesky" => "🦋",
         "skool" => "🎓",
+        "github" => "🐙",
         _ => "🔗",
     }
 }
@@ -530,11 +534,12 @@ pub async fn public_connect(
             "facebook" | "instagram" => "FACEBOOK_CLIENT_ID + FACEBOOK_CLIENT_SECRET",
             "instagram-standalone" => "INSTAGRAM_APP_ID + INSTAGRAM_APP_SECRET",
             "threads" => "THREADS_APP_ID + THREADS_APP_SECRET",
-            "youtube" => "YOUTUBE_CLIENT_ID + YOUTUBE_CLIENT_SECRET",
+            "youtube" | "google" => "YOUTUBE_CLIENT_ID + YOUTUBE_CLIENT_SECRET",
             "telegram-bot" => "TELEGRAM_BOT_TOKENS (comma-separated)",
             "telegram-user" => "TELEGRAM_CLI_PATH",
                 "bluesky" => "BLUESKY_HANDLE + BLUESKY_APP_PASSWORD",
                 "skool" => "Chrome extension — install, login to Skool, extract auth_token cookie",
+                "github" => "GITHUB_TOKEN",
             _ => "Unknown provider. Check server logs.",
         };
         return Err(AppError::BadRequest(format!(
