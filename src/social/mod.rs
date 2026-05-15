@@ -3,10 +3,14 @@
 // Each platform implements this trait for OAuth + publishing.
 
 pub mod bluesky;
+pub mod calendar;
 pub mod common;
 pub mod devto;
 pub mod discord;
+pub mod drive;
 pub mod facebook;
+pub mod github;
+pub mod gmail;
 pub mod hashnode;
 pub mod instagram;
 pub mod instagram_standalone;

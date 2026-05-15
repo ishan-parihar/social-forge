@@ -69,6 +69,9 @@ pub struct Config {
     // Hashnode (API key-based)
     pub hashnode_api_key: Option<String>,
 
+    // GitHub (PAT-based)
+    pub github_token: Option<String>,
+
     // Token encryption at rest
     pub token_encryption_key: Option<String>,
 
@@ -127,6 +130,7 @@ impl Config {
             medium_access_token: opt("MEDIUM_ACCESS_TOKEN"),
             devto_api_key: opt("DEVTO_API_KEY"),
             hashnode_api_key: opt("HASHNODE_API_KEY"),
+            github_token: opt("GITHUB_TOKEN"),
             token_encryption_key: opt("TOKEN_ENCRYPTION_KEY"),
             media_dir: opt("MEDIA_DIR").unwrap_or_else(|| "./uploads".into()),
         })
@@ -190,6 +194,10 @@ impl Config {
             "medium" => Some(("api-key".into(), self.medium_access_token.clone()?)),
             "devto" => Some(("api-key".into(), self.devto_api_key.clone()?)),
             "hashnode" => Some(("api-key".into(), self.hashnode_api_key.clone()?)),
+            "github" => Some((self.github_token.clone()?, self.github_token.clone()?)),
+            "gmail" => Some((self.youtube_client_id.clone()?, self.youtube_client_secret.clone()?)),
+            "calendar" => Some((self.youtube_client_id.clone()?, self.youtube_client_secret.clone()?)),
+            "drive" => Some((self.youtube_client_id.clone()?, self.youtube_client_secret.clone()?)),
             _ => None,
         }
     }

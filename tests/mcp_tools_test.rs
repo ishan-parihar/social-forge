@@ -40,10 +40,11 @@ async fn test_provider_registry_has_all_providers() {
         "linkedin-page", "instagram-standalone", "threads", "youtube",
         "reddit", "telegram-bot", "telegram-user", "pinterest", "skool",
         "whatsapp", "wordpress",
+        "gmail", "calendar", "drive",
     ];
     expected.sort();
 
-    assert_eq!(ids, expected, "Provider registry should contain all 16 providers");
+    assert_eq!(ids, expected, "Provider registry should contain all 19 providers");
     println!("✅ Provider registry: {} providers registered", ids.len());
 }
 

@@ -51,6 +51,10 @@ mod tools_webhooks;
 pub mod tools_wordpress;
 pub mod tools_youtube;
 pub mod tools_x;
+pub mod tools_github;
+pub mod tools_gmail;
+pub mod tools_gcal;
+pub mod tools_drive;
 
 // ══════════════════════════════════════════════════════════════
 // AUTH TOOLS
@@ -1802,6 +1806,291 @@ impl PostizMcpServer {
         params: Parameters<tools_notifications::NotifCreateInput>,
     ) -> Result<Json<McpJsonValue>, String> {
         tools_notifications::handle_notif_create(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    // ── GitHub Tools ─────────────────────────────────────────────
+
+    #[tool(description = "Get the currently authenticated GitHub user")]
+    pub async fn gh_get_authenticated_user(
+        &self,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_github::handle_gh_get_authenticated_user(&self.state, &()).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Get a GitHub user by login username")]
+    pub async fn gh_get_user(
+        &self,
+        params: Parameters<tools_github::GhGetUserInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_github::handle_gh_get_user(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "List repositories for a GitHub user or organization")]
+    pub async fn gh_list_repos(
+        &self,
+        params: Parameters<tools_github::GhListReposInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_github::handle_gh_list_repos(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Get details of a specific GitHub repository")]
+    pub async fn gh_get_repo(
+        &self,
+        params: Parameters<tools_github::GhGetRepoInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_github::handle_gh_get_repo(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "List issues for a GitHub repository")]
+    pub async fn gh_list_issues(
+        &self,
+        params: Parameters<tools_github::GhListIssuesInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_github::handle_gh_list_issues(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Get a specific GitHub issue")]
+    pub async fn gh_get_issue(
+        &self,
+        params: Parameters<tools_github::GhGetIssueInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_github::handle_gh_get_issue(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Create a new issue in a GitHub repository")]
+    pub async fn gh_create_issue(
+        &self,
+        params: Parameters<tools_github::GhCreateIssueInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_github::handle_gh_create_issue(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "List pull requests for a GitHub repository")]
+    pub async fn gh_list_pull_requests(
+        &self,
+        params: Parameters<tools_github::GhListPullRequestsInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_github::handle_gh_list_pull_requests(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Get a specific GitHub pull request")]
+    pub async fn gh_get_pull_request(
+        &self,
+        params: Parameters<tools_github::GhGetPullRequestInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_github::handle_gh_get_pull_request(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "List commits for a GitHub repository")]
+    pub async fn gh_list_commits(
+        &self,
+        params: Parameters<tools_github::GhListCommitsInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_github::handle_gh_list_commits(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "List branches for a GitHub repository")]
+    pub async fn gh_list_branches(
+        &self,
+        params: Parameters<tools_github::GhListBranchesInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_github::handle_gh_list_branches(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "List releases for a GitHub repository")]
+    pub async fn gh_list_releases(
+        &self,
+        params: Parameters<tools_github::GhListReleasesInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_github::handle_gh_list_releases(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Search GitHub repositories by query")]
+    pub async fn gh_search_repos(
+        &self,
+        params: Parameters<tools_github::GhSearchReposInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_github::handle_gh_search_repos(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Search code on GitHub by query")]
+    pub async fn gh_search_code(
+        &self,
+        params: Parameters<tools_github::GhSearchCodeInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_github::handle_gh_search_code(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "List contributors for a GitHub repository")]
+    pub async fn gh_list_contributors(
+        &self,
+        params: Parameters<tools_github::GhListContributorsInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_github::handle_gh_list_contributors(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Get file or directory contents from a GitHub repository")]
+    pub async fn gh_get_repo_content(
+        &self,
+        params: Parameters<tools_github::GhGetRepoContentInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_github::handle_gh_get_repo_content(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    // ── Gmail Tools ──────────────────────────────────────────────
+
+    #[tool(description = "Get Gmail profile info")]
+    pub async fn gm_get_profile(
+        &self,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_gmail::handle_gm_get_profile(&self.state, &()).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "List Gmail messages with optional search query")]
+    pub async fn gm_list_messages(
+        &self,
+        params: Parameters<tools_gmail::GmListMessagesInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_gmail::handle_gm_list_messages(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Get a single Gmail message by ID")]
+    pub async fn gm_get_message(
+        &self,
+        params: Parameters<tools_gmail::GmGetMessageInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_gmail::handle_gm_get_message(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Send an email via Gmail")]
+    pub async fn gm_send_message(
+        &self,
+        params: Parameters<tools_gmail::GmSendMessageInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_gmail::handle_gm_send_message(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "List Gmail labels")]
+    pub async fn gm_list_labels(
+        &self,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_gmail::handle_gm_list_labels(&self.state, &()).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Get a Gmail thread by ID")]
+    pub async fn gm_get_thread(
+        &self,
+        params: Parameters<tools_gmail::GmGetThreadInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_gmail::handle_gm_get_thread(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Search Gmail messages with a query")]
+    pub async fn gm_search_messages(
+        &self,
+        params: Parameters<tools_gmail::GmSearchMessagesInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_gmail::handle_gm_search_messages(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    // ── Google Calendar Tools ────────────────────────────────────
+
+    #[tool(description = "List Google calendars")]
+    pub async fn gcal_list_calendars(
+        &self,
+        params: Parameters<tools_gcal::GcalListCalendarsInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_gcal::handle_gcal_list_calendars(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "List calendar events")]
+    pub async fn gcal_list_events(
+        &self,
+        params: Parameters<tools_gcal::GcalListEventsInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_gcal::handle_gcal_list_events(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Get a single calendar event")]
+    pub async fn gcal_get_event(
+        &self,
+        params: Parameters<tools_gcal::GcalGetEventInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_gcal::handle_gcal_get_event(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Create a new calendar event")]
+    pub async fn gcal_create_event(
+        &self,
+        params: Parameters<tools_gcal::GcalCreateEventInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_gcal::handle_gcal_create_event(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Update a calendar event")]
+    pub async fn gcal_update_event(
+        &self,
+        params: Parameters<tools_gcal::GcalUpdateEventInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_gcal::handle_gcal_update_event(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Delete a calendar event")]
+    pub async fn gcal_delete_event(
+        &self,
+        params: Parameters<tools_gcal::GcalDeleteEventInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_gcal::handle_gcal_delete_event(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    // ── Google Drive Tools ───────────────────────────────────────
+
+    #[tool(description = "List files in Google Drive")]
+    pub async fn dr_list_files(
+        &self,
+        params: Parameters<tools_drive::DrListFilesInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_drive::handle_dr_list_files(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Get a file from Google Drive by ID")]
+    pub async fn dr_get_file(
+        &self,
+        params: Parameters<tools_drive::DrGetFileInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_drive::handle_dr_get_file(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Search files in Google Drive")]
+    pub async fn dr_search_files(
+        &self,
+        params: Parameters<tools_drive::DrSearchFilesInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_drive::handle_dr_search_files(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "List folders in Google Drive")]
+    pub async fn dr_list_folders(
+        &self,
+        params: Parameters<tools_drive::DrListFoldersInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_drive::handle_dr_list_folders(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Get file metadata from Google Drive")]
+    pub async fn dr_get_file_metadata(
+        &self,
+        params: Parameters<tools_drive::DrGetFileMetadataInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_drive::handle_dr_get_file_metadata(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Export a Google Drive file to a target format")]
+    pub async fn dr_export_file(
+        &self,
+        params: Parameters<tools_drive::DrExportFileInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_drive::handle_dr_export_file(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 }
 

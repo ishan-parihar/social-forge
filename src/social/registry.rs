@@ -120,6 +120,18 @@ impl ProviderRegistry {
             providers.insert("hashnode", Arc::new(hashnode::HashnodeProvider::new(config)));
         }
 
+        // GitHub — PAT-based (always registered, shows as configured if GITHUB_TOKEN is set)
+        if config.github_token.is_some() {
+            providers.insert("github", Arc::new(github::GithubProvider::new(config)));
+        }
+
+        // Google services — each reuses YOUTUBE_CLIENT_ID / YOUTUBE_CLIENT_SECRET
+        if config.youtube_client_id.is_some() {
+            providers.insert("gmail", Arc::new(gmail::GmailProvider::new(config)));
+            providers.insert("calendar", Arc::new(calendar::CalendarProvider::new(config)));
+            providers.insert("drive", Arc::new(drive::DriveProvider::new(config)));
+        }
+
         // Chrome extension-based provider (no OAuth credentials needed)
         providers.insert("skool", Arc::new(skool::SkoolProvider::new()));
 
