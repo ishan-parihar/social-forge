@@ -807,6 +807,22 @@ impl PostizMcpServer {
     }
 
 
+    #[tool(description = "Get recent mentions of an Instagram business account")]
+    pub async fn ig_get_mentions(
+        &self,
+        params: Parameters<tools_instagram::IgGetMentionsInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_instagram::handle_ig_get_mentions(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Poll the status of an Instagram container (before publishing)")]
+    pub async fn ig_poll_container(
+        &self,
+        params: Parameters<tools_instagram::IgPollContainerInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_instagram::handle_ig_poll_container(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
     #[tool(description = "Get audience insights for an Instagram business account")]
     pub async fn ig_get_insights_audience(
         &self,

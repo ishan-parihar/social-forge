@@ -42,8 +42,13 @@ impl SocialProvider for ThreadsProvider {
         vec![
             "threads_basic".into(),
             "threads_content_publish".into(),
-            "threads_manage_replies".into(),
+            "threads_delete".into(),
+            "threads_keyword_search".into(),
             "threads_manage_insights".into(),
+            "threads_manage_mentions".into(),
+            "threads_manage_replies".into(),
+            "threads_profile_discovery".into(),
+            "threads_read_replies".into(),
         ]
     }
 
@@ -552,7 +557,7 @@ impl ThreadsProvider {
     ) -> Result<serde_json::Value, ProviderError> {
         let resp = self
             .http
-            .get(format!("{}/{}/insights", self.graph_url(), user_id))
+            .get(format!("{}/{}/threads_insights", self.graph_url(), user_id))
             .query(&[("metric", metric), ("period", period), ("access_token", access_token)])
             .send()
             .await?;
