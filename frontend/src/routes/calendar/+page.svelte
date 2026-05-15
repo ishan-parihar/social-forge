@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { calendarApi } from "$lib/api/calendar";
+  import { postsApi } from "$lib/api/posts";
   import { calendarState } from "$lib/stores/calendar";
   import { toCalendarEvent, type CalendarEvent, type CalendarView } from "$lib/calendar/types";
   import { formatDateKey } from "$lib/calendar/utils";
@@ -60,14 +61,10 @@
   function handleToday() { calendarState.goToday(); refresh(); }
 
   async function handleDrop(eventId: string, newDate: string) {
-    const dateObj = new Date(newDate + "T12:00:00");
-    try {
-      await calendarApi.reschedule(eventId, dateObj.toISOString());
-    } catch {
-      // Fallback: try /api/posts/:id/schedule
-      const { postsApi } = await import("$lib/api/posts");
-      await postsApi.schedule(eventId, dateObj.toISOString());
-    }
+    const event = events.find(e => e.id === eventId);
+    const time = event?.time || "00:00";
+    const dateObj = new Date(`${newDate}T${time}:00Z`);
+    await postsApi.schedule(eventId, dateObj.toISOString());
     refresh();
   }
 

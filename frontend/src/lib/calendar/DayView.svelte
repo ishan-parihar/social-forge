@@ -11,6 +11,17 @@
   let key = $derived(formatDateKey(date));
   let dayEvents = $derived(events.filter(e => e.date === key));
   let hours = $derived(getDayHours());
+
+  let eventsByHour = $derived.by(() => {
+    const map = new Map<string, CEvent[]>();
+    for (const e of dayEvents) {
+      const hour = (e.time || "00:00").slice(0, 2);
+      const list = map.get(hour) || [];
+      list.push(e);
+      map.set(hour, list);
+    }
+    return map;
+  });
 </script>
 
 <div class="bg-[#131720] border border-[#1e2435] rounded-xl overflow-hidden">
@@ -25,7 +36,7 @@
       <div class="flex border-b border-[#1e2435] min-h-[56px]">
         <div class="w-16 text-xs text-[#6b7280] px-2 py-1 border-r border-[#1e2435] shrink-0">{hour}</div>
         <div class="flex-1 px-2 py-1 space-y-0.5">
-          {#each dayEvents.filter(e => (e.time || "00:00").startsWith(hour.slice(0, 2))) as event}
+          {#each (eventsByHour.get(hour.slice(0, 2)) || []) as event}
             <div onclick={() => onEventClick?.(event.id)}>
               <CalendarEvent {event} />
             </div>

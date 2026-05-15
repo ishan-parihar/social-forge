@@ -12,6 +12,20 @@
   let weekDays = $derived(buildWeekDays(referenceDate, events));
   let hours = $derived(getDayHours());
 
+  let eventsByDayHour = $derived.by(() => {
+    const map = new Map<string, CEvent[]>();
+    for (const wd of weekDays) {
+      for (const e of wd.events) {
+        const hour = (e.time || "00:00").slice(0, 2);
+        const key = `${wd.dateStr}-${hour}`;
+        const list = map.get(key) || [];
+        list.push(e);
+        map.set(key, list);
+      }
+    }
+    return map;
+  });
+
   function handleDrop(e: DragEvent, dateStr: string) {
     e.preventDefault();
     const id = e.dataTransfer?.getData("text/plain");
@@ -39,7 +53,7 @@
             ondragover={(e) => e.preventDefault()}
             ondrop={(e) => handleDrop(e, wd.dateStr)}
           >
-            {#each wd.events.filter(e => (e.time || "00:00").startsWith(hour.slice(0, 2))) as event}
+            {#each (eventsByDayHour.get(`${wd.dateStr}-${hour.slice(0, 2)}`) || []) as event}
               <div onclick={() => onEventClick?.(event.id)}>
                 <CalendarEvent {event} compact />
               </div>
