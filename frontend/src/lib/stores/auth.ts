@@ -1,4 +1,3 @@
-// Svelte 5 module-level reactivity replaces Context
 import { writable } from "svelte/store";
 
 export interface User {
@@ -9,15 +8,17 @@ export interface User {
 export const currentUser = writable<User | null>(null);
 export const isAuthenticated = writable<boolean>(false);
 
+const isBrowser = typeof window !== "undefined";
+
 // Helper: set auth state from login/register response
 export function setAuth(user: User, token: string) {
-  localStorage.setItem("token", token);
+  if (isBrowser) localStorage.setItem("token", token);
   currentUser.set(user);
   isAuthenticated.set(true);
 }
 
 export function clearAuth() {
-  localStorage.removeItem("token");
+  if (isBrowser) localStorage.removeItem("token");
   currentUser.set(null);
   isAuthenticated.set(false);
 }
