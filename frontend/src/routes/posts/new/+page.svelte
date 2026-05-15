@@ -1,6 +1,8 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
   import { postsApi } from "$lib/api/posts";
+  import { integrationsApi, type Integration } from "$lib/api/integrations";
+  import { onMount } from "svelte";
   import ChannelSelector from "$lib/composer/ChannelSelector.svelte";
   import RichTextEditor from "$lib/composer/RichTextEditor.svelte";
   import MediaUpload from "$lib/composer/MediaUpload.svelte";
@@ -12,11 +14,19 @@
   let content = $state("");
   let title = $state("");
   let selectedIntegrations = $state<string[]>([]);
+  let allIntegrations = $state<Integration[]>([]);
+  let integrationProviders = $derived(new Map(allIntegrations.map(i => [i.id, i.provider_identifier])));
+  let integrationNames = $derived(new Map(allIntegrations.map(i => [i.id, i.provider_name])));
   let mediaItems = $state<MediaItem[]>([]);
   let scheduledAt = $state<string | null>(null);
   let activeProvider = $state<string | null>(null);
   let submitting = $state(false);
   let error = $state<string | null>(null);
+
+  onMount(async () => {
+    const r = await integrationsApi.list();
+    if (r.data) allIntegrations = r.data.integrations.filter(i => !i.disabled);
+  });
 
   let providerOverride = $state<Map<string, string>>(new Map());
 
@@ -105,13 +115,13 @@
               onclick={() => activeProvider = activeProvider === intId ? null : intId}
               class="w-full flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-[#1a1f2e] transition-colors"
             >
-              <span class="flex-1">Platform {i + 1}</span>
+              <span class="flex-1">{integrationNames.get(intId) || `Platform ${i + 1}`}</span>
               <span class="text-[#6b7280] text-xs">{activeProvider === intId ? "▾" : "▸"}</span>
             </button>
             {#if activeProvider === intId}
               <div class="px-3 pb-3">
                 <ProviderEditor
-                  provider={intId}
+                  provider={integrationProviders.get(intId) || intId}
                   content={providerOverride.get(intId) || content}
                   onContentChange={(html) => providerOverride.set(intId, html)}
                   integrationId={intId}
@@ -141,6 +151,6 @@
 
   <!-- Preview -->
   {#if selectedIntegrations.length > 0}
-    <PostPreview {content} selectedIntegrations={selectedIntegrations} />
+    <PostPreview {content} selectedIntegrations={selectedIntegrations} {integrationProviders} />
   {/if}
 </div>
