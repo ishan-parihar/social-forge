@@ -5,11 +5,12 @@ export function getMonthDays(year: number, month: number): Date[] {
   const last = new Date(year, month + 1, 0);
   const days: Date[] = [];
   // Leading days (from previous month)
-  const leadingDays = first.getDay() === 0 ? 6 : first.getDay() - 1;
+  // Sunday-start grid (matches MonthView day headers)
+  const leadingDays = first.getDay(); // 0=Sun..6=Sat → how many prev-month days to fill
   for (let i = leadingDays; i > 0; i--) days.push(new Date(year, month, 1 - i));
   for (let d = 1; d <= last.getDate(); d++) days.push(new Date(year, month, d));
   // Trailing days (from next month)
-  const trailingDays = last.getDay() === 0 ? 0 : 6 - last.getDay();
+  const trailingDays = 6 - last.getDay();
   for (let i = 1; i <= trailingDays; i++) days.push(new Date(year, month + 1, i));
   return days;
 }
