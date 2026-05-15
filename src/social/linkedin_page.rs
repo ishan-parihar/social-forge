@@ -318,10 +318,14 @@ impl SocialProvider for LinkedInPageProvider {
     async fn analytics(
         &self,
         access_token: &str,
-        _internal_id: &str,
+        internal_id: &str,
         _days: u32,
     ) -> Result<Vec<AnalyticsData>, ProviderError> {
-        let org_id = self.resolve_org_id(access_token).await?;
+        let org_id = if internal_id.is_empty() {
+            self.resolve_org_id(access_token).await?
+        } else {
+            internal_id.to_string()
+        };
         let org_urn = format!("urn:li:organization:{org_id}");
 
         let mut results = Vec::new();

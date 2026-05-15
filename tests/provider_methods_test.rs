@@ -676,7 +676,7 @@ async fn test_ias_mcp_tool_handler_full_chain() {
     assert!(auth_result.is_ok(), "Auth URL should generate: {auth_result:?}");
     let url = auth_result.unwrap().url;
     assert!(url.contains("instagram.com/oauth/authorize"), "URL should go to Instagram OAuth");
-    assert!(url.contains("instagram_business_basic"), "Should contain the right scopes");
+    assert!(url.contains("instagram_business_basic"), "Should contain business scopes (matching postiz-app pattern)");
 
     println!("✅ ias_mcp_handler: Full chain verified (provider registration, auth URL, server creation)");
 }
@@ -804,9 +804,9 @@ async fn test_ias_and_threads_credentials_loaded() {
     assert!(!secret.is_empty(), "Instagram Standalone client_secret should not be empty");
     println!("✅ Instagram Standalone credentials loaded (client_id: {}...)", &cid[..5]);
 
-    // Threads needs THREADS_CLIENT_ID + THREADS_CLIENT_SECRET
+    // Threads needs THREADS_APP_ID + THREADS_APP_SECRET
     let threads_creds = config.provider_credentials("threads");
-    assert!(threads_creds.is_some(), "Threads credentials should be loaded from .env (THREADS_CLIENT_ID/THREADS_CLIENT_SECRET)");
+    assert!(threads_creds.is_some(), "Threads credentials should be loaded from .env (THREADS_APP_ID/THREADS_APP_SECRET)");
     let (cid2, secret2) = threads_creds.unwrap();
     assert!(!cid2.is_empty(), "Threads client_id should not be empty");
     assert!(!secret2.is_empty(), "Threads client_secret should not be empty");

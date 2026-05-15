@@ -154,7 +154,7 @@ postiz-rust/
 - **File**: `src/social/threads.rs`
 - **API**: `graph.threads.net/v1.0`
 - **Auth**: OAuth 2.0 via `threads.net/oauth/authorize` → `graph.threads.net/oauth/access_token` → long-lived token upgrade
-- **Credentials**: `THREADS_CLIENT_ID` + `THREADS_CLIENT_SECRET`
+- **Credentials**: `THREADS_APP_ID` + `THREADS_APP_SECRET`
 - **Provider Methods (7)**:
   - `get_profile(access_token)` → Threads profile info
   - `get_threads(access_token, user_id, limit)` → List threads
@@ -517,8 +517,8 @@ BuildId resolved dynamically: fetch community page → parse `__NEXT_DATA__` fro
 | `APP_URL` | OAuth callbacks | ✅ | e.g., http://localhost:3000 |
 | `INSTAGRAM_APP_ID` | IG Standalone | Conditional | Basic Display API app |
 | `INSTAGRAM_APP_SECRET` | IG Standalone | Conditional | Basic Display API app secret |
-| `THREADS_CLIENT_ID` | Threads | Conditional | Threads API app |
-| `THREADS_CLIENT_SECRET` | Threads | Conditional | Threads API app secret |
+| `THREADS_APP_ID` | Threads | Conditional | Threads API app |
+| `THREADS_APP_SECRET` | Threads | Conditional | Threads API app secret |
 | `INSTAGRAM_CLIENT_ID` | Instagram Business | ✅ | Facebook Graph API app |
 | `INSTAGRAM_CLIENT_SECRET` | Instagram Business | ✅ | Facebook Graph API app secret |
 | `LINKEDIN_CLIENT_ID` | LinkedIn | Conditional | LinkedIn OAuth 2.0 app |

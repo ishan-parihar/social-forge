@@ -60,7 +60,7 @@ impl ProviderRegistry {
             );
         }
 
-        if config.threads_client_id.is_some() {
+        if config.threads_app_id.is_some() {
             providers.insert("threads", Arc::new(threads::ThreadsProvider::new(config)));
         }
 

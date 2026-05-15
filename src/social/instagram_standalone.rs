@@ -64,11 +64,10 @@ impl SocialProvider for InstagramStandaloneProvider {
         redirect_uri: &str,
     ) -> Result<AuthUrlResponse, ProviderError> {
         let scope = self.scopes().join(",");
-        let https_uri = self.ensure_https_redirect_uri(redirect_uri);
         let params: Vec<(&str, &str)> = vec![
             ("enable_fb_login", "0"),
             ("client_id", self.client_id.as_str()),
-            ("redirect_uri", &https_uri),
+            ("redirect_uri", redirect_uri),
             ("response_type", "code"),
             ("state", state),
             ("scope", scope.as_str()),
@@ -89,13 +88,11 @@ impl SocialProvider for InstagramStandaloneProvider {
         _code_verifier: &str,
         redirect_uri: &str,
     ) -> Result<AuthToken, ProviderError> {
-        let https_uri = self.ensure_https_redirect_uri(redirect_uri);
-        // Step 1: Exchange code for short-lived token
         let params: Vec<(&str, &str)> = vec![
             ("client_id", self.client_id.as_str()),
             ("client_secret", self.client_secret.as_str()),
             ("grant_type", "authorization_code"),
-            ("redirect_uri", &https_uri),
+            ("redirect_uri", redirect_uri),
             ("code", code),
         ];
 
@@ -106,15 +103,30 @@ impl SocialProvider for InstagramStandaloneProvider {
             .send()
             .await?;
 
+        let status = resp.status();
         let json: serde_json::Value = resp.json().await?;
+        if !status.is_success() {
+            let err_msg = json["error_message"]
+                .as_str()
+                .or_else(|| json["error"]["message"].as_str())
+                .unwrap_or("Unknown error");
+            let err_code = json["error"]["code"].as_u64().unwrap_or(0);
+            return Err(ProviderError::Api(format!(
+                "Instagram token exchange failed (code {err_code}): {err_msg}"
+            )));
+        }
         let short_token = json["access_token"]
             .as_str()
-            .ok_or_else(|| ProviderError::Auth("Missing access_token".into()))?
+            .ok_or_else(|| {
+                let err = serde_json::to_string(&json).unwrap_or_default();
+                ProviderError::Auth(format!("Missing access_token in response: {err}"))
+            })?
             .to_string();
 
         // Step 2: Exchange for long-lived token (60 days)
         let long_params: Vec<(&str, &str)> = vec![
             ("grant_type", "ig_exchange_token"),
+            ("client_id", self.client_id.as_str()),
             ("client_secret", self.client_secret.as_str()),
             ("access_token", short_token.as_str()),
         ];
@@ -126,7 +138,16 @@ impl SocialProvider for InstagramStandaloneProvider {
             .send()
             .await?;
 
+        let long_status = long_resp.status();
         let long_json: serde_json::Value = long_resp.json().await?;
+        if !long_status.is_success() {
+            let err_msg = long_json["error"]["message"]
+                .as_str()
+                .unwrap_or("Unknown error");
+            return Err(ProviderError::Api(format!(
+                "Instagram long-lived token exchange failed: {err_msg}"
+            )));
+        }
         let access_token = long_json["access_token"]
             .as_str()
             .unwrap_or(&short_token)
@@ -303,14 +324,6 @@ impl SocialProvider for InstagramStandaloneProvider {
 }
 
 impl InstagramStandaloneProvider {
-    fn ensure_https_redirect_uri(&self, uri: &str) -> String {
-        if uri.starts_with("http://") {
-            format!("https://redirectmeto.com/{}", uri)
-        } else {
-            uri.to_string()
-        }
-    }
-
     async fn resolve_user_id(&self, access_token: &str) -> Result<String, ProviderError> {
         let user: serde_json::Value = self
             .http
