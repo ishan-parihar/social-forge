@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { posts, integrations, type Integration } from '$lib/api';
+  import { postsApi, integrationsApi, type Integration } from '$lib/api';
   import { goto } from '$app/navigation';
   import { toast } from '$lib/stores/toast';
 
@@ -11,15 +11,15 @@
   let busy = $state(false);
 
   onMount(async () => {
-    const r = await integrations.list();
+    const r = await integrationsApi.list();
     if (r.data) { channels = r.data.integrations; if (channels.length) selChannel = channels[0].id; }
   });
 
   async function submit() {
     if (!selChannel || !content) { toast('Select a channel and enter content', 'error'); return; }
     busy = true;
-    const r = await posts.create({
-      integration_id: selChannel,
+    const r = await postsApi.create({
+      integration_ids: [selChannel],
       content,
       scheduled_at: scheduledAt || undefined,
     });

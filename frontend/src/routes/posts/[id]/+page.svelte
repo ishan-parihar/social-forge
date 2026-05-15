@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { posts as postsApi, type PostDetail } from '$lib/api';
+  import { postsApi, type PostDetail } from '$lib/api';
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import { formatDateTime } from '$lib/calendar';
