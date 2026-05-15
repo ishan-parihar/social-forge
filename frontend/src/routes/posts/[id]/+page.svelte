@@ -21,10 +21,7 @@
 
   async function save() {
     if (!post) return;
-    await postsApi.create({
-      integration_ids: [post.integration_id],
-      content: editContent,
-    });
+    await postsApi.update(post.id, { content: editContent });
     post.content = editContent;
     editing = false;
   }
@@ -78,7 +75,7 @@
       {/if}
 
       {#if editing}
-        <RichTextEditor content={editContent} onUpdate={(html) => editContent = html} />
+        <RichTextEditor content={editContent} onUpdate={(html: string) => editContent = html} />
       {:else}
         <div class="prose prose-invert max-w-none text-sm">{@html post.content}</div>
       {/if}
