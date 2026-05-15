@@ -1,31 +1,29 @@
 <script lang="ts">
   import { integrationsApi, type Integration } from "$lib/api/integrations";
   import { onMount } from "svelte";
+  import { groupIntegrations } from "$lib/channels/group-integrations";
   import ChannelCard from "$lib/channels/ChannelCard.svelte";
   import ProviderIcon from "$lib/channels/ProviderIcon.svelte";
 
   let integrations = $state<Integration[]>([]);
   let loading = $state(true);
+  let error = $state("");
   let availableProviders = $state([
     "x", "facebook", "instagram", "threads", "linkedin", "linkedin-page",
     "youtube", "pinterest", "reddit", "bluesky", "discord", "telegram", "whatsapp", "skool",
   ]);
 
-  let groups = $derived.by(() => {
-    const g = new Map<string, Integration[]>();
-    for (const int of integrations) {
-      const key = int.provider_name || int.provider_identifier;
-      const existing = g.get(key) || [];
-      existing.push(int);
-      g.set(key, existing);
-    }
-    return g;
-  });
+  let groups = $derived.by(() => groupIntegrations(integrations));
 
   async function load() {
     loading = true;
-    const r = await integrationsApi.list();
-    if (r.data) integrations = r.data.integrations;
+    error = "";
+    try {
+      const r = await integrationsApi.list();
+      if (r.data) integrations = r.data.integrations;
+    } catch {
+      error = "Failed to load channels";
+    }
     loading = false;
   }
 

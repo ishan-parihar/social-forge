@@ -32,7 +32,7 @@
       <span class="w-2 h-2 rounded-full bg-green-500" title="Connected"></span>
     {/if}
     <Dropdown items={menuItems} align="right">
-      <button class="opacity-0 group-hover:opacity-100 p-1 text-[#6b7280] hover:text-white transition-all">⋮</button>
+      <span class="opacity-0 group-hover:opacity-100 p-1 text-[#6b7280] hover:text-white transition-all" aria-label="Channel actions" role="button">⋮</span>
     </Dropdown>
   </div>
 </div>
