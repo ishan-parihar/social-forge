@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { calendar as calApi, type PostSummary } from '$lib/api';
+  import { calendarApi, type PostSummary } from '$lib/api';
   import { getMonthDays, isToday, isCurrentMonth, months, days, formatDateTime } from '$lib/calendar';
   import { goto } from '$app/navigation';
 
@@ -20,7 +20,7 @@
     calDays = getMonthDays(year, month);
     const start = year + '-' + String(month + 1).padStart(2, '0') + '-01';
     const end = new Date(year, month + 1, 0).toISOString().split('T')[0];
-    const r = await calApi.get(start, end);
+    const r = await calendarApi.get(start, end);
     if (r.data) {
       const m = new Map();
       r.data.days.forEach(d => m.set(d.date, d.posts));

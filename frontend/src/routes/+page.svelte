@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { posts, type PostSummary } from '$lib/api';
+  import { postsApi, type PostSummary } from '$lib/api';
   import { formatDateTime } from '$lib/calendar';
   import { goto } from '$app/navigation';
 
@@ -9,7 +9,7 @@
   let stats = $state({ draft: 0, queued: 0, published: 0, error: 0 });
 
   onMount(async () => {
-    const r = await posts.list({ limit: 100 });
+    const r = await postsApi.list({ limit: 100 });
     if (!r.data) return;
     const all = r.data.posts;
     upcoming = all.filter(p => p.state === 'queued').slice(0, 5);

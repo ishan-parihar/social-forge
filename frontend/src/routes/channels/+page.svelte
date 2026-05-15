@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { integrations, type Integration } from '$lib/api';
+  import { integrationsApi, type Integration } from '$lib/api';
   import { toast } from '$lib/stores/toast';
 
   let channels = $state<Integration[]>([]);
@@ -14,17 +14,17 @@
     { id: 'instagram', name: 'Instagram', icon: '📷', color: '#e4405f' },
   ];
 
-  onMount(async () => { const r = await integrations.list(); if (r.data) channels = r.data.integrations; });
+  onMount(async () => { const r = await integrationsApi.list(); if (r.data) channels = r.data.integrations; });
 
   async function connect(provider: string) {
     connecting = provider;
-    const r = await integrations.connect(provider);
+    const r = await integrationsApi.connect(provider);
     connecting = '';
     if (r.data?.url) {
       window.open(r.data.url, '_blank', 'width=600,height=700');
       toast('Authorization window opened. Complete the OAuth flow to connect.', 'info');
       setTimeout(async () => {
-        const r2 = await integrations.list();
+        const r2 = await integrationsApi.list();
         if (r2.data) channels = r2.data.integrations;
         toast('Channels refreshed', 'success');
       }, 5000);
@@ -35,7 +35,7 @@
 
   async function disconnect(id: string) {
     if (!confirm('Remove this channel?')) return;
-    await integrations.delete(id);
+    await integrationsApi.delete(id);
     channels = channels.filter(c => c.id !== id);
     toast('Channel removed', 'success');
   }
