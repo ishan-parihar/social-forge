@@ -390,3 +390,45 @@ pub async fn handle_gh_get_repo_content(
         .map_err(|e| format!("GitHub get repo content failed: {e}"))?;
     Ok(Json(serde_json::json!({ "data": result })))
 }
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct GhCloseIssueInput {
+    pub owner: String,
+    pub repo: String,
+    pub issue_number: u32,
+}
+
+pub async fn handle_gh_close_issue(
+    state: &AppState,
+    input: &GhCloseIssueInput,
+) -> Result<Json<serde_json::Value>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let token = find_gh_token(state, user_id).await?;
+    let provider = create_gh_provider(state);
+    let result = provider
+        .close_issue(&token, &input.owner, &input.repo, input.issue_number)
+        .await
+        .map_err(|e| format!("GitHub close issue failed: {e}"))?;
+    Ok(Json(serde_json::json!({ "data": result })))
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct GhListMyReposInput {
+    /// Max repositories to return (default 30, max 100)
+    pub limit: Option<u32>,
+}
+
+pub async fn handle_gh_list_my_repos(
+    state: &AppState,
+    input: &GhListMyReposInput,
+) -> Result<Json<serde_json::Value>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let token = find_gh_token(state, user_id).await?;
+    let provider = create_gh_provider(state);
+    let limit = input.limit.unwrap_or(30);
+    let result = provider
+        .list_my_repos(&token, limit)
+        .await
+        .map_err(|e| format!("GitHub list my repos failed: {e}"))?;
+    Ok(Json(serde_json::json!({ "data": result })))
+}

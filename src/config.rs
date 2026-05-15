@@ -195,9 +195,7 @@ impl Config {
             "devto" => Some(("api-key".into(), self.devto_api_key.clone()?)),
             "hashnode" => Some(("api-key".into(), self.hashnode_api_key.clone()?)),
             "github" => Some((self.github_token.clone()?, self.github_token.clone()?)),
-            "gmail" => Some((self.youtube_client_id.clone()?, self.youtube_client_secret.clone()?)),
-            "calendar" => Some((self.youtube_client_id.clone()?, self.youtube_client_secret.clone()?)),
-            "drive" => Some((self.youtube_client_id.clone()?, self.youtube_client_secret.clone()?)),
+            "google" | "gmail" | "calendar" | "drive" => Some((self.youtube_client_id.clone()?, self.youtube_client_secret.clone()?)),
             _ => None,
         }
     }

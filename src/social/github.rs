@@ -15,8 +15,6 @@ use super::*;
 use crate::config::Config;
 
 const GITHUB_API_BASE: &str = "https://api.github.com";
-#[allow(dead_code)]
-const GITHUB_GRAPHQL_URL: &str = "https://api.github.com/graphql";
 const USER_AGENT: &str = "social-forge/1.0";
 
 pub struct GithubProvider {
@@ -99,6 +97,47 @@ impl GithubProvider {
                     .unwrap_or("GitHub API error")
                     .to_string(),
             ))
+        }
+    }
+
+    /// Perform a PATCH to the GitHub REST API.
+    async fn github_patch(
+        &self,
+        access_token: &str,
+        path: &str,
+        body: &serde_json::Value,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let url = format!("{GITHUB_API_BASE}{path}");
+        let resp = self
+            .http
+            .patch(&url)
+            .header("Authorization", format!("Bearer {access_token}"))
+            .header("Accept", "application/vnd.github.v3+json")
+            .json(body)
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+
+        if status == StatusCode::OK {
+            Ok(json)
+        } else if status == StatusCode::UNAUTHORIZED {
+            Err(ProviderError::Auth(
+                json["message"].as_str().unwrap_or("Authentication failed").to_string(),
+            ))
+        } else if status == StatusCode::FORBIDDEN {
+            let msg = json["message"].as_str().unwrap_or("Forbidden").to_string();
+            if msg.to_lowercase().contains("rate limit") {
+                Err(ProviderError::RateLimited(msg))
+            } else {
+                Err(ProviderError::Api(msg))
+            }
+        } else if status == StatusCode::NOT_FOUND {
+            Err(ProviderError::Api(json["message"].as_str().unwrap_or("Resource not found").to_string()))
+        } else if status == StatusCode::UNPROCESSABLE_ENTITY {
+            Err(ProviderError::InvalidRequest(json["message"].as_str().unwrap_or("Validation error").to_string()))
+        } else {
+            Err(ProviderError::Api(json["message"].as_str().unwrap_or("GitHub API error").to_string()))
         }
     }
 
@@ -422,6 +461,43 @@ impl GithubProvider {
             access_token,
             &format!("/repos/{owner}/{repo}/contents/{path}"),
             None,
+        )
+        .await
+    }
+
+    /// Close an issue by issue number.
+    /// Sets state to "closed".
+    pub async fn close_issue(
+        &self,
+        access_token: &str,
+        owner: &str,
+        repo: &str,
+        issue_number: u32,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let payload = serde_json::json!({ "state": "closed" });
+        self.github_patch(
+            access_token,
+            &format!("/repos/{owner}/{repo}/issues/{issue_number}"),
+            &payload,
+        )
+        .await
+    }
+
+    /// List repositories for the authenticated user.
+    pub async fn list_my_repos(
+        &self,
+        access_token: &str,
+        limit: u32,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let per_page = limit.clamp(1, 100).to_string();
+        self.github_get(
+            access_token,
+            "/user/repos",
+            Some(&[
+                ("per_page", &per_page),
+                ("sort", "updated"),
+                ("direction", "desc"),
+            ]),
         )
         .await
     }
