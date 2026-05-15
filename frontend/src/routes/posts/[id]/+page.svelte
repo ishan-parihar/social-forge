@@ -21,7 +21,8 @@
 
   async function save() {
     if (!post) return;
-    await postsApi.update(post.id, { content: editContent });
+    const r = await postsApi.update(post.id, { content: editContent });
+    if (r.error) return;
     post.content = editContent;
     editing = false;
   }
@@ -30,14 +31,15 @@
     if (!post) return;
     const at = prompt("Schedule for (ISO date):", new Date().toISOString());
     if (at) {
-      await postsApi.schedule(post.id, at);
-      post.state = "queued";
+      const r = await postsApi.schedule(post.id, at);
+      if (r.data) post.state = "queued";
     }
   }
 
   async function deletePost() {
     if (!post || !confirm("Delete this post?")) return;
-    await postsApi.delete(post.id);
+    const r = await postsApi.delete(post.id);
+    if (r.error) return;
     goto("/posts");
   }
 </script>

@@ -7,13 +7,16 @@
   let posts = $state<PostSummary[]>([]);
   let filter = $state("all");
   let loading = $state(true);
+  let error = $state<string | null>(null);
 
   async function load() {
     loading = true;
+    error = null;
     const params: any = {};
     if (filter !== "all") params.state = filter;
     const r = await postsApi.list(params);
     if (r.data) posts = r.data.posts;
+    else error = r.error || "Failed to load posts";
     loading = false;
   }
 
@@ -44,13 +47,15 @@
   </div>
 
   <!-- Post list -->
-  {#if loading}
+  {#if error}
+    <div class="text-center py-12 text-sm text-red-400">{error}</div>
+  {:else if loading}
     <div class="text-center py-12 text-sm text-[#6b7280]">Loading...</div>
   {:else if posts.length === 0}
     <div class="text-center py-12 text-sm text-[#6b7280]">No posts found</div>
   {:else}
     <div class="bg-[#131720] border border-[#1e2435] rounded-xl overflow-hidden">
-      {#each posts as post}
+      {#each posts as post (post.id)}
         <button
           onclick={() => goto(`/posts/${post.id}`)}
           class="w-full flex items-center gap-4 px-4 py-3 border-b border-[#1e2435] last:border-0 hover:bg-[#1a1f2e] transition-colors text-left"
@@ -64,7 +69,7 @@
           </div>
           <Badge state={post.state as "draft" | "queued" | "published" | "error"} />
           {#if post.error_message}
-            <span class="text-xs text-red-400" title={post.error_message}>⚠</span>
+            <span role="img" aria-label={post.error_message} class="text-xs text-red-400" title={post.error_message}>⚠</span>
           {/if}
         </button>
       {/each}
