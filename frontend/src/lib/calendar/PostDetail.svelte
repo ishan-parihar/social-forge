@@ -1,20 +1,35 @@
 <script lang="ts">
+  import { tick } from "svelte";
   import Badge from "$lib/ui/Badge.svelte";
   import type { CalendarEvent as CEvent } from "./types";
 
   let { event, onclose }: { event?: CEvent | null; onclose: () => void } = $props();
 
-  // Close on Escape
+  let panelEl: HTMLDivElement | undefined = $state();
+
   function handleKeydown(e: KeyboardEvent) {
     if (e.key === "Escape") onclose();
   }
+
+  $effect(() => {
+    if (event) {
+      tick().then(() => panelEl?.focus());
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = "";
+      };
+    }
+  });
 </script>
 
 {#if event}
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="fixed inset-0 z-40 flex justify-end" role="dialog" aria-modal="true" onkeydown={handleKeydown}>
-    <div class="absolute inset-0 bg-black/40" onclick={onclose}></div>
-    <div class="relative w-96 bg-[#131720] border-l border-[#1e2435] p-6 overflow-y-auto" tabindex="-1">
+    <div class="absolute inset-0 bg-black/40" onclick={onclose} onkeydown={(e) => e.key === "Escape" && onclose()}></div>
+    <div
+      bind:this={panelEl}
+      tabindex="-1"
+      class="relative w-96 bg-[#131720] border-l border-[#1e2435] p-6 overflow-y-auto outline-none"
+    >
       <div class="flex items-center justify-between mb-6">
         <h3 class="font-semibold">Post Details</h3>
         <button onclick={onclose} aria-label="Close" class="text-[#6b7280] hover:text-white text-xl">&times;</button>
