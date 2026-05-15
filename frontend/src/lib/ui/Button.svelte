@@ -8,7 +8,7 @@
   } = $props();
 </script>
 
-<button {onclick} {disabled} class="btn btn-{variant} btn-{size}">
+<button type="button" {onclick} {disabled} class="btn btn-{variant} btn-{size}">
   {#if children}{@render children()}{/if}
 </button>
 
