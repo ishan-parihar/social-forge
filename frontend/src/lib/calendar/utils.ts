@@ -4,9 +4,13 @@ export function getMonthDays(year: number, month: number): Date[] {
   const first = new Date(year, month, 1);
   const last = new Date(year, month + 1, 0);
   const days: Date[] = [];
-  for (let i = first.getDay() - 1; i >= 0; i--) days.push(new Date(year, month, -i));
+  // Leading days (from previous month)
+  const leadingDays = first.getDay() === 0 ? 6 : first.getDay() - 1;
+  for (let i = leadingDays; i > 0; i--) days.push(new Date(year, month, 1 - i));
   for (let d = 1; d <= last.getDate(); d++) days.push(new Date(year, month, d));
-  for (let i = 1; i <= 6 - last.getDay(); i++) days.push(new Date(year, month + 1, i));
+  // Trailing days (from next month)
+  const trailingDays = last.getDay() === 0 ? 0 : 6 - last.getDay();
+  for (let i = 1; i <= trailingDays; i++) days.push(new Date(year, month + 1, i));
   return days;
 }
 
