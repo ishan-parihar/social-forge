@@ -6,7 +6,7 @@
 use axum::{
     extract::{Path, Query, State},
     response::{Html, IntoResponse, Redirect, Response},
-    Json,
+    Form, Json,
 };
 use serde::Deserialize;
 use uuid::Uuid;
@@ -64,6 +64,7 @@ pub async fn onboard_page(
             format!(r#"<div class="profile-pic profile-pic-placeholder">{}</div>"#, &icon)
         };
         let connected_at = integration.created_at.format("%b %e, %Y").to_string();
+        let integration_id = integration.id.to_string();
 
         // Provider display name for the identifier
         let provider_display = match pid.as_str() {
@@ -83,7 +84,7 @@ pub async fn onboard_page(
         };
 
         connected_cards.push_str(&format!(
-            r#"<div class="connected-card">
+            r#"<div class="connected-card" id="ic-{iid}">
                 <div class="connected-avatar">{pic_html}</div>
                 <div class="connected-body">
                     <div class="connected-name">{name}</div>
@@ -93,10 +94,11 @@ pub async fn onboard_page(
                 <div class="connected-status-badge">
                     <span class="badge badge-connected">✅ Connected</span>
                 </div>
-                <div class="connected-meta">
-                    <code class="connected-id">{pid}</code>
+                <div class="connected-actions">
+                    <button class="btn-disconnect" onclick="dc('{iid}')" title="Disconnect this account">✕</button>
                 </div>
             </div>"#,
+            iid = integration_id,
         ));
     }
 
@@ -133,11 +135,22 @@ pub async fn onboard_page(
         if connected_count > 0 {
             badge_class = "badge-connected";
             badge_text = format!("Connected ({})", connected_count);
-            hint_text = format!("{} account(s) connected — click Add Another to connect more", connected_count);
-            action_html = format!(
-                r#"<a href="/api/public/connect/{}?token={}" class="btn btn-primary">+ Add Another</a>"#,
-                id, token
-            );
+            if id == "x" {
+                hint_text = format!("{} account(s) connected — Add Another (OAuth) or Enter Cookies", connected_count);
+                action_html = format!(
+                    r#"<div style="display:flex;gap:6px;flex-direction:column;">
+                        <a href="/api/public/connect/{}?token={}" class="btn btn-primary" style="font-size:12px;">+ Add Another (OAuth)</a>
+                        <a href="/api/public/connect/x-cookies?token={}" class="btn" style="font-size:12px;background:#f0f2f5;color:#333;border:1px solid #ccc;">🍪 Enter Cookies</a>
+                    </div>"#,
+                    id, token, token
+                );
+            } else {
+                hint_text = format!("{} account(s) connected — click Add Another to connect more", connected_count);
+                action_html = format!(
+                    r#"<a href="/api/public/connect/{}?token={}" class="btn btn-primary">+ Add Another</a>"#,
+                    id, token
+                );
+            }
         } else if !has_creds {
             badge_class = "badge-error";
             badge_text = "Not Configured".into();
@@ -173,10 +186,21 @@ pub async fn onboard_page(
             badge_class = "badge-success";
             badge_text = "OAuth 2.0".into();
             hint_text = "Opens provider OAuth page in browser".into();
-            action_html = format!(
-                r#"<a href="/api/public/connect/{}?token={}" class="btn btn-primary">Connect ➜</a>"#,
-                id, token
-            );
+            // X/Twitter shows both OAuth and cookie options
+            if id == "x" {
+                action_html = format!(
+                    r#"<div style="display:flex;gap:6px;flex-direction:column;">
+                        <a href="/api/public/connect/{}?token={}" class="btn btn-primary" style="font-size:12px;">OAuth ➜</a>
+                        <a href="/api/public/connect/x-cookies?token={}" class="btn" style="font-size:12px;background:#f0f2f5;color:#333;border:1px solid #ccc;">🍪 Enter Cookies</a>
+                    </div>"#,
+                    id, token, token
+                );
+            } else {
+                action_html = format!(
+                    r#"<a href="/api/public/connect/{}?token={}" class="btn btn-primary">Connect ➜</a>"#,
+                    id, token
+                );
+            }
         } else {
             badge_class = "badge-warning";
             badge_text = "Direct Connect".into();
@@ -250,11 +274,13 @@ pub async fn onboard_page(
 
     let connected_section = if has_connected {
         format!(
-            r#"<h2 class="section-title">✅ Connected Channels <span class="count-badge">{count}</span></h2>
+            r#"<div id="connected-section">
+            <h2 class="section-title">✅ Connected Channels <span class="count-badge">{count}</span></h2>
             <p class="section-subtitle">These social accounts are already linked to your Postiz Rust account.</p>
             <div class="connected-grid">{cards}</div>
             <h2 class="section-title" style="margin-top:28px;">🔌 Available Providers</h2>
-            <p class="section-subtitle">Click <strong>Connect</strong> to add more channels.</p>"#,
+            <p class="section-subtitle">Click <strong>Connect</strong> to add more channels.</p>
+            </div>"#,
             count = integrations.len(),
             cards = connected_cards,
         )
@@ -316,6 +342,14 @@ pub async fn onboard_page(
         .connected-status-badge {{ flex-shrink: 0; }}
         .connected-meta {{ flex-shrink: 0; margin-left: 8px; }}
         .connected-meta code {{ font-size: 11px; color: #aaa; }}
+        .connected-actions {{ flex-shrink: 0; margin-left: 4px; }}
+        .btn-disconnect {{
+            background: none; border: none; cursor: pointer; font-size: 16px;
+            width: 32px; height: 32px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            color: #dc3545; opacity: 0.4; transition: all 0.15s;
+        }}
+        .btn-disconnect:hover {{ opacity: 1; background: #f8d7da; }}
         /* ── Provider grid ─────────────────────────── */
         .grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); gap: 14px; }}
         .card {{
@@ -402,6 +436,36 @@ pub async fn onboard_page(
             Postiz Rust v{version} · server: {app_url} · MCP stdio available with --mcp flag
         </div>
     </div>
+<script>
+function dc(iid){{
+    if(!confirm('Disconnect this account? This cannot be undone.'))return;
+    var tok='{token}';
+    var x=new XMLHttpRequest();
+    x.open('DELETE','/api/integrations/'+iid);
+    x.setRequestHeader('Authorization','Bearer '+tok);
+    x.onload=function(){{
+        if(x.status>=200&&x.status<300){{
+            var el=document.getElementById('ic-'+iid);
+            if(el)el.style.opacity='0.3';
+            setTimeout(function(){{
+                if(el)el.remove();
+                // check if any connected cards remain
+                var remaining=document.querySelectorAll('.connected-card');
+                if(!remaining.length){{
+                    var sec=document.getElementById('connected-section');
+                    if(sec)sec.style.display='none';
+                }}
+                // refresh the page to update provider card states
+                location.reload();
+            }},300);
+        }}else{{
+            alert('Failed to disconnect. Check server logs.');
+        }}
+    }};
+    x.onerror=function(){{alert('Network error. Is the server running?');}};
+    x.send();
+}}
+</script>
 </body>
 </html>"#,
         dev_email = DEV_EMAIL,
@@ -612,6 +676,304 @@ fetch('/api/integrations/'+iid+'/connect-page/'+btn.getAttribute('data-id'),{{me
         iid = iid,
         tok = tok,
     )
+}
+
+#[derive(Debug, Deserialize)]
+pub struct XCookieForm {
+    pub token: String,
+    pub auth_token: Option<String>,
+    pub ct0: Option<String>,
+    pub cookie_string: Option<String>,
+    pub submit: Option<String>,
+}
+
+/// GET /api/public/connect/x-cookies — show cookie input form with instructions
+pub async fn x_cookies_form(
+    State(state): State<AppState>,
+    Query(query): Query<PublicConnectQuery>,
+) -> Result<Html<String>, AppError> {
+    let user_id = if let Some(token_str) = &query.token {
+        let claims = jwt::validate_token(token_str, &state.config.jwt_secret)
+            .map_err(|_| AppError::BadRequest("Invalid token".into()))?;
+        Uuid::parse_str(&claims.sub)
+            .map_err(|_| AppError::BadRequest("Invalid user ID".into()))?
+    } else {
+        let user = get_or_create_dev_user(&state).await?;
+        let t = jwt::create_token(user.id, &state.config.jwt_secret)?;
+        return Ok(Html(format!(
+            r#"<!DOCTYPE html><html><head><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=/api/public/connect/x-cookies?token={}" /></head><body>Redirecting...</body></html>"#,
+            t
+        )));
+    };
+
+    let token = query.token.clone().unwrap_or_default();
+    let error = query.redirect_uri.as_deref().unwrap_or("");
+
+    let html = format!(r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Connect X/Twitter — Cookie Auth</title>
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; color: #1a1a2e; padding: 40px 20px; }}
+  .container {{ max-width: 640px; margin: 0 auto; }}
+  h1 {{ font-size: 26px; margin-bottom: 6px; }}
+  .subtitle {{ color: #666; margin-bottom: 20px; font-size: 14px; }}
+  .instructions {{ background: #fffbe6; border: 1px solid #ffe58f; border-radius: 10px; padding: 18px 20px; margin-bottom: 24px; }}
+  .instructions h3 {{ font-size: 15px; margin-bottom: 8px; }}
+  .instructions ol {{ padding-left: 20px; font-size: 14px; line-height: 1.7; color: #333; }}
+  .instructions code {{ background: #fff3cd; padding: 1px 6px; border-radius: 3px; font-size: 13px; }}
+  .form-group {{ margin-bottom: 16px; }}
+  label {{ display: block; font-weight: 600; font-size: 13px; margin-bottom: 4px; color: #333; }}
+  input[type=text], input[type=password] {{ width: 100%; padding: 10px 14px; border: 1px solid #ccc; border-radius: 8px; font-size: 14px; font-family: monospace; }}
+  input[type=text]:focus, input[type=password]:focus {{ outline: none; border-color: #4361ee; box-shadow: 0 0 0 3px rgba(67,97,238,0.15); }}
+  .btn {{ display: inline-block; padding: 10px 24px; border-radius: 8px; border: none; font-size: 14px; font-weight: 600; cursor: pointer; }}
+  .btn-primary {{ background: #4361ee; color: white; }}
+  .btn-primary:hover {{ background: #3a56d4; }}
+  .btn:disabled {{ opacity: 0.6; cursor: default; }}
+  .error {{ background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; color: #721c24; font-size: 14px; }}
+  .note {{ margin-top: 20px; font-size: 12px; color: #999; line-height: 1.5; }}
+  .back {{ display: block; margin-top: 16px; font-size: 13px; color: #4361ee; text-decoration: none; }}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>𝕏 Connect X/Twitter</h1>
+  <p class="subtitle">Use your browser cookies to authenticate with X's GraphQL API.</p>
+
+  {error_html}
+
+  <div class="instructions" style="border-left:4px solid #52c41a;background:#f6ffed;">
+    <h3>✅ Recommended: Paste the full Cookie header</h3>
+    <ol>
+      <li>Open <strong><a href="https://x.com" target="_blank">x.com</a></strong> and log into your account</li>
+      <li>Press <code>F12</code> (DevTools) → <strong>Network</strong> tab → refresh page</li>
+      <li>Click any <code>x.com</code> request → <strong>Request Headers</strong> → find <code>Cookie:</code></li>
+      <li><strong>Right-click → Copy value</strong> (the entire long string)</li>
+      <li>Paste it into the textarea below and click <strong>Connect</strong></li>
+    </ol>
+    <p style="margin-top:10px;font-size:12px;color:#888;">⚠️ This includes ALL session cookies (auth_token, ct0, guest_id, kdt, twid…) for the most reliable authentication.</p>
+  </div>
+
+    <form action="/api/public/connect/x-cookies/import" method="POST" style="margin-bottom:16px;">
+      <input type="hidden" name="token" value="{token}" />
+      <button type="submit" name="submit" value="1" class="btn" style="background:#52c41a;color:white;width:100%;font-size:15px;padding:12px 24px;">
+        🔍 Import from Browser (Zen / Chrome / Brave / Firefox)
+      </button>
+      <p style="font-size:12px;color:#888;margin-top:6px;text-align:center;">
+        Reads X/Twitter cookies directly from your local browser profile. No copy-paste needed.
+      </p>
+    </form>
+
+    <hr style="border:none;border-top:1px solid #eee;margin:20px 0;" />
+
+    <form action="/api/public/connect/x-cookies" method="POST">
+    <input type="hidden" name="token" value="{token}" />
+
+    <div class="form-group">
+      <label for="cookie_string">Full Cookie Header String</label>
+      <textarea id="cookie_string" name="cookie_string" rows="4" style="width:100%;padding:10px 14px;border:1px solid #ccc;border-radius:8px;font-family:monospace;font-size:12px;" placeholder="auth_token=...; ct0=...; guest_id=...; kdt=...; twid=...; lang=en; ..."></textarea>
+    </div>
+
+    <details style="margin-bottom:16px;">
+      <summary style="cursor:pointer;font-size:13px;color:#888;user-select:none;">⌨️ Manually enter auth_token + ct0 instead</summary>
+      <div style="margin-top:12px;padding:12px;background:#fafafa;border-radius:8px;border:1px solid #eee;">
+        <p style="font-size:12px;color:#888;margin-bottom:10px;">
+          Alternative: DevTools → <strong>Application</strong> tab → <strong>Cookies</strong> → <code>x.com</code>
+        </p>
+        <div class="form-group">
+          <label for="auth_token">auth_token</label>
+          <input type="password" id="auth_token" name="auth_token" placeholder="Paste your auth_token cookie value" autocomplete="off" />
+        </div>
+        <div class="form-group">
+          <label for="ct0">ct0 (CSRF token)</label>
+          <input type="text" id="ct0" name="ct0" placeholder="Paste your ct0 cookie value" autocomplete="off" />
+        </div>
+      </div>
+    </details>
+
+    <button type="submit" name="submit" value="1" class="btn btn-primary">🔗 Connect X/Twitter</button>
+  </form>
+
+  <a href="/" class="back">← Back to onboarding</a>
+</div>
+</body>
+</html>"#,
+        error_html = if error.is_empty() { String::new() } else {
+            format!(r#"<div class="error">❌ {error}</div>"#)
+        },
+        token = token,
+    );
+
+    Ok(Html(html))
+}
+
+/// POST /api/public/connect/x-cookies — store X cookies as encrypted integration
+pub async fn x_cookies_submit(
+    State(state): State<AppState>,
+    Query(query): Query<PublicConnectQuery>,
+    Form(form): Form<XCookieForm>,
+) -> Result<Response, AppError> {
+    let user_id = if let Some(token_str) = Some(&form.token).or(query.token.as_ref()) {
+        let claims = jwt::validate_token(token_str, &state.config.jwt_secret)
+            .map_err(|_| AppError::BadRequest("Invalid or expired token. Visit / to get a fresh one.".into()))?;
+        Uuid::parse_str(&claims.sub)
+            .map_err(|_| AppError::BadRequest("Invalid user ID in token".into()))?
+    } else {
+        return Err(AppError::BadRequest("Missing auth token. Visit / to get one.".into()));
+    };
+
+    let auth_token = form.auth_token.as_deref().unwrap_or("");
+    let ct0 = form.ct0.as_deref().unwrap_or("");
+    let cookie_string = form.cookie_string.as_deref().unwrap_or("");
+
+    // Parse cookie_string if provided, extracting auth_token and ct0
+    let (final_at, final_ct0, final_cookie_string) = if !cookie_string.is_empty() {
+        if let Some(parsed) = crate::social::x_cookies::parse_cookie_string(cookie_string) {
+            (parsed.0, parsed.1, parsed.2)
+        } else {
+            return Ok(Redirect::to(&format!(
+                "/api/public/connect/x-cookies?token={}&redirect_uri=Could+not+parse+cookie+string.+Use+individual+fields+instead.",
+                form.token
+            )).into_response());
+        }
+    } else if !auth_token.is_empty() && !ct0.is_empty() {
+        (auth_token.to_string(), ct0.to_string(), String::new())
+    } else {
+        return Ok(Redirect::to(&format!(
+            "/api/public/connect/x-cookies?token={}&redirect_uri=Please+provide+auth_token+and+ct0,+or+a+full+Cookie+string.",
+            form.token
+        )).into_response());
+    };
+
+    let token_str = crate::social::x_cookies::build_cookie_token(
+        &final_at, &final_ct0, Some(&final_cookie_string)
+    );
+
+    let (internal_id, profile_name, profile_picture) = {
+        let mut provider = crate::social::x::XProvider::new(&state.config);
+        provider.prepare_from_token(&token_str);
+        match provider.get_me(&token_str).await {
+            Ok(json) => {
+                let data = json.get("data");
+                let name = data.and_then(|d| d.get("name")).and_then(|s| s.as_str()).unwrap_or("X User").to_string();
+                let username = data.and_then(|d| d.get("username")).and_then(|s| s.as_str()).unwrap_or("");
+                let avatar = data.and_then(|d| d.get("profile_image_url")).and_then(|s| s.as_str()).map(String::from);
+                let id = data.and_then(|d| d.get("id")).and_then(|s| s.as_str()).unwrap_or("").to_string();
+                tracing::info!("X cookie auth identified user: @{username} ({name}) id={id}");
+                (id, name, avatar)
+            }
+            Err(e) => {
+                tracing::warn!("X cookie auth succeeded but get_me failed: {e}. Using fallback profile.");
+                (
+                    format!("cookie-{}", &final_at[..8.min(final_at.len())]),
+                    "X (Cookie Auth)".to_string(),
+                    None,
+                )
+            }
+        }
+    };
+
+    queries::create_integration(
+        &state.db,
+        user_id,
+        "x",
+        "X (Twitter)",
+        &internal_id,
+        &token_str,
+        None,
+        None,
+        Some(&profile_name),
+        None,
+        profile_picture.as_deref(),
+        None,
+    ).await?;
+
+    let display = urlencoding::encode(&profile_name);
+    state.broadcast.send(
+        "integration_connected",
+        &serde_json::json!({ "provider": "x", "method": "cookie", "profile": profile_name }),
+    );
+
+    tracing::info!("X cookie auth connected for user {user_id} as {profile_name}");
+
+    Ok(Redirect::to(&format!("/?connected=x&name={display}")).into_response())
+}
+
+/// POST /api/public/connect/x-cookies/import — extract cookies from local browser
+pub async fn x_cookies_import(
+    State(state): State<AppState>,
+    Query(query): Query<PublicConnectQuery>,
+    Form(form): Form<XCookieForm>,
+) -> Result<Response, AppError> {
+    let user_id = if let Some(token_str) = Some(&form.token).or(query.token.as_ref()) {
+        let claims = jwt::validate_token(token_str, &state.config.jwt_secret)
+            .map_err(|_| AppError::BadRequest("Invalid or expired token. Visit / to get a fresh one.".into()))?;
+        Uuid::parse_str(&claims.sub)
+            .map_err(|_| AppError::BadRequest("Invalid user ID in token".into()))?
+    } else {
+        return Err(AppError::BadRequest("Missing auth token. Visit / to get one.".into()));
+    };
+
+    let cookies = crate::social::x_cookies::extract_x_cookies()
+        .ok_or_else(|| AppError::BadRequest(
+            "Could not find X/Twitter cookies in any browser. Make sure you're logged into x.com in Zen, Chrome, Brave, or Firefox.".into()
+        ))?;
+
+    let token_str = crate::social::x_cookies::build_cookie_token(
+        &cookies.auth_token, &cookies.ct0, Some(&cookies.cookie_string)
+    );
+
+    let (internal_id, profile_name, profile_picture) = {
+        let mut provider = crate::social::x::XProvider::new(&state.config);
+        provider.prepare_from_token(&token_str);
+        match provider.get_me(&token_str).await {
+            Ok(json) => {
+                let data = json.get("data");
+                let name = data.and_then(|d| d.get("name")).and_then(|s| s.as_str()).unwrap_or("X User").to_string();
+                let username = data.and_then(|d| d.get("username")).and_then(|s| s.as_str()).unwrap_or("");
+                let avatar = data.and_then(|d| d.get("profile_image_url")).and_then(|s| s.as_str()).map(String::from);
+                let id = data.and_then(|d| d.get("id")).and_then(|s| s.as_str()).unwrap_or("").to_string();
+                tracing::info!("X browser import identified user: @{username} ({name}) id={id} from {}", cookies.source);
+                (id, name, avatar)
+            }
+            Err(e) => {
+                tracing::warn!("X browser import get_me failed: {e}. Using fallback profile.");
+                (
+                    format!("cookie-{}", &cookies.auth_token[..8.min(cookies.auth_token.len())]),
+                    format!("X (Cookie Auth) — {}", cookies.source),
+                    None,
+                )
+            }
+        }
+    };
+
+    queries::create_integration(
+        &state.db,
+        user_id,
+        "x",
+        "X (Twitter)",
+        &internal_id,
+        &token_str,
+        None,
+        None,
+        Some(&profile_name),
+        None,
+        profile_picture.as_deref(),
+        None,
+    ).await?;
+
+    let display = urlencoding::encode(&profile_name);
+    state.broadcast.send(
+        "integration_connected",
+        &serde_json::json!({ "provider": "x", "method": "browser-import", "source": cookies.source, "profile": profile_name }),
+    );
+
+    tracing::info!("X cookie auth connected for user {user_id} via browser import ({}) as {profile_name}", cookies.source);
+
+    Ok(Redirect::to(&format!("/?connected=x&name={display}")).into_response())
 }
 
 // ── Dev user helpers ──────────────────────────────────────────

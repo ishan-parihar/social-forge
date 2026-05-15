@@ -24,7 +24,7 @@ impl RedditProvider {
         let mut headers = reqwest::header::HeaderMap::new();
         headers.insert(
             reqwest::header::ACCEPT,
-            reqwest::header::HeaderValue::from_static("text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"),
+            reqwest::header::HeaderValue::from_static("text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"),
         );
         headers.insert(
             reqwest::header::ACCEPT_LANGUAGE,
@@ -34,12 +34,19 @@ impl RedditProvider {
             reqwest::header::CACHE_CONTROL,
             reqwest::header::HeaderValue::from_static("no-cache"),
         );
+        headers.insert(
+            reqwest::header::PRAGMA,
+            reqwest::header::HeaderValue::from_static("no-cache"),
+        );
+        headers.insert(
+            reqwest::header::UPGRADE_INSECURE_REQUESTS,
+            reqwest::header::HeaderValue::from_static("1"),
+        );
 
         let http = reqwest::Client::builder()
             .user_agent("Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0")
             .default_headers(headers)
-            .cookie_store(true)
-            .gzip(true)
+            .http1_only()
             .build()
             .expect("Failed to build reqwest client");
 
@@ -112,7 +119,6 @@ impl RedditProvider {
             .http
             .get(&format!("https://oauth.reddit.com{endpoint}"))
             .header("Authorization", format!("Bearer {token}"))
-            .header("User-Agent", "postiz-rust:v0.1.0 (by /u/postiz_rust)")
             .query(&all_params)
             .send()
             .await?;

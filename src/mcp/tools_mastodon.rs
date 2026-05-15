@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::api::AppState;
+use crate::crypto;
 use crate::social::mastodon::MastodonProvider;
 use crate::social::SocialProvider;
 
@@ -80,7 +81,11 @@ async fn find_mastodon_integration(
             "Mastodon not connected. Connect it via the integrations page first.".to_string()
         })?;
 
-    Ok(integration.access_token.clone())
+    let __tok = integration.access_token.clone();
+    let __tok = state.token_key.as_ref()
+        .and_then(|k| crate::crypto::decrypt_string(&__tok, k).ok())
+        .unwrap_or(__tok);
+    Ok(__tok)
 }
 
 fn create_mastodon_provider(state: &AppState) -> MastodonProvider {

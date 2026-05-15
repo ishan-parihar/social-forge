@@ -424,6 +424,8 @@ mod tests {
             frontend_url: "http://localhost:4200".into(),
             x_client_id: None,
             x_client_secret: None,
+            x_auth_token: None,
+            x_ct0: None,
             linkedin_client_id: Some("test_linkedin_id".into()),
             linkedin_client_secret: Some("test_linkedin_secret".into()),
             bluesky_handle: None,

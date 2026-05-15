@@ -352,6 +352,20 @@ pub async fn publish_post(
 
 /// For MCP single-user mode: get the first user.
 pub(crate) async fn resolve_first_user(state: &AppState) -> Result<Uuid, String> {
+    // Prefer a user with integrations, fall back to any user
+    let user = sqlx::query_scalar::<_, Uuid>(
+        "SELECT u.id FROM users u \
+         WHERE EXISTS (SELECT 1 FROM integrations i WHERE i.user_id = u.id) \
+         LIMIT 1"
+    )
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    if let Some(id) = user {
+        return Ok(id);
+    }
+
     sqlx::query_scalar::<_, Uuid>("SELECT id FROM users LIMIT 1")
         .fetch_optional(&state.db)
         .await

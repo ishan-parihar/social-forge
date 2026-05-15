@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::api::AppState;
+use crate::crypto;
 use crate::social::instagram_standalone::InstagramStandaloneProvider;
 
 // ── Input/Output Types ──────────────────────────────────────
@@ -73,7 +74,11 @@ async fn find_ias_token(state: &AppState, user_id: Uuid, ig_id: &str) -> Result<
             )
         })?;
 
-    Ok(ig.access_token.clone())
+    let __tok = ig.access_token.clone();
+    let __tok = state.token_key.as_ref()
+        .and_then(|k| crate::crypto::decrypt_string(&__tok, k).ok())
+        .unwrap_or(__tok);
+    Ok(__tok)
 }
 
 fn create_provider(state: &AppState) -> InstagramStandaloneProvider {

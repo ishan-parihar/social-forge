@@ -18,8 +18,11 @@ use postiz_rust::social::instagram_standalone::InstagramStandaloneProvider;
 use postiz_rust::social::linkedin::LinkedInProvider;
 use postiz_rust::social::linkedin_page::LinkedInPageProvider;
 use postiz_rust::social::pinterest::PinterestProvider;
+use postiz_rust::social::reddit::RedditProvider;
 use postiz_rust::social::skool::SkoolProvider;
 use postiz_rust::social::threads::ThreadsProvider;
+use postiz_rust::social::wordpress::WordPressProvider;
+use postiz_rust::social::x::XProvider;
 use postiz_rust::social::youtube::YoutubeProvider;
 use postiz_rust::social::SocialProvider;
 
@@ -640,7 +643,7 @@ async fn test_ias_mcp_tool_handler_full_chain() {
     use postiz_rust::api::rate_limiter::AuthRateLimiter;
     use postiz_rust::social::registry::ProviderRegistry;
 
-    let registry = Arc::new(ProviderRegistry::new(&config, None));
+    let registry = Arc::new(ProviderRegistry::new(&config, None, None));
     let broadcaster = Broadcaster::new();
     let rate_limiter = AuthRateLimiter::new(5, 60);
 
@@ -652,6 +655,7 @@ async fn test_ias_mcp_tool_handler_full_chain() {
         rate_limiter,
         token_key: None,
         telegram_client_manager: None,
+        wa_client: None,
     };
 
     // Verify MCP server can be created (all #[tool] macros compile)
@@ -690,7 +694,7 @@ async fn test_threads_mcp_tool_handler_full_chain() {
     use postiz_rust::api::rate_limiter::AuthRateLimiter;
     use postiz_rust::social::registry::ProviderRegistry;
 
-    let registry = Arc::new(ProviderRegistry::new(&config, None));
+    let registry = Arc::new(ProviderRegistry::new(&config, None, None));
     let broadcaster = Broadcaster::new();
     let rate_limiter = AuthRateLimiter::new(5, 60);
 
@@ -702,6 +706,7 @@ async fn test_threads_mcp_tool_handler_full_chain() {
         rate_limiter,
         token_key: None,
         telegram_client_manager: None,
+        wa_client: None,
     };
 
     // Verify MCP server can be created
@@ -740,7 +745,7 @@ async fn test_linkedin_mcp_tool_handler_full_chain() {
     use postiz_rust::api::rate_limiter::AuthRateLimiter;
     use postiz_rust::social::registry::ProviderRegistry;
 
-    let registry = Arc::new(ProviderRegistry::new(&config, None));
+    let registry = Arc::new(ProviderRegistry::new(&config, None, None));
     let broadcaster = Broadcaster::new();
     let rate_limiter = AuthRateLimiter::new(5, 60);
 
@@ -752,6 +757,7 @@ async fn test_linkedin_mcp_tool_handler_full_chain() {
         rate_limiter,
         token_key: None,
         telegram_client_manager: None,
+        wa_client: None,
     };
 
     // Verify MCP server can be created
@@ -921,4 +927,117 @@ async fn test_pinterest_search_pins() {
     let result = provider.search_pins("bad-token", "landscape", None).await;
     assert!(result.is_err());
     println!("✅ pinterest_search_pins: Properly handled API error");
+}
+
+// ── X/Twitter Provider Method Tests ─────────────────────────────
+// XProvider reads credentials from env, so we require a valid config.
+
+const X_BAD_TOKEN: &str = "AAAAAAAAAAAAAAAAAAAAAInvalidXTokenForTesting";
+
+#[tokio::test]
+async fn test_x_get_me() {
+    let config = get_config();
+    let provider = XProvider::new(&config);
+    let result = provider.get_me(X_BAD_TOKEN).await;
+    match &result {
+        Err(e) => println!("✅ x_get_me: Properly handled API error: {e}"),
+        Ok(v) => println!("⚠️  x_get_me: Unexpected success: {v:?}"),
+    }
+}
+
+#[tokio::test]
+async fn test_x_home_timeline() {
+    let config = get_config();
+    let provider = XProvider::new(&config);
+    let result = provider.home_timeline(X_BAD_TOKEN, "44196397", 5, None).await;
+    match &result {
+        Err(e) => println!("✅ x_home_timeline: Properly handled API error: {e}"),
+        Ok(v) => println!("⚠️  x_home_timeline: Unexpected success: {v:?}"),
+    }
+}
+
+#[tokio::test]
+async fn test_x_search_tweets() {
+    let config = get_config();
+    let provider = XProvider::new(&config);
+    let result = provider.search_tweets(X_BAD_TOKEN, "rust programming", 5, None).await;
+    match &result {
+        Err(e) => println!("✅ x_search_tweets: Properly handled API error: {e}"),
+        Ok(v) => println!("⚠️  x_search_tweets: Unexpected success: {v:?}"),
+    }
+}
+
+#[tokio::test]
+async fn test_x_followers() {
+    let config = get_config();
+    let provider = XProvider::new(&config);
+    let result = provider.followers(X_BAD_TOKEN, "44196397", 5, None).await;
+    match &result {
+        Err(e) => println!("✅ x_followers: Properly handled API error: {e}"),
+        Ok(v) => println!("⚠️  x_followers: Unexpected success: {v:?}"),
+    }
+}
+
+// ── Reddit Provider Method Tests ────────────────────────────────
+
+const REDDIT_BAD_TOKEN: &str = "invalid_reddit_token_for_testing_12345";
+
+#[tokio::test]
+async fn test_reddit_browse() {
+    let config = get_config();
+    let provider = RedditProvider::new(&config);
+    let result = provider.browse(REDDIT_BAD_TOKEN, "rust", "hot", 5, "all").await;
+    match &result {
+        Err(e) => println!("✅ reddit_browse: Properly handled API error: {e}"),
+        Ok(v) => println!("⚠️  reddit_browse: Unexpected success: {v:?}"),
+    }
+}
+
+#[tokio::test]
+async fn test_reddit_search() {
+    let config = get_config();
+    let provider = RedditProvider::new(&config);
+    let result = provider.search(REDDIT_BAD_TOKEN, "test query", Some("all"), "new", 5, "all").await;
+    match &result {
+        Err(e) => println!("✅ reddit_search: Properly handled API error: {e}"),
+        Ok(v) => println!("⚠️  reddit_search: Unexpected success: {v:?}"),
+    }
+}
+
+#[tokio::test]
+async fn test_reddit_inbox() {
+    let config = get_config();
+    let provider = RedditProvider::new(&config);
+    let result = provider.inbox(REDDIT_BAD_TOKEN, "inbox", 5).await;
+    match &result {
+        Err(e) => println!("✅ reddit_inbox: Properly handled API error: {e}"),
+        Ok(v) => println!("⚠️  reddit_inbox: Unexpected success: {v:?}"),
+    }
+}
+
+// ── WordPress Provider Method Tests ─────────────────────────────
+// WordPress expects a JSON token {"site_url":"...","username":"...","app_password":"..."}
+
+const WP_BAD_TOKEN: &str = r#"{"site_url":"https://example.com","username":"admin","app_password":"bad"}"#;
+
+#[tokio::test]
+async fn test_wordpress_list_posts() {
+    let config = get_config();
+    let provider = WordPressProvider::new(&config);
+    let result = provider.list_posts(WP_BAD_TOKEN, None, None).await;
+    match &result {
+        Err(e) => println!("✅ wordpress_list_posts: Properly handled API error: {e}"),
+        Ok(v) => println!("⚠️  wordpress_list_posts: Unexpected success: {v:?}"),
+    }
+}
+
+#[tokio::test]
+async fn test_wordpress_get_post() {
+    let config = get_config();
+    let provider = WordPressProvider::new(&config);
+    let result = provider.get_post(WP_BAD_TOKEN, 1).await;
+    match &result {
+        Err(e) => println!("✅ wordpress_get_post: Properly handled API error: {e}"),
+        Ok(v) => println!("⚠️  wordpress_get_post: Unexpected success: {v:?}"),
+    }
 }

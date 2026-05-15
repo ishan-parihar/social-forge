@@ -53,3 +53,6 @@ data/whatsapp/
 .memsearch/
 .contexty/
 .sisyphus/
+.playwright-mcp/
+onboard-page.md
+onboarding-page.png

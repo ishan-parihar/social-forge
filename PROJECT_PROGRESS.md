@@ -2,7 +2,7 @@
 
 > **Last Updated**: 2026-05-11 (v3)
 > **MCP Tool Count**: 115 (+12 Discord/Skool/YouTube/Pinterest Phase 2 tools)
-> **Active Test Pass**: 135/135 (excluding 5 whatsapp tests needing wacli binary)
+> **Active Test Pass**: 148/148 ✅ (including 14 WhatsApp tests — native wa-rs)
 > **Context**: Rust-based social media management platform with MCP (Model Context Protocol) server for AI agent integration, REST API for web UI, and 16 social providers.
 
 ---
@@ -504,7 +504,7 @@ BuildId resolved dynamically: fetch community page → parse `__NEXT_DATA__` fro
 | `tests/linkedin_e2e_test.rs` | 20 | Comprehensive LinkedIn end-to-end: provider registry, auth URLs, scopes, MCP server, handler chain, DB schema, publish flows, reconnect flow |
 | `tests/mcp_meta_audit.rs` | 2 | Meta audit of FB/IG tool names and structure |
 | All lib tests (`#[cfg(test)]`) | 53 | Unit tests across all crates |
-| **Total** | **135 passing** | (excluding 5 WhatsApp tests needing wacli binary) |
+| **Total** | **148 passing** | (14 WhatsApp tests — all passing with native wa-rs) |
 
 ---
 

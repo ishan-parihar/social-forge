@@ -26,6 +26,7 @@ pub mod tiktok;
 pub mod whatsapp;
 pub mod wordpress;
 pub mod x;
+pub mod x_cookies;
 pub mod youtube;
 
 use async_trait::async_trait;

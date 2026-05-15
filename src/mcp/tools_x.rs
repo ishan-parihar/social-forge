@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::api::AppState;
+use crate::crypto;
 use crate::social::x::XProvider;
 
 // ── Input/Output Types ──────────────────────────────────────
@@ -221,23 +222,61 @@ pub struct XListTimelineOutput {
 // ── Helpers ──────────────────────────────────────────────────
 
 async fn find_x_token(state: &AppState, user_id: Uuid) -> Result<(String, String), String> {
+    // Priority 1: DB-stored cookie tokens (freshest — submitted via web form)
     let integrations = crate::db::queries::list_integrations(&state.db, user_id)
         .await
         .map_err(|e| format!("DB error: {e}"))?;
 
-    let x = integrations
+    let x_integrations: Vec<_> = integrations
         .into_iter()
-        .find(|i| i.provider_identifier == "x")
-        .ok_or_else(|| {
-            "No X/Twitter integration found. Connect X first via integrations_connect."
-                .to_string()
-        })?;
+        .filter(|i| i.provider_identifier == "x")
+        .collect();
 
-    Ok((x.access_token, x.internal_id))
+    if let Some(preferred) = x_integrations.iter()
+        .find(|i| i.access_token.starts_with('{'))
+    {
+        let token = preferred.access_token.clone();
+        let token = state.token_key.as_ref()
+            .and_then(|key| crypto::decrypt_string(&token, key).ok())
+            .unwrap_or(token);
+        return Ok((token, preferred.internal_id.clone()));
+    }
+
+    // Priority 2: Env vars (X_AUTH_TOKEN + X_CT0) — stale but quick
+    if let (Some(auth_token), Some(ct0)) = (&state.config.x_auth_token, &state.config.x_ct0) {
+        let token = serde_json::json!({
+            "auth_token": auth_token,
+            "ct0": ct0,
+        })
+        .to_string();
+        return Ok((token, String::new()));
+    }
+
+    // Priority 3: Browser cookie extraction (Chrome/Brave/Firefox)
+    if let Some(cookies) = crate::social::x_cookies::extract_x_cookies() {
+        tracing::info!("X cookies extracted from browser: {}", cookies.source);
+        let token = crate::social::x_cookies::build_cookie_token(
+            &cookies.auth_token, &cookies.ct0, Some(&cookies.cookie_string)
+        );
+        return Ok((token, String::new()));
+    }
+
+    // Priority 4: OAuth DB tokens as last resort
+    if let Some(oauth) = x_integrations.first() {
+        let token = oauth.access_token.clone();
+        let token = state.token_key.as_ref()
+            .and_then(|key| crypto::decrypt_string(&token, key).ok())
+            .unwrap_or(token);
+        return Ok((token, oauth.internal_id.clone()));
+    }
+
+    Err("No X/Twitter integration found. Enter fresh cookies at /api/public/connect/x-cookies, set X_AUTH_TOKEN + X_CT0 env vars, or connect via OAuth.".into())
 }
 
-fn create_provider(state: &AppState) -> XProvider {
-    XProvider::new(&state.config)
+fn create_provider(state: &AppState, token: &str) -> XProvider {
+    let mut provider = XProvider::new(&state.config);
+    provider.prepare_from_token(token);
+    provider
 }
 
 async fn resolve_first_user(state: &AppState) -> Result<Uuid, String> {
@@ -251,7 +290,7 @@ pub async fn x_get_me(
 ) -> Result<Json<XGetMeOutput>, String> {
     let user_id = resolve_first_user(state).await?;
     let (token, _) = find_x_token(state, user_id).await?;
-    let provider = create_provider(state);
+    let provider = create_provider(state, &token);
     let result = provider.get_me(&token).await.map_err(|e| format!("X get_me failed: {e}"))?;
     Ok(Json(XGetMeOutput { data: result }))
 }
@@ -262,7 +301,7 @@ pub async fn x_home_timeline(
 ) -> Result<Json<XHomeTimelineOutput>, String> {
     let user_id = resolve_first_user(state).await?;
     let (token, my_id) = find_x_token(state, user_id).await?;
-    let provider = create_provider(state);
+    let provider = create_provider(state, &token);
     let max_results = input.max_results.unwrap_or(20).min(100);
     let result = provider
         .home_timeline(&token, &my_id, max_results, input.pagination_token.as_deref())
@@ -277,7 +316,7 @@ pub async fn x_user_lookup(
 ) -> Result<Json<XUserLookupOutput>, String> {
     let user_id = resolve_first_user(state).await?;
     let (token, _) = find_x_token(state, user_id).await?;
-    let provider = create_provider(state);
+    let provider = create_provider(state, &token);
     let result = provider
         .user_lookup(&token, &input.user_id)
         .await
@@ -291,7 +330,7 @@ pub async fn x_user_lookup_by_username(
 ) -> Result<Json<XUserLookupByUsernameOutput>, String> {
     let user_id = resolve_first_user(state).await?;
     let (token, _) = find_x_token(state, user_id).await?;
-    let provider = create_provider(state);
+    let provider = create_provider(state, &token);
     let result = provider
         .user_lookup_by_username(&token, &input.username)
         .await
@@ -305,7 +344,7 @@ pub async fn x_user_tweets(
 ) -> Result<Json<XUserTweetsOutput>, String> {
     let user_id = resolve_first_user(state).await?;
     let (token, _) = find_x_token(state, user_id).await?;
-    let provider = create_provider(state);
+    let provider = create_provider(state, &token);
     let max_results = input.max_results.unwrap_or(20).min(100);
     let result = provider
         .user_tweets(&token, &input.user_id, max_results, input.pagination_token.as_deref())
@@ -320,7 +359,7 @@ pub async fn x_tweet_detail(
 ) -> Result<Json<XTweetDetailOutput>, String> {
     let user_id = resolve_first_user(state).await?;
     let (token, _) = find_x_token(state, user_id).await?;
-    let provider = create_provider(state);
+    let provider = create_provider(state, &token);
     let result = provider
         .tweet_detail(&token, &input.tweet_id)
         .await
@@ -334,7 +373,7 @@ pub async fn x_search_tweets(
 ) -> Result<Json<XSearchTweetsOutput>, String> {
     let user_id = resolve_first_user(state).await?;
     let (token, _) = find_x_token(state, user_id).await?;
-    let provider = create_provider(state);
+    let provider = create_provider(state, &token);
     let max_results = input.max_results.unwrap_or(20).min(100);
     let result = provider
         .search_tweets(&token, &input.query, max_results, input.next_token.as_deref())
@@ -349,7 +388,7 @@ pub async fn x_delete_tweet(
 ) -> Result<Json<XDeleteTweetOutput>, String> {
     let user_id = resolve_first_user(state).await?;
     let (token, _) = find_x_token(state, user_id).await?;
-    let provider = create_provider(state);
+    let provider = create_provider(state, &token);
     let result = provider
         .delete_tweet(&token, &input.tweet_id)
         .await
@@ -363,7 +402,7 @@ pub async fn x_like_tweet(
 ) -> Result<Json<XLikeTweetOutput>, String> {
     let user_id = resolve_first_user(state).await?;
     let (token, my_id) = find_x_token(state, user_id).await?;
-    let provider = create_provider(state);
+    let provider = create_provider(state, &token);
     let result = provider
         .like_tweet(&token, &my_id, &input.tweet_id)
         .await
@@ -377,7 +416,7 @@ pub async fn x_unlike_tweet(
 ) -> Result<Json<XUnlikeTweetOutput>, String> {
     let user_id = resolve_first_user(state).await?;
     let (token, my_id) = find_x_token(state, user_id).await?;
-    let provider = create_provider(state);
+    let provider = create_provider(state, &token);
     let result = provider
         .unlike_tweet(&token, &my_id, &input.tweet_id)
         .await
@@ -391,7 +430,7 @@ pub async fn x_retweet(
 ) -> Result<Json<XRetweetOutput>, String> {
     let user_id = resolve_first_user(state).await?;
     let (token, my_id) = find_x_token(state, user_id).await?;
-    let provider = create_provider(state);
+    let provider = create_provider(state, &token);
     let result = provider
         .retweet(&token, &my_id, &input.tweet_id)
         .await
@@ -405,7 +444,7 @@ pub async fn x_unretweet(
 ) -> Result<Json<XUnretweetOutput>, String> {
     let user_id = resolve_first_user(state).await?;
     let (token, my_id) = find_x_token(state, user_id).await?;
-    let provider = create_provider(state);
+    let provider = create_provider(state, &token);
     let result = provider
         .unretweet(&token, &my_id, &input.tweet_id)
         .await
@@ -419,7 +458,7 @@ pub async fn x_bookmarks(
 ) -> Result<Json<XBookmarksOutput>, String> {
     let user_id = resolve_first_user(state).await?;
     let (token, my_id) = find_x_token(state, user_id).await?;
-    let provider = create_provider(state);
+    let provider = create_provider(state, &token);
     let max_results = input.max_results.unwrap_or(20).min(100);
     let result = provider
         .bookmarks(&token, &my_id, max_results, input.pagination_token.as_deref())
@@ -434,7 +473,7 @@ pub async fn x_bookmark_tweet(
 ) -> Result<Json<XBookmarkTweetOutput>, String> {
     let user_id = resolve_first_user(state).await?;
     let (token, my_id) = find_x_token(state, user_id).await?;
-    let provider = create_provider(state);
+    let provider = create_provider(state, &token);
     let result = provider
         .bookmark_tweet(&token, &my_id, &input.tweet_id)
         .await
@@ -448,7 +487,7 @@ pub async fn x_unbookmark_tweet(
 ) -> Result<Json<XUnbookmarkTweetOutput>, String> {
     let user_id = resolve_first_user(state).await?;
     let (token, my_id) = find_x_token(state, user_id).await?;
-    let provider = create_provider(state);
+    let provider = create_provider(state, &token);
     let result = provider
         .unbookmark_tweet(&token, &my_id, &input.tweet_id)
         .await
@@ -462,7 +501,7 @@ pub async fn x_followers(
 ) -> Result<Json<XFollowersOutput>, String> {
     let user_id = resolve_first_user(state).await?;
     let (token, _) = find_x_token(state, user_id).await?;
-    let provider = create_provider(state);
+    let provider = create_provider(state, &token);
     let max_results = input.max_results.unwrap_or(20).min(100);
     let result = provider
         .followers(&token, &input.user_id, max_results, input.pagination_token.as_deref())
@@ -477,7 +516,7 @@ pub async fn x_following(
 ) -> Result<Json<XFollowingOutput>, String> {
     let user_id = resolve_first_user(state).await?;
     let (token, _) = find_x_token(state, user_id).await?;
-    let provider = create_provider(state);
+    let provider = create_provider(state, &token);
     let max_results = input.max_results.unwrap_or(20).min(100);
     let result = provider
         .following(&token, &input.user_id, max_results, input.pagination_token.as_deref())
@@ -492,7 +531,7 @@ pub async fn x_follow_user(
 ) -> Result<Json<XFollowUserOutput>, String> {
     let user_id = resolve_first_user(state).await?;
     let (token, my_id) = find_x_token(state, user_id).await?;
-    let provider = create_provider(state);
+    let provider = create_provider(state, &token);
     let result = provider
         .follow_user(&token, &my_id, &input.target_user_id)
         .await
@@ -506,7 +545,7 @@ pub async fn x_unfollow_user(
 ) -> Result<Json<XUnfollowUserOutput>, String> {
     let user_id = resolve_first_user(state).await?;
     let (token, my_id) = find_x_token(state, user_id).await?;
-    let provider = create_provider(state);
+    let provider = create_provider(state, &token);
     let result = provider
         .unfollow_user(&token, &my_id, &input.target_user_id)
         .await
@@ -520,7 +559,7 @@ pub async fn x_list_timeline(
 ) -> Result<Json<XListTimelineOutput>, String> {
     let user_id = resolve_first_user(state).await?;
     let (token, _) = find_x_token(state, user_id).await?;
-    let provider = create_provider(state);
+    let provider = create_provider(state, &token);
     let max_results = input.max_results.unwrap_or(20).min(100);
     let result = provider
         .list_timeline(&token, &input.list_id, max_results, input.pagination_token.as_deref())

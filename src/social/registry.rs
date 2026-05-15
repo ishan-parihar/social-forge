@@ -10,6 +10,7 @@ use super::mastodon;
 use super::slack;
 use crate::config::Config;
 use crate::services::telegram_client::TelegramClientManager;
+use crate::wa::WhaClient;
 
 /// Thread-safe provider registry
 #[derive(Clone)]
@@ -19,7 +20,12 @@ pub struct ProviderRegistry {
 
 impl ProviderRegistry {
     /// Build registry with all providers, given app config for credentials
-    pub fn new(config: &Config, telegram_client_manager: Option<Arc<TelegramClientManager>>) -> Self {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        config: &Config,
+        telegram_client_manager: Option<Arc<TelegramClientManager>>,
+        wa_client: Option<Arc<tokio::sync::Mutex<WhaClient>>>,
+    ) -> Self {
         let mut providers: HashMap<&'static str, Arc<dyn SocialProvider>> = HashMap::new();
 
         // Current providers
@@ -86,8 +92,8 @@ impl ProviderRegistry {
         // Always registered (show on frontend even without credentials)
         providers.insert("pinterest", Arc::new(pinterest::PinterestProvider::new(config)));
 
-        // WhatsApp — daemon-based provider via wacli sidecar
-        providers.insert("whatsapp", Arc::new(whatsapp::WhatsAppProvider::new(config)));
+        // WhatsApp — native wa-rs client with wacli fallback
+        providers.insert("whatsapp", Arc::new(whatsapp::WhatsAppProvider::new(config, wa_client.clone())));
 
         // TikTok — OAuth-based video platform
         if config.tiktok_client_id.is_some() {

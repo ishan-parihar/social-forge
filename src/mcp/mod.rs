@@ -37,7 +37,7 @@ mod tools_hashnode;
 pub mod tools_pinterest;
 mod tools_posts;
 pub mod tools_discord;
-mod tools_reddit;
+pub mod tools_reddit;
 mod tools_skool;
 pub mod tools_slack;
 mod tools_tags;
@@ -50,7 +50,7 @@ mod tools_notifications;
 mod tools_webhooks;
 pub mod tools_wordpress;
 pub mod tools_youtube;
-mod tools_x;
+pub mod tools_x;
 
 // ══════════════════════════════════════════════════════════════
 // AUTH TOOLS
@@ -91,6 +91,29 @@ pub struct RegisterOutput {
 pub struct SuccessOutput {
     pub success: bool,
     pub message: String,
+}
+
+/// MCP-compatible wrapper around serde_json::Value for tool output.
+/// The MCP spec requires outputSchema to have root type \"object\",
+/// but schemars generates `true` (any-value schema) for serde_json::Value.
+/// This wrapper provides a valid `{\"type\": \"object\"}` schema.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct McpJsonValue(pub serde_json::Value);
+
+impl McpJsonValue {
+    pub fn value(self) -> serde_json::Value {
+        self.0
+    }
+}
+
+impl JsonSchema for McpJsonValue {
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        std::borrow::Cow::Borrowed("OutputObject")
+    }
+    fn json_schema(_gen: &mut rmcp::schemars::SchemaGenerator) -> rmcp::schemars::Schema {
+        serde_json::from_value(serde_json::json!({"type": "object"})).unwrap()
+    }
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -553,120 +576,120 @@ impl PostizMcpServer {
     pub async fn fb_get_feed(
         &self,
         params: Parameters<tools_facebook::FbGetFeedInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_facebook::handle_fb_get_feed(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_facebook::handle_fb_get_feed(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get a single Facebook post by ID")]
     pub async fn fb_get_post(
         &self,
         params: Parameters<tools_facebook::FbGetPostInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_facebook::handle_fb_get_post(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_facebook::handle_fb_get_post(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get comments on a Facebook post")]
     pub async fn fb_get_comments(
         &self,
         params: Parameters<tools_facebook::FbGetCommentsInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_facebook::handle_fb_get_comments(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_facebook::handle_fb_get_comments(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Create a text/link post on a Facebook page")]
     pub async fn fb_create_post(
         &self,
         params: Parameters<tools_facebook::FbCreatePostInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_facebook::handle_fb_create_post(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_facebook::handle_fb_create_post(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Create a photo post on a Facebook page")]
     pub async fn fb_create_photo(
         &self,
         params: Parameters<tools_facebook::FbCreatePhotoInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_facebook::handle_fb_create_photo(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_facebook::handle_fb_create_photo(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Create a video post on a Facebook page")]
     pub async fn fb_create_video(
         &self,
         params: Parameters<tools_facebook::FbCreateVideoInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_facebook::handle_fb_create_video(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_facebook::handle_fb_create_video(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Delete a Facebook post by ID")]
     pub async fn fb_delete_post(
         &self,
         params: Parameters<tools_facebook::FbDeletePostInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_facebook::handle_fb_delete_post(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_facebook::handle_fb_delete_post(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Comment on a Facebook post")]
     pub async fn fb_comment(
         &self,
         params: Parameters<tools_facebook::FbCommentInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_facebook::handle_fb_comment(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_facebook::handle_fb_comment(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "React to a Facebook post (LIKE, LOVE, WOW, HAHA, SAD, ANGRY)")]
     pub async fn fb_react(
         &self,
         params: Parameters<tools_facebook::FbReactInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_facebook::handle_fb_react(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_facebook::handle_fb_react(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get insights/analytics for a Facebook page")]
     pub async fn fb_page_insights(
         &self,
         params: Parameters<tools_facebook::FbPageInsightsInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_facebook::handle_fb_page_insights(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_facebook::handle_fb_page_insights(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get conversations (inbox) for a Facebook page")]
     pub async fn fb_conversations(
         &self,
         params: Parameters<tools_facebook::FbConversationsInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_facebook::handle_fb_conversations(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_facebook::handle_fb_conversations(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get messages in a Facebook conversation")]
     pub async fn fb_conversation_messages(
         &self,
         params: Parameters<tools_facebook::FbConversationMsgsInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_facebook::handle_fb_conversation_msgs(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_facebook::handle_fb_conversation_msgs(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Send a message to a Facebook conversation")]
     pub async fn fb_send_message(
         &self,
         params: Parameters<tools_facebook::FbSendMessageInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_facebook::handle_fb_send_message(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_facebook::handle_fb_send_message(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Search for public Facebook pages by name")]
     pub async fn fb_search_pages(
         &self,
         params: Parameters<tools_facebook::FbSearchPagesInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_facebook::handle_fb_search_pages(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_facebook::handle_fb_search_pages(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get albums from a Facebook page")]
     pub async fn fb_albums(
         &self,
         params: Parameters<tools_facebook::FbAlbumsInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_facebook::handle_fb_albums(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_facebook::handle_fb_albums(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     // ── Instagram Tools ─────────────────────────────────────────────
@@ -675,112 +698,112 @@ impl PostizMcpServer {
     pub async fn ig_get_media(
         &self,
         params: Parameters<tools_instagram::IgGetMediaInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_instagram::handle_ig_get_media(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_instagram::handle_ig_get_media(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get details of a specific Instagram media item")]
     pub async fn ig_get_media_detail(
         &self,
         params: Parameters<tools_instagram::IgGetMediaDetailInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_instagram::handle_ig_get_media_detail(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_instagram::handle_ig_get_media_detail(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get comments on an Instagram media item")]
     pub async fn ig_get_comments(
         &self,
         params: Parameters<tools_instagram::IgGetCommentsInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_instagram::handle_ig_get_comments(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_instagram::handle_ig_get_comments(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Search for Instagram hashtags by name")]
     pub async fn ig_search_hashtag(
         &self,
         params: Parameters<tools_instagram::IgSearchHashtagInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_instagram::handle_ig_search_hashtag(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_instagram::handle_ig_search_hashtag(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get recent media for an Instagram hashtag")]
     pub async fn ig_get_hashtag_media(
         &self,
         params: Parameters<tools_instagram::IgGetHashtagMediaInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_instagram::handle_ig_get_hashtag_media(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_instagram::handle_ig_get_hashtag_media(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get insights for an Instagram business account")]
     pub async fn ig_get_insights(
         &self,
         params: Parameters<tools_instagram::IgGetInsightsInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_instagram::handle_ig_get_insights(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_instagram::handle_ig_get_insights(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get media where the Instagram account is tagged")]
     pub async fn ig_get_tagged(
         &self,
         params: Parameters<tools_instagram::IgGetTaggedInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_instagram::handle_ig_get_tagged(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_instagram::handle_ig_get_tagged(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Create an Instagram media container (step 1 of publish)")]
     pub async fn ig_create_container(
         &self,
         params: Parameters<tools_instagram::IgCreateContainerInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_instagram::handle_ig_create_container(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_instagram::handle_ig_create_container(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Publish an Instagram media container (step 2 of publish)")]
     pub async fn ig_publish_container(
         &self,
         params: Parameters<tools_instagram::IgPublishContainerInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_instagram::handle_ig_publish_container(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_instagram::handle_ig_publish_container(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Reply to an Instagram comment")]
     pub async fn ig_reply_to_comment(
         &self,
         params: Parameters<tools_instagram::IgReplyToCommentInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_instagram::handle_ig_reply_to_comment(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_instagram::handle_ig_reply_to_comment(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get Instagram reels for a business account")]
     pub async fn ig_get_reels(
         &self,
         params: Parameters<tools_instagram::IgGetReelsInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_instagram::handle_ig_get_reels(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_instagram::handle_ig_get_reels(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get Instagram stories for a business account")]
     pub async fn ig_get_stories(
         &self,
         params: Parameters<tools_instagram::IgGetStoriesInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_instagram::handle_ig_get_stories(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_instagram::handle_ig_get_stories(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get followers of an Instagram business account")]
     pub async fn ig_get_followers(
         &self,
         params: Parameters<tools_instagram::IgGetFollowersInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_instagram::handle_ig_get_followers(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_instagram::handle_ig_get_followers(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Discover an Instagram business account by username")]
     pub async fn ig_business_discovery(
         &self,
         params: Parameters<tools_instagram::IgBusinessDiscoveryInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_instagram::handle_ig_business_discovery(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_instagram::handle_ig_business_discovery(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
 
@@ -788,8 +811,8 @@ impl PostizMcpServer {
     pub async fn ig_get_insights_audience(
         &self,
         params: Parameters<tools_instagram::IgGetInsightsAudienceInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_instagram::handle_ig_get_insights_audience(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_instagram::handle_ig_get_insights_audience(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     // ── Instagram Standalone (Basic Display API) Tools ─────────────────
@@ -798,56 +821,56 @@ impl PostizMcpServer {
     pub async fn ias_get_media(
         &self,
         params: Parameters<tools_instagram_standalone::IasGetMediaInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_instagram_standalone::handle_ias_get_media(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_instagram_standalone::handle_ias_get_media(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get details of a specific Instagram media item (Basic Display API)")]
     pub async fn ias_get_media_detail(
         &self,
         params: Parameters<tools_instagram_standalone::IasGetMediaDetailInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_instagram_standalone::handle_ias_get_media_detail(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_instagram_standalone::handle_ias_get_media_detail(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get comments on an Instagram media item (Basic Display API)")]
     pub async fn ias_get_comments(
         &self,
         params: Parameters<tools_instagram_standalone::IasGetCommentsInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_instagram_standalone::handle_ias_get_comments(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_instagram_standalone::handle_ias_get_comments(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Reply to an Instagram comment (Basic Display API)")]
     pub async fn ias_reply_to_comment(
         &self,
         params: Parameters<tools_instagram_standalone::IasReplyToCommentInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_instagram_standalone::handle_ias_reply_to_comment(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_instagram_standalone::handle_ias_reply_to_comment(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Create an Instagram media container (step 1 of publish, Basic Display API)")]
     pub async fn ias_create_container(
         &self,
         params: Parameters<tools_instagram_standalone::IasCreateContainerInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_instagram_standalone::handle_ias_create_container(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_instagram_standalone::handle_ias_create_container(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Publish an Instagram media container (step 2 of publish, Basic Display API)")]
     pub async fn ias_publish_container(
         &self,
         params: Parameters<tools_instagram_standalone::IasPublishContainerInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_instagram_standalone::handle_ias_publish_container(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_instagram_standalone::handle_ias_publish_container(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Poll Instagram container publish status (Basic Display API)")]
     pub async fn ias_poll_container(
         &self,
         params: Parameters<tools_instagram_standalone::IasPollContainerInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_instagram_standalone::handle_ias_poll_container(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_instagram_standalone::handle_ias_poll_container(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     // ── YouTube Tools ──────────────────────────────────────────────
@@ -856,72 +879,72 @@ impl PostizMcpServer {
     pub async fn yt_search_videos(
         &self,
         params: Parameters<tools_youtube::YtSearchVideosInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_youtube::handle_yt_search_videos(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_youtube::handle_yt_search_videos(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get details of a specific YouTube video by video ID")]
     pub async fn yt_get_video(
         &self,
         params: Parameters<tools_youtube::YtGetVideoInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_youtube::handle_yt_get_video(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_youtube::handle_yt_get_video(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "List playlists for a YouTube channel")]
     pub async fn yt_list_playlists(
         &self,
         params: Parameters<tools_youtube::YtListPlaylistsInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_youtube::handle_yt_list_playlists(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_youtube::handle_yt_list_playlists(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get items in a YouTube playlist")]
     pub async fn yt_get_playlist_items(
         &self,
         params: Parameters<tools_youtube::YtGetPlaylistItemsInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_youtube::handle_yt_get_playlist_items(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_youtube::handle_yt_get_playlist_items(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get comments on a YouTube video")]
     pub async fn yt_get_comments(
         &self,
         params: Parameters<tools_youtube::YtGetCommentsInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_youtube::handle_yt_get_comments(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_youtube::handle_yt_get_comments(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get statistics for a YouTube channel (subscribers, views, videos)")]
     pub async fn yt_get_channel_stats(
         &self,
         params: Parameters<tools_youtube::YtGetChannelStatsInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_youtube::handle_yt_get_channel_stats(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_youtube::handle_yt_get_channel_stats(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get YouTube Analytics reports for a channel (views, watch time, etc.)")]
     pub async fn yt_get_analytics(
         &self,
         params: Parameters<tools_youtube::YtGetAnalyticsInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_youtube::handle_yt_get_analytics(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_youtube::handle_yt_get_analytics(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get subscriptions for a YouTube channel")]
     pub async fn yt_get_subscriptions(
         &self,
         params: Parameters<tools_youtube::YtGetSubscriptionsInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_youtube::handle_yt_get_subscriptions(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_youtube::handle_yt_get_subscriptions(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Find YouTube creators by topic. Searches videos, groups by channel, enriches with subscriber counts and email detection.")]
     pub async fn yt_find_creators(
         &self,
         params: Parameters<tools_youtube::YtFindCreatorsInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_youtube::handle_yt_find_creators(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_youtube::handle_yt_find_creators(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     // ── Pinterest Tools ──────────────────────────────────────────
@@ -930,56 +953,56 @@ impl PostizMcpServer {
     pub async fn pi_get_user_account(
         &self,
         params: Parameters<tools_pinterest::PiGetUserAccountInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_pinterest::handle_pi_get_user_account(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_pinterest::handle_pi_get_user_account(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get Pinterest board details")]
     pub async fn pi_get_board(
         &self,
         params: Parameters<tools_pinterest::PiGetBoardInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_pinterest::handle_pi_get_board(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_pinterest::handle_pi_get_board(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get pins on a Pinterest board")]
     pub async fn pi_get_board_pins(
         &self,
         params: Parameters<tools_pinterest::PiGetBoardPinsInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_pinterest::handle_pi_get_board_pins(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_pinterest::handle_pi_get_board_pins(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get a single Pinterest pin")]
     pub async fn pi_get_pin(
         &self,
         params: Parameters<tools_pinterest::PiGetPinInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_pinterest::handle_pi_get_pin(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_pinterest::handle_pi_get_pin(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get analytics for a Pinterest board")]
     pub async fn pi_get_board_analytics(
         &self,
         params: Parameters<tools_pinterest::PiGetBoardAnalyticsInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_pinterest::handle_pi_get_board_analytics(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_pinterest::handle_pi_get_board_analytics(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get analytics for a Pinterest pin within a board")]
     pub async fn pi_get_pin_analytics(
         &self,
         params: Parameters<tools_pinterest::PiGetPinAnalyticsInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_pinterest::handle_pi_get_pin_analytics(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_pinterest::handle_pi_get_pin_analytics(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Search Pinterest pins by keyword using Pinterest API v5")]
     pub async fn pi_search_pins(
         &self,
         params: Parameters<tools_pinterest::PiSearchPinsInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_pinterest::handle_pi_search_pins(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_pinterest::handle_pi_search_pins(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     // ── Discord Tools ───────────────────────────────────────────
@@ -988,80 +1011,80 @@ impl PostizMcpServer {
     pub async fn di_get_channel(
         &self,
         params: Parameters<tools_discord::DiGetChannelInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_discord::handle_di_get_channel(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_discord::handle_di_get_channel(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get messages from a Discord channel")]
     pub async fn di_get_messages(
         &self,
         params: Parameters<tools_discord::DiGetMessagesInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_discord::handle_di_get_messages(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_discord::handle_di_get_messages(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get Discord guild/server info")]
     pub async fn di_get_guild(
         &self,
         params: Parameters<tools_discord::DiGetGuildInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_discord::handle_di_get_guild(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_discord::handle_di_get_guild(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get thread members in a Discord channel")]
     pub async fn di_get_thread_members(
         &self,
         params: Parameters<tools_discord::DiGetThreadMembersInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_discord::handle_di_get_thread_members(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_discord::handle_di_get_thread_members(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Send a message to a Discord channel")]
     pub async fn di_send_message(
         &self,
         params: Parameters<tools_discord::DiSendMessageInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_discord::handle_di_send_message(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_discord::handle_di_send_message(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Delete a message from a Discord channel")]
     pub async fn di_delete_message(
         &self,
         params: Parameters<tools_discord::DiDeleteMessageInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_discord::handle_di_delete_message(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_discord::handle_di_delete_message(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Add a reaction (emoji) to a Discord message")]
     pub async fn di_add_reaction(
         &self,
         params: Parameters<tools_discord::DiAddReactionInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_discord::handle_di_add_reaction(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_discord::handle_di_add_reaction(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "List all channels in a Discord guild/server")]
     pub async fn di_get_guild_channels(
         &self,
         params: Parameters<tools_discord::DiGetGuildChannelsInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_discord::handle_di_get_guild_channels(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_discord::handle_di_get_guild_channels(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get detailed info about a Discord guild/server including member counts")]
     pub async fn di_get_server_info(
         &self,
         params: Parameters<tools_discord::DiGetServerInfoInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_discord::handle_di_get_server_info(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_discord::handle_di_get_server_info(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Create a forum post in a Discord forum channel")]
     pub async fn di_create_forum_post(
         &self,
         params: Parameters<tools_discord::DiCreateForumPostInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_discord::handle_di_create_forum_post(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_discord::handle_di_create_forum_post(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     // ── WhatsApp Tools ───────────────────────────────────────────
@@ -1104,32 +1127,32 @@ impl PostizMcpServer {
     pub async fn wp_create_post(
         &self,
         params: Parameters<tools_wordpress::WpCreatePostInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_wordpress::handle_wp_create_post(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_wordpress::handle_wp_create_post(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "List WordPress posts with optional status filter and pagination")]
     pub async fn wp_list_posts(
         &self,
         params: Parameters<tools_wordpress::WpListPostsInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_wordpress::handle_wp_list_posts(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_wordpress::handle_wp_list_posts(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get a single WordPress post by ID")]
     pub async fn wp_get_post(
         &self,
         params: Parameters<tools_wordpress::WpGetPostInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_wordpress::handle_wp_get_post(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_wordpress::handle_wp_get_post(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "List categories for a WordPress site")]
     pub async fn wp_list_categories(
         &self,
         params: Parameters<tools_wordpress::WpListCategoriesInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_wordpress::handle_wp_list_categories(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_wordpress::handle_wp_list_categories(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     // ── Threads Tools ─────────────────────────────────────────────────
@@ -1138,72 +1161,72 @@ impl PostizMcpServer {
     pub async fn th_get_profile(
         &self,
         params: Parameters<tools_threads::ThreadsGetProfileInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_threads::handle_th_get_profile(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_threads::handle_th_get_profile(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "List Threads threads (posts) for your account")]
     pub async fn th_get_threads(
         &self,
         params: Parameters<tools_threads::ThreadsGetThreadsInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_threads::handle_th_get_threads(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_threads::handle_th_get_threads(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get details of a specific Threads thread (post)")]
     pub async fn th_get_thread_detail(
         &self,
         params: Parameters<tools_threads::ThreadsGetThreadDetailInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_threads::handle_th_get_thread_detail(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_threads::handle_th_get_thread_detail(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get replies on a Threads thread")]
     pub async fn th_get_replies(
         &self,
         params: Parameters<tools_threads::ThreadsGetRepliesInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_threads::handle_th_get_replies(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_threads::handle_th_get_replies(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Reply to a Threads thread")]
     pub async fn th_reply_to_thread(
         &self,
         params: Parameters<tools_threads::ThreadsReplyToThreadInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_threads::handle_th_reply_to_thread(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_threads::handle_th_reply_to_thread(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Create and publish a new Threads post (text, image, or video)")]
     pub async fn th_create_thread(
         &self,
         params: Parameters<tools_threads::ThreadsCreateThreadInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_threads::handle_th_create_thread(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_threads::handle_th_create_thread(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Delete a Threads thread (post)")]
     pub async fn th_delete_thread(
         &self,
         params: Parameters<tools_threads::ThreadsDeleteThreadInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_threads::handle_th_delete_thread(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_threads::handle_th_delete_thread(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get insights/analytics for your Threads account")]
     pub async fn th_get_insights(
         &self,
         params: Parameters<tools_threads::ThreadsGetInsightsInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_threads::handle_th_get_insights(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_threads::handle_th_get_insights(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Poll publish status of a Threads creation ID")]
     pub async fn th_poll_publish_status(
         &self,
         params: Parameters<tools_threads::ThreadsPollStatusInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_threads::handle_th_poll_publish_status(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_threads::handle_th_poll_publish_status(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     // ── LinkedIn Personal Tools ─────────────────────────────────
@@ -1212,48 +1235,48 @@ impl PostizMcpServer {
     pub async fn li_get_profile(
         &self,
         params: Parameters<tools_linkedin::LiGetProfileInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_linkedin::handle_li_get_profile(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_linkedin::handle_li_get_profile(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "List LinkedIn posts for an author URN (e.g. urn:li:person:abc). Use this to fetch your recent posts.")]
     pub async fn li_get_posts(
         &self,
         params: Parameters<tools_linkedin::LiGetPostsInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_linkedin::handle_li_get_posts(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_linkedin::handle_li_get_posts(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get details of a specific LinkedIn post by its URN (e.g. urn:li:activity:xyz)")]
     pub async fn li_get_post_detail(
         &self,
         params: Parameters<tools_linkedin::LiGetPostDetailInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_linkedin::handle_li_get_post_detail(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_linkedin::handle_li_get_post_detail(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get comments on a LinkedIn post by its URN")]
     pub async fn li_get_comments(
         &self,
         params: Parameters<tools_linkedin::LiGetCommentsInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_linkedin::handle_li_get_comments(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_linkedin::handle_li_get_comments(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Create a comment on a LinkedIn post. Provide your actor URN (e.g. urn:li:person:abc) and the message text.")]
     pub async fn li_create_comment(
         &self,
         params: Parameters<tools_linkedin::LiCreateCommentInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_linkedin::handle_li_create_comment(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_linkedin::handle_li_create_comment(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Create a new LinkedIn post (text-only). Content will be published immediately to your LinkedIn profile.")]
     pub async fn li_create_post(
         &self,
         params: Parameters<tools_linkedin::LiCreatePostInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_linkedin::handle_li_create_post(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_linkedin::handle_li_create_post(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     // ── LinkedIn Page Tools ────────────────────────────────────
@@ -1262,32 +1285,32 @@ impl PostizMcpServer {
     pub async fn lip_list_pages(
         &self,
         params: Parameters<tools_linkedin_page::LipListPagesInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_linkedin_page::handle_lip_list_pages(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_linkedin_page::handle_lip_list_pages(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get details of a LinkedIn company page by its page ID")]
     pub async fn lip_get_page(
         &self,
         params: Parameters<tools_linkedin_page::LipGetPageInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_linkedin_page::handle_lip_get_page(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_linkedin_page::handle_lip_get_page(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get posts from a LinkedIn company page by page ID")]
     pub async fn lip_get_page_posts(
         &self,
         params: Parameters<tools_linkedin_page::LipGetPagePostsInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_linkedin_page::handle_lip_get_page_posts(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_linkedin_page::handle_lip_get_page_posts(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Create a comment on a LinkedIn post as a company page. Provide the page URN, post URN, and message.")]
     pub async fn lip_create_comment(
         &self,
         params: Parameters<tools_linkedin_page::LipCreateCommentInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_linkedin_page::handle_lip_create_comment(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_linkedin_page::handle_lip_create_comment(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     // ── Telegram Bot Tools ───────────────────────────────────────
@@ -1371,40 +1394,40 @@ impl PostizMcpServer {
     pub async fn sk_publish(
         &self,
         params: Parameters<tools_skool::SkPublishInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_skool::handle_sk_publish(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_skool::handle_sk_publish(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get Skool community info (name, description, member count)")]
     pub async fn sk_get_info(
         &self,
         params: Parameters<tools_skool::SkGetInfoInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_skool::handle_sk_get_info(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_skool::handle_sk_get_info(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "List posts in a Skool community with optional pagination/sort/category")]
     pub async fn sk_list_posts(
         &self,
         params: Parameters<tools_skool::SkListPostsInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_skool::handle_sk_list_posts(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_skool::handle_sk_list_posts(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get a single Skool post by community slug and post slug")]
     pub async fn sk_get_post(
         &self,
         params: Parameters<tools_skool::SkGetPostInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_skool::handle_sk_get_post(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_skool::handle_sk_get_post(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Create a comment on a Skool post")]
     pub async fn sk_create_comment(
         &self,
         params: Parameters<tools_skool::SkCreateCommentInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_skool::handle_sk_create_comment(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_skool::handle_sk_create_comment(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     // ── Slack Tools ─────────────────────────────────────────────────
@@ -1413,32 +1436,32 @@ impl PostizMcpServer {
     pub async fn sl_send_message(
         &self,
         params: Parameters<tools_slack::SlSendMessageInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_slack::handle_sl_send_message(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_slack::handle_sl_send_message(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "List all public and private channels in the Slack workspace")]
     pub async fn sl_list_channels(
         &self,
         params: Parameters<tools_slack::SlListChannelsInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_slack::handle_sl_list_channels(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_slack::handle_sl_list_channels(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get message history for a Slack channel. Specify channel ID and optional limit.")]
     pub async fn sl_channel_history(
         &self,
         params: Parameters<tools_slack::SlChannelHistoryInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_slack::handle_sl_channel_history(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_slack::handle_sl_channel_history(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "List all users in the Slack workspace")]
     pub async fn sl_list_users(
         &self,
         params: Parameters<tools_slack::SlListUsersInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_slack::handle_sl_list_users(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_slack::handle_sl_list_users(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     // ── Bluesky Tools ─────────────────────────────────────────────────
@@ -1447,40 +1470,40 @@ impl PostizMcpServer {
     pub async fn bs_profile(
         &self,
         params: Parameters<tools_bluesky::BsProfileInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_bluesky::handle_bs_profile(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_bluesky::handle_bs_profile(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get the Bluesky home timeline")]
     pub async fn bs_timeline(
         &self,
         params: Parameters<tools_bluesky::BsTimelineInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_bluesky::handle_bs_timeline(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_bluesky::handle_bs_timeline(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Create a new Bluesky post (text with optional images)")]
     pub async fn bs_create_post(
         &self,
         params: Parameters<tools_bluesky::BsCreatePostInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_bluesky::handle_bs_create_post(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_bluesky::handle_bs_create_post(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Search Bluesky for posts and users")]
     pub async fn bs_search(
         &self,
         params: Parameters<tools_bluesky::BsSearchInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_bluesky::handle_bs_search(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_bluesky::handle_bs_search(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get the Bluesky feed (popular/recent posts)")]
     pub async fn bs_feed(
         &self,
         params: Parameters<tools_bluesky::BsFeedInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_bluesky::handle_bs_feed(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_bluesky::handle_bs_feed(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     // ── TikTok Tools ─────────────────────────────────────────────────
@@ -1489,24 +1512,24 @@ impl PostizMcpServer {
     pub async fn tt_profile(
         &self,
         params: Parameters<tools_tiktok::TtProfileInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_tiktok::handle_tt_profile(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_tiktok::handle_tt_profile(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Create and publish a TikTok video")]
     pub async fn tt_create_post(
         &self,
         params: Parameters<tools_tiktok::TtCreatePostInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_tiktok::handle_tt_create_post(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_tiktok::handle_tt_create_post(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "List TikTok videos for the authenticated user")]
     pub async fn tt_list_videos(
         &self,
         params: Parameters<tools_tiktok::TtListVideosInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_tiktok::handle_tt_list_videos(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_tiktok::handle_tt_list_videos(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     // ── Mastodon Tools ───────────────────────────────────────────────
@@ -1515,32 +1538,32 @@ impl PostizMcpServer {
     pub async fn ms_create_post(
         &self,
         params: Parameters<tools_mastodon::MsCreatePostInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_mastodon::handle_ms_create_post(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_mastodon::handle_ms_create_post(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get Mastodon timeline (home, local, trending, or public)")]
     pub async fn ms_get_timeline(
         &self,
         params: Parameters<tools_mastodon::MsGetTimelineInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_mastodon::handle_ms_get_timeline(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_mastodon::handle_ms_get_timeline(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get a single Mastodon post/status by ID")]
     pub async fn ms_get_post(
         &self,
         params: Parameters<tools_mastodon::MsGetPostInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_mastodon::handle_ms_get_post(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_mastodon::handle_ms_get_post(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Search across Mastodon for accounts, statuses, and hashtags")]
     pub async fn ms_search(
         &self,
         params: Parameters<tools_mastodon::MsSearchInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_mastodon::handle_ms_search(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_mastodon::handle_ms_search(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     // ── Medium Tools ─────────────────────────────────────────────────
@@ -1549,24 +1572,24 @@ impl PostizMcpServer {
     pub async fn md_create_post(
         &self,
         params: Parameters<tools_medium::MdCreatePostInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_medium::handle_md_create_post(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_medium::handle_md_create_post(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "List Medium posts for the authenticated user")]
     pub async fn md_list_posts(
         &self,
         params: Parameters<tools_medium::MdListPostsInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_medium::handle_md_list_posts(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_medium::handle_md_list_posts(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get a single Medium post by post ID")]
     pub async fn md_get_post(
         &self,
         params: Parameters<tools_medium::MdGetPostInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_medium::handle_md_get_post(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_medium::handle_md_get_post(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     // ── Hashnode Tools ────────────────────────────────────────────────
@@ -1575,24 +1598,24 @@ impl PostizMcpServer {
     pub async fn hn_create_post(
         &self,
         params: Parameters<tools_hashnode::HnCreatePostInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_hashnode::handle_hn_create_post(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_hashnode::handle_hn_create_post(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "List Hashnode posts for a publication")]
     pub async fn hn_list_posts(
         &self,
         params: Parameters<tools_hashnode::HnListPostsInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_hashnode::handle_hn_list_posts(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_hashnode::handle_hn_list_posts(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get a single Hashnode post by post ID")]
     pub async fn hn_get_post(
         &self,
         params: Parameters<tools_hashnode::HnGetPostInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_hashnode::handle_hn_get_post(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_hashnode::handle_hn_get_post(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     // ── Dev.to Tools ─────────────────────────────────────────────────
@@ -1601,24 +1624,24 @@ impl PostizMcpServer {
     pub async fn dv_create_post(
         &self,
         params: Parameters<tools_devto::DvCreatePostInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_devto::handle_dv_create_post(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_devto::handle_dv_create_post(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "List Dev.to articles for the authenticated user")]
     pub async fn dv_list_posts(
         &self,
         params: Parameters<tools_devto::DvListPostsInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_devto::handle_dv_list_posts(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_devto::handle_dv_list_posts(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get a single Dev.to article by article ID")]
     pub async fn dv_get_post(
         &self,
         params: Parameters<tools_devto::DvGetPostInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_devto::handle_dv_get_post(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_devto::handle_dv_get_post(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     // ── Analytics Tools ──────────────────────────────────────────────
@@ -1627,16 +1650,16 @@ impl PostizMcpServer {
     pub async fn analytics_get(
         &self,
         params: Parameters<tools_analytics::AnalyticsGetInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_analytics::handle_analytics_get(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_analytics::handle_analytics_get(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get analytics data for a specific post")]
     pub async fn analytics_get_post(
         &self,
         params: Parameters<tools_analytics::AnalyticsPostInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_analytics::handle_analytics_get_post(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_analytics::handle_analytics_get_post(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     // ── Tags Tools ──────────────────────────────────────────────────
@@ -1645,40 +1668,40 @@ impl PostizMcpServer {
     pub async fn tag_create(
         &self,
         params: Parameters<tools_tags::TagCreateInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_tags::handle_tag_create(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_tags::handle_tag_create(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "List all tags for the authenticated user")]
     pub async fn tag_list(
         &self,
         params: Parameters<tools_tags::TagListInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_tags::handle_tag_list(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_tags::handle_tag_list(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get a single tag by ID")]
     pub async fn tag_get(
         &self,
         params: Parameters<tools_tags::TagGetInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_tags::handle_tag_get(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_tags::handle_tag_get(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Update an existing tag")]
     pub async fn tag_update(
         &self,
         params: Parameters<tools_tags::TagUpdateInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_tags::handle_tag_update(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_tags::handle_tag_update(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Delete a tag")]
     pub async fn tag_delete(
         &self,
         params: Parameters<tools_tags::TagDeleteInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_tags::handle_tag_delete(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_tags::handle_tag_delete(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     // ── Webhooks Tools ──────────────────────────────────────────────
@@ -1687,48 +1710,48 @@ impl PostizMcpServer {
     pub async fn wh_create(
         &self,
         params: Parameters<tools_webhooks::WhCreateInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_webhooks::handle_wh_create(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_webhooks::handle_wh_create(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "List all outgoing webhooks")]
     pub async fn wh_list(
         &self,
         params: Parameters<tools_webhooks::WhListInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_webhooks::handle_wh_list(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_webhooks::handle_wh_list(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get a single webhook by ID")]
     pub async fn wh_get(
         &self,
         params: Parameters<tools_webhooks::WhGetInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_webhooks::handle_wh_get(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_webhooks::handle_wh_get(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Update an existing webhook")]
     pub async fn wh_update(
         &self,
         params: Parameters<tools_webhooks::WhUpdateInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_webhooks::handle_wh_update(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_webhooks::handle_wh_update(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Delete a webhook")]
     pub async fn wh_delete(
         &self,
         params: Parameters<tools_webhooks::WhDeleteInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_webhooks::handle_wh_delete(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_webhooks::handle_wh_delete(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Test a webhook by sending a sample event")]
     pub async fn wh_test(
         &self,
         params: Parameters<tools_webhooks::WhTestInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_webhooks::handle_wh_test(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_webhooks::handle_wh_test(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     // ── Notification Tools ─────────────────────────────────────
@@ -1737,32 +1760,32 @@ impl PostizMcpServer {
     async fn notif_list(
         &self,
         params: Parameters<tools_notifications::NotifListInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_notifications::handle_notif_list(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_notifications::handle_notif_list(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Mark a notification as read by its ID")]
     async fn notif_mark_read(
         &self,
         params: Parameters<tools_notifications::NotifMarkReadInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_notifications::handle_notif_mark_read(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_notifications::handle_notif_mark_read(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Mark all notifications as read")]
     async fn notif_mark_all_read(
         &self,
         params: Parameters<tools_notifications::NotifMarkAllReadInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_notifications::handle_notif_mark_all_read(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_notifications::handle_notif_mark_all_read(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Create a notification (for testing or programmatic alerts)")]
     async fn notif_create(
         &self,
         params: Parameters<tools_notifications::NotifCreateInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_notifications::handle_notif_create(&self.state, &params.0).await
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_notifications::handle_notif_create(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 }
 

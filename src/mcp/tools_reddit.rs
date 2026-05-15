@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::api::AppState;
+use crate::crypto;
 use crate::social::reddit::RedditProvider;
 
 // ── Input/Output Types ──────────────────────────────────────
@@ -117,7 +118,11 @@ async fn find_reddit_token(state: &AppState, user_id: Uuid) -> Result<String, St
                 .to_string()
         })?;
 
-    Ok(reddit.access_token)
+    let token = reddit.access_token.clone();
+    let token = state.token_key.as_ref()
+        .and_then(|key| crypto::decrypt_string(&token, key).ok())
+        .unwrap_or(token);
+    Ok(token)
 }
 
 /// Create a RedditProvider from the app config (needed by MCP handlers).

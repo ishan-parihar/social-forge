@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::api::AppState;
+use crate::crypto;
 use crate::social::facebook::FacebookProvider;
 
 // ── Input Types ───────────────────────────────────────────────
@@ -125,7 +126,11 @@ async fn find_facebook_token(state: &AppState, user_id: Uuid) -> Result<String, 
             "No Facebook account connected. Use the onboarding page first.".to_string()
         })?;
 
-    Ok(fb.access_token.clone())
+    let token = fb.access_token.clone();
+    let token = state.token_key.as_ref()
+        .and_then(|key| crypto::decrypt_string(&token, key).ok())
+        .unwrap_or(token);
+    Ok(token)
 }
 
 /// Find a page-scoped Facebook token by page_id.
@@ -143,7 +148,11 @@ async fn find_page_token(state: &AppState, user_id: Uuid, page_id: &str) -> Resu
             )
         })?;
 
-    Ok(page.access_token.clone())
+    let token = page.access_token.clone();
+    let token = state.token_key.as_ref()
+        .and_then(|key| crypto::decrypt_string(&token, key).ok())
+        .unwrap_or(token);
+    Ok(token)
 }
 
 fn create_provider(state: &AppState) -> FacebookProvider {
