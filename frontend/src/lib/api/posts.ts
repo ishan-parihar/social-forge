@@ -36,6 +36,10 @@ export const postsApi = {
   schedule: (id: string, at: string) => api.post<PostDetail>(`/api/posts/${id}/schedule`, { scheduled_at: at }),
   delete: (id: string) => api.del<{ deleted: boolean }>(`/api/posts/${id}`),
   setTags: (id: string, tag_ids: string[]) => api.put<PostDetail>(`/api/posts/${id}/tags`, { tag_ids }),
+  findSlot: (integrationId?: string) => {
+    const q = integrationId ? `?integration_id=${integrationId}` : "";
+    return api.get<{ date: string }>(`/api/posts/find-slot${q}`);
+  },
   repeat: (id: string, intervalDays: number, endDate: string) =>
     api.post<{ group_id: string; count: number; post_ids: string[]; scheduled_dates: string[] }>(
       `/api/posts/${id}/repeat`, { interval_days: intervalDays, end_date: endDate }

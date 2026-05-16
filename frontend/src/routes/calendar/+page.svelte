@@ -68,6 +68,32 @@
     refresh();
   }
 
+  async function handleDuplicate(eventId: string) {
+    try {
+      // Get full post detail
+      const detail = await postsApi.get(eventId);
+      if (!detail.data) return;
+
+      const post = detail.data;
+
+      // Find next available slot
+      const slot = await postsApi.findSlot(post.integration_id);
+      if (!slot.data) return;
+
+      // Create copy
+      await postsApi.create({
+        integration_ids: [post.integration_id],
+        content: post.content,
+        title: post.title,
+        scheduled_at: slot.data.date,
+      });
+
+      refresh();
+    } catch (e) {
+      console.error("Failed to duplicate post:", e);
+    }
+  }
+
   onMount(() => refresh());
 </script>
 
@@ -117,5 +143,5 @@
     />
   {/if}
 
-  <PostDetail event={selectedEvent} onclose={() => selectedEvent = null} />
+  <PostDetail event={selectedEvent} onclose={() => selectedEvent = null} onDuplicate={handleDuplicate} />
 </div>

@@ -36,7 +36,7 @@
         >
           <ProviderIcon provider={int.provider_identifier} size="sm" />
           <div class="flex-1 min-w-0">
-            <div class="text-xs truncate">{int.profile_name || int.provider_name}</div>
+            <div class="text-xs truncate">{int.profile_name || int.provider_name}<span class="text-[#6b7280] text-xs ml-1" title="Best time available">🕐</span></div>
           </div>
           {#if isSelected}
             <span class="text-indigo-400 text-xs">✓</span>

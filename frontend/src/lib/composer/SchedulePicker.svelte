@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { postsApi } from "$lib/api/posts";
+
   let { scheduledAt, onChange, recurring, onRecurringChange }: {
     scheduledAt?: string | null;
     onChange?: (iso: string | null) => void;
@@ -14,11 +16,31 @@
   let intervalDays = $state(recurring?.intervalDays ?? 7);
   let endDateStr = $state(recurring?.endDate?.split("T")[0] ?? "");
 
+  let autoScheduling = $state(false);
+
   function update() {
     if (scheduled && dateStr && timeStr) {
       onChange?.(`${dateStr}T${timeStr}:00.000Z`);
     } else {
       onChange?.(null);
+    }
+  }
+
+  async function autoSchedule() {
+    autoScheduling = true;
+    try {
+      const r = await postsApi.findSlot();
+      if (r.data) {
+        const d = new Date(r.data.date);
+        dateStr = d.toISOString().split("T")[0];
+        timeStr = d.toISOString().split("T")[1]?.slice(0, 5) || "12:00";
+        scheduled = true;
+        update();
+      }
+    } catch (e) {
+      console.error("Auto-schedule failed:", e);
+    } finally {
+      autoScheduling = false;
     }
   }
 
@@ -44,6 +66,15 @@
       <input type="time" bind:value={timeStr} onchange={update}
         class="flex-1 px-3 py-2 bg-[#0d1117] border border-[#1e2435] rounded-lg text-sm text-[#d1d5db]" />
     </div>
+
+    <button onclick={autoSchedule} disabled={autoScheduling}
+      class="w-full px-3 py-2 bg-[#1a1f2e] hover:bg-[#242b3d] border border-[#2a3045] rounded-lg text-sm text-indigo-400 transition-colors flex items-center justify-center gap-2">
+      {#if autoScheduling}
+        <span class="animate-spin">⏳</span> Finding best time...
+      {:else}
+        ✨ Auto-schedule
+      {/if}
+    </button>
 
     <div class="border-t border-[#1e2435] pt-2 mt-2">
       <label class="flex items-center gap-2 text-sm cursor-pointer">
