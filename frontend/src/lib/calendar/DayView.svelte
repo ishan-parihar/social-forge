@@ -35,12 +35,12 @@
     <div class="text-xs text-[#6b7280]">{dayEvents.length} posts scheduled</div>
   </div>
   <div class="overflow-y-auto max-h-[700px]">
-    {#each hours as hour}
+    {#each hours as hour (hour)}
       <div class="flex border-b border-[#1e2435] min-h-[56px]">
         <div class="w-16 text-xs text-[#6b7280] px-2 py-1 border-r border-[#1e2435] shrink-0">{hour}</div>
         <div class="flex-1 px-2 py-1 space-y-0.5">
-          {#each (eventsByHour.get(hour.slice(0, 2)) || []) as event}
-            <div onclick={() => onEventClick?.(event.id)}>
+          {#each (eventsByHour.get(hour.slice(0, 2)) || []) as event (event.id)}
+            <div onclick={() => onEventClick?.(event.id)} onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') onEventClick?.(event.id); }} role="button" tabindex="-1">
               <CalendarEvent {event} {onDuplicate} {onStats} {onDelete} />
             </div>
           {/each}
