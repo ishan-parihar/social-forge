@@ -11,7 +11,7 @@
       </tr>
     </thead>
     <tbody>
-      {#each postsByProvider as row}
+      {#each postsByProvider as row (row.provider)}
         <tr class="border-b border-[#1e2435] hover:bg-[#1e2435]/50 transition-colors">
           <td class="px-4 py-3 text-sm text-[#e8edf5]">{row.provider}</td>
           <td class="px-4 py-3 text-sm text-right text-[#e8edf5]">{row.count}</td>

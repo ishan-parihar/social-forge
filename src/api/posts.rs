@@ -28,11 +28,27 @@ pub struct CreatePostRequest {
     pub settings: Option<serde_json::Value>,
     pub scheduled_at: Option<String>,
     pub tag_ids: Option<Vec<Uuid>>,
+    pub first_comment: Option<String>,
+    pub sequence: Option<i32>,
 }
 
 #[derive(Debug, Serialize)]
 pub struct CreatePostsResponse {
     pub posts: Vec<PostPublic>,
+    pub group_id: Option<Uuid>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateThreadRequest {
+    pub content_parts: Vec<String>,
+    pub integration_ids: Vec<Uuid>,
+    pub scheduled_at: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CreateThreadResponse {
+    pub posts: Vec<PostPublic>,
+    pub group_id: Uuid,
 }
 
 #[derive(Debug, Deserialize)]
@@ -79,6 +95,8 @@ pub struct PostWithIntegrationName {
     pub repeat_interval_days: Option<i32>,
     pub repeat_end_date: Option<String>,
     pub group_id: Option<Uuid>,
+    pub first_comment: Option<String>,
+    pub sequence: i32,
 }
 
 #[derive(Debug, Serialize)]
@@ -99,6 +117,8 @@ pub struct PostDetailResponse {
     pub repeat_interval_days: Option<i32>,
     pub repeat_end_date: Option<String>,
     pub group_id: Option<Uuid>,
+    pub first_comment: Option<String>,
+    pub sequence: i32,
 }
 
 #[derive(Debug, Deserialize)]
@@ -207,6 +227,8 @@ pub async fn list(
              repeat_interval_days: p.repeat_interval_days,
              repeat_end_date: p.repeat_end_date.map(|d| d.to_rfc3339()),
              group_id: p.group_id,
+             first_comment: p.first_comment.clone(),
+             sequence: p.sequence,
          });
     }
 
@@ -269,6 +291,8 @@ pub async fn create(
         &settings,
         scheduled_at,
         state_enum,
+        body.first_comment.as_deref(),
+        body.sequence.unwrap_or(0),
     )
     .await?;
 
@@ -297,7 +321,83 @@ pub async fn create(
         })
         .collect();
 
-    Ok(Json(CreatePostsResponse { posts: publics }))
+    Ok(Json(CreatePostsResponse { posts: publics, group_id: None }))
+}
+
+/// POST /api/posts/thread — create a thread of posts (X/Twitter threads)
+pub async fn create_thread(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Json(body): Json<CreateThreadRequest>,
+) -> Result<Json<CreateThreadResponse>, crate::error::AppError> {
+    if body.content_parts.is_empty() {
+        return Err(crate::error::AppError::BadRequest("content_parts must not be empty".into()));
+    }
+    if body.content_parts.len() > 25 {
+        return Err(crate::error::AppError::BadRequest("Maximum 25 tweets per thread".into()));
+    }
+    if body.integration_ids.is_empty() {
+        return Err(crate::error::AppError::BadRequest("At least one integration is required".into()));
+    }
+
+    // Validate ALL integration_ids belong to user
+    let mut validated_integrations = Vec::with_capacity(body.integration_ids.len());
+    for &id in &body.integration_ids {
+        let integ = queries::get_integration(&state.db, id, auth.user_id)
+            .await?
+            .ok_or_else(|| crate::error::AppError::NotFound("Integration not found".into()))?;
+
+        if integ.disabled {
+            return Err(crate::error::AppError::BadRequest("Integration is disabled".into()));
+        }
+        validated_integrations.push(integ);
+    }
+
+    let scheduled_at: Option<DateTime<Utc>> = match body.scheduled_at {
+        Some(ref s) => {
+            let dt = DateTime::parse_from_rfc3339(s)
+                .map_err(|_| crate::error::AppError::BadRequest("Invalid date format, use ISO8601".into()))?;
+            Some(dt.with_timezone(&Utc))
+        }
+        None => None,
+    };
+
+    let state_enum = if scheduled_at.is_some() {
+        Some(crate::db::models::PostState::Queued)
+    } else {
+        Some(crate::db::models::PostState::Draft)
+    };
+
+    let group_id = Uuid::new_v4();
+
+    let posts = queries::create_thread_posts(
+        &state.db,
+        auth.user_id,
+        &body.integration_ids,
+        &body.content_parts,
+        scheduled_at,
+        state_enum,
+        group_id,
+    )
+    .await?;
+
+    // Enrich with integration names and broadcast
+    let publics: Vec<PostPublic> = posts
+        .into_iter()
+        .map(|p| {
+            let integration_name = validated_integrations
+                .iter()
+                .find(|i| i.id == p.integration_id)
+                .map(|i| i.provider_name.clone())
+                .unwrap_or_default();
+            let mut public = PostPublic::from(p);
+            public.integration_name = integration_name;
+            state.broadcast.send("post_created", &public);
+            public
+        })
+        .collect();
+
+    Ok(Json(CreateThreadResponse { posts: publics, group_id }))
 }
 
 /// GET /api/posts/:id
@@ -335,6 +435,8 @@ pub async fn get(
          repeat_interval_days: post.repeat_interval_days,
          repeat_end_date: post.repeat_end_date.map(|d| d.to_rfc3339()),
          group_id: post.group_id,
+         first_comment: post.first_comment.clone(),
+         sequence: post.sequence,
      }))
  }
  
@@ -442,6 +544,8 @@ pub async fn set_post_tags(
          repeat_interval_days: post.repeat_interval_days,
          repeat_end_date: post.repeat_end_date.map(|d| d.to_rfc3339()),
          group_id: post.group_id,
+         first_comment: post.first_comment.clone(),
+         sequence: post.sequence,
      }))
  }
  

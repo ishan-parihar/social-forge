@@ -203,7 +203,7 @@ pub async fn oauth_callback(
                     let token = jwt::create_token(integration.user_id, &state.config.jwt_secret)
                         .map_err(|e| AppError::Internal(format!("JWT creation: {e}")))?;
                     return Ok(Redirect::to(&format!(
-                        "{}/?pending={}&integration_id={}&token={}",
+                        "{}/auth/callback?pending={}&integration_id={}&token={}",
                         app_url,
                         integration.provider_identifier,
                         integration.id,
@@ -213,7 +213,7 @@ pub async fn oauth_callback(
             }
 
             Ok(Redirect::to(&format!(
-                "{}/?connected={}&name={}",
+                "{}/auth/callback?connected={}&name={}",
                 app_url,
                 integration.provider_identifier,
                 urlencoding::encode(&integration.provider_name),
@@ -222,7 +222,7 @@ pub async fn oauth_callback(
         Err(e) => {
             tracing::error!("OAuth callback failed: {e}");
             Ok(Redirect::to(&format!(
-                "{}/?error={}",
+                "{}/auth/callback?error={}",
                 app_url,
                 urlencoding::encode(&e.to_string()),
             )))
@@ -481,6 +481,111 @@ pub async fn connect_api_key(
     );
 
     Ok(Json(ConnectApiKeyResponse {
+        integration: integration.into(),
+    }))
+}
+
+// ── Web3 Connect ─────────────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+pub struct ConnectWeb3Request {
+    pub provider: String,
+    pub address: String,
+    pub label: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ConnectWeb3Response {
+    pub integration: IntegrationPublic,
+}
+
+/// POST /api/integrations/connect/web3 — connect a Web3 provider
+///
+/// For providers like Farcaster and Nostr that use wallet/npub addresses.
+/// Accepts { provider, address, label }, validates via exchange_code,
+/// then stores the address as the access_token.
+pub async fn connect_web3(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Json(body): Json<ConnectWeb3Request>,
+) -> Result<Json<ConnectWeb3Response>, AppError> {
+    let provider_obj = state
+        .providers
+        .get(&body.provider)
+        .ok_or_else(|| AppError::BadRequest(format!("Unknown provider: {}", body.provider)))?;
+
+    if provider_obj.uses_oauth() {
+        return Err(AppError::BadRequest(
+            format!("Provider '{}' uses OAuth, not Web3 auth. Use the standard connect flow.", body.provider)
+        ));
+    }
+
+    // Verify provider is Web3-capable (farcaster or nostr only)
+    if body.provider != "farcaster" && body.provider != "nostr" {
+        return Err(AppError::BadRequest(
+            format!("Web3 auth is not supported for provider '{}'. Only 'farcaster' and 'nostr' support this auth method.", body.provider)
+        ));
+    }
+
+    // Check credentials first
+    if state.config.provider_credentials(&body.provider).is_none() {
+        return Err(AppError::BadRequest(
+            format!("Provider '{}' is not configured. Set the corresponding environment variables first.", body.provider)
+        ));
+    }
+
+    if body.address.trim().is_empty() {
+        return Err(AppError::BadRequest("address must not be empty".into()));
+    }
+
+    let label = body.label.unwrap_or_else(|| provider_obj.name().to_string());
+
+    // Build credential JSON and pass through exchange_code for validation
+    let creds_json = serde_json::json!({
+        "address": body.address,
+    });
+    let code = creds_json.to_string();
+
+    let auth_result = provider_obj
+        .exchange_code(&code, "", "")
+        .await
+        .map_err(|e| AppError::BadRequest(format!("Failed to validate Web3 credentials: {e}")))?;
+
+    // Use the normalized address from exchange_code as the access_token
+    let final_token = auth_result.access_token;
+
+    let integration = queries::create_integration(
+        &state.db,
+        auth.user_id,
+        &body.provider,
+        provider_obj.name(),
+        &auth_result.provider_user_id,
+        &final_token,
+        None,
+        None,
+        Some(&label),
+        auth_result.picture.as_deref(),
+        None,
+        None,
+    )
+    .await?;
+
+    state.broadcast.send(
+        "integration_connected",
+        &serde_json::json!({
+            "provider": body.provider,
+            "name": label,
+        }),
+    );
+
+    tracing::info!(
+        "Web3 integration connected: {} ({}) for user {}",
+        body.provider,
+        label,
+        auth.user_id,
+    );
+
+    Ok(Json(ConnectWeb3Response {
         integration: integration.into(),
     }))
 }

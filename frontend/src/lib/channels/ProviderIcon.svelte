@@ -6,7 +6,10 @@
     linkedin: "💼", linkedin_page: "🏢", "linkedin-page": "🏢",
     youtube: "▶️", pinterest: "📌",
     reddit: "👽", bluesky: "🦋", discord: "💬", telegram: "✈️",
-    whatsapp: "💚", skool: "🎓",
+    twitch: "📺", vk: "💬", google_my_business: "🏪", whop: "🛒",
+    whatsapp: "💚", skool: "🎓", lemmy: "🗳️",
+    farcaster: "🏰", nostr: "🧡",
+    mewe: "👥", moltbook: "📘", kick: "🦵",
   };
 
   const dims = { sm: "w-6 h-6 text-sm", md: "w-8 h-8 text-base", lg: "w-10 h-10 text-lg" };

@@ -18,6 +18,7 @@ use postiz_rust::api;
 use postiz_rust::config;
 use postiz_rust::db;
 use postiz_rust::mcp;
+use postiz_rust::rss;
 use postiz_rust::scheduler;
 
 use anyhow::Context;
@@ -132,13 +133,23 @@ async fn main() -> anyhow::Result<()> {
     let state_for_mcp = state.clone();
 
     // ── Start scheduler ───────────────────────────────────────
-    let (_shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
+    let (shutdown_tx, _) = tokio::sync::watch::channel(false);
+    let scheduler_rx = shutdown_tx.subscribe();
     scheduler::start_scheduler(
         db.clone(),
         providers_arc.clone(),
         broadcaster.clone(),
         token_key,
-        shutdown_rx,
+        scheduler_rx,
+    );
+
+    // ── Start RSS poller ─────────────────────────────────────
+    let rss_rx = shutdown_tx.subscribe();
+    rss::start_rss_poller(
+        db.clone(),
+        providers_arc.clone(),
+        Arc::new(config.clone()),
+        rss_rx,
     );
 
     // ── Build HTTP router ─────────────────────────────────────
@@ -146,7 +157,7 @@ async fn main() -> anyhow::Result<()> {
 
     // ── Start HTTP server ────────────────────────────────────
     // HTTP on 3443 (internal). HTTPS on 3000 via socat TLS proxy.
-    let http_addr = "0.0.0.0:3443".to_string();
+    let http_addr = "0.0.0.0:3444".to_string();
 
     let listener = tokio::net::TcpListener::bind(&http_addr)
         .await

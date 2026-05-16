@@ -85,6 +85,8 @@ impl PostService {
             &input.settings,
             input.scheduled_at,
             Some(PostState::Draft),
+            None,
+            0,
         )
         .await
         .map_err(|e| format!("Database error: {e}"))?;

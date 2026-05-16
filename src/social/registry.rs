@@ -6,7 +6,12 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use super::*;
+use super::farcaster;
+use super::kick;
 use super::mastodon;
+use super::mewe;
+use super::moltbook;
+use super::nostr;
 use super::slack;
 use crate::config::Config;
 use crate::services::telegram_client::TelegramClientManager;
@@ -96,6 +101,44 @@ impl ProviderRegistry {
             providers.insert("tiktok", Arc::new(tiktok::TikTokProvider::new(config)));
         }
 
+        // Twitch — OAuth-based streaming platform
+        if config.twitch_client_id.is_some() {
+            providers.insert("twitch", Arc::new(twitch::TwitchProvider::new(config)));
+        }
+
+        // VK — OAuth-based social network
+        if config.vk_client_id.is_some() {
+            providers.insert("vk", Arc::new(vk::VkProvider::new(config)));
+        }
+
+        // Google My Business — uses same Google OAuth credentials
+        if config.youtube_client_id.is_some() && config.youtube_client_secret.is_some() {
+            providers.insert(
+                "google_my_business",
+                Arc::new(google_my_business::GoogleMyBusinessProvider::new(config)),
+            );
+        }
+
+        // Whop — OAuth-based community commerce platform
+        if config.whop_client_id.is_some() {
+            providers.insert("whop", Arc::new(whop::WhopProvider::new(config)));
+        }
+
+        // MeWe — OAuth-based social network
+        if config.mewe_client_id.is_some() {
+            providers.insert("mewe", Arc::new(mewe::MeWeProvider::new(config)));
+        }
+
+        // Moltbook — OAuth-based social network
+        if config.moltbook_client_id.is_some() {
+            providers.insert("moltbook", Arc::new(moltbook::MoltbookProvider::new(config)));
+        }
+
+        // Kick — OAuth-based streaming platform
+        if config.kick_client_id.is_some() {
+            providers.insert("kick", Arc::new(kick::KickProvider::new(config)));
+        }
+
         // Mastodon — OAuth-based microblogging (with app registration)
         if config.mastodon_client_id.is_some() {
             providers.insert("mastodon", Arc::new(mastodon::MastodonProvider::new(config)));
@@ -132,6 +175,15 @@ impl ProviderRegistry {
 
         // WordPress — REST API + Application Password (always registered, no global credentials)
         providers.insert("wordpress", Arc::new(wordpress::WordPressProvider::new(config)));
+
+        // Farcaster — Web3-based (always registered, no OAuth)
+        providers.insert("farcaster", Arc::new(farcaster::FarcasterProvider::new(config)));
+
+        // Nostr — Web3-based (always registered, no OAuth)
+        providers.insert("nostr", Arc::new(nostr::NostrProvider::new(config)));
+
+        // Lemmy — API key-based (always registered, no global credentials — per-user in integration record)
+        providers.insert("lemmy", Arc::new(lemmy::LemmyProvider::new(config)));
 
         // Slack — OAuth-based messaging workspace provider
         if config.slack_client_id.is_some() {

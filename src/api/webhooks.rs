@@ -19,6 +19,7 @@ use super::AppState;
 #[derive(Debug, FromRow, Serialize)]
 pub struct WebhookRow {
     pub id: Uuid,
+    #[serde(skip)]
     pub user_id: Uuid,
     pub name: String,
     pub url: String,
@@ -77,6 +78,20 @@ pub struct WebhookResponse {
     pub updated_at: String,
 }
 
+/// Public response used for list/get — omits the HMAC secret.
+/// Only the `create` handler returns the secret (once).
+#[derive(Debug, Serialize)]
+pub struct WebhookResponsePublic {
+    pub id: Uuid,
+    pub name: String,
+    pub url: String,
+    pub event_types: Vec<String>,
+    pub is_active: bool,
+    pub last_triggered_at: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
 #[derive(Debug, Serialize)]
 pub struct WebhookDeliveryResponse {
     pub id: Uuid,
@@ -105,6 +120,19 @@ fn webhook_to_response(w: WebhookRow) -> WebhookResponse {
         name: w.name,
         url: w.url,
         secret: w.secret,
+        event_types: w.event_types,
+        is_active: w.is_active,
+        last_triggered_at: w.last_triggered_at.map(|dt| dt.to_rfc3339()),
+        created_at: w.created_at.to_rfc3339(),
+        updated_at: w.updated_at.to_rfc3339(),
+    }
+}
+
+fn webhook_to_response_public(w: WebhookRow) -> WebhookResponsePublic {
+    WebhookResponsePublic {
+        id: w.id,
+        name: w.name,
+        url: w.url,
         event_types: w.event_types,
         is_active: w.is_active,
         last_triggered_at: w.last_triggered_at.map(|dt| dt.to_rfc3339()),
@@ -168,7 +196,7 @@ pub async fn create(
 pub async fn list(
     State(state): State<AppState>,
     auth: AuthenticatedUser,
-) -> Result<Json<Vec<WebhookResponse>>, crate::error::AppError> {
+) -> Result<Json<Vec<WebhookResponsePublic>>, crate::error::AppError> {
     let rows: Vec<WebhookRow> = sqlx::query_as(
         r#"
         SELECT id, user_id, name, url, secret, event_types, is_active,
@@ -182,7 +210,7 @@ pub async fn list(
     .fetch_all(&state.db)
     .await?;
 
-    Ok(Json(rows.into_iter().map(webhook_to_response).collect()))
+    Ok(Json(rows.into_iter().map(webhook_to_response_public).collect()))
 }
 
 /// GET /api/webhooks/:id
@@ -190,7 +218,7 @@ pub async fn get(
     State(state): State<AppState>,
     auth: AuthenticatedUser,
     Path(id): Path<Uuid>,
-) -> Result<Json<WebhookResponse>, crate::error::AppError> {
+) -> Result<Json<WebhookResponsePublic>, crate::error::AppError> {
     let row: WebhookRow = sqlx::query_as(
         r#"
         SELECT id, user_id, name, url, secret, event_types, is_active,
@@ -205,7 +233,7 @@ pub async fn get(
     .await?
     .ok_or_else(|| crate::error::AppError::NotFound("Webhook not found".into()))?;
 
-    Ok(Json(webhook_to_response(row)))
+    Ok(Json(webhook_to_response_public(row)))
 }
 
 /// PUT /api/webhooks/:id
@@ -214,7 +242,7 @@ pub async fn update(
     auth: AuthenticatedUser,
     Path(id): Path<Uuid>,
     Json(body): Json<WebhookUpdateRequest>,
-) -> Result<Json<WebhookResponse>, crate::error::AppError> {
+) -> Result<Json<WebhookResponsePublic>, crate::error::AppError> {
     // Fetch current row first to merge with updates
     let current: WebhookRow = sqlx::query_as(
         r#"
@@ -256,7 +284,7 @@ pub async fn update(
     .fetch_one(&state.db)
     .await?;
 
-    Ok(Json(webhook_to_response(row)))
+    Ok(Json(webhook_to_response_public(row)))
 }
 
 /// DELETE /api/webhooks/:id
@@ -276,6 +304,33 @@ pub async fn delete(
     }
 
     Ok(Json(serde_json::json!({"deleted": true})))
+}
+
+/// GET /api/webhooks/:id/deliveries
+/// Lists recent deliveries for a webhook.
+pub async fn deliveries(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(id): Path<Uuid>,
+) -> Result<Json<Vec<WebhookDeliveryResponse>>, crate::error::AppError> {
+    // Verify webhook ownership and list deliveries in one join
+    let rows: Vec<WebhookDeliveryRow> = sqlx::query_as(
+        r#"
+        SELECT d.id, d.webhook_id, d.event_type, d.status, d.status_code,
+               d.response_body, d.attempted_at, d.delivered_at
+        FROM webhook_deliveries d
+        JOIN webhooks w ON w.id = d.webhook_id
+        WHERE d.webhook_id = $1 AND w.user_id = $2
+        ORDER BY d.attempted_at DESC
+        LIMIT 50
+        "#,
+    )
+    .bind(id)
+    .bind(auth.user_id)
+    .fetch_all(&state.db)
+    .await?;
+
+    Ok(Json(rows.into_iter().map(delivery_to_response).collect()))
 }
 
 /// POST /api/webhooks/:id/test
@@ -321,11 +376,12 @@ pub async fn test(
 
     let (status_code, response_body) = result;
 
-    // Record delivery
+    // Record delivery — only set delivered_at on success
+    let delivered_dt = if status_code >= 200 && status_code < 300 { Some(Utc::now()) } else { None };
     let delivery_row: WebhookDeliveryRow = sqlx::query_as(
         r#"
         INSERT INTO webhook_deliveries (webhook_id, event_type, payload, status, status_code, response_body, delivered_at)
-        VALUES ($1, $2, $3, $4, $5, $6, now())
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
         RETURNING id, webhook_id, event_type, status, status_code, response_body, attempted_at, delivered_at
         "#,
     )
@@ -335,14 +391,18 @@ pub async fn test(
     .bind(if status_code == 200 || status_code == 201 { "delivered" } else { "failed" })
     .bind(status_code as i32)
     .bind(&response_body)
+    .bind(delivered_dt)
     .fetch_one(&state.db)
     .await?;
 
     // Update last_triggered_at
-    let _ = sqlx::query("UPDATE webhooks SET last_triggered_at = now() WHERE id = $1")
+    if let Err(e) = sqlx::query("UPDATE webhooks SET last_triggered_at = now() WHERE id = $1")
         .bind(id)
         .execute(&state.db)
-        .await;
+        .await
+    {
+        tracing::warn!(%id, error = %e, "Failed to update webhook last_triggered_at");
+    }
 
     Ok(Json(WebhookTestResult {
         status_code,

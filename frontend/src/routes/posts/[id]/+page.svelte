@@ -85,7 +85,7 @@
 
       {#if post.tags && post.tags.length > 0}
         <div class="flex flex-wrap gap-1.5">
-          {#each post.tags as tag}
+          {#each post.tags as tag (tag.id)}
             <span
               class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs"
               style="background: {tag.color}22; color: {tag.color}; border: 1px solid {tag.color}44"
@@ -107,6 +107,22 @@
         <RichTextEditor content={editContent} onUpdate={(html: string) => editContent = html} />
       {:else}
         <div class="prose prose-invert max-w-none text-sm">{@html post.content}</div>
+      {/if}
+
+      {#if post.first_comment}
+        <div class="border-t border-[#1e2435] pt-3 mt-3">
+          <div class="text-xs text-[#6b7280] mb-1">First Comment</div>
+          <div class="text-sm text-[#d1d5db]">{post.first_comment}</div>
+        </div>
+      {/if}
+
+      {#if post.group_id}
+        <div class="border-t border-[#1e2435] pt-3 mt-3">
+          <div class="text-xs text-indigo-400 mb-1">Thread post (sequence {post.sequence ?? 0})</div>
+          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-indigo-500/20 text-indigo-400">
+            🧵 Group: {post.group_id.slice(0, 8)}...
+          </span>
+        </div>
       {/if}
 
       {#if post.platform_post_url}

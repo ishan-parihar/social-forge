@@ -9,6 +9,8 @@ export interface PostSummary {
   repeat_interval_days?: number | null;
   repeat_end_date?: string | null;
   group_id?: string | null;
+  first_comment?: string | null;
+  sequence?: number;
 }
 export interface PostDetail {
   id: string; integration_id: string; integration_name: string; state: string;
@@ -18,6 +20,14 @@ export interface PostDetail {
   repeat_interval_days?: number | null;
   repeat_end_date?: string | null;
   group_id?: string | null;
+  first_comment?: string | null;
+  sequence?: number;
+}
+
+export interface ThreadRequest {
+  content_parts: string[];
+  integration_ids: string[];
+  scheduled_at?: string;
 }
 
 export const postsApi = {
@@ -29,8 +39,10 @@ export const postsApi = {
     return api.get<{ posts: PostSummary[]; total: number }>(`/api/posts?${q}`);
   },
   get: (id: string) => api.get<PostDetail>(`/api/posts/${id}`),
-  create: (d: { integration_ids: string[]; content: string; title?: string; scheduled_at?: string; tag_ids?: string[] }) =>
-    api.post<{ posts: PostSummary[] }>("/api/posts", d),
+  create: (d: { integration_ids: string[]; content: string; title?: string; scheduled_at?: string; tag_ids?: string[]; first_comment?: string }) =>
+    api.post<{ posts: PostSummary[]; group_id?: string }>("/api/posts", d),
+  createThread: (d: ThreadRequest) =>
+    api.post<{ posts: PostSummary[]; group_id: string }>("/api/posts/thread", d),
   update: (id: string, d: { content: string; title?: string }) =>
     api.put<PostDetail>(`/api/posts/${id}`, d),
   schedule: (id: string, at: string) => api.post<PostDetail>(`/api/posts/${id}/schedule`, { scheduled_at: at }),

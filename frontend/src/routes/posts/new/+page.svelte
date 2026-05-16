@@ -10,6 +10,11 @@
   import ProviderEditor from "$lib/composer/ProviderEditor.svelte";
   import PostPreview from "$lib/composer/PostPreview.svelte";
   import TagPicker from "$lib/composer/TagPicker.svelte";
+  import PostSetModal from "$lib/composer/PostSetModal.svelte";
+  import ThreadFinisher from "$lib/composer/ThreadFinisher.svelte";
+  import FirstComment from "$lib/composer/FirstComment.svelte";
+  import AiAssistant from "$lib/composer/AiAssistant.svelte";
+  import AiHashtagSuggestions from "$lib/composer/AiHashtagSuggestions.svelte";
   import type { MediaItem } from "$lib/api/media";
 
   let content = $state("");
@@ -25,6 +30,13 @@
   let selectedTagIds = $state<string[]>([]);
   let submitting = $state(false);
   let error = $state<string | null>(null);
+  let firstComment = $state("");
+  let showAi = $state(false);
+
+  // Auto-detect if X/Twitter is selected (for thread mode)
+  let hasXIntegration = $derived(
+    selectedIntegrations.some(id => integrationProviders.get(id) === 'x')
+  );
 
   onMount(async () => {
     const r = await integrationsApi.list();
@@ -32,6 +44,40 @@
   });
 
   let providerOverride = $state<Map<string, string>>(new Map());
+  let showPostSets = $state(false);
+
+  function handlePostSetLoad(set: { content: string; channelIds: string[]; scheduledAt: string | null }) {
+    if (set.content) content = set.content;
+    if (set.channelIds.length > 0) selectedIntegrations = set.channelIds;
+    if (set.scheduledAt) scheduledAt = set.scheduledAt;
+  }
+
+  async function handleCreateThread(parts: string[]) {
+    if (submitting) return;
+    if (selectedIntegrations.length === 0) {
+      error = "Please select at least one channel";
+      return;
+    }
+    submitting = true;
+    error = null;
+    try {
+      const r = await postsApi.createThread({
+        content_parts: parts,
+        integration_ids: selectedIntegrations,
+        scheduled_at: scheduledAt || undefined,
+      });
+      if (r.error) {
+        error = r.error;
+        submitting = false;
+        return;
+      }
+      goto("/calendar");
+    } catch (e: any) {
+      error = e.message || "Failed to create thread";
+    } finally {
+      submitting = false;
+    }
+  }
 
   async function submit() {
     if (submitting) return;
@@ -52,6 +98,7 @@
         title: title || undefined,
         scheduled_at: scheduledAt || undefined,
         tag_ids: selectedTagIds,
+        first_comment: firstComment || undefined,
       });
       if (r.error) {
         error = r.error;
@@ -65,12 +112,26 @@
       submitting = false;
     }
   }
+
+  function insertAiText(text: string) {
+    content = content + (content ? "\n\n" : "") + text;
+  }
+
+  function addHashtag(tag: string) {
+    content = content + (content.endsWith(" ") ? "" : " ") + "#" + tag;
+  }
 </script>
 
 <div class="max-w-4xl mx-auto space-y-6">
   <div class="flex items-center justify-between">
     <h2 class="text-xl font-semibold">Create Post</h2>
     <div class="flex gap-2">
+      <button onclick={() => (showPostSets = true)} aria-label="Post Sets" class="px-3 py-1.5 text-sm text-[#6b7280] hover:text-white border border-[#1e2435] rounded-lg transition-colors">Post Sets</button>
+      <button onclick={() => showAi = !showAi} aria-label="AI Assistant"
+        class="px-3 py-1.5 text-sm border border-[#1e2435] rounded-lg transition-colors
+          {showAi ? 'bg-indigo-600/20 text-indigo-400 border-indigo-500/30' : 'text-[#6b7280] hover:text-white'}">
+        ✨ AI
+      </button>
       <button onclick={() => goto("/calendar")} class="px-3 py-1.5 text-sm text-[#6b7280] hover:text-white border border-[#1e2435] rounded-lg">Cancel</button>
       <button onclick={submit} disabled={submitting} class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 rounded-lg text-sm transition-colors">
         {submitting ? "Publishing..." : "Publish"}
@@ -125,6 +186,14 @@
     <RichTextEditor {content} onUpdate={(html) => content = html} />
   </div>
 
+  <!-- AI Assistant Panel -->
+  {#if showAi}
+    <AiAssistant {content} onInsert={insertAiText} />
+  {/if}
+
+  <!-- AI Hashtag Suggestions -->
+  <AiHashtagSuggestions {content} onAddHashtag={addHashtag} />
+
   <!-- Per-provider content overrides -->
   {#if selectedIntegrations.length > 1}
     <div class="bg-[#131720] border border-[#1e2435] rounded-xl p-4">
@@ -171,8 +240,30 @@
     <SchedulePicker {scheduledAt} onChange={(iso: string | null) => scheduledAt = iso} {recurring} onRecurringChange={(r: { intervalDays: number; endDate: string } | null) => recurring = r} integrationId={selectedIntegrations[0]} />
   </div>
 
+  <!-- Thread Finisher (visible when X/Twitter is selected) -->
+  {#if hasXIntegration}
+    <ThreadFinisher {content} onCreateThread={handleCreateThread} {submitting} />
+  {/if}
+
+  <!-- First Comment (visible when LinkedIn/Facebook is selected) -->
+  <FirstComment
+    {selectedIntegrations}
+    {integrationProviders}
+    firstComment={firstComment}
+    onFirstCommentChange={(text) => firstComment = text}
+  />
+
   <!-- Preview -->
   {#if selectedIntegrations.length > 0}
     <PostPreview {content} selectedIntegrations={selectedIntegrations} {integrationProviders} />
   {/if}
 </div>
+
+<PostSetModal
+  open={showPostSets}
+  onclose={() => (showPostSets = false)}
+  currentContent={content}
+  currentChannelIds={selectedIntegrations}
+  currentScheduleAt={scheduledAt}
+  onLoad={handlePostSetLoad}
+/>

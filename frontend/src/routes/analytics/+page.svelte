@@ -10,10 +10,11 @@
   let loading = $state(true);
   let error = $state<string | null>(null);
 
-  async function fetchData() {
+  async function fetchData(signal?: AbortSignal) {
     loading = true;
     error = null;
-    const res = await analyticsApi.getSummary(days);
+    const res = await analyticsApi.getSummary(days, signal);
+    if (signal?.aborted) return;
     if (res.error) {
       error = res.error;
       data = null;
@@ -24,7 +25,9 @@
   }
 
   $effect(() => {
-    fetchData();
+    const controller = new AbortController();
+    fetchData(controller.signal);
+    return () => controller.abort();
   });
 
   function handleDaysChange(newDays: number) {
@@ -41,7 +44,7 @@
   {#if error}
     <div class="bg-red-900/20 border border-red-800/40 rounded-lg p-4">
       <p class="text-red-400 text-sm">{error}</p>
-      <button onclick={fetchData} class="mt-2 text-sm text-indigo-400 hover:text-indigo-300">Retry</button>
+      <button onclick={() => fetchData()} class="mt-2 text-sm text-indigo-400 hover:text-indigo-300">Retry</button>
     </div>
   {:else if loading}
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
