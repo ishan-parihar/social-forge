@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { CalendarEvent as CEvent } from "./types";
+  import RepeatingBadge from "./RepeatingBadge.svelte";
 
   let { event, compact = false }: { event: CEvent; compact?: boolean } = $props();
 
@@ -17,6 +18,9 @@
         <span class="tag-overflow">+{overflowCount}</span>
       {/if}
     </span>
+  {/if}
+  {#if !compact && event.repeatIntervalDays}
+    <RepeatingBadge intervalDays={event.repeatIntervalDays} />
   {/if}
   {#if !compact}
     <span class="event-time">{event.time || ""}</span>

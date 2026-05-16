@@ -71,6 +71,9 @@ pub struct PostWithIntegrationName {
     pub error_message: Option<String>,
     pub created_at: String,
     pub tags: Vec<TagResponse>,
+    pub repeat_interval_days: Option<i32>,
+    pub repeat_end_date: Option<String>,
+    pub group_id: Option<Uuid>,
 }
 
 #[derive(Debug, Serialize)]
@@ -88,6 +91,9 @@ pub struct PostDetailResponse {
     pub error_message: Option<String>,
     pub created_at: String,
     pub tags: Vec<TagResponse>,
+    pub repeat_interval_days: Option<i32>,
+    pub repeat_end_date: Option<String>,
+    pub group_id: Option<Uuid>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -180,20 +186,23 @@ pub async fn list(
         };
         let tags = enrich_post_tags(&state.db, p.id, auth.user_id).await;
         enriched.push(PostWithIntegrationName {
-            id: p.id,
-            integration_id: p.integration_id,
-            integration_name,
-            state: p.state.to_string(),
-            content: p.content,
-            title: p.title,
-            media: p.media,
-            scheduled_at: p.scheduled_at.map(|d| d.to_rfc3339()),
-            published_at: p.published_at.map(|d| d.to_rfc3339()),
-            platform_post_url: p.platform_post_url,
-            error_message: p.error_message,
-            created_at: p.created_at.to_rfc3339(),
-            tags,
-        });
+             id: p.id,
+             integration_id: p.integration_id,
+             integration_name,
+             state: p.state.to_string(),
+             content: p.content,
+             title: p.title,
+             media: p.media,
+             scheduled_at: p.scheduled_at.map(|d| d.to_rfc3339()),
+             published_at: p.published_at.map(|d| d.to_rfc3339()),
+             platform_post_url: p.platform_post_url,
+             error_message: p.error_message,
+             created_at: p.created_at.to_rfc3339(),
+             tags,
+             repeat_interval_days: p.repeat_interval_days,
+             repeat_end_date: p.repeat_end_date.map(|d| d.to_rfc3339()),
+             group_id: p.group_id,
+         });
     }
 
     Ok(Json(PostsListResponse {
@@ -287,23 +296,26 @@ pub async fn get(
     let tags = enrich_post_tags(&state.db, post.id, auth.user_id).await;
 
     Ok(Json(PostDetailResponse {
-        id: post.id,
-        integration_id: post.integration_id,
-        integration_name,
-        state: post.state.to_string(),
-        content: post.content,
-        title: post.title,
-        media: post.media,
-        scheduled_at: post.scheduled_at.map(|d| d.to_rfc3339()),
-        published_at: post.published_at.map(|d| d.to_rfc3339()),
-        platform_post_url: post.platform_post_url,
-        error_message: post.error_message,
-        created_at: post.created_at.to_rfc3339(),
-        tags,
-    }))
-}
-
-/// PUT /api/posts/:id
+         id: post.id,
+         integration_id: post.integration_id,
+         integration_name,
+         state: post.state.to_string(),
+         content: post.content,
+         title: post.title,
+         media: post.media,
+         scheduled_at: post.scheduled_at.map(|d| d.to_rfc3339()),
+         published_at: post.published_at.map(|d| d.to_rfc3339()),
+         platform_post_url: post.platform_post_url,
+         error_message: post.error_message,
+         created_at: post.created_at.to_rfc3339(),
+         tags,
+         repeat_interval_days: post.repeat_interval_days,
+         repeat_end_date: post.repeat_end_date.map(|d| d.to_rfc3339()),
+         group_id: post.group_id,
+     }))
+ }
+ 
+ /// PUT /api/posts/:id
 pub async fn update(
     State(state): State<AppState>,
     auth: AuthenticatedUser,
@@ -391,23 +403,26 @@ pub async fn set_post_tags(
     let tags = enrich_post_tags(&state.db, post.id, auth.user_id).await;
 
     Ok(Json(PostDetailResponse {
-        id: post.id,
-        integration_id: post.integration_id,
-        integration_name,
-        state: post.state.to_string(),
-        content: post.content,
-        title: post.title,
-        media: post.media,
-        scheduled_at: post.scheduled_at.map(|d| d.to_rfc3339()),
-        published_at: post.published_at.map(|d| d.to_rfc3339()),
-        platform_post_url: post.platform_post_url,
-        error_message: post.error_message,
-        created_at: post.created_at.to_rfc3339(),
-        tags,
-    }))
-}
-
-/// GET /api/posts/find-slot
+         id: post.id,
+         integration_id: post.integration_id,
+         integration_name,
+         state: post.state.to_string(),
+         content: post.content,
+         title: post.title,
+         media: post.media,
+         scheduled_at: post.scheduled_at.map(|d| d.to_rfc3339()),
+         published_at: post.published_at.map(|d| d.to_rfc3339()),
+         platform_post_url: post.platform_post_url,
+         error_message: post.error_message,
+         created_at: post.created_at.to_rfc3339(),
+         tags,
+         repeat_interval_days: post.repeat_interval_days,
+         repeat_end_date: post.repeat_end_date.map(|d| d.to_rfc3339()),
+         group_id: post.group_id,
+     }))
+ }
+ 
+ /// GET /api/posts/find-slot
 #[derive(Debug, Deserialize)]
 pub struct FindSlotQuery {
     pub integration_id: Option<Uuid>,
@@ -424,6 +439,92 @@ pub async fn find_slot(
 
     Ok(Json(FindSlotResponse {
         date: slot.to_rfc3339(),
+    }))
+}
+
+/// POST /api/posts/{id}/repeat — set up recurring posts
+#[derive(Debug, Deserialize)]
+pub struct RepeatPostRequest {
+    pub interval_days: i32,
+    pub end_date: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct RepeatPostResponse {
+    pub group_id: Uuid,
+    pub count: usize,
+    pub post_ids: Vec<Uuid>,
+    pub scheduled_dates: Vec<String>,
+}
+
+pub async fn repeat_post(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(id): Path<Uuid>,
+    Json(body): Json<RepeatPostRequest>,
+) -> Result<Json<RepeatPostResponse>, crate::error::AppError> {
+    // 1. Validate the post exists and belongs to user
+    let original = queries::get_post(&state.db, id, auth.user_id)
+        .await?
+        .ok_or_else(|| crate::error::AppError::NotFound("Post not found".into()))?;
+
+    let original_scheduled = original.scheduled_at
+        .ok_or_else(|| crate::error::AppError::BadRequest("Post must have a scheduled_at time".into()))?;
+
+    // 2. Validate parameters
+    if body.interval_days <= 0 {
+        return Err(crate::error::AppError::BadRequest("interval_days must be positive".into()));
+    }
+
+    let end_date = DateTime::parse_from_rfc3339(&body.end_date)
+        .map_err(|_| crate::error::AppError::BadRequest("Invalid end_date format, use ISO8601".into()))?
+        .with_timezone(&Utc);
+
+    if end_date <= original_scheduled {
+        return Err(crate::error::AppError::BadRequest("end_date must be after the original scheduled_at".into()));
+    }
+
+    // 3. Generate a group_id for this recurring series
+    let group_id = Uuid::new_v4();
+
+    // 4. Update the original post with recurring metadata
+    queries::set_post_recurring(
+        &state.db,
+        id,
+        auth.user_id,
+        body.interval_days,
+        &end_date,
+        group_id,
+    )
+    .await?
+    .ok_or_else(|| crate::error::AppError::NotFound("Post not found".into()))?;
+
+    // 5. Create future copies
+    let interval = chrono::Duration::days(body.interval_days as i64);
+    let mut current = original_scheduled + interval;
+    let mut post_ids = Vec::new();
+    let mut scheduled_dates = Vec::new();
+
+    while current <= end_date {
+        let copy = queries::create_repeated_post(
+            &state.db,
+            auth.user_id,
+            id,
+            &current,
+            group_id,
+        )
+        .await?;
+
+        post_ids.push(copy.id);
+        scheduled_dates.push(current.to_rfc3339());
+        current += interval;
+    }
+
+    Ok(Json(RepeatPostResponse {
+        group_id,
+        count: post_ids.len(),
+        post_ids,
+        scheduled_dates,
     }))
 }
 

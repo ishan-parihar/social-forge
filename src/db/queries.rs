@@ -198,21 +198,22 @@ pub async fn create_post(
            (user_id, integration_id, content, title, media, settings, scheduled_at, state)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
            RETURNING id, user_id, integration_id, state as "state: PostState",
-             content, title, media, settings, scheduled_at, published_at,
-             platform_post_id, platform_post_url, error_message,
-             created_at, updated_at"#,
-        user_id,
-        integration_id,
-        content,
-        title,
-        media,
-        settings,
-        scheduled_at,
-        st as PostState,
-    )
-    .fetch_one(pool)
-    .await
-}
+              content, title, media, settings, scheduled_at, published_at,
+              platform_post_id, platform_post_url, error_message,
+              created_at, updated_at,
+              repeat_interval_days, repeat_end_date, group_id"#,
+         user_id,
+         integration_id,
+         content,
+         title,
+         media,
+         settings,
+         scheduled_at,
+         st as PostState,
+     )
+     .fetch_one(pool)
+     .await
+ }
 
 pub async fn list_posts(
     pool: &PgPool,
@@ -234,21 +235,22 @@ pub async fn list_posts(
             r#"SELECT id, user_id, integration_id, state as "state: PostState",
                content, title, media, settings, scheduled_at, published_at,
                platform_post_id, platform_post_url, error_message,
-               created_at, updated_at
+               created_at, updated_at,
+               repeat_interval_days, repeat_end_date, group_id
              FROM posts WHERE user_id = $1 AND state = $2
              ORDER BY scheduled_at DESC NULLS LAST, created_at DESC
              LIMIT $3 OFFSET $4"#,
-            user_id,
-            ps as PostState,
-            limit,
-            offset,
-        )
-        .fetch_all(pool)
-        .await
-    } else {
-        list_posts_all(pool, user_id, limit, offset).await
-    }
-}
+         user_id,
+         ps as PostState,
+         limit,
+         offset,
+     )
+     .fetch_all(pool)
+     .await
+     } else {
+         list_posts_all(pool, user_id, limit, offset).await
+     }
+ }
 
 /// Count posts for a user, optionally filtered by state
 pub async fn count_posts_by_user(
@@ -298,42 +300,44 @@ async fn list_posts_all(
     offset: i64,
 ) -> Result<Vec<Post>, sqlx::Error> {
     sqlx::query_as!(
-        Post,
-        r#"SELECT id, user_id, integration_id, state as "state: PostState",
-           content, title, media, settings, scheduled_at, published_at,
-           platform_post_id, platform_post_url, error_message,
-           created_at, updated_at
-         FROM posts WHERE user_id = $1
-         ORDER BY scheduled_at DESC NULLS LAST, created_at DESC
-         LIMIT $2 OFFSET $3"#,
-        user_id,
-        limit,
-        offset,
-    )
-    .fetch_all(pool)
-    .await
-}
+         Post,
+         r#"SELECT id, user_id, integration_id, state as "state: PostState",
+            content, title, media, settings, scheduled_at, published_at,
+            platform_post_id, platform_post_url, error_message,
+            created_at, updated_at,
+            repeat_interval_days, repeat_end_date, group_id
+          FROM posts WHERE user_id = $1
+          ORDER BY scheduled_at DESC NULLS LAST, created_at DESC
+          LIMIT $2 OFFSET $3"#,
+         user_id,
+         limit,
+         offset,
+     )
+     .fetch_all(pool)
+     .await
+ }
 
-pub async fn get_post(
+ pub async fn get_post(
     pool: &PgPool,
     id: Uuid,
     user_id: Uuid,
 ) -> Result<Option<Post>, sqlx::Error> {
     sqlx::query_as!(
-        Post,
-        r#"SELECT id, user_id, integration_id, state as "state: PostState",
-           content, title, media, settings, scheduled_at, published_at,
-           platform_post_id, platform_post_url, error_message,
-           created_at, updated_at
-         FROM posts WHERE id = $1 AND user_id = $2"#,
-        id,
-        user_id,
-    )
-    .fetch_optional(pool)
-    .await
-}
+         Post,
+         r#"SELECT id, user_id, integration_id, state as "state: PostState",
+            content, title, media, settings, scheduled_at, published_at,
+            platform_post_id, platform_post_url, error_message,
+            created_at, updated_at,
+            repeat_interval_days, repeat_end_date, group_id
+          FROM posts WHERE id = $1 AND user_id = $2"#,
+         id,
+         user_id,
+     )
+     .fetch_optional(pool)
+     .await
+ }
 
-pub async fn update_post_content(
+ pub async fn update_post_content(
     pool: &PgPool,
     id: Uuid,
     user_id: Uuid,
@@ -348,21 +352,22 @@ pub async fn update_post_content(
            updated_at = now()
            WHERE id = $5 AND user_id = $6
            RETURNING id, user_id, integration_id, state as "state: PostState",
-             content, title, media, settings, scheduled_at, published_at,
-             platform_post_id, platform_post_url, error_message,
-             created_at, updated_at"#,
-        content,
-        title,
-        media,
-        settings,
-        id,
-        user_id,
-    )
-    .fetch_optional(pool)
-    .await
-}
+              content, title, media, settings, scheduled_at, published_at,
+              platform_post_id, platform_post_url, error_message,
+              created_at, updated_at,
+              repeat_interval_days, repeat_end_date, group_id"#,
+         content,
+         title,
+         media,
+         settings,
+         id,
+         user_id,
+     )
+     .fetch_optional(pool)
+     .await
+ }
 
-pub async fn schedule_post(
+ pub async fn schedule_post(
     pool: &PgPool,
     id: Uuid,
     user_id: Uuid,
@@ -374,18 +379,19 @@ pub async fn schedule_post(
            updated_at = now()
            WHERE id = $2 AND user_id = $3
            RETURNING id, user_id, integration_id, state as "state: PostState",
-             content, title, media, settings, scheduled_at, published_at,
-             platform_post_id, platform_post_url, error_message,
-             created_at, updated_at"#,
-        scheduled_at,
-        id,
-        user_id,
-    )
-    .fetch_optional(pool)
-    .await
-}
+              content, title, media, settings, scheduled_at, published_at,
+              platform_post_id, platform_post_url, error_message,
+              created_at, updated_at,
+              repeat_interval_days, repeat_end_date, group_id"#,
+         scheduled_at,
+         id,
+         user_id,
+     )
+     .fetch_optional(pool)
+     .await
+ }
 
-pub async fn update_post_state(
+ pub async fn update_post_state(
     pool: &PgPool,
     id: Uuid,
     state: PostState,
@@ -430,20 +436,21 @@ pub async fn get_post_with_integration(
     user_id: Uuid,
 ) -> Result<Option<PostWithIntegration>, sqlx::Error> {
     sqlx::query_as!(
-        PostWithIntegration,
-        r#"SELECT p.id, p.user_id, p.integration_id,
-           p.state as "state: PostState",
-           p.content, p.title, p.media, p.settings,
-           p.scheduled_at, p.published_at,
-           p.platform_post_id, p.platform_post_url, p.error_message,
-           p.created_at, p.updated_at,
-           i.provider_identifier, i.access_token,
-           i.refresh_token, i.token_expires_at,
-           i.disabled as "integration_disabled",
-           i.refresh_needed as "integration_refresh_needed"
-         FROM posts p
-         JOIN integrations i ON p.integration_id = i.id
-         WHERE p.id = $1 AND p.user_id = $2"#,
+         PostWithIntegration,
+         r#"SELECT p.id, p.user_id, p.integration_id,
+            p.state as "state: PostState",
+            p.content, p.title, p.media, p.settings,
+            p.scheduled_at, p.published_at,
+            p.platform_post_id, p.platform_post_url, p.error_message,
+            p.created_at, p.updated_at,
+            p.repeat_interval_days, p.repeat_end_date, p.group_id,
+            i.provider_identifier, i.access_token,
+            i.refresh_token, i.token_expires_at,
+            i.disabled as "integration_disabled",
+            i.refresh_needed as "integration_refresh_needed"
+          FROM posts p
+          JOIN integrations i ON p.integration_id = i.id
+          WHERE p.id = $1 AND p.user_id = $2"#,
         post_id,
         user_id,
     )
@@ -458,23 +465,24 @@ pub async fn get_due_posts(
 ) -> Result<Vec<PostWithIntegration>, sqlx::Error> {
     sqlx::query_as!(
         PostWithIntegration,
-        r#"SELECT p.id, p.user_id, p.integration_id,
-           p.state as "state: PostState",
-           p.content, p.title, p.media, p.settings,
-           p.scheduled_at, p.published_at,
-           p.platform_post_id, p.platform_post_url, p.error_message,
-           p.created_at, p.updated_at,
-           i.provider_identifier, i.access_token,
-           i.refresh_token, i.token_expires_at,
-           i.disabled as "integration_disabled",
-           i.refresh_needed as "integration_refresh_needed"
-         FROM posts p
-         JOIN integrations i ON p.integration_id = i.id
-         WHERE p.state = 'queued'
-           AND p.scheduled_at <= NOW()
-           AND i.disabled = false
-         ORDER BY p.scheduled_at ASC
-         LIMIT $1"#,
+         r#"SELECT p.id, p.user_id, p.integration_id,
+            p.state as "state: PostState",
+            p.content, p.title, p.media, p.settings,
+            p.scheduled_at, p.published_at,
+            p.platform_post_id, p.platform_post_url, p.error_message,
+            p.created_at, p.updated_at,
+            p.repeat_interval_days, p.repeat_end_date, p.group_id,
+            i.provider_identifier, i.access_token,
+            i.refresh_token, i.token_expires_at,
+            i.disabled as "integration_disabled",
+            i.refresh_needed as "integration_refresh_needed"
+          FROM posts p
+          JOIN integrations i ON p.integration_id = i.id
+          WHERE p.state = 'queued'
+            AND p.scheduled_at <= NOW()
+            AND i.disabled = false
+          ORDER BY p.scheduled_at ASC
+          LIMIT $1"#,
         limit,
     )
     .fetch_all(pool)
@@ -549,17 +557,18 @@ pub async fn get_posts_by_date_range(
     end: DateTime<Utc>,
 ) -> Result<Vec<Post>, sqlx::Error> {
     sqlx::query_as!(
-        Post,
-        r#"SELECT id, user_id, integration_id, state as "state: PostState",
-           content, title, media, settings, scheduled_at, published_at,
-           platform_post_id, platform_post_url, error_message,
-           created_at, updated_at
-         FROM posts
-         WHERE user_id = $1
-           AND scheduled_at IS NOT NULL
-           AND scheduled_at >= $2
-           AND scheduled_at <= $3
-         ORDER BY scheduled_at ASC"#,
+         Post,
+         r#"SELECT id, user_id, integration_id, state as "state: PostState",
+            content, title, media, settings, scheduled_at, published_at,
+            platform_post_id, platform_post_url, error_message,
+            created_at, updated_at,
+            repeat_interval_days, repeat_end_date, group_id
+          FROM posts
+          WHERE user_id = $1
+            AND scheduled_at IS NOT NULL
+            AND scheduled_at >= $2
+            AND scheduled_at <= $3
+          ORDER BY scheduled_at ASC"#,
         user_id,
         start,
         end,
@@ -810,6 +819,64 @@ pub async fn mark_all_notifications_read(pool: &PgPool, user_id: Uuid) -> Result
     .execute(pool)
     .await?;
     Ok(r.rows_affected())
+}
+
+// ══════════════════════════════════════════════════════════════
+// RECURRING POSTS
+// ══════════════════════════════════════════════════════════════
+
+pub async fn create_repeated_post(
+    pool: &PgPool,
+    user_id: Uuid,
+    original_id: Uuid,
+    scheduled_at: &DateTime<Utc>,
+    group_id: Uuid,
+) -> Result<Post, sqlx::Error> {
+    sqlx::query_as!(
+        Post,
+        r#"INSERT INTO posts (user_id, integration_id, title, content, media, settings, scheduled_at, state, repeat_interval_days, repeat_end_date, group_id)
+           SELECT p.user_id, p.integration_id, p.title, p.content, p.media, p.settings, $1, 'draft', p.repeat_interval_days, p.repeat_end_date, $3
+           FROM posts p WHERE p.id = $2 AND p.user_id = $4
+           RETURNING id, user_id, integration_id, state as "state: PostState",
+             content, title, media, settings, scheduled_at, published_at,
+             platform_post_id, platform_post_url, error_message,
+             created_at, updated_at,
+             repeat_interval_days, repeat_end_date, group_id"#,
+        scheduled_at,
+        original_id,
+        group_id,
+        user_id,
+    )
+    .fetch_one(pool)
+    .await
+}
+
+pub async fn set_post_recurring(
+    pool: &PgPool,
+    id: Uuid,
+    user_id: Uuid,
+    interval_days: i32,
+    end_date: &DateTime<Utc>,
+    group_id: Uuid,
+) -> Result<Option<Post>, sqlx::Error> {
+    sqlx::query_as!(
+        Post,
+        r#"UPDATE posts SET repeat_interval_days = $1, repeat_end_date = $2, group_id = $3,
+           updated_at = now()
+           WHERE id = $4 AND user_id = $5
+           RETURNING id, user_id, integration_id, state as "state: PostState",
+             content, title, media, settings, scheduled_at, published_at,
+             platform_post_id, platform_post_url, error_message,
+             created_at, updated_at,
+             repeat_interval_days, repeat_end_date, group_id"#,
+        interval_days,
+        end_date,
+        group_id,
+        id,
+        user_id,
+    )
+    .fetch_optional(pool)
+    .await
 }
 
 pub async fn delete_notification(

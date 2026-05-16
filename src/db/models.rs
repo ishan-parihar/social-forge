@@ -131,6 +131,9 @@ pub struct Post {
     pub error_message: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub repeat_interval_days: Option<i32>,
+    pub repeat_end_date: Option<DateTime<Utc>>,
+    pub group_id: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -146,6 +149,9 @@ pub struct PostPublic {
     pub platform_post_url: Option<String>,
     pub error_message: Option<String>,
     pub created_at: String,
+    pub repeat_interval_days: Option<i32>,
+    pub repeat_end_date: Option<String>,
+    pub group_id: Option<Uuid>,
 }
 
 impl From<Post> for PostPublic {
@@ -162,6 +168,9 @@ impl From<Post> for PostPublic {
             platform_post_url: p.platform_post_url,
             error_message: p.error_message,
             created_at: p.created_at.to_rfc3339(),
+            repeat_interval_days: p.repeat_interval_days,
+            repeat_end_date: p.repeat_end_date.map(|d| d.to_rfc3339()),
+            group_id: p.group_id,
         }
     }
 }
@@ -185,6 +194,9 @@ pub struct PostWithIntegration {
     pub error_message: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub repeat_interval_days: Option<i32>,
+    pub repeat_end_date: Option<DateTime<Utc>>,
+    pub group_id: Option<Uuid>,
     // Joined from integrations
     pub provider_identifier: String,
     pub access_token: String,

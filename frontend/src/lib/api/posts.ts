@@ -6,12 +6,18 @@ export interface PostSummary {
   content: string; title?: string; scheduled_at?: string;
   platform_post_url?: string; error_message?: string; created_at: string;
   tags?: Tag[];
+  repeat_interval_days?: number | null;
+  repeat_end_date?: string | null;
+  group_id?: string | null;
 }
 export interface PostDetail {
   id: string; integration_id: string; integration_name: string; state: string;
   content: string; title?: string; scheduled_at?: string;
   published_at?: string; platform_post_url?: string; error_message?: string; created_at: string;
   tags?: Tag[];
+  repeat_interval_days?: number | null;
+  repeat_end_date?: string | null;
+  group_id?: string | null;
 }
 
 export const postsApi = {
@@ -30,4 +36,8 @@ export const postsApi = {
   schedule: (id: string, at: string) => api.post<PostDetail>(`/api/posts/${id}/schedule`, { scheduled_at: at }),
   delete: (id: string) => api.del<{ deleted: boolean }>(`/api/posts/${id}`),
   setTags: (id: string, tag_ids: string[]) => api.put<PostDetail>(`/api/posts/${id}/tags`, { tag_ids }),
+  repeat: (id: string, intervalDays: number, endDate: string) =>
+    api.post<{ group_id: string; count: number; post_ids: string[]; scheduled_dates: string[] }>(
+      `/api/posts/${id}/repeat`, { interval_days: intervalDays, end_date: endDate }
+    ),
 };
