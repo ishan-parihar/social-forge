@@ -7,10 +7,10 @@
   let overflowCount = $derived((event.tags?.length || 0) - 2);
 </script>
 
-<div class="event-chip {event.state}" title={event.content}>
+<div class="event-chip {event.state}" title={event.content.length > 200 ? event.content.slice(0, 200) + '...' : event.content}>
   {#if !compact && event.tags && event.tags.length > 0}
     <span class="event-tags">
-      {#each visibleTags as tag}
+      {#each visibleTags as tag (tag.id)}
         <span class="tag-dot" style="background: {tag.color}"></span>
       {/each}
       {#if overflowCount > 0}

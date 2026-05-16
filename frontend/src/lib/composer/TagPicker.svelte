@@ -44,6 +44,7 @@
               ? 'border-transparent text-white'
               : 'border-[#1e2435] text-[#6b7280] hover:text-white hover:bg-[#1a1f2e]'}"
           style={isSelected ? `background: ${tag.color}; border-color: ${tag.color};` : ''}
+          aria-label="{isSelected ? 'Remove' : 'Add'} tag {tag.name}"
         >
           <span
             class="w-2 h-2 rounded-full"

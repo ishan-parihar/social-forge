@@ -100,6 +100,49 @@ pub struct FindSlotResponse {
     pub date: String,
 }
 
+// ── Helpers ──────────────────────────────────────────────────
+
+/// Fetch and convert tags for a post. Logs DB errors instead of silently swallowing them.
+async fn enrich_post_tags(db: &crate::db::PgPool, post_id: Uuid, user_id: Uuid) -> Vec<TagResponse> {
+    match queries::get_tags_for_post(db, post_id, user_id).await {
+        Ok(rows) => rows
+            .into_iter()
+            .map(|row| TagResponse {
+                id: row.id,
+                name: row.name,
+                color: row.color,
+                created_at: row.created_at.to_rfc3339(),
+                updated_at: row.updated_at.to_rfc3339(),
+            })
+            .collect(),
+        Err(e) => {
+            tracing::warn!("Failed to fetch tags for post {post_id}: {e}");
+            Vec::new()
+        }
+    }
+}
+
+/// Verify that all tag_ids belong to the given user.
+async fn verify_tag_ownership(
+    db: &crate::db::PgPool,
+    tag_ids: &[Uuid],
+    user_id: Uuid,
+) -> Result<(), crate::error::AppError> {
+    let count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*)::bigint FROM tags WHERE id = ANY($1) AND user_id = $2",
+    )
+    .bind(tag_ids)
+    .bind(user_id)
+    .fetch_one(db)
+    .await?;
+    if (count as usize) != tag_ids.len() {
+        return Err(crate::error::AppError::BadRequest(
+            "One or more tags not found or do not belong to the user".into(),
+        ));
+    }
+    Ok(())
+}
+
 // ── Handlers ─────────────────────────────────────────────────
 
 /// GET /api/posts
@@ -128,7 +171,6 @@ pub async fn list(
     )
     .await?;
 
-    // Enrich with integration names and tags
     let mut enriched = Vec::with_capacity(posts.len());
     for p in posts {
         let integration_name = if let Ok(Some(integ)) = queries::get_integration(&state.db, p.integration_id, auth.user_id).await {
@@ -136,18 +178,7 @@ pub async fn list(
         } else {
             "Unknown".into()
         };
-        let tags = queries::get_tags_for_post(&state.db, p.id, auth.user_id)
-            .await
-            .unwrap_or_default()
-            .into_iter()
-            .map(|row| TagResponse {
-                id: row.id,
-                name: row.name,
-                color: row.color,
-                created_at: row.created_at.to_rfc3339(),
-                updated_at: row.updated_at.to_rfc3339(),
-            })
-            .collect();
+        let tags = enrich_post_tags(&state.db, p.id, auth.user_id).await;
         enriched.push(PostWithIntegrationName {
             id: p.id,
             integration_id: p.integration_id,
@@ -203,6 +234,13 @@ pub async fn create(
         Some(crate::db::models::PostState::Draft)
     };
 
+    // Verify tag ownership before creating the post (fail fast)
+    if let Some(ref tag_ids) = body.tag_ids {
+        if !tag_ids.is_empty() {
+            verify_tag_ownership(&state.db, tag_ids, auth.user_id).await?;
+        }
+    }
+
     let post = queries::create_post(
         &state.db,
         auth.user_id,
@@ -246,18 +284,7 @@ pub async fn get(
         "Unknown".into()
     };
 
-    let tags = queries::get_tags_for_post(&state.db, post.id, auth.user_id)
-        .await
-        .unwrap_or_default()
-        .into_iter()
-        .map(|row| TagResponse {
-            id: row.id,
-            name: row.name,
-            color: row.color,
-            created_at: row.created_at.to_rfc3339(),
-            updated_at: row.updated_at.to_rfc3339(),
-        })
-        .collect();
+    let tags = enrich_post_tags(&state.db, post.id, auth.user_id).await;
 
     Ok(Json(PostDetailResponse {
         id: post.id,
@@ -345,48 +372,23 @@ pub async fn set_post_tags(
     Path(id): Path<Uuid>,
     Json(body): Json<SetPostTagsRequest>,
 ) -> Result<Json<PostDetailResponse>, crate::error::AppError> {
-    // Verify post exists and belongs to user
     let post = queries::get_post(&state.db, id, auth.user_id)
         .await?
         .ok_or_else(|| crate::error::AppError::NotFound("Post not found".into()))?;
 
-    // Verify all tag_ids belong to the user
-    for &tag_id in &body.tag_ids {
-        let exists = sqlx::query_scalar::<_, i64>(
-            "SELECT COUNT(*) FROM tags WHERE id = $1 AND user_id = $2",
-        )
-        .bind(tag_id)
-        .bind(auth.user_id)
-        .fetch_one(&state.db)
-        .await?;
-        if exists == 0 {
-            return Err(crate::error::AppError::BadRequest(
-                format!("Tag {} not found or does not belong to user", tag_id),
-            ));
-        }
+    if !body.tag_ids.is_empty() {
+        verify_tag_ownership(&state.db, &body.tag_ids, auth.user_id).await?;
     }
 
     queries::set_post_tags(&state.db, id, &body.tag_ids).await?;
 
-    // Return enriched post
     let integration_name = if let Ok(Some(integ)) = queries::get_integration(&state.db, post.integration_id, auth.user_id).await {
         integ.provider_name
     } else {
         "Unknown".into()
     };
 
-    let tags = queries::get_tags_for_post(&state.db, post.id, auth.user_id)
-        .await
-        .unwrap_or_default()
-        .into_iter()
-        .map(|row| TagResponse {
-            id: row.id,
-            name: row.name,
-            color: row.color,
-            created_at: row.created_at.to_rfc3339(),
-            updated_at: row.updated_at.to_rfc3339(),
-        })
-        .collect();
+    let tags = enrich_post_tags(&state.db, post.id, auth.user_id).await;
 
     Ok(Json(PostDetailResponse {
         id: post.id,

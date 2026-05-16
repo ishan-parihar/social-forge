@@ -10,42 +10,55 @@
   let editing = $state(false);
   let editContent = $state("");
   let loading = $state(true);
+  let error = $state<string | null>(null);
 
   onMount(async () => {
     const id = $page.params.id;
     if (!id) { loading = false; return; }
     const r = await postsApi.get(id);
     if (r.data) { post = r.data; editContent = r.data.content; }
+    else error = r.error || "Failed to load post";
     loading = false;
   });
 
   async function save() {
     if (!post) return;
+    error = null;
     const r = await postsApi.update(post.id, { content: editContent });
-    if (r.error) return;
+    if (r.error) { error = r.error; return; }
     post.content = editContent;
     editing = false;
   }
 
   async function schedulePost() {
     if (!post) return;
+    error = null;
     const at = prompt("Schedule for (ISO date):", new Date().toISOString());
     if (at) {
       const r = await postsApi.schedule(post.id, at);
       if (r.data) post.state = "queued";
+      else error = r.error || "Failed to schedule post";
     }
   }
 
   async function deletePost() {
     if (!post || !confirm("Delete this post?")) return;
+    error = null;
     const r = await postsApi.delete(post.id);
-    if (r.error) return;
+    if (r.error) { error = r.error; return; }
     goto("/posts");
   }
 </script>
 
 <div class="max-w-2xl mx-auto space-y-6">
   <button onclick={() => goto("/posts")} class="text-sm text-[#6b7280] hover:text-white">&larr; Back to posts</button>
+
+  {#if error}
+    <div class="bg-red-500/10 border border-red-500/30 text-red-400 text-sm rounded-lg p-3 flex items-center justify-between">
+      <span>{error}</span>
+      <button onclick={() => error = null} class="text-red-400/70 hover:text-red-400">&times;</button>
+    </div>
+  {/if}
 
   {#if loading}
     <div class="text-center py-12 text-sm text-[#6b7280]">Loading...</div>

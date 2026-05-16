@@ -142,6 +142,7 @@
                 class="w-5 h-5 rounded-full border border-[#1e2435] {newColor === c ? 'ring-2 ring-indigo-400' : ''}"
                 style="background: {c}"
                 title={c}
+                aria-label="Select color {c}"
               ></button>
             {/each}
           </div>
@@ -185,6 +186,7 @@
                     onclick={() => editColor = c}
                     class="w-4 h-4 rounded-full border border-[#1e2435] {editColor === c ? 'ring-2 ring-indigo-400' : ''}"
                     style="background: {c}"
+                    aria-label="Select color {c}"
                   ></button>
                 {/each}
               </div>
@@ -194,13 +196,13 @@
               <!-- Display -->
               <span class="w-3 h-3 rounded-full flex-shrink-0" style="background: {tag.color}"></span>
               <span class="flex-1 text-sm">{tag.name}</span>
-              <button onclick={() => startEdit(tag)} class="text-xs text-[#6b7280] hover:text-indigo-400 px-1" title="Edit">&#9998;</button>
+              <button onclick={() => startEdit(tag)} class="text-xs text-[#6b7280] hover:text-indigo-400 px-1" title="Edit" aria-label="Edit tag">&#9998;</button>
               {#if deletingId === tag.id}
                 <span class="text-xs text-[#6b7280]">Delete?</span>
                 <button onclick={() => confirmDelete(tag.id)} class="text-xs text-red-400 hover:underline px-1">Yes</button>
                 <button onclick={() => deletingId = null} class="text-xs text-[#6b7280] hover:underline px-1">No</button>
               {:else}
-                <button onclick={() => deletingId = tag.id} class="text-xs text-[#6b7280] hover:text-red-400 px-1" title="Delete">&#128465;</button>
+                <button onclick={() => deletingId = tag.id} class="text-xs text-[#6b7280] hover:text-red-400 px-1" title="Delete" aria-label="Delete tag">&#128465;</button>
               {/if}
             {/if}
           </div>
