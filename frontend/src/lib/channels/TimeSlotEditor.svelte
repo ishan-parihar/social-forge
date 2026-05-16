@@ -20,6 +20,14 @@
     let error = $state<string | null>(null);
     let success = $state(false);
 
+    $effect(() => {
+      if (show) {
+        timeslots = initialTimeslots.map(t => ({ ...t }));
+        error = null;
+        success = false;
+      }
+    });
+
     function minToTime(m: number): string {
         const h = Math.floor(m / 60);
         const min = m % 60;
