@@ -3,7 +3,7 @@
   import Badge from "$lib/ui/Badge.svelte";
   import type { CalendarEvent as CEvent } from "./types";
 
-  let { event, onclose, onDuplicate }: { event?: CEvent | null; onclose: () => void; onDuplicate?: (id: string) => void } = $props();
+  let { event, onclose, onDuplicate, duplicating = false }: { event?: CEvent | null; onclose: () => void; onDuplicate?: (id: string) => void; duplicating?: boolean } = $props();
 
   let panelEl: HTMLDivElement | undefined = $state();
 
@@ -62,8 +62,12 @@
             View on platform &rarr;
           </a>
         {/if}
-        <button onclick={() => onDuplicate?.(event.id)} class="w-full px-3 py-2 bg-[#1a1f2e] hover:bg-[#242b3d] border border-[#2a3045] rounded-lg text-sm text-indigo-400 transition-colors flex items-center justify-center gap-2">
-          📋 Duplicate
+        <button onclick={() => onDuplicate?.(event.id)} disabled={duplicating} class="w-full px-3 py-2 bg-[#1a1f2e] hover:bg-[#242b3d] border border-[#2a3045] rounded-lg text-sm text-indigo-400 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+          {#if duplicating}
+            <span class="animate-spin">⏳</span> Duplicating...
+          {:else}
+            📋 Duplicate
+          {/if}
         </button>
       </div>
     </div>
