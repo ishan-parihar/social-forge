@@ -38,7 +38,7 @@
         aria-label={`${v.label} view`}
         class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium capitalize transition-colors
           {view === v.key ? 'bg-indigo-600 text-white' : 'text-[#6b7280] hover:text-white hover:bg-[#1a1f2e]'}"
-      ><span>{v.icon}</span> {v.label}</button>
+      ><span aria-hidden="true">{v.icon}</span> {v.label}</button>
     {/each}
   </div>
 </div>

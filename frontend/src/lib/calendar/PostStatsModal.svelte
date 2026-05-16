@@ -13,6 +13,8 @@
   let loading = $state(false);
   let error = $state<string | null>(null);
   let panelEl: HTMLDivElement | undefined = $state();
+  let dialogEl: HTMLDivElement | undefined = $state();
+  let abortController: AbortController | null = null;
 
   let totalImpressions = $derived(analyticsData?.reduce((s, d) => s + d.impressions, 0) ?? 0);
   let totalLikes = $derived(analyticsData?.reduce((s, d) => s + d.likes, 0) ?? 0);
@@ -65,21 +67,26 @@
   }
 
   async function fetchData() {
+    abortController?.abort();
+    abortController = new AbortController();
+    const signal = abortController.signal;
     loading = true;
     error = null;
     try {
-      const r = await analyticsApi.getPostAnalytics(postId, days);
+      const r = await analyticsApi.getPostAnalytics(postId, days, signal);
+      if (signal.aborted) return;
       if (r.data?.data) {
         analyticsData = r.data.data;
       } else {
-        analyticsData = [];
-        error = r.error || null;
+        error = r.error || "No data returned";
+        analyticsData = null;
       }
     } catch (e: any) {
+      if (e.name === "AbortError") return;
       error = e.message || "Failed to load analytics";
       analyticsData = null;
     } finally {
-      loading = false;
+      if (!signal.aborted) loading = false;
     }
   }
 
@@ -89,19 +96,20 @@
 
   $effect(() => {
     document.body.style.overflow = "hidden";
+    dialogEl?.focus();
     return () => {
       document.body.style.overflow = "";
     };
   });
 </script>
 
-<div class="fixed inset-0 z-40 flex justify-end" role="dialog" aria-modal="true" tabindex="-1" onkeydown={handleKeydown}>
+<div bind:this={dialogEl} class="fixed inset-0 z-40 flex justify-end" role="dialog" aria-modal="true" aria-labelledby="stats-modal-title" tabindex="-1" onkeydown={handleKeydown}>
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="absolute inset-0 bg-black/40" onclick={onclose}></div>
   <div bind:this={panelEl} tabindex="-1" class="relative w-96 bg-[#131720] border-l border-[#1e2435] p-6 overflow-y-auto outline-none">
     <div class="flex items-center justify-between mb-6">
-      <h3 class="font-semibold text-sm truncate pr-2" title={postTitle}>{postTitle}</h3>
+      <h3 id="stats-modal-title" class="font-semibold text-sm truncate pr-2" title={postTitle}>{postTitle}</h3>
       <button onclick={onclose} aria-label="Close" class="text-[#6b7280] hover:text-white text-xl shrink-0">&times;</button>
     </div>
 
@@ -130,8 +138,8 @@
             <div class="text-xs text-[#6b7280] mb-1">{card.icon} {card.label}</div>
             <div class="text-lg font-semibold text-white">{card.value.toLocaleString()}</div>
             {#if analyticsData.length >= 2}
-              {@const first = analyticsData[0][card.key]}
-              {@const last = analyticsData[analyticsData.length - 1][card.key]}
+              {@const first = analyticsData[0][card.key] as number}
+              {@const last = analyticsData[analyticsData.length - 1][card.key] as number}
               <div class="text-xs mt-1 {last >= first ? 'text-green-400' : 'text-red-400'}">
                 {last >= first ? '\u2191' : '\u2193'} {Math.abs(last - first).toLocaleString()}
               </div>
@@ -149,7 +157,7 @@
                 <div class="flex-1 flex flex-col items-center justify-end h-full">
                   <div
                     class="w-full rounded-t transition-all duration-300"
-                    style="height: {(point[card.key] / (card.key === 'impressions' ? maxImpressions : card.key === 'likes' ? maxLikes : card.key === 'shares' ? maxShares : maxComments)) * 100}%; background: {card.color}; min-height: {point[card.key] > 0 ? '4px' : '0'}"
+                    style="height: {((point[card.key] as number) / (card.key === 'impressions' ? maxImpressions : card.key === 'likes' ? maxLikes : card.key === 'shares' ? maxShares : maxComments)) * 100}%; background: {card.color}; min-height: {(point[card.key] as number) > 0 ? '4px' : '0'}"
                   ></div>
                   {#if chartData.length <= 7 || (chartData.length <= 10 && i % 2 === 0) || i % 3 === 0}
                     <span class="text-[8px] text-[#6b7280] mt-1 truncate w-full text-center">{shortDate(point.date)}</span>

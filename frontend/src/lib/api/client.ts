@@ -13,7 +13,7 @@ class ApiClient {
   addRequestInterceptor(fn: Interceptor) { this.reqInterceptors.push(fn); }
   addResponseInterceptor(fn: ResponseInterceptor) { this.resInterceptors.push(fn); }
 
-  async request<T>(method: string, path: string, body?: unknown, timeoutMs = 10000): Promise<{ data?: T; error?: string; status: number }> {
+  async request<T>(method: string, path: string, body?: unknown, timeoutMs = 10000, signal?: AbortSignal): Promise<{ data?: T; error?: string; status: number }> {
     let headers: Record<string, string> = {};
     let reqBody: BodyInit | undefined;
     if (body && !(body instanceof FormData)) {
@@ -37,7 +37,8 @@ class ApiClient {
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), timeoutMs);
-      const res = await fetch(reqInit.url, { ...reqInit, signal: controller.signal });
+      const combinedSignal = signal ? AbortSignal.any([controller.signal, signal]) : controller.signal;
+      const res = await fetch(reqInit.url, { ...reqInit, signal: combinedSignal });
       clearTimeout(timeout);
 
       let processedRes = res;
@@ -55,7 +56,7 @@ class ApiClient {
     }
   }
 
-  get<T>(path: string) { return this.request<T>("GET", path); }
+  get<T>(path: string, signal?: AbortSignal) { return this.request<T>("GET", path, undefined, undefined, signal); }
   post<T>(path: string, body?: unknown) { return this.request<T>("POST", path, body); }
   put<T>(path: string, body?: unknown) { return this.request<T>("PUT", path, body); }
   del<T>(path: string) { return this.request<T>("DELETE", path); }

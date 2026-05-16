@@ -13,8 +13,8 @@ export interface PostAnalytics {
 }
 
 export const analyticsApi = {
-  getPostAnalytics: (postId: string, days?: number) => {
+  getPostAnalytics: (postId: string, days?: number, signal?: AbortSignal) => {
     const q = days ? `?days=${days}` : "";
-    return api.get<PostAnalytics>(`/api/analytics/post/${postId}${q}`);
+    return api.get<PostAnalytics>(`/api/analytics/post/${postId}${q}`, signal);
   },
 };

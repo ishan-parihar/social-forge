@@ -27,7 +27,8 @@
   let calDays = $derived(getMonthDays(year, month));
 
   function handleDragStart(e: DragEvent, eventId: string) {
-    e.dataTransfer?.setData("text/plain", eventId);
+    if (!e.dataTransfer) return;
+    e.dataTransfer.setData("text/plain", eventId);
   }
 
   function handleDragOver(e: DragEvent) {
@@ -56,7 +57,7 @@
         onclick={() => onDateClick?.(key)}
         role="gridcell"
         tabindex="-1"
-        onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') onDateClick?.(key); }}
+        onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onDateClick?.(key); } }}
         class="min-h-24 p-1.5 border-b border-r border-[#1e2435] transition-colors hover:bg-[#1a1f2e] cursor-pointer"
         class:opacity-30={!isCurrentMonth(date, year, month)}
       >
@@ -71,7 +72,7 @@
               draggable="true"
               ondragstart={(e) => handleDragStart(e, event.id)}
               onclick={(e) => { e.stopPropagation(); onEventClick?.(event.id); }}
-              onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); onEventClick?.(event.id); } }}
+              onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onEventClick?.(event.id); } }}
               role="button"
               tabindex="-1"
             >

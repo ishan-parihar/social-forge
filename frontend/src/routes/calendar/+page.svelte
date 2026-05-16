@@ -20,6 +20,7 @@
   let deleting = $state(false);
   let statsPostId = $state<string | null>(null);
   let loading = $state(false);
+  let refreshing = $state(false);
   let fetchError = $state<string | null>(null);
 
   async function fetchEvents(start: string, end: string) {
@@ -51,15 +52,21 @@
   }
 
   async function refresh() {
-    const st = calendarState.state;
-    if (st.view === "list") {
-      await fetchEvents(
-        formatDateKey(new Date()),
-        formatDateKey(new Date(Date.now() + 90 * 24 * 60 * 60 * 1000))
-      );
-    } else {
-      const r = st.view === "week" ? getWeekRange() : getMonthRange();
-      await fetchEvents(r.start, r.end);
+    if (refreshing) return;
+    refreshing = true;
+    try {
+      const st = calendarState.state;
+      if (st.view === "list") {
+        await fetchEvents(
+          formatDateKey(new Date()),
+          formatDateKey(new Date(Date.now() + 90 * 24 * 60 * 60 * 1000))
+        );
+      } else {
+        const r = st.view === "week" ? getWeekRange() : getMonthRange();
+        await fetchEvents(r.start, r.end);
+      }
+    } finally {
+      refreshing = false;
     }
   }
 
