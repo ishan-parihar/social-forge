@@ -11,12 +11,14 @@
   import DayView from "$lib/calendar/DayView.svelte";
   import ListView from "$lib/calendar/ListView.svelte";
   import PostDetail from "$lib/calendar/PostDetail.svelte";
+  import PostStatsModal from "$lib/calendar/PostStatsModal.svelte";
   import { goto } from "$app/navigation";
 
   let events = $state<CalendarEvent[]>([]);
   let selectedEvent = $state<CalendarEvent | null>(null);
   let duplicating = $state(false);
   let deleting = $state(false);
+  let statsPostId = $state<string | null>(null);
   let loading = $state(false);
   let fetchError = $state<string | null>(null);
 
@@ -114,7 +116,7 @@
   }
 
   function handleStats(eventId: string) {
-    console.log("Stats for event:", eventId);
+    statsPostId = eventId;
   }
 
   async function handleDelete(eventId: string) {
@@ -200,4 +202,11 @@
   {/if}
 
   <PostDetail event={selectedEvent} onclose={() => selectedEvent = null} onDuplicate={handleDuplicate} {duplicating} />
+
+  {#if statsPostId}
+    {@const post = events.find(e => e.id === statsPostId)}
+    {#if post}
+      <PostStatsModal postId={statsPostId} postTitle={post.title} onclose={() => statsPostId = null} />
+    {/if}
+  {/if}
 </div>

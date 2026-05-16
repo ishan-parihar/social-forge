@@ -7,7 +7,12 @@
     onViewChange: (v: CalendarView) => void;
   } = $props();
 
-  const views: CalendarView[] = ["month", "week", "day", "list"];
+  const views: { key: CalendarView; label: string; icon: string }[] = [
+    { key: "day", label: "Day", icon: "\u{1F4C5}" },
+    { key: "week", label: "Week", icon: "\u{1F4C6}" },
+    { key: "month", label: "Month", icon: "\u{1F4C5}" },
+    { key: "list", label: "List", icon: "\u{1F4CB}" },
+  ];
 
   let title = $derived.by(() => {
     const d = currentDate;
@@ -29,11 +34,11 @@
   <div class="flex bg-[#131720] rounded-lg border border-[#1e2435] overflow-hidden">
     {#each views as v}
       <button
-        onclick={() => onViewChange(v)}
-        aria-label={`${v} view`}
-        class="px-3 py-1.5 text-xs font-medium capitalize transition-colors
-          {view === v ? 'bg-indigo-600 text-white' : 'text-[#6b7280] hover:text-white hover:bg-[#1a1f2e]'}"
-      >{v}</button>
+        onclick={() => onViewChange(v.key)}
+        aria-label={`${v.label} view`}
+        class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium capitalize transition-colors
+          {view === v.key ? 'bg-indigo-600 text-white' : 'text-[#6b7280] hover:text-white hover:bg-[#1a1f2e]'}"
+      ><span>{v.icon}</span> {v.label}</button>
     {/each}
   </div>
 </div>
