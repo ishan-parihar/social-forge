@@ -15,6 +15,7 @@
 
   let events = $state<CalendarEvent[]>([]);
   let selectedEvent = $state<CalendarEvent | null>(null);
+  let duplicating = $state(false);
 
   async function fetchEvents(start: string, end: string) {
     const r = await calendarApi.get(start, end);
@@ -69,18 +70,22 @@
   }
 
   async function handleDuplicate(eventId: string) {
+    if (duplicating) return;
+    duplicating = true;
     try {
-      // Get full post detail
       const detail = await postsApi.get(eventId);
-      if (!detail.data) return;
-
+      if (detail.error || !detail.data) {
+        console.error("Failed to fetch post:", detail.error);
+        return;
+      }
       const post = detail.data;
 
-      // Find next available slot
       const slot = await postsApi.findSlot(post.integration_id);
-      if (!slot.data) return;
+      if (slot.error || !slot.data?.date) {
+        console.error("Failed to find slot:", slot.error);
+        return;
+      }
 
-      // Create copy
       await postsApi.create({
         integration_ids: [post.integration_id],
         content: post.content,
@@ -91,6 +96,8 @@
       refresh();
     } catch (e) {
       console.error("Failed to duplicate post:", e);
+    } finally {
+      duplicating = false;
     }
   }
 
@@ -143,5 +150,5 @@
     />
   {/if}
 
-  <PostDetail event={selectedEvent} onclose={() => selectedEvent = null} onDuplicate={handleDuplicate} />
+  <PostDetail event={selectedEvent} onclose={() => selectedEvent = null} onDuplicate={handleDuplicate} {duplicating} />
 </div>

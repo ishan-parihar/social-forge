@@ -1,11 +1,12 @@
 <script lang="ts">
   import { postsApi } from "$lib/api/posts";
 
-  let { scheduledAt, onChange, recurring, onRecurringChange }: {
+  let { scheduledAt, onChange, recurring, onRecurringChange, integrationId }: {
     scheduledAt?: string | null;
     onChange?: (iso: string | null) => void;
     recurring?: { intervalDays: number; endDate: string } | null;
     onRecurringChange?: (r: { intervalDays: number; endDate: string } | null) => void;
+    integrationId?: string;
   } = $props();
 
   let scheduled = $state(!!scheduledAt);
@@ -18,6 +19,26 @@
 
   let autoScheduling = $state(false);
 
+  // Sync local state from props when parent resets (P2.1)
+  $effect(() => {
+    scheduled = !!scheduledAt;
+  });
+  $effect(() => {
+    if (scheduledAt && typeof scheduledAt === 'string') {
+      dateStr = scheduledAt.slice(0, 10);
+      timeStr = scheduledAt.slice(11, 16);
+    }
+  });
+  $effect(() => {
+    if (recurring) {
+      repeatEnabled = true;
+      intervalDays = recurring.intervalDays;
+      endDateStr = recurring.endDate;
+    } else {
+      repeatEnabled = false;
+    }
+  });
+
   function update() {
     if (scheduled && dateStr && timeStr) {
       onChange?.(`${dateStr}T${timeStr}:00.000Z`);
@@ -29,14 +50,20 @@
   async function autoSchedule() {
     autoScheduling = true;
     try {
-      const r = await postsApi.findSlot();
-      if (r.data) {
-        const d = new Date(r.data.date);
-        dateStr = d.toISOString().split("T")[0];
-        timeStr = d.toISOString().split("T")[1]?.slice(0, 5) || "12:00";
-        scheduled = true;
-        update();
+      const r = await postsApi.findSlot(integrationId);
+      if (r.error) {
+        console.error("Auto-schedule failed:", r.error);
+        return;
       }
+      if (!r.data?.date) {
+        console.error("No available slot returned");
+        return;
+      }
+      const d = new Date(r.data.date + "Z");  // UTC
+      dateStr = d.toISOString().slice(0, 10);
+      timeStr = d.toISOString().slice(11, 16);
+      scheduled = true;
+      update();
     } catch (e) {
       console.error("Auto-schedule failed:", e);
     } finally {

@@ -170,7 +170,7 @@
   <!-- Scheduling -->
   <div class="bg-[#131720] border border-[#1e2435] rounded-xl p-4">
     <h3 class="text-sm font-semibold mb-3">Schedule</h3>
-    <SchedulePicker {scheduledAt} onChange={(iso: string | null) => scheduledAt = iso} {recurring} onRecurringChange={(r: { intervalDays: number; endDate: string } | null) => recurring = r} />
+    <SchedulePicker {scheduledAt} onChange={(iso: string | null) => scheduledAt = iso} {recurring} onRecurringChange={(r: { intervalDays: number; endDate: string } | null) => recurring = r} integrationId={selectedIntegrations[0]} />
   </div>
 
   <!-- Preview -->
