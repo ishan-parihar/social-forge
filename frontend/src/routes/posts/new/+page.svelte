@@ -46,13 +46,18 @@
     try {
       for (const intId of selectedIntegrations) {
         const pContent = providerOverride.get(intId) || content;
-        await postsApi.create({
+        const r = await postsApi.create({
           integration_ids: [intId],
           content: pContent,
           title: title || undefined,
           scheduled_at: scheduledAt || undefined,
           tag_ids: selectedTagIds,
         });
+        if (r.error) {
+          error = r.error;
+          submitting = false;
+          return;
+        }
       }
       goto("/calendar");
     } catch (e: any) {

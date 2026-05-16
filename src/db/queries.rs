@@ -494,21 +494,21 @@ pub struct PostTagRow {
     pub updated_at: DateTime<Utc>,
 }
 
-/// Get tags for a post (from post_tags JOIN tags)
 pub async fn get_tags_for_post(
     pool: &PgPool,
     post_id: Uuid,
     user_id: Uuid,
 ) -> Result<Vec<PostTagRow>, sqlx::Error> {
-    sqlx::query_as::<_, PostTagRow>(
+    sqlx::query_as!(
+        PostTagRow,
         r#"SELECT t.id, t.name, t.color, t.created_at, t.updated_at
            FROM post_tags pt
            JOIN tags t ON pt.tag_id = t.id
            WHERE pt.post_id = $1 AND t.user_id = $2
            ORDER BY t.name"#,
+        post_id,
+        user_id,
     )
-    .bind(post_id)
-    .bind(user_id)
     .fetch_all(pool)
     .await
 }
