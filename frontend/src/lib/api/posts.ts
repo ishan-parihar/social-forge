@@ -30,7 +30,7 @@ export const postsApi = {
   },
   get: (id: string) => api.get<PostDetail>(`/api/posts/${id}`),
   create: (d: { integration_ids: string[]; content: string; title?: string; scheduled_at?: string; tag_ids?: string[] }) =>
-    api.post<PostDetail>("/api/posts", d),
+    api.post<{ posts: PostSummary[] }>("/api/posts", d),
   update: (id: string, d: { content: string; title?: string }) =>
     api.put<PostDetail>(`/api/posts/${id}`, d),
   schedule: (id: string, at: string) => api.post<PostDetail>(`/api/posts/${id}/schedule`, { scheduled_at: at }),
