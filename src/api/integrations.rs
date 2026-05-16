@@ -385,6 +385,106 @@ pub async fn toggle_disable(
     Ok(Json(serde_json::json!({"success": true, "disabled": body.disabled})))
 }
 
+// ── API Key Connect ─────────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+pub struct ConnectApiKeyRequest {
+    pub provider: String,
+    pub api_key: String,
+    pub instance_url: Option<String>,
+    pub label: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ConnectApiKeyResponse {
+    pub integration: IntegrationPublic,
+}
+
+/// POST /api/integrations/connect/api-key — connect a provider using API key
+///
+/// For providers like Lemmy that use per-user API keys + instance URLs.
+/// Validates the API key by calling the provider's pages() method,
+/// then stores the credentials as JSON in the integration record.
+pub async fn connect_api_key(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Json(body): Json<ConnectApiKeyRequest>,
+) -> Result<Json<ConnectApiKeyResponse>, AppError> {
+    let provider_obj = state
+        .providers
+        .get(&body.provider)
+        .ok_or_else(|| AppError::BadRequest(format!("Unknown provider: {}", body.provider)))?;
+
+    if provider_obj.uses_oauth() {
+        return Err(AppError::BadRequest(
+            format!("Provider '{}' uses OAuth, not API key auth. Use the standard connect flow.", body.provider)
+        ));
+    }
+
+    if body.api_key.trim().is_empty() {
+        return Err(AppError::BadRequest("api_key must not be empty".into()));
+    }
+
+    // Build the credential JSON (WordPress-style per-user credential storage)
+    let instance_url = body.instance_url.unwrap_or_default();
+    let label = body.label.unwrap_or_else(|| provider_obj.name().to_string());
+
+    let creds_json = serde_json::json!({
+        "api_key": body.api_key,
+        "instance_url": instance_url,
+    });
+    let access_token = creds_json.to_string();
+
+    // Validate by calling provider's pages() method
+    let pages = provider_obj
+        .pages(&access_token)
+        .await
+        .map_err(|e| AppError::BadRequest(format!("Failed to validate API key: {e}")))?;
+
+    let page = pages.into_iter().next().unwrap_or(PageInfo {
+        id: provider_obj.identifier().to_string(),
+        name: label.clone(),
+        access_token: Some(access_token.clone()),
+        picture: None,
+        username: None,
+    });
+
+    let integration = queries::create_integration(
+        &state.db,
+        auth.user_id,
+        &body.provider,
+        provider_obj.name(),
+        &page.id,
+        &access_token,
+        None,
+        None,
+        Some(&label),
+        page.picture.as_deref(),
+        None,
+        None,
+    )
+    .await?;
+
+    state.broadcast.send(
+        "integration_connected",
+        &serde_json::json!({
+            "provider": body.provider,
+            "name": label,
+        }),
+    );
+
+    tracing::info!(
+        "API key integration connected: {} ({}) for user {}",
+        body.provider,
+        label,
+        auth.user_id,
+    );
+
+    Ok(Json(ConnectApiKeyResponse {
+        integration: integration.into(),
+    }))
+}
+
 // ── Multi-Account Pages API ──────────────────────────────────
 
 #[derive(Debug, Serialize)]
