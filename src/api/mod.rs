@@ -100,6 +100,8 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/integrations/{id}", axum::routing::delete(integrations::delete))
         .route("/api/integrations/{id}/available-pages", axum::routing::get(integrations::available_pages))
         .route("/api/integrations/{parent_id}/connect-page/{page_id}", axum::routing::post(integrations::connect_page))
+        .route("/api/integrations/{id}/timeslots", axum::routing::put(integrations::update_timeslots))
+        .route("/api/integrations/{id}/disable", axum::routing::put(integrations::toggle_disable))
         .route("/api/calendar", axum::routing::get(calendar::get))
         .route("/api/media", axum::routing::get(media::list).post(media::upload))
         .route("/api/analytics", axum::routing::get(analytics::get))

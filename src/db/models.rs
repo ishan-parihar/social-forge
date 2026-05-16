@@ -73,6 +73,7 @@ pub struct IntegrationPublic {
     pub disabled: bool,
     pub refresh_needed: bool,
     pub root_internal_id: Option<String>,
+    pub posting_times: serde_json::Value,
 }
 
 impl From<Integration> for IntegrationPublic {
@@ -87,6 +88,7 @@ impl From<Integration> for IntegrationPublic {
             disabled: i.disabled,
             refresh_needed: i.refresh_needed,
             root_internal_id: i.root_internal_id,
+            posting_times: i.posting_times,
         }
     }
 }
