@@ -8,8 +8,9 @@ use axum::{
 };
 use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+use crate::api::tags::TagResponse;
 use crate::auth::middleware::AuthenticatedUser;
-use crate::db::models::PostPublic;
 use crate::db::queries;
 use crate::error::AppError;
 use super::AppState;
@@ -21,9 +22,26 @@ pub struct CalendarQuery {
 }
 
 #[derive(Debug, Serialize)]
+pub struct CalendarPost {
+    pub id: Uuid,
+    pub integration_id: Uuid,
+    pub integration_name: String,
+    pub state: String,
+    pub content: String,
+    pub title: Option<String>,
+    pub media: serde_json::Value,
+    pub scheduled_at: Option<String>,
+    pub published_at: Option<String>,
+    pub platform_post_url: Option<String>,
+    pub error_message: Option<String>,
+    pub created_at: String,
+    pub tags: Vec<TagResponse>,
+}
+
+#[derive(Debug, Serialize)]
 pub struct CalendarDay {
     pub date: String,
-    pub posts: Vec<PostPublic>,
+    pub posts: Vec<CalendarPost>,
 }
 
 #[derive(Debug, Serialize)]
@@ -46,14 +64,47 @@ pub async fn get(
 
     let posts = queries::get_posts_by_date_range(&state.db, auth.user_id, start, end).await?;
 
-    // Group posts by date
-    let mut day_map: std::collections::BTreeMap<String, Vec<PostPublic>> = std::collections::BTreeMap::new();
+    let mut day_map: std::collections::BTreeMap<String, Vec<CalendarPost>> = std::collections::BTreeMap::new();
     for p in posts {
         let date_key = p
             .scheduled_at
             .map(|d| d.format("%Y-%m-%d").to_string())
             .unwrap_or_else(|| "unscheduled".into());
-        day_map.entry(date_key).or_default().push(PostPublic::from(p));
+
+        let integration_name = if let Ok(Some(integ)) = queries::get_integration(&state.db, p.integration_id, auth.user_id).await {
+            integ.provider_name
+        } else {
+            "Unknown".into()
+        };
+
+        let tags = queries::get_tags_for_post(&state.db, p.id, auth.user_id)
+            .await
+            .unwrap_or_default()
+            .into_iter()
+            .map(|row| TagResponse {
+                id: row.id,
+                name: row.name,
+                color: row.color,
+                created_at: row.created_at.to_rfc3339(),
+                updated_at: row.updated_at.to_rfc3339(),
+            })
+            .collect();
+
+        day_map.entry(date_key).or_default().push(CalendarPost {
+            id: p.id,
+            integration_id: p.integration_id,
+            integration_name,
+            state: p.state.to_string(),
+            content: p.content,
+            title: p.title,
+            media: p.media,
+            scheduled_at: p.scheduled_at.map(|d| d.to_rfc3339()),
+            published_at: p.published_at.map(|d| d.to_rfc3339()),
+            platform_post_url: p.platform_post_url,
+            error_message: p.error_message,
+            created_at: p.created_at.to_rfc3339(),
+            tags,
+        });
     }
 
     let days: Vec<CalendarDay> = day_map
