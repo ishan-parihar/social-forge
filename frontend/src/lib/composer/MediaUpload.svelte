@@ -25,7 +25,7 @@
     e.preventDefault();
     if (!e.dataTransfer?.files.length) return;
     const file = e.dataTransfer.files[0];
-    mediaApi.upload(file).then(r => { if (r.data) onAdd?.(r.data); });
+    mediaApi.upload(file).then(r => { if (r.data) onAdd?.(r.data); }).catch(e => console.error("Upload failed:", e));
   }
 </script>
 

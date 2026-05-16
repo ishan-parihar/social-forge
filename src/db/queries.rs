@@ -481,6 +481,66 @@ pub async fn get_due_posts(
     .await
 }
 
+// ══════════════════════════════════════════════════════════════
+// TAGS
+// ══════════════════════════════════════════════════════════════
+
+#[derive(sqlx::FromRow)]
+pub struct PostTagRow {
+    pub id: Uuid,
+    pub name: String,
+    pub color: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+/// Get tags for a post (from post_tags JOIN tags)
+pub async fn get_tags_for_post(
+    pool: &PgPool,
+    post_id: Uuid,
+    user_id: Uuid,
+) -> Result<Vec<PostTagRow>, sqlx::Error> {
+    sqlx::query_as::<_, PostTagRow>(
+        r#"SELECT t.id, t.name, t.color, t.created_at, t.updated_at
+           FROM post_tags pt
+           JOIN tags t ON pt.tag_id = t.id
+           WHERE pt.post_id = $1 AND t.user_id = $2
+           ORDER BY t.name"#,
+    )
+    .bind(post_id)
+    .bind(user_id)
+    .fetch_all(pool)
+    .await
+}
+
+pub async fn set_post_tags(
+    pool: &PgPool,
+    post_id: Uuid,
+    tag_ids: &[Uuid],
+) -> Result<(), sqlx::Error> {
+    let mut tx = pool.begin().await?;
+
+    // Delete existing post_tags for this post
+    sqlx::query("DELETE FROM post_tags WHERE post_id = $1")
+        .bind(post_id)
+        .execute(&mut *tx)
+        .await?;
+
+    // Insert new post_tags (only if tag_ids is non-empty)
+    for &tag_id in tag_ids {
+        sqlx::query(
+            "INSERT INTO post_tags (post_id, tag_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+        )
+        .bind(post_id)
+        .bind(tag_id)
+        .execute(&mut *tx)
+        .await?;
+    }
+
+    tx.commit().await?;
+    Ok(())
+}
+
 /// Get posts for a date range (calendar view)
 pub async fn get_posts_by_date_range(
     pool: &PgPool,

@@ -10,7 +10,7 @@
 
   function update() {
     if (scheduled && dateStr && timeStr) {
-      onChange?.(`${dateStr}T${timeStr}:00.000Z`);
+      onChange?.(`${dateStr}T${timeStr}:00.000`);
     } else {
       onChange?.(null);
     }

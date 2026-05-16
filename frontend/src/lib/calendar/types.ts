@@ -1,4 +1,5 @@
 import type { PostSummary } from "$lib/api/posts";
+import type { Tag } from "$lib/api/tags";
 
 export type CalendarView = "month" | "week" | "day" | "list";
 
@@ -13,6 +14,7 @@ export interface CalendarEvent {
   integrationName: string;
   postUrl?: string;
   error?: string;
+  tags?: Array<{ id: string; name: string; color: string }>;
 }
 
 export interface WeekDay {
@@ -35,5 +37,6 @@ export function toCalendarEvent(post: PostSummary): CalendarEvent {
     integrationName: post.integration_name,
     postUrl: post.platform_post_url,
     error: post.error_message,
+    tags: post.tags?.map(t => ({ id: t.id, name: t.name, color: t.color })),
   };
 }
