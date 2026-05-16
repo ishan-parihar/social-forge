@@ -2,13 +2,24 @@
   import '../app.css';
   import { initializeAuth, clearAuth, currentUser, isAuthenticated } from '$lib/stores/auth';
   import { auth } from '$lib/api/auth';
+  import { teamsApi, type Team } from '$lib/api/teams';
   import { realtime } from '$lib/stores/realtime';
   import Toast from '$lib/components/Toast.svelte';
+  import NotificationBell from '$lib/notifications/NotificationBell.svelte';
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
 
   let { children } = $props();
+
+  let userTeams = $state<Team[]>([]);
+  let showTeamSwitcher = $state(false);
+  let aiCredits = $state<{ used: number; limit: number } | null>(null);
+
+  function toggleTeamSwitcher() {
+    showTeamSwitcher = !showTeamSwitcher;
+    teamsApi.list().then(r => { if (r.data) userTeams = r.data; });
+  }
 
   function logout() {
     clearAuth();
@@ -18,11 +29,16 @@
   const nav = [
     { href: '/', label: 'Dashboard', icon: '▦' },
     { href: '/calendar', label: 'Calendar', icon: '📅' },
+    { href: '/analytics', label: 'Analytics', icon: '📊' },
     { href: '/posts', label: 'Posts', icon: '📄' },
     { href: '/channels', label: 'Channels', icon: '🔗' },
     { href: '/tags', label: 'Tags', icon: '🏷' },
     { href: '/media', label: 'Media', icon: '🖼' },
     { href: '/settings', label: 'Settings', icon: '⚙' },
+    { href: '/settings/team', label: 'Team', icon: '👥' },
+    { href: '/settings/developer', label: 'Developer', icon: '🔧' },
+    { href: '/settings/signatures', label: 'Signatures', icon: '✍' },
+    { href: '/settings/rss', label: 'RSS Autopost', icon: '📡' },
   ];
 
   onMount(() => {
@@ -66,6 +82,38 @@
         {#if $currentUser}
           <div class="text-xs text-[#6b7280] mb-2 truncate">{$currentUser.email}</div>
         {/if}
+        <div class="relative">
+          <button
+            onclick={toggleTeamSwitcher}
+            class="w-full text-left text-xs text-[#6b7280] hover:text-indigo-400 transition-colors mb-2"
+          >
+            Switch Team ▾
+          </button>
+          {#if showTeamSwitcher}
+            <div class="absolute bottom-full left-0 mb-1 w-full bg-[#1a1f2e] border border-[#1e2435] rounded-lg shadow-xl z-50 max-h-48 overflow-y-auto">
+              {#if userTeams.length === 0}
+                <div class="px-3 py-2 text-xs text-[#4b5563]">No teams</div>
+              {:else}
+                {#each userTeams as team (team.id)}
+                  <a
+                    href="/settings/team"
+                    onclick={() => { showTeamSwitcher = false; }}
+                    class="block px-3 py-2 text-xs text-[#6b7280] hover:text-[#e8edf5] hover:bg-[#131720] transition-colors"
+                  >
+                    {team.name}
+                  </a>
+                {/each}
+              {/if}
+            </div>
+          {/if}
+        </div>
+        <div class="flex items-center gap-2 px-3 py-1.5 text-xs text-[#6b7280]">
+          <span>✨ AI</span>
+          <span class="flex-1"></span>
+        </div>
+        <div class="px-3 py-1">
+          <NotificationBell />
+        </div>
         <button onclick={logout} class="text-xs text-[#6b7280] hover:text-red-400 transition-colors">Logout</button>
       </div>
     </aside>
