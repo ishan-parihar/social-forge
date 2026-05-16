@@ -19,6 +19,7 @@ use self::rate_limiter::AuthRateLimiter;
 
 mod analytics;
 mod auth;
+mod billing;
 mod calendar;
 mod integrations;
 mod media;
@@ -26,8 +27,12 @@ mod notifications;
 mod onboard;
 mod posts;
 pub mod rate_limiter;
+mod rss;
 mod sse;
+mod signatures;
 mod tags;
+mod teams;
+mod developer;
 mod webhooks;
 
 /// Shared application state available to all handlers
@@ -77,12 +82,15 @@ pub fn build_router(state: AppState) -> Router {
         .route("/", axum::routing::get(onboard::onboard_page))
         .route("/api/public/connect/x-cookies", axum::routing::get(onboard::x_cookies_form).post(onboard::x_cookies_submit))
 .route("/api/public/connect/x-cookies/import", axum::routing::post(onboard::x_cookies_import))
-        .route("/api/public/connect/{provider}", axum::routing::get(onboard::public_connect));
+        .route("/api/public/connect/{provider}", axum::routing::get(onboard::public_connect))
+        // Stripe webhook — no auth (signature verification in handler)
+        .route("/api/billing/webhook", axum::routing::post(billing::stripe_webhook));
 
     // Protected routes — auth required
     let protected_routes = Router::new()
         .route("/api/auth/me", axum::routing::get(auth::me))
         .route("/api/posts", axum::routing::get(posts::list).post(posts::create))
+        .route("/api/posts/thread", axum::routing::post(posts::create_thread))
         .route("/api/providers", axum::routing::get(integrations::list_providers))
         .route(
             "/api/posts/{id}",
@@ -97,6 +105,8 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/posts/find-slot", axum::routing::get(posts::find_slot))
         .route("/api/integrations", axum::routing::get(integrations::list))
         .route("/api/integrations/connect/{provider}", axum::routing::get(integrations::connect))
+        .route("/api/integrations/connect/api-key", axum::routing::post(integrations::connect_api_key))
+        .route("/api/integrations/connect/web3", axum::routing::post(integrations::connect_web3))
         .route("/api/integrations/{id}", axum::routing::delete(integrations::delete))
         .route("/api/integrations/{id}/available-pages", axum::routing::get(integrations::available_pages))
         .route("/api/integrations/{parent_id}/connect-page/{page_id}", axum::routing::post(integrations::connect_page))
@@ -104,18 +114,44 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/integrations/{id}/disable", axum::routing::put(integrations::toggle_disable))
         .route("/api/calendar", axum::routing::get(calendar::get))
         .route("/api/media", axum::routing::get(media::list).post(media::upload))
+        .route("/api/media/{id}", axum::routing::delete(media::delete))
         .route("/api/analytics", axum::routing::get(analytics::get))
+        .route("/api/analytics/summary", axum::routing::get(analytics::get_summary))
         .route("/api/analytics/post/{id}", axum::routing::get(analytics::get_post))
         .route("/api/tags", axum::routing::get(tags::list).post(tags::create))
         .route("/api/tags/{id}", axum::routing::get(tags::get).put(tags::update).delete(tags::delete))
+        .route("/api/teams", axum::routing::get(teams::list).post(teams::create))
+        .route("/api/teams/accept", axum::routing::post(teams::accept_invite))
+        .route("/api/teams/{id}", axum::routing::get(teams::get).put(teams::update).delete(teams::delete))
+        .route("/api/teams/{id}/invite", axum::routing::post(teams::invite))
+        .route("/api/teams/{id}/members", axum::routing::get(teams::members))
+        .route("/api/teams/{id}/members/{user_id}", axum::routing::delete(teams::remove_member))
+        .route("/api/signatures", axum::routing::get(signatures::list).post(signatures::create))
+        .route("/api/signatures/{id}", axum::routing::put(signatures::update).delete(signatures::delete))
+        .route("/api/developer/api-keys", axum::routing::get(developer::list).post(developer::create))
+        .route("/api/developer/api-keys/{id}", axum::routing::delete(developer::revoke))
+        .route("/api/developer/api-keys/{id}/regenerate", axum::routing::post(developer::regenerate))
         .route("/api/webhooks", axum::routing::get(webhooks::list).post(webhooks::create))
         .route("/api/webhooks/{id}", axum::routing::get(webhooks::get).put(webhooks::update).delete(webhooks::delete))
         .route("/api/webhooks/{id}/test", axum::routing::post(webhooks::test))
+        .route("/api/webhooks/{id}/deliveries", axum::routing::get(webhooks::deliveries))
         .route("/api/notifications", axum::routing::get(notifications::list))
         .route("/api/notifications/unread-count", axum::routing::get(notifications::unread_count))
         .route("/api/notifications/{id}/read", axum::routing::put(notifications::mark_read))
         .route("/api/notifications/read-all", axum::routing::put(notifications::mark_all_read))
         .route("/api/notifications/{id}", axum::routing::delete(notifications::delete))
+        // Billing / Stripe subscriptions
+        .route("/api/billing/create-checkout", axum::routing::post(billing::create_checkout_session))
+        .route("/api/billing/subscription", axum::routing::get(billing::get_subscription))
+        .route("/api/billing/invoices", axum::routing::get(billing::get_invoices))
+        .route("/api/billing/portal-session", axum::routing::post(billing::create_portal_session))
+        // RSS autopost
+        .route("/api/rss/feeds", axum::routing::get(rss::list_feeds).post(rss::create_feed))
+        .route("/api/rss/feeds/{id}", axum::routing::delete(rss::delete_feed))
+        .route("/api/rss/feeds/{id}/toggle", axum::routing::put(rss::toggle_feed))
+        .route("/api/rss/feeds/{id}/poll", axum::routing::post(rss::poll_feed))
+        .route("/api/rss/feeds/{id}/items", axum::routing::get(rss::list_feed_items))
+        .route("/api/rss/feeds/{id}/items/{guid}/import", axum::routing::post(rss::import_item))
         // Auth middleware chain: inject secret first, then validate
         .layer(middleware::from_fn(auth_middleware))
         .layer(Extension(jwt_secret));

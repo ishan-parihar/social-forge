@@ -122,3 +122,9 @@ mime_guess = "2"
 # URL encoding for OAuth
 url = { version = "2", features = ["serde"] }
 urlencoding = "2"
+
+# RSS feed parsing
+feed-rs = "2.1"
+
+# XML parsing
+quick-xml = "0.36"

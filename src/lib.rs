@@ -8,6 +8,7 @@ pub mod db;
 pub mod error;
 pub mod mcp;
 pub mod realtime;
+pub mod rss;
 pub mod scheduler;
 pub mod services;
 pub mod social;

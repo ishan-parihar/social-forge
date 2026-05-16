@@ -39,6 +39,7 @@
     { href: '/settings/developer', label: 'Developer', icon: '🔧' },
     { href: '/settings/signatures', label: 'Signatures', icon: '✍' },
     { href: '/settings/rss', label: 'RSS Autopost', icon: '📡' },
+    { href: '/settings/billing', label: 'Billing', icon: '💳' },
   ];
 
   onMount(() => {

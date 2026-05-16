@@ -10,7 +10,7 @@
     <p class="text-[#d1d5db] text-sm py-8 text-center">No data for this period</p>
   {:else}
     <div class="flex items-end gap-1 h-40">
-      {#each postsByDay as day}
+      {#each postsByDay as day (day.date)}
         <div class="flex-1 flex flex-col items-center justify-end h-full">
           <div
             class="w-full bg-indigo-500/80 rounded-t hover:bg-indigo-400 transition-colors min-h-[4px]"
@@ -21,7 +21,7 @@
       {/each}
     </div>
     <div class="flex gap-1 mt-2">
-      {#each postsByDay as day}
+      {#each postsByDay as day (day.date)}
         <div class="flex-1 text-center">
           <span class="text-[10px] text-[#6b7280]">{day.date.slice(5)}</span>
         </div>

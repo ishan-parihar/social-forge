@@ -136,6 +136,8 @@ pub struct Post {
     pub repeat_interval_days: Option<i32>,
     pub repeat_end_date: Option<DateTime<Utc>>,
     pub group_id: Option<Uuid>,
+    pub first_comment: Option<String>,
+    pub sequence: i32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -155,6 +157,8 @@ pub struct PostPublic {
     pub repeat_interval_days: Option<i32>,
     pub repeat_end_date: Option<String>,
     pub group_id: Option<Uuid>,
+    pub first_comment: Option<String>,
+    pub sequence: i32,
 }
 
 impl From<Post> for PostPublic {
@@ -175,6 +179,8 @@ impl From<Post> for PostPublic {
             repeat_interval_days: p.repeat_interval_days,
             repeat_end_date: p.repeat_end_date.map(|d| d.to_rfc3339()),
             group_id: p.group_id,
+            first_comment: p.first_comment,
+            sequence: p.sequence,
         }
     }
 }
@@ -201,6 +207,8 @@ pub struct PostWithIntegration {
     pub repeat_interval_days: Option<i32>,
     pub repeat_end_date: Option<DateTime<Utc>>,
     pub group_id: Option<Uuid>,
+    pub first_comment: Option<String>,
+    pub sequence: i32,
     // Joined from integrations
     pub provider_identifier: String,
     pub access_token: String,
@@ -303,6 +311,50 @@ impl From<Notification> for NotificationPublic {
             created_at: n.created_at.to_rfc3339(),
         }
     }
+}
+
+// ── Rss Feed ─────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct RssFeed {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub feed_url: String,
+    pub integration_id: Uuid,
+    pub title: String,
+    pub last_polled_at: Option<DateTime<Utc>>,
+    pub poll_interval_min: i32,
+    pub enabled: bool,
+    pub use_ai_summary: bool,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct RssPost {
+    pub id: Uuid,
+    pub feed_id: Uuid,
+    pub post_id: Option<Uuid>,
+    pub guid: String,
+    pub title: String,
+    pub url: String,
+    pub published_at: Option<DateTime<Utc>>,
+    pub content_hash: String,
+    pub is_imported: bool,
+    pub created_at: DateTime<Utc>,
+}
+
+// ── Signature ──────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct Signature {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub name: String,
+    pub content: String,
+    pub provider: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 use schemars::JsonSchema;

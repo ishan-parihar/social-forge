@@ -72,11 +72,50 @@ pub struct Config {
     // GitHub (PAT-based)
     pub github_token: Option<String>,
 
+    // Twitch
+    pub twitch_client_id: Option<String>,
+    pub twitch_client_secret: Option<String>,
+
+    // VK
+    pub vk_client_id: Option<String>,
+    pub vk_client_secret: Option<String>,
+
+    // Whop
+    pub whop_client_id: Option<String>,
+    pub whop_client_secret: Option<String>,
+
+    // MeWe
+    pub mewe_client_id: Option<String>,
+    pub mewe_client_secret: Option<String>,
+
+    // Moltbook
+    pub moltbook_client_id: Option<String>,
+    pub moltbook_client_secret: Option<String>,
+
+    // Kick
+    pub kick_client_id: Option<String>,
+    pub kick_client_secret: Option<String>,
+
+    // Neynar (Farcaster) API key
+    pub neynar_api_key: Option<String>,
+
+    // Nostr private key for event signing
+    pub nostr_private_key: Option<String>,
+
     // Token encryption at rest
     pub token_encryption_key: Option<String>,
 
     // Media storage
     pub media_dir: String,
+
+    // Stripe billing
+    pub stripe_secret_key: Option<String>,
+    pub stripe_webhook_secret: Option<String>,
+    pub stripe_price_free: Option<String>,
+    pub stripe_price_pro_monthly: Option<String>,
+    pub stripe_price_pro_annual: Option<String>,
+    pub stripe_price_business_monthly: Option<String>,
+    pub stripe_price_business_annual: Option<String>,
 }
 
 impl Config {
@@ -131,8 +170,30 @@ impl Config {
             devto_api_key: opt("DEVTO_API_KEY"),
             hashnode_api_key: opt("HASHNODE_API_KEY"),
             github_token: opt("GITHUB_TOKEN"),
+            twitch_client_id: opt("TWITCH_CLIENT_ID"),
+            twitch_client_secret: opt("TWITCH_CLIENT_SECRET"),
+            vk_client_id: opt("VK_CLIENT_ID"),
+            vk_client_secret: opt("VK_CLIENT_SECRET"),
+            whop_client_id: opt("WHOP_CLIENT_ID"),
+            whop_client_secret: opt("WHOP_CLIENT_SECRET"),
+            mewe_client_id: opt("MEWE_CLIENT_ID"),
+            mewe_client_secret: opt("MEWE_CLIENT_SECRET"),
+            moltbook_client_id: opt("MOLTBOOK_CLIENT_ID"),
+            moltbook_client_secret: opt("MOLTBOOK_CLIENT_SECRET"),
+            kick_client_id: opt("KICK_CLIENT_ID"),
+            kick_client_secret: opt("KICK_CLIENT_SECRET"),
+            neynar_api_key: opt("NEYNAR_API_KEY"),
+            nostr_private_key: opt("NOSTR_PRIVATE_KEY"),
             token_encryption_key: opt("TOKEN_ENCRYPTION_KEY"),
             media_dir: opt("MEDIA_DIR").unwrap_or_else(|| "./uploads".into()),
+
+            stripe_secret_key: opt("STRIPE_SECRET_KEY"),
+            stripe_webhook_secret: opt("STRIPE_WEBHOOK_SECRET"),
+            stripe_price_free: opt("STRIPE_PRICE_FREE"),
+            stripe_price_pro_monthly: opt("STRIPE_PRICE_PRO_MONTHLY"),
+            stripe_price_pro_annual: opt("STRIPE_PRICE_PRO_ANNUAL"),
+            stripe_price_business_monthly: opt("STRIPE_PRICE_BUSINESS_MONTHLY"),
+            stripe_price_business_annual: opt("STRIPE_PRICE_BUSINESS_ANNUAL"),
         })
     }
 
@@ -191,11 +252,20 @@ impl Config {
             "slack" => Some((self.slack_client_id.clone()?, self.slack_client_secret.clone()?)),
             "mastodon" => Some((self.mastodon_client_id.clone()?, self.mastodon_client_secret.clone()?)),
             "tiktok" => Some((self.tiktok_client_id.clone()?, self.tiktok_client_secret.clone()?)),
+            "twitch" => Some((self.twitch_client_id.clone()?, self.twitch_client_secret.clone()?)),
+            "vk" => Some((self.vk_client_id.clone()?, self.vk_client_secret.clone()?)),
+            "whop" => Some((self.whop_client_id.clone()?, self.whop_client_secret.clone()?)),
+            "mewe" => Some((self.mewe_client_id.clone()?, self.mewe_client_secret.clone()?)),
+            "moltbook" => Some((self.moltbook_client_id.clone()?, self.moltbook_client_secret.clone()?)),
+            "kick" => Some((self.kick_client_id.clone()?, self.kick_client_secret.clone()?)),
             "medium" => Some(("api-key".into(), self.medium_access_token.clone()?)),
             "devto" => Some(("api-key".into(), self.devto_api_key.clone()?)),
             "hashnode" => Some(("api-key".into(), self.hashnode_api_key.clone()?)),
             "github" => Some((self.github_token.clone()?, self.github_token.clone()?)),
-            "google" | "gmail" | "calendar" | "drive" => Some((self.youtube_client_id.clone()?, self.youtube_client_secret.clone()?)),
+            "google" | "google_my_business" | "gmail" | "calendar" | "drive" => Some((self.youtube_client_id.clone()?, self.youtube_client_secret.clone()?)),
+            "lemmy" => Some(("lemmy".into(), "api_key".into())),
+            "farcaster" => Some(("neynar".into(), self.neynar_api_key.clone()?)),
+            "nostr" => Some(("nostr".into(), self.nostr_private_key.clone()?)),
             _ => None,
         }
     }

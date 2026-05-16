@@ -23,6 +23,7 @@ use super::AppState;
 pub struct ListMediaQuery {
     pub limit: Option<i64>,
     pub offset: Option<i64>,
+    pub search: Option<String>,
 }
 
 const MAX_FILE_SIZE: u64 = 50 * 1024 * 1024; // 50 MB
@@ -101,9 +102,30 @@ pub async fn list(
     axum::extract::Query(query): axum::extract::Query<ListMediaQuery>,
 ) -> Result<Json<Vec<MediaPublic>>, AppError> {
     let limit = query.limit.unwrap_or(50).min(200);
-    let offset = query.offset.unwrap_or(0);
-    let entries = queries::list_media(&state.db, auth.user_id, limit, offset).await?;
+    let offset = query.offset.unwrap_or(0).max(0);
+    let search = query.search.as_deref();
+    let entries = queries::list_media(&state.db, auth.user_id, limit, offset, search).await?;
     Ok(Json(entries.into_iter().map(MediaPublic::from).collect()))
+}
+
+pub async fn delete(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(id): Path<Uuid>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let entry = queries::delete_media(&state.db, id, auth.user_id)
+        .await?
+        .ok_or_else(|| AppError::NotFound("Media not found".into()))?;
+
+    let upload_dir = std::path::Path::new(&state.config.media_dir);
+    let filepath = upload_dir.join(&entry.storage_path);
+    if filepath.exists() {
+        tokio::fs::remove_file(&filepath).await.map_err(|e| {
+            AppError::Internal(format!("Failed to delete file: {e}"))
+        })?;
+    }
+
+    Ok(Json(serde_json::json!({"deleted": true})))
 }
 
 /// Query params for media serving — supports JWT token for auth

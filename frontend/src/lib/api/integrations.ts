@@ -11,9 +11,27 @@ export interface TimeslotEntry {
   time: number; // minutes from midnight
 }
 
+export interface ConnectApiKeyRequest {
+  provider: string;
+  api_key: string;
+  instance_url?: string;
+  label?: string;
+  verification_code?: string;
+}
+
+export interface ConnectWeb3Request {
+  provider: string;
+  address: string;
+  label?: string;
+}
+
 export const integrationsApi = {
   list: () => api.get<{ integrations: Integration[] }>("/api/integrations"),
   connect: (provider: string) => api.get<{ url: string; state: string }>(`/api/integrations/connect/${provider}`),
+  connectApiKey: (body: ConnectApiKeyRequest) =>
+    api.post<{ integration: Integration }>("/api/integrations/connect/api-key", body),
+  connectWeb3: (body: ConnectWeb3Request) =>
+    api.post<{ integration: Integration }>("/api/integrations/connect/web3", body),
   disconnect: (id: string) => api.del<{ deleted: boolean }>(`/api/integrations/${id}`),
   updateTimeslots: (id: string, timeslots: TimeslotEntry[]) =>
     api.put<{ success: boolean; posting_times: TimeslotEntry[] }>(
@@ -25,4 +43,6 @@ export const integrationsApi = {
       `/api/integrations/${id}/disable`,
       { disabled }
     ),
+  refresh: (id: string) =>
+    api.post<{ success: boolean }>(`/api/integrations/${id}/refresh`),
 };
