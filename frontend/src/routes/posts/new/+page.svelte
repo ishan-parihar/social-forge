@@ -20,6 +20,7 @@
   let integrationNames = $derived(new Map(allIntegrations.map(i => [i.id, i.provider_name])));
   let mediaItems = $state<MediaItem[]>([]);
   let scheduledAt = $state<string | null>(null);
+  let recurring = $state<{ intervalDays: number; endDate: string } | null>(null);
   let activeProvider = $state<string | null>(null);
   let selectedTagIds = $state<string[]>([]);
   let submitting = $state(false);
@@ -169,7 +170,7 @@
   <!-- Scheduling -->
   <div class="bg-[#131720] border border-[#1e2435] rounded-xl p-4">
     <h3 class="text-sm font-semibold mb-3">Schedule</h3>
-    <SchedulePicker scheduledAt={scheduledAt} onChange={(iso) => scheduledAt = iso} />
+    <SchedulePicker {scheduledAt} onChange={(iso: string | null) => scheduledAt = iso} {recurring} onRecurringChange={(r: { intervalDays: number; endDate: string } | null) => recurring = r} />
   </div>
 
   <!-- Preview -->

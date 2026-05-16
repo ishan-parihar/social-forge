@@ -835,7 +835,7 @@ pub async fn create_repeated_post(
     sqlx::query_as!(
         Post,
         r#"INSERT INTO posts (user_id, integration_id, title, content, media, settings, scheduled_at, state, repeat_interval_days, repeat_end_date, group_id)
-           SELECT p.user_id, p.integration_id, p.title, p.content, p.media, p.settings, $1, 'draft', p.repeat_interval_days, p.repeat_end_date, $3
+           SELECT p.user_id, p.integration_id, p.title, p.content, p.media, p.settings, $1, p.state, NULL::int4, NULL::timestamptz, $3
            FROM posts p WHERE p.id = $2 AND p.user_id = $4
            RETURNING id, user_id, integration_id, state as "state: PostState",
              content, title, media, settings, scheduled_at, published_at,
@@ -877,6 +877,69 @@ pub async fn set_post_recurring(
     )
     .fetch_optional(pool)
     .await
+}
+
+pub async fn set_post_recurring_with_copies(
+    pool: &PgPool,
+    id: Uuid,
+    user_id: Uuid,
+    interval_days: i32,
+    end_date: &DateTime<Utc>,
+    group_id: Uuid,
+    original_scheduled: &DateTime<Utc>,
+) -> Result<(Vec<Uuid>, Vec<String>), sqlx::Error> {
+    let mut tx = pool.begin().await?;
+
+    sqlx::query_as!(
+        Post,
+        r#"UPDATE posts SET repeat_interval_days = $1, repeat_end_date = $2, group_id = $3,
+           updated_at = now()
+           WHERE id = $4 AND user_id = $5
+           RETURNING id, user_id, integration_id, state as "state: PostState",
+             content, title, media, settings, scheduled_at, published_at,
+             platform_post_id, platform_post_url, error_message,
+             created_at, updated_at,
+             repeat_interval_days, repeat_end_date, group_id"#,
+        interval_days,
+        end_date,
+        group_id,
+        id,
+        user_id,
+    )
+    .fetch_optional(&mut *tx)
+    .await?;
+
+    let interval = chrono::Duration::days(interval_days as i64);
+    let mut current = *original_scheduled + interval;
+    let mut post_ids = Vec::new();
+    let mut scheduled_dates = Vec::new();
+
+    while current <= *end_date {
+        let copy = sqlx::query_as!(
+            Post,
+            r#"INSERT INTO posts (user_id, integration_id, title, content, media, settings, scheduled_at, state, repeat_interval_days, repeat_end_date, group_id)
+               SELECT p.user_id, p.integration_id, p.title, p.content, p.media, p.settings, $1, p.state, NULL::int4, NULL::timestamptz, $3
+               FROM posts p WHERE p.id = $2 AND p.user_id = $4
+               RETURNING id, user_id, integration_id, state as "state: PostState",
+                 content, title, media, settings, scheduled_at, published_at,
+                 platform_post_id, platform_post_url, error_message,
+                 created_at, updated_at,
+                 repeat_interval_days, repeat_end_date, group_id"#,
+            &current,
+            id,
+            group_id,
+            user_id,
+        )
+        .fetch_one(&mut *tx)
+        .await?;
+
+        post_ids.push(copy.id);
+        scheduled_dates.push(current.to_rfc3339());
+        current += interval;
+    }
+
+    tx.commit().await?;
+    Ok((post_ids, scheduled_dates))
 }
 
 pub async fn delete_notification(

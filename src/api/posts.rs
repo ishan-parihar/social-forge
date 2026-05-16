@@ -468,6 +468,23 @@ pub async fn repeat_post(
         .await?
         .ok_or_else(|| crate::error::AppError::NotFound("Post not found".into()))?;
 
+    // 1a. Guard against double-recurring
+    if original.repeat_interval_days.is_some() {
+        return Err(crate::error::AppError::BadRequest(
+            "Post is already part of a recurring series".into(),
+        ));
+    }
+
+    // 1b. State guard — only draft or queued posts can be repeated
+    match original.state {
+        crate::db::models::PostState::Draft | crate::db::models::PostState::Queued => {}
+        _ => {
+            return Err(crate::error::AppError::BadRequest(
+                "Can only set recurring for draft or queued posts".into(),
+            ));
+        }
+    }
+
     let original_scheduled = original.scheduled_at
         .ok_or_else(|| crate::error::AppError::BadRequest("Post must have a scheduled_at time".into()))?;
 
@@ -484,41 +501,27 @@ pub async fn repeat_post(
         return Err(crate::error::AppError::BadRequest("end_date must be after the original scheduled_at".into()));
     }
 
-    // 3. Generate a group_id for this recurring series
+    // 3. Upper bound check — guard against runaway copy loops
+    const MAX_COPIES: i32 = 100;
+    let max_possible = ((end_date - original_scheduled).num_days() / body.interval_days as i64) + 1;
+    if max_possible > MAX_COPIES as i64 {
+        return Err(crate::error::AppError::BadRequest("Too many copies".into()));
+    }
+
+    // 4. Generate a group_id for this recurring series
     let group_id = Uuid::new_v4();
 
-    // 4. Update the original post with recurring metadata
-    queries::set_post_recurring(
+    // 5. Update original + create copies in a single transaction
+    let (post_ids, scheduled_dates) = queries::set_post_recurring_with_copies(
         &state.db,
         id,
         auth.user_id,
         body.interval_days,
         &end_date,
         group_id,
+        &original_scheduled,
     )
-    .await?
-    .ok_or_else(|| crate::error::AppError::NotFound("Post not found".into()))?;
-
-    // 5. Create future copies
-    let interval = chrono::Duration::days(body.interval_days as i64);
-    let mut current = original_scheduled + interval;
-    let mut post_ids = Vec::new();
-    let mut scheduled_dates = Vec::new();
-
-    while current <= end_date {
-        let copy = queries::create_repeated_post(
-            &state.db,
-            auth.user_id,
-            id,
-            &current,
-            group_id,
-        )
-        .await?;
-
-        post_ids.push(copy.id);
-        scheduled_dates.push(current.to_rfc3339());
-        current += interval;
-    }
+    .await?;
 
     Ok(Json(RepeatPostResponse {
         group_id,
