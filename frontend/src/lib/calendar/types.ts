@@ -15,6 +15,9 @@ export interface CalendarEvent {
   postUrl?: string;
   error?: string;
   tags?: Array<{ id: string; name: string; color: string }>;
+  repeatIntervalDays?: number | null;
+  repeatEndDate?: string | null;
+  groupId?: string | null;
 }
 
 export interface WeekDay {
@@ -38,5 +41,8 @@ export function toCalendarEvent(post: PostSummary): CalendarEvent {
     postUrl: post.platform_post_url,
     error: post.error_message,
     tags: post.tags?.map(t => ({ id: t.id, name: t.name, color: t.color })),
+    repeatIntervalDays: post.repeat_interval_days ?? null,
+    repeatEndDate: post.repeat_end_date ?? null,
+    groupId: post.group_id ?? null,
   };
 }
