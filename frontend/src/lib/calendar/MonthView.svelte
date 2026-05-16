@@ -3,12 +3,15 @@
   import CalendarEvent from "./CalendarEvent.svelte";
   import type { CalendarEvent as CEvent } from "./types";
 
-  let { year, month, events = [], onEventClick, onDateClick, onDrop }: {
+  let { year, month, events = [], onEventClick, onDateClick, onDrop, onDuplicate, onStats, onDelete }: {
     year: number; month: number;
     events?: CEvent[];
     onEventClick?: (id: string) => void;
     onDateClick?: (date: string) => void;
     onDrop?: (eventId: string, newDate: string) => void;
+    onDuplicate?: (id: string) => void;
+    onStats?: (id: string) => void;
+    onDelete?: (id: string) => void;
   } = $props();
 
   let eventsByDate = $derived.by(() => {
@@ -65,7 +68,7 @@
               ondragstart={(e) => handleDragStart(e, event.id)}
               onclick={(e) => { e.stopPropagation(); onEventClick?.(event.id); }}
             >
-              <CalendarEvent {event} compact />
+              <CalendarEvent {event} compact {onDuplicate} {onStats} {onDelete} />
             </div>
           {/each}
           {#if dayEvents.length > 3}
