@@ -2,7 +2,7 @@
   import Badge from "$lib/ui/Badge.svelte";
   import type { CalendarEvent as CEvent } from "./types";
 
-  let { events = [], onEventClick, onDuplicate, onStats, onDelete, page = 1, totalPages = 1, totalItems = 0, onPageChange }: {
+  let { events = [], onEventClick, onDuplicate, onStats, onDelete, page = 1, totalPages = 1, totalItems = 0, onPageChange, pageSize = 20, showActions = false }: {
     events?: CEvent[];
     onEventClick?: (id: string) => void;
     onDuplicate?: (id: string) => void;
@@ -12,6 +12,8 @@
     totalPages?: number;
     totalItems?: number;
     onPageChange?: (p: number) => void;
+    pageSize?: number;
+    showActions?: boolean;
   } = $props();
 
   let sorted = $derived([...events].sort((a, b) =>
@@ -35,12 +37,12 @@
             <div class="text-sm truncate">{event.title}</div>
             <div class="text-xs text-[#6b7280]">{event.integrationName}</div>
           </div>
-          <Badge state={event.state} />
+          <Badge state={event.state as "draft" | "queued" | "published" | "error"} />
           {#if event.error}
             <span class="text-xs text-red-400" title={event.error}>⚠</span>
           {/if}
         </button>
-        <div class="opacity-0 group-hover:opacity-100 transition-opacity duration-150 flex items-center gap-1 shrink-0">
+        <div class="invisible group-hover:visible group-focus-within:visible transition-all duration-150 flex items-center gap-1 shrink-0">
           <button onclick={() => onDuplicate?.(event.id)} class="text-[#9ca3af] hover:text-white px-1.5 py-0.5 rounded text-xs" title="Duplicate" aria-label="Duplicate post">📋</button>
           <button onclick={() => onStats?.(event.id)} class="text-[#9ca3af] hover:text-white px-1.5 py-0.5 rounded text-xs" title="Statistics" aria-label="View post statistics">📊</button>
           <button onclick={() => onDelete?.(event.id)} class="text-[#9ca3af] hover:text-red-400 px-1.5 py-0.5 rounded text-xs" title="Delete" aria-label="Delete post">🗑️</button>
@@ -52,7 +54,7 @@
   {#if totalPages > 1}
     <div class="flex items-center justify-between px-4 py-3 border-t border-[#1e2435]">
       <span class="text-sm text-[#6b7280]">
-        Showing {(page - 1) * 20 + 1}–{Math.min(page * 20, totalItems)} of {totalItems}
+        Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, totalItems)} of {totalItems}
       </span>
       <div class="flex gap-2">
         <button
