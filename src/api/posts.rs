@@ -21,13 +21,18 @@ use super::AppState;
 
 #[derive(Debug, Deserialize)]
 pub struct CreatePostRequest {
-    pub integration_id: Uuid,
+    pub integration_ids: Vec<Uuid>,
     pub content: String,
     pub title: Option<String>,
     pub media: Option<serde_json::Value>,
     pub settings: Option<serde_json::Value>,
     pub scheduled_at: Option<String>,
     pub tag_ids: Option<Vec<Uuid>>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CreatePostsResponse {
+    pub posts: Vec<PostPublic>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -216,14 +221,18 @@ pub async fn create(
     State(state): State<AppState>,
     auth: AuthenticatedUser,
     Json(body): Json<CreatePostRequest>,
-) -> Result<Json<PostPublic>, crate::error::AppError> {
-    // Validate integration belongs to user
-    let integ = queries::get_integration(&state.db, body.integration_id, auth.user_id)
-        .await?
-        .ok_or_else(|| crate::error::AppError::NotFound("Integration not found".into()))?;
+) -> Result<Json<CreatePostsResponse>, crate::error::AppError> {
+    // Validate ALL integration_ids belong to user and collect for enrichment
+    let mut validated_integrations = Vec::with_capacity(body.integration_ids.len());
+    for &id in &body.integration_ids {
+        let integ = queries::get_integration(&state.db, id, auth.user_id)
+            .await?
+            .ok_or_else(|| crate::error::AppError::NotFound("Integration not found".into()))?;
 
-    if integ.disabled {
-        return Err(crate::error::AppError::BadRequest("Integration is disabled".into()));
+        if integ.disabled {
+            return Err(crate::error::AppError::BadRequest("Integration is disabled".into()));
+        }
+        validated_integrations.push(integ);
     }
 
     let scheduled_at: Option<DateTime<Utc>> = match body.scheduled_at {
@@ -250,10 +259,10 @@ pub async fn create(
         }
     }
 
-    let post = queries::create_post(
+    let posts = queries::create_posts_for_integrations(
         &state.db,
         auth.user_id,
-        body.integration_id,
+        &body.integration_ids,
         &body.content,
         body.title.as_deref(),
         &media,
@@ -263,18 +272,32 @@ pub async fn create(
     )
     .await?;
 
-    // Insert post_tags if tag_ids provided
+    // Insert post_tags for each post if tag_ids provided
     if let Some(ref tag_ids) = body.tag_ids {
         if !tag_ids.is_empty() {
-            queries::set_post_tags(&state.db, post.id, tag_ids).await?;
+            for post in &posts {
+                queries::set_post_tags(&state.db, post.id, tag_ids).await?;
+            }
         }
     }
 
-    // Broadcast event
-    let public = PostPublic::from(post.clone());
-    state.broadcast.send("post_created", &public);
+    // Enrich with integration names, broadcast, and return
+    let publics: Vec<PostPublic> = posts
+        .into_iter()
+        .map(|p| {
+            let integration_name = validated_integrations
+                .iter()
+                .find(|i| i.id == p.integration_id)
+                .map(|i| i.provider_name.clone())
+                .unwrap_or_default();
+            let mut public = PostPublic::from(p);
+            public.integration_name = integration_name;
+            state.broadcast.send("post_created", &public);
+            public
+        })
+        .collect();
 
-    Ok(Json(public))
+    Ok(Json(CreatePostsResponse { posts: publics }))
 }
 
 /// GET /api/posts/:id

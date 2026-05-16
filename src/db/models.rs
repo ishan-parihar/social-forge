@@ -142,6 +142,7 @@ pub struct Post {
 pub struct PostPublic {
     pub id: Uuid,
     pub integration_id: Uuid,
+    pub integration_name: String,
     pub state: String,
     pub content: String,
     pub title: Option<String>,
@@ -161,6 +162,7 @@ impl From<Post> for PostPublic {
         Self {
             id: p.id,
             integration_id: p.integration_id,
+            integration_name: String::new(),
             state: p.state.to_string(),
             content: p.content,
             title: p.title,
