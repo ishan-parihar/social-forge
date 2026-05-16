@@ -16,7 +16,7 @@
   async function load() {
     loading = true;
     error = null;
-    const params: any = { limit, offset: (page - 1) * limit };
+    const params: Record<string, string | number> = { limit, offset: (page - 1) * limit };
     if (filter !== "all") params.state = filter;
     const r = await postsApi.list(params);
     if (r.data) {

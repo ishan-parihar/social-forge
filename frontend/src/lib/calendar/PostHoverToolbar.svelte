@@ -14,20 +14,24 @@
     onclick={() => goto(`/posts/${eventId}`)}
     class="text-[#9ca3af] hover:text-white px-1.5 py-0.5 rounded text-xs transition-colors"
     title="Edit"
+    aria-label="Edit post"
   >✏️</button>
   <button
     onclick={() => onDuplicate?.(eventId)}
     class="text-[#9ca3af] hover:text-white px-1.5 py-0.5 rounded text-xs transition-colors"
     title="Duplicate"
+    aria-label="Duplicate post"
   >📋</button>
   <button
     onclick={() => onStats?.(eventId)}
     class="text-[#9ca3af] hover:text-white px-1.5 py-0.5 rounded text-xs transition-colors"
     title="Statistics"
+    aria-label="View post statistics"
   >📊</button>
   <button
     onclick={() => onDelete?.(eventId)}
     class="text-[#9ca3af] hover:text-red-400 px-1.5 py-0.5 rounded text-xs transition-colors"
     title="Delete"
+    aria-label="Delete post"
   >🗑️</button>
 </div>

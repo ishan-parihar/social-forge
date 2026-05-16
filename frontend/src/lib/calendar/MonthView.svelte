@@ -46,13 +46,17 @@
     {#each days as d}<span>{d}</span>{/each}
   </div>
   <div class="grid grid-cols-7">
-    {#each calDays as date}
+    {#each calDays as date (formatDateKey(date))}
       {@const key = formatDateKey(date)}
       {@const dayEvents = eventsByDate.get(key) || []}
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div
         ondragover={handleDragOver}
         ondrop={(e) => handleDrop(e, key)}
         onclick={() => onDateClick?.(key)}
+        role="gridcell"
+        tabindex="-1"
+        onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') onDateClick?.(key); }}
         class="min-h-24 p-1.5 border-b border-r border-[#1e2435] transition-colors hover:bg-[#1a1f2e] cursor-pointer"
         class:opacity-30={!isCurrentMonth(date, year, month)}
       >
@@ -62,11 +66,14 @@
           class:text-[#6b7280]={!isToday(date)}
         >{date.getDate()}</span>
         <div class="space-y-0.5">
-          {#each dayEvents.slice(0, 3) as event}
+          {#each dayEvents.slice(0, 3) as event (event.id)}
             <div
               draggable="true"
               ondragstart={(e) => handleDragStart(e, event.id)}
               onclick={(e) => { e.stopPropagation(); onEventClick?.(event.id); }}
+              onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); onEventClick?.(event.id); } }}
+              role="button"
+              tabindex="-1"
             >
               <CalendarEvent {event} compact {onDuplicate} {onStats} {onDelete} />
             </div>

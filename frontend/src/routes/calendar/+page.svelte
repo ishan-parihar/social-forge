@@ -16,13 +16,18 @@
   let events = $state<CalendarEvent[]>([]);
   let selectedEvent = $state<CalendarEvent | null>(null);
   let duplicating = $state(false);
+  let deleting = $state(false);
   let loading = $state(false);
+  let fetchError = $state<string | null>(null);
 
   async function fetchEvents(start: string, end: string) {
     loading = true;
+    fetchError = null;
     const r = await calendarApi.get(start, end);
     if (r.data) {
       events = r.data.days.flatMap(d => d.posts.map(toCalendarEvent));
+    } else {
+      fetchError = r.error || "Failed to load calendar events";
     }
     loading = false;
   }
@@ -68,8 +73,12 @@
     const event = events.find(e => e.id === eventId);
     const time = event?.time || "00:00";
     const dateObj = new Date(`${newDate}T${time}:00Z`);
-    await postsApi.schedule(eventId, dateObj.toISOString());
-    refresh();
+    const r = await postsApi.schedule(eventId, dateObj.toISOString());
+    if (r.error) {
+      console.error("Failed to reschedule:", r.error);
+    } else {
+      refresh();
+    }
   }
 
   async function handleDuplicate(eventId: string) {
@@ -109,12 +118,15 @@
   }
 
   async function handleDelete(eventId: string) {
+    if (deleting) return;
     if (!confirm("Delete this post?")) return;
-    const r = await postsApi.delete(eventId);
-    if (r.error) {
-      console.error("Failed to delete post:", r.error);
-    } else {
-      refresh();
+    deleting = true;
+    try {
+      const r = await postsApi.delete(eventId);
+      if (r.error) console.error("Failed to delete post:", r.error);
+      else refresh();
+    } finally {
+      deleting = false;
     }
   }
 
@@ -138,9 +150,11 @@
     onViewChange={handleViewChange}
   />
 
-  {#if loading}
+  {#if fetchError}
+    <div class="text-center py-4 text-sm text-red-400">{fetchError}</div>
+  {:else if loading}
     <div class="grid grid-cols-7 gap-px">
-      {#each Array(35) as _}
+      {#each Array(35) as _, i (i)}
         <div class="h-24 bg-[#1a1f2e] animate-pulse rounded"></div>
       {/each}
     </div>
@@ -179,6 +193,9 @@
     <ListView
       {events}
       onEventClick={(id) => selectedEvent = events.find(e => e.id === id) || null}
+      onDuplicate={handleDuplicate}
+      onStats={handleStats}
+      onDelete={handleDelete}
     />
   {/if}
 
