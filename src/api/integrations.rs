@@ -12,6 +12,7 @@ use uuid::Uuid;
 use crate::auth::jwt;
 use crate::auth::middleware::AuthenticatedUser;
 use crate::crypto;
+use crate::db::models::Integration;
 use crate::db::models::IntegrationPublic;
 use crate::db::queries;
 use crate::error::AppError;
@@ -289,6 +290,88 @@ pub async fn list_providers(
     statuses.sort_by(|a, b| a.identifier.cmp(&b.identifier));
     Ok(Json(statuses))
 }
+// ── Timeslots & Disable ─────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateTimeslotsRequest {
+    pub timeslots: Vec<TimeslotEntry>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TimeslotEntry {
+    pub time: i32, // minutes from midnight
+}
+
+/// PUT /api/integrations/{id}/timeslots — update posting time slots
+pub async fn update_timeslots(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(id): Path<Uuid>,
+    Json(body): Json<UpdateTimeslotsRequest>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    // Verify integration belongs to user
+    let _integration = queries::get_integration(&state.db, id, auth.user_id)
+        .await?
+        .ok_or_else(|| AppError::NotFound("Integration not found".into()))?;
+
+    // Validate: max 3 slots
+    if body.timeslots.len() > 3 {
+        return Err(AppError::BadRequest(
+            "Maximum 3 time slots allowed".into(),
+        ));
+    }
+
+    // Validate each time is 0-1439
+    for slot in &body.timeslots {
+        if slot.time < 0 || slot.time >= 1440 {
+            return Err(AppError::BadRequest(
+                "Invalid time: must be 0-1439 minutes from midnight".into(),
+            ));
+        }
+    }
+
+    let timeslots_json = serde_json::to_value(&body.timeslots)
+        .map_err(|_| AppError::Internal("Failed to serialize timeslots".into()))?;
+
+    sqlx::query(
+        "UPDATE integrations SET posting_times = $1, updated_at = NOW() WHERE id = $2",
+    )
+    .bind(&timeslots_json)
+    .bind(id)
+    .execute(&state.db)
+    .await?;
+
+    Ok(Json(serde_json::json!({
+        "success": true,
+        "posting_times": timeslots_json
+    })))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ToggleDisableRequest {
+    pub disabled: bool,
+}
+
+/// PUT /api/integrations/{id}/disable — toggle integration disabled state
+pub async fn toggle_disable(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(id): Path<Uuid>,
+    Json(body): Json<ToggleDisableRequest>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let _integration = queries::get_integration(&state.db, id, auth.user_id)
+        .await?
+        .ok_or_else(|| AppError::NotFound("Integration not found".into()))?;
+
+    sqlx::query("UPDATE integrations SET disabled = $1, updated_at = NOW() WHERE id = $2")
+        .bind(body.disabled)
+        .bind(id)
+        .execute(&state.db)
+        .await?;
+
+    Ok(Json(serde_json::json!({"success": true, "disabled": body.disabled})))
+}
+
 // ── Multi-Account Pages API ──────────────────────────────────
 
 #[derive(Debug, Serialize)]

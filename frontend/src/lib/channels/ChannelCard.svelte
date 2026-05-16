@@ -1,20 +1,43 @@
 <script lang="ts">
-  import Dropdown from "$lib/ui/Dropdown.svelte";
   import ProviderIcon from "./ProviderIcon.svelte";
-  import type { Integration } from "$lib/api/integrations";
+  import ChannelContextMenu from "./ChannelContextMenu.svelte";
+  import { integrationsApi, type Integration, type TimeslotEntry } from "$lib/api/integrations";
 
-  let { integration, onDisconnect, onRefresh }: {
+  let { integration, timeslots, onDisconnect, onRefresh, onToggleDisable }: {
     integration: Integration;
+    timeslots?: TimeslotEntry[];
     onDisconnect?: (id: string) => void;
     onRefresh?: (id: string) => void;
+    onToggleDisable?: (id: string, disabled: boolean) => void;
   } = $props();
 
-  const menuItems = $derived([
-    ...(integration.refresh_needed
-      ? [{ label: "Refresh Token", onclick: () => onRefresh?.(integration.id), variant: "default" as const }]
-      : []),
-    { label: "Disconnect", onclick: () => onDisconnect?.(integration.id), variant: "danger" as const },
-  ]);
+  let currentTimeslots = $derived(
+    timeslots ?? (Array.isArray(integration.posting_times) ? integration.posting_times : [])
+  );
+
+  function handleRename() {
+    const newName = prompt("Rename channel:", integration.profile_name || integration.provider_name || "");
+    if (newName && newName !== (integration.profile_name || integration.provider_name)) {
+      console.log("Rename not yet implemented — would rename to:", newName);
+    }
+  }
+
+  function handleCopyId() {
+    navigator.clipboard.writeText(integration.id);
+  }
+
+  function handleToggleDisable() {
+    const newDisabled = !integration.disabled;
+    if (onToggleDisable) {
+      onToggleDisable(integration.id, newDisabled);
+    } else {
+      integrationsApi.toggleDisable(integration.id, newDisabled);
+    }
+  }
+
+  function handleDelete() {
+    onDisconnect?.(integration.id);
+  }
 </script>
 
 <div class="flex items-center gap-3 px-3 py-2.5 hover:bg-[#1a1f2e] rounded-lg transition-colors group">
@@ -31,8 +54,16 @@
     {:else}
       <span class="w-2 h-2 rounded-full bg-green-500" title="Connected"></span>
     {/if}
-    <Dropdown items={menuItems} align="right">
-      <span class="opacity-0 group-hover:opacity-100 p-1 text-[#6b7280] hover:text-white transition-all" aria-label="Channel actions" role="button">⋮</span>
-    </Dropdown>
+    <ChannelContextMenu
+      integrationId={integration.id}
+      integrationName={integration.profile_name || integration.provider_name}
+      currentTimeslots={currentTimeslots}
+      disabled={integration.disabled}
+      onRefreshToken={integration.refresh_needed ? () => onRefresh?.(integration.id) : undefined}
+      onRename={handleRename}
+      onToggleDisable={handleToggleDisable}
+      onCopyId={handleCopyId}
+      onDelete={handleDelete}
+    />
   </div>
 </div>
