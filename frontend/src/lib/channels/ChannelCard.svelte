@@ -26,12 +26,17 @@
     navigator.clipboard.writeText(integration.id);
   }
 
-  function handleToggleDisable() {
+  async function handleToggleDisable() {
     const newDisabled = !integration.disabled;
     if (onToggleDisable) {
       onToggleDisable(integration.id, newDisabled);
     } else {
-      integrationsApi.toggleDisable(integration.id, newDisabled);
+      try {
+        const r = await integrationsApi.toggleDisable(integration.id, newDisabled);
+        if (r.error) console.error("Toggle disable failed:", r.error);
+      } catch (e) {
+        console.error("Toggle disable error:", e);
+      }
     }
   }
 

@@ -321,6 +321,17 @@ pub async fn update_timeslots(
         ));
     }
 
+    // Validate no duplicate times
+    use std::collections::HashSet;
+    let mut seen = HashSet::new();
+    for slot in &body.timeslots {
+        if !seen.insert(&slot.time) {
+            return Err(AppError::BadRequest(
+                format!("Duplicate time slot: {} minutes is already set", slot.time)
+            ));
+        }
+    }
+
     // Validate each time is 0-1439
     for slot in &body.timeslots {
         if slot.time < 0 || slot.time >= 1440 {
@@ -334,10 +345,11 @@ pub async fn update_timeslots(
         .map_err(|_| AppError::Internal("Failed to serialize timeslots".into()))?;
 
     sqlx::query(
-        "UPDATE integrations SET posting_times = $1, updated_at = NOW() WHERE id = $2",
+        "UPDATE integrations SET posting_times = $1, updated_at = NOW() WHERE id = $2 AND user_id = $3",
     )
     .bind(&timeslots_json)
     .bind(id)
+    .bind(auth.user_id)
     .execute(&state.db)
     .await?;
 
@@ -363,9 +375,10 @@ pub async fn toggle_disable(
         .await?
         .ok_or_else(|| AppError::NotFound("Integration not found".into()))?;
 
-    sqlx::query("UPDATE integrations SET disabled = $1, updated_at = NOW() WHERE id = $2")
+    sqlx::query("UPDATE integrations SET disabled = $1, updated_at = NOW() WHERE id = $2 AND user_id = $3")
         .bind(body.disabled)
         .bind(id)
+        .bind(auth.user_id)
         .execute(&state.db)
         .await?;
 
