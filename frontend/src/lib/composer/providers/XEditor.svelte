@@ -11,7 +11,7 @@
   function handleInput(e: Event) {
     const target = e.target as HTMLTextAreaElement;
     text = target.value;
-    onContentChange?.(target.value);
+    onContentChange?.(`<p>${target.value}</p>`);
   }
 </script>
 
@@ -19,8 +19,9 @@
   <textarea
     value={text}
     oninput={handleInput}
-    maxlength="300"
+    maxlength="280"
     placeholder="What's happening?"
+    aria-label="Post content"
     class="w-full h-24 bg-[#0d1117] border border-[#1e2435] rounded-lg p-3 text-sm resize-none focus:border-indigo-500 outline-none"
   ></textarea>
   <div class="flex justify-between text-xs">

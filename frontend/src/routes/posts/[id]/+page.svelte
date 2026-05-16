@@ -70,6 +70,20 @@
         </div>
       </div>
 
+      {#if post.tags && post.tags.length > 0}
+        <div class="flex flex-wrap gap-1.5">
+          {#each post.tags as tag}
+            <span
+              class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs"
+              style="background: {tag.color}22; color: {tag.color}; border: 1px solid {tag.color}44"
+            >
+              <span class="w-1.5 h-1.5 rounded-full" style="background: {tag.color}"></span>
+              {tag.name}
+            </span>
+          {/each}
+        </div>
+      {/if}
+
       {#if post.scheduled_at}
         <div class="text-sm text-[#6b7280]">
           Scheduled: {new Date(post.scheduled_at).toLocaleString()}

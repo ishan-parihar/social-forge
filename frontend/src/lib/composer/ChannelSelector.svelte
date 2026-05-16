@@ -11,8 +11,13 @@
   let integrations = $state<Integration[]>([]);
 
   onMount(async () => {
-    const r = await integrationsApi.list();
-    if (r.data) integrations = r.data.integrations.filter(i => !i.disabled);
+    try {
+      const r = await integrationsApi.list();
+      if (r.data) integrations = r.data.integrations.filter(i => !i.disabled);
+    } catch (e) {
+      console.error("Failed to load integrations:", e);
+      integrations = [];
+    }
   });
 </script>
 
@@ -23,7 +28,7 @@
     </div>
   {:else}
     <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
-      {#each integrations as int}
+      {#each integrations as int (int.id)}
         {@const isSelected = selected.includes(int.id)}
         <button
           onclick={() => onToggle?.(int.id)}

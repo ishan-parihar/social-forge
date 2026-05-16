@@ -48,6 +48,8 @@
     <h3 class="text-sm font-semibold text-[#6b7280] uppercase tracking-wider mb-3">Connected Channels</h3>
     {#if loading}
       <div class="text-center text-sm text-[#6b7280] py-8">Loading...</div>
+    {:else if error}
+      <div class="text-center text-sm text-red-400 py-4">{error}</div>
     {:else if integrations.length === 0}
       <div class="text-center text-sm text-[#6b7280] py-8">No channels connected yet. Select a provider below to connect.</div>
     {:else}

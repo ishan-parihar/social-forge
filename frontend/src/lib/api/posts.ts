@@ -1,14 +1,17 @@
 import { api } from './client';
+import type { Tag } from './tags';
 
 export interface PostSummary {
   id: string; integration_name: string; state: string;
   content: string; title?: string; scheduled_at?: string;
   platform_post_url?: string; error_message?: string; created_at: string;
+  tags?: Tag[];
 }
 export interface PostDetail {
-  id: string; integration_id: string; state: string;
+  id: string; integration_id: string; integration_name: string; state: string;
   content: string; title?: string; scheduled_at?: string;
   published_at?: string; platform_post_url?: string; error_message?: string; created_at: string;
+  tags?: Tag[];
 }
 
 export const postsApi = {
@@ -20,10 +23,11 @@ export const postsApi = {
     return api.get<{ posts: PostSummary[]; total: number }>(`/api/posts?${q}`);
   },
   get: (id: string) => api.get<PostDetail>(`/api/posts/${id}`),
-  create: (d: { integration_ids: string[]; content: string; title?: string; scheduled_at?: string }) =>
+  create: (d: { integration_ids: string[]; content: string; title?: string; scheduled_at?: string; tag_ids?: string[] }) =>
     api.post<PostDetail>("/api/posts", d),
   update: (id: string, d: { content: string; title?: string }) =>
     api.put<PostDetail>(`/api/posts/${id}`, d),
   schedule: (id: string, at: string) => api.post<PostDetail>(`/api/posts/${id}/schedule`, { scheduled_at: at }),
   delete: (id: string) => api.del<{ deleted: boolean }>(`/api/posts/${id}`),
+  setTags: (id: string, tag_ids: string[]) => api.put<PostDetail>(`/api/posts/${id}/tags`, { tag_ids }),
 };

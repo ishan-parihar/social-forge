@@ -20,6 +20,7 @@
     { href: '/calendar', label: 'Calendar', icon: '📅' },
     { href: '/posts', label: 'Posts', icon: '📄' },
     { href: '/channels', label: 'Channels', icon: '🔗' },
+    { href: '/tags', label: 'Tags', icon: '🏷' },
     { href: '/media', label: 'Media', icon: '🖼' },
     { href: '/settings', label: 'Settings', icon: '⚙' },
   ];

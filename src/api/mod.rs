@@ -92,6 +92,7 @@ pub fn build_router(state: AppState) -> Router {
         )
         .route("/api/posts/{id}/schedule", axum::routing::post(posts::schedule))
         .route("/api/posts/{id}/publish", axum::routing::post(posts::publish_post))
+        .route("/api/posts/{id}/tags", axum::routing::put(posts::set_post_tags))
         .route("/api/posts/find-slot", axum::routing::get(posts::find_slot))
         .route("/api/integrations", axum::routing::get(integrations::list))
         .route("/api/integrations/connect/{provider}", axum::routing::get(integrations::connect))

@@ -9,6 +9,7 @@
   import SchedulePicker from "$lib/composer/SchedulePicker.svelte";
   import ProviderEditor from "$lib/composer/ProviderEditor.svelte";
   import PostPreview from "$lib/composer/PostPreview.svelte";
+  import TagPicker from "$lib/composer/TagPicker.svelte";
   import type { MediaItem } from "$lib/api/media";
 
   let content = $state("");
@@ -20,6 +21,7 @@
   let mediaItems = $state<MediaItem[]>([]);
   let scheduledAt = $state<string | null>(null);
   let activeProvider = $state<string | null>(null);
+  let selectedTagIds = $state<string[]>([]);
   let submitting = $state(false);
   let error = $state<string | null>(null);
 
@@ -49,6 +51,7 @@
           content: pContent,
           title: title || undefined,
           scheduled_at: scheduledAt || undefined,
+          tag_ids: selectedTagIds,
         });
       }
       goto("/calendar");
@@ -92,6 +95,21 @@
           selectedIntegrations = selectedIntegrations.filter(i => i !== id);
         } else {
           selectedIntegrations = [...selectedIntegrations, id];
+        }
+      }}
+    />
+  </div>
+
+  <!-- Tags -->
+  <div class="bg-[#131720] border border-[#1e2435] rounded-xl p-4">
+    <h3 class="text-sm font-semibold mb-3">Tags</h3>
+    <TagPicker
+      selected={selectedTagIds}
+      onToggle={(id) => {
+        if (selectedTagIds.includes(id)) {
+          selectedTagIds = selectedTagIds.filter(t => t !== id);
+        } else {
+          selectedTagIds = [...selectedTagIds, id];
         }
       }}
     />

@@ -13,7 +13,7 @@ use crate::auth::middleware::AuthenticatedUser;
 use crate::db::models::PostPublic;
 use crate::db::queries;
 use crate::services::posts::PostService;
-
+use crate::api::tags::TagResponse;
 
 use super::AppState;
 
@@ -27,6 +27,7 @@ pub struct CreatePostRequest {
     pub media: Option<serde_json::Value>,
     pub settings: Option<serde_json::Value>,
     pub scheduled_at: Option<String>,
+    pub tag_ids: Option<Vec<Uuid>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -69,6 +70,29 @@ pub struct PostWithIntegrationName {
     pub platform_post_url: Option<String>,
     pub error_message: Option<String>,
     pub created_at: String,
+    pub tags: Vec<TagResponse>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PostDetailResponse {
+    pub id: Uuid,
+    pub integration_id: Uuid,
+    pub integration_name: String,
+    pub state: String,
+    pub content: String,
+    pub title: Option<String>,
+    pub media: serde_json::Value,
+    pub scheduled_at: Option<String>,
+    pub published_at: Option<String>,
+    pub platform_post_url: Option<String>,
+    pub error_message: Option<String>,
+    pub created_at: String,
+    pub tags: Vec<TagResponse>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SetPostTagsRequest {
+    pub tag_ids: Vec<Uuid>,
 }
 
 #[derive(Debug, Serialize)]
@@ -104,7 +128,7 @@ pub async fn list(
     )
     .await?;
 
-    // Enrich with integration names
+    // Enrich with integration names and tags
     let mut enriched = Vec::with_capacity(posts.len());
     for p in posts {
         let integration_name = if let Ok(Some(integ)) = queries::get_integration(&state.db, p.integration_id, auth.user_id).await {
@@ -112,6 +136,18 @@ pub async fn list(
         } else {
             "Unknown".into()
         };
+        let tags = queries::get_tags_for_post(&state.db, p.id, auth.user_id)
+            .await
+            .unwrap_or_default()
+            .into_iter()
+            .map(|row| TagResponse {
+                id: row.id,
+                name: row.name,
+                color: row.color,
+                created_at: row.created_at.to_rfc3339(),
+                updated_at: row.updated_at.to_rfc3339(),
+            })
+            .collect();
         enriched.push(PostWithIntegrationName {
             id: p.id,
             integration_id: p.integration_id,
@@ -125,6 +161,7 @@ pub async fn list(
             platform_post_url: p.platform_post_url,
             error_message: p.error_message,
             created_at: p.created_at.to_rfc3339(),
+            tags,
         });
     }
 
@@ -179,6 +216,13 @@ pub async fn create(
     )
     .await?;
 
+    // Insert post_tags if tag_ids provided
+    if let Some(ref tag_ids) = body.tag_ids {
+        if !tag_ids.is_empty() {
+            queries::set_post_tags(&state.db, post.id, tag_ids).await?;
+        }
+    }
+
     // Broadcast event
     let public = PostPublic::from(post.clone());
     state.broadcast.send("post_created", &public);
@@ -191,11 +235,45 @@ pub async fn get(
     State(state): State<AppState>,
     auth: AuthenticatedUser,
     Path(id): Path<Uuid>,
-) -> Result<Json<PostPublic>, crate::error::AppError> {
+) -> Result<Json<PostDetailResponse>, crate::error::AppError> {
     let post = queries::get_post(&state.db, id, auth.user_id)
         .await?
         .ok_or_else(|| crate::error::AppError::NotFound("Post not found".into()))?;
-    Ok(Json(PostPublic::from(post)))
+
+    let integration_name = if let Ok(Some(integ)) = queries::get_integration(&state.db, post.integration_id, auth.user_id).await {
+        integ.provider_name
+    } else {
+        "Unknown".into()
+    };
+
+    let tags = queries::get_tags_for_post(&state.db, post.id, auth.user_id)
+        .await
+        .unwrap_or_default()
+        .into_iter()
+        .map(|row| TagResponse {
+            id: row.id,
+            name: row.name,
+            color: row.color,
+            created_at: row.created_at.to_rfc3339(),
+            updated_at: row.updated_at.to_rfc3339(),
+        })
+        .collect();
+
+    Ok(Json(PostDetailResponse {
+        id: post.id,
+        integration_id: post.integration_id,
+        integration_name,
+        state: post.state.to_string(),
+        content: post.content,
+        title: post.title,
+        media: post.media,
+        scheduled_at: post.scheduled_at.map(|d| d.to_rfc3339()),
+        published_at: post.published_at.map(|d| d.to_rfc3339()),
+        platform_post_url: post.platform_post_url,
+        error_message: post.error_message,
+        created_at: post.created_at.to_rfc3339(),
+        tags,
+    }))
 }
 
 /// PUT /api/posts/:id
@@ -258,6 +336,73 @@ pub async fn delete(
         return Err(crate::error::AppError::NotFound("Post not found".into()));
     }
     Ok(Json(serde_json::json!({"deleted": true})))
+}
+
+/// PUT /api/posts/{id}/tags
+pub async fn set_post_tags(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(id): Path<Uuid>,
+    Json(body): Json<SetPostTagsRequest>,
+) -> Result<Json<PostDetailResponse>, crate::error::AppError> {
+    // Verify post exists and belongs to user
+    let post = queries::get_post(&state.db, id, auth.user_id)
+        .await?
+        .ok_or_else(|| crate::error::AppError::NotFound("Post not found".into()))?;
+
+    // Verify all tag_ids belong to the user
+    for &tag_id in &body.tag_ids {
+        let exists = sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*) FROM tags WHERE id = $1 AND user_id = $2",
+        )
+        .bind(tag_id)
+        .bind(auth.user_id)
+        .fetch_one(&state.db)
+        .await?;
+        if exists == 0 {
+            return Err(crate::error::AppError::BadRequest(
+                format!("Tag {} not found or does not belong to user", tag_id),
+            ));
+        }
+    }
+
+    queries::set_post_tags(&state.db, id, &body.tag_ids).await?;
+
+    // Return enriched post
+    let integration_name = if let Ok(Some(integ)) = queries::get_integration(&state.db, post.integration_id, auth.user_id).await {
+        integ.provider_name
+    } else {
+        "Unknown".into()
+    };
+
+    let tags = queries::get_tags_for_post(&state.db, post.id, auth.user_id)
+        .await
+        .unwrap_or_default()
+        .into_iter()
+        .map(|row| TagResponse {
+            id: row.id,
+            name: row.name,
+            color: row.color,
+            created_at: row.created_at.to_rfc3339(),
+            updated_at: row.updated_at.to_rfc3339(),
+        })
+        .collect();
+
+    Ok(Json(PostDetailResponse {
+        id: post.id,
+        integration_id: post.integration_id,
+        integration_name,
+        state: post.state.to_string(),
+        content: post.content,
+        title: post.title,
+        media: post.media,
+        scheduled_at: post.scheduled_at.map(|d| d.to_rfc3339()),
+        published_at: post.published_at.map(|d| d.to_rfc3339()),
+        platform_post_url: post.platform_post_url,
+        error_message: post.error_message,
+        created_at: post.created_at.to_rfc3339(),
+        tags,
+    }))
 }
 
 /// GET /api/posts/find-slot
