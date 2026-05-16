@@ -16,12 +16,15 @@
   let events = $state<CalendarEvent[]>([]);
   let selectedEvent = $state<CalendarEvent | null>(null);
   let duplicating = $state(false);
+  let loading = $state(false);
 
   async function fetchEvents(start: string, end: string) {
+    loading = true;
     const r = await calendarApi.get(start, end);
     if (r.data) {
       events = r.data.days.flatMap(d => d.posts.map(toCalendarEvent));
     }
+    loading = false;
   }
 
   function getMonthRange() {
@@ -101,6 +104,20 @@
     }
   }
 
+  function handleStats(eventId: string) {
+    console.log("Stats for event:", eventId);
+  }
+
+  async function handleDelete(eventId: string) {
+    if (!confirm("Delete this post?")) return;
+    const r = await postsApi.delete(eventId);
+    if (r.error) {
+      console.error("Failed to delete post:", r.error);
+    } else {
+      refresh();
+    }
+  }
+
   onMount(() => refresh());
 </script>
 
@@ -121,7 +138,13 @@
     onViewChange={handleViewChange}
   />
 
-  {#if calendarState.state.view === "month"}
+  {#if loading}
+    <div class="grid grid-cols-7 gap-px">
+      {#each Array(35) as _}
+        <div class="h-24 bg-[#1a1f2e] animate-pulse rounded"></div>
+      {/each}
+    </div>
+  {:else if calendarState.state.view === "month"}
     <MonthView
       year={calendarState.state.currentDate.getFullYear()}
       month={calendarState.state.currentDate.getMonth()}
@@ -129,6 +152,9 @@
       onEventClick={(id) => selectedEvent = events.find(e => e.id === id) || null}
       onDateClick={(date) => calendarState.selectDate(date)}
       onDrop={handleDrop}
+      onDuplicate={handleDuplicate}
+      onStats={handleStats}
+      onDelete={handleDelete}
     />
   {:else if calendarState.state.view === "week"}
     <WeekView
@@ -136,12 +162,18 @@
       {events}
       onEventClick={(id) => selectedEvent = events.find(e => e.id === id) || null}
       onDrop={handleDrop}
+      onDuplicate={handleDuplicate}
+      onStats={handleStats}
+      onDelete={handleDelete}
     />
   {:else if calendarState.state.view === "day"}
     <DayView
       date={calendarState.state.currentDate}
       {events}
       onEventClick={(id) => selectedEvent = events.find(e => e.id === id) || null}
+      onDuplicate={handleDuplicate}
+      onStats={handleStats}
+      onDelete={handleDelete}
     />
   {:else if calendarState.state.view === "list"}
     <ListView

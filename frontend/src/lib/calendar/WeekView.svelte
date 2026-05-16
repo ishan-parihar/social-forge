@@ -3,10 +3,13 @@
   import CalendarEvent from "./CalendarEvent.svelte";
   import type { CalendarEvent as CEvent } from "./types";
 
-  let { referenceDate, events = [], onEventClick, onDrop }: {
+  let { referenceDate, events = [], onEventClick, onDrop, onDuplicate, onStats, onDelete }: {
     referenceDate: Date; events?: CEvent[];
     onEventClick?: (id: string) => void;
     onDrop?: (eventId: string, newDate: string) => void;
+    onDuplicate?: (id: string) => void;
+    onStats?: (id: string) => void;
+    onDelete?: (id: string) => void;
   } = $props();
 
   let weekDays = $derived(buildWeekDays(referenceDate, events));
@@ -55,7 +58,7 @@
           >
             {#each (eventsByDayHour.get(`${wd.dateStr}-${hour.slice(0, 2)}`) || []) as event}
               <div onclick={() => onEventClick?.(event.id)}>
-                <CalendarEvent {event} compact />
+                <CalendarEvent {event} {onDuplicate} {onStats} {onDelete} />
               </div>
             {/each}
           </div>

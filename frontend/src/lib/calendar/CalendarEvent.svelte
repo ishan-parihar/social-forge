@@ -1,31 +1,55 @@
 <script lang="ts">
   import type { CalendarEvent as CEvent } from "./types";
   import RepeatingBadge from "./RepeatingBadge.svelte";
+  import PostHoverToolbar from "./PostHoverToolbar.svelte";
 
-  let { event, compact = false }: { event: CEvent; compact?: boolean } = $props();
+  let { event, compact = false, onDuplicate, onStats, onDelete }: {
+    event: CEvent;
+    compact?: boolean;
+    onDuplicate?: (id: string) => void;
+    onStats?: (id: string) => void;
+    onDelete?: (id: string) => void;
+  } = $props();
 
   let visibleTags = $derived((event.tags || []).slice(0, 2));
   let overflowCount = $derived((event.tags?.length || 0) - 2);
+
+  let isPast = $derived(event.date < todayStr());
+  function todayStr() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
 </script>
 
-<div class="event-chip {event.state}" title={event.content.length > 200 ? event.content.slice(0, 200) + '...' : event.content}>
-  {#if !compact && event.tags && event.tags.length > 0}
-    <span class="event-tags">
-      {#each visibleTags as tag (tag.id)}
-        <span class="tag-dot" style="background: {tag.color}"></span>
-      {/each}
-      {#if overflowCount > 0}
-        <span class="tag-overflow">+{overflowCount}</span>
-      {/if}
-    </span>
-  {/if}
-  {#if !compact && event.repeatIntervalDays}
-    <RepeatingBadge intervalDays={event.repeatIntervalDays} />
-  {/if}
+<div class="group relative">
+  <div
+    class="event-chip {event.state} {isPast ? 'opacity-50' : ''} {event.error ? 'ring-1 ring-red-500/50' : ''}"
+    title={event.content.length > 200 ? event.content.slice(0, 200) + '...' : event.content}
+  >
+    {#if !compact && event.tags && event.tags.length > 0}
+      <span class="event-tags">
+        {#each visibleTags as tag (tag.id)}
+          <span class="tag-dot" style="background: {tag.color}"></span>
+        {/each}
+        {#if overflowCount > 0}
+          <span class="tag-overflow">+{overflowCount}</span>
+        {/if}
+      </span>
+    {/if}
+    {#if !compact && event.repeatIntervalDays}
+      <RepeatingBadge intervalDays={event.repeatIntervalDays} />
+    {/if}
+    {#if !compact}
+      <span class="event-time">{event.time || ""}</span>
+    {/if}
+    <span class="event-content">{event.title}</span>
+  </div>
+
   {#if !compact}
-    <span class="event-time">{event.time || ""}</span>
+    <div class="opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+      <PostHoverToolbar eventId={event.id} {onDuplicate} {onStats} {onDelete} />
+    </div>
   {/if}
-  <span class="event-content">{event.title}</span>
 </div>
 
 <style>

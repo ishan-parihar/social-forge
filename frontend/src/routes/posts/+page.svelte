@@ -8,20 +8,35 @@
   let filter = $state("all");
   let loading = $state(true);
   let error = $state<string | null>(null);
+  let page = $state(1);
+  let totalPages = $state(1);
+  let totalItems = $state(0);
+  const limit = 20;
 
   async function load() {
     loading = true;
     error = null;
-    const params: any = {};
+    const params: any = { limit, offset: (page - 1) * limit };
     if (filter !== "all") params.state = filter;
     const r = await postsApi.list(params);
-    if (r.data) posts = r.data.posts;
-    else error = r.error || "Failed to load posts";
+    if (r.data) {
+      posts = r.data.posts;
+      totalItems = r.data.total;
+      totalPages = Math.ceil(r.data.total / limit);
+    } else {
+      error = r.error || "Failed to load posts";
+    }
     loading = false;
   }
 
   function toggleFilter(f: string) {
     filter = f;
+    page = 1;
+    load();
+  }
+
+  function handlePageChange(p: number) {
+    page = p;
     load();
   }
 
@@ -74,5 +89,25 @@
         </button>
       {/each}
     </div>
+
+    {#if totalPages > 1}
+      <div class="flex items-center justify-between px-4 py-3 bg-[#131720] border border-[#1e2435] rounded-xl">
+        <span class="text-sm text-[#6b7280]">
+          Showing {(page - 1) * limit + 1}–{Math.min(page * limit, totalItems)} of {totalItems}
+        </span>
+        <div class="flex gap-2">
+          <button
+            onclick={() => handlePageChange(page - 1)}
+            disabled={page <= 1}
+            class="px-3 py-1 text-sm rounded bg-[#1e2435] text-[#d1d5db] disabled:opacity-50 hover:bg-[#2a3045] transition-colors"
+          >← Previous</button>
+          <button
+            onclick={() => handlePageChange(page + 1)}
+            disabled={page >= totalPages}
+            class="px-3 py-1 text-sm rounded bg-[#1e2435] text-[#d1d5db] disabled:opacity-50 hover:bg-[#2a3045] transition-colors"
+          >Next →</button>
+        </div>
+      </div>
+    {/if}
   {/if}
 </div>

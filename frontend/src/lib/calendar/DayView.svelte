@@ -3,9 +3,12 @@
   import CalendarEvent from "./CalendarEvent.svelte";
   import type { CalendarEvent as CEvent } from "./types";
 
-  let { date, events = [], onEventClick }: {
+  let { date, events = [], onEventClick, onDuplicate, onStats, onDelete }: {
     date: Date; events?: CEvent[];
     onEventClick?: (id: string) => void;
+    onDuplicate?: (id: string) => void;
+    onStats?: (id: string) => void;
+    onDelete?: (id: string) => void;
   } = $props();
 
   let key = $derived(formatDateKey(date));
@@ -38,7 +41,7 @@
         <div class="flex-1 px-2 py-1 space-y-0.5">
           {#each (eventsByHour.get(hour.slice(0, 2)) || []) as event}
             <div onclick={() => onEventClick?.(event.id)}>
-              <CalendarEvent {event} />
+              <CalendarEvent {event} {onDuplicate} {onStats} {onDelete} />
             </div>
           {/each}
         </div>
