@@ -29,6 +29,27 @@ pub async fn create_user(
     .await
 }
 
+pub async fn create_user_with_id(
+    pool: &PgPool,
+    id: Uuid,
+    email: &str,
+    password_hash: &str,
+    name: &str,
+) -> Result<User, sqlx::Error> {
+    sqlx::query_as!(
+        User,
+        "INSERT INTO users (id, email, password, name) VALUES ($1, $2, $3, $4)
+         ON CONFLICT (email) DO UPDATE SET id = EXCLUDED.id, password = EXCLUDED.password, name = EXCLUDED.name
+         RETURNING id, email, password, name, timezone, created_at, updated_at",
+        id,
+        email,
+        password_hash,
+        name,
+    )
+    .fetch_one(pool)
+    .await
+}
+
 pub async fn get_user_by_email(pool: &PgPool, email: &str) -> Result<Option<User>, sqlx::Error> {
     sqlx::query_as!(
         User,

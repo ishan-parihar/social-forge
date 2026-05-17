@@ -2,6 +2,7 @@ import { api } from './client';
 
 export interface Integration {
   id: string; provider_identifier: string; provider_name: string;
+  internal_id: string;
   profile_name?: string; profile_picture?: string; profile_url?: string;
   disabled: boolean; refresh_needed: boolean;
   posting_times?: { time: number }[];

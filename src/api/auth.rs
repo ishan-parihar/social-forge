@@ -122,14 +122,18 @@ pub async fn login(
     }))
 }
 
-/// GET /api/auth/me
+/// GET /api/auth/me — returns the default user, auto-creating if needed
 pub async fn me(
     State(state): State<AppState>,
     auth: AuthenticatedUser,
 ) -> Result<Json<UserResponse>, crate::error::AppError> {
-    let user = queries::get_user_by_id(&state.db, auth.user_id)
-        .await?
-        .ok_or_else(|| crate::error::AppError::NotFound("User not found".into()))?;
+    let user = match queries::get_user_by_id(&state.db, auth.user_id).await? {
+        Some(u) => u,
+        None => {
+            let hash = crate::auth::jwt::hash_password("socialforge")?;
+            queries::create_user_with_id(&state.db, auth.user_id, "user@socialforge.local", &hash, "User").await?
+        }
+    };
 
     Ok(Json(UserResponse {
         id: user.id,

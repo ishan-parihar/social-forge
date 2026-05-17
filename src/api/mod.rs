@@ -2,12 +2,12 @@
 // axum HTTP router combining all route modules.
 // Protected routes use the auth middleware chain.
 
-use axum::{middleware, Extension, Router};
+use axum::{middleware, Router};
 use tower_http::cors::CorsLayer;
 use tower_http::limit::RequestBodyLimitLayer;
 use tower_http::trace::TraceLayer;
 
-use crate::auth::middleware::{auth_middleware, JwtSecret};
+use crate::auth::middleware::auth_middleware;
 use crate::config::Config;
 use crate::db::PgPool;
 use crate::realtime::Broadcaster;
@@ -53,8 +53,6 @@ pub struct AppState {
 
 /// Build the axum router with all routes
 pub fn build_router(state: AppState) -> Router {
-    let jwt_secret = JwtSecret(state.config.jwt_secret.clone());
-
     // Extract allowed origin for CORS
     let cors_origin = state.config.frontend_url.clone();
     let cors_layer = if cors_origin == "*" || cors_origin.is_empty() {
@@ -152,9 +150,8 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/rss/feeds/{id}/poll", axum::routing::post(rss::poll_feed))
         .route("/api/rss/feeds/{id}/items", axum::routing::get(rss::list_feed_items))
         .route("/api/rss/feeds/{id}/items/{guid}/import", axum::routing::post(rss::import_item))
-        // Auth middleware chain: inject secret first, then validate
-        .layer(middleware::from_fn(auth_middleware))
-        .layer(Extension(jwt_secret));
+        // Auth middleware: injects DEFAULT_USER_ID for single-user mode
+        .layer(middleware::from_fn(auth_middleware));
 
     // Global middleware stack
     Router::new()

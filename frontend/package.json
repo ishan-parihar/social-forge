@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite dev --port 4200",
+    "dev": "vite dev --port 3000",
     "build": "vite build",
-    "preview": "vite preview --port 4200"
+    "preview": "vite preview --port 3000"
   },
   "devDependencies": {
     "@sveltejs/adapter-static": "^3.0.8",
