@@ -75,7 +75,13 @@
         <span class="text-[10px] px-1.5 py-0.5 rounded border {authTypeColor}">{authTypeLabel}</span>
       {/if}
     </div>
-    <div class="text-xs text-[#6b7280] truncate">{integration.provider_identifier}</div>
+    <div class="text-xs text-[#6b7280] truncate">
+      {#if integration.profile_url}
+        {integration.profile_url}
+      {:else}
+        ID: {integration.internal_id}
+      {/if}
+    </div>
   </div>
   <div class="shrink-0 flex items-center gap-2">
     {#if integration.disabled}
