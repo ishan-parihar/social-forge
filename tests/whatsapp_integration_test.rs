@@ -1,13 +1,13 @@
 use std::path::PathBuf;
 use std::fs;
 
-use postiz_rust::config::Config;
-use postiz_rust::services::whatsapp_daemon::WhatsAppDaemon;
-use postiz_rust::social::registry::ProviderRegistry;
-use postiz_rust::social::whatsapp::WhatsAppProvider;
-use postiz_rust::social::SocialProvider;
-use postiz_rust::mcp::tools_whatsapp;
-use postiz_rust::wa::chats;
+use social_forge::config::Config;
+use social_forge::services::whatsapp_daemon::WhatsAppDaemon;
+use social_forge::social::registry::ProviderRegistry;
+use social_forge::social::whatsapp::WhatsAppProvider;
+use social_forge::social::SocialProvider;
+use social_forge::mcp::tools_whatsapp;
+use social_forge::wa::chats;
 use rmcp::Json;
 
 fn get_config() -> Config {
@@ -57,7 +57,7 @@ fn test_whatsapp_provider_metadata() {
     let scopes = wa.scopes();
     assert!(scopes.is_empty(), "WhatsApp should have no OAuth scopes");
 
-    use postiz_rust::social::EditorType;
+    use social_forge::social::EditorType;
     assert_eq!(wa.editor_type(), EditorType::Normal);
 
     let rt = tokio::runtime::Runtime::new().unwrap();
@@ -71,7 +71,7 @@ fn test_whatsapp_provider_metadata() {
     let refresh = rt.block_on(wa.refresh_token("test-refresh"));
     assert!(refresh.is_err(), "refresh_token should error for non-OAuth provider");
 
-    use postiz_rust::social::PostContent;
+    use social_forge::social::PostContent;
     let post = PostContent {
         content: "Hello WhatsApp".into(),
         media: vec![],
@@ -296,17 +296,17 @@ fn test_whatsapp_provider_creation_with_real_config() {
 #[tokio::test]
 async fn test_whatsapp_mcp_tool_compilation() {
     let config = get_config();
-    let db = postiz_rust::db::create_pool(&config.database_url)
+    let db = social_forge::db::create_pool(&config.database_url)
         .await
         .expect("Failed to connect to DB");
 
-    use postiz_rust::api::AppState;
-    use postiz_rust::mcp::PostizMcpServer;
-    use postiz_rust::realtime::Broadcaster;
+    use social_forge::api::AppState;
+    use social_forge::mcp::PostizMcpServer;
+    use social_forge::realtime::Broadcaster;
 
     let broadcaster = Broadcaster::new();
     let registry = ProviderRegistry::new(&config, None, None);
-    let rate_limiter = postiz_rust::api::rate_limiter::AuthRateLimiter::new(5, 60);
+    let rate_limiter = social_forge::api::rate_limiter::AuthRateLimiter::new(5, 60);
 
     let state = AppState {
         db: db.clone(),
@@ -334,16 +334,16 @@ async fn test_whatsapp_mcp_tool_compilation() {
 #[tokio::test]
 async fn test_whatsapp_mcp_handler_functions() {
     let config = get_config();
-    let db = postiz_rust::db::create_pool(&config.database_url)
+    let db = social_forge::db::create_pool(&config.database_url)
         .await
         .expect("Failed to connect to DB");
 
-    use postiz_rust::api::AppState;
-    use postiz_rust::realtime::Broadcaster;
+    use social_forge::api::AppState;
+    use social_forge::realtime::Broadcaster;
 
     let broadcaster = Broadcaster::new();
     let registry = ProviderRegistry::new(&config, None, None);
-    let rate_limiter = postiz_rust::api::rate_limiter::AuthRateLimiter::new(5, 60);
+    let rate_limiter = social_forge::api::rate_limiter::AuthRateLimiter::new(5, 60);
 
     let state = AppState {
         db: db.clone(),

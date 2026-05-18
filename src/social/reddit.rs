@@ -71,7 +71,7 @@ impl RedditProvider {
             .http
             .post("https://www.reddit.com/api/v1/access_token")
             .header("Authorization", format!("Basic {auth}"))
-            .header("User-Agent", "postiz-rust:v0.1.0 (by /u/postiz_rust)")
+            .header("User-Agent", "social-forge:v0.1.0 (by /u/social_forge)")
             .form(&[
                 ("grant_type", "password"),
                 ("username", self.username.as_str()),
@@ -289,7 +289,7 @@ impl RedditProvider {
             .http
             .post("https://oauth.reddit.com/api/compose")
             .header("Authorization", format!("Bearer {token}"))
-            .header("User-Agent", "postiz-rust:v0.1.0 (by /u/postiz_rust)")
+            .header("User-Agent", "social-forge:v0.1.0 (by /u/social_forge)")
             .form(&[
                 ("api_type", "json"),
                 ("to", to),
@@ -340,7 +340,7 @@ impl RedditProvider {
             .http
             .get("https://oauth.reddit.com/api/v1/me")
             .header("Authorization", format!("Bearer {token}"))
-            .header("User-Agent", "postiz-rust:v0.1.0 (by /u/postiz_rust)")
+            .header("User-Agent", "social-forge:v0.1.0 (by /u/social_forge)")
             .send()
             .await?;
 
@@ -425,7 +425,7 @@ impl SocialProvider for RedditProvider {
                 .http
                 .get("https://oauth.reddit.com/api/v1/me")
                 .header("Authorization", format!("Bearer {token}"))
-                .header("User-Agent", "postiz-rust:v0.1.0 (by /u/postiz_rust)")
+                .header("User-Agent", "social-forge:v0.1.0 (by /u/social_forge)")
                 .send()
                 .await?;
 
@@ -460,7 +460,7 @@ impl SocialProvider for RedditProvider {
                 .http
                 .post("https://www.reddit.com/api/v1/access_token")
                 .header("Authorization", format!("Basic {auth}"))
-                .header("User-Agent", "postiz-rust:v0.1.0 (by /u/postiz_rust)")
+                .header("User-Agent", "social-forge:v0.1.0 (by /u/social_forge)")
                 .form(&[("grant_type", "refresh_token"), ("refresh_token", rt)])
                 .send()
                 .await?;
@@ -513,7 +513,7 @@ impl SocialProvider for RedditProvider {
                 .http
                 .post("https://www.reddit.com/api/v1/access_token")
                 .header("Authorization", format!("Basic {auth}"))
-                .header("User-Agent", "postiz-rust:v0.1.0 (by /u/postiz_rust)")
+                .header("User-Agent", "social-forge:v0.1.0 (by /u/social_forge)")
                 .form(&[("grant_type", "refresh_token"), ("refresh_token", rt)])
                 .send()
                 .await?;
@@ -602,7 +602,7 @@ impl SocialProvider for RedditProvider {
             .http
             .post("https://oauth.reddit.com/api/submit")
             .header("Authorization", format!("Bearer {access_token}"))
-            .header("User-Agent", "postiz-rust:v0.1.0 (by /u/postiz_rust)")
+            .header("User-Agent", "social-forge:v0.1.0 (by /u/social_forge)")
             .form(&post_data)
             .send()
             .await?;
@@ -661,7 +661,7 @@ impl SocialProvider for RedditProvider {
             .http
             .post("https://oauth.reddit.com/api/comment")
             .header("Authorization", format!("Bearer {access_token}"))
-            .header("User-Agent", "postiz-rust:v0.1.0 (by /u/postiz_rust)")
+            .header("User-Agent", "social-forge:v0.1.0 (by /u/social_forge)")
             .form(&[
                 ("api_type", "json"),
                 ("thing_id", &thing_id),
@@ -718,7 +718,7 @@ impl SocialProvider for RedditProvider {
             .http
             .get("https://oauth.reddit.com/api/v1/me/karma")
             .header("Authorization", format!("Bearer {access_token}"))
-            .header("User-Agent", "postiz-rust:v0.1.0 (by /u/postiz_rust)")
+            .header("User-Agent", "social-forge:v0.1.0 (by /u/social_forge)")
             .send()
             .await?;
 
@@ -771,7 +771,7 @@ impl SocialProvider for RedditProvider {
             .http
             .get(format!("https://oauth.reddit.com/by_id/{}", fullname))
             .header("Authorization", format!("Bearer {access_token}"))
-            .header("User-Agent", "postiz-rust:v0.1.0 (by /u/postiz_rust)")
+            .header("User-Agent", "social-forge:v0.1.0 (by /u/social_forge)")
             .send()
             .await?;
 
@@ -843,7 +843,7 @@ impl SocialProvider for RedditProvider {
             .http
             .get("https://oauth.reddit.com/message/inbox")
             .header("Authorization", format!("Bearer {access_token}"))
-            .header("User-Agent", "postiz-rust:v0.1.0 (by /u/postiz_rust)")
+            .header("User-Agent", "social-forge:v0.1.0 (by /u/social_forge)")
             .query(&[("limit", "25")])
             .send()
             .await?;

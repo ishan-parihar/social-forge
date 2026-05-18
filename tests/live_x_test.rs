@@ -6,8 +6,8 @@
 //
 // Requires: .env with X_AUTH_TOKEN, X_CT0 set, database running.
 
-use postiz_rust::config::Config;
-use postiz_rust::social::x::XProvider;
+use social_forge::config::Config;
+use social_forge::social::x::XProvider;
 
 fn setup_config() -> Config {
     dotenvy::dotenv().ok();

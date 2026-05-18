@@ -67,10 +67,17 @@
 </script>
 
 <div class="flex items-center gap-3 px-3 py-2.5 hover:bg-[#1a1f2e] rounded-lg transition-colors group">
-  <ProviderIcon provider={integration.provider_identifier} size="sm" />
+  {#if integration.profile_picture}
+    <img src={integration.profile_picture} alt="" class="w-8 h-8 rounded-full object-cover flex-shrink-0" />
+  {:else}
+    <ProviderIcon provider={integration.provider_identifier} size="sm" />
+  {/if}
   <div class="flex-1 min-w-0">
     <div class="text-sm truncate flex items-center gap-2">
       {integration.profile_name || integration.provider_name}
+      {#if integration.root_internal_id}
+        <span class="text-[10px] px-1.5 py-0.5 rounded border text-indigo-400 border-indigo-400/30 bg-indigo-400/10">Page</span>
+      {/if}
       {#if authTypeLabel}
         <span class="text-[10px] px-1.5 py-0.5 rounded border {authTypeColor}">{authTypeLabel}</span>
       {/if}
@@ -78,8 +85,10 @@
     <div class="text-xs text-[#6b7280] truncate">
       {#if integration.profile_url}
         {integration.profile_url}
+      {:else if integration.internal_id}
+        @{integration.internal_id}
       {:else}
-        ID: {integration.internal_id}
+        {integration.provider_name}
       {/if}
     </div>
   </div>

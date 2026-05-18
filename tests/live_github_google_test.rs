@@ -1,9 +1,9 @@
-use postiz_rust::config::Config;
-use postiz_rust::crypto;
-use postiz_rust::db;
-use postiz_rust::social::github::GithubProvider;
-use postiz_rust::social::google::GoogleProvider;
-use postiz_rust::social::SocialProvider;
+use social_forge::config::Config;
+use social_forge::crypto;
+use social_forge::db;
+use social_forge::social::github::GithubProvider;
+use social_forge::social::google::GoogleProvider;
+use social_forge::social::SocialProvider;
 
 fn get_config() -> Config {
     dotenvy::dotenv().ok();
@@ -160,7 +160,7 @@ async fn test_goog_search() {
 #[tokio::test]
 async fn test_goog_channel() {
     let (p, t) = google_provider_token().await;
-    let pages: Vec<postiz_rust::social::PageInfo> = SocialProvider::pages(&p, &t).await.unwrap();
+    let pages: Vec<social_forge::social::PageInfo> = SocialProvider::pages(&p, &t).await.unwrap();
     if let Some(page) = pages.first() {
         let r = p.get_channel_stats(&t, &page.id).await.unwrap();
         let s = &r["items"][0]["statistics"];
@@ -182,7 +182,7 @@ async fn test_goog_video() {
 #[tokio::test]
 async fn test_goog_playlists() {
     let (p, t) = google_provider_token().await;
-    let pages: Vec<postiz_rust::social::PageInfo> = SocialProvider::pages(&p, &t).await.unwrap();
+    let pages: Vec<social_forge::social::PageInfo> = SocialProvider::pages(&p, &t).await.unwrap();
     if let Some(page) = pages.first() {
         let r = p.get_playlists(&t, &page.id, 5).await.unwrap();
         println!("OK playlists: {}", r["items"].as_array().map(|a| a.len()).unwrap_or(0));
@@ -214,7 +214,7 @@ async fn test_goog_find() {
 #[tokio::test]
 async fn test_goog_analytics() {
     let (p, t) = google_provider_token().await;
-    let pages: Vec<postiz_rust::social::PageInfo> = SocialProvider::pages(&p, &t).await.unwrap();
+    let pages: Vec<social_forge::social::PageInfo> = SocialProvider::pages(&p, &t).await.unwrap();
     if let Some(page) = pages.first() {
         match p.get_analytics(&t, &page.id, "views,estimatedMinutesWatched", "2025-01-01", "2025-05-15").await {
             Ok(r) => println!("OK analytics: {} rows", r["rows"].as_array().map(|a| a.len()).unwrap_or(0)),

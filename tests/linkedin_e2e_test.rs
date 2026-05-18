@@ -13,16 +13,16 @@
 
 use std::sync::Arc;
 
-use postiz_rust::api::AppState;
-use postiz_rust::api::rate_limiter::AuthRateLimiter;
-use postiz_rust::config::Config;
-use postiz_rust::db;
-use postiz_rust::mcp::PostizMcpServer;
-use postiz_rust::realtime::Broadcaster;
-use postiz_rust::social::linkedin::LinkedInProvider;
-use postiz_rust::social::linkedin_page::LinkedInPageProvider;
-use postiz_rust::social::registry::ProviderRegistry;
-use postiz_rust::social::SocialProvider;
+use social_forge::api::AppState;
+use social_forge::api::rate_limiter::AuthRateLimiter;
+use social_forge::config::Config;
+use social_forge::db;
+use social_forge::mcp::PostizMcpServer;
+use social_forge::realtime::Broadcaster;
+use social_forge::social::linkedin::LinkedInProvider;
+use social_forge::social::linkedin_page::LinkedInPageProvider;
+use social_forge::social::registry::ProviderRegistry;
+use social_forge::social::SocialProvider;
 
 // ── Helpers ─────────────────────────────────────────────────────
 
@@ -278,7 +278,7 @@ async fn test_linkedin_li_tools_return_user_friendly_error_when_no_integration()
 
     if let Some((uid_str,)) = users.first() {
         let uid: uuid::Uuid = uid_str.parse().expect("valid UUID");
-        let integrations = postiz_rust::db::queries::list_integrations(&state.db, uid)
+        let integrations = social_forge::db::queries::list_integrations(&state.db, uid)
             .await
             .expect("Failed to list integrations");
 
@@ -322,7 +322,7 @@ async fn test_linkedin_mcp_tool_handler_full_chain() {
 
     // Verify publish through SocialProvider trait compiles correctly
     let provider = LinkedInProvider::new(&state.config);
-    let post = postiz_rust::social::PostContent {
+    let post = social_forge::social::PostContent {
         content: "End-to-end test post".into(),
         media: vec![],
         settings: serde_json::Value::Object(serde_json::Map::new()),
@@ -349,7 +349,7 @@ async fn test_linkedin_mcp_tool_handler_full_chain() {
 
     // LinkedIn Page publish via trait
     let lip_provider = LinkedInPageProvider::new(&state.config);
-    let lip_post = postiz_rust::social::PostContent {
+    let lip_post = social_forge::social::PostContent {
         content: "End-to-end page test post".into(),
         media: vec![],
         settings: serde_json::Value::Object(serde_json::Map::new()),
@@ -529,7 +529,7 @@ async fn test_linkedin_publish_full_flow() {
     // Test 1: Personal publish via SocialProvider trait
     {
         let provider = LinkedInProvider::new(&config);
-        let post = postiz_rust::social::PostContent {
+        let post = social_forge::social::PostContent {
             content: "E2E test - personal publish".into(),
             media: vec![],
             settings: serde_json::Value::Object(serde_json::Map::new()),
@@ -542,7 +542,7 @@ async fn test_linkedin_publish_full_flow() {
     // Test 2: Page publish via SocialProvider trait
     {
         let provider = LinkedInPageProvider::new(&config);
-        let post = postiz_rust::social::PostContent {
+        let post = social_forge::social::PostContent {
             content: "E2E test - page publish".into(),
             media: vec![],
             settings: serde_json::Value::Object(serde_json::Map::new()),
@@ -557,7 +557,7 @@ async fn test_linkedin_publish_full_flow() {
         let provider = LinkedInProvider::new(&config);
 
         // Should reject empty content via validate_post
-        let empty_post = postiz_rust::social::PostContent {
+        let empty_post = social_forge::social::PostContent {
             content: "".into(), // LinkedIn allows non-empty but SocialProvider doesn't validate emptiness
             media: vec![],
             settings: serde_json::Value::Object(serde_json::Map::new()),
@@ -569,7 +569,7 @@ async fn test_linkedin_publish_full_flow() {
 
         // Content over max_length should be caught by validate_post
         let long_content = "x".repeat(3001);
-        let long_post = postiz_rust::social::PostContent {
+        let long_post = social_forge::social::PostContent {
             content: long_content,
             media: vec![],
             settings: serde_json::Value::Object(serde_json::Map::new()),

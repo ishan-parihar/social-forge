@@ -1,4 +1,4 @@
-## Feature Parity Gap Analysis: postiz-app vs. social-forge (postiz-rust)
+## Feature Parity Gap Analysis: postiz-app vs. social-forge (social-forge)
 
 ---
 

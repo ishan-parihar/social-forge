@@ -1,4 +1,4 @@
-# Provider Audit — social-forge (postiz-rust)
+# Provider Audit — social-forge (social-forge)
 
 > **Living document**. Update as providers are connected, tested, or changed.
 > Last updated: 2026-05-15 | Commit: `40f9156` (plus subsequent LinkedIn Page analytics fix)
@@ -421,7 +421,7 @@ tests/
 
 | Component | Status | Notes |
 |-----------|--------|-------|
-| PostgreSQL | ✅ Running | Docker container `postiz-rust-postgres-1` (port 5432) |
+| PostgreSQL | ✅ Running | Docker container `social-forge-postgres-1` (port 5432) |
 | Redis | ✅ Running | Docker container (caching/rate limiting) |
 | Token Encryption | ✅ Wired | AES-256-GCM via `TOKEN_ENCRYPTION_KEY` (64 hex chars) |
 | MCP stdio mode | ✅ Working | `--mcp` flag for AI agent integration |

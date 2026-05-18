@@ -4,7 +4,7 @@
 To ensure consistent testing and avoid context loss regarding connected accounts, use the following credentials and identity:
 
 ### Database Configuration
-- **PostgreSQL Container**: `postiz-rust-postgres-1`
+- **PostgreSQL Container**: `social-forge-postgres-1`
 - **DB Name**: `postiz`
 - **User/Password**: `postiz` / `postiz`
 - **Internal Connection**: `postgres://postiz:postiz@172.21.0.2:5432/postiz`

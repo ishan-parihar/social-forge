@@ -94,7 +94,7 @@ pub async fn list_providers(
                 has_credentials: has_creds,
                 editor_type: format!("{:?}", p.editor_type()),
                 redirect_uri: if p.uses_oauth() {
-                    format!("{}/api/auth/callback", state.config.app_url)
+                    format!("{}/api/auth/callback", state.config.frontend_url)
                 } else {
                     "N/A (non-OAuth)".into()
                 },
@@ -161,7 +161,7 @@ pub async fn connect_integration(
         let redirect_uri = input
             .redirect_uri
             .clone()
-            .unwrap_or_else(|| format!("{}/api/auth/callback", state.config.app_url));
+            .unwrap_or_else(|| format!("{}/api/auth/callback", state.config.frontend_url));
 
         let token = provider_obj
             .exchange_code("", "", &redirect_uri)

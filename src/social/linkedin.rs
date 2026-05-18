@@ -313,17 +313,29 @@ impl SocialProvider for LinkedInProvider {
         let resp = self.http.post(self.token_url()).form(&params).send().await?;
         let json: serde_json::Value = resp.json().await?;
 
+        let access_token = json["access_token"]
+            .as_str()
+            .ok_or_else(|| ProviderError::Auth("Missing access_token".into()))?
+            .to_string();
+
+        // Fetch profile info so it's not lost on refresh
+        let profile = self
+            .http
+            .get("https://api.linkedin.com/v2/userinfo")
+            .header("Authorization", format!("Bearer {access_token}"))
+            .send()
+            .await?
+            .json::<serde_json::Value>()
+            .await?;
+
         Ok(AuthToken {
-            access_token: json["access_token"]
-                .as_str()
-                .ok_or_else(|| ProviderError::Auth("Missing access_token".into()))?
-                .to_string(),
+            access_token,
             refresh_token: json["refresh_token"].as_str().map(String::from),
             expires_in: json["expires_in"].as_u64().map(|v| v as u32),
-            provider_user_id: String::new(),
-            name: String::new(),
-            username: String::new(),
-            picture: None,
+            provider_user_id: profile["sub"].as_str().unwrap_or("").to_string(),
+            name: profile["name"].as_str().unwrap_or("").to_string(),
+            username: profile["preferred_username"].as_str().unwrap_or("").to_string(),
+            picture: profile["picture"].as_str().map(String::from),
         })
     }
 
@@ -400,6 +412,30 @@ impl SocialProvider for LinkedInProvider {
                 .to_string();
             Err(ProviderError::Api(msg))
         }
+    }
+
+    async fn reconnect(
+        &self,
+        access_token: &str,
+        _internal_id: &str,
+        _page_id: &str,
+    ) -> Result<super::ReconnectResult, ProviderError> {
+        let profile = self
+            .http
+            .get("https://api.linkedin.com/v2/userinfo")
+            .header("Authorization", format!("Bearer {access_token}"))
+            .send()
+            .await?
+            .json::<serde_json::Value>()
+            .await?;
+
+        Ok(super::ReconnectResult {
+            id: profile["sub"].as_str().unwrap_or("").to_string(),
+            name: profile["name"].as_str().unwrap_or("").to_string(),
+            access_token: access_token.to_string(),
+            picture: profile["picture"].as_str().map(String::from),
+            username: profile["preferred_username"].as_str().map(String::from),
+        })
     }
 
     async fn fetch_page_info(

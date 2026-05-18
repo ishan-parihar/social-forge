@@ -15,8 +15,8 @@
 
 use std::sync::OnceLock;
 
-use postiz_rust::config::Config;
-use postiz_rust::social::x::XProvider;
+use social_forge::config::Config;
+use social_forge::social::x::XProvider;
 
 static CONFIG: OnceLock<Config> = OnceLock::new();
 
@@ -312,12 +312,12 @@ async fn test_x_cookie_parsing() {
     let _ = provider; // just need the impl
     
     // Verify cookie token is detected
-    let is_cookie = postiz_rust::social::x::XProvider::is_cookie_auth_static(valid);
+    let is_cookie = social_forge::social::x::XProvider::is_cookie_auth_static(valid);
     println!("  ✅ cookie parse (valid): {is_cookie}");
     
-    let not_cookie = postiz_rust::social::x::XProvider::is_cookie_auth_static(invalid);
+    let not_cookie = social_forge::social::x::XProvider::is_cookie_auth_static(invalid);
     println!("  ✅ cookie parse (invalid): {not_cookie}");
     
-    let empty_cookie = postiz_rust::social::x::XProvider::is_cookie_auth_static(empty);
+    let empty_cookie = social_forge::social::x::XProvider::is_cookie_auth_static(empty);
     println!("  ✅ cookie parse (empty): {empty_cookie}");
 }

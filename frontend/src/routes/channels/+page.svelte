@@ -10,12 +10,39 @@
   let integrations = $state<Integration[]>([]);
   let loading = $state(true);
   let error = $state("");
+  const providerLabels: Record<string, string> = {
+    x: "X (Twitter)", facebook: "Facebook", instagram: "Instagram",
+    "instagram-standalone": "Instagram (Standalone)", threads: "Threads",
+    linkedin: "LinkedIn", "linkedin-page": "LinkedIn Page",
+    google: "Google Suite", youtube: "YouTube", google_my_business: "Google Business",
+    reddit: "Reddit", bluesky: "Bluesky", discord: "Discord", pinterest: "Pinterest",
+    tiktok: "TikTok", twitch: "Twitch", vk: "VK", mewe: "MeWe",
+    moltbook: "Moltbook", kick: "Kick", mastodon: "Mastodon",
+    "telegram-bot": "Telegram Bot", "telegram-user": "Telegram User",
+    whatsapp: "WhatsApp", slack: "Slack",
+    wordpress: "WordPress", medium: "Medium", devto: "Dev.to", hashnode: "Hashnode",
+    github: "GitHub", lemmy: "Lemmy", whop: "Whop",
+    farcaster: "Farcaster", nostr: "Nostr",
+    skool: "Skool",
+  };
+
+  function providerLabel(provider: string): string {
+    return providerLabels[provider] ?? provider.replace(/_/g, " ");
+  }
+
   let availableProviders = $state([
-    "x", "facebook", "instagram", "threads", "linkedin", "linkedin-page",
-    "youtube", "pinterest", "reddit", "bluesky", "discord", "telegram", "whatsapp", "skool", "lemmy",
-    "twitch", "vk", "google_my_business", "whop",
-    "mewe", "moltbook", "kick",
+    "x", "facebook", "instagram", "instagram-standalone", "threads",
+    "linkedin", "linkedin-page",
+    "google",
+    "reddit", "bluesky", "discord", "pinterest",
+    "tiktok", "twitch", "vk", "mewe", "moltbook", "kick", "mastodon",
+    "google_my_business", "whop", "slack",
+    "telegram-bot", "telegram-user",
+    "whatsapp",
+    "wordpress", "medium", "devto", "hashnode",
+    "github", "lemmy",
     "farcaster", "nostr",
+    "skool",
   ]);
   let connecting = $state<string | null>(null);
   let connectProvider = $state<string | null>(null);
@@ -171,7 +198,7 @@
           class="flex flex-col items-center gap-2 p-4 bg-[#0d1117] border border-[#1e2435] rounded-xl hover:border-indigo-500/50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <ProviderIcon {provider} size="lg" />
-          <span class="text-xs capitalize">{provider.replace("-", " ")}</span>
+          <span class="text-xs">{providerLabel(provider)}</span>
         </button>
       {/each}
     </div>

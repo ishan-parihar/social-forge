@@ -26,16 +26,16 @@ jobs:
         include:
           - name: linux-x64
             os: ubuntu-latest
-            bin: postiz-rust
-            artifact_name: postiz-rust-linux-x64
+            bin: social-forge
+            artifact_name: social-forge-linux-x64
           - name: macos-arm64
             os: macos-14
-            bin: postiz-rust
-            artifact_name: postiz-rust-macos-arm64
+            bin: social-forge
+            artifact_name: social-forge-macos-arm64
           - name: windows-x64
             os: windows-latest
-            bin: postiz-rust.exe
-            artifact_name: postiz-rust-windows-x64.exe
+            bin: social-forge.exe
+            artifact_name: social-forge-windows-x64.exe
     steps:
       - uses: actions/checkout@v4
 

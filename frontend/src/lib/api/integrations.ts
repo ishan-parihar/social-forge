@@ -26,6 +26,11 @@ export interface ConnectWeb3Request {
   label?: string;
 }
 
+export interface PageInfo {
+  id: string; name: string; access_token?: string;
+  picture?: string; username?: string;
+}
+
 export const integrationsApi = {
   list: () => api.get<{ integrations: Integration[] }>("/api/integrations"),
   connect: (provider: string) => api.get<{ url: string; state: string }>(`/api/integrations/connect/${provider}`),
@@ -46,4 +51,12 @@ export const integrationsApi = {
     ),
   refresh: (id: string) =>
     api.post<{ success: boolean }>(`/api/integrations/${id}/refresh`),
+  availablePages: (integrationId: string) =>
+    api.get<{ pages: PageInfo[]; parent_integration_id: string; provider: string }>(
+      `/api/integrations/${integrationId}/available-pages`
+    ),
+  connectPage: (parentIntegrationId: string, pageId: string) =>
+    api.post<{ integration: Integration; parent_id: string }>(
+      `/api/integrations/${parentIntegrationId}/connect-page/${pageId}`
+    ),
 };
