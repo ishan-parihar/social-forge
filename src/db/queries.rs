@@ -89,26 +89,29 @@ pub async fn create_integration(
     profile_picture: Option<&str>,
     profile_url: Option<&str>,
     root_internal_id: Option<&str>,
+    auth_method: Option<&str>,
 ) -> Result<Integration, sqlx::Error> {
+    let method = auth_method.unwrap_or("oauth");
     sqlx::query_as!(
         Integration,
         r#"INSERT INTO integrations
            (user_id, provider_identifier, provider_name, internal_id,
             access_token, refresh_token, token_expires_at,
             profile_name, profile_picture, profile_url,
-            root_internal_id)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            root_internal_id, auth_method)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
            ON CONFLICT (user_id, provider_identifier, internal_id)
            DO UPDATE SET access_token = $5, refresh_token = $6,
              token_expires_at = $7, profile_name = $8,
              profile_picture = $9, profile_url = $10,
              root_internal_id = COALESCE($11, integrations.root_internal_id),
+             auth_method = $12,
              refresh_needed = false, disabled = false,
              updated_at = now()
            RETURNING id, user_id, provider_identifier, provider_name,
              internal_id, access_token, refresh_token, token_expires_at,
              profile_name, profile_picture, profile_url, disabled,
-             refresh_needed, root_internal_id, posting_times, created_at, updated_at"#,
+             refresh_needed, root_internal_id, posting_times, auth_method, created_at, updated_at"#,
         user_id,
         provider_identifier,
         provider_name,
@@ -120,6 +123,7 @@ pub async fn create_integration(
         profile_picture,
         profile_url,
         root_internal_id,
+        method,
     )
     .fetch_one(pool)
     .await
@@ -134,7 +138,7 @@ pub async fn list_integrations(
         "SELECT id, user_id, provider_identifier, provider_name, internal_id,
                 access_token, refresh_token, token_expires_at,
                 profile_name, profile_picture, profile_url, disabled,
-                refresh_needed, root_internal_id, posting_times, created_at, updated_at
+                refresh_needed, root_internal_id, posting_times, auth_method, created_at, updated_at
          FROM integrations WHERE user_id = $1 ORDER BY created_at DESC",
         user_id,
     )
@@ -152,7 +156,7 @@ pub async fn get_integration(
         "SELECT id, user_id, provider_identifier, provider_name, internal_id,
                 access_token, refresh_token, token_expires_at,
                 profile_name, profile_picture, profile_url, disabled,
-                refresh_needed, root_internal_id, posting_times, created_at, updated_at
+                refresh_needed, root_internal_id, posting_times, auth_method, created_at, updated_at
          FROM integrations WHERE id = $1 AND user_id = $2",
         id,
         user_id,

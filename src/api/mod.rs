@@ -104,6 +104,8 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/integrations", axum::routing::get(integrations::list))
         .route("/api/integrations/connect/{provider}", axum::routing::get(integrations::connect))
         .route("/api/integrations/connect/api-key", axum::routing::post(integrations::connect_api_key))
+        .route("/api/integrations/connect/x-cookie", axum::routing::post(integrations::connect_x_cookie))
+        .route("/api/integrations/connect/github-pat", axum::routing::post(integrations::connect_github_pat))
         .route("/api/integrations/connect/web3", axum::routing::post(integrations::connect_web3))
         .route("/api/integrations/{id}", axum::routing::delete(integrations::delete))
         .route("/api/integrations/{id}/available-pages", axum::routing::get(integrations::available_pages))

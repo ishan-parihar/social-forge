@@ -58,6 +58,7 @@ pub struct Integration {
     pub refresh_needed: bool,
     pub root_internal_id: Option<String>,
     pub posting_times: serde_json::Value,
+    pub auth_method: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -75,6 +76,7 @@ pub struct IntegrationPublic {
     pub refresh_needed: bool,
     pub root_internal_id: Option<String>,
     pub posting_times: serde_json::Value,
+    pub auth_method: String,
 }
 
 impl From<Integration> for IntegrationPublic {
@@ -91,6 +93,7 @@ impl From<Integration> for IntegrationPublic {
             refresh_needed: i.refresh_needed,
             root_internal_id: i.root_internal_id,
             posting_times: i.posting_times,
+            auth_method: i.auth_method,
         }
     }
 }

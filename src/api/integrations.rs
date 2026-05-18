@@ -124,6 +124,7 @@ pub async fn connect(
             token.picture.as_deref(),
             None,
             None,
+        None, // auth_method
         )
         .await?;
 
@@ -432,6 +433,176 @@ pub async fn refresh(
     })))
 }
 
+// ── X Cookie Connect ────────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+pub struct ConnectXCookieRequest {
+    pub auth_token: String,
+    pub ct0: String,
+}
+
+/// POST /api/integrations/connect/x-cookie — connect X via browser cookies
+pub async fn connect_x_cookie(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Json(body): Json<ConnectXCookieRequest>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    if body.auth_token.trim().is_empty() || body.ct0.trim().is_empty() {
+        return Err(AppError::BadRequest("auth_token and ct0 are required".into()));
+    }
+
+    let cookie_str = format!("auth_token={}; ct0={};", body.auth_token.trim(), body.ct0.trim());
+    let ct0 = body.ct0.trim();
+    let bearer = "Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA";
+
+    let http = reqwest::Client::new();
+
+    // Step 1: Get current user from multi/list
+    let resp = http
+        .get("https://x.com/i/api/1.1/account/multi/list.json")
+        .header("x-csrf-token", ct0)
+        .header("Cookie", &cookie_str)
+        .header("Authorization", bearer)
+        .send()
+        .await
+        .map_err(|e| AppError::Provider(format!("X cookie auth failed: {e}")))?;
+
+    let list: serde_json::Value = resp.json().await
+        .map_err(|e| AppError::Provider(format!("X response parse error: {e}")))?;
+
+    let users = list["users"].as_array()
+        .ok_or_else(|| AppError::Provider("X cookie auth: no users in response".into()))?;
+    let user = users.first()
+        .ok_or_else(|| AppError::Provider("X cookie auth: empty users list".into()))?;
+
+    let screen_name = user["screen_name"].as_str().unwrap_or("");
+    let user_id_str = user["user_id"].as_str().unwrap_or("");
+
+    if screen_name.is_empty() || user_id_str.is_empty() {
+        return Err(AppError::Provider("X cookie auth: could not determine user".into()));
+    }
+
+    // Step 2: Get full profile via GraphQL UserByScreenName
+    let vars = serde_json::json!({"screen_name": screen_name, "withSafetyModeUserFields": true});
+    let features = serde_json::json!({"hidden_profile_subscriptions_enabled":true,"responsive_web_graphql_exclude_directive_enabled":true,"verified_phone_label_enabled":false,"responsive_web_graphql_skip_user_profile_image_extensions_enabled":false,"responsive_web_graphql_timeline_navigation_enabled":true});
+    let qid = "1VOOyvKkiI3FMmkeDNxM9A";
+    let gql_url = format!(
+        "https://x.com/i/api/graphql/{qid}/UserByScreenName?variables={}&features={}",
+        urlencoding::encode(&vars.to_string()),
+        urlencoding::encode(&features.to_string()),
+    );
+
+    let resp = http
+        .get(&gql_url)
+        .header("x-csrf-token", ct0)
+        .header("Cookie", &cookie_str)
+        .header("Authorization", bearer)
+        .send()
+        .await
+        .map_err(|e| AppError::Provider(format!("X GraphQL error: {e}")))?;
+
+    let profile: serde_json::Value = resp.json().await.unwrap_or_default();
+    let legacy = profile.pointer("/data/user/result/legacy");
+    let name = legacy.and_then(|l| l["name"].as_str()).unwrap_or(screen_name);
+    let picture = legacy.and_then(|l| l["profile_image_url_https"].as_str())
+        .map(|u| u.replace("_normal", "_400x400"));
+
+    // Store as JSON blob
+    let token_json = serde_json::json!({
+        "auth_token": body.auth_token.trim(),
+        "ct0": body.ct0.trim(),
+        "cookie_string": cookie_str,
+    });
+    let access_token = token_json.to_string();
+
+    let integration = queries::create_integration(
+        &state.db,
+        auth.user_id,
+        "x",
+        "X (Twitter)",
+        user_id_str,
+        &access_token,
+        None,
+        None,
+        Some(name),
+        picture.as_deref(),
+        Some(&format!("@{screen_name}")),
+        None,
+        Some("cookie"),
+    )
+    .await?;
+
+    let public: IntegrationPublic = integration.into();
+    Ok(Json(serde_json::json!({ "integration": public })))
+}
+
+// ── GitHub PAT Connect ──────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+pub struct ConnectGithubPatRequest {
+    pub pat: String,
+    pub label: Option<String>,
+}
+
+/// POST /api/integrations/connect/github-pat — connect GitHub via Personal Access Token
+pub async fn connect_github_pat(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Json(body): Json<ConnectGithubPatRequest>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    if body.pat.trim().is_empty() {
+        return Err(AppError::BadRequest("pat is required".into()));
+    }
+
+    let http = reqwest::Client::new();
+    let resp = http
+        .get("https://api.github.com/user")
+        .header("Authorization", format!("Bearer {}", body.pat.trim()))
+        .header("Accept", "application/vnd.github.v3+json")
+        .header("User-Agent", "social-forge:v0.1.0")
+        .send()
+        .await
+        .map_err(|e| AppError::Provider(format!("GitHub API error: {e}")))?;
+
+    if !resp.status().is_success() {
+        return Err(AppError::BadRequest("Invalid GitHub PAT or insufficient permissions".into()));
+    }
+
+    let json: serde_json::Value = resp.json().await
+        .map_err(|e| AppError::Provider(format!("GitHub response parse error: {e}")))?;
+
+    let gh_id = json["id"].as_u64().map(|n| n.to_string()).unwrap_or_default();
+    let login = json["login"].as_str().unwrap_or("");
+    let name = json["name"].as_str().or(Some(login)).unwrap_or("");
+    let avatar = json["avatar_url"].as_str();
+
+    if gh_id.is_empty() {
+        return Err(AppError::Provider("Failed to fetch GitHub user info".into()));
+    }
+
+    let label = body.label.as_deref().unwrap_or(name);
+
+    let integration = queries::create_integration(
+        &state.db,
+        auth.user_id,
+        "github",
+        "GitHub",
+        &gh_id,
+        body.pat.trim(),
+        None,
+        None,
+        Some(label),
+        avatar,
+        Some(&format!("@{login}")),
+        None,
+        Some("pat"),
+    )
+    .await?;
+
+    let public: IntegrationPublic = integration.into();
+    Ok(Json(serde_json::json!({ "integration": public })))
+}
+
 // ── API Key Connect ─────────────────────────────────────────
 
 #[derive(Debug, Deserialize)]
@@ -509,6 +680,7 @@ pub async fn connect_api_key(
         page.picture.as_deref(),
         None,
         None,
+        None, // auth_method
     )
     .await?;
 
@@ -614,6 +786,7 @@ pub async fn connect_web3(
         auth_result.picture.as_deref(),
         None,
         None,
+        None, // auth_method
     )
     .await?;
 
@@ -783,6 +956,7 @@ pub async fn connect_page(
         page.picture.as_deref(),
         None,
         Some(&parent.internal_id),
+        None, // auth_method
     )
     .await?;
 
