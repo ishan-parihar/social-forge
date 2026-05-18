@@ -87,13 +87,34 @@ pub async fn connect(
 
         // For one-time-token providers (Telegram), give instructions
         if provider_obj.one_time_token() {
-            // Generate a one-time code that the user will send in the chat
             let code = uuid::Uuid::new_v4().to_string();
+            let instructions = match provider.as_str() {
+                "telegram-bot" => {
+                    // Get bot username from configured token
+                    let mut bot_username = String::from("your bot");
+                    if let Some((_, tokens_str)) = state.config.provider_credentials("telegram-bot") {
+                        let token = tokens_str.split(',').next().unwrap_or("").trim().to_string();
+                        if !token.is_empty() {
+                            if let Ok(resp) = reqwest::Client::new()
+                                .get(format!("https://api.telegram.org/bot{token}/getMe"))
+                                .send().await
+                            {
+                                if let Ok(json) = resp.json::<serde_json::Value>().await {
+                                    if let Some(u) = json["result"]["username"].as_str() {
+                                        bot_username = format!("@{u}");
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    format!("{bot_username}\n/connect {code}")
+                },
+                "telegram-user" => "Use MCP tools (tu_request_code → tu_sign_in) to authenticate your Telegram account, then click Verify.".into(),
+                "whatsapp" => "Use MCP tools (wa_pair_code) to link your WhatsApp device, then click Verify.".into(),
+                _ => format!("Send this code to the provider: /connect {code}"),
+            };
             return Ok(Json(ConnectResponse {
-                url: format!(
-                    "Open Telegram, start a chat with this bot, and send: /connect {}",
-                    code
-                ),
+                url: instructions,
                 state: "one-time-token".into(),
             }));
         }
@@ -439,6 +460,203 @@ pub async fn refresh(
 pub struct ConnectXCookieRequest {
     pub auth_token: String,
     pub ct0: String,
+}
+
+/// POST /api/integrations/connect/:provider/verify — verify one-time-token (Telegram Bot)
+pub async fn verify_one_time_token(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(provider): Path<String>,
+    Json(body): Json<serde_json::Value>,
+) -> Result<Json<ConnectResponse>, AppError> {
+    let code = body["code"].as_str().unwrap_or("").to_string();
+
+    let provider_obj = state
+        .providers
+        .get(&provider)
+        .ok_or_else(|| AppError::BadRequest(format!("Unknown provider: {provider}")))?;
+
+    let redirect_uri = format!("{}/api/auth/callback", state.config.app_url);
+    let token = provider_obj
+        .exchange_code(&code, "", &redirect_uri)
+        .await
+        .map_err(|e| AppError::Provider(format!("Verification failed: {e}")))?;
+
+    queries::create_integration(
+        &state.db,
+        auth.user_id,
+        &provider,
+        &provider_obj.name(),
+        &token.provider_user_id,
+        &token.access_token,
+        token.refresh_token.as_deref(),
+        token.expires_in.map(|exp| chrono::Utc::now() + chrono::Duration::seconds(exp as i64)),
+        Some(&token.name),
+        token.picture.as_deref(),
+        token.username.is_empty().then_some(None).unwrap_or(Some(&format!("@{}", token.username))),
+        None,
+        None,
+    )
+    .await?;
+
+    state.broadcast.send("integration_connected", &serde_json::json!({ "provider": provider, "name": token.name }));
+
+    Ok(Json(ConnectResponse {
+        url: format!("Connected to {} as {}", provider_obj.name(), token.name),
+        state: "connected".into(),
+    }))
+}
+
+/// POST /api/integrations/connect/telegram-bot/token — connect with a custom bot token
+pub async fn connect_telegram_bot_token(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Json(body): Json<serde_json::Value>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let token = body["token"].as_str().unwrap_or("").trim().to_string();
+    if token.is_empty() {
+        return Err(AppError::BadRequest("Bot token required".into()));
+    }
+
+    // Validate token via getMe
+    let http = reqwest::Client::new();
+    let resp = http.get(format!("https://api.telegram.org/bot{token}/getMe"))
+        .send().await
+        .map_err(|e| AppError::Provider(format!("Failed to reach Telegram: {e}")))?;
+
+    let json: serde_json::Value = resp.json().await
+        .map_err(|e| AppError::Provider(format!("Invalid response: {e}")))?;
+
+    if !json["ok"].as_bool().unwrap_or(false) {
+        return Err(AppError::Provider("Invalid bot token".into()));
+    }
+
+    let bot = &json["result"];
+    let bot_id = bot["id"].as_i64().unwrap_or(0).to_string();
+    let bot_name = bot["first_name"].as_str().unwrap_or("Telegram Bot");
+    let bot_username = bot["username"].as_str().unwrap_or("");
+    let profile_url = if bot_username.is_empty() { None } else { Some(format!("@{bot_username}")) };
+
+    let integration = queries::create_integration(
+        &state.db, auth.user_id,
+        "telegram-bot", "Telegram Bot",
+        &bot_id, &token,
+        None, None,
+        Some(bot_name),
+        None,
+        profile_url.as_deref(),
+        None, None,
+    ).await?;
+
+    let public: IntegrationPublic = integration.into();
+    Ok(Json(serde_json::json!({ "integration": public })))
+}
+
+/// POST /api/integrations/connect/whatsapp/pair — request pair code
+pub async fn whatsapp_pair(
+    State(state): State<AppState>,
+    _auth: AuthenticatedUser,
+    Json(body): Json<serde_json::Value>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let phone = body["phone_number"].as_str().unwrap_or("").trim().to_string();
+    if phone.is_empty() || !phone.starts_with('+') {
+        return Err(AppError::BadRequest("phone_number required in international format (e.g. +1234567890)".into()));
+    }
+
+    let wa = state.wa_client.as_ref()
+        .ok_or_else(|| AppError::Provider("WhatsApp client not configured".into()))?;
+
+    // Always reconnect to ensure fresh WebSocket
+    {
+        let mut locked = wa.lock().await;
+        locked.connect().await.map_err(|e| AppError::Provider(format!("WhatsApp connect failed: {e}")))?;
+    }
+
+    let code = crate::wa::auth::pair_with_code(wa, crate::wa::auth::PairOptions {
+        phone_number: phone,
+        show_push_notification: true,
+    }).await.map_err(|e| AppError::Provider(format!("Pair code request failed: {e}")))?;
+
+    Ok(Json(serde_json::json!({ "pair_code": code, "expires_in": 180 })))
+}
+
+/// GET /api/integrations/connect/whatsapp/status — poll auth status
+pub async fn whatsapp_status(
+    State(state): State<AppState>,
+    _auth: AuthenticatedUser,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let wa = state.wa_client.as_ref()
+        .ok_or_else(|| AppError::Provider("WhatsApp client not configured".into()))?;
+
+    let locked = wa.lock().await;
+    let authenticated = locked.is_authenticated();
+    let jid = if authenticated {
+        locked.inner().get_pn().await.map(|j| j.to_string())
+    } else {
+        None
+    };
+    Ok(Json(serde_json::json!({ "authenticated": authenticated, "jid": jid })))
+}
+
+/// POST /api/integrations/connect/telegram-user/request-code
+pub async fn telegram_user_request_code(
+    State(state): State<AppState>,
+    _auth: AuthenticatedUser,
+    Json(body): Json<serde_json::Value>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let phone = body["phone"].as_str().unwrap_or("").trim().to_string();
+    if phone.is_empty() {
+        return Err(AppError::BadRequest("phone number required".into()));
+    }
+
+    let mgr = state.telegram_client_manager.as_ref()
+        .ok_or_else(|| AppError::Provider("Telegram user client not configured. Set TELEGRAM_API_ID and TELEGRAM_API_HASH.".into()))?;
+
+    mgr.request_login_code(&phone).await
+        .map_err(|e| AppError::Provider(format!("Failed to send code: {e}")))?;
+
+    Ok(Json(serde_json::json!({ "status": "code_sent" })))
+}
+
+/// POST /api/integrations/connect/telegram-user/sign-in
+pub async fn telegram_user_sign_in(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Json(body): Json<serde_json::Value>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let code = body["code"].as_str().unwrap_or("").trim().to_string();
+    if code.is_empty() {
+        return Err(AppError::BadRequest("verification code required".into()));
+    }
+
+    let mgr = state.telegram_client_manager.as_ref()
+        .ok_or_else(|| AppError::Provider("Telegram user client not configured".into()))?;
+
+    mgr.sign_in("", &code).await
+        .map_err(|e| AppError::Provider(format!("Sign in failed: {e}")))?;
+
+    // Fetch user info and create integration
+    let info = mgr.user_info().await
+        .map_err(|e| AppError::Provider(format!("Failed to get user info: {e}")))?;
+
+    let user_id = info["id"].as_i64().unwrap_or(0).to_string();
+    let name = info["name"].as_str().unwrap_or("Telegram User").to_string();
+    let username = info["username"].as_str().unwrap_or("").to_string();
+    let profile_url = if username.is_empty() { None } else { Some(format!("@{username}")) };
+
+    let integration = queries::create_integration(
+        &state.db, auth.user_id,
+        "telegram-user", "Telegram User",
+        &user_id, &user_id,
+        None, None,
+        Some(&name),
+        None,
+        profile_url.as_deref(),
+        None, None,
+    ).await?;
+
+    let public: IntegrationPublic = integration.into();
+    Ok(Json(serde_json::json!({ "integration": public })))
 }
 
 /// POST /api/integrations/connect/x-cookie — connect X via browser cookies

@@ -244,6 +244,7 @@ impl Config {
             )),
             "telegram-bot" => Some(("bot".into(), self.telegram_bot_tokens.clone()?)),
             "telegram-user" => Some(("user".into(), "daemon".into())),
+            "whatsapp" => self.whatsapp_store_dir.as_ref().map(|d| ("whatsapp".into(), d.clone())),
             "pinterest" => Some((
                 self.pinterest_client_id.clone()?,
                 self.pinterest_client_secret.clone()?,
