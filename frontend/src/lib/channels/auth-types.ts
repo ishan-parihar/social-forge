@@ -1,5 +1,5 @@
 /** Auth type mapping: determines which connect UI to show per provider. */
-export type AuthType = "oauth" | "api_key" | "web3" | "extension";
+export type AuthType = "oauth" | "api_key" | "web3" | "extension" | "cookie" | "pat";
 
 export const AUTH_TYPES: Record<string, AuthType> = {
   lemmy: "api_key",
@@ -10,6 +10,12 @@ export const AUTH_TYPES: Record<string, AuthType> = {
   farcaster: "web3",
   nostr: "web3",
   skool: "extension",
+};
+
+/** Providers that support multiple connect methods */
+export const MULTI_AUTH_PROVIDERS: Record<string, AuthType[]> = {
+  x: ["oauth", "cookie"],
+  github: ["pat"],
 };
 
 /**

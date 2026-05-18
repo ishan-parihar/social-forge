@@ -5,11 +5,14 @@
   import ChannelCard from "$lib/channels/ChannelCard.svelte";
   import ProviderIcon from "$lib/channels/ProviderIcon.svelte";
   import ConnectFlow from "$lib/channels/ConnectFlow.svelte";
-  import { getAuthType } from "$lib/channels/auth-types";
+  import { getAuthType, MULTI_AUTH_PROVIDERS } from "$lib/channels/auth-types";
 
   let integrations = $state<Integration[]>([]);
   let loading = $state(true);
   let error = $state("");
+  let credDialog = $state<{ provider: string; type: "cookie" | "pat" } | null>(null);
+  let credFields = $state<Record<string, string>>({});
+  let connectChoice = $state<string | null>(null);
   const providerLabels: Record<string, string> = {
     x: "X (Twitter)", facebook: "Facebook", instagram: "Instagram",
     "instagram-standalone": "Instagram (Standalone)", threads: "Threads",
@@ -72,6 +75,18 @@
   }
 
   function initiateConnect(provider: string) {
+    const multiAuth = MULTI_AUTH_PROVIDERS[provider];
+    if (multiAuth && !multiAuth.includes("oauth")) {
+      // Provider only supports non-OAuth (e.g., GitHub PAT)
+      credDialog = { provider, type: multiAuth[0] as "cookie" | "pat" };
+      credFields = {};
+      return;
+    }
+    if (multiAuth && multiAuth.includes("oauth") && multiAuth.includes("cookie")) {
+      // Show choice: OAuth or Cookie (for X)
+      connectChoice = provider;
+      return;
+    }
     const authType = getAuthType(provider);
     if (authType === "oauth") {
       // OAuth flow: open popup, listen for postMessage
@@ -127,6 +142,48 @@
       // Non-OAuth: show connect dialog
       connectProvider = provider;
     }
+  }
+
+  function initiateOAuth(provider: string) {
+    connecting = provider;
+    error = "";
+    integrationsApi.connect(provider).then((r) => {
+      if (r.error) { error = r.error; connecting = null; return; }
+      if (!r.data?.url) { error = "Failed to initiate connection"; connecting = null; return; }
+      if (r.data.state === "auto") { connecting = null; load(); return; }
+      const popup = window.open(r.data.url, "_blank", "width=600,height=700");
+      if (popup) {
+        const onMessage = (e: MessageEvent) => {
+          if (e.data?.type === "oauth-connected") { window.removeEventListener("message", onMessage); connecting = null; load(); }
+        };
+        window.addEventListener("message", onMessage);
+        const interval = setInterval(() => { if (popup.closed) { clearInterval(interval); window.removeEventListener("message", onMessage); connecting = null; load(); } }, 1000);
+      } else { connecting = null; }
+    }).catch(() => { error = "Failed to connect " + provider; connecting = null; });
+  }
+
+  async function submitCredDialog() {
+    if (!credDialog) return;
+    error = "";
+    try {
+      if (credDialog.provider === "x" && credDialog.type === "cookie") {
+        const r = await integrationsApi.connectXCookie(credFields.auth_token || "", credFields.ct0 || "");
+        if (r.error) { error = r.error; return; }
+      } else if (credDialog.provider === "github" && credDialog.type === "pat") {
+        const r = await integrationsApi.connectGithubPat(credFields.pat || "", credFields.label || undefined);
+        if (r.error) { error = r.error; return; }
+      }
+      credDialog = null;
+      credFields = {};
+      await load();
+    } catch (e: any) {
+      error = e?.message || "Connection failed";
+    }
+  }
+
+  function showXCookieDialog() {
+    credDialog = { provider: "x", type: "cookie" };
+    credFields = {};
   }
 
   async function handleChannelRefresh(id: string) {
@@ -211,3 +268,49 @@
   onSuccess={handleConnectSuccess}
   onClose={handleConnectClose}
 />
+
+{#if connectChoice}
+<div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50" role="dialog">
+  <div class="bg-[#0d1117] border border-[#1e2435] rounded-xl p-6 w-full max-w-sm">
+    <h3 class="text-lg font-semibold mb-4">Connect {providerLabel(connectChoice)}</h3>
+    <p class="text-sm text-[#6b7280] mb-4">Choose how to connect:</p>
+    <div class="flex flex-col gap-3">
+      <button onclick={() => { const p = connectChoice; connectChoice = null; initiateOAuth(p!); }} class="px-4 py-3 bg-[#161b22] border border-[#30363d] rounded-lg hover:border-indigo-500/50 text-left">
+        <div class="text-sm font-medium">OAuth 2.0</div>
+        <div class="text-xs text-[#6b7280]">Standard login — limited to API scopes</div>
+      </button>
+      <button onclick={() => { connectChoice = null; credDialog = { provider: "x", type: "cookie" }; credFields = {}; }} class="px-4 py-3 bg-[#161b22] border border-[#30363d] rounded-lg hover:border-orange-500/50 text-left">
+        <div class="text-sm font-medium">Browser Cookies</div>
+        <div class="text-xs text-[#6b7280]">Full access — DMs, analytics, advanced features</div>
+      </button>
+    </div>
+    <button onclick={() => connectChoice = null} class="mt-4 text-sm text-[#6b7280] hover:text-white w-full text-center">Cancel</button>
+  </div>
+</div>
+{/if}
+
+{#if credDialog}
+<div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50" role="dialog">
+  <div class="bg-[#0d1117] border border-[#1e2435] rounded-xl p-6 w-full max-w-md">
+    <h3 class="text-lg font-semibold mb-4">
+      {#if credDialog.provider === "x"}Connect X via Cookies{:else}Connect GitHub via PAT{/if}
+    </h3>
+    {#if credDialog.provider === "x" && credDialog.type === "cookie"}
+      <label class="block text-sm text-[#6b7280] mb-1">auth_token</label>
+      <input type="text" bind:value={credFields.auth_token} placeholder="Paste auth_token cookie" class="w-full mb-3 px-3 py-2 bg-[#161b22] border border-[#30363d] rounded text-sm" />
+      <label class="block text-sm text-[#6b7280] mb-1">ct0</label>
+      <input type="text" bind:value={credFields.ct0} placeholder="Paste ct0 cookie" class="w-full mb-4 px-3 py-2 bg-[#161b22] border border-[#30363d] rounded text-sm" />
+    {:else if credDialog.provider === "github"}
+      <label class="block text-sm text-[#6b7280] mb-1">Personal Access Token</label>
+      <input type="password" bind:value={credFields.pat} placeholder="ghp_..." class="w-full mb-3 px-3 py-2 bg-[#161b22] border border-[#30363d] rounded text-sm" />
+      <label class="block text-sm text-[#6b7280] mb-1">Label (optional)</label>
+      <input type="text" bind:value={credFields.label} placeholder="My GitHub" class="w-full mb-4 px-3 py-2 bg-[#161b22] border border-[#30363d] rounded text-sm" />
+    {/if}
+    {#if error}<p class="text-red-400 text-sm mb-3">{error}</p>{/if}
+    <div class="flex gap-3 justify-end">
+      <button onclick={() => { credDialog = null; error = ""; }} class="px-4 py-2 text-sm text-[#6b7280] hover:text-white">Cancel</button>
+      <button onclick={submitCredDialog} class="px-4 py-2 text-sm bg-indigo-600 hover:bg-indigo-500 rounded">Connect</button>
+    </div>
+  </div>
+</div>
+{/if}

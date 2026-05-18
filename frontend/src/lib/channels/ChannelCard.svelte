@@ -19,6 +19,10 @@
   let authType = $derived(getAuthType(integration.provider_identifier));
 
   let authTypeLabel = $derived.by(() => {
+    const m = integration.auth_method;
+    if (m === "cookie") return "Cookie";
+    if (m === "pat") return "PAT";
+    if (m === "api_key") return "API Key";
     switch (authType) {
       case "api_key": return "API Key";
       case "web3": return "Web3";
@@ -28,6 +32,10 @@
   });
 
   let authTypeColor = $derived.by(() => {
+    const m = integration.auth_method;
+    if (m === "cookie") return "text-orange-400 border-orange-400/30 bg-orange-400/10";
+    if (m === "pat") return "text-emerald-400 border-emerald-400/30 bg-emerald-400/10";
+    if (m === "api_key") return "text-amber-400 border-amber-400/30 bg-amber-400/10";
     switch (authType) {
       case "api_key": return "text-amber-400 border-amber-400/30 bg-amber-400/10";
       case "web3": return "text-purple-400 border-purple-400/30 bg-purple-400/10";

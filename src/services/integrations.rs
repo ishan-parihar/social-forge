@@ -144,6 +144,7 @@ impl IntegrationService {
             token.picture.as_deref(),
             None,
             None, // root_internal_id — set by pages API for sub-accounts
+        None, // auth_method
         )
         .await
         .map_err(|e| format!("Database error: {e}"))?;

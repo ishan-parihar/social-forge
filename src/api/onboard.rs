@@ -590,6 +590,7 @@ pub async fn public_connect(
             token.picture.as_deref(),
             None,
             None,
+        None, // auth_method
         )
         .await?;
 
@@ -894,6 +895,7 @@ pub async fn x_cookies_submit(
         None,
         profile_picture.as_deref(),
         None,
+        None, // auth_method
     ).await?;
 
     let display = urlencoding::encode(&profile_name);
@@ -968,6 +970,7 @@ pub async fn x_cookies_import(
         None,
         profile_picture.as_deref(),
         None,
+        None, // auth_method
     ).await?;
 
     let display = urlencoding::encode(&profile_name);

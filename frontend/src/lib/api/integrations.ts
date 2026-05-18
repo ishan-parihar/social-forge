@@ -6,6 +6,8 @@ export interface Integration {
   profile_name?: string; profile_picture?: string; profile_url?: string;
   disabled: boolean; refresh_needed: boolean;
   posting_times?: { time: number }[];
+  auth_method?: string;
+  root_internal_id?: string;
 }
 
 export interface TimeslotEntry {
@@ -59,4 +61,8 @@ export const integrationsApi = {
     api.post<{ integration: Integration; parent_id: string }>(
       `/api/integrations/${parentIntegrationId}/connect-page/${pageId}`
     ),
+  connectXCookie: (auth_token: string, ct0: string) =>
+    api.post<{ integration: Integration }>("/api/integrations/connect/x-cookie", { auth_token, ct0 }),
+  connectGithubPat: (pat: string, label?: string) =>
+    api.post<{ integration: Integration }>("/api/integrations/connect/github-pat", { pat, label }),
 };

@@ -183,6 +183,7 @@ pub async fn connect_integration(
             token.picture.as_deref(),
             None,
             None,
+        None, // auth_method
         )
         .await
         .map_err(|e| e.to_string())?;
