@@ -206,13 +206,20 @@ impl SocialProvider for LinkedInPageProvider {
             .http
             .get(format!("https://api.linkedin.com/v2/organizations/{page_id}?projection=(id,localizedName,vanityName,logoV2(original~:playableStreams))"))
             .header("Authorization", format!("Bearer {access_token}"))
+            .header("X-Restli-Protocol-Version", "2.0.0")
+            .header("LinkedIn-Version", "202601")
             .send()
             .await?;
 
         let json: serde_json::Value = resp.json().await?;
 
+        let id_str = json["id"].as_u64()
+            .map(|n| n.to_string())
+            .or_else(|| json["id"].as_str().map(String::from))
+            .unwrap_or_else(|| page_id.to_string());
+
         Ok(PageInfo {
-            id: json["id"].as_str().unwrap_or("").to_string(),
+            id: id_str,
             name: json["localizedName"].as_str().unwrap_or("").to_string(),
             access_token: Some(access_token.to_string()),
             picture: json["logoV2"]["original~"]["elements"]
