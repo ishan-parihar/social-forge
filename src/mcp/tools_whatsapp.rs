@@ -101,3 +101,114 @@ pub async fn handle_wa_contacts(
         .map_err(|e| format!("WhatsApp list contacts failed: {e}"))?;
     Ok(Json(WaContactsOutput { data: result }))
 }
+
+// ─── Additional WhatsApp MCP Tools ───────────────────────────────
+
+use crate::wa::groups;
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct WaEditMessageInput {
+    pub to: String,
+    pub message_id: String,
+    pub new_text: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct WaEditMessageOutput {
+    pub message_id: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct WaRevokeMessageInput {
+    pub to: String,
+    pub message_id: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct WaRevokeMessageOutput {
+    pub success: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct WaListGroupsOutput {
+    pub groups: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct WaCreateGroupInput {
+    pub subject: String,
+    pub participants: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct WaCreateGroupOutput {
+    pub group_jid: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct WaGroupInviteLinkInput {
+    pub group_jid: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct WaGroupInviteLinkOutput {
+    pub invite_link: String,
+}
+
+pub async fn handle_wa_edit_message(
+    state: &AppState,
+    input: &WaEditMessageInput,
+) -> Result<Json<WaEditMessageOutput>, String> {
+    let client = get_wa_client(state)?;
+    let jid = wa_rs::Jid::pn(&input.to);
+    let msg_id = messages::edit_message(client, &jid, &input.message_id, &input.new_text)
+        .await
+        .map_err(|e| format!("WhatsApp edit failed: {e}"))?;
+    Ok(Json(WaEditMessageOutput { message_id: msg_id }))
+}
+
+pub async fn handle_wa_revoke_message(
+    state: &AppState,
+    input: &WaRevokeMessageInput,
+) -> Result<Json<WaRevokeMessageOutput>, String> {
+    let client = get_wa_client(state)?;
+    let jid = wa_rs::Jid::pn(&input.to);
+    messages::revoke_message(client, &jid, &input.message_id)
+        .await
+        .map_err(|e| format!("WhatsApp revoke failed: {e}"))?;
+    Ok(Json(WaRevokeMessageOutput { success: true }))
+}
+
+pub async fn handle_wa_list_groups(
+    state: &AppState,
+) -> Result<Json<WaListGroupsOutput>, String> {
+    let client = get_wa_client(state)?;
+    let result = groups::list_groups(client)
+        .await
+        .map_err(|e| format!("WhatsApp list groups failed: {e}"))?;
+    Ok(Json(WaListGroupsOutput { groups: result }))
+}
+
+pub async fn handle_wa_create_group(
+    state: &AppState,
+    input: &WaCreateGroupInput,
+) -> Result<Json<WaCreateGroupOutput>, String> {
+    let client = get_wa_client(state)?;
+    let result = groups::create_group(client, &input.subject, &input.participants)
+        .await
+        .map_err(|e| format!("WhatsApp create group failed: {e}"))?;
+    Ok(Json(WaCreateGroupOutput { group_jid: result.gid.to_string() }))
+}
+
+pub async fn handle_wa_group_invite_link(
+    state: &AppState,
+    input: &WaGroupInviteLinkInput,
+) -> Result<Json<WaGroupInviteLinkOutput>, String> {
+    let client = get_wa_client(state)?;
+    let jid: wa_rs::Jid = input.group_jid.parse()
+        .map_err(|e| format!("Invalid group JID: {e}"))?;
+    let link = groups::get_group_invite_link(client, &jid)
+        .await
+        .map_err(|e| format!("WhatsApp invite link failed: {e}"))?;
+    Ok(Json(WaGroupInviteLinkOutput { invite_link: link }))
+}

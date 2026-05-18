@@ -534,14 +534,16 @@ pub async fn connect_telegram_bot_token(
     let bot = &json["result"];
     let bot_id = bot["id"].as_i64().unwrap_or(0).to_string();
     let bot_username = bot["username"].as_str().unwrap_or("");
-    let bot_first_name = bot["first_name"].as_str().unwrap_or("Telegram Bot");
-    let display_name = if bot_username.is_empty() { bot_first_name.to_string() } else { format!("@{bot_username}") };
+    let display_name = if bot_username.is_empty() { "Telegram Bot".to_string() } else { format!("@{bot_username}") };
     let profile_url = if bot_username.is_empty() { None } else { Some(format!("@{bot_username}")) };
+
+    // Store as JSON with bot_token (no chat_id yet — user connects a chat via /connect flow)
+    let access_token = serde_json::json!({ "bot_token": token }).to_string();
 
     let integration = queries::create_integration(
         &state.db, auth.user_id,
         "telegram-bot", "Telegram Bot",
-        &bot_id, &token,
+        &bot_id, &access_token,
         None, None,
         Some(&display_name),
         None,
