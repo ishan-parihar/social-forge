@@ -6,7 +6,6 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::api::AppState;
-use crate::crypto;
 use crate::social::linkedin::LinkedInProvider;
 use crate::social::SocialProvider;
 
@@ -191,4 +190,109 @@ pub async fn handle_li_create_post(
             "status": result.status,
         }
     })))
+}
+
+// ─── LinkedIn Personal Delete Post ──────────────────────────────
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct LiDeletePostInput {
+    pub user_id: Uuid,
+    pub li_id: String,
+    /// The post URN (e.g., urn:li:share:123456 or urn:li:ugcPost:123456)
+    pub post_urn: String,
+}
+
+pub async fn handle_li_delete_post(
+    state: &AppState,
+    input: &LiDeletePostInput,
+) -> Result<Json<serde_json::Value>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let token = find_linkedin_token(state, user_id, &input.li_id).await?;
+    let provider = create_provider(state);
+    provider.delete_post(&token, &input.post_urn).await
+        .map_err(|e| format!("LinkedIn delete failed: {e}"))?;
+    Ok(Json(serde_json::json!({"deleted": true, "post_urn": input.post_urn})))
+}
+
+// ─── LinkedIn Personal Get Reactions ────────────────────────────
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct LiGetReactionsInput {
+    pub user_id: Uuid,
+    pub li_id: String,
+    pub post_urn: String,
+}
+
+pub async fn handle_li_get_reactions(
+    state: &AppState,
+    input: &LiGetReactionsInput,
+) -> Result<Json<serde_json::Value>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let token = find_linkedin_token(state, user_id, &input.li_id).await?;
+    let provider = create_provider(state);
+    let result = provider.get_reactions(&token, &input.post_urn).await
+        .map_err(|e| format!("LinkedIn get reactions failed: {e}"))?;
+    Ok(Json(serde_json::json!({ "data": result })))
+}
+
+// ─── LinkedIn Personal Get Shares ───────────────────────────────
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct LiGetSharesInput {
+    pub user_id: Uuid,
+    pub li_id: String,
+    pub post_urn: String,
+}
+
+pub async fn handle_li_get_shares(
+    state: &AppState,
+    input: &LiGetSharesInput,
+) -> Result<Json<serde_json::Value>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let token = find_linkedin_token(state, user_id, &input.li_id).await?;
+    let provider = create_provider(state);
+    let result = provider.get_shares(&token, &input.post_urn).await
+        .map_err(|e| format!("LinkedIn get shares failed: {e}"))?;
+    Ok(Json(serde_json::json!({ "data": result })))
+}
+
+// ─── LinkedIn Personal Analytics ────────────────────────────────
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct LiGetAnalyticsInput {
+    pub user_id: Uuid,
+    pub li_id: String,
+}
+
+pub async fn handle_li_get_analytics(
+    state: &AppState,
+    input: &LiGetAnalyticsInput,
+) -> Result<Json<serde_json::Value>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let token = find_linkedin_token(state, user_id, &input.li_id).await?;
+    let provider = create_provider(state);
+    let data = provider.analytics(&token, &input.li_id, 30).await
+        .map_err(|e| format!("LinkedIn analytics failed: {e}"))?;
+    Ok(Json(serde_json::json!({ "data": data })))
+}
+
+// ─── LinkedIn Personal Post Analytics ───────────────────────────
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct LiGetPostAnalyticsInput {
+    pub user_id: Uuid,
+    pub li_id: String,
+    pub post_urn: String,
+}
+
+pub async fn handle_li_get_post_analytics(
+    state: &AppState,
+    input: &LiGetPostAnalyticsInput,
+) -> Result<Json<serde_json::Value>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let token = find_linkedin_token(state, user_id, &input.li_id).await?;
+    let provider = create_provider(state);
+    let data = provider.post_analytics(&token, &input.post_urn).await
+        .map_err(|e| format!("LinkedIn post analytics failed: {e}"))?;
+    Ok(Json(serde_json::json!({ "data": data })))
 }

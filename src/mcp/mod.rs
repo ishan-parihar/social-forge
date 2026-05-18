@@ -408,6 +408,29 @@ impl PostizMcpServer {
         tools_reddit::reddit_get_comments(&self.state, &params.0).await
     }
 
+    #[tool(description = "Create a new Reddit post (text or link) in a subreddit.")]
+    pub async fn reddit_create_post(
+        &self,
+        params: Parameters<tools_reddit::RedditCreatePostInput>,
+    ) -> Result<Json<tools_reddit::RedditCreatePostOutput>, String> {
+        tools_reddit::handle_reddit_create_post(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Create a comment or reply on Reddit. thing_id: t3_<post_id> for post, t1_<comment_id> for reply.")]
+    pub async fn reddit_create_comment(
+        &self,
+        params: Parameters<tools_reddit::RedditCreateCommentInput>,
+    ) -> Result<Json<tools_reddit::RedditCreateCommentOutput>, String> {
+        tools_reddit::handle_reddit_create_comment(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get karma breakdown by subreddit for the connected Reddit account.")]
+    pub async fn reddit_get_karma(
+        &self,
+    ) -> Result<Json<tools_reddit::RedditGetKarmaOutput>, String> {
+        tools_reddit::handle_reddit_get_karma(&self.state).await
+    }
+
     // ── X/Twitter Read Tools ─────────────────────────────────────
 
     #[tool(description = "Get the authenticated X/Twitter user's profile")]
@@ -1487,6 +1510,46 @@ impl PostizMcpServer {
         tools_linkedin::handle_li_create_post(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
+    #[tool(description = "Delete a LinkedIn post by its URN (e.g., urn:li:share:123456).")]
+    pub async fn li_delete_post(
+        &self,
+        params: Parameters<tools_linkedin::LiDeletePostInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_linkedin::handle_li_delete_post(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Get reactions (likes) on a LinkedIn post by its URN.")]
+    pub async fn li_get_reactions(
+        &self,
+        params: Parameters<tools_linkedin::LiGetReactionsInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_linkedin::handle_li_get_reactions(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Get shares (reposts) of a LinkedIn post by its URN.")]
+    pub async fn li_get_shares(
+        &self,
+        params: Parameters<tools_linkedin::LiGetSharesInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_linkedin::handle_li_get_shares(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Get analytics for your LinkedIn personal profile (connections count).")]
+    pub async fn li_get_analytics(
+        &self,
+        params: Parameters<tools_linkedin::LiGetAnalyticsInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_linkedin::handle_li_get_analytics(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Get analytics for a specific LinkedIn post (likes, comments, shares counts).")]
+    pub async fn li_get_post_analytics(
+        &self,
+        params: Parameters<tools_linkedin::LiGetPostAnalyticsInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_linkedin::handle_li_get_post_analytics(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
     // ── LinkedIn Page Tools ────────────────────────────────────
 
     #[tool(description = "List LinkedIn company pages you administer. Returns page IDs and names needed for page operations.")]
@@ -1521,6 +1584,62 @@ impl PostizMcpServer {
         tools_linkedin_page::handle_lip_create_comment(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
+    #[tool(description = "Create a post as a LinkedIn Page (organization).")]
+    pub async fn lip_create_post(
+        &self,
+        params: Parameters<tools_linkedin_page::LipCreatePostInput>,
+    ) -> Result<Json<tools_linkedin_page::LipCreatePostOutput>, String> {
+        tools_linkedin_page::handle_lip_create_post(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get analytics (impressions, clicks, likes, followers) for a LinkedIn Page.")]
+    pub async fn lip_get_analytics(
+        &self,
+        params: Parameters<tools_linkedin_page::LipGetAnalyticsInput>,
+    ) -> Result<Json<tools_linkedin_page::LipGetAnalyticsOutput>, String> {
+        tools_linkedin_page::handle_lip_get_analytics(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get analytics for a specific LinkedIn Page post.")]
+    pub async fn lip_get_post_analytics(
+        &self,
+        params: Parameters<tools_linkedin_page::LipGetPostAnalyticsInput>,
+    ) -> Result<Json<tools_linkedin_page::LipGetAnalyticsOutput>, String> {
+        tools_linkedin_page::handle_lip_get_post_analytics(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get follower count for a LinkedIn Page.")]
+    pub async fn lip_get_followers(
+        &self,
+        params: Parameters<tools_linkedin_page::LipGetFollowersInput>,
+    ) -> Result<Json<tools_linkedin_page::LipGetFollowersOutput>, String> {
+        tools_linkedin_page::handle_lip_get_followers(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Delete a LinkedIn Page post by its URN.")]
+    pub async fn lip_delete_post(
+        &self,
+        params: Parameters<tools_linkedin_page::LipDeletePostInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_linkedin_page::handle_lip_delete_post(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Get reactions (likes) on a LinkedIn Page post by its URN.")]
+    pub async fn lip_get_reactions(
+        &self,
+        params: Parameters<tools_linkedin_page::LipGetReactionsInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_linkedin_page::handle_lip_get_reactions(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Get shares (reposts) of a LinkedIn Page post by its URN.")]
+    pub async fn lip_get_shares(
+        &self,
+        params: Parameters<tools_linkedin_page::LipGetSharesInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_linkedin_page::handle_lip_get_shares(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
     // ── Telegram Bot Tools ───────────────────────────────────────
     #[tool(description = "Send a message via Telegram Bot API using a configured bot token.")]
     pub async fn tb_send_message(
@@ -1536,6 +1655,70 @@ impl PostizMcpServer {
         params: Parameters<tools_telegram_bot::TbGetUpdatesInput>,
     ) -> Result<Json<tools_telegram_bot::TbGetUpdatesOutput>, String> {
         tools_telegram_bot::handle_tb_get_updates(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get bot info (username, name, capabilities) for a Telegram bot by token_index.")]
+    pub async fn tb_get_me(
+        &self,
+        params: Parameters<tools_telegram_bot::TbTokenInput>,
+    ) -> Result<Json<tools_telegram_bot::TbApiOutput>, String> {
+        tools_telegram_bot::handle_tb_get_me(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get chat details (title, type, member count) for a Telegram chat.")]
+    pub async fn tb_get_chat(
+        &self,
+        params: Parameters<tools_telegram_bot::TbChatInput>,
+    ) -> Result<Json<tools_telegram_bot::TbApiOutput>, String> {
+        tools_telegram_bot::handle_tb_get_chat(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get member count of a Telegram chat/channel.")]
+    pub async fn tb_get_chat_member_count(
+        &self,
+        params: Parameters<tools_telegram_bot::TbChatInput>,
+    ) -> Result<Json<tools_telegram_bot::TbApiOutput>, String> {
+        tools_telegram_bot::handle_tb_get_chat_member_count(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Send a photo via Telegram Bot to a chat.")]
+    pub async fn tb_send_photo(
+        &self,
+        params: Parameters<tools_telegram_bot::TbSendPhotoInput>,
+    ) -> Result<Json<tools_telegram_bot::TbApiOutput>, String> {
+        tools_telegram_bot::handle_tb_send_photo(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Send a document/file via Telegram Bot to a chat.")]
+    pub async fn tb_send_document(
+        &self,
+        params: Parameters<tools_telegram_bot::TbSendDocumentInput>,
+    ) -> Result<Json<tools_telegram_bot::TbApiOutput>, String> {
+        tools_telegram_bot::handle_tb_send_document(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Forward a message from one Telegram chat to another.")]
+    pub async fn tb_forward_message(
+        &self,
+        params: Parameters<tools_telegram_bot::TbForwardInput>,
+    ) -> Result<Json<tools_telegram_bot::TbApiOutput>, String> {
+        tools_telegram_bot::handle_tb_forward_message(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Pin a message in a Telegram chat.")]
+    pub async fn tb_pin_message(
+        &self,
+        params: Parameters<tools_telegram_bot::TbPinInput>,
+    ) -> Result<Json<tools_telegram_bot::TbApiOutput>, String> {
+        tools_telegram_bot::handle_tb_pin_message(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Unpin a message in a Telegram chat.")]
+    pub async fn tb_unpin_message(
+        &self,
+        params: Parameters<tools_telegram_bot::TbPinInput>,
+    ) -> Result<Json<tools_telegram_bot::TbApiOutput>, String> {
+        tools_telegram_bot::handle_tb_unpin_message(&self.state, &params.0).await
     }
 
     // ── Telegram User Tools ──────────────────────────────────────

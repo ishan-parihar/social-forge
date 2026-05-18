@@ -274,3 +274,123 @@ pub async fn reddit_inbox(
 
     Ok(Json(RedditInboxOutput { messages: result }))
 }
+
+// ─── Reddit Write Tools ─────────────────────────────────────────
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct RedditCreatePostInput {
+    pub subreddit: String,
+    pub title: String,
+    pub text: Option<String>,
+    pub url: Option<String>,
+    pub flair_id: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct RedditCreatePostOutput {
+    pub post_id: String,
+    pub url: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct RedditCreateCommentInput {
+    /// Post ID (t3_xxx) or comment ID (t1_xxx) to reply to
+    pub thing_id: String,
+    pub text: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct RedditCreateCommentOutput {
+    pub comment_id: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct RedditGetKarmaOutput {
+    pub data: serde_json::Value,
+}
+
+pub async fn handle_reddit_create_post(
+    state: &AppState,
+    input: &RedditCreatePostInput,
+) -> Result<Json<RedditCreatePostOutput>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let token = find_reddit_token(state, user_id).await?;
+
+    let subreddit = input.subreddit.replace("/r/", "").replace("r/", "");
+    let kind = if input.url.is_some() { "link" } else { "self" };
+
+    let mut form: Vec<(&str, &str)> = vec![
+        ("api_type", "json"),
+        ("sr", &subreddit),
+        ("title", &input.title),
+        ("kind", kind),
+    ];
+    let text_val = input.text.as_deref().unwrap_or("");
+    let url_val = input.url.as_deref().unwrap_or("");
+    if kind == "self" { form.push(("text", text_val)); }
+    else { form.push(("url", url_val)); }
+    if let Some(f) = &input.flair_id { form.push(("flair_id", f)); }
+
+    let resp = reqwest::Client::new()
+        .post("https://oauth.reddit.com/api/submit")
+        .header("Authorization", format!("Bearer {token}"))
+        .header("User-Agent", "social-forge:v0.1.0 (by /u/social_forge)")
+        .form(&form).send().await
+        .map_err(|e| format!("Reddit submit failed: {e}"))?;
+
+    let json: serde_json::Value = resp.json().await.map_err(|e| format!("Parse failed: {e}"))?;
+    let post_url = json["json"]["data"]["url"].as_str().unwrap_or("").to_string();
+    let post_id = json["json"]["data"]["id"].as_str().unwrap_or("").to_string();
+
+    if post_id.is_empty() {
+        return Err(format!("Reddit submit error: {}", serde_json::to_string(&json).unwrap_or_default()));
+    }
+    Ok(Json(RedditCreatePostOutput { post_id, url: post_url }))
+}
+
+pub async fn handle_reddit_create_comment(
+    state: &AppState,
+    input: &RedditCreateCommentInput,
+) -> Result<Json<RedditCreateCommentOutput>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let token = find_reddit_token(state, user_id).await?;
+
+    let thing_id = if input.thing_id.starts_with("t3_") || input.thing_id.starts_with("t1_") {
+        input.thing_id.clone()
+    } else {
+        format!("t3_{}", input.thing_id)
+    };
+
+    let resp = reqwest::Client::new()
+        .post("https://oauth.reddit.com/api/comment")
+        .header("Authorization", format!("Bearer {token}"))
+        .header("User-Agent", "social-forge:v0.1.0 (by /u/social_forge)")
+        .form(&[("api_type", "json"), ("thing_id", &thing_id), ("text", &input.text)])
+        .send().await
+        .map_err(|e| format!("Reddit comment failed: {e}"))?;
+
+    let json: serde_json::Value = resp.json().await.map_err(|e| format!("Parse failed: {e}"))?;
+    let comment_id = json["json"]["data"]["things"][0]["data"]["id"].as_str().unwrap_or("").to_string();
+
+    if comment_id.is_empty() {
+        return Err(format!("Reddit comment error: {}", serde_json::to_string(&json).unwrap_or_default()));
+    }
+    Ok(Json(RedditCreateCommentOutput { comment_id }))
+}
+
+pub async fn handle_reddit_get_karma(
+    state: &AppState,
+) -> Result<Json<RedditGetKarmaOutput>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let token = find_reddit_token(state, user_id).await?;
+
+    let resp = reqwest::Client::new()
+        .get("https://oauth.reddit.com/api/v1/me/karma")
+        .header("Authorization", format!("Bearer {token}"))
+        .header("User-Agent", "social-forge:v0.1.0 (by /u/social_forge)")
+        .send().await
+        .map_err(|e| format!("Reddit karma failed: {e}"))?;
+
+    let json: serde_json::Value = resp.json().await.map_err(|e| format!("Parse failed: {e}"))?;
+    Ok(Json(RedditGetKarmaOutput { data: json }))
+}

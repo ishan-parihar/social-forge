@@ -162,6 +162,90 @@ impl LinkedInProvider {
         }
     }
 
+    pub async fn delete_post(
+        &self,
+        access_token: &str,
+        post_urn: &str,
+    ) -> Result<(), ProviderError> {
+        let url = format!(
+            "https://api.linkedin.com/v2/rest/posts/{}",
+            urlencoding::encode(post_urn)
+        );
+        let resp = self
+            .http
+            .delete(&url)
+            .header("Authorization", format!("Bearer {access_token}"))
+            .header("X-Restli-Protocol-Version", "2.0.0")
+            .header("LinkedIn-Version", "202601")
+            .send()
+            .await?;
+        let status = resp.status();
+        if status.is_success() || status.as_u16() == 204 {
+            Ok(())
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let body = resp.text().await.unwrap_or_default();
+            Err(ProviderError::Api(format!("Delete failed ({}): {}", status, body)))
+        }
+    }
+
+    pub async fn get_reactions(
+        &self,
+        access_token: &str,
+        post_urn: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let url = format!(
+            "https://api.linkedin.com/v2/rest/socialActions/{post_urn}/likes"
+        );
+        let resp = self
+            .http
+            .get(&url)
+            .header("Authorization", format!("Bearer {access_token}"))
+            .header("X-Restli-Protocol-Version", "2.0.0")
+            .header("LinkedIn-Version", "202601")
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let msg = json["message"].as_str().unwrap_or("LinkedIn API error").to_string();
+            Err(ProviderError::Api(msg))
+        }
+    }
+
+    pub async fn get_shares(
+        &self,
+        access_token: &str,
+        post_urn: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let url = format!(
+            "https://api.linkedin.com/v2/rest/socialActions/{post_urn}/shares"
+        );
+        let resp = self
+            .http
+            .get(&url)
+            .header("Authorization", format!("Bearer {access_token}"))
+            .header("X-Restli-Protocol-Version", "2.0.0")
+            .header("LinkedIn-Version", "202601")
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let msg = json["message"].as_str().unwrap_or("LinkedIn API error").to_string();
+            Err(ProviderError::Api(msg))
+        }
+    }
+
     pub async fn create_comment(
         &self,
         access_token: &str,
@@ -438,6 +522,106 @@ impl SocialProvider for LinkedInProvider {
         })
     }
 
+    async fn analytics(
+        &self,
+        access_token: &str,
+        _internal_id: &str,
+        _days: u32,
+    ) -> Result<Vec<AnalyticsData>, ProviderError> {
+        // LinkedIn personal profiles: get network size (connections/followers)
+        let user_id = self.get_user_id(access_token).await?;
+        let person_urn = format!("urn:li:person:{user_id}");
+
+        let mut results = Vec::new();
+
+        // Get follower/connection count
+        let url = format!(
+            "https://api.linkedin.com/v2/networkSizes/{}?edgeType=CompanyFollowedByMember",
+            person_urn
+        );
+        let resp = self
+            .http
+            .get(&url)
+            .header("Authorization", format!("Bearer {access_token}"))
+            .header("X-Restli-Protocol-Version", "2.0.0")
+            .header("LinkedIn-Version", "202601")
+            .send()
+            .await?;
+
+        if resp.status().is_success() {
+            let json: serde_json::Value = resp.json().await.unwrap_or_default();
+            if let Some(count) = json["firstDegreeSize"].as_u64() {
+                results.push(AnalyticsData {
+                    label: "connections".into(),
+                    data: vec![AnalyticsDataPoint {
+                        total: count.to_string(),
+                        date: chrono::Utc::now().format("%Y-%m-%d").to_string(),
+                    }],
+                    percentage_change: 0.0,
+                });
+            }
+        }
+
+        Ok(results)
+    }
+
+    async fn post_analytics(
+        &self,
+        access_token: &str,
+        platform_post_id: &str,
+    ) -> Result<Vec<AnalyticsData>, ProviderError> {
+        // Get social actions (likes, comments, shares counts) for a post
+        let url = format!(
+            "https://api.linkedin.com/v2/rest/socialActions/{platform_post_id}"
+        );
+        let resp = self
+            .http
+            .get(&url)
+            .header("Authorization", format!("Bearer {access_token}"))
+            .header("X-Restli-Protocol-Version", "2.0.0")
+            .header("LinkedIn-Version", "202601")
+            .send()
+            .await?;
+
+        let status = resp.status();
+        if status == 401 {
+            return Err(ProviderError::TokenExpired);
+        }
+
+        let json: serde_json::Value = resp.json().await.unwrap_or_default();
+        if !status.is_success() {
+            let msg = json["message"].as_str().unwrap_or("LinkedIn post analytics error").to_string();
+            return Err(ProviderError::Api(msg));
+        }
+
+        let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+        let mut results = Vec::new();
+
+        if let Some(n) = json["likesSummary"]["totalLikes"].as_u64() {
+            results.push(AnalyticsData {
+                label: "likes".into(),
+                data: vec![AnalyticsDataPoint { total: n.to_string(), date: today.clone() }],
+                percentage_change: 0.0,
+            });
+        }
+        if let Some(n) = json["commentsSummary"]["totalFirstLevelComments"].as_u64() {
+            results.push(AnalyticsData {
+                label: "comments".into(),
+                data: vec![AnalyticsDataPoint { total: n.to_string(), date: today.clone() }],
+                percentage_change: 0.0,
+            });
+        }
+        if let Some(n) = json["sharesSummary"]["totalShares"].as_u64() {
+            results.push(AnalyticsData {
+                label: "shares".into(),
+                data: vec![AnalyticsDataPoint { total: n.to_string(), date: today }],
+                percentage_change: 0.0,
+            });
+        }
+
+        Ok(results)
+    }
+
     async fn fetch_page_info(
         &self,
         _access_token: &str,
@@ -470,8 +654,8 @@ mod tests {
             facebook_client_secret: None,
             instagram_client_id: None,
             instagram_client_secret: None,
-        threads_app_id: None,
-        threads_app_secret: None,
+            threads_app_id: None,
+            threads_app_secret: None,
             youtube_client_id: None,
             youtube_client_secret: None,
             reddit_client_id: None,
@@ -483,7 +667,6 @@ mod tests {
             discord_client_id: None,
             discord_client_secret: None,
             discord_bot_token: None,
-
             telegram_bot_tokens: None,
             telegram_session_dir: None,
             telegram_api_id: None,
@@ -504,8 +687,29 @@ mod tests {
             mastodon_instance_url: None,
             hashnode_api_key: None,
             github_token: None,
+            twitch_client_id: None,
+            twitch_client_secret: None,
+            vk_client_id: None,
+            vk_client_secret: None,
+            whop_client_id: None,
+            whop_client_secret: None,
+            mewe_client_id: None,
+            mewe_client_secret: None,
+            moltbook_client_id: None,
+            moltbook_client_secret: None,
+            kick_client_id: None,
+            kick_client_secret: None,
+            neynar_api_key: None,
+            nostr_private_key: None,
             token_encryption_key: None,
             media_dir: "./uploads".into(),
+            stripe_secret_key: None,
+            stripe_webhook_secret: None,
+            stripe_price_free: None,
+            stripe_price_pro_monthly: None,
+            stripe_price_pro_annual: None,
+            stripe_price_business_monthly: None,
+            stripe_price_business_annual: None,
         }
     }
 
