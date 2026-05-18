@@ -431,6 +431,110 @@ impl PostizMcpServer {
         tools_reddit::handle_reddit_get_karma(&self.state).await
     }
 
+    #[tool(description = "Vote on a Reddit post or comment. direction: 1=upvote, 0=unvote, -1=downvote. Requires cookie auth.")]
+    pub async fn reddit_vote(
+        &self,
+        params: Parameters<tools_reddit::RedditVoteInput>,
+    ) -> Result<Json<tools_reddit::RedditActionOutput>, String> {
+        tools_reddit::handle_reddit_vote(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Save a Reddit post or comment. Requires cookie auth.")]
+    pub async fn reddit_save(
+        &self,
+        params: Parameters<tools_reddit::RedditThingInput>,
+    ) -> Result<Json<tools_reddit::RedditActionOutput>, String> {
+        tools_reddit::handle_reddit_save(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Unsave a Reddit post or comment. Requires cookie auth.")]
+    pub async fn reddit_unsave(
+        &self,
+        params: Parameters<tools_reddit::RedditThingInput>,
+    ) -> Result<Json<tools_reddit::RedditActionOutput>, String> {
+        tools_reddit::handle_reddit_unsave(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Hide a Reddit post from your feed. Requires cookie auth.")]
+    pub async fn reddit_hide(
+        &self,
+        params: Parameters<tools_reddit::RedditThingInput>,
+    ) -> Result<Json<tools_reddit::RedditActionOutput>, String> {
+        tools_reddit::handle_reddit_hide(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Subscribe or unsubscribe to a subreddit. action: 'sub' or 'unsub'. Requires cookie auth.")]
+    pub async fn reddit_subscribe(
+        &self,
+        params: Parameters<tools_reddit::RedditSubscribeInput>,
+    ) -> Result<Json<tools_reddit::RedditActionOutput>, String> {
+        tools_reddit::handle_reddit_subscribe(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Edit a Reddit post or comment text. Requires cookie auth.")]
+    pub async fn reddit_edit(
+        &self,
+        params: Parameters<tools_reddit::RedditEditInput>,
+    ) -> Result<Json<tools_reddit::RedditActionOutput>, String> {
+        tools_reddit::handle_reddit_edit(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Delete a Reddit post or comment. Requires cookie auth.")]
+    pub async fn reddit_delete(
+        &self,
+        params: Parameters<tools_reddit::RedditThingInput>,
+    ) -> Result<Json<tools_reddit::RedditActionOutput>, String> {
+        tools_reddit::handle_reddit_delete(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Moderation: remove a post/comment. Set spam=true to mark as spam. Requires mod cookie auth.")]
+    pub async fn reddit_mod_remove(
+        &self,
+        params: Parameters<tools_reddit::RedditModRemoveInput>,
+    ) -> Result<Json<tools_reddit::RedditActionOutput>, String> {
+        tools_reddit::handle_reddit_mod_remove(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Moderation: approve a post/comment. Requires mod cookie auth.")]
+    pub async fn reddit_mod_approve(
+        &self,
+        params: Parameters<tools_reddit::RedditThingInput>,
+    ) -> Result<Json<tools_reddit::RedditActionOutput>, String> {
+        tools_reddit::handle_reddit_mod_approve(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Moderation: distinguish a comment (how: 'yes', 'no', 'admin', 'special'). Requires mod cookie auth.")]
+    pub async fn reddit_mod_distinguish(
+        &self,
+        params: Parameters<tools_reddit::RedditModDistinguishInput>,
+    ) -> Result<Json<tools_reddit::RedditActionOutput>, String> {
+        tools_reddit::handle_reddit_mod_distinguish(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Moderation: sticky or unsticky a post. Requires mod cookie auth.")]
+    pub async fn reddit_mod_sticky(
+        &self,
+        params: Parameters<tools_reddit::RedditModStickyInput>,
+    ) -> Result<Json<tools_reddit::RedditActionOutput>, String> {
+        tools_reddit::handle_reddit_mod_sticky(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Moderation: lock a post/comment thread. Requires mod cookie auth.")]
+    pub async fn reddit_mod_lock(
+        &self,
+        params: Parameters<tools_reddit::RedditThingInput>,
+    ) -> Result<Json<tools_reddit::RedditActionOutput>, String> {
+        tools_reddit::handle_reddit_mod_lock(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Moderation: unlock a post/comment thread. Requires mod cookie auth.")]
+    pub async fn reddit_mod_unlock(
+        &self,
+        params: Parameters<tools_reddit::RedditThingInput>,
+    ) -> Result<Json<tools_reddit::RedditActionOutput>, String> {
+        tools_reddit::handle_reddit_mod_unlock(&self.state, &params.0).await
+    }
+
     // ── X/Twitter Read Tools ─────────────────────────────────────
 
     #[tool(description = "Get the authenticated X/Twitter user's profile")]

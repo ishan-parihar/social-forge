@@ -80,6 +80,8 @@ pub fn build_router(state: AppState) -> Router {
         .route("/", axum::routing::get(onboard::onboard_page))
         .route("/api/public/connect/x-cookies", axum::routing::get(onboard::x_cookies_form).post(onboard::x_cookies_submit))
 .route("/api/public/connect/x-cookies/import", axum::routing::post(onboard::x_cookies_import))
+.route("/api/public/connect/reddit-cookies", axum::routing::get(onboard::reddit_cookies_form).post(onboard::reddit_cookies_submit))
+.route("/api/public/connect/reddit-cookies/import", axum::routing::post(onboard::reddit_cookies_import))
         .route("/api/public/connect/{provider}", axum::routing::get(onboard::public_connect))
         // Stripe webhook — no auth (signature verification in handler)
         .route("/api/billing/webhook", axum::routing::post(billing::stripe_webhook));
