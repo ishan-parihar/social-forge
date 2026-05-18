@@ -1290,6 +1290,45 @@ impl PostizMcpServer {
         tools_whatsapp::handle_wa_contacts(&self.state, &params.0).await
     }
 
+    #[tool(description = "Edit a previously sent WhatsApp message (within 48h)")]
+    pub async fn wa_edit_message(
+        &self,
+        params: Parameters<tools_whatsapp::WaEditMessageInput>,
+    ) -> Result<Json<tools_whatsapp::WaEditMessageOutput>, String> {
+        tools_whatsapp::handle_wa_edit_message(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Delete/revoke a WhatsApp message for everyone")]
+    pub async fn wa_revoke_message(
+        &self,
+        params: Parameters<tools_whatsapp::WaRevokeMessageInput>,
+    ) -> Result<Json<tools_whatsapp::WaRevokeMessageOutput>, String> {
+        tools_whatsapp::handle_wa_revoke_message(&self.state, &params.0).await
+    }
+
+    #[tool(description = "List all WhatsApp groups the user participates in")]
+    pub async fn wa_list_groups(
+        &self,
+    ) -> Result<Json<tools_whatsapp::WaListGroupsOutput>, String> {
+        tools_whatsapp::handle_wa_list_groups(&self.state).await
+    }
+
+    #[tool(description = "Create a new WhatsApp group with given subject and participant phone numbers")]
+    pub async fn wa_create_group(
+        &self,
+        params: Parameters<tools_whatsapp::WaCreateGroupInput>,
+    ) -> Result<Json<tools_whatsapp::WaCreateGroupOutput>, String> {
+        tools_whatsapp::handle_wa_create_group(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get the invite link for a WhatsApp group")]
+    pub async fn wa_group_invite_link(
+        &self,
+        params: Parameters<tools_whatsapp::WaGroupInviteLinkInput>,
+    ) -> Result<Json<tools_whatsapp::WaGroupInviteLinkOutput>, String> {
+        tools_whatsapp::handle_wa_group_invite_link(&self.state, &params.0).await
+    }
+
     // ── WordPress Tools ───────────────────────────────────────────────
 
     #[tool(description = "Create a new WordPress post. Requires a connected WordPress integration (site URL + Application Password).")]
