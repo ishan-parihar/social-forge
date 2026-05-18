@@ -727,6 +727,10 @@ impl SocialProvider for XProvider {
             .await
             .map_err(|e| ProviderError::Api(e.to_string()))?;
 
+        if user_info.get("data").is_none() {
+            tracing::warn!("X /2/users/me returned no data: {user_info}");
+        }
+
         Ok(AuthToken {
             access_token,
             refresh_token,
