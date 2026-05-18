@@ -11,6 +11,10 @@ pub struct RedditProvider {
     access_token: Option<String>,
     refresh_token: Option<String>,
     http: reqwest::Client,
+    /// Cookie string for www.reddit.com auth (dual-path)
+    cookie_string: Option<String>,
+    /// Cached modhash (CSRF token) for cookie-based POST requests
+    modhash: Option<String>,
 }
 
 impl RedditProvider {
@@ -58,7 +62,244 @@ impl RedditProvider {
             access_token,
             refresh_token,
             http,
+            cookie_string: None,
+            modhash: None,
         }
+    }
+
+    // ── Cookie Auth (dual-path) ─────────────────────────────────
+
+    /// Initialize from a token JSON blob (cookie or OAuth).
+    pub fn prepare_from_token(&mut self, token: &str) {
+        if let Some((session, token_v2, cookie_str)) = crate::social::reddit_cookies::parse_cookie_token(token) {
+            self.set_cookie_credentials(&session, token_v2.as_deref(), cookie_str.as_deref());
+        }
+    }
+
+    /// Check if a token is a cookie auth JSON blob
+    pub fn is_cookie_auth(token: &str) -> bool {
+        crate::social::reddit_cookies::is_cookie_auth(token)
+    }
+
+    fn set_cookie_credentials(&mut self, reddit_session: &str, token_v2: Option<&str>, extra_cookies: Option<&str>) {
+        self.cookie_string = Some(match extra_cookies {
+            Some(extras) if !extras.is_empty() && extras.contains("reddit_session=") => {
+                extras.to_string()
+            }
+            _ => {
+                let mut s = format!("reddit_session={reddit_session}");
+                if let Some(t) = token_v2 {
+                    s.push_str(&format!("; token_v2={t}"));
+                }
+                s
+            }
+        });
+    }
+
+    fn has_cookies(&self) -> bool {
+        self.cookie_string.is_some()
+    }
+
+    /// GET request via www.reddit.com with cookie auth
+    pub async fn get_www(
+        &self,
+        endpoint: &str,
+        params: &[(&str, &str)],
+    ) -> Result<serde_json::Value, ProviderError> {
+        let cookies = self.cookie_string.as_deref()
+            .ok_or_else(|| ProviderError::Auth("No Reddit cookies configured".into()))?;
+
+        let mut all_params: Vec<(&str, &str)> = params.to_vec();
+        all_params.push(("raw_json", "1"));
+
+        let resp = self.http
+            .get(&format!("https://www.reddit.com{endpoint}"))
+            .header("Cookie", cookies)
+            .query(&all_params)
+            .send()
+            .await?;
+
+        let status = resp.status();
+        if status == 401 || status == 403 {
+            return Err(ProviderError::TokenExpired);
+        }
+        if !status.is_success() {
+            let body = resp.text().await.unwrap_or_default();
+            return Err(ProviderError::Api(format!("Reddit www API error ({status}): {body}")));
+        }
+        Ok(resp.json().await?)
+    }
+
+    /// POST request via www.reddit.com with cookie auth + modhash
+    async fn post_www(
+        &mut self,
+        endpoint: &str,
+        form: &[(&str, &str)],
+    ) -> Result<serde_json::Value, ProviderError> {
+        let modhash = self.ensure_modhash().await?;
+        let cookies = self.cookie_string.as_deref()
+            .ok_or_else(|| ProviderError::Auth("No Reddit cookies configured".into()))?
+            .to_string();
+
+        let mut all_form: Vec<(&str, &str)> = form.to_vec();
+        all_form.push(("uh", &modhash));
+        all_form.push(("api_type", "json"));
+
+        let resp = self.http
+            .post(&format!("https://www.reddit.com{endpoint}"))
+            .header("Cookie", &cookies)
+            .form(&all_form)
+            .send()
+            .await?;
+
+        let status = resp.status();
+        if status == 401 || status == 403 {
+            return Err(ProviderError::TokenExpired);
+        }
+        if !status.is_success() {
+            let body = resp.text().await.unwrap_or_default();
+            return Err(ProviderError::Api(format!("Reddit www POST error ({status}): {body}")));
+        }
+        Ok(resp.json().await?)
+    }
+
+    /// Fetch modhash (CSRF token) from /api/me.json
+    async fn ensure_modhash(&mut self) -> Result<String, ProviderError> {
+        if let Some(ref mh) = self.modhash {
+            return Ok(mh.clone());
+        }
+        let me = self.get_www("/api/me.json", &[]).await?;
+        let mh = me["data"]["modhash"].as_str().unwrap_or("").to_string();
+        if mh.is_empty() {
+            return Err(ProviderError::Auth("Could not fetch modhash — cookies may be expired".into()));
+        }
+        self.modhash = Some(mh.clone());
+        Ok(mh)
+    }
+
+    // ── Cookie-based write operations ───────────────────────────
+
+    /// Vote on a post/comment (dir: 1=upvote, 0=unvote, -1=downvote)
+    pub async fn vote(&mut self, thing_id: &str, dir: i8) -> Result<serde_json::Value, ProviderError> {
+        let dir_s = dir.to_string();
+        let id = thing_id.to_string();
+        self.post_www("/api/vote", &[("id", &id), ("dir", &dir_s)]).await
+    }
+
+    /// Save a post/comment
+    pub async fn save(&mut self, thing_id: &str) -> Result<serde_json::Value, ProviderError> {
+        let id = thing_id.to_string();
+        self.post_www("/api/save", &[("id", &id)]).await
+    }
+
+    /// Unsave a post/comment
+    pub async fn unsave(&mut self, thing_id: &str) -> Result<serde_json::Value, ProviderError> {
+        let id = thing_id.to_string();
+        self.post_www("/api/unsave", &[("id", &id)]).await
+    }
+
+    /// Hide a post
+    pub async fn hide(&mut self, thing_id: &str) -> Result<serde_json::Value, ProviderError> {
+        let id = thing_id.to_string();
+        self.post_www("/api/hide", &[("id", &id)]).await
+    }
+
+    /// Unhide a post
+    pub async fn unhide(&mut self, thing_id: &str) -> Result<serde_json::Value, ProviderError> {
+        let id = thing_id.to_string();
+        self.post_www("/api/unhide", &[("id", &id)]).await
+    }
+
+    /// Subscribe/unsubscribe to a subreddit (action: "sub" or "unsub")
+    pub async fn subscribe(&mut self, subreddit: &str, action: &str) -> Result<serde_json::Value, ProviderError> {
+        let sr = subreddit.trim_start_matches("r/").to_string();
+        let act = action.to_string();
+        self.post_www("/api/subscribe", &[("sr_name", &sr), ("action", &act)]).await
+    }
+
+    /// Edit a self-post or comment text
+    pub async fn edit_text(&mut self, thing_id: &str, text: &str) -> Result<serde_json::Value, ProviderError> {
+        let id = thing_id.to_string();
+        let txt = text.to_string();
+        self.post_www("/api/editusertext", &[("thing_id", &id), ("text", &txt)]).await
+    }
+
+    /// Delete a post or comment
+    pub async fn delete(&mut self, thing_id: &str) -> Result<serde_json::Value, ProviderError> {
+        let id = thing_id.to_string();
+        self.post_www("/api/del", &[("id", &id)]).await
+    }
+
+    /// Moderation: remove a post/comment (spam=true marks as spam)
+    pub async fn mod_remove(&mut self, thing_id: &str, spam: bool) -> Result<serde_json::Value, ProviderError> {
+        let id = thing_id.to_string();
+        let spam_s = spam.to_string();
+        self.post_www("/api/remove", &[("id", &id), ("spam", &spam_s)]).await
+    }
+
+    /// Moderation: approve a post/comment
+    pub async fn mod_approve(&mut self, thing_id: &str) -> Result<serde_json::Value, ProviderError> {
+        let id = thing_id.to_string();
+        self.post_www("/api/approve", &[("id", &id)]).await
+    }
+
+    /// Moderation: distinguish a comment (how: "yes", "no", "admin", "special")
+    pub async fn mod_distinguish(&mut self, thing_id: &str, how: &str) -> Result<serde_json::Value, ProviderError> {
+        let id = thing_id.to_string();
+        let h = how.to_string();
+        self.post_www("/api/distinguish", &[("id", &id), ("how", &h)]).await
+    }
+
+    /// Moderation: sticky/unsticky a post
+    pub async fn mod_sticky(&mut self, thing_id: &str, state: bool) -> Result<serde_json::Value, ProviderError> {
+        let id = thing_id.to_string();
+        let s = state.to_string();
+        self.post_www("/api/set_subreddit_sticky", &[("id", &id), ("state", &s)]).await
+    }
+
+    /// Moderation: lock a post/comment
+    pub async fn mod_lock(&mut self, thing_id: &str) -> Result<serde_json::Value, ProviderError> {
+        let id = thing_id.to_string();
+        self.post_www("/api/lock", &[("id", &id)]).await
+    }
+
+    /// Moderation: unlock a post/comment
+    pub async fn mod_unlock(&mut self, thing_id: &str) -> Result<serde_json::Value, ProviderError> {
+        let id = thing_id.to_string();
+        self.post_www("/api/unlock", &[("id", &id)]).await
+    }
+
+    /// Submit a post via cookie auth (www.reddit.com)
+    pub async fn submit_www(
+        &mut self,
+        subreddit: &str,
+        title: &str,
+        kind: &str,
+        text: Option<&str>,
+        url: Option<&str>,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let sr = subreddit.trim_start_matches("r/").to_string();
+        let t = title.to_string();
+        let k = kind.to_string();
+        let txt = text.unwrap_or("").to_string();
+        let u = url.unwrap_or("").to_string();
+
+        let mut form: Vec<(&str, &str)> = vec![
+            ("sr", &sr),
+            ("title", &t),
+            ("kind", &k),
+        ];
+        if kind == "self" { form.push(("text", &txt)); }
+        else { form.push(("url", &u)); }
+
+        self.post_www("/api/submit", &form).await
+    }
+
+    /// Comment via cookie auth (www.reddit.com)
+    pub async fn comment_www(&mut self, thing_id: &str, text: &str) -> Result<serde_json::Value, ProviderError> {
+        let id = thing_id.to_string();
+        let txt = text.to_string();
+        self.post_www("/api/comment", &[("thing_id", &id), ("text", &txt)]).await
     }
 
     async fn password_grant(&self) -> Result<(String, u32), ProviderError> {

@@ -984,6 +984,257 @@ pub async fn x_cookies_import(
     Ok(Redirect::to(&format!("/?connected=x&name={display}")).into_response())
 }
 
+// ── Reddit Cookie Auth ────────────────────────────────────────
+
+#[derive(Deserialize)]
+pub struct RedditCookieForm {
+    pub token: String,
+    pub reddit_session: Option<String>,
+    pub token_v2: Option<String>,
+    pub cookie_string: Option<String>,
+    pub submit: Option<String>,
+}
+
+/// GET /api/public/connect/reddit-cookies — show cookie input form
+pub async fn reddit_cookies_form(
+    State(state): State<AppState>,
+    Query(query): Query<PublicConnectQuery>,
+) -> Result<Html<String>, AppError> {
+    let user_id = if let Some(token_str) = &query.token {
+        let claims = jwt::validate_token(token_str, &state.config.jwt_secret)
+            .map_err(|_| AppError::BadRequest("Invalid token".into()))?;
+        Uuid::parse_str(&claims.sub)
+            .map_err(|_| AppError::BadRequest("Invalid user ID".into()))?
+    } else {
+        let user = get_or_create_dev_user(&state).await?;
+        let t = jwt::create_token(user.id, &state.config.jwt_secret)?;
+        return Ok(Html(format!(
+            r#"<!DOCTYPE html><html><head><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=/api/public/connect/reddit-cookies?token={}" /></head><body>Redirecting...</body></html>"#,
+            t
+        )));
+    };
+
+    let token = query.token.clone().unwrap_or_default();
+    let error = query.redirect_uri.as_deref().unwrap_or("");
+
+    let html = format!(r#"<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Connect Reddit — Cookie Auth</title>
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; color: #1a1a2e; padding: 40px 20px; }}
+  .container {{ max-width: 640px; margin: 0 auto; }}
+  h1 {{ font-size: 26px; margin-bottom: 6px; }}
+  .subtitle {{ color: #666; margin-bottom: 20px; font-size: 14px; }}
+  .instructions {{ background: #fff3e0; border: 1px solid #ffcc80; border-radius: 10px; padding: 18px 20px; margin-bottom: 24px; }}
+  .instructions h3 {{ font-size: 15px; margin-bottom: 8px; }}
+  .instructions ol {{ padding-left: 20px; font-size: 14px; line-height: 1.7; color: #333; }}
+  .instructions code {{ background: #fff3cd; padding: 1px 6px; border-radius: 3px; font-size: 13px; }}
+  .form-group {{ margin-bottom: 16px; }}
+  label {{ display: block; font-weight: 600; font-size: 13px; margin-bottom: 4px; color: #333; }}
+  input, textarea {{ width: 100%; padding: 10px 14px; border: 1px solid #ccc; border-radius: 8px; font-size: 14px; font-family: monospace; }}
+  .btn {{ display: inline-block; padding: 10px 24px; border-radius: 8px; border: none; font-size: 14px; font-weight: 600; cursor: pointer; }}
+  .btn-primary {{ background: #ff4500; color: white; }}
+  .btn-primary:hover {{ background: #e03d00; }}
+  .error {{ background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; color: #721c24; font-size: 14px; }}
+  .back {{ display: block; margin-top: 16px; font-size: 13px; color: #ff4500; text-decoration: none; }}
+</style></head><body>
+<div class="container">
+  <h1>🤖 Connect Reddit</h1>
+  <p class="subtitle">Use your browser cookies to authenticate with Reddit's API (enables voting, saving, moderation).</p>
+
+  {error_html}
+
+  <form action="/api/public/connect/reddit-cookies/import" method="POST" style="margin-bottom:16px;">
+    <input type="hidden" name="token" value="{token}" />
+    <button type="submit" name="submit" value="1" class="btn" style="background:#ff4500;color:white;width:100%;font-size:15px;padding:12px 24px;">
+      🔍 Import from Browser (Zen / Chrome / Brave / Firefox)
+    </button>
+    <p style="font-size:12px;color:#888;margin-top:6px;text-align:center;">
+      Reads Reddit cookies directly from your local browser profile. No copy-paste needed.
+    </p>
+  </form>
+
+  <hr style="border:none;border-top:1px solid #eee;margin:20px 0;" />
+
+  <div class="instructions">
+    <h3>📋 Manual: Paste the full Cookie header</h3>
+    <ol>
+      <li>Open <strong><a href="https://www.reddit.com" target="_blank">reddit.com</a></strong> and log in</li>
+      <li>Press <code>F12</code> → <strong>Network</strong> tab → refresh page</li>
+      <li>Click any <code>reddit.com</code> request → <strong>Request Headers</strong> → find <code>Cookie:</code></li>
+      <li><strong>Copy the entire value</strong> and paste below</li>
+    </ol>
+  </div>
+
+  <form action="/api/public/connect/reddit-cookies" method="POST">
+    <input type="hidden" name="token" value="{token}" />
+    <div class="form-group">
+      <label for="cookie_string">Full Cookie Header String</label>
+      <textarea id="cookie_string" name="cookie_string" rows="4" placeholder="reddit_session=...; token_v2=...; csrf_token=...; loid=..."></textarea>
+    </div>
+    <details style="margin-bottom:16px;">
+      <summary style="cursor:pointer;font-size:13px;color:#888;">⌨️ Manually enter reddit_session instead</summary>
+      <div style="margin-top:12px;padding:12px;background:#fafafa;border-radius:8px;border:1px solid #eee;">
+        <div class="form-group">
+          <label for="reddit_session">reddit_session</label>
+          <input type="password" id="reddit_session" name="reddit_session" placeholder="Your reddit_session cookie value" autocomplete="off" />
+        </div>
+        <div class="form-group">
+          <label for="token_v2">token_v2 (optional)</label>
+          <input type="text" id="token_v2" name="token_v2" placeholder="Your token_v2 cookie value (optional)" autocomplete="off" />
+        </div>
+      </div>
+    </details>
+    <button type="submit" name="submit" value="1" class="btn btn-primary">🔗 Connect Reddit</button>
+  </form>
+  <a href="/" class="back">← Back to onboarding</a>
+</div></body></html>"#,
+        error_html = if error.is_empty() { String::new() } else { format!(r#"<div class="error">❌ {error}</div>"#) },
+        token = token,
+    );
+    Ok(Html(html))
+}
+
+/// POST /api/public/connect/reddit-cookies — submit cookies manually
+pub async fn reddit_cookies_submit(
+    State(state): State<AppState>,
+    Query(query): Query<PublicConnectQuery>,
+    Form(form): Form<RedditCookieForm>,
+) -> Result<Response, AppError> {
+    let user_id = if let Some(token_str) = Some(&form.token).or(query.token.as_ref()) {
+        let claims = jwt::validate_token(token_str, &state.config.jwt_secret)
+            .map_err(|_| AppError::BadRequest("Invalid or expired token".into()))?;
+        Uuid::parse_str(&claims.sub)
+            .map_err(|_| AppError::BadRequest("Invalid user ID".into()))?
+    } else {
+        return Err(AppError::BadRequest("Missing auth token".into()));
+    };
+
+    let cookie_string = form.cookie_string.as_deref().unwrap_or("");
+    let reddit_session = form.reddit_session.as_deref().unwrap_or("");
+    let token_v2 = form.token_v2.as_deref().unwrap_or("");
+
+    let (final_session, final_token_v2, final_cookie_string) = if !cookie_string.is_empty() {
+        if let Some(parsed) = crate::social::reddit_cookies::parse_cookie_string(cookie_string) {
+            (parsed.reddit_session, parsed.token_v2, Some(parsed.cookie_string))
+        } else {
+            return Ok(Redirect::to(&format!(
+                "/api/public/connect/reddit-cookies?token={}&redirect_uri=Could+not+parse+cookie+string.+Ensure+it+contains+reddit_session.",
+                form.token
+            )).into_response());
+        }
+    } else if !reddit_session.is_empty() {
+        (reddit_session.to_string(), if token_v2.is_empty() { None } else { Some(token_v2.to_string()) }, None)
+    } else {
+        return Ok(Redirect::to(&format!(
+            "/api/public/connect/reddit-cookies?token={}&redirect_uri=Please+provide+reddit_session+or+a+full+Cookie+string.",
+            form.token
+        )).into_response());
+    };
+
+    let token_str = crate::social::reddit_cookies::build_cookie_token(
+        &final_session, final_token_v2.as_deref(), final_cookie_string.as_deref()
+    );
+
+    // Validate by fetching /api/me.json
+    let (internal_id, profile_name, profile_picture) = {
+        let mut provider = crate::social::reddit::RedditProvider::new(&state.config);
+        provider.prepare_from_token(&token_str);
+        match provider.get_www("/api/me.json", &[]).await {
+            Ok(json) => {
+                let name = json["data"]["name"].as_str().unwrap_or("Reddit User").to_string();
+                let icon = json["data"]["icon_img"].as_str()
+                    .and_then(|s| s.split('?').next())
+                    .map(String::from);
+                let id = json["data"]["id"].as_str().unwrap_or("").to_string();
+                tracing::info!("Reddit cookie auth identified user: u/{name} id={id}");
+                (id, name, icon)
+            }
+            Err(e) => {
+                tracing::warn!("Reddit cookie auth validation failed: {e}");
+                return Ok(Redirect::to(&format!(
+                    "/api/public/connect/reddit-cookies?token={}&redirect_uri=Cookie+validation+failed:+{}",
+                    form.token, urlencoding::encode(&e.to_string())
+                )).into_response());
+            }
+        }
+    };
+
+    queries::create_integration(
+        &state.db, user_id, "reddit", "Reddit", &internal_id, &token_str,
+        None, None, Some(&profile_name), None, profile_picture.as_deref(), None, None,
+    ).await?;
+
+    state.broadcast.send(
+        "integration_connected",
+        &serde_json::json!({ "provider": "reddit", "method": "cookie", "profile": profile_name }),
+    );
+
+    Ok(Redirect::to(&format!("/?connected=reddit&name={}", urlencoding::encode(&profile_name))).into_response())
+}
+
+/// POST /api/public/connect/reddit-cookies/import — extract from browser
+pub async fn reddit_cookies_import(
+    State(state): State<AppState>,
+    Query(query): Query<PublicConnectQuery>,
+    Form(form): Form<RedditCookieForm>,
+) -> Result<Response, AppError> {
+    let user_id = if let Some(token_str) = Some(&form.token).or(query.token.as_ref()) {
+        let claims = jwt::validate_token(token_str, &state.config.jwt_secret)
+            .map_err(|_| AppError::BadRequest("Invalid or expired token".into()))?;
+        Uuid::parse_str(&claims.sub)
+            .map_err(|_| AppError::BadRequest("Invalid user ID".into()))?
+    } else {
+        return Err(AppError::BadRequest("Missing auth token".into()));
+    };
+
+    let cookies = crate::social::reddit_cookies::extract_reddit_cookies()
+        .ok_or_else(|| AppError::BadRequest(
+            "Could not find Reddit cookies in any browser. Make sure you're logged into reddit.com.".into()
+        ))?;
+
+    let token_str = crate::social::reddit_cookies::build_cookie_token(
+        &cookies.reddit_session, cookies.token_v2.as_deref(), Some(&cookies.cookie_string)
+    );
+
+    let (internal_id, profile_name, profile_picture) = {
+        let mut provider = crate::social::reddit::RedditProvider::new(&state.config);
+        provider.prepare_from_token(&token_str);
+        match provider.get_www("/api/me.json", &[]).await {
+            Ok(json) => {
+                let name = json["data"]["name"].as_str().unwrap_or("Reddit User").to_string();
+                let icon = json["data"]["icon_img"].as_str()
+                    .and_then(|s| s.split('?').next())
+                    .map(String::from);
+                let id = json["data"]["id"].as_str().unwrap_or("").to_string();
+                tracing::info!("Reddit browser import identified user: u/{name} from {}", cookies.source);
+                (id, name, icon)
+            }
+            Err(e) => {
+                tracing::warn!("Reddit browser import validation failed: {e}");
+                (
+                    format!("cookie-{}", &cookies.reddit_session[..8.min(cookies.reddit_session.len())]),
+                    format!("Reddit (Cookie) — {}", cookies.source),
+                    None,
+                )
+            }
+        }
+    };
+
+    queries::create_integration(
+        &state.db, user_id, "reddit", "Reddit", &internal_id, &token_str,
+        None, None, Some(&profile_name), None, profile_picture.as_deref(), None, None,
+    ).await?;
+
+    state.broadcast.send(
+        "integration_connected",
+        &serde_json::json!({ "provider": "reddit", "method": "browser-import", "source": cookies.source, "profile": profile_name }),
+    );
+
+    Ok(Redirect::to(&format!("/?connected=reddit&name={}", urlencoding::encode(&profile_name))).into_response())
+}
+
 // ── Dev user helpers ──────────────────────────────────────────
 
 /// Find or create the dev user for public onboarding

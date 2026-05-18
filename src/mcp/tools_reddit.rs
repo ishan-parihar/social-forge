@@ -104,30 +104,54 @@ pub struct RedditInboxOutput {
 
 // ── Helpers ──────────────────────────────────────────────────
 
-/// Find the first Reddit integration for the current user and return its access token.
+/// Find the best Reddit token for the current user.
+/// Priority: 1) DB cookie tokens 2) Browser extraction 3) OAuth DB tokens 4) Env vars
 async fn find_reddit_token(state: &AppState, user_id: Uuid) -> Result<String, String> {
     let integrations = crate::db::queries::list_integrations(&state.db, user_id)
         .await
         .map_err(|e| format!("DB error: {e}"))?;
 
-    let reddit = integrations
+    let reddit_integrations: Vec<_> = integrations
         .into_iter()
-        .find(|i| i.provider_identifier == "reddit")
-        .ok_or_else(|| {
-            "No Reddit integration found. Connect Reddit first via integrations_connect."
-                .to_string()
-        })?;
+        .filter(|i| i.provider_identifier == "reddit")
+        .collect();
 
-    let token = reddit.access_token.clone();
-    let token = state.token_key.as_ref()
-        .and_then(|key| crypto::decrypt_string(&token, key).ok())
-        .unwrap_or(token);
-    Ok(token)
+    // Priority 1: DB-stored cookie tokens (JSON blobs with reddit_session)
+    if let Some(preferred) = reddit_integrations.iter()
+        .find(|i| i.access_token.starts_with('{'))
+    {
+        let token = preferred.access_token.clone();
+        let token = state.token_key.as_ref()
+            .and_then(|key| crypto::decrypt_string(&token, key).ok())
+            .unwrap_or(token);
+        return Ok(token);
+    }
+
+    // Priority 2: Browser cookie extraction
+    if let Some(cookies) = crate::social::reddit_cookies::extract_reddit_cookies() {
+        tracing::info!("Reddit cookies extracted from browser: {}", cookies.source);
+        return Ok(crate::social::reddit_cookies::build_cookie_token(
+            &cookies.reddit_session, cookies.token_v2.as_deref(), Some(&cookies.cookie_string)
+        ));
+    }
+
+    // Priority 3: OAuth DB tokens
+    if let Some(oauth) = reddit_integrations.first() {
+        let token = oauth.access_token.clone();
+        let token = state.token_key.as_ref()
+            .and_then(|key| crypto::decrypt_string(&token, key).ok())
+            .unwrap_or(token);
+        return Ok(token);
+    }
+
+    Err("No Reddit integration found. Connect Reddit via /api/public/connect/reddit-cookies or integrations_connect.".into())
 }
 
 /// Create a RedditProvider from the app config (needed by MCP handlers).
-fn create_provider(state: &AppState) -> RedditProvider {
-    RedditProvider::new(&state.config)
+fn create_provider(state: &AppState, token: &str) -> RedditProvider {
+    let mut provider = RedditProvider::new(&state.config);
+    provider.prepare_from_token(token);
+    provider
 }
 
 // ── Tool Implementations ────────────────────────────────────
@@ -138,7 +162,7 @@ pub async fn reddit_get_comments(
 ) -> Result<Json<RedditGetCommentsOutput>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_reddit_token(state, user_id).await?;
-    let provider = create_provider(state);
+    let provider = create_provider(state, &token);
 
     let sort = input.sort.as_deref().unwrap_or("confidence");
     let depth = input.depth.unwrap_or(5);
@@ -158,7 +182,7 @@ pub async fn reddit_browse(
 ) -> Result<Json<RedditBrowseOutput>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_reddit_token(state, user_id).await?;
-    let provider = create_provider(state);
+    let provider = create_provider(state, &token);
 
     let sort = input.sort.as_deref().unwrap_or("hot");
     let limit = input.limit.unwrap_or(25);
@@ -178,7 +202,7 @@ pub async fn reddit_search(
 ) -> Result<Json<RedditSearchOutput>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_reddit_token(state, user_id).await?;
-    let provider = create_provider(state);
+    let provider = create_provider(state, &token);
 
     let sort = input.sort.as_deref().unwrap_or("relevance");
     let limit = input.limit.unwrap_or(25);
@@ -205,7 +229,7 @@ pub async fn reddit_post_detail(
 ) -> Result<Json<RedditPostDetailOutput>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_reddit_token(state, user_id).await?;
-    let provider = create_provider(state);
+    let provider = create_provider(state, &token);
 
     let depth = input.depth.unwrap_or(5);
     let limit = input.limit.unwrap_or(50);
@@ -224,7 +248,7 @@ pub async fn reddit_user_info(
 ) -> Result<Json<RedditUserInfoOutput>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_reddit_token(state, user_id).await?;
-    let provider = create_provider(state);
+    let provider = create_provider(state, &token);
 
     let include_posts = input.include_posts.unwrap_or(true);
     let include_comments = input.include_comments.unwrap_or(false);
@@ -243,7 +267,7 @@ pub async fn reddit_send_dm(
 ) -> Result<Json<RedditSendDmOutput>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_reddit_token(state, user_id).await?;
-    let provider = create_provider(state);
+    let provider = create_provider(state, &token);
 
     provider
         .send_dm(&token, &input.to, &input.subject, &input.text)
@@ -262,7 +286,7 @@ pub async fn reddit_inbox(
 ) -> Result<Json<RedditInboxOutput>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_reddit_token(state, user_id).await?;
-    let provider = create_provider(state);
+    let provider = create_provider(state, &token);
 
     let folder = input.folder.as_deref().unwrap_or("inbox");
     let limit = input.limit.unwrap_or(25);
@@ -393,4 +417,216 @@ pub async fn handle_reddit_get_karma(
 
     let json: serde_json::Value = resp.json().await.map_err(|e| format!("Parse failed: {e}"))?;
     Ok(Json(RedditGetKarmaOutput { data: json }))
+}
+
+// ─── Reddit Cookie-Based Write Tools ────────────────────────────
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct RedditVoteInput {
+    /// Thing ID (t3_xxx for post, t1_xxx for comment)
+    pub thing_id: String,
+    /// 1 = upvote, 0 = unvote, -1 = downvote
+    pub direction: i8,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct RedditThingInput {
+    /// Thing ID (t3_xxx for post, t1_xxx for comment)
+    pub thing_id: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct RedditSubscribeInput {
+    pub subreddit: String,
+    /// "sub" to subscribe, "unsub" to unsubscribe
+    pub action: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct RedditEditInput {
+    /// Thing ID of the post/comment to edit
+    pub thing_id: String,
+    pub text: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct RedditModRemoveInput {
+    pub thing_id: String,
+    /// true to mark as spam, false for regular removal
+    pub spam: Option<bool>,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct RedditModDistinguishInput {
+    pub thing_id: String,
+    /// "yes", "no", "admin", or "special"
+    pub how: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct RedditModStickyInput {
+    pub thing_id: String,
+    /// true to sticky, false to unsticky
+    pub state: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct RedditActionOutput {
+    pub success: bool,
+}
+
+pub async fn handle_reddit_vote(
+    state: &AppState,
+    input: &RedditVoteInput,
+) -> Result<Json<RedditActionOutput>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let token = find_reddit_token(state, user_id).await?;
+    let mut provider = create_provider(state, &token);
+    provider.vote(&input.thing_id, input.direction).await
+        .map_err(|e| format!("Reddit vote failed: {e}"))?;
+    Ok(Json(RedditActionOutput { success: true }))
+}
+
+pub async fn handle_reddit_save(
+    state: &AppState,
+    input: &RedditThingInput,
+) -> Result<Json<RedditActionOutput>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let token = find_reddit_token(state, user_id).await?;
+    let mut provider = create_provider(state, &token);
+    provider.save(&input.thing_id).await
+        .map_err(|e| format!("Reddit save failed: {e}"))?;
+    Ok(Json(RedditActionOutput { success: true }))
+}
+
+pub async fn handle_reddit_unsave(
+    state: &AppState,
+    input: &RedditThingInput,
+) -> Result<Json<RedditActionOutput>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let token = find_reddit_token(state, user_id).await?;
+    let mut provider = create_provider(state, &token);
+    provider.unsave(&input.thing_id).await
+        .map_err(|e| format!("Reddit unsave failed: {e}"))?;
+    Ok(Json(RedditActionOutput { success: true }))
+}
+
+pub async fn handle_reddit_hide(
+    state: &AppState,
+    input: &RedditThingInput,
+) -> Result<Json<RedditActionOutput>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let token = find_reddit_token(state, user_id).await?;
+    let mut provider = create_provider(state, &token);
+    provider.hide(&input.thing_id).await
+        .map_err(|e| format!("Reddit hide failed: {e}"))?;
+    Ok(Json(RedditActionOutput { success: true }))
+}
+
+pub async fn handle_reddit_subscribe(
+    state: &AppState,
+    input: &RedditSubscribeInput,
+) -> Result<Json<RedditActionOutput>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let token = find_reddit_token(state, user_id).await?;
+    let mut provider = create_provider(state, &token);
+    provider.subscribe(&input.subreddit, &input.action).await
+        .map_err(|e| format!("Reddit subscribe failed: {e}"))?;
+    Ok(Json(RedditActionOutput { success: true }))
+}
+
+pub async fn handle_reddit_edit(
+    state: &AppState,
+    input: &RedditEditInput,
+) -> Result<Json<RedditActionOutput>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let token = find_reddit_token(state, user_id).await?;
+    let mut provider = create_provider(state, &token);
+    provider.edit_text(&input.thing_id, &input.text).await
+        .map_err(|e| format!("Reddit edit failed: {e}"))?;
+    Ok(Json(RedditActionOutput { success: true }))
+}
+
+pub async fn handle_reddit_delete(
+    state: &AppState,
+    input: &RedditThingInput,
+) -> Result<Json<RedditActionOutput>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let token = find_reddit_token(state, user_id).await?;
+    let mut provider = create_provider(state, &token);
+    provider.delete(&input.thing_id).await
+        .map_err(|e| format!("Reddit delete failed: {e}"))?;
+    Ok(Json(RedditActionOutput { success: true }))
+}
+
+pub async fn handle_reddit_mod_remove(
+    state: &AppState,
+    input: &RedditModRemoveInput,
+) -> Result<Json<RedditActionOutput>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let token = find_reddit_token(state, user_id).await?;
+    let mut provider = create_provider(state, &token);
+    provider.mod_remove(&input.thing_id, input.spam.unwrap_or(false)).await
+        .map_err(|e| format!("Reddit mod remove failed: {e}"))?;
+    Ok(Json(RedditActionOutput { success: true }))
+}
+
+pub async fn handle_reddit_mod_approve(
+    state: &AppState,
+    input: &RedditThingInput,
+) -> Result<Json<RedditActionOutput>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let token = find_reddit_token(state, user_id).await?;
+    let mut provider = create_provider(state, &token);
+    provider.mod_approve(&input.thing_id).await
+        .map_err(|e| format!("Reddit mod approve failed: {e}"))?;
+    Ok(Json(RedditActionOutput { success: true }))
+}
+
+pub async fn handle_reddit_mod_distinguish(
+    state: &AppState,
+    input: &RedditModDistinguishInput,
+) -> Result<Json<RedditActionOutput>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let token = find_reddit_token(state, user_id).await?;
+    let mut provider = create_provider(state, &token);
+    provider.mod_distinguish(&input.thing_id, &input.how).await
+        .map_err(|e| format!("Reddit mod distinguish failed: {e}"))?;
+    Ok(Json(RedditActionOutput { success: true }))
+}
+
+pub async fn handle_reddit_mod_sticky(
+    state: &AppState,
+    input: &RedditModStickyInput,
+) -> Result<Json<RedditActionOutput>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let token = find_reddit_token(state, user_id).await?;
+    let mut provider = create_provider(state, &token);
+    provider.mod_sticky(&input.thing_id, input.state).await
+        .map_err(|e| format!("Reddit mod sticky failed: {e}"))?;
+    Ok(Json(RedditActionOutput { success: true }))
+}
+
+pub async fn handle_reddit_mod_lock(
+    state: &AppState,
+    input: &RedditThingInput,
+) -> Result<Json<RedditActionOutput>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let token = find_reddit_token(state, user_id).await?;
+    let mut provider = create_provider(state, &token);
+    provider.mod_lock(&input.thing_id).await
+        .map_err(|e| format!("Reddit mod lock failed: {e}"))?;
+    Ok(Json(RedditActionOutput { success: true }))
+}
+
+pub async fn handle_reddit_mod_unlock(
+    state: &AppState,
+    input: &RedditThingInput,
+) -> Result<Json<RedditActionOutput>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let token = find_reddit_token(state, user_id).await?;
+    let mut provider = create_provider(state, &token);
+    provider.mod_unlock(&input.thing_id).await
+        .map_err(|e| format!("Reddit mod unlock failed: {e}"))?;
+    Ok(Json(RedditActionOutput { success: true }))
 }

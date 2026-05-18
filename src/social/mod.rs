@@ -27,6 +27,7 @@ pub mod mastodon;
 pub mod medium;
 pub mod pinterest;
 pub mod reddit;
+pub mod reddit_cookies;
 pub mod registry;
 pub mod skool;
 pub mod slack;
