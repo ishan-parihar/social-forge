@@ -1,19 +1,14 @@
-/**
- * Auth type mapping for providers.
- * - "oauth": Standard OAuth flow (window.open) — default
- * - "api_key": API Key input dialog
- * - "web3": Web3 address/public key dialog
- * - "extension": Browser extension info dialog
- */
+/** Auth type mapping: determines which connect UI to show per provider. */
 export type AuthType = "oauth" | "api_key" | "web3" | "extension";
 
 export const AUTH_TYPES: Record<string, AuthType> = {
-  // API Key providers
   lemmy: "api_key",
-  // Web3 providers
+  wordpress: "api_key",
+  medium: "api_key",
+  devto: "api_key",
+  hashnode: "api_key",
   farcaster: "web3",
   nostr: "web3",
-  // Extension providers
   skool: "extension",
 };
 

@@ -13,14 +13,14 @@
 use std::sync::OnceLock;
 use uuid::Uuid;
 
-use postiz_rust::config::Config;
-use postiz_rust::crypto;
-use postiz_rust::db;
-use postiz_rust::db::queries;
-use postiz_rust::social::linkedin::LinkedInProvider;
-use postiz_rust::social::linkedin_page::LinkedInPageProvider;
-use postiz_rust::social::youtube::YoutubeProvider;
-use postiz_rust::social::SocialProvider;
+use social_forge::config::Config;
+use social_forge::crypto;
+use social_forge::db;
+use social_forge::db::queries;
+use social_forge::social::linkedin::LinkedInProvider;
+use social_forge::social::linkedin_page::LinkedInPageProvider;
+use social_forge::social::youtube::YoutubeProvider;
+use social_forge::social::SocialProvider;
 
 static CONFIG: OnceLock<Config> = OnceLock::new();
 

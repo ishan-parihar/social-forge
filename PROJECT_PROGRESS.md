@@ -1,4 +1,4 @@
-# Project Progress: postiz-rust
+# Project Progress: social-forge
 
 > **Last Updated**: 2026-05-11 (v3)
 > **MCP Tool Count**: 115 (+12 Discord/Skool/YouTube/Pinterest Phase 2 tools)
@@ -10,7 +10,7 @@
 ## 1. Architecture Overview
 
 ```
-postiz-rust/
+social-forge/
 ├── src/
 │   ├── main.rs                    # Single binary entrypoint
 │   ├── config.rs                  # Config from env vars
@@ -228,7 +228,7 @@ Token lookup: `find_linkedin_page_token()` filters by `provider_identifier == "l
 **Auth model**: Session cookies (`li_at`, `JSESSIONID`) from browser
 **API protocol**: LinkedIn Voyager API (internal REST + GraphQL at `www.linkedin.com`)
 
-| Module | Tools | What It Does | Feasibility in postiz-rust |
+| Module | Tools | What It Does | Feasibility in social-forge |
 |---|---|---|---|
 | `person.py` | `get_person_profile` | Full profile: experience, education, skills, about, posts, contact info | Low — requires Voyager API + cookie auth |
 | `person.py` | `search_people` | Search LinkedIn people directory | Low — requires Voyager API |
@@ -250,7 +250,7 @@ Token lookup: `find_linkedin_page_token()` filters by `provider_identifier == "l
 
 ### 5.5 What We Can Build (Postiz-Rust, OAuth 2.0)
 
-**Viability assessment**: The Voyager API (internal LinkedIn.com API) and the official LinkedIn API v2 are fundamentally incompatible — different auth models (cookies vs OAuth2), different endpoints, different rate limits. We cannot integrate Voyager into postiz-rust without adding a completely separate auth system.
+**Viability assessment**: The Voyager API (internal LinkedIn.com API) and the official LinkedIn API v2 are fundamentally incompatible — different auth models (cookies vs OAuth2), different endpoints, different rate limits. We cannot integrate Voyager into social-forge without adding a completely separate auth system.
 
 **What's feasible with OAuth 2.0 tokens**:
 
@@ -475,7 +475,7 @@ BuildId resolved dynamically: fetch community page → parse `__NEXT_DATA__` fro
 
 ## 11. CLI Coverage
 
-**Current state**: No `src/cli/` module exists. The single binary `postiz-rust` has two modes:
+**Current state**: No `src/cli/` module exists. The single binary `social-forge` has two modes:
 1. **Web server** (default) — REST API at port 3001
 2. **MCP stdio** (`--mcp` flag) — MCP tools over stdio for AI agent integration
 

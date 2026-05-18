@@ -3,16 +3,16 @@
 // It uses the real AppState and DB to verify end-to-end functionality.
 
 use std::sync::Arc;
-use postiz_rust::config::Config;
-use postiz_rust::db;
-use postiz_rust::api::AppState;
-use postiz_rust::realtime::Broadcaster;
-use postiz_rust::social::registry::ProviderRegistry;
-use postiz_rust::api::rate_limiter::AuthRateLimiter;
+use social_forge::config::Config;
+use social_forge::db;
+use social_forge::api::AppState;
+use social_forge::realtime::Broadcaster;
+use social_forge::social::registry::ProviderRegistry;
+use social_forge::api::rate_limiter::AuthRateLimiter;
 use rmcp::Json;
 
-use postiz_rust::mcp::tools_facebook as fb;
-use postiz_rust::mcp::tools_instagram as ig;
+use social_forge::mcp::tools_facebook as fb;
+use social_forge::mcp::tools_instagram as ig;
 
 // ─── Test Fixtures ───────────────────────────────────────────────────
 

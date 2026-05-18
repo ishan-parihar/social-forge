@@ -1,5 +1,5 @@
-use postiz_rust::config::Config;
-use postiz_rust::social::x::XProvider;
+use social_forge::config::Config;
+use social_forge::social::x::XProvider;
 
 fn get_config() -> Config {
     dotenvy::dotenv().ok();

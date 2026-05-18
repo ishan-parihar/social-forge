@@ -11,20 +11,20 @@
 
 use std::sync::Arc;
 
-use postiz_rust::config::Config;
-use postiz_rust::db;
-use postiz_rust::social::discord::DiscordProvider;
-use postiz_rust::social::instagram_standalone::InstagramStandaloneProvider;
-use postiz_rust::social::linkedin::LinkedInProvider;
-use postiz_rust::social::linkedin_page::LinkedInPageProvider;
-use postiz_rust::social::pinterest::PinterestProvider;
-use postiz_rust::social::reddit::RedditProvider;
-use postiz_rust::social::skool::SkoolProvider;
-use postiz_rust::social::threads::ThreadsProvider;
-use postiz_rust::social::wordpress::WordPressProvider;
-use postiz_rust::social::x::XProvider;
-use postiz_rust::social::youtube::YoutubeProvider;
-use postiz_rust::social::SocialProvider;
+use social_forge::config::Config;
+use social_forge::db;
+use social_forge::social::discord::DiscordProvider;
+use social_forge::social::instagram_standalone::InstagramStandaloneProvider;
+use social_forge::social::linkedin::LinkedInProvider;
+use social_forge::social::linkedin_page::LinkedInPageProvider;
+use social_forge::social::pinterest::PinterestProvider;
+use social_forge::social::reddit::RedditProvider;
+use social_forge::social::skool::SkoolProvider;
+use social_forge::social::threads::ThreadsProvider;
+use social_forge::social::wordpress::WordPressProvider;
+use social_forge::social::x::XProvider;
+use social_forge::social::youtube::YoutubeProvider;
+use social_forge::social::SocialProvider;
 
 fn get_config() -> Config {
     dotenvy::dotenv().ok();
@@ -213,9 +213,9 @@ async fn test_ias_social_provider_publish_with_bad_token() {
     let config = get_config();
     let provider = InstagramStandaloneProvider::new(&config);
 
-    let post = postiz_rust::social::PostContent {
+    let post = social_forge::social::PostContent {
         content: "Test post".into(),
-        media: vec![postiz_rust::social::MediaAttachment {
+        media: vec![social_forge::social::MediaAttachment {
             url: "https://example.com/test.jpg".into(),
             mime_type: "image/jpeg".into(),
             alt: None,
@@ -394,7 +394,7 @@ async fn test_threads_social_provider_publish_with_bad_token() {
     let config = get_config();
     let provider = ThreadsProvider::new(&config);
 
-    let post = postiz_rust::social::PostContent {
+    let post = social_forge::social::PostContent {
         content: "Test post from postiz-rust integration test".into(),
         media: vec![],
         settings: serde_json::Value::Object(serde_json::Map::new()),
@@ -530,7 +530,7 @@ async fn test_linkedin_publish_with_bad_token() {
     let config = get_config();
     let provider = LinkedInProvider::new(&config);
 
-    let post = postiz_rust::social::PostContent {
+    let post = social_forge::social::PostContent {
         content: "Test LinkedIn post from integration test".into(),
         media: vec![],
         settings: serde_json::Value::Object(serde_json::Map::new()),
@@ -637,11 +637,11 @@ async fn test_ias_mcp_tool_handler_full_chain() {
         .await
         .expect("Failed to connect to DB");
 
-    use postiz_rust::api::AppState;
-    use postiz_rust::mcp::PostizMcpServer;
-    use postiz_rust::realtime::Broadcaster;
-    use postiz_rust::api::rate_limiter::AuthRateLimiter;
-    use postiz_rust::social::registry::ProviderRegistry;
+    use social_forge::api::AppState;
+    use social_forge::mcp::PostizMcpServer;
+    use social_forge::realtime::Broadcaster;
+    use social_forge::api::rate_limiter::AuthRateLimiter;
+    use social_forge::social::registry::ProviderRegistry;
 
     let registry = Arc::new(ProviderRegistry::new(&config, None, None));
     let broadcaster = Broadcaster::new();
@@ -688,11 +688,11 @@ async fn test_threads_mcp_tool_handler_full_chain() {
         .await
         .expect("Failed to connect to DB");
 
-    use postiz_rust::api::AppState;
-    use postiz_rust::mcp::PostizMcpServer;
-    use postiz_rust::realtime::Broadcaster;
-    use postiz_rust::api::rate_limiter::AuthRateLimiter;
-    use postiz_rust::social::registry::ProviderRegistry;
+    use social_forge::api::AppState;
+    use social_forge::mcp::PostizMcpServer;
+    use social_forge::realtime::Broadcaster;
+    use social_forge::api::rate_limiter::AuthRateLimiter;
+    use social_forge::social::registry::ProviderRegistry;
 
     let registry = Arc::new(ProviderRegistry::new(&config, None, None));
     let broadcaster = Broadcaster::new();
@@ -739,11 +739,11 @@ async fn test_linkedin_mcp_tool_handler_full_chain() {
         .await
         .expect("Failed to connect to DB");
 
-    use postiz_rust::api::AppState;
-    use postiz_rust::mcp::PostizMcpServer;
-    use postiz_rust::realtime::Broadcaster;
-    use postiz_rust::api::rate_limiter::AuthRateLimiter;
-    use postiz_rust::social::registry::ProviderRegistry;
+    use social_forge::api::AppState;
+    use social_forge::mcp::PostizMcpServer;
+    use social_forge::realtime::Broadcaster;
+    use social_forge::api::rate_limiter::AuthRateLimiter;
+    use social_forge::social::registry::ProviderRegistry;
 
     let registry = Arc::new(ProviderRegistry::new(&config, None, None));
     let broadcaster = Broadcaster::new();

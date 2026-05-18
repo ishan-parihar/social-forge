@@ -25,7 +25,7 @@ services:
       DATABASE_URL: postgres://postiz:postiz@postgres:5432/postiz
       APP_URL: http://localhost:3000
       FRONTEND_URL: http://localhost:4200
-      RUST_LOG: info,postiz_rust=debug
+      RUST_LOG: info,social_forge=debug
       MEDIA_DIR: /data/uploads
     volumes:
       - uploads:/data/uploads

@@ -146,7 +146,9 @@ pub async fn connect(
     let oauth_state = crate::social::common::generate_state();
     let redirect_uri = query
         .redirect_uri
-        .unwrap_or_else(|| format!("{}/api/auth/callback", state.config.app_url));
+        .unwrap_or_else(|| format!("{}/api/auth/callback", state.config.frontend_url));
+
+    tracing::info!("OAuth connect {provider}: redirect_uri={redirect_uri}");
 
     let auth_url = provider_obj
         .generate_auth_url(&oauth_state, &code_verifier, &redirect_uri)
@@ -281,7 +283,7 @@ pub async fn list_providers(
             has_credentials: has_creds,
             editor_type: format!("{:?}", provider.editor_type()),
             redirect_uri: if provider.uses_oauth() {
-                format!("{}/api/auth/callback", state.config.app_url)
+                format!("{}/api/auth/callback", state.config.frontend_url)
             } else {
                 "N/A (non-OAuth)".into()
             },
@@ -383,6 +385,51 @@ pub async fn toggle_disable(
         .await?;
 
     Ok(Json(serde_json::json!({"success": true, "disabled": body.disabled})))
+}
+
+/// POST /api/integrations/{id}/refresh — re-fetch profile info from provider
+pub async fn refresh(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(id): Path<Uuid>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let integration = queries::get_integration(&state.db, id, auth.user_id)
+        .await?
+        .ok_or_else(|| AppError::NotFound("Integration not found".into()))?;
+
+    let provider_obj = state
+        .providers
+        .get(&integration.provider_identifier)
+        .ok_or_else(|| AppError::BadRequest("Provider not found in registry".into()))?;
+
+    let resolve_token = |token: &str| -> String {
+        state.token_key.as_ref()
+            .and_then(|key| crypto::decrypt_string(token, key).ok())
+            .unwrap_or_else(|| token.to_string())
+    };
+
+    let token = resolve_token(&integration.access_token);
+
+    let info = provider_obj
+        .reconnect(&token, &integration.internal_id, &integration.internal_id)
+        .await
+        .map_err(|e| AppError::Provider(format!("Failed to refresh: {e}")))?;
+
+    sqlx::query(
+        "UPDATE integrations SET profile_name = $1, profile_picture = COALESCE($2, profile_picture), updated_at = NOW() WHERE id = $3 AND user_id = $4",
+    )
+    .bind(&info.name)
+    .bind(info.picture.clone())
+    .bind(id)
+    .bind(auth.user_id)
+    .execute(&state.db)
+    .await?;
+
+    Ok(Json(serde_json::json!({
+        "success": true,
+        "profile_name": info.name,
+        "profile_picture": info.picture,
+    })))
 }
 
 // ── API Key Connect ─────────────────────────────────────────
@@ -707,6 +754,21 @@ pub async fn connect_page(
         .ok_or_else(|| AppError::BadRequest("Page not found or not accessible with this token".into()))?;
 
     let page_token = page.access_token.unwrap_or_default();
+
+    let existing = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM integrations WHERE user_id = $1 AND provider_identifier = $2 AND internal_id = $3",
+    )
+    .bind(auth.user_id)
+    .bind(&parent.provider_identifier)
+    .bind(&page.id)
+    .fetch_one(&state.db)
+    .await?;
+
+    if existing > 0 {
+        return Err(AppError::BadRequest(
+            format!("Page '{}' is already connected", page.name)
+        ));
+    }
 
     let integration = queries::create_integration(
         &state.db,

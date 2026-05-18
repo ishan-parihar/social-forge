@@ -14,20 +14,20 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use postiz_rust::api;
-use postiz_rust::config;
-use postiz_rust::db;
-use postiz_rust::mcp;
-use postiz_rust::rss;
-use postiz_rust::scheduler;
+use social_forge::api;
+use social_forge::config;
+use social_forge::db;
+use social_forge::mcp;
+use social_forge::rss;
+use social_forge::scheduler;
 
 use anyhow::Context;
 
-use postiz_rust::api::AppState;
-use postiz_rust::realtime::Broadcaster;
-use postiz_rust::services::telegram_client::TelegramClientManager;
-use postiz_rust::social::registry::ProviderRegistry;
-use postiz_rust::wa::WhaClient;
+use social_forge::api::AppState;
+use social_forge::realtime::Broadcaster;
+use social_forge::services::telegram_client::TelegramClientManager;
+use social_forge::social::registry::ProviderRegistry;
+use social_forge::wa::WhaClient;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -36,7 +36,7 @@ async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "info,postiz_rust=debug".into()),
+                .unwrap_or_else(|_| "info,social_forge=debug".into()),
         )
         .with_writer(std::io::stderr)
         .with_ansi(false)
@@ -79,7 +79,7 @@ async fn main() -> anyhow::Result<()> {
     };
 
     // ── WhatsApp Web client (wa-rs replaces Go wacli sidecar) ──
-    let wa_client: postiz_rust::wa::OptionalWhaClient =
+    let wa_client: social_forge::wa::OptionalWhaClient =
         if let Some(dir) = &config.whatsapp_store_dir {
             let store_dir = PathBuf::from(dir);
             match WhaClient::new(store_dir).await {
@@ -112,7 +112,7 @@ async fn main() -> anyhow::Result<()> {
     let token_key = config
         .token_encryption_key
         .as_ref()
-        .and_then(|k| postiz_rust::crypto::decode_hex_key(k).ok());
+        .and_then(|k| social_forge::crypto::decode_hex_key(k).ok());
     if token_key.is_some() {
         tracing::info!("Token encryption at rest: ENABLED");
     } else {
@@ -173,6 +173,7 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("SSE events: http://{http_addr}/api/events");
     tracing::info!("Health check: http://{http_addr}/health");
     tracing::info!("Frontend URL: {}", config.frontend_url);
+    tracing::info!("OAuth redirect_uri: {}/api/auth/callback", config.frontend_url);
 
     // ── MCP mode: also start MCP stdio server ────────────────
     let args: Vec<String> = std::env::args().collect();

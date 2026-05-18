@@ -3,12 +3,12 @@
 // Requires: Docker (postgres + redis), .env with INSTAGRAM_APP_ID,
 //   THREADS_APP_ID, and real OAuth tokens in the DB for dev@postiz.dev.
 
-use postiz_rust::config::Config;
-use postiz_rust::db;
-use postiz_rust::db::queries;
-use postiz_rust::social::instagram_standalone::InstagramStandaloneProvider;
-use postiz_rust::social::threads::ThreadsProvider;
-use postiz_rust::social::SocialProvider;
+use social_forge::config::Config;
+use social_forge::db;
+use social_forge::db::queries;
+use social_forge::social::instagram_standalone::InstagramStandaloneProvider;
+use social_forge::social::threads::ThreadsProvider;
+use social_forge::social::SocialProvider;
 
 // ── Threads Tests ──────────────────────────────────────────────
 
@@ -89,8 +89,8 @@ async fn get_token(config: &Config, pool: &sqlx::PgPool, provider_identifier: &s
     let token = config.token_encryption_key
         .as_ref()
         .and_then(|k| {
-            let key = postiz_rust::crypto::decode_hex_key(k).ok()?;
-            postiz_rust::crypto::decrypt_string(&integration.access_token, &key).ok()
+            let key = social_forge::crypto::decode_hex_key(k).ok()?;
+            social_forge::crypto::decrypt_string(&integration.access_token, &key).ok()
         })
         .unwrap_or_else(|| integration.access_token.clone());
 

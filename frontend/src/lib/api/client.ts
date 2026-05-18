@@ -13,7 +13,7 @@ class ApiClient {
   addRequestInterceptor(fn: Interceptor) { this.reqInterceptors.push(fn); }
   addResponseInterceptor(fn: ResponseInterceptor) { this.resInterceptors.push(fn); }
 
-  async request<T>(method: string, path: string, body?: unknown, timeoutMs = 10000, signal?: AbortSignal): Promise<{ data?: T; error?: string; status: number }> {
+  async request<T>(method: string, path: string, body?: unknown, timeoutMs = 30000, signal?: AbortSignal): Promise<{ data?: T; error?: string; status: number }> {
     let headers: Record<string, string> = {};
     let reqBody: BodyInit | undefined;
     if (body && !(body instanceof FormData)) {
@@ -63,22 +63,3 @@ class ApiClient {
 }
 
 export const api = new ApiClient("");
-
-// Auth interceptor: attach Bearer token from localStorage
-api.addRequestInterceptor((req) => {
-  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-  if (token) {
-    (req.headers as Record<string, string>)["Authorization"] = `Bearer ${token}`;
-  }
-  return req;
-});
-
-// Response interceptor: detect 401 and trigger token refresh
-api.addResponseInterceptor(async (res) => {
-  if (res.status === 401) {
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent("auth:unauthorized"));
-    }
-  }
-  return res;
-});

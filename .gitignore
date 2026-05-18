@@ -56,3 +56,5 @@ data/whatsapp/
 .playwright-mcp/
 onboard-page.md
 onboarding-page.png
+frontend/localhost-key.pem
+frontend/localhost.pem

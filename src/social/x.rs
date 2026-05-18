@@ -342,6 +342,23 @@ impl XProvider {
 
     // ── V2 REST API (OAuth Bearer fallback) ──────────────────
 
+    async fn v1_get_with_cookies(&self, url: &str, cookie_str: &str) -> Result<serde_json::Value, ProviderError> {
+        let ct0 = Self::parse_cookie_token(cookie_str)
+            .map(|(_, ct)| ct)
+            .unwrap_or_default();
+        let resp = self
+            .http
+            .get(url)
+            .header("x-csrf-token", &ct0)
+            .header("Cookie", cookie_str)
+            .send()
+            .await
+            .map_err(|e| ProviderError::Api(format!("X cookie GET error: {e}")))?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await.map_err(|e| ProviderError::Api(e.to_string()))?;
+        self.check_v2_response(status, &json)
+    }
+
     async fn v2_get(&self, url: &str, access_token: &str) -> Result<serde_json::Value, ProviderError> {
         let resp = self
             .http
@@ -632,13 +649,6 @@ impl SocialProvider for XProvider {
             "tweet.write".into(),
             "users.read".into(),
             "offline.access".into(),
-            "bookmark.read".into(),
-            "bookmark.write".into(),
-            "like.read".into(),
-            "like.write".into(),
-            "follows.read".into(),
-            "follows.write".into(),
-            "list.read".into(),
         ]
     }
 
@@ -708,7 +718,7 @@ impl SocialProvider for XProvider {
 
         let user_info: serde_json::Value = self
             .http
-            .get("https://api.twitter.com/2/users/me")
+            .get("https://api.twitter.com/2/users/me?user.fields=name,username,profile_image_url")
             .header(header::AUTHORIZATION, format!("Bearer {access_token}"))
             .send()
             .await
@@ -724,7 +734,7 @@ impl SocialProvider for XProvider {
             provider_user_id: user_info["data"]["id"].as_str().unwrap_or("").to_string(),
             name: user_info["data"]["name"].as_str().unwrap_or("").to_string(),
             username: user_info["data"]["username"].as_str().unwrap_or("").to_string(),
-            picture: None,
+            picture: user_info["data"]["profile_image_url"].as_str().map(String::from),
         })
     }
 
@@ -840,6 +850,30 @@ impl SocialProvider for XProvider {
         _page_id: &str,
     ) -> Result<PageInfo, ProviderError> {
         Err(ProviderError::Api("X does not support page management".into()))
+    }
+
+    async fn reconnect(
+        &self,
+        access_token: &str,
+        _internal_id: &str,
+        _page_id: &str,
+    ) -> Result<super::ReconnectResult, ProviderError> {
+        // Try cookie-based auth first (access_token may be a JSON blob)
+        let json = if let Some((at, ct)) = Self::parse_cookie_token(access_token) {
+            let cookie_str = Self::extract_cookie_string(access_token)
+                .unwrap_or_else(|| format!("auth_token={at}; ct0={ct};"));
+            self.v1_get_with_cookies("https://api.twitter.com/2/users/me?user.fields=name,username,profile_image_url", &cookie_str).await?
+        } else {
+            self.v2_get("https://api.twitter.com/2/users/me?user.fields=name,username,profile_image_url", access_token).await?
+        };
+        let data = &json["data"];
+        Ok(super::ReconnectResult {
+            id: data["id"].as_str().unwrap_or("").to_string(),
+            name: data["name"].as_str().unwrap_or("").to_string(),
+            access_token: access_token.to_string(),
+            picture: data["profile_image_url"].as_str().map(|s| s.to_string()),
+            username: data["username"].as_str().map(|s| s.to_string()),
+        })
     }
 
     async fn analytics(

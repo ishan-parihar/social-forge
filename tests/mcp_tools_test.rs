@@ -11,9 +11,9 @@
 
 use std::sync::Arc;
 
-use postiz_rust::config::Config;
-use postiz_rust::db;
-use postiz_rust::social::registry::ProviderRegistry;
+use social_forge::config::Config;
+use social_forge::db;
+use social_forge::social::registry::ProviderRegistry;
 
 // ── Helper: Test fixtures ────────────────────────────────────────
 
@@ -187,13 +187,13 @@ async fn test_mcp_tools_registration() {
         .await
         .expect("Failed to connect to DB");
 
-    use postiz_rust::api::AppState;
-    use postiz_rust::mcp::PostizMcpServer;
-    use postiz_rust::realtime::Broadcaster;
+    use social_forge::api::AppState;
+    use social_forge::mcp::PostizMcpServer;
+    use social_forge::realtime::Broadcaster;
 
     let broadcaster = Broadcaster::new();
     let registry = Arc::new(get_registry(&config));
-    let rate_limiter = postiz_rust::api::rate_limiter::AuthRateLimiter::new(5, 60);
+    let rate_limiter = social_forge::api::rate_limiter::AuthRateLimiter::new(5, 60);
 
     let state = AppState {
         db: db.clone(),
