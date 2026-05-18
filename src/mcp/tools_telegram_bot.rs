@@ -134,3 +134,84 @@ pub async fn handle_tb_get_updates(
         Err(format!("Telegram API error: {}", error_msg))
     }
 }
+
+// ─── Additional Telegram Bot Tools ──────────────────────────────
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct TbTokenInput { pub token_index: usize }
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct TbChatInput { pub token_index: usize, pub chat_id: String }
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct TbSendPhotoInput { pub token_index: usize, pub chat_id: String, pub photo_url: String, pub caption: Option<String> }
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct TbSendDocumentInput { pub token_index: usize, pub chat_id: String, pub document_url: String, pub caption: Option<String> }
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct TbForwardInput { pub token_index: usize, pub chat_id: String, pub from_chat_id: String, pub message_id: i64 }
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct TbPinInput { pub token_index: usize, pub chat_id: String, pub message_id: i64 }
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct TbApiOutput { pub data: serde_json::Value }
+
+async fn tb_call(state: &AppState, token_index: usize, method: &str, body: serde_json::Value) -> Result<Json<TbApiOutput>, String> {
+    let tokens = get_telegram_bot_tokens(state);
+    let token = tokens.get(token_index)
+        .ok_or_else(|| format!("Token index {} out of range ({} bots)", token_index, tokens.len()))?;
+    let resp = reqwest::Client::new()
+        .post(format!("https://api.telegram.org/bot{token}/{method}"))
+        .json(&body).send().await
+        .map_err(|e| format!("Request failed: {e}"))?;
+    let json: serde_json::Value = resp.json().await.map_err(|e| format!("Parse failed: {e}"))?;
+    if json["ok"].as_bool().unwrap_or(false) {
+        Ok(Json(TbApiOutput { data: json }))
+    } else {
+        Err(format!("Telegram API: {}", json["description"].as_str().unwrap_or("unknown error")))
+    }
+}
+
+pub async fn handle_tb_get_me(state: &AppState, input: &TbTokenInput) -> Result<Json<TbApiOutput>, String> {
+    tb_call(state, input.token_index, "getMe", serde_json::json!({})).await
+}
+
+pub async fn handle_tb_get_chat(state: &AppState, input: &TbChatInput) -> Result<Json<TbApiOutput>, String> {
+    tb_call(state, input.token_index, "getChat", serde_json::json!({"chat_id": input.chat_id})).await
+}
+
+pub async fn handle_tb_get_chat_member_count(state: &AppState, input: &TbChatInput) -> Result<Json<TbApiOutput>, String> {
+    tb_call(state, input.token_index, "getChatMemberCount", serde_json::json!({"chat_id": input.chat_id})).await
+}
+
+pub async fn handle_tb_send_photo(state: &AppState, input: &TbSendPhotoInput) -> Result<Json<TbApiOutput>, String> {
+    let mut body = serde_json::json!({"chat_id": input.chat_id, "photo": input.photo_url});
+    if let Some(c) = &input.caption { body["caption"] = serde_json::json!(c); }
+    tb_call(state, input.token_index, "sendPhoto", body).await
+}
+
+pub async fn handle_tb_send_document(state: &AppState, input: &TbSendDocumentInput) -> Result<Json<TbApiOutput>, String> {
+    let mut body = serde_json::json!({"chat_id": input.chat_id, "document": input.document_url});
+    if let Some(c) = &input.caption { body["caption"] = serde_json::json!(c); }
+    tb_call(state, input.token_index, "sendDocument", body).await
+}
+
+pub async fn handle_tb_forward_message(state: &AppState, input: &TbForwardInput) -> Result<Json<TbApiOutput>, String> {
+    tb_call(state, input.token_index, "forwardMessage", serde_json::json!({
+        "chat_id": input.chat_id, "from_chat_id": input.from_chat_id, "message_id": input.message_id
+    })).await
+}
+
+pub async fn handle_tb_pin_message(state: &AppState, input: &TbPinInput) -> Result<Json<TbApiOutput>, String> {
+    tb_call(state, input.token_index, "pinChatMessage", serde_json::json!({
+        "chat_id": input.chat_id, "message_id": input.message_id
+    })).await
+}
+
+pub async fn handle_tb_unpin_message(state: &AppState, input: &TbPinInput) -> Result<Json<TbApiOutput>, String> {
+    tb_call(state, input.token_index, "unpinChatMessage", serde_json::json!({
+        "chat_id": input.chat_id, "message_id": input.message_id
+    })).await
+}
