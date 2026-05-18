@@ -14,7 +14,10 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use clap::Parser;
+
 use social_forge::api;
+use social_forge::cli::{self, Cli, Command};
 use social_forge::config;
 use social_forge::db;
 use social_forge::mcp;
@@ -31,6 +34,18 @@ use social_forge::wa::WhaClient;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    let cli_args = Cli::parse();
+
+    // Dispatch non-server commands to CLI handler
+    match &cli_args.command {
+        Command::Serve { .. } | Command::Mcp => {
+            // Fall through to server startup below
+        }
+        _ => {
+            return cli::run_cli(cli_args).await;
+        }
+    }
+
     // ── Init logging ──────────────────────────────────────────
     dotenvy::dotenv().ok();
     tracing_subscriber::fmt()
@@ -176,8 +191,7 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("OAuth redirect_uri: {}/api/auth/callback", config.frontend_url);
 
     // ── MCP mode: also start MCP stdio server ────────────────
-    let args: Vec<String> = std::env::args().collect();
-    if args.contains(&"--mcp".to_string()) {
+    if matches!(cli_args.command, Command::Mcp) {
         tracing::info!("Starting in MERGED mode: HTTP on {http_addr} + MCP on stdio");
         tokio::spawn(async move {
             tracing::info!("MCP server started on stdio");

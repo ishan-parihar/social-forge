@@ -1,6 +1,7 @@
 // Postiz-Rust library root
 // Re-exports modules for use from tests and integration.
 pub mod api;
+pub mod cli;
 pub mod auth;
 pub mod config;
 pub mod crypto;
