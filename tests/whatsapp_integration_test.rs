@@ -301,7 +301,7 @@ async fn test_whatsapp_mcp_tool_compilation() {
         .expect("Failed to connect to DB");
 
     use social_forge::api::AppState;
-    use social_forge::mcp::PostizMcpServer;
+    use social_forge::mcp::Social ForgeMcpServer;
     use social_forge::realtime::Broadcaster;
 
     let broadcaster = Broadcaster::new();
@@ -319,7 +319,7 @@ async fn test_whatsapp_mcp_tool_compilation() {
         wa_client: None,
     };
 
-    let server = PostizMcpServer::new(state.clone());
+    let server = Social ForgeMcpServer::new(state.clone());
     assert!(server.state.config.whatsapp_store_dir.is_some() || server.state.config.whatsapp_store_dir.is_none());
 
     let wa_provider = server.state.providers.get("whatsapp");
@@ -328,7 +328,7 @@ async fn test_whatsapp_mcp_tool_compilation() {
     assert_eq!(wa.identifier(), "whatsapp");
     assert_eq!(wa.name(), "WhatsApp");
 
-    println!("PASS: PostizMcpServer includes WhatsApp provider");
+    println!("PASS: Social ForgeMcpServer includes WhatsApp provider");
 }
 
 #[tokio::test]

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Postiz-Rust End-to-End Test Suite
+# Social Forge-Rust End-to-End Test Suite
 set -e
 
 BASE="http://localhost:3000"
@@ -16,7 +16,7 @@ red() {
 }
 
 echo "═══════════════════════════════════════════"
-echo "  Postiz-Rust End-to-End Test Suite"
+echo "  Social Forge-Rust End-to-End Test Suite"
 echo "═══════════════════════════════════════════"
 
 # ── 1. Health Check ──────────────────────────────
@@ -34,7 +34,7 @@ echo -e "\n── 2. Authentication ──"
 # Register
 REG=$(curl -sf -X POST $BASE/api/auth/register \
 	-H "Content-Type: application/json" \
-	-d '{"email":"test@postiz.dev","password":"test123456","name":"Test User"}') || true
+	-d '{"email":"test@social-forge.dev","password":"test123456","name":"Test User"}') || true
 if [ -n "$REG" ]; then
 	TOKEN=$(echo "$REG" | python3 -c "import sys,json; print(json.load(sys.stdin)['token'])" 2>/dev/null)
 	green "Register (token: ${TOKEN:0:20}...)"
@@ -46,14 +46,14 @@ fi
 # Duplicate register (should fail)
 DUP=$(curl -s -o /dev/null -w "%{http_code}" -X POST $BASE/api/auth/register \
 	-H "Content-Type: application/json" \
-	-d '{"email":"test@postiz.dev","password":"test123456","name":"Test User"}')
+	-d '{"email":"test@social-forge.dev","password":"test123456","name":"Test User"}')
 [ "$DUP" = "409" ] && green "Duplicate register rejected (409)" || red "Duplicate register: got $DUP"
 
 # Login
 if [ -z "$TOKEN" ]; then
 	LOGIN=$(curl -sf -X POST $BASE/api/auth/login \
 		-H "Content-Type: application/json" \
-		-d '{"email":"test@postiz.dev","password":"test123456"}') || true
+		-d '{"email":"test@social-forge.dev","password":"test123456"}') || true
 	TOKEN=$(echo "$LOGIN" | python3 -c "import sys,json; print(json.load(sys.stdin)['token'])" 2>/dev/null)
 fi
 [ -n "$TOKEN" ] && green "Login (token: ${TOKEN:0:20}...)" || red "Login failed"
@@ -61,21 +61,21 @@ fi
 # Bad password
 BAD=$(curl -s -o /dev/null -w "%{http_code}" -X POST $BASE/api/auth/login \
 	-H "Content-Type: application/json" \
-	-d '{"email":"test@postiz.dev","password":"wrongpassword"}')
+	-d '{"email":"test@social-forge.dev","password":"wrongpassword"}')
 [ "$BAD" = "401" ] && green "Bad password rejected (401)" || red "Bad password: got $BAD"
 
 # GET /me
 ME=$(curl -sf $BASE/api/auth/me -H "Authorization: Bearer $TOKEN") || true
 if [ -n "$ME" ]; then
 	ME_EMAIL=$(echo "$ME" | python3 -c "import sys,json; print(json.load(sys.stdin)['email'])" 2>/dev/null)
-	[ "$ME_EMAIL" = "test@postiz.dev" ] && green "Get current user ($ME_EMAIL)" || red "Email mismatch: $ME_EMAIL"
+	[ "$ME_EMAIL" = "test@social-forge.dev" ] && green "Get current user ($ME_EMAIL)" || red "Email mismatch: $ME_EMAIL"
 else
 	red "Get current user failed"
 fi
 
 # ── 3. MCP stdio ─────────────────────────────────
 echo -e "\n── 3. MCP Server (stdio) ──"
-MCP_OUT=$(printf '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}\n{"jsonrpc":"2.0","method":"notifications/initialized"}\n{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}\n' | timeout 5 ./target/release/postiz-rust --mcp 2>/dev/null || true)
+MCP_OUT=$(printf '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}\n{"jsonrpc":"2.0","method":"notifications/initialized"}\n{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}\n' | timeout 5 ./target/release/social-forge-rust --mcp 2>/dev/null || true)
 echo "$MCP_OUT" | grep -q "auth_login" && green "MCP tools/list returns tools" || red "MCP tools/list failed"
 
 # ── 4. Integrations ──────────────────────────────
@@ -98,10 +98,10 @@ CONNECT=$(curl -s -o /dev/null -w "%{http_code}" $BASE/api/integrations/connect/
 echo -e "\n── 5. Posts ──"
 
 # Create integration in DB for testing
-INT_ID=$(PGPASSWORD=postiz psql -h localhost -U postiz -d postiz -tA \
+INT_ID=$(PGPASSWORD=social-forge psql -h localhost -U social-forge -d social-forge -tA \
 	-c "INSERT INTO integrations (user_id, provider_identifier, provider_name, internal_id, access_token)
       SELECT id, 'x', 'X (Twitter)', 'test123', 'test-token'
-      FROM users WHERE email = 'test@postiz.dev'
+      FROM users WHERE email = 'test@social-forge.dev'
       RETURNING id;" 2>/dev/null | head -1)
 
 [ -n "$INT_ID" ] && green "Created test integration ($INT_ID)" || {
@@ -113,7 +113,7 @@ INT_ID=$(PGPASSWORD=postiz psql -h localhost -U postiz -d postiz -tA \
 POST=$(curl -sf -X POST $BASE/api/posts \
 	-H "Authorization: Bearer $TOKEN" \
 	-H "Content-Type: application/json" \
-	-d "{\"integration_id\":\"$INT_ID\",\"content\":\"Test post from Postiz-Rust! #RustLang\",\"title\":\"Test Post\"}") || true
+	-d "{\"integration_id\":\"$INT_ID\",\"content\":\"Test post from Social Forge-Rust! #RustLang\",\"title\":\"Test Post\"}") || true
 if [ -n "$POST" ]; then
 	POST_ID=$(echo "$POST" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])" 2>/dev/null)
 	POST_STATE=$(echo "$POST" | python3 -c "import sys,json; print(json.load(sys.stdin)['state'])" 2>/dev/null)

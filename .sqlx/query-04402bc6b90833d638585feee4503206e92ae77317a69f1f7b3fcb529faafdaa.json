@@ -1,0 +1,173 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT p.id, p.user_id, p.integration_id,\n            p.state as \"state: PostState\",\n            p.content, p.title, p.media, p.settings,\n            p.scheduled_at, p.published_at,\n            p.platform_post_id, p.platform_post_url, p.error_message,\n            p.created_at, p.updated_at,\n            p.repeat_interval_days, p.repeat_end_date, p.group_id,\n            i.provider_identifier, i.access_token,\n            i.refresh_token, i.token_expires_at,\n            i.disabled as \"integration_disabled\",\n            i.refresh_needed as \"integration_refresh_needed\"\n          FROM posts p\n          JOIN integrations i ON p.integration_id = i.id\n          WHERE p.id = $1 AND p.user_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "integration_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "state: PostState",
+        "type_info": {
+          "Custom": {
+            "name": "post_state",
+            "kind": {
+              "Enum": [
+                "draft",
+                "queued",
+                "published",
+                "error"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "content",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "media",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 7,
+        "name": "settings",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 8,
+        "name": "scheduled_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "published_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "platform_post_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "platform_post_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "error_message",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 14,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 15,
+        "name": "repeat_interval_days",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 16,
+        "name": "repeat_end_date",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 17,
+        "name": "group_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 18,
+        "name": "provider_identifier",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 19,
+        "name": "access_token",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 20,
+        "name": "refresh_token",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 21,
+        "name": "token_expires_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 22,
+        "name": "integration_disabled",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 23,
+        "name": "integration_refresh_needed",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "04402bc6b90833d638585feee4503206e92ae77317a69f1f7b3fcb529faafdaa"
+}

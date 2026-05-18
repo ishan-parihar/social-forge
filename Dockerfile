@@ -7,36 +7,48 @@ RUN apt-get update && \
 
 WORKDIR /app
 
-# Cache dependency downloads by building a minimal dummy first
+# Cache dependencies
 COPY Cargo.toml Cargo.lock* ./
-RUN mkdir -p src/ && echo "fn main() {}" > src/main.rs && \
-    mkdir -p migrations/ && touch migrations/init.sql && \
-    cargo build --release 2>/dev/null || true
-RUN rm -rf src/ migrations/
+RUN mkdir -p src && echo "fn main() {}" > src/main.rs && \
+    echo "" > src/lib.rs && \
+    cargo build --release 2>/dev/null || true && \
+    rm -rf src
 
-# Now build the real application
-COPY Cargo.toml Cargo.lock* ./
+# Build the real application
 COPY src/ ./src/
 COPY migrations/ ./migrations/
+COPY .sqlx/ ./.sqlx/
 
-RUN cargo build --release && \
-    strip target/release/postiz-rust
+ENV SQLX_OFFLINE=true
+RUN cargo build --release && strip target/release/social-forge
 
-# ─── Runtime Stage ──────────────────────────────────────────
+# ─── Frontend Build Stage ────────────────────────────────────
+FROM node:20-slim AS frontend
+
+WORKDIR /app/frontend
+COPY frontend/package.json frontend/pnpm-lock.yaml ./
+RUN npm install -g pnpm && pnpm install --frozen-lockfile
+COPY frontend/ ./
+RUN pnpm build
+
+# ─── Runtime Stage ───────────────────────────────────────────
 FROM debian:bookworm-slim
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends ca-certificates libssl3 wget && \
+    apt-get install -y --no-install-recommends ca-certificates libssl3 && \
     rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /app/target/release/postiz-rust /usr/local/bin/postiz-rust
+COPY --from=builder /app/target/release/social-forge /usr/local/bin/social-forge
+COPY --from=frontend /app/frontend/build /app/frontend/build
+COPY migrations/ /app/migrations/
 
-RUN mkdir -p /data/uploads
+WORKDIR /app
+RUN mkdir -p /app/uploads
 
-EXPOSE 3000
+EXPOSE 3444
 HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1
+    CMD wget --no-verbose --tries=1 --spider http://localhost:3444/health || exit 1
 
-VOLUME ["/data/uploads"]
+VOLUME ["/app/uploads"]
 
-CMD ["postiz-rust"]
+CMD ["social-forge", "serve"]

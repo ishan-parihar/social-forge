@@ -17,7 +17,7 @@ use crate::error::AppError;
 
 use super::AppState;
 
-const DEV_EMAIL: &str = "dev@postiz.dev";
+const DEV_EMAIL: &str = "dev@social-forge.dev";
 const DEV_PASSWORD: &str = "devdev123";
 const DEV_NAME: &str = "Dev User";
 
@@ -279,7 +279,7 @@ pub async fn onboard_page(
         format!(
             r#"<div id="connected-section">
             <h2 class="section-title">✅ Connected Channels <span class="count-badge">{count}</span></h2>
-            <p class="section-subtitle">These social accounts are already linked to your Postiz Rust account.</p>
+            <p class="section-subtitle">These social accounts are already linked to your Social Forge Rust account.</p>
             <div class="connected-grid">{cards}</div>
             <h2 class="section-title" style="margin-top:28px;">🔌 Available Providers</h2>
             <p class="section-subtitle">Click <strong>Connect</strong> to add more channels.</p>
@@ -297,7 +297,7 @@ pub async fn onboard_page(
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Postiz Rust — Channel Onboarding</title>
+    <title>Social Forge Rust — Channel Onboarding</title>
     <style>
         * {{ box-sizing: border-box; margin: 0; padding: 0; }}
         body {{
@@ -411,7 +411,7 @@ pub async fn onboard_page(
 </head>
 <body>
     <div class="container">
-        <h1>🔗 Postiz Rust — Channel Onboarding</h1>
+        <h1>🔗 Social Forge Rust — Channel Onboarding</h1>
 
         <div class="user-info">
             <span>👤 <span class="label">User:</span> <strong>{dev_email}</strong></span>
@@ -436,7 +436,7 @@ pub async fn onboard_page(
         </div>
 
         <div class="footer">
-            Postiz Rust v{version} · server: {app_url} · MCP stdio available with --mcp flag
+            Social Forge Rust v{version} · server: {app_url} · MCP stdio available with --mcp flag
         </div>
     </div>
 <script>

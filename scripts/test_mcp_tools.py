@@ -6,7 +6,7 @@ Tests Instagram Standalone and Threads MCP tools via stdio JSON-RPC.
 Usage:
   python3 scripts/test_mcp_tools.py
 
-Requires: server binary at target/debug/postiz-rust, running DB at DATABASE_URL.
+Requires: server binary at target/debug/social-forge-rust, running DB at DATABASE_URL.
 """
 
 import subprocess
@@ -17,7 +17,7 @@ import os
 from dataclasses import dataclass
 from typing import Any
 
-SERVER_BINARY = "./target/debug/postiz-rust"
+SERVER_BINARY = "./target/debug/social-forge-rust"
 
 @dataclass
 class McpResponse:

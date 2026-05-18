@@ -3,7 +3,7 @@
 
 import type { MediaItem } from "$lib/api/media";
 
-// Per-channel content overrides (Postiz pattern: different content per platform)
+// Per-channel content overrides (Social Forge pattern: different content per platform)
 export interface ChannelContent {
   integrationId: string;
   content: string;        // platform-specific override

@@ -395,7 +395,7 @@ async fn test_threads_social_provider_publish_with_bad_token() {
     let provider = ThreadsProvider::new(&config);
 
     let post = social_forge::social::PostContent {
-        content: "Test post from postiz-rust integration test".into(),
+        content: "Test post from social-forge-rust integration test".into(),
         media: vec![],
         settings: serde_json::Value::Object(serde_json::Map::new()),
     };
@@ -638,7 +638,7 @@ async fn test_ias_mcp_tool_handler_full_chain() {
         .expect("Failed to connect to DB");
 
     use social_forge::api::AppState;
-    use social_forge::mcp::PostizMcpServer;
+    use social_forge::mcp::Social ForgeMcpServer;
     use social_forge::realtime::Broadcaster;
     use social_forge::api::rate_limiter::AuthRateLimiter;
     use social_forge::social::registry::ProviderRegistry;
@@ -659,7 +659,7 @@ async fn test_ias_mcp_tool_handler_full_chain() {
     };
 
     // Verify MCP server can be created (all #[tool] macros compile)
-    let server = PostizMcpServer::new(state.clone());
+    let server = Social ForgeMcpServer::new(state.clone());
     drop(server);
 
     // Verify Instagram Standalone provider is registered
@@ -676,7 +676,7 @@ async fn test_ias_mcp_tool_handler_full_chain() {
     assert!(auth_result.is_ok(), "Auth URL should generate: {auth_result:?}");
     let url = auth_result.unwrap().url;
     assert!(url.contains("instagram.com/oauth/authorize"), "URL should go to Instagram OAuth");
-    assert!(url.contains("instagram_business_basic"), "Should contain business scopes (matching postiz-app pattern)");
+    assert!(url.contains("instagram_business_basic"), "Should contain business scopes (matching social-forge-app pattern)");
 
     println!("✅ ias_mcp_handler: Full chain verified (provider registration, auth URL, server creation)");
 }
@@ -689,7 +689,7 @@ async fn test_threads_mcp_tool_handler_full_chain() {
         .expect("Failed to connect to DB");
 
     use social_forge::api::AppState;
-    use social_forge::mcp::PostizMcpServer;
+    use social_forge::mcp::Social ForgeMcpServer;
     use social_forge::realtime::Broadcaster;
     use social_forge::api::rate_limiter::AuthRateLimiter;
     use social_forge::social::registry::ProviderRegistry;
@@ -710,7 +710,7 @@ async fn test_threads_mcp_tool_handler_full_chain() {
     };
 
     // Verify MCP server can be created
-    let server = PostizMcpServer::new(state.clone());
+    let server = Social ForgeMcpServer::new(state.clone());
     drop(server);
 
     // Verify Threads provider is registered
@@ -740,7 +740,7 @@ async fn test_linkedin_mcp_tool_handler_full_chain() {
         .expect("Failed to connect to DB");
 
     use social_forge::api::AppState;
-    use social_forge::mcp::PostizMcpServer;
+    use social_forge::mcp::Social ForgeMcpServer;
     use social_forge::realtime::Broadcaster;
     use social_forge::api::rate_limiter::AuthRateLimiter;
     use social_forge::social::registry::ProviderRegistry;
@@ -761,7 +761,7 @@ async fn test_linkedin_mcp_tool_handler_full_chain() {
     };
 
     // Verify MCP server can be created
-    let server = PostizMcpServer::new(state.clone());
+    let server = Social ForgeMcpServer::new(state.clone());
     drop(server);
 
     // Verify LinkedIn provider is registered

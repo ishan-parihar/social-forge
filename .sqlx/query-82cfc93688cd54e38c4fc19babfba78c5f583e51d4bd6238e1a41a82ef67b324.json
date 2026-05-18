@@ -1,0 +1,31 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE posts SET state = $1, published_at = COALESCE($2, published_at),\n           platform_post_id = COALESCE($3, platform_post_id),\n           platform_post_url = COALESCE($4, platform_post_url),\n           error_message = $5, updated_at = now()\n           WHERE id = $6",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        {
+          "Custom": {
+            "name": "post_state",
+            "kind": {
+              "Enum": [
+                "draft",
+                "queued",
+                "published",
+                "error"
+              ]
+            }
+          }
+        },
+        "Timestamptz",
+        "Text",
+        "Text",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "82cfc93688cd54e38c4fc19babfba78c5f583e51d4bd6238e1a41a82ef67b324"
+}

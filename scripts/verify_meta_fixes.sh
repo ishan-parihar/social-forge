@@ -43,7 +43,7 @@ run_tool "fb_get_page" "{\"page_id\": \"$FB_PAGE_ID\"}"
 run_tool "fb_get_page_insights" "{\"page_id\": \"$FB_PAGE_ID\", \"metric\": \"page_fan_count,page_impressions\", \"period\": \"week\"}"
 
 # 3. Test FB Search Pages (Crucial: New endpoint)
-run_tool "fb_search_pages" "{\"query\": \"Postiz\"}"
+run_tool "fb_search_pages" "{\"query\": \"Social Forge\"}"
 
 # 4. Test IG Get Media
 run_tool "ig_get_media" "{\"ig_id\": \"$IG_ACCOUNT_ID\", \"limit\": 5}"

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Postiz-Rust end-to-end test suite - HTTP API tests."""
+"""Social Forge-Rust end-to-end test suite - HTTP API tests."""
 
 import urllib.request
 import urllib.error
@@ -58,13 +58,13 @@ def ok_val(name, condition):
         FAIL += 1
 
 
-PG_ENV = {**os.environ, "PGPASSWORD": "postiz"}
+PG_ENV = {**os.environ, "PGPASSWORD": "social-forge"}
 
 
 def psql(sql):
     """Run a psql command and return stdout."""
     r = subprocess.run(
-        ["psql", "-h", "localhost", "-U", "postiz", "-d", "postiz", "-tA", "-c", sql],
+        ["psql", "-h", "localhost", "-U", "social-forge", "-d", "social-forge", "-tA", "-c", sql],
         capture_output=True,
         text=True,
         env=PG_ENV,
@@ -76,15 +76,15 @@ def psql(sql):
 def cleanup_test_user():
     """Remove any pre-existing test data."""
     psql(
-        "DELETE FROM media WHERE user_id IN (SELECT id FROM users WHERE email = 'test@postiz.dev')"
+        "DELETE FROM media WHERE user_id IN (SELECT id FROM users WHERE email = 'test@social-forge.dev')"
     )
     psql(
-        "DELETE FROM integrations WHERE user_id IN (SELECT id FROM users WHERE email = 'test@postiz.dev')"
+        "DELETE FROM integrations WHERE user_id IN (SELECT id FROM users WHERE email = 'test@social-forge.dev')"
     )
     psql(
-        "DELETE FROM posts WHERE user_id IN (SELECT id FROM users WHERE email = 'test@postiz.dev')"
+        "DELETE FROM posts WHERE user_id IN (SELECT id FROM users WHERE email = 'test@social-forge.dev')"
     )
-    psql("DELETE FROM users WHERE email = 'test@postiz.dev'")
+    psql("DELETE FROM users WHERE email = 'test@social-forge.dev'")
     print("  Cleaned up any pre-existing test data")
 
 
@@ -93,7 +93,7 @@ def get_int_id():
     val = psql(
         "INSERT INTO integrations (user_id, provider_identifier, provider_name, internal_id, access_token) "
         "SELECT id, 'x', 'X (Twitter)', 'test123', 'test-token' "
-        "FROM users WHERE email = 'test@postiz.dev' RETURNING id;"
+        "FROM users WHERE email = 'test@social-forge.dev' RETURNING id;"
     )
     print(f"    INT_ID={val}")
     return val
@@ -115,7 +115,7 @@ print("\n── 2. Authentication ──")
 status, data = req(
     "POST",
     "/api/auth/register",
-    body={"email": "test@postiz.dev", "password": "test123456", "name": "Test User"},
+    body={"email": "test@social-forge.dev", "password": "test123456", "name": "Test User"},
 )
 ok("Register", status, 200)
 TOKEN = data.get("token", "")
@@ -124,26 +124,26 @@ ok_val("Token received", len(TOKEN) > 20)
 status, _ = req(
     "POST",
     "/api/auth/register",
-    body={"email": "test@postiz.dev", "password": "test123456", "name": "Test User"},
+    body={"email": "test@social-forge.dev", "password": "test123456", "name": "Test User"},
 )
 ok("Duplicate register rejected (409)", status, 409)
 
 status, data = req(
     "POST",
     "/api/auth/login",
-    body={"email": "test@postiz.dev", "password": "test123456"},
+    body={"email": "test@social-forge.dev", "password": "test123456"},
 )
 ok("Login", status, 200)
 TOKEN = data.get("token", "")
 
 status, _ = req(
-    "POST", "/api/auth/login", body={"email": "test@postiz.dev", "password": "wrong"}
+    "POST", "/api/auth/login", body={"email": "test@social-forge.dev", "password": "wrong"}
 )
 ok("Bad password rejected (401)", status, 401)
 
 status, data = req("GET", "/api/auth/me", headers={"Authorization": f"Bearer {TOKEN}"})
 ok("Get current user", status, 200)
-ok_val("Email is correct", data.get("email") == "test@postiz.dev")
+ok_val("Email is correct", data.get("email") == "test@social-forge.dev")
 
 # Unauthenticated
 status, _ = req("GET", "/api/auth/me")
@@ -180,7 +180,7 @@ status, data = req(
     headers={"Authorization": f"Bearer {TOKEN}"},
     body={
         "integration_id": INT_ID,
-        "content": "Test post from Postiz-Rust! #RustLang",
+        "content": "Test post from Social Forge-Rust! #RustLang",
         "title": "Test Post",
     },
 )
@@ -202,7 +202,7 @@ status, data = req(
     "GET", f"/api/posts/{POST_ID}", headers={"Authorization": f"Bearer {TOKEN}"}
 )
 ok("Get post by ID", status, 200)
-ok_val("Content matches", "Postiz-Rust" in data.get("content", ""))
+ok_val("Content matches", "Social Forge-Rust" in data.get("content", ""))
 
 # Schedule
 status, data = req(

@@ -48,14 +48,14 @@ async fn test_live_youtube_all_tools() {
         "SELECT i.id::text, i.access_token, i.refresh_token, i.internal_id, i.profile_name
          FROM integrations i
          JOIN users u ON i.user_id = u.id
-         WHERE u.email = 'dev@postiz.dev' AND i.provider_identifier = 'youtube'
+         WHERE u.email = 'dev@social-forge.dev' AND i.provider_identifier = 'youtube'
          ORDER BY i.created_at"
     )
     .fetch_all(&pool)
     .await
     .expect("Query");
 
-    assert!(!rows.is_empty(), "No YouTube integrations found for dev@postiz.dev");
+    assert!(!rows.is_empty(), "No YouTube integrations found for dev@social-forge.dev");
     println!("Found {} YouTube channel(s)\n", rows.len());
 
     let provider = YoutubeProvider::new(&config);
