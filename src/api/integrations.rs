@@ -533,8 +533,9 @@ pub async fn connect_telegram_bot_token(
 
     let bot = &json["result"];
     let bot_id = bot["id"].as_i64().unwrap_or(0).to_string();
-    let bot_name = bot["first_name"].as_str().unwrap_or("Telegram Bot");
     let bot_username = bot["username"].as_str().unwrap_or("");
+    let bot_first_name = bot["first_name"].as_str().unwrap_or("Telegram Bot");
+    let display_name = if bot_username.is_empty() { bot_first_name.to_string() } else { format!("@{bot_username}") };
     let profile_url = if bot_username.is_empty() { None } else { Some(format!("@{bot_username}")) };
 
     let integration = queries::create_integration(
@@ -542,7 +543,7 @@ pub async fn connect_telegram_bot_token(
         "telegram-bot", "Telegram Bot",
         &bot_id, &token,
         None, None,
-        Some(bot_name),
+        Some(&display_name),
         None,
         profile_url.as_deref(),
         None, None,
@@ -566,10 +567,10 @@ pub async fn whatsapp_pair(
     let wa = state.wa_client.as_ref()
         .ok_or_else(|| AppError::Provider("WhatsApp client not configured".into()))?;
 
-    // Always reconnect to ensure fresh WebSocket
+    // Force fresh connection for reliable pair code generation
     {
         let mut locked = wa.lock().await;
-        locked.connect().await.map_err(|e| AppError::Provider(format!("WhatsApp connect failed: {e}")))?;
+        locked.reconnect().await.map_err(|e| AppError::Provider(format!("WhatsApp connect failed: {e}")))?;
     }
 
     let code = crate::wa::auth::pair_with_code(wa, crate::wa::auth::PairOptions {

@@ -102,9 +102,10 @@ impl WhaClient {
     /// - WebSocket connection failure (network / DNS)
     /// - wa-rs internal protocol error during reconnection
     pub async fn connect(&mut self) -> anyhow::Result<()> {
-        if self.connected {
+        if self.connected && self.inner.is_connected() {
             return Ok(());
         }
+        self.connected = false;
         let inner = Arc::clone(&self.inner);
         // Spawn run() which handles connect + message loop + auto-reconnect
         tokio::spawn(async move { inner.run().await });
@@ -124,6 +125,15 @@ impl WhaClient {
             anyhow::bail!("WhatsApp Web connection timed out");
         }
         Ok(())
+    }
+
+    /// Force disconnect and reconnect fresh (for pair code retries).
+    pub async fn reconnect(&mut self) -> anyhow::Result<()> {
+        self.inner.disconnect().await;
+        self.connected = false;
+        // Brief pause for cleanup
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        self.connect().await
     }
 
     /// Returns `true` when a WhatsApp Web session has been fully
