@@ -6,7 +6,7 @@
 // Requires: running DB at DATABASE_URL, configured .env with
 //   TOKEN_ENCRYPTION_KEY and OAuth client credentials.
 //
-// Connects to the DB, looks up the dev user (dev@postiz.dev),
+// Connects to the DB, looks up the dev user (dev@social-forge.dev),
 // fetches encrypted tokens for linkedin / linkedin-page / youtube,
 // decrypts them, and calls every public provider method.
 
@@ -53,7 +53,7 @@ fn decrypt_token(raw: &str) -> Option<String> {
     crypto::decrypt_string(raw, &key).ok()
 }
 
-/// Fetch all integrations for dev@postiz.dev from the DB.
+/// Fetch all integrations for dev@social-forge.dev from the DB.
 async fn get_dev_user_integrations() -> (Vec<db::models::Integration>, Uuid) {
     let config = get_config();
     let pool = db::create_pool(&config.database_url)
@@ -61,10 +61,10 @@ async fn get_dev_user_integrations() -> (Vec<db::models::Integration>, Uuid) {
         .expect("Failed to connect to DB");
 
     // Look up dev user
-    let user = queries::get_user_by_email(&pool, "dev@postiz.dev")
+    let user = queries::get_user_by_email(&pool, "dev@social-forge.dev")
         .await
         .expect("DB error")
-        .expect("dev@postiz.dev user not found. Has the onboarding page been visited?");
+        .expect("dev@social-forge.dev user not found. Has the onboarding page been visited?");
 
     let integrations = queries::list_integrations(&pool, user.id)
         .await

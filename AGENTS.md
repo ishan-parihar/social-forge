@@ -1,31 +1,40 @@
-# AGENTS.md - Knowledge Base
+# AGENTS.md — AI Agent Knowledge Base
 
-## Environment & Test Identity
-To ensure consistent testing and avoid context loss regarding connected accounts, use the following credentials and identity:
+## Quick Reference
 
-### Database Configuration
-- **PostgreSQL Container**: `social-forge-postgres-1`
-- **DB Name**: `postiz`
-- **User/Password**: `postiz` / `postiz`
-- **Internal Connection**: `postgres://postiz:postiz@172.21.0.2:5432/postiz`
-- **Host Connection**: `postgres://postiz:postiz@localhost:5432/postiz`
+### CLI Usage (preferred for AI agents)
+```bash
+social-forge --help              # Discover all commands
+social-forge providers           # List connected accounts
+social-forge x timeline          # Read X timeline
+social-forge reddit browse rust  # Browse subreddit
+social-forge linkedin profile    # Get LinkedIn profile
+```
 
-### Golden Test User (The "Primary" Identity)
-Use this user for all tool verification as they have the most connected channels.
-- **User ID**: `87c12961-11e0-47b9-8788-efe46b2acacc`
+### MCP Usage (for Claude Desktop / Cursor)
+```json
+{
+  "mcpServers": {
+    "social-forge": {
+      "command": "social-forge",
+      "args": ["mcp"]
+    }
+  }
+}
+```
 
-#### Connected Social Channels
-| Provider | Internal ID / Page ID |
-|---|---|
-| Facebook | `4372074126446140` |
-| Facebook | `604373986102944` |
-| Facebook | `338858752654432` |
-| Facebook | `106249392449992` |
-| Facebook | `102729826251641` |
-| Instagram | `17841400680408909` |
-| Instagram | `17841401924712730` |
-| Instagram | `4372074126446140` |
-| Instagram | `17841474734070627` |
-| Instagram | `17841461291118404` |
+### Authentication Priority
+1. DB-stored cookie tokens (submitted via web form)
+2. Browser cookie extraction (auto-detected from Chrome/Brave/Firefox/Zen)
+3. OAuth tokens from DB
+4. Environment variables
 
-**Verification Rule**: Always verify the `integrations` table for this user before assuming a page is "not connected".
+### Database
+- **Connection**: `DATABASE_URL` env var (PostgreSQL)
+- **Migrations**: `migrations/` directory, auto-applied on startup
+
+### Key Patterns
+- All CLI output is JSON (machine-readable)
+- Errors output JSON to stderr with exit code 1
+- Cookie auth enables full platform access (voting, moderation, GraphQL)
+- OAuth is the fallback for platforms without cookie support

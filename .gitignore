@@ -2,9 +2,10 @@
 target/
 Cargo.lock
 
-# Environment
+# Environment & secrets
 .env
 uploads/
+data/
 
 # IDE
 .idea/
@@ -17,44 +18,29 @@ node_modules/
 frontend/.svelte-kit/
 frontend/build/
 frontend/.env
+frontend/localhost-key.pem
+frontend/localhost.pem
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Debug / dev artifacts
-*.stats.json
-.pantheon-workflow/
-.oh-my-opencode-pi*
-.oh-my-opencode-pi-debug/
-.ruff_cache/
-
-# Plans / handover (not source code)
-PLAN.md
-HANDOVER.md
-
-# Cloned submodule repos (keep on disk, not tracked in git)
-tg/
-gogcli/
-
-# Tracked junk / secrets
-server.log
-data/whatsapp/
-.envsitter/
-
-# sqlx offline cache
-.sqlx/
-.contexty
-.memsearch
-.hive
-
-# Metadata directories (AI agent session data, tool calls, plans)
-.hive/
-.memsearch/
+# AI agent session data
 .contexty/
+.memsearch/
+.hive/
 .sisyphus/
 .playwright-mcp/
+.envsitter/
+.oh-my-opencode-pi*
+.ruff_cache/
+
+# Dev artifacts
+*.stats.json
+server.log
+test-store/
 onboard-page.md
 onboarding-page.png
-frontend/localhost-key.pem
-frontend/localhost.pem
+feature-parity-gap.md
+PROJECT_PROGRESS.md
+PROVIDER_AUDIT.md

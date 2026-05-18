@@ -22,7 +22,7 @@ fn decrypt_token(raw: &str) -> Option<String> {
 async fn get_google_token() -> Option<String> {
     let cfg = get_config();
     let pool = db::create_pool(&cfg.database_url).await.ok()?;
-    let user = sqlx::query!("SELECT id FROM users WHERE email = 'dev@postiz.dev'")
+    let user = sqlx::query!("SELECT id FROM users WHERE email = 'dev@social-forge.dev'")
         .fetch_optional(&pool).await.ok()??;
     let row = sqlx::query!(
         "SELECT access_token FROM integrations WHERE user_id = $1 AND provider_identifier = $2 LIMIT 1",

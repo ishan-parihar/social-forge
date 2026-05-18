@@ -7,7 +7,7 @@ authors = ["Ishan Parihar"]
 license = "MIT"
 repository = "https://github.com/ishan-parihar/social-forge"
 homepage = "https://github.com/ishan-parihar/social-forge"
-keywords = ["mcp", "social-media", "scheduler", "axum", "postiz"]
+keywords = ["mcp", "social-media", "scheduler", "axum", "social-forge"]
 categories = ["command-line-utilities", "web-programming::http-server"]
 
 [[bin]]

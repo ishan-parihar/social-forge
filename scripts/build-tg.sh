@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# build-tg.sh — Build vysheng/telegram-cli for postiz-rust
+# build-tg.sh — Build vysheng/telegram-cli for social-forge-rust
 # Produces binary at: tg/bin/telegram-cli
 #
 

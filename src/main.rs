@@ -1,4 +1,4 @@
-// ─── Postiz-Rust ──────────────────────────────────────────────
+// ─── Social Forge ──────────────────────────────────────────────
 // Social Media Scheduling Platform — Rust implementation.
 //
 // Architecture:

@@ -49,7 +49,7 @@ call_tool "fb_create_photo" "{\"page_id\": \"$FB_PAGE_ID\", \"url\": \"https://p
 call_tool "fb_create_video" "{\"page_id\": \"$FB_PAGE_ID\", \"file_url\": \"https://www.w3schools.com/html/mov_bbb.mp4\", \"title\": \"Audit Video\"}"
 call_tool "fb_page_insights" "{\"page_id\": \"$FB_PAGE_ID\", \"metric\": \"page_post_engagements\"}"
 call_tool "fb_albums" "{\"page_id\": \"$FB_PAGE_ID\"}"
-call_tool "fb_search_pages" "{\"query\": \"Postiz\"}"
+call_tool "fb_search_pages" "{\"query\": \"Social Forge\"}"
 call_tool "fb_conversations" "{\"page_id\": \"$FB_PAGE_ID\"}"
 
 # --- INSTAGRAM CASCADE ---

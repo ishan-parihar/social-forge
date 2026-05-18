@@ -1,5 +1,5 @@
 // ─── MCP Server ───────────────────────────────────────────────
-// Model Context Protocol server exposing all Postiz operations as tools.
+// Model Context Protocol server exposing all Social Forge operations as tools.
 // Designed for AI agents to schedule, manage, and monitor posts.
 //
 // Uses rmcp crate with ServerHandler + #[tool_router] pattern.
@@ -125,7 +125,7 @@ impl JsonSchema for McpJsonValue {
 
 
 #[derive(Clone)]
-pub struct PostizMcpServer {
+pub struct SocialForgeMcpServer {
     pub state: AppState,
 }
 
@@ -133,7 +133,7 @@ pub struct PostizMcpServer {
 
 
 #[tool_router(server_handler)]
-impl PostizMcpServer {
+impl SocialForgeMcpServer {
     pub fn new(state: AppState) -> Self {
         Self { state }
     }
@@ -2437,7 +2437,7 @@ impl PostizMcpServer {
 
 /// Start the MCP server on stdio (for AI clients that spawn the binary)
 pub async fn run_mcp_stdio(state: AppState) -> anyhow::Result<()> {
-    let server = PostizMcpServer::new(state);
+    let server = SocialForgeMcpServer::new(state);
     let service = server.serve(stdio()).await?;
     tracing::info!("MCP server started on stdio");
     service.waiting().await?;

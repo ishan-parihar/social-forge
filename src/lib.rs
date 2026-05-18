@@ -1,4 +1,4 @@
-// Postiz-Rust library root
+// Social Forge library root
 // Re-exports modules for use from tests and integration.
 pub mod api;
 pub mod cli;

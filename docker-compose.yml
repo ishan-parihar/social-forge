@@ -1,51 +1,38 @@
+version: "3.8"
+
 services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: postiz
-      POSTGRES_USER: postiz
-      POSTGRES_PASSWORD: postiz
-    volumes:
-      - pgdata:/var/lib/postgresql/data
+      POSTGRES_DB: social_forge
+      POSTGRES_USER: social_forge
+      POSTGRES_PASSWORD: social_forge
     ports:
       - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postiz"]
+      test: ["CMD-SHELL", "pg_isready -U social_forge"]
       interval: 5s
-      timeout: 5s
+      timeout: 3s
       retries: 5
 
-  app:
+  social-forge:
     build: .
-    ports:
-      - "3000:3000"
-    env_file:
-      - .env
-    environment:
-      DATABASE_URL: postgres://postiz:postiz@postgres:5432/postiz
-      APP_URL: http://localhost:3000
-      FRONTEND_URL: http://localhost:4200
-      RUST_LOG: info,social_forge=debug
-      MEDIA_DIR: /data/uploads
-    volumes:
-      - uploads:/data/uploads
     depends_on:
       postgres:
         condition: service_healthy
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "wget",
-          "--no-verbose",
-          "--tries=1",
-          "--spider",
-          "http://localhost:3000/health",
-        ]
-      interval: 15s
-      timeout: 5s
-      start_period: 10s
-      retries: 3
+    ports:
+      - "3444:3444"
+    environment:
+      DATABASE_URL: postgres://social_forge:social_forge@postgres:5432/social_forge
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      APP_URL: http://localhost:3444
+      FRONTEND_URL: http://localhost:3444
+    env_file:
+      - .env
+    volumes:
+      - uploads:/app/uploads
     restart: unless-stopped
 
 volumes:

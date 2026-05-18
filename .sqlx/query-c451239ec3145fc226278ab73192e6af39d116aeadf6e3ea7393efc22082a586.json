@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE integrations SET access_token = $1, refresh_token = $2,\n         token_expires_at = $3, refresh_needed = false, updated_at = now()\n         WHERE id = $4",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c451239ec3145fc226278ab73192e6af39d116aeadf6e3ea7393efc22082a586"
+}

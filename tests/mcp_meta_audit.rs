@@ -147,7 +147,7 @@ async fn audit_facebook_tools() {
     println!("fb_albums: {}", if albums.is_ok() { "✅" } else { "❌" });
 
     let search = fb::handle_fb_search_pages(&state, &fb::FbSearchPagesInput {
-        query: "Postiz".to_string(),
+        query: "Social Forge".to_string(),
     }).await;
     println!("fb_search_pages: {}", if search.is_ok() { "✅" } else { "❌" });
 
