@@ -13,6 +13,14 @@
   let credDialog = $state<{ provider: string; type: "cookie" | "pat" } | null>(null);
   let credFields = $state<Record<string, string>>({});
   let connectChoice = $state<string | null>(null);
+  let onboardDialog = $state<{
+    provider: string;
+    step: "phone" | "pair_code" | "polling" | "sms_code" | "bot_code" | "done";
+    phone?: string;
+    pairCode?: string;
+    code?: string;
+    instructions?: string;
+  } | null>(null);
   const providerLabels: Record<string, string> = {
     x: "X (Twitter)", facebook: "Facebook", instagram: "Instagram",
     "instagram-standalone": "Instagram (Standalone)", threads: "Threads",
@@ -77,69 +85,43 @@
   function initiateConnect(provider: string) {
     const multiAuth = MULTI_AUTH_PROVIDERS[provider];
     if (multiAuth && !multiAuth.includes("oauth")) {
-      // Provider only supports non-OAuth (e.g., GitHub PAT)
       credDialog = { provider, type: multiAuth[0] as "cookie" | "pat" };
       credFields = {};
       return;
     }
     if (multiAuth && multiAuth.includes("oauth") && multiAuth.includes("cookie")) {
-      // Show choice: OAuth or Cookie (for X)
       connectChoice = provider;
+      return;
+    }
+    // WhatsApp / Telegram User: step-by-step onboarding
+    if (provider === "whatsapp" || provider === "telegram-user") {
+      onboardDialog = { provider, step: "phone", phone: "" };
       return;
     }
     const authType = getAuthType(provider);
     if (authType === "oauth") {
-      // OAuth flow: open popup, listen for postMessage
       connecting = provider;
       error = "";
       integrationsApi.connect(provider).then((r) => {
-        if (r.error) {
-          error = r.error;
+        if (r.error) { error = r.error; connecting = null; return; }
+        if (!r.data?.url) { error = "Failed to initiate connection"; connecting = null; return; }
+        if (r.data.state === "auto") { connecting = null; load(); return; }
+        if (r.data.state === "one-time-token") {
           connecting = null;
+          const match = r.data.url.match(/\/connect\s+(\S+)/);
+          onboardDialog = { provider, step: "bot_code", instructions: r.data.url, code: match?.[1] ?? "" };
           return;
         }
-        if (!r.data?.url) {
-          error = "Failed to initiate connection";
-          connecting = null;
-          return;
-        }
-        // Non-OAuth auto-connect: provider connected server-side, just reload
-        if (r.data.state === "auto") {
-          connecting = null;
-          load();
-          return;
-        }
-        // OAuth: open popup and wait for postMessage callback
         const popup = window.open(r.data.url, "_blank", "width=600,height=700");
         if (popup) {
           const onMessage = (e: MessageEvent) => {
-            if (e.data?.type === "oauth-connected") {
-              window.removeEventListener("message", onMessage);
-              connecting = null;
-              load();
-            }
+            if (e.data?.type === "oauth-connected") { window.removeEventListener("message", onMessage); connecting = null; load(); }
           };
           window.addEventListener("message", onMessage);
-          // Fallback: poll popup closed in case postMessage fails
-          const interval = setInterval(() => {
-            if (popup.closed) {
-              clearInterval(interval);
-              window.removeEventListener("message", onMessage);
-              connecting = null;
-              load();
-            }
-          }, 1000);
-        } else {
-          // Popup blocked — fallback to same window
-          connecting = null;
-        }
-      }).catch((e) => {
-        error = "Failed to connect " + provider;
-        console.error("Connect failed:", e);
-        connecting = null;
-      });
+          const interval = setInterval(() => { if (popup.closed) { clearInterval(interval); window.removeEventListener("message", onMessage); connecting = null; load(); } }, 1000);
+        } else { connecting = null; }
+      }).catch((e) => { error = "Failed to connect " + provider; console.error("Connect failed:", e); connecting = null; });
     } else {
-      // Non-OAuth: show connect dialog
       connectProvider = provider;
     }
   }
@@ -171,6 +153,9 @@
         if (r.error) { error = r.error; return; }
       } else if (credDialog.provider === "github" && credDialog.type === "pat") {
         const r = await integrationsApi.connectGithubPat(credFields.pat || "", credFields.label || undefined);
+        if (r.error) { error = r.error; return; }
+      } else if (credDialog.provider === "telegram-bot") {
+        const r = await integrationsApi.connectTelegramBotToken(credFields.token || "");
         if (r.error) { error = r.error; return; }
       }
       credDialog = null;
@@ -204,6 +189,68 @@
       error = "Failed to toggle channel";
       console.error("Toggle disable failed:", e);
     }
+  }
+
+  async function onboardSubmitPhone() {
+    if (!onboardDialog || !onboardDialog.phone) return;
+    error = "";
+    connecting = onboardDialog.provider;
+    try {
+      if (onboardDialog.provider === "whatsapp") {
+        const r = await integrationsApi.whatsappPair(onboardDialog.phone);
+        if (r.error) { error = r.error; connecting = null; return; }
+        onboardDialog = { ...onboardDialog, step: "pair_code", pairCode: r.data?.pair_code ?? "" };
+        connecting = null;
+        // Start polling for auth
+        pollWhatsAppAuth();
+      } else if (onboardDialog.provider === "telegram-user") {
+        const r = await integrationsApi.telegramUserRequestCode(onboardDialog.phone);
+        if (r.error) { error = r.error; connecting = null; return; }
+        onboardDialog = { ...onboardDialog, step: "sms_code", code: "" };
+        connecting = null;
+      }
+    } catch (e: any) { error = e?.message || "Failed"; connecting = null; }
+  }
+
+  async function pollWhatsAppAuth() {
+    for (let i = 0; i < 60; i++) {
+      await new Promise(r => setTimeout(r, 3000));
+      if (!onboardDialog || onboardDialog.provider !== "whatsapp") return;
+      try {
+        const r = await integrationsApi.whatsappStatus();
+        if (r.data?.authenticated) {
+          // Now verify to create integration
+          const v = await integrationsApi.verifyOneTimeToken("whatsapp", "");
+          if (v.error) { error = v.error; return; }
+          onboardDialog = null;
+          await load();
+          return;
+        }
+      } catch { /* keep polling */ }
+    }
+    error = "Timed out waiting for WhatsApp authentication";
+  }
+
+  async function onboardSubmitCode() {
+    if (!onboardDialog || !onboardDialog.code) return;
+    error = "";
+    connecting = onboardDialog.provider;
+    try {
+      if (onboardDialog.provider === "telegram-user") {
+        const r = await integrationsApi.telegramUserSignIn(onboardDialog.code);
+        if (r.error) { error = r.error; connecting = null; return; }
+        onboardDialog = null;
+        connecting = null;
+        await load();
+      } else {
+        // telegram-bot verify
+        const r = await integrationsApi.verifyOneTimeToken(onboardDialog.provider, onboardDialog.code ?? "");
+        if (r.error) { error = r.error; connecting = null; return; }
+        onboardDialog = null;
+        connecting = null;
+        await load();
+      }
+    } catch (e: any) { error = e?.message || "Verification failed"; connecting = null; }
   }
 
   function handleConnectSuccess() {
@@ -275,14 +322,25 @@
     <h3 class="text-lg font-semibold mb-4">Connect {providerLabel(connectChoice)}</h3>
     <p class="text-sm text-[#6b7280] mb-4">Choose how to connect:</p>
     <div class="flex flex-col gap-3">
-      <button onclick={() => { const p = connectChoice; connectChoice = null; initiateOAuth(p!); }} class="px-4 py-3 bg-[#161b22] border border-[#30363d] rounded-lg hover:border-indigo-500/50 text-left">
-        <div class="text-sm font-medium">OAuth 2.0</div>
-        <div class="text-xs text-[#6b7280]">Standard login — limited to API scopes</div>
-      </button>
-      <button onclick={() => { connectChoice = null; credDialog = { provider: "x", type: "cookie" }; credFields = {}; }} class="px-4 py-3 bg-[#161b22] border border-[#30363d] rounded-lg hover:border-orange-500/50 text-left">
-        <div class="text-sm font-medium">Browser Cookies</div>
-        <div class="text-xs text-[#6b7280]">Full access — DMs, analytics, advanced features</div>
-      </button>
+      {#if connectChoice === "x"}
+        <button onclick={() => { const p = connectChoice; connectChoice = null; initiateOAuth(p!); }} class="px-4 py-3 bg-[#161b22] border border-[#30363d] rounded-lg hover:border-indigo-500/50 text-left">
+          <div class="text-sm font-medium">OAuth 2.0</div>
+          <div class="text-xs text-[#6b7280]">Standard login — limited to API scopes</div>
+        </button>
+        <button onclick={() => { connectChoice = null; credDialog = { provider: "x", type: "cookie" }; credFields = {}; }} class="px-4 py-3 bg-[#161b22] border border-[#30363d] rounded-lg hover:border-orange-500/50 text-left">
+          <div class="text-sm font-medium">Browser Cookies</div>
+          <div class="text-xs text-[#6b7280]">Full access — DMs, analytics, advanced features</div>
+        </button>
+      {:else if connectChoice === "telegram-bot"}
+        <button onclick={() => { const p = connectChoice; connectChoice = null; initiateOAuth(p!); }} class="px-4 py-3 bg-[#161b22] border border-[#30363d] rounded-lg hover:border-indigo-500/50 text-left">
+          <div class="text-sm font-medium">Use Configured Bot</div>
+          <div class="text-xs text-[#6b7280]">Connect a chat/channel to the bot already set up in .env</div>
+        </button>
+        <button onclick={() => { connectChoice = null; credDialog = { provider: "telegram-bot", type: "pat" }; credFields = {}; }} class="px-4 py-3 bg-[#161b22] border border-[#30363d] rounded-lg hover:border-emerald-500/50 text-left">
+          <div class="text-sm font-medium">Add Custom Bot Token</div>
+          <div class="text-xs text-[#6b7280]">Paste a bot token from @BotFather</div>
+        </button>
+      {/if}
     </div>
     <button onclick={() => connectChoice = null} class="mt-4 text-sm text-[#6b7280] hover:text-white w-full text-center">Cancel</button>
   </div>
@@ -293,13 +351,17 @@
 <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50" role="dialog">
   <div class="bg-[#0d1117] border border-[#1e2435] rounded-xl p-6 w-full max-w-md">
     <h3 class="text-lg font-semibold mb-4">
-      {#if credDialog.provider === "x"}Connect X via Cookies{:else}Connect GitHub via PAT{/if}
+      {#if credDialog.provider === "x"}Connect X via Cookies{:else if credDialog.provider === "telegram-bot"}Add Telegram Bot{:else}Connect GitHub via PAT{/if}
     </h3>
     {#if credDialog.provider === "x" && credDialog.type === "cookie"}
       <label class="block text-sm text-[#6b7280] mb-1">auth_token</label>
       <input type="text" bind:value={credFields.auth_token} placeholder="Paste auth_token cookie" class="w-full mb-3 px-3 py-2 bg-[#161b22] border border-[#30363d] rounded text-sm" />
       <label class="block text-sm text-[#6b7280] mb-1">ct0</label>
       <input type="text" bind:value={credFields.ct0} placeholder="Paste ct0 cookie" class="w-full mb-4 px-3 py-2 bg-[#161b22] border border-[#30363d] rounded text-sm" />
+    {:else if credDialog.provider === "telegram-bot"}
+      <p class="text-sm text-[#6b7280] mb-3">Get a token from <a href="https://t.me/BotFather" target="_blank" class="text-indigo-400 hover:text-indigo-300">@BotFather</a> on Telegram.</p>
+      <label class="block text-sm text-[#6b7280] mb-1">Bot Token</label>
+      <input type="password" bind:value={credFields.token} placeholder="123456:ABC-DEF..." class="w-full mb-4 px-3 py-2 bg-[#161b22] border border-[#30363d] rounded text-sm font-mono" />
     {:else if credDialog.provider === "github"}
       <label class="block text-sm text-[#6b7280] mb-1">Personal Access Token</label>
       <input type="password" bind:value={credFields.pat} placeholder="ghp_..." class="w-full mb-3 px-3 py-2 bg-[#161b22] border border-[#30363d] rounded text-sm" />
@@ -311,6 +373,72 @@
       <button onclick={() => { credDialog = null; error = ""; }} class="px-4 py-2 text-sm text-[#6b7280] hover:text-white">Cancel</button>
       <button onclick={submitCredDialog} class="px-4 py-2 text-sm bg-indigo-600 hover:bg-indigo-500 rounded">Connect</button>
     </div>
+  </div>
+</div>
+{/if}
+
+{#if onboardDialog}
+<div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50" role="dialog">
+  <div class="bg-[#0d1117] border border-[#1e2435] rounded-xl p-6 w-full max-w-sm">
+    <h3 class="text-lg font-semibold mb-3">Connect {providerLabel(onboardDialog.provider)}</h3>
+
+    {#if onboardDialog.step === "phone"}
+      <p class="text-sm text-[#6b7280] mb-3">
+        {#if onboardDialog.provider === "whatsapp"}Enter your phone number to get a pairing code.{:else}Enter your phone number to receive a login code via Telegram.{/if}
+      </p>
+      <input type="tel" bind:value={onboardDialog.phone} placeholder="+1234567890" class="w-full mb-4 px-3 py-2 bg-[#161b22] border border-[#30363d] rounded text-sm" />
+      {#if error}<p class="text-red-400 text-sm mb-3">{error}</p>{/if}
+      <div class="flex justify-end gap-2">
+        <button onclick={() => { onboardDialog = null; error = ""; }} class="px-4 py-2 text-sm text-[#6b7280] hover:text-white">Cancel</button>
+        <button onclick={onboardSubmitPhone} disabled={!!connecting} class="px-4 py-2 text-sm bg-indigo-600 hover:bg-indigo-500 rounded disabled:opacity-50">
+          {connecting ? "Sending…" : "Next"}
+        </button>
+      </div>
+
+    {:else if onboardDialog.step === "pair_code"}
+      <p class="text-sm text-[#6b7280] mb-2">Open WhatsApp on your phone:</p>
+      <p class="text-sm text-[#c9d1d9] mb-3">Settings → Linked Devices → Link a Device → Enter code</p>
+      <div class="bg-[#161b22] border border-[#30363d] rounded-lg p-4 mb-4 text-center">
+        <span class="text-2xl font-mono font-bold tracking-[0.3em] text-white">{onboardDialog.pairCode}</span>
+      </div>
+      <p class="text-xs text-[#6b7280] mb-3 text-center">Waiting for you to enter the code on your phone…</p>
+      <div class="flex justify-center"><div class="animate-spin h-5 w-5 border-2 border-indigo-500 border-t-transparent rounded-full"></div></div>
+      <div class="flex justify-end mt-4">
+        <button onclick={() => { onboardDialog = null; error = ""; }} class="px-4 py-2 text-sm text-[#6b7280] hover:text-white">Cancel</button>
+      </div>
+
+    {:else if onboardDialog.step === "sms_code"}
+      <p class="text-sm text-[#6b7280] mb-3">Enter the code sent to your Telegram app.</p>
+      <input type="text" bind:value={onboardDialog.code} placeholder="12345" class="w-full mb-4 px-3 py-2 bg-[#161b22] border border-[#30363d] rounded text-sm font-mono text-center text-lg tracking-widest" />
+      {#if error}<p class="text-red-400 text-sm mb-3">{error}</p>{/if}
+      <div class="flex justify-end gap-2">
+        <button onclick={() => { onboardDialog = null; error = ""; }} class="px-4 py-2 text-sm text-[#6b7280] hover:text-white">Cancel</button>
+        <button onclick={onboardSubmitCode} disabled={!!connecting} class="px-4 py-2 text-sm bg-indigo-600 hover:bg-indigo-500 rounded disabled:opacity-50">
+          {connecting ? "Signing in…" : "Sign In"}
+        </button>
+      </div>
+
+    {:else if onboardDialog.step === "bot_code"}
+      {@const parts = (onboardDialog.instructions ?? "").split("\n")}
+      {@const botUsername = parts[0] ?? ""}
+      {@const connectCmd = parts[1] ?? ""}
+      <div class="space-y-3 mb-4">
+        <p class="text-sm text-[#6b7280]">1. Open this bot in Telegram:</p>
+        <a href="https://t.me/{botUsername.replace('@','')}" target="_blank" class="block text-center text-indigo-400 hover:text-indigo-300 font-medium">{botUsername}</a>
+        <p class="text-sm text-[#6b7280]">2. Send this command to the bot or any group/channel it's in:</p>
+        <div class="bg-[#161b22] border border-[#30363d] rounded-lg p-3 text-center">
+          <code class="text-sm text-white font-mono">{connectCmd}</code>
+        </div>
+        <p class="text-sm text-[#6b7280]">3. Click Verify below.</p>
+      </div>
+      {#if error}<p class="text-red-400 text-sm mb-3">{error}</p>{/if}
+      <div class="flex justify-end gap-2">
+        <button onclick={() => { onboardDialog = null; error = ""; }} class="px-4 py-2 text-sm text-[#6b7280] hover:text-white">Cancel</button>
+        <button onclick={onboardSubmitCode} disabled={!!connecting} class="px-4 py-2 text-sm bg-indigo-600 hover:bg-indigo-500 rounded disabled:opacity-50">
+          {connecting ? "Verifying…" : "Verify"}
+        </button>
+      </div>
+    {/if}
   </div>
 </div>
 {/if}

@@ -65,4 +65,16 @@ export const integrationsApi = {
     api.post<{ integration: Integration }>("/api/integrations/connect/x-cookie", { auth_token, ct0 }),
   connectGithubPat: (pat: string, label?: string) =>
     api.post<{ integration: Integration }>("/api/integrations/connect/github-pat", { pat, label }),
+  verifyOneTimeToken: (provider: string, code: string) =>
+    api.post<{ url: string; state: string }>(`/api/integrations/connect/${provider}/verify`, { code }),
+  whatsappPair: (phone_number: string) =>
+    api.post<{ pair_code: string; expires_in: number }>("/api/integrations/connect/whatsapp/pair", { phone_number }),
+  whatsappStatus: () =>
+    api.get<{ authenticated: boolean; jid?: string }>("/api/integrations/connect/whatsapp/status"),
+  telegramUserRequestCode: (phone: string) =>
+    api.post<{ status: string }>("/api/integrations/connect/telegram-user/request-code", { phone }),
+  telegramUserSignIn: (code: string) =>
+    api.post<{ integration: Integration }>("/api/integrations/connect/telegram-user/sign-in", { code }),
+  connectTelegramBotToken: (token: string) =>
+    api.post<{ integration: Integration }>("/api/integrations/connect/telegram-bot/token", { token }),
 };

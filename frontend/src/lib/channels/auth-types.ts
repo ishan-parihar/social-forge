@@ -16,6 +16,7 @@ export const AUTH_TYPES: Record<string, AuthType> = {
 export const MULTI_AUTH_PROVIDERS: Record<string, AuthType[]> = {
   x: ["oauth", "cookie"],
   github: ["pat"],
+  "telegram-bot": ["oauth", "pat"],  // oauth = configured bot flow, pat = custom token
 };
 
 /**
