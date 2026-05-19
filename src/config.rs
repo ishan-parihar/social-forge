@@ -139,7 +139,7 @@ pub struct Config {
 
 impl Config {
     pub fn from_env() -> anyhow::Result<Self> {
-        let app_url = opt("APP_URL").unwrap_or_else(|| "http://localhost:3000".into());
+        let app_url = opt("APP_URL").unwrap_or_else(|| "https://localhost:6543".into());
         let frontend_url = opt("FRONTEND_URL").unwrap_or_else(|| app_url.clone());
         Ok(Self {
             database_url: env("DATABASE_URL")?,

@@ -24,7 +24,7 @@ pub enum Command {
     /// Start the HTTP REST server
     Serve {
         /// Port to listen on
-        #[arg(long, default_value_t = 3000)]
+        #[arg(long, default_value_t = 6543)]
         port: u16,
     },
 

@@ -34,12 +34,15 @@ use social_forge::wa::WhaClient;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // Install rustls crypto provider for TLS
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
     let cli_args = Cli::parse();
 
     // Extract port for server mode
     let port = match &cli_args.command {
         Command::Serve { port } => *port,
-        _ => 3000,
+        _ => 6543,
     };
 
     // Dispatch non-server commands to CLI handler
@@ -176,24 +179,60 @@ async fn main() -> anyhow::Result<()> {
     // ── Build HTTP router ─────────────────────────────────────
     let app = api::build_router(state);
 
-    // ── Start HTTP server ────────────────────────────────────
+    // ── Start HTTP/HTTPS server ─────────────────────────────
     let http_addr = format!("0.0.0.0:{port}");
+    let use_tls = config.app_url.starts_with("https://");
 
-    let listener = tokio::net::TcpListener::bind(&http_addr)
-        .await
-        .context("Failed to bind HTTP listener")?;
+    if use_tls {
+        // Generate self-signed cert for localhost (or use mkcert certs if available)
+        let cert_path = std::path::Path::new("data/tls/cert.pem");
+        let key_path = std::path::Path::new("data/tls/key.pem");
 
-    tokio::spawn(async move {
-        if let Err(e) = axum::serve(listener, app).await {
-            tracing::error!("HTTP server error: {e}");
+        if !cert_path.exists() {
+            std::fs::create_dir_all("data/tls")?;
+            let mut params = rcgen::CertificateParams::new(vec![
+                "localhost".into(),
+                "127.0.0.1".into(),
+            ])?;
+            params.subject_alt_names.push(rcgen::SanType::IpAddress(std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST)));
+            let key_pair = rcgen::KeyPair::generate()?;
+            let cert = params.self_signed(&key_pair)?;
+            std::fs::write(cert_path, cert.pem())?;
+            std::fs::write(key_path, key_pair.serialize_pem())?;
+            tracing::info!("Generated self-signed TLS cert at data/tls/");
+            tracing::warn!("⚠️  For browsers: trust the cert or use mkcert. See README.");
         }
-    });
 
-    tracing::info!("REST API: http://{http_addr}/api/");
-    tracing::info!("SSE events: http://{http_addr}/api/events");
-    tracing::info!("Health check: http://{http_addr}/health");
-    tracing::info!("Frontend URL: {}", config.frontend_url);
-    tracing::info!("OAuth redirect_uri: {}/api/auth/callback", config.frontend_url);
+        let tls_config = axum_server::tls_rustls::RustlsConfig::from_pem_file(cert_path, key_path)
+            .await
+            .context("Failed to load TLS config")?;
+
+        let addr: std::net::SocketAddr = http_addr.parse().unwrap();
+        tokio::spawn(async move {
+            if let Err(e) = axum_server::bind_rustls(addr, tls_config)
+                .serve(app.into_make_service())
+                .await
+            {
+                tracing::error!("HTTPS server error: {e}");
+            }
+        });
+        tracing::info!("HTTPS server: https://localhost:{port}/");
+    } else {
+        let listener = tokio::net::TcpListener::bind(&http_addr)
+            .await
+            .context("Failed to bind HTTP listener")?;
+        tokio::spawn(async move {
+            if let Err(e) = axum::serve(listener, app).await {
+                tracing::error!("HTTP server error: {e}");
+            }
+        });
+        tracing::info!("HTTP server: http://{http_addr}/");
+    }
+
+    let scheme = if use_tls { "https" } else { "http" };
+    tracing::info!("Dashboard: {scheme}://localhost:{port}/");
+    tracing::info!("Setup: {scheme}://localhost:{port}/setup");
+    tracing::info!("OAuth redirect_uri: {}/api/auth/callback", config.app_url);
 
     // ── MCP mode: also start MCP stdio server ────────────────
     if matches!(cli_args.command, Command::Mcp) {

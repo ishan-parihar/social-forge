@@ -6,9 +6,9 @@ export default defineConfig({
 	server: {
 		port: 5173,
 		proxy: {
-			"/api": "http://localhost:3000",
-			"/health": "http://localhost:3000",
-			"/setup": "http://localhost:3000",
+			"/api": { target: "https://localhost:6543", secure: false },
+			"/health": { target: "https://localhost:6543", secure: false },
+			"/setup": { target: "https://localhost:6543", secure: false },
 		},
 	},
 });
