@@ -757,6 +757,70 @@ pub async fn connect_x_cookie(
     Ok(Json(serde_json::json!({ "integration": public })))
 }
 
+// ── Reddit Cookie Connect ───────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+pub struct ConnectRedditCookieRequest {
+    pub cookie_string: String,
+}
+
+/// POST /api/integrations/connect/reddit-cookie
+pub async fn connect_reddit_cookie(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Json(body): Json<ConnectRedditCookieRequest>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    if body.cookie_string.trim().is_empty() {
+        return Err(AppError::BadRequest("cookie_string is required".into()));
+    }
+
+    let parsed = crate::social::reddit_cookies::parse_cookie_string(&body.cookie_string)
+        .ok_or_else(|| AppError::BadRequest("Could not parse cookie string. Ensure it contains reddit_session.".into()))?;
+
+    let token_str = crate::social::reddit_cookies::build_cookie_token(
+        &parsed.reddit_session,
+        parsed.token_v2.as_deref(),
+        Some(&parsed.cookie_string),
+    );
+
+    // Validate by fetching user info
+    let http = reqwest::Client::new();
+    let me_resp = http
+        .get("https://www.reddit.com/api/me.json")
+        .header("Cookie", &parsed.cookie_string)
+        .header("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) social-forge/0.1")
+        .send()
+        .await
+        .map_err(|e| AppError::Provider(format!("Reddit cookie validation failed: {e}")))?;
+    let me: serde_json::Value = me_resp.json().await
+        .map_err(|e| AppError::Provider(format!("Reddit response parse error: {e}")))?;
+
+    let username = me["data"]["name"].as_str().unwrap_or("unknown");
+    if username == "unknown" || username.is_empty() {
+        return Err(AppError::BadRequest("Invalid cookies — could not authenticate with Reddit".into()));
+    }
+    let icon = me["data"]["icon_img"].as_str()
+        .and_then(|s| s.split('?').next())
+        .unwrap_or("");
+
+    let integration = queries::create_integration(
+        &state.db,
+        auth.user_id,
+        "reddit",
+        "Reddit",
+        username,
+        &token_str,
+        None, None,
+        Some(username),
+        if icon.is_empty() { None } else { Some(icon) },
+        Some(&format!("https://reddit.com/user/{username}")),
+        None,
+        Some("cookie"),
+    ).await.map_err(|e| AppError::Internal(format!("DB error: {e}")))?;
+
+    Ok(Json(serde_json::json!({ "integration": { "id": integration.id, "provider_name": "Reddit", "profile_name": username } })))
+}
+
 // ── GitHub PAT Connect ──────────────────────────────────────
 
 #[derive(Debug, Deserialize)]

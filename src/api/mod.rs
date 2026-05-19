@@ -115,6 +115,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/integrations/connect/telegram-bot/token", axum::routing::post(integrations::connect_telegram_bot_token))
         .route("/api/integrations/connect/api-key", axum::routing::post(integrations::connect_api_key))
         .route("/api/integrations/connect/x-cookie", axum::routing::post(integrations::connect_x_cookie))
+        .route("/api/integrations/connect/reddit-cookie", axum::routing::post(integrations::connect_reddit_cookie))
         .route("/api/integrations/connect/github-pat", axum::routing::post(integrations::connect_github_pat))
         .route("/api/integrations/connect/web3", axum::routing::post(integrations::connect_web3))
         .route("/api/integrations/{id}", axum::routing::delete(integrations::delete))

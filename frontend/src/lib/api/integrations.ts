@@ -63,6 +63,8 @@ export const integrationsApi = {
     ),
   connectXCookie: (auth_token: string, ct0: string) =>
     api.post<{ integration: Integration }>("/api/integrations/connect/x-cookie", { auth_token, ct0 }),
+  connectRedditCookie: (cookie_string: string) =>
+    api.post<{ integration: Integration }>("/api/integrations/connect/reddit-cookie", { cookie_string }),
   connectGithubPat: (pat: string, label?: string) =>
     api.post<{ integration: Integration }>("/api/integrations/connect/github-pat", { pat, label }),
   verifyOneTimeToken: (provider: string, code: string) =>

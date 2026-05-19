@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import { calendarApi } from "$lib/api/calendar";
   import { postsApi } from "$lib/api/posts";
-  import { calendarState } from "$lib/stores/calendar";
+  import { calendarState } from "$lib/stores/calendar.svelte";
   import { toCalendarEvent, type CalendarEvent, type CalendarView } from "$lib/calendar/types";
   import { formatDateKey } from "$lib/calendar/utils";
   import CalendarHeader from "$lib/calendar/CalendarHeader.svelte";
