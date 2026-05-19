@@ -83,6 +83,7 @@ pub fn build_router(state: AppState) -> Router {
 .route("/api/public/connect/x-cookies/import", axum::routing::post(onboard::x_cookies_import))
 .route("/api/public/connect/reddit-cookies", axum::routing::get(onboard::reddit_cookies_form).post(onboard::reddit_cookies_submit))
 .route("/api/public/connect/reddit-cookies/import", axum::routing::post(onboard::reddit_cookies_import))
+.route("/api/public/connect/telegram-bot-token", axum::routing::get(onboard::telegram_bot_token_form).post(onboard::telegram_bot_token_submit))
         .route("/api/public/connect/{provider}", axum::routing::get(onboard::public_connect))
         // Stripe webhook — no auth (signature verification in handler)
         .route("/api/billing/webhook", axum::routing::post(billing::stripe_webhook));
@@ -147,6 +148,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/webhooks/{id}/deliveries", axum::routing::get(webhooks::deliveries))
         .route("/api/notifications", axum::routing::get(notifications::list))
         .route("/api/notifications/unread-count", axum::routing::get(notifications::unread_count))
+        .route("/api/notifications/prefs", axum::routing::get(notifications::get_prefs).put(notifications::update_prefs))
         .route("/api/notifications/{id}/read", axum::routing::put(notifications::mark_read))
         .route("/api/notifications/read-all", axum::routing::put(notifications::mark_all_read))
         .route("/api/notifications/{id}", axum::routing::delete(notifications::delete))

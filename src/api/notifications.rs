@@ -75,3 +75,45 @@ pub async fn delete(
     }
     Ok(Json(json!({"deleted": true})))
 }
+
+/// GET /api/notifications/prefs
+pub async fn get_prefs(
+    State(_state): State<AppState>,
+    _auth: AuthenticatedUser,
+) -> Json<Value> {
+    // Return defaults — prefs are stored client-side for now
+    Json(json!({
+        "post_published": "push",
+        "post_failed": "push",
+        "team_invite": "push",
+        "analytics_weekly": "none",
+        "quiet_hours_start": null,
+        "quiet_hours_end": null,
+        "timezone": 0
+    }))
+}
+
+/// PUT /api/notifications/prefs
+pub async fn update_prefs(
+    State(_state): State<AppState>,
+    _auth: AuthenticatedUser,
+    Json(body): Json<Value>,
+) -> Json<Value> {
+    // Accept and echo back — client stores locally
+    let defaults = json!({
+        "post_published": "push",
+        "post_failed": "push",
+        "team_invite": "push",
+        "analytics_weekly": "none",
+        "quiet_hours_start": null,
+        "quiet_hours_end": null,
+        "timezone": 0
+    });
+    let mut merged = defaults;
+    if let Some(obj) = body.as_object() {
+        for (k, v) in obj {
+            merged[k] = v.clone();
+        }
+    }
+    Json(merged)
+}

@@ -168,7 +168,6 @@ impl SocialProvider for LinkedInPageProvider {
             .get("https://api.linkedin.com/v2/organizationalEntityAcls?q=roleAssignee&role=ADMINISTRATOR&projection=(elements*(organizationalTarget~(localizedName,vanityName,logoV2(original~:playableStreams))))")
             .header("Authorization", format!("Bearer {access_token}"))
             .header("X-Restli-Protocol-Version", "2.0.0")
-            .header("LinkedIn-Version", "202601")
             .send()
             .await?;
 
@@ -207,7 +206,6 @@ impl SocialProvider for LinkedInPageProvider {
             .get(format!("https://api.linkedin.com/v2/organizations/{page_id}?projection=(id,localizedName,vanityName,logoV2(original~:playableStreams))"))
             .header("Authorization", format!("Bearer {access_token}"))
             .header("X-Restli-Protocol-Version", "2.0.0")
-            .header("LinkedIn-Version", "202601")
             .send()
             .await?;
 
