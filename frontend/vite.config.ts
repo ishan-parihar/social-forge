@@ -4,10 +4,11 @@ import { defineConfig } from "vite";
 export default defineConfig({
 	plugins: [sveltekit()],
 	server: {
-		port: 3000,
+		port: 5173,
 		proxy: {
-			"/api": "http://localhost:3444",
-			"/health": "http://localhost:3444",
+			"/api": "http://localhost:3000",
+			"/health": "http://localhost:3000",
+			"/setup": "http://localhost:3000",
 		},
 	},
 });

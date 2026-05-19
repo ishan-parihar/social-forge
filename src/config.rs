@@ -139,11 +139,13 @@ pub struct Config {
 
 impl Config {
     pub fn from_env() -> anyhow::Result<Self> {
+        let app_url = opt("APP_URL").unwrap_or_else(|| "http://localhost:3000".into());
+        let frontend_url = opt("FRONTEND_URL").unwrap_or_else(|| app_url.clone());
         Ok(Self {
             database_url: env("DATABASE_URL")?,
-            jwt_secret: env("JWT_SECRET")?,
-            app_url: env("APP_URL")?,
-            frontend_url: env("FRONTEND_URL")?,
+            jwt_secret: opt("JWT_SECRET").unwrap_or_else(|| "dev-secret-change-in-production".into()),
+            app_url,
+            frontend_url,
             x_client_id: opt("X_CLIENT_ID"),
             x_client_secret: opt("X_CLIENT_SECRET"),
             x_auth_token: opt("X_AUTH_TOKEN"),
