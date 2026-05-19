@@ -639,27 +639,90 @@ impl SocialProvider for RedditProvider {
     }
 
     fn uses_oauth(&self) -> bool {
-        false
+        !self.client_id.is_empty() && !self.client_secret.is_empty()
     }
 
     async fn generate_auth_url(
         &self,
-        _state: &str,
+        state: &str,
         _code_verifier: &str,
-        _redirect_uri: &str,
+        redirect_uri: &str,
     ) -> Result<AuthUrlResponse, ProviderError> {
-        Err(ProviderError::Auth(
-            "Reddit uses password grant, not OAuth. Set REDDIT_USERNAME + REDDIT_PASSWORD in .env"
-                .into(),
-        ))
+        if self.client_id.is_empty() || self.client_secret.is_empty() {
+            return Err(ProviderError::Auth(
+                "Reddit OAuth requires REDDIT_CLIENT_ID + REDDIT_CLIENT_SECRET".into(),
+            ));
+        }
+        let scopes = self.scopes().join(" ");
+        let url = format!(
+            "https://www.reddit.com/api/v1/authorize?client_id={}&response_type=code&state={}&redirect_uri={}&duration=permanent&scope={}",
+            self.client_id,
+            state,
+            urlencoding::encode(redirect_uri),
+            urlencoding::encode(&scopes),
+        );
+        Ok(AuthUrlResponse { url })
     }
 
     async fn exchange_code(
         &self,
-        _code: &str,
+        code: &str,
         _code_verifier: &str,
-        _redirect_uri: &str,
+        redirect_uri: &str,
     ) -> Result<AuthToken, ProviderError> {
+        // 0. If an authorization code is provided, exchange it (OAuth code flow)
+        if !code.is_empty() && !self.client_id.is_empty() {
+            let auth = base64::Engine::encode(
+                &base64::engine::general_purpose::STANDARD,
+                format!("{}:{}", self.client_id, self.client_secret),
+            );
+            let resp = self
+                .http
+                .post("https://www.reddit.com/api/v1/access_token")
+                .header("Authorization", format!("Basic {auth}"))
+                .header("User-Agent", "social-forge:v0.1.0 (by /u/social_forge)")
+                .form(&[
+                    ("grant_type", "authorization_code"),
+                    ("code", code),
+                    ("redirect_uri", redirect_uri),
+                ])
+                .send()
+                .await?;
+
+            let body = resp.text().await.unwrap_or_default();
+            let json: serde_json::Value = serde_json::from_str(&body)
+                .map_err(|e| ProviderError::Api(format!("Reddit token exchange parse error: {e}")))?;
+
+            if let Some(access_token) = json["access_token"].as_str() {
+                let refresh_token = json["refresh_token"].as_str().map(String::from);
+                let expires_in = json["expires_in"].as_u64().map(|n| n as u32);
+                // Fetch user info
+                let me_resp = self
+                    .http
+                    .get("https://oauth.reddit.com/api/v1/me")
+                    .header("Authorization", format!("Bearer {access_token}"))
+                    .header("User-Agent", "social-forge:v0.1.0 (by /u/social_forge)")
+                    .send()
+                    .await?;
+                let user: serde_json::Value = me_resp.json().await.unwrap_or_default();
+                return Ok(AuthToken {
+                    access_token: access_token.to_string(),
+                    refresh_token,
+                    expires_in: expires_in.or(Some(86400)),
+                    provider_user_id: user["id"].as_str().unwrap_or("").to_string(),
+                    name: user["name"].as_str().unwrap_or("").to_string(),
+                    username: user["name"].as_str().unwrap_or("").to_string(),
+                    picture: user["icon_img"]
+                        .as_str()
+                        .and_then(|s| s.split('?').next())
+                        .map(String::from),
+                });
+            } else {
+                let error = json["error"].as_str().unwrap_or("unknown");
+                return Err(ProviderError::Api(format!("Reddit code exchange failed: {error}")));
+            }
+        }
+
         // 1. Try pre-configured REDDIT_ACCESS_TOKEN (from env, same as reddit-cli)
         if let Some(token) = &self.access_token {
             let resp = self

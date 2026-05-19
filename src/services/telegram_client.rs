@@ -52,13 +52,32 @@ impl TelegramClientManager {
         Self::ensure_client(&mut guard, self.api_id, &self.api_hash, &self.session_path).await?;
 
         let client = guard.client.as_ref().unwrap();
-        let token = client
-            .request_login_code(phone)
-            .await
-            .map_err(|e| format!("Request login code failed: {e}"))?;
-
-        guard.pending_token = Some(token);
-        Ok(serde_json::json!({ "status": "code_sent" }))
+        match client.request_login_code(phone).await {
+            Ok(token) => {
+                guard.pending_token = Some(token);
+                Ok(serde_json::json!({ "status": "code_sent" }))
+            }
+            Err(e) => {
+                let err_str = format!("{e}");
+                if err_str.contains("AUTH_RESTART") {
+                    // Session corrupted — clear and retry with fresh session
+                    tracing::warn!("AUTH_RESTART: clearing Telegram session and retrying");
+                    guard.client = None;
+                    guard.pending_token = None;
+                    let _ = std::fs::remove_file(&self.session_path);
+                    Self::ensure_client(&mut guard, self.api_id, &self.api_hash, &self.session_path).await?;
+                    let client = guard.client.as_ref().unwrap();
+                    let token = client
+                        .request_login_code(phone)
+                        .await
+                        .map_err(|e| format!("Request login code failed after session reset: {e}"))?;
+                    guard.pending_token = Some(token);
+                    Ok(serde_json::json!({ "status": "code_sent", "note": "session was reset" }))
+                } else {
+                    Err(format!("Request login code failed: {e}"))
+                }
+            }
+        }
     }
 
     pub async fn sign_in(&self, _phone: &str, code: &str) -> Result<Value, String> {

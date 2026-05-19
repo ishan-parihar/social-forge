@@ -168,7 +168,7 @@ pub async fn connect(
     let oauth_state = crate::social::common::generate_state();
     let redirect_uri = query
         .redirect_uri
-        .unwrap_or_else(|| format!("{}/api/auth/callback", state.config.frontend_url));
+        .unwrap_or_else(|| format!("{}/api/auth/callback", state.config.app_url));
 
     tracing::info!("OAuth connect {provider}: redirect_uri={redirect_uri}");
 

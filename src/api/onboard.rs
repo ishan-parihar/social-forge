@@ -181,6 +181,7 @@ pub async fn onboard_page(
                 _ => "Missing environment variables",
             }.into();
             // Reddit and X can use cookie auth without any env vars
+            // Telegram Bot can accept a token directly
             if id == "reddit" {
                 action_html = format!(
                     r#"<a href="/api/public/connect/reddit-cookies?token={}" class="btn btn-primary">🍪 Connect via Cookies</a>"#,
@@ -189,6 +190,11 @@ pub async fn onboard_page(
             } else if id == "x" {
                 action_html = format!(
                     r#"<a href="/api/public/connect/x-cookies?token={}" class="btn btn-primary">🍪 Connect via Cookies</a>"#,
+                    token
+                );
+            } else if id == "telegram-bot" {
+                action_html = format!(
+                    r#"<a href="/api/public/connect/telegram-bot-token?token={}" class="btn btn-primary">🤖 Enter Bot Token</a>"#,
                     token
                 );
             } else {
@@ -1277,4 +1283,77 @@ async fn get_or_create_dev_user(state: &AppState) -> Result<crate::db::models::U
     let user = queries::create_user(&state.db, DEV_EMAIL, &hash, DEV_NAME).await?;
     tracing::info!("Created dev user: {} ({})", DEV_EMAIL, user.id);
     Ok(user)
+}
+
+// ── Telegram Bot Token Form ──────────────────────────────────
+
+/// GET /api/public/connect/telegram-bot-token — form to enter bot token
+pub async fn telegram_bot_token_form() -> axum::response::Html<String> {
+    axum::response::Html(format!(r#"<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Social Forge — Telegram Bot Token</title>
+<style>body{{font-family:system-ui;background:#0b0e14;color:#d1d5db;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0}}
+.card{{background:#131720;border:1px solid #1e2435;border-radius:12px;padding:2rem;max-width:480px;width:100%}}
+h2{{color:#fff;margin-top:0}}input{{width:100%;padding:.75rem;border:1px solid #1e2435;border-radius:8px;background:#0d1117;color:#d1d5db;margin:.5rem 0;box-sizing:border-box}}
+.btn{{display:inline-block;padding:.75rem 1.5rem;background:#6366f1;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:.9rem;width:100%;margin-top:.5rem}}
+.btn:hover{{background:#4f46e5}}.hint{{font-size:.8rem;color:#6b7280;margin-top:.5rem}}</style></head>
+<body><div class="card"><h2>🤖 Telegram Bot Token</h2>
+<p style="font-size:.9rem;color:#9ca3af">Enter your bot token from <a href="https://t.me/BotFather" style="color:#6366f1">@BotFather</a></p>
+<form method="POST" action="/api/public/connect/telegram-bot-token">
+<input name="bot_token" placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz" required>
+<button type="submit" class="btn">Connect Bot</button>
+</form>
+<p class="hint">The token looks like: 123456789:ABCdefGHIjklMNOpqrsTUVwxyz</p>
+</div></body></html>"#))
+}
+
+/// POST /api/public/connect/telegram-bot-token — submit bot token
+pub async fn telegram_bot_token_submit(
+    State(state): State<AppState>,
+    axum::extract::Form(form): axum::extract::Form<std::collections::HashMap<String, String>>,
+) -> axum::response::Response {
+    use axum::response::IntoResponse;
+    let bot_token = match form.get("bot_token") {
+        Some(t) if !t.is_empty() => t.clone(),
+        _ => return axum::response::Html("<p>Error: bot_token is required</p>".to_string()).into_response(),
+    };
+
+    // Validate token via getMe
+    let url = format!("https://api.telegram.org/bot{}/getMe", bot_token);
+    let resp = match reqwest::get(&url).await {
+        Ok(r) => r,
+        Err(e) => return axum::response::Html(format!("<p>Error: Failed to reach Telegram API: {e}</p>")).into_response(),
+    };
+    let json: serde_json::Value = match resp.json().await {
+        Ok(j) => j,
+        Err(e) => return axum::response::Html(format!("<p>Error: Invalid response: {e}</p>")).into_response(),
+    };
+    if !json["ok"].as_bool().unwrap_or(false) {
+        return axum::response::Html(format!("<p>Error: Invalid bot token. Telegram says: {}</p>", json["description"].as_str().unwrap_or("unknown error"))).into_response();
+    }
+
+    let bot = &json["result"];
+    let bot_id = bot["id"].as_i64().unwrap_or(0).to_string();
+    let bot_name = bot["first_name"].as_str().unwrap_or("Bot");
+    let bot_username = bot["username"].as_str().unwrap_or("");
+
+    let user_id = crate::auth::middleware::DEFAULT_USER_ID;
+    let token_json = serde_json::json!({"bot_token": bot_token}).to_string();
+    let _ = crate::db::queries::create_integration(
+        &state.db,
+        user_id,
+        "telegram-bot",
+        "Telegram Bot",
+        &bot_id,
+        &token_json,
+        None,
+        None,
+        Some(bot_name),
+        None,
+        Some(&format!("https://t.me/{bot_username}")),
+        None,
+        Some("api_key"),
+    ).await;
+
+    axum::response::Redirect::to("/setup?connected=telegram-bot").into_response()
 }
