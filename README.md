@@ -27,7 +27,7 @@ One binary. One codebase. Zero runtime dependencies beyond PostgreSQL.
 │                        Social Forge Binary                        │
 ├──────────────┬──────────────────┬───────────────────────────────┤
 │   CLI Mode   │   REST API Mode  │        MCP Stdio Mode         │
-│  (clap)      │  (axum :3000)    │   (rmcp, 130+ tools)          │
+│  (clap)      │  (axum :6543)    │   (rmcp, 130+ tools)          │
 ├──────────────┴──────────────────┴───────────────────────────────┤
 │                    Shared Business Logic                          │
 │  ┌──────────────────────────────────────────────────────────┐   │
@@ -87,11 +87,11 @@ cargo build --release
 # Build the frontend dashboard
 cd frontend && npm install && npm run build && cd ..
 
-# Start the server (serves API + dashboard on port 3000)
+# Start the server (serves API + dashboard on port 6543 with HTTPS)
 ./target/release/social-forge serve
 ```
 
-Open `http://localhost:3000` for the dashboard. Visit `http://localhost:3000/setup` to connect social accounts via OAuth.
+Open `https://localhost:6543` for the dashboard. Visit `https://localhost:6543/setup` to connect social accounts via OAuth.
 
 ### Option 2: Docker
 
@@ -200,7 +200,7 @@ The only required variable is `DATABASE_URL`. Everything else has sensible defau
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `DATABASE_URL` | *(required)* | PostgreSQL connection string |
-| `APP_URL` | `http://localhost:3000` | Public URL of your instance. Used for OAuth redirect URIs. |
+| `APP_URL` | `https://localhost:6543` | Public URL of your instance. Used for OAuth redirect URIs. |
 | `FRONTEND_URL` | Same as `APP_URL` | CORS allowed origin. Set separately only if frontend is on a different domain. |
 | `JWT_SECRET` | Auto-generated | Secret for signing auth tokens. Set a strong value in production. |
 | `TOKEN_ENCRYPTION_KEY` | *(optional)* | 64 hex chars. Encrypts OAuth tokens at rest (AES-GCM). |
@@ -213,11 +213,11 @@ The only required variable is `DATABASE_URL`. Everything else has sensible defau
 export APP_URL=https://social-forge.yourdomain.com
 
 # 2. Start the server
-social-forge serve --port 3000
+social-forge serve --port 6543
 
-# 3. Point your tunnel to localhost:3000
-ngrok http 3000
-# or: cloudflared tunnel --url http://localhost:3000
+# 3. Point your tunnel to localhost:6543
+ngrok http 6543
+# or: cloudflared tunnel --url https://localhost:6543
 ```
 
 All OAuth redirect URIs automatically use `{APP_URL}/api/auth/callback`. Register this URL in each platform's developer console.
@@ -227,7 +227,7 @@ All OAuth redirect URIs automatically use `{APP_URL}/api/auth/callback`. Registe
 **Caddy:**
 ```
 social-forge.yourdomain.com {
-    reverse_proxy localhost:3000
+    reverse_proxy localhost:6543
 }
 ```
 
@@ -236,7 +236,7 @@ social-forge.yourdomain.com {
 server {
     server_name social-forge.yourdomain.com;
     location / {
-        proxy_pass http://localhost:3000;
+        proxy_pass https://localhost:6543;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
@@ -247,8 +247,8 @@ server {
 ### Onboarding Flow
 
 1. **Start the server**: `social-forge serve`
-2. **Open the dashboard**: `http://localhost:3000` (or your APP_URL)
-3. **Connect accounts**: Visit `http://localhost:3000/setup`
+2. **Open the dashboard**: `https://localhost:6543` (or your APP_URL)
+3. **Connect accounts**: Visit `https://localhost:6543/setup`
    - For OAuth providers (LinkedIn, Facebook, etc.): Click "Connect" → complete OAuth flow
    - For cookie auth (X, Reddit): Click "🍪 Enter Cookies" → paste browser cookies
    - For API key providers (Bluesky, GitHub, etc.): Enter credentials directly
@@ -264,8 +264,17 @@ When registering your app with social platforms, use this redirect URI:
 ```
 
 For example:
-- Local dev: `http://localhost:3000/api/auth/callback`
+- Local dev: `https://localhost:6543/api/auth/callback`
 - Production: `https://social-forge.yourdomain.com/api/auth/callback`
+
+> **⚠️ HTTPS is REQUIRED for Instagram and Threads (Meta platforms).**
+> Meta does NOT support `http://` redirect URIs, even for localhost.
+> Social Forge auto-generates a self-signed TLS certificate on first run.
+> Your browser will show a security warning — click "Advanced" → "Proceed" to accept it.
+> For a trusted cert, use [mkcert](https://github.com/FiloSottile/mkcert):
+> ```bash
+> mkcert -install && mkcert -cert-file data/tls/cert.pem -key-file data/tls/key.pem localhost 127.0.0.1
+> ```
 
 | Platform | Developer Console |
 |----------|-------------------|

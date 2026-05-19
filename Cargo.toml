@@ -15,6 +15,9 @@ name = "social-forge"
 path = "src/main.rs"
 
 [dependencies]
+axum-server = { version = "0.7", features = ["tls-rustls"] }
+rcgen = "0.13"
+rustls = { version = "0.23", features = ["ring"] }
 # Web framework
 axum = { version = "0.8", features = ["macros"] }
 mime = "0.3"
