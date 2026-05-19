@@ -36,12 +36,18 @@ pub struct CalendarPost {
     pub error_message: Option<String>,
     pub created_at: String,
     pub tags: Vec<TagResponse>,
+    pub repeat_interval_days: Option<i32>,
+    pub repeat_end_date: Option<String>,
+    pub group_id: Option<Uuid>,
+    pub first_comment: Option<String>,
+    pub sequence: i32,
 }
 
 #[derive(Debug, Serialize)]
 pub struct CalendarDay {
     pub date: String,
     pub posts: Vec<CalendarPost>,
+    pub post_count: usize,
 }
 
 #[derive(Debug, Serialize)]
@@ -104,12 +110,20 @@ pub async fn get(
             error_message: p.error_message,
             created_at: p.created_at.to_rfc3339(),
             tags,
+            repeat_interval_days: p.repeat_interval_days,
+            repeat_end_date: p.repeat_end_date.map(|d| d.to_rfc3339()),
+            group_id: p.group_id,
+            first_comment: p.first_comment,
+            sequence: p.sequence,
         });
     }
 
     let days: Vec<CalendarDay> = day_map
         .into_iter()
-        .map(|(date, posts)| CalendarDay { date, posts })
+        .map(|(date, posts)| {
+            let post_count = posts.len();
+            CalendarDay { date, posts, post_count }
+        })
         .collect();
 
     let total = days.iter().map(|d| d.posts.len()).sum();

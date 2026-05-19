@@ -5,6 +5,7 @@
 
   let unreadCount = $state(0);
   let panelOpen = $state(false);
+  let containerEl: HTMLDivElement | undefined = $state(undefined);
 
   async function fetchUnreadCount() {
     const res = await notificationsApi.unreadCount();
@@ -15,7 +16,8 @@
     }
   }
 
-  function togglePanel() {
+  function togglePanel(e: MouseEvent) {
+    e.stopPropagation();
     panelOpen = !panelOpen;
   }
 
@@ -31,7 +33,7 @@
   });
 </script>
 
-<div class="relative">
+<div class="relative" bind:this={containerEl}>
   <button
     onclick={togglePanel}
     class="relative p-1.5 rounded-lg text-[#9ca3af] hover:text-white transition-colors duration-150"
@@ -47,5 +49,5 @@
     {/if}
   </button>
 
-  <NotificationPanel open={panelOpen} onclose={closePanel} />
+  <NotificationPanel open={panelOpen} onclose={closePanel} {containerEl} />
 </div>
