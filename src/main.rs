@@ -36,6 +36,12 @@ use social_forge::wa::WhaClient;
 async fn main() -> anyhow::Result<()> {
     let cli_args = Cli::parse();
 
+    // Extract port for server mode
+    let port = match &cli_args.command {
+        Command::Serve { port } => *port,
+        _ => 3000,
+    };
+
     // Dispatch non-server commands to CLI handler
     match &cli_args.command {
         Command::Serve { .. } | Command::Mcp => {
@@ -171,8 +177,7 @@ async fn main() -> anyhow::Result<()> {
     let app = api::build_router(state);
 
     // ── Start HTTP server ────────────────────────────────────
-    // HTTP on 3443 (internal). HTTPS on 3000 via socat TLS proxy.
-    let http_addr = "0.0.0.0:3444".to_string();
+    let http_addr = format!("0.0.0.0:{port}");
 
     let listener = tokio::net::TcpListener::bind(&http_addr)
         .await

@@ -5,6 +5,7 @@
 use axum::{middleware, Router};
 use tower_http::cors::CorsLayer;
 use tower_http::limit::RequestBodyLimitLayer;
+use tower_http::services::{ServeDir, ServeFile};
 use tower_http::trace::TraceLayer;
 
 use crate::auth::middleware::auth_middleware;
@@ -77,7 +78,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/events", axum::routing::get(sse::sse_handler))
         .route("/api/media/{id}", axum::routing::get(media::serve_media))
         // Public onboarding — browser-accessible OAuth flow (no JWT header needed)
-        .route("/", axum::routing::get(onboard::onboard_page))
+        .route("/setup", axum::routing::get(onboard::onboard_page))
         .route("/api/public/connect/x-cookies", axum::routing::get(onboard::x_cookies_form).post(onboard::x_cookies_submit))
 .route("/api/public/connect/x-cookies/import", axum::routing::post(onboard::x_cookies_import))
 .route("/api/public/connect/reddit-cookies", axum::routing::get(onboard::reddit_cookies_form).post(onboard::reddit_cookies_submit))
@@ -165,7 +166,7 @@ pub fn build_router(state: AppState) -> Router {
         .layer(middleware::from_fn(auth_middleware));
 
     // Global middleware stack
-    Router::new()
+    let app = Router::new()
         .merge(public_routes)
         .merge(protected_routes)
         .layer(cors_layer)
@@ -173,7 +174,21 @@ pub fn build_router(state: AppState) -> Router {
         .layer(RequestBodyLimitLayer::new(
             10 * 1024 * 1024, // 10 MB limit
         ))
-        .with_state(state)
+        .with_state(state);
+
+    // Serve SvelteKit static build as fallback (SPA routing)
+    let frontend_dir = std::env::var("FRONTEND_DIR")
+        .unwrap_or_else(|_| "./frontend/build".into());
+    let frontend_path = std::path::Path::new(&frontend_dir);
+    if frontend_path.join("index.html").exists() {
+        let index = frontend_path.join("index.html");
+        app.fallback_service(
+            ServeDir::new(frontend_path)
+                .not_found_service(ServeFile::new(index))
+        )
+    } else {
+        app
+    }
 }
 
 /// Health check endpoint

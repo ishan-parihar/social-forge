@@ -27,7 +27,7 @@ One binary. One codebase. Zero runtime dependencies beyond PostgreSQL.
 │                        Social Forge Binary                        │
 ├──────────────┬──────────────────┬───────────────────────────────┤
 │   CLI Mode   │   REST API Mode  │        MCP Stdio Mode         │
-│  (clap)      │  (axum :3444)    │   (rmcp, 130+ tools)          │
+│  (clap)      │  (axum :3000)    │   (rmcp, 130+ tools)          │
 ├──────────────┴──────────────────┴───────────────────────────────┤
 │                    Shared Business Logic                          │
 │  ┌──────────────────────────────────────────────────────────┐   │
@@ -71,7 +71,29 @@ One binary. One codebase. Zero runtime dependencies beyond PostgreSQL.
 
 ## Quick Start
 
-### Option 1: Docker (recommended)
+### Option 1: From source (recommended for development)
+
+```bash
+git clone https://github.com/ishan-parihar/social-forge.git
+cd social-forge
+cp .env.example .env
+
+# Start PostgreSQL (or use your own)
+docker compose up -d postgres
+
+# Build
+cargo build --release
+
+# Build the frontend dashboard
+cd frontend && npm install && npm run build && cd ..
+
+# Start the server (serves API + dashboard on port 3000)
+./target/release/social-forge serve
+```
+
+Open `http://localhost:3000` for the dashboard. Visit `http://localhost:3000/setup` to connect social accounts via OAuth.
+
+### Option 2: Docker
 
 ```bash
 git clone https://github.com/ishan-parihar/social-forge.git
@@ -81,27 +103,14 @@ cp .env.example .env
 docker compose up -d
 ```
 
-The server starts at `http://localhost:3444`. Visit `/` for the onboarding dashboard.
-
-### Option 2: From source
-
-```bash
-git clone https://github.com/ishan-parihar/social-forge.git
-cd social-forge
-cp .env.example .env
-
-# Start PostgreSQL
-docker compose up -d postgres
-
-# Build and run
-cargo build --release
-./target/release/social-forge serve
-```
-
 ### Option 3: CLI only (no server)
 
 ```bash
-# After building, use CLI commands directly:
+# Initialize user config
+social-forge init
+
+# Edit ~/.social-forge/.env with DATABASE_URL and credentials
+# Then use CLI commands from any directory:
 social-forge providers                    # List connected accounts
 social-forge x timeline --count 5        # View X timeline
 social-forge reddit browse rust          # Browse r/rust
@@ -175,10 +184,99 @@ Social Forge implements a unique **dual-path auth** system (inspired by how brow
 
 ### OAuth (all providers)
 - Standard OAuth 2.0 PKCE flow
-- Managed via the onboarding dashboard at `/`
+- Managed via the onboarding dashboard at `/setup`
 - Tokens encrypted at rest (AES-GCM, optional)
 
 Priority resolution: `DB cookie tokens → Browser extraction → OAuth tokens → Env vars`
+
+---
+
+## Self-Hosting & Onboarding
+
+### Environment Variables
+
+The only required variable is `DATABASE_URL`. Everything else has sensible defaults:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DATABASE_URL` | *(required)* | PostgreSQL connection string |
+| `APP_URL` | `http://localhost:3000` | Public URL of your instance. Used for OAuth redirect URIs. |
+| `FRONTEND_URL` | Same as `APP_URL` | CORS allowed origin. Set separately only if frontend is on a different domain. |
+| `JWT_SECRET` | Auto-generated | Secret for signing auth tokens. Set a strong value in production. |
+| `TOKEN_ENCRYPTION_KEY` | *(optional)* | 64 hex chars. Encrypts OAuth tokens at rest (AES-GCM). |
+| `FRONTEND_DIR` | `./frontend/build` | Path to the SvelteKit static build directory. |
+
+### Exposing via Tunnel (ngrok, Cloudflare, etc.)
+
+```bash
+# 1. Set APP_URL to your public tunnel URL
+export APP_URL=https://social-forge.yourdomain.com
+
+# 2. Start the server
+social-forge serve --port 3000
+
+# 3. Point your tunnel to localhost:3000
+ngrok http 3000
+# or: cloudflared tunnel --url http://localhost:3000
+```
+
+All OAuth redirect URIs automatically use `{APP_URL}/api/auth/callback`. Register this URL in each platform's developer console.
+
+### Reverse Proxy (Caddy / Nginx)
+
+**Caddy:**
+```
+social-forge.yourdomain.com {
+    reverse_proxy localhost:3000
+}
+```
+
+**Nginx:**
+```nginx
+server {
+    server_name social-forge.yourdomain.com;
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+### Onboarding Flow
+
+1. **Start the server**: `social-forge serve`
+2. **Open the dashboard**: `http://localhost:3000` (or your APP_URL)
+3. **Connect accounts**: Visit `http://localhost:3000/setup`
+   - For OAuth providers (LinkedIn, Facebook, etc.): Click "Connect" → complete OAuth flow
+   - For cookie auth (X, Reddit): Click "🍪 Enter Cookies" → paste browser cookies
+   - For API key providers (Bluesky, GitHub, etc.): Enter credentials directly
+4. **Create content**: Use the dashboard at `/posts/new` or the CLI
+5. **Schedule**: Set a date/time or use "Auto-schedule" to find optimal slots
+
+### OAuth Redirect URI Setup
+
+When registering your app with social platforms, use this redirect URI:
+
+```
+{APP_URL}/api/auth/callback
+```
+
+For example:
+- Local dev: `http://localhost:3000/api/auth/callback`
+- Production: `https://social-forge.yourdomain.com/api/auth/callback`
+
+| Platform | Developer Console |
+|----------|-------------------|
+| X/Twitter | https://developer.twitter.com/en/portal/projects |
+| LinkedIn | https://www.linkedin.com/developers/apps |
+| Facebook/Instagram | https://developers.facebook.com/apps |
+| Reddit | https://www.reddit.com/prefs/apps |
+| YouTube | https://console.cloud.google.com/apis/credentials |
+| TikTok | https://developers.tiktok.com/apps |
+| Pinterest | https://developers.pinterest.com/apps |
+| Discord | https://discord.com/developers/applications |
 
 ---
 
