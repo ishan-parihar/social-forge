@@ -1,0 +1,44 @@
+# ─── Local Build Dockerfile ──────────────────────────────────
+# Use this if you want to compile from source instead of fetching releases.
+# Build: docker build -f Dockerfile.build -t social-forge .
+
+FROM rust:1.85-slim-bookworm AS builder
+
+RUN apt-get update && \
+    apt-get install -y pkg-config libssl-dev musl-tools && \
+    rustup target add x86_64-unknown-linux-musl && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY Cargo.toml Cargo.lock* ./
+RUN mkdir -p src && echo "fn main() {}" > src/main.rs && echo "" > src/lib.rs && \
+    cargo build --release --target x86_64-unknown-linux-musl 2>/dev/null || true && \
+    rm -rf src
+
+COPY src/ ./src/
+COPY migrations/ ./migrations/
+COPY .sqlx/ ./.sqlx/
+
+ENV SQLX_OFFLINE=true
+RUN cargo build --release --target x86_64-unknown-linux-musl && \
+    strip target/x86_64-unknown-linux-musl/release/social-forge
+
+FROM node:20-slim AS frontend
+WORKDIR /app/frontend
+COPY frontend/package.json frontend/pnpm-lock.yaml* ./
+RUN npm install -g pnpm && pnpm install --frozen-lockfile 2>/dev/null || pnpm install
+COPY frontend/ ./
+RUN pnpm build
+
+FROM alpine:3.20
+RUN apk add --no-cache ca-certificates curl
+COPY --from=builder /app/target/x86_64-unknown-linux-musl/release/social-forge /usr/local/bin/social-forge
+COPY --from=frontend /app/frontend/build /app/frontend/build
+COPY migrations/ /app/migrations/
+
+WORKDIR /app
+RUN mkdir -p /app/uploads
+EXPOSE 3444
+HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl -sf http://localhost:3444/health || exit 1
+CMD ["social-forge", "serve"]

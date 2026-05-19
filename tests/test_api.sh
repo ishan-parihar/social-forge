@@ -75,7 +75,7 @@ fi
 
 # ── 3. MCP stdio ─────────────────────────────────
 echo -e "\n── 3. MCP Server (stdio) ──"
-MCP_OUT=$(printf '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}\n{"jsonrpc":"2.0","method":"notifications/initialized"}\n{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}\n' | timeout 5 ./target/release/social-forge-rust --mcp 2>/dev/null || true)
+MCP_OUT=$(printf '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}\n{"jsonrpc":"2.0","method":"notifications/initialized"}\n{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}\n' | timeout 5 ./target/releassocial-forge mcp 2>/dev/null || true)
 echo "$MCP_OUT" | grep -q "auth_login" && green "MCP tools/list returns tools" || red "MCP tools/list failed"
 
 # ── 4. Integrations ──────────────────────────────
