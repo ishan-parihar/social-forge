@@ -1,5 +1,6 @@
 <script lang="ts">
   import { tick } from "svelte";
+  import { goto } from "$app/navigation";
   import Badge from "$lib/ui/Badge.svelte";
   import type { CalendarEvent as CEvent } from "./types";
 
@@ -68,6 +69,9 @@
           {:else}
             📋 Duplicate
           {/if}
+        </button>
+        <button onclick={() => goto(`/posts/${event.id}`)} class="w-full px-3 py-2 bg-[#1a1f2e] hover:bg-[#242b3d] border border-[#2a3045] rounded-lg text-sm text-indigo-400 transition-colors flex items-center justify-center gap-2">
+          ✏️ Edit
         </button>
       </div>
     </div>

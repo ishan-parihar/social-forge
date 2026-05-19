@@ -175,9 +175,10 @@ async fn publish_post(
     let mut access_token = resolve_token(db, provider, post).await?;
 
     // Build post content
+    let media: Vec<crate::social::MediaAttachment> = serde_json::from_value(post.media.clone()).unwrap_or_default();
     let content = PostContent {
         content: post.content.clone(),
-        media: vec![],
+        media,
         settings: post.settings.clone(),
     };
 
@@ -217,6 +218,25 @@ async fn publish_post(
                         "provider": post.provider_identifier,
                     }),
                 );
+
+                // Publish first_comment if present
+                if let Some(ref comment_text) = post.first_comment {
+                    if !comment_text.is_empty() {
+                        let comment_content = PostContent {
+                            content: comment_text.clone(),
+                            media: vec![],
+                            settings: serde_json::json!({}),
+                        };
+                        if let Err(e) = provider.comment(
+                            &access_token,
+                            &result.platform_post_id,
+                            None,
+                            &comment_content,
+                        ).await {
+                            tracing::warn!("Failed to post first_comment for {}: {e}", post.id);
+                        }
+                    }
+                }
 
                 return Ok(());
             }

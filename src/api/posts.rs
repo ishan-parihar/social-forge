@@ -1,6 +1,8 @@
 // ─── Posts API Routes ─────────────────────────────────────────
 // CRUD for social media posts with scheduling support.
 
+use std::collections::HashMap;
+
 use axum::{
     extract::{Path, Query, State},
     Json,
@@ -20,6 +22,12 @@ use super::AppState;
 // ── Request Types ───────────────────────────────────────────
 
 #[derive(Debug, Deserialize)]
+pub struct PostOverride {
+    pub content: Option<String>,
+    pub settings: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct CreatePostRequest {
     pub integration_ids: Vec<Uuid>,
     pub content: String,
@@ -30,6 +38,7 @@ pub struct CreatePostRequest {
     pub tag_ids: Option<Vec<Uuid>>,
     pub first_comment: Option<String>,
     pub sequence: Option<i32>,
+    pub overrides: Option<HashMap<String, PostOverride>>,
 }
 
 #[derive(Debug, Serialize)]
@@ -281,20 +290,51 @@ pub async fn create(
         }
     }
 
-    let posts = queries::create_posts_for_integrations(
-        &state.db,
-        auth.user_id,
-        &body.integration_ids,
-        &body.content,
-        body.title.as_deref(),
-        &media,
-        &settings,
-        scheduled_at,
-        state_enum,
-        body.first_comment.as_deref(),
-        body.sequence.unwrap_or(0),
-    )
-    .await?;
+    let posts = if body.overrides.is_some() {
+        let overrides = body.overrides.as_ref().unwrap();
+        let mut posts = Vec::with_capacity(body.integration_ids.len());
+        for &id in &body.integration_ids {
+            let post_content = overrides
+                .get(&id.to_string())
+                .and_then(|o| o.content.as_deref())
+                .unwrap_or(&body.content);
+            let post_settings = overrides
+                .get(&id.to_string())
+                .and_then(|o| o.settings.clone())
+                .unwrap_or_else(|| settings.clone());
+            let post = queries::create_post(
+                &state.db,
+                auth.user_id,
+                id,
+                post_content,
+                body.title.as_deref(),
+                &media,
+                &post_settings,
+                scheduled_at,
+                state_enum.clone(),
+                body.first_comment.as_deref(),
+                body.sequence.unwrap_or(0),
+            )
+            .await?;
+            posts.push(post);
+        }
+        posts
+    } else {
+        queries::create_posts_for_integrations(
+            &state.db,
+            auth.user_id,
+            &body.integration_ids,
+            &body.content,
+            body.title.as_deref(),
+            &media,
+            &settings,
+            scheduled_at,
+            state_enum,
+            body.first_comment.as_deref(),
+            body.sequence.unwrap_or(0),
+        )
+        .await?
+    };
 
     // Insert post_tags for each post if tag_ids provided
     if let Some(ref tag_ids) = body.tag_ids {

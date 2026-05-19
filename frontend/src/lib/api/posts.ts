@@ -39,7 +39,7 @@ export const postsApi = {
     return api.get<{ posts: PostSummary[]; total: number }>(`/api/posts?${q}`);
   },
   get: (id: string) => api.get<PostDetail>(`/api/posts/${id}`),
-  create: (d: { integration_ids: string[]; content: string; title?: string; scheduled_at?: string; tag_ids?: string[]; first_comment?: string }) =>
+  create: (d: { integration_ids: string[]; content: string; title?: string; scheduled_at?: string; tag_ids?: string[]; first_comment?: string; media?: { id: string; url: string; mime_type: string; alt?: string }[]; overrides?: Record<string, { content?: string; settings?: any }> }) =>
     api.post<{ posts: PostSummary[]; group_id?: string }>("/api/posts", d),
   createThread: (d: ThreadRequest) =>
     api.post<{ posts: PostSummary[]; group_id: string }>("/api/posts/thread", d),
@@ -52,6 +52,7 @@ export const postsApi = {
     const q = integrationId ? `?integration_id=${integrationId}` : "";
     return api.get<{ date: string }>(`/api/posts/find-slot${q}`);
   },
+  publish: (id: string) => api.post<PostDetail>(`/api/posts/${id}/publish`, {}),
   repeat: (id: string, intervalDays: number, endDate: string) =>
     api.post<{ group_id: string; count: number; post_ids: string[]; scheduled_dates: string[] }>(
       `/api/posts/${id}/repeat`, { interval_days: intervalDays, end_date: endDate }

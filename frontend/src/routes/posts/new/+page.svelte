@@ -1,5 +1,6 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
+  import { page } from "$app/stores";
   import { postsApi } from "$lib/api/posts";
   import { integrationsApi, type Integration } from "$lib/api/integrations";
   import { onMount } from "svelte";
@@ -38,9 +39,42 @@
     selectedIntegrations.some(id => integrationProviders.get(id) === 'x')
   );
 
+  const DRAFT_KEY = 'social-forge-composer-draft';
+  let autoSaveTimer: ReturnType<typeof setTimeout>;
+
   onMount(async () => {
+    const dateParam = new URL(window.location.href).searchParams.get('date');
+    if (dateParam) {
+      scheduledAt = `${dateParam}T09:00:00.000Z`;
+    } else {
+      // Restore draft from localStorage
+      const saved = localStorage.getItem(DRAFT_KEY);
+      if (saved) {
+        try {
+          const d = JSON.parse(saved);
+          if (d.content) content = d.content;
+          if (d.title) title = d.title;
+          if (d.selectedIntegrations) selectedIntegrations = d.selectedIntegrations;
+          if (d.scheduledAt) scheduledAt = d.scheduledAt;
+          if (d.firstComment) firstComment = d.firstComment;
+        } catch {}
+      }
+    }
     const r = await integrationsApi.list();
     if (r.data) allIntegrations = r.data.integrations.filter(i => !i.disabled);
+  });
+
+  // Auto-save draft to localStorage
+  $effect(() => {
+    const _ = [content, title, selectedIntegrations, scheduledAt, firstComment];
+    clearTimeout(autoSaveTimer);
+    autoSaveTimer = setTimeout(() => {
+      if (content || title) {
+        localStorage.setItem(DRAFT_KEY, JSON.stringify({
+          content, title, selectedIntegrations, scheduledAt, firstComment
+        }));
+      }
+    }, 1500);
   });
 
   let providerOverride = $state<Map<string, string>>(new Map());
@@ -92,6 +126,12 @@
     submitting = true;
     error = null;
     try {
+      const overridesObj: Record<string, { content: string }> = {};
+      for (const [id, html] of providerOverride) {
+        if (html && html !== content) {
+          overridesObj[id] = { content: html };
+        }
+      }
       const r = await postsApi.create({
         integration_ids: selectedIntegrations,
         content,
@@ -99,15 +139,51 @@
         scheduled_at: scheduledAt || undefined,
         tag_ids: selectedTagIds,
         first_comment: firstComment || undefined,
+        media: mediaItems.length > 0 ? mediaItems.map(m => ({ id: m.id, url: m.url, mime_type: m.mime_type, alt: undefined })) : undefined,
+        overrides: Object.keys(overridesObj).length > 0 ? overridesObj : undefined,
       });
       if (r.error) {
         error = r.error;
         submitting = false;
         return;
       }
+      // Set up recurring if configured
+      if (recurring && r.data?.posts?.[0]?.id) {
+        await postsApi.repeat(r.data.posts[0].id, recurring.intervalDays, recurring.endDate);
+      }
+      localStorage.removeItem(DRAFT_KEY);
       goto("/calendar");
     } catch (e: any) {
       error = e.message || "Failed to create post";
+    } finally {
+      submitting = false;
+    }
+  }
+
+  async function postNow() {
+    if (submitting) return;
+    if (selectedIntegrations.length === 0) { error = "Please select at least one channel"; return; }
+    if (!content.trim()) { error = "Please write some content"; return; }
+    submitting = true;
+    error = null;
+    try {
+      const r = await postsApi.create({
+        integration_ids: selectedIntegrations,
+        content,
+        title: title || undefined,
+        tag_ids: selectedTagIds,
+        first_comment: firstComment || undefined,
+        media: mediaItems.length > 0 ? mediaItems.map(m => ({ id: m.id, url: m.url, mime_type: m.mime_type, alt: undefined })) : undefined,
+      });
+      if (r.error) { error = r.error; return; }
+      if (r.data?.posts?.[0]?.id) {
+        const pub = await postsApi.publish(r.data.posts[0].id);
+        if (pub.error) { error = pub.error; return; }
+      }
+      localStorage.removeItem(DRAFT_KEY);
+      goto("/calendar");
+    } catch (e: any) {
+      error = e.message || "Failed to post";
     } finally {
       submitting = false;
     }
@@ -133,8 +209,11 @@
         ✨ AI
       </button>
       <button onclick={() => goto("/calendar")} class="px-3 py-1.5 text-sm text-[#6b7280] hover:text-white border border-[#1e2435] rounded-lg">Cancel</button>
+      <button onclick={postNow} disabled={submitting} class="px-4 py-1.5 bg-green-600 hover:bg-green-500 disabled:opacity-50 rounded-lg text-sm transition-colors">
+        {submitting ? "Posting..." : "Post Now"}
+      </button>
       <button onclick={submit} disabled={submitting} class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 rounded-lg text-sm transition-colors">
-        {submitting ? "Publishing..." : "Publish"}
+        {submitting ? "Scheduling..." : "Schedule"}
       </button>
     </div>
   </div>
