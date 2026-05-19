@@ -25,11 +25,6 @@
     </div>
   {/if}
   <div class="bg-[#131720] border border-[#1e2435] rounded-xl p-5">
-    <h3 class="text-sm font-medium mb-2">Billing & Subscription</h3>
-    <p class="text-xs text-[#6b7280]">Manage your subscription plan and payment methods.</p>
-    <a href="/settings/billing" class="text-xs text-indigo-400 hover:text-indigo-300 mt-2 inline-block">Go to Billing &rarr;</a>
-  </div>
-  <div class="bg-[#131720] border border-[#1e2435] rounded-xl p-5">
     <h3 class="text-sm font-medium mb-2">API Connection</h3>
     <p class="text-xs text-[#6b7280]">Backend: <span class="text-indigo-400">http://localhost:3000</span></p>
     <p class="text-xs text-[#6b7280] mt-1">AI agents can use the MCP interface via <code class="text-indigo-400">social-forge mcp</code></p>

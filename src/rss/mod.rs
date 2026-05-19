@@ -5,6 +5,7 @@ use tokio::sync::watch;
 use tracing;
 
 use crate::config::Config;
+use crate::db::models::PostState;
 use crate::db::PgPool;
 use crate::social::registry::ProviderRegistry;
 
@@ -104,6 +105,50 @@ async fn poll_all_feeds(db: &PgPool) -> Result<(), Box<dyn std::error::Error + S
             .await
             {
                 tracing::warn!("Failed to insert RSS post for feed {}: {e}", feed.id);
+                continue;
+            }
+
+            // Auto-create a queued post so the scheduler publishes it
+            let post_content = format!("{}\n\n{}", title, url);
+            match crate::db::queries::create_post(
+                db,
+                feed.user_id,
+                feed.integration_id,
+                &post_content,
+                Some(&title),
+                &serde_json::json!({}),
+                &serde_json::json!({"rss_auto": true}),
+                None,
+                Some(PostState::Queued),
+                None,
+                0,
+            )
+            .await
+            {
+                Ok(post) => {
+                    // Link the rss_post to the created post
+                    if let Ok(rss_post) =
+                        crate::db::queries::get_rss_post_by_hash(db, feed.id, &content_hash).await
+                    {
+                        if let Some(rp) = rss_post {
+                            let _ = crate::db::queries::update_rss_post_post_id(
+                                db, rp.id, post.id,
+                            )
+                            .await;
+                        }
+                    }
+                    tracing::info!(
+                        "RSS autopost: created queued post {} for feed {}",
+                        post.id,
+                        feed.id
+                    );
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        "RSS autopost: failed to create post for feed {}: {e}",
+                        feed.id
+                    );
+                }
             }
         }
 

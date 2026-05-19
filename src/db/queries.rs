@@ -1385,6 +1385,17 @@ pub async fn update_rss_post_post_id(pool: &PgPool, rss_post_id: Uuid, post_id: 
     Ok(r.rows_affected())
 }
 
+pub async fn get_rss_post_by_hash(pool: &PgPool, feed_id: Uuid, content_hash: &str) -> Result<Option<RssPost>, sqlx::Error> {
+    sqlx::query_as::<_, RssPost>(
+        r#"SELECT id, feed_id, post_id, guid, title, url, published_at, content_hash, is_imported, created_at
+           FROM rss_posts WHERE feed_id = $1 AND content_hash = $2"#,
+    )
+    .bind(feed_id)
+    .bind(content_hash)
+    .fetch_optional(pool)
+    .await
+}
+
 pub async fn delete_notification(
     pool: &PgPool,
     id: Uuid,

@@ -1,12 +1,13 @@
 <script lang="ts">
   import { notificationsApi, type Notification } from '$lib/api/notifications';
 
-  let { open, onclose }: { open: boolean; onclose: () => void } = $props();
+  let { open, onclose, containerEl }: { open: boolean; onclose: () => void; containerEl?: HTMLDivElement } = $props();
 
   let notifications = $state<Notification[]>([]);
   let loading = $state(true);
   let loadError = $state<string | null>(null);
   let markingAll = $state(false);
+  let panelStyle = $state('');
 
   async function loadNotifications() {
     loading = true;
@@ -16,7 +17,6 @@
       notifications = res.data.data;
     } else if (res.error) {
       loadError = res.error;
-      console.warn('Failed to load notifications:', res.error);
     }
     loading = false;
   }
@@ -27,29 +27,20 @@
       notifications = notifications.map(n =>
         n.id === id ? { ...n, is_read: true } : n
       );
-    } else if (res.error) {
-      console.warn('Failed to mark notification as read:', res.error);
     }
   }
 
   async function handleMarkAllRead() {
     markingAll = true;
-    try {
-      const res = await notificationsApi.markAllRead();
-      if (res.data) {
-        notifications = notifications.map(n => ({ ...n, is_read: true }));
-      } else if (res.error) {
-        console.warn('Failed to mark all notifications as read:', res.error);
-      }
-    } finally {
-      markingAll = false;
+    const res = await notificationsApi.markAllRead();
+    if (res.data) {
+      notifications = notifications.map(n => ({ ...n, is_read: true }));
     }
+    markingAll = false;
   }
 
   function relativeTime(dateStr: string): string {
-    const now = Date.now();
-    const date = new Date(dateStr).getTime();
-    const diff = now - date;
+    const diff = Date.now() - new Date(dateStr).getTime();
     const mins = Math.floor(diff / 60000);
     if (mins < 1) return 'just now';
     if (mins < 60) return `${mins}m ago`;
@@ -64,36 +55,41 @@
     return text.length > max ? text.slice(0, max) + '...' : text;
   }
 
-  let panelEl: HTMLDivElement | undefined = $state(undefined);
-
   $effect(() => {
     if (!open) return;
+    // Position panel below the bell button
+    if (containerEl) {
+      const rect = containerEl.getBoundingClientRect();
+      panelStyle = `position:fixed; top:${rect.bottom + 8}px; left:${rect.left}px; z-index:9999;`;
+    }
     const cb = onclose;
     function handleClick(e: MouseEvent) {
-      if (panelEl && !panelEl.contains(e.target as Node)) {
-        cb();
-      }
+      if (containerEl && containerEl.contains(e.target as Node)) return;
+      cb();
+    }
+    function handleKeydown(e: KeyboardEvent) {
+      if (e.key === 'Escape') cb();
     }
     const timer = setTimeout(() => {
       document.addEventListener('click', handleClick);
+      document.addEventListener('keydown', handleKeydown);
     }, 0);
     return () => {
       clearTimeout(timer);
       document.removeEventListener('click', handleClick);
+      document.removeEventListener('keydown', handleKeydown);
     };
   });
 
   $effect(() => {
-    if (open) {
-      loadNotifications();
-    }
+    if (open) loadNotifications();
   });
 </script>
 
 {#if open}
   <div
-    bind:this={panelEl}
-    class="absolute top-full right-0 mt-2 w-80 bg-[#131720] border border-[#1e2435] rounded-xl shadow-2xl z-50 overflow-hidden"
+    class="w-80 bg-[#131720] border border-[#1e2435] rounded-xl shadow-2xl overflow-hidden"
+    style={panelStyle}
   >
     <div class="flex items-center justify-between px-4 py-3 border-b border-[#1e2435]">
       <span class="text-sm font-medium text-[#d1d5db]">Notifications</span>
@@ -117,9 +113,7 @@
       {:else if loadError}
         <div class="px-4 py-8 text-center text-sm text-red-400">Failed to load notifications</div>
       {:else if notifications.length === 0}
-        <div class="px-4 py-8 text-center text-sm text-[#6b7280]">
-          No notifications yet
-        </div>
+        <div class="px-4 py-8 text-center text-sm text-[#6b7280]">No notifications yet</div>
       {:else}
         {#each notifications as n (n.id)}
           <button

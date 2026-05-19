@@ -24,7 +24,8 @@
     loadingIntegrations = false;
   });
 
-  async function handleSubmit() {
+  async function handleSubmit(e: Event) {
+    e.preventDefault();
     if (!feedUrl.trim()) { error = 'Feed URL is required'; return; }
     if (!integrationId) { error = 'Integration is required'; return; }
 
@@ -113,7 +114,7 @@
       <div class="text-xs text-red-400">{error}</div>
     {/if}
 
-    <Button type="submit" disabled={saving || loadingIntegrations} onclick={handleSubmit}>
+    <Button type="submit" disabled={saving || loadingIntegrations}>
       {saving ? 'Adding...' : 'Add Feed'}
     </Button>
   </form>
