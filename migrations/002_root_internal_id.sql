@@ -1,4 +1,4 @@
--- Postiz-Rust multi-account support
+-- Social Forge multi-account support
 -- Adds root_internal_id to support parent-child integration relationships
 -- (e.g., Facebook user token → multiple page integrations)
 

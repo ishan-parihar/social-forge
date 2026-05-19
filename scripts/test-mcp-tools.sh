@@ -3,7 +3,7 @@
 # Tests all 58 MCP tools (7 Reddit + 20 X + 15 Facebook + 16 Instagram) via the running server.
 #
 # Usage:
-#   1. Start server: ./target/release/social-forge-rust --mcp
+#   1. Start server: ./target/releassocial-forge mcp
 #   2. Run tests:    bash scripts/test-mcp-tools.sh
 #
 # This test validates:
@@ -221,7 +221,7 @@ run_test "Calendar: get" "curl -s \"$BASE/api/calendar?start=2026-01-01&end=2026
 # ── 11. MCP Tools Compilation Verification ─────────────────────
 echo "--- MCP Tools Compilation ---"
 echo "  Verify binary has all tools via cargo test..."
-cd /home/ishanp/Documents/GitHub/social-forge-rust
+cd .
 if cargo test --test mcp_tools_test -- --nocapture 2>&1 | grep -q "test result: ok"; then
     echo -e "  MCP tools integration tests ${GREEN}PASS${NC}"
     PASS=$((PASS+1))

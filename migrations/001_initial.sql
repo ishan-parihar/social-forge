@@ -1,4 +1,4 @@
--- Postiz-Rust initial schema
+-- Social Forge initial schema
 -- Run automatically on startup via sqlx::migrate!
 
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";

@@ -395,7 +395,7 @@ async fn test_threads_social_provider_publish_with_bad_token() {
     let provider = ThreadsProvider::new(&config);
 
     let post = social_forge::social::PostContent {
-        content: "Test post from social-forge-rust integration test".into(),
+        content: "Test post from social-forge integration test".into(),
         media: vec![],
         settings: serde_json::Value::Object(serde_json::Map::new()),
     };
