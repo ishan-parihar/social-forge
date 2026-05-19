@@ -1,8 +1,27 @@
 // ─── Configuration ─────────────────────────────────────────────
 // Loads from environment variables (12-factor app style).
-// Uses dotenvy to load .env for local dev.
+// Priority: env vars > .env (cwd) > ~/.social-forge/.env (user config)
 
 use serde::Deserialize;
+
+/// Returns the user config directory: ~/.social-forge/
+pub fn config_dir() -> std::path::PathBuf {
+    let home = std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .unwrap_or_else(|_| "/tmp".into());
+    std::path::PathBuf::from(home).join(".social-forge")
+}
+
+/// Load .env files in priority order (later values don't override earlier ones)
+pub fn load_dotenv() {
+    // 1. CWD .env (highest priority for local dev)
+    dotenvy::dotenv().ok();
+    // 2. ~/.social-forge/.env (user-level config)
+    let user_env = config_dir().join(".env");
+    if user_env.exists() {
+        dotenvy::from_path(&user_env).ok();
+    }
+}
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Config {

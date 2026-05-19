@@ -31,6 +31,9 @@ pub enum Command {
     /// Start the MCP stdio server
     Mcp,
 
+    /// Initialize ~/.social-forge/ config directory with default .env template
+    Init,
+
     /// List connected social providers
     Providers,
 

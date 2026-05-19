@@ -29,7 +29,7 @@ fn output_error(msg: &str) -> anyhow::Result<()> {
 // ── Lightweight State Init ───────────────────────────────────
 
 async fn init_state() -> anyhow::Result<AppState> {
-    dotenvy::dotenv().ok();
+    crate::config::load_dotenv();
     let config = Config::from_env()?;
     let db = db::create_pool(&config.database_url).await?;
     let broadcaster = Broadcaster::new();
@@ -193,6 +193,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
         Command::Serve { .. } | Command::Mcp => {
             unreachable!("Serve/Mcp handled in main.rs before calling run_cli");
         }
+        Command::Init => handle_init(),
         Command::Providers => handle_providers().await,
         Command::Connect { provider } => handle_connect(&provider),
         Command::X { action } => handle_x(action).await,
@@ -219,6 +220,27 @@ async fn handle_providers() -> anyhow::Result<()> {
         })
     }).collect();
     output_json(&serde_json::json!({"providers": list}));
+    Ok(())
+}
+
+fn handle_init() -> anyhow::Result<()> {
+    let dir = crate::config::config_dir();
+    std::fs::create_dir_all(&dir)?;
+    let env_path = dir.join(".env");
+    if env_path.exists() {
+        output_json(&serde_json::json!({
+            "status": "exists",
+            "path": env_path.display().to_string(),
+            "message": "Config already exists. Edit it with your preferred editor."
+        }));
+    } else {
+        std::fs::write(&env_path, include_str!("../../.env.example"))?;
+        output_json(&serde_json::json!({
+            "status": "created",
+            "path": env_path.display().to_string(),
+            "message": "Config created. Edit ~/.social-forge/.env with your API keys and DATABASE_URL."
+        }));
+    }
     Ok(())
 }
 
