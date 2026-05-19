@@ -30,15 +30,22 @@
     editing = false;
   }
 
+  let showScheduleForm = $state(false);
+  let schedDate = $state("");
+  let schedTime = $state("09:00");
+
   async function schedulePost() {
     if (!post) return;
+    showScheduleForm = true;
+  }
+
+  async function confirmSchedule() {
+    if (!post || !schedDate) return;
     error = null;
-    const at = prompt("Schedule for (ISO date):", new Date().toISOString());
-    if (at) {
-      const r = await postsApi.schedule(post.id, at);
-      if (r.data) post.state = "queued";
-      else error = r.error || "Failed to schedule post";
-    }
+    const iso = `${schedDate}T${schedTime}:00.000Z`;
+    const r = await postsApi.schedule(post.id, iso);
+    if (r.data) { post.state = "queued"; post.scheduled_at = iso; showScheduleForm = false; }
+    else error = r.error || "Failed to schedule post";
   }
 
   async function deletePost() {
@@ -72,8 +79,8 @@
         <div class="flex gap-2">
           {#if !editing}
             <button onclick={() => editing = true} class="text-xs text-indigo-400 hover:underline">Edit</button>
-            {#if post.state === "draft"}
-              <button onclick={schedulePost} class="text-xs text-indigo-400 hover:underline">Schedule</button>
+            {#if post.state === "draft" || post.state === "queued"}
+              <button onclick={schedulePost} class="text-xs text-indigo-400 hover:underline">{post.state === "queued" ? "Reschedule" : "Schedule"}</button>
             {/if}
             <button onclick={deletePost} class="text-xs text-red-400 hover:underline">Delete</button>
           {:else}
@@ -100,6 +107,15 @@
       {#if post.scheduled_at}
         <div class="text-sm text-[#6b7280]">
           Scheduled: {new Date(post.scheduled_at).toLocaleString()}
+        </div>
+      {/if}
+
+      {#if showScheduleForm}
+        <div class="flex items-center gap-2 bg-[#0d1117] border border-[#2a3045] rounded-lg p-3">
+          <input type="date" bind:value={schedDate} class="px-2 py-1 bg-[#131720] border border-[#1e2435] rounded text-sm text-[#d1d5db]" />
+          <input type="time" bind:value={schedTime} class="px-2 py-1 bg-[#131720] border border-[#1e2435] rounded text-sm text-[#d1d5db]" />
+          <button onclick={confirmSchedule} class="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 rounded text-xs">Confirm</button>
+          <button onclick={() => showScheduleForm = false} class="px-3 py-1 text-[#6b7280] hover:text-white text-xs">Cancel</button>
         </div>
       {/if}
 

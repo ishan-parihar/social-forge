@@ -743,28 +743,103 @@ pub async fn find_next_free_slot(
     user_id: Uuid,
     integration_id: Option<Uuid>,
 ) -> Result<Option<DateTime<Utc>>, sqlx::Error> {
-    // Always use the per-integration query (when integration_id is None,
-    // check all posts for this user)
-    let last: Option<DateTime<Utc>> = if let Some(iid) = integration_id {
-        sqlx::query_scalar!(
-            r#"SELECT MAX(scheduled_at) FROM posts
-               WHERE user_id = $1 AND integration_id = $2 AND state != 'error'"#,
-            user_id,
-            iid
+    let now = Utc::now();
+
+    // Get posting_times from integration if provided
+    let posting_times: Vec<i64> = if let Some(iid) = integration_id {
+        let integration = sqlx::query_scalar!(
+            r#"SELECT posting_times FROM integrations WHERE id = $1 AND user_id = $2"#,
+            iid,
+            user_id
         )
-        .fetch_one(pool)
+        .fetch_optional(pool)
+        .await?;
+
+        integration
+            .and_then(|v| v.as_array().cloned())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|obj| obj.get("time").and_then(|t| t.as_i64()))
+                    .collect()
+            })
+            .unwrap_or_default()
+    } else {
+        vec![]
+    };
+
+    // Fallback: if no posting_times configured, use old logic (last + 2h)
+    if posting_times.is_empty() {
+        let last: Option<DateTime<Utc>> = if let Some(iid) = integration_id {
+            sqlx::query_scalar!(
+                r#"SELECT MAX(scheduled_at) FROM posts
+                   WHERE user_id = $1 AND integration_id = $2 AND state != 'error'"#,
+                user_id,
+                iid
+            )
+            .fetch_one(pool)
+            .await?
+        } else {
+            sqlx::query_scalar!(
+                r#"SELECT MAX(scheduled_at) FROM posts
+                   WHERE user_id = $1 AND state != 'error'"#,
+                user_id,
+            )
+            .fetch_one(pool)
+            .await?
+        };
+        return Ok(Some(last.unwrap_or(now) + chrono::Duration::hours(2)));
+    }
+
+    // Get scheduled posts for the next 14 days
+    let end = now + chrono::Duration::days(14);
+    let scheduled: Vec<DateTime<Utc>> = if let Some(iid) = integration_id {
+        sqlx::query_scalar!(
+            r#"SELECT scheduled_at as "scheduled_at!" FROM posts
+               WHERE user_id = $1 AND integration_id = $2 AND state != 'error'
+               AND scheduled_at >= $3 AND scheduled_at <= $4"#,
+            user_id,
+            iid,
+            now,
+            end
+        )
+        .fetch_all(pool)
         .await?
     } else {
         sqlx::query_scalar!(
-            r#"SELECT MAX(scheduled_at) FROM posts
-               WHERE user_id = $1 AND state != 'error'"#,
+            r#"SELECT scheduled_at as "scheduled_at!" FROM posts
+               WHERE user_id = $1 AND state != 'error'
+               AND scheduled_at >= $2 AND scheduled_at <= $3"#,
             user_id,
+            now,
+            end
         )
-        .fetch_one(pool)
+        .fetch_all(pool)
         .await?
     };
 
-    Ok(Some(last.unwrap_or_else(Utc::now) + chrono::Duration::hours(2)))
+    // Walk forward day by day, checking each posting_time slot
+    let today = now.date_naive();
+    for day_offset in 0..14i64 {
+        let date = today + chrono::Duration::days(day_offset);
+        for &minutes in &posting_times {
+            let slot = date
+                .and_hms_opt((minutes / 60) as u32, (minutes % 60) as u32, 0)
+                .unwrap()
+                .and_utc();
+            // Skip slots in the past
+            if slot <= now {
+                continue;
+            }
+            // Skip slots that already have a post (within 1 minute tolerance)
+            let occupied = scheduled.iter().any(|s| (*s - slot).num_minutes().abs() < 1);
+            if !occupied {
+                return Ok(Some(slot));
+            }
+        }
+    }
+
+    // All slots full in 14 days — fallback
+    Ok(Some(now + chrono::Duration::hours(2)))
 }
 
 // ══════════════════════════════════════════════════════════════

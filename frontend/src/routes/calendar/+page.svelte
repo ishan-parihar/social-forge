@@ -173,7 +173,7 @@
       month={calendarState.state.currentDate.getMonth()}
       {events}
       onEventClick={(id) => selectedEvent = events.find(e => e.id === id) || null}
-      onDateClick={(date) => calendarState.selectDate(date)}
+      onDateClick={(date) => goto(`/posts/new?date=${date}`)}
       onDrop={handleDrop}
       onDuplicate={handleDuplicate}
       onStats={handleStats}
