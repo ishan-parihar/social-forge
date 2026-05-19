@@ -15,8 +15,9 @@ export const AUTH_TYPES: Record<string, AuthType> = {
 /** Providers that support multiple connect methods */
 export const MULTI_AUTH_PROVIDERS: Record<string, AuthType[]> = {
   x: ["oauth", "cookie"],
+  reddit: ["oauth", "cookie"],
   github: ["pat"],
-  "telegram-bot": ["oauth", "pat"],  // oauth = configured bot flow, pat = custom token
+  "telegram-bot": ["pat"],  // custom bot token only
 };
 
 /**

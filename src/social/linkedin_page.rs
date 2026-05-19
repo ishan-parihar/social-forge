@@ -29,6 +29,35 @@ impl LinkedInPageProvider {
         "https://www.linkedin.com/oauth/v2/accessToken"
     }
 
+    /// Fetch organization logo via REST API (fallback when decoration doesn't work)
+    async fn fetch_org_logo(&self, access_token: &str, org_id: &str) -> Result<String, ProviderError> {
+        // Use the REST API with version header to get logoV2 URN
+        let resp = self.http
+            .get(format!("https://api.linkedin.com/rest/organizations/{org_id}?fields=logoV2"))
+            .header("Authorization", format!("Bearer {access_token}"))
+            .header("LinkedIn-Version", "202401")
+            .header("X-Restli-Protocol-Version", "2.0.0")
+            .send()
+            .await?;
+        let json: serde_json::Value = resp.json().await.unwrap_or_default();
+        // logoV2.original is a URN like "urn:li:image:C560BAQ..."
+        if let Some(urn) = json["logoV2"]["original"].as_str() {
+            // Resolve the image URN to a download URL
+            let encoded = urlencoding::encode(urn);
+            let img_resp = self.http
+                .get(format!("https://api.linkedin.com/rest/images/{encoded}"))
+                .header("Authorization", format!("Bearer {access_token}"))
+                .header("LinkedIn-Version", "202401")
+                .send()
+                .await?;
+            let img_json: serde_json::Value = img_resp.json().await.unwrap_or_default();
+            if let Some(url) = img_json["downloadUrl"].as_str() {
+                return Ok(url.to_string());
+            }
+        }
+        Err(ProviderError::Api("No logo found".into()))
+    }
+
     fn authorize_url(&self) -> &'static str {
         "https://www.linkedin.com/oauth/v2/authorization"
     }
@@ -174,7 +203,8 @@ impl SocialProvider for LinkedInPageProvider {
         let json: serde_json::Value = resp.json().await?;
         let elements = json["elements"].as_array().map(|a| a.to_vec()).unwrap_or_default();
 
-        let pages = elements.iter().map(|e| {
+        let mut pages = Vec::new();
+        for e in &elements {
             let target = &e["organizationalTarget~"];
             let id = e["organizationalTarget"].as_str()
                 .unwrap_or("")
@@ -182,20 +212,31 @@ impl SocialProvider for LinkedInPageProvider {
                 .next_back()
                 .unwrap_or("")
                 .to_string();
-            PageInfo {
+
+            // Try decoration first, fall back to separate logo fetch
+            let mut picture = target["logoV2"]["original~"]["elements"]
+                .as_array()
+                .and_then(|a| a.first())
+                .and_then(|el| el["identifiers"].as_array())
+                .and_then(|ids| ids.first())
+                .and_then(|id_val| id_val["identifier"].as_str())
+                .map(String::from);
+
+            // Fallback: fetch logo via /rest/organizations endpoint
+            if picture.is_none() && !id.is_empty() {
+                if let Ok(logo_url) = self.fetch_org_logo(access_token, &id).await {
+                    picture = Some(logo_url);
+                }
+            }
+
+            pages.push(PageInfo {
                 id,
                 name: target["localizedName"].as_str().unwrap_or("").to_string(),
                 access_token: Some(access_token.to_string()),
-                picture: target["logoV2"]["original~"]["elements"]
-                    .as_array()
-                    .and_then(|a| a.first())
-                    .and_then(|el| el["identifiers"].as_array())
-                    .and_then(|ids| ids.first())
-                    .and_then(|id| id["identifier"].as_str())
-                    .map(String::from),
+                picture,
                 username: target["vanityName"].as_str().map(String::from),
-            }
-        }).collect();
+            });
+        }
 
         Ok(pages)
     }
@@ -216,17 +257,25 @@ impl SocialProvider for LinkedInPageProvider {
             .or_else(|| json["id"].as_str().map(String::from))
             .unwrap_or_else(|| page_id.to_string());
 
+        let mut picture = json["logoV2"]["original~"]["elements"]
+            .as_array()
+            .and_then(|a| a.first())
+            .and_then(|el| el["identifiers"].as_array())
+            .and_then(|ids| ids.first())
+            .and_then(|id| id["identifier"].as_str())
+            .map(String::from);
+
+        if picture.is_none() {
+            if let Ok(logo_url) = self.fetch_org_logo(access_token, page_id).await {
+                picture = Some(logo_url);
+            }
+        }
+
         Ok(PageInfo {
             id: id_str,
             name: json["localizedName"].as_str().unwrap_or("").to_string(),
             access_token: Some(access_token.to_string()),
-            picture: json["logoV2"]["original~"]["elements"]
-                .as_array()
-                .and_then(|a| a.first())
-                .and_then(|el| el["identifiers"].as_array())
-                .and_then(|ids| ids.first())
-                .and_then(|id| id["identifier"].as_str())
-                .map(String::from),
+            picture,
             username: json["vanityName"].as_str().map(String::from),
         })
     }

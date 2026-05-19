@@ -151,6 +151,9 @@
       if (credDialog.provider === "x" && credDialog.type === "cookie") {
         const r = await integrationsApi.connectXCookie(credFields.auth_token || "", credFields.ct0 || "");
         if (r.error) { error = r.error; return; }
+      } else if (credDialog.provider === "reddit" && credDialog.type === "cookie") {
+        const r = await integrationsApi.connectRedditCookie(credFields.cookie_string || "");
+        if (r.error) { error = r.error; return; }
       } else if (credDialog.provider === "github" && credDialog.type === "pat") {
         const r = await integrationsApi.connectGithubPat(credFields.pat || "", credFields.label || undefined);
         if (r.error) { error = r.error; return; }
@@ -331,6 +334,15 @@
           <div class="text-sm font-medium">Browser Cookies</div>
           <div class="text-xs text-[#6b7280]">Full access — DMs, analytics, advanced features</div>
         </button>
+      {:else if connectChoice === "reddit"}
+        <button onclick={() => { const p = connectChoice; connectChoice = null; initiateOAuth(p!); }} class="px-4 py-3 bg-[#161b22] border border-[#30363d] rounded-lg hover:border-indigo-500/50 text-left">
+          <div class="text-sm font-medium">OAuth 2.0</div>
+          <div class="text-xs text-[#6b7280]">Standard Reddit API access</div>
+        </button>
+        <button onclick={() => { connectChoice = null; credDialog = { provider: "reddit", type: "cookie" }; credFields = {}; }} class="px-4 py-3 bg-[#161b22] border border-[#30363d] rounded-lg hover:border-orange-500/50 text-left">
+          <div class="text-sm font-medium">Browser Cookies</div>
+          <div class="text-xs text-[#6b7280]">Full access — voting, moderation, all subreddits</div>
+        </button>
       {:else if connectChoice === "telegram-bot"}
         <button onclick={() => { const p = connectChoice; connectChoice = null; initiateOAuth(p!); }} class="px-4 py-3 bg-[#161b22] border border-[#30363d] rounded-lg hover:border-indigo-500/50 text-left">
           <div class="text-sm font-medium">Use Configured Bot</div>
@@ -351,13 +363,17 @@
 <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50" role="dialog">
   <div class="bg-[#0d1117] border border-[#1e2435] rounded-xl p-6 w-full max-w-md">
     <h3 class="text-lg font-semibold mb-4">
-      {#if credDialog.provider === "x"}Connect X via Cookies{:else if credDialog.provider === "telegram-bot"}Add Telegram Bot{:else}Connect GitHub via PAT{/if}
+      {#if credDialog.provider === "x"}Connect X via Cookies{:else if credDialog.provider === "reddit"}Connect Reddit via Cookies{:else if credDialog.provider === "telegram-bot"}Add Telegram Bot{:else}Connect GitHub via PAT{/if}
     </h3>
     {#if credDialog.provider === "x" && credDialog.type === "cookie"}
       <label class="block text-sm text-[#6b7280] mb-1">auth_token</label>
       <input type="text" bind:value={credFields.auth_token} placeholder="Paste auth_token cookie" class="w-full mb-3 px-3 py-2 bg-[#161b22] border border-[#30363d] rounded text-sm" />
       <label class="block text-sm text-[#6b7280] mb-1">ct0</label>
       <input type="text" bind:value={credFields.ct0} placeholder="Paste ct0 cookie" class="w-full mb-4 px-3 py-2 bg-[#161b22] border border-[#30363d] rounded text-sm" />
+    {:else if credDialog.provider === "reddit" && credDialog.type === "cookie"}
+      <p class="text-sm text-[#6b7280] mb-3">Paste your Reddit cookie string from browser DevTools (Application → Cookies → www.reddit.com).</p>
+      <label class="block text-sm text-[#6b7280] mb-1">Cookie String</label>
+      <textarea bind:value={credFields.cookie_string} placeholder="reddit_session=...; token_v2=...; csv=..." rows="4" class="w-full mb-4 px-3 py-2 bg-[#161b22] border border-[#30363d] rounded text-sm font-mono"></textarea>
     {:else if credDialog.provider === "telegram-bot"}
       <p class="text-sm text-[#6b7280] mb-3">Get a token from <a href="https://t.me/BotFather" target="_blank" class="text-indigo-400 hover:text-indigo-300">@BotFather</a> on Telegram.</p>
       <label class="block text-sm text-[#6b7280] mb-1">Bot Token</label>
