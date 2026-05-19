@@ -146,6 +146,15 @@ pub async fn onboard_page(
                     </div>"#,
                     id, token, token
                 );
+            } else if id == "reddit" {
+                hint_text = format!("{} account(s) connected — Add Another (OAuth) or Enter Cookies", connected_count);
+                action_html = format!(
+                    r#"<div style="display:flex;gap:6px;flex-direction:column;">
+                        <a href="/api/public/connect/{}?token={}" class="btn btn-primary" style="font-size:12px;">+ Add Another (OAuth)</a>
+                        <a href="/api/public/connect/reddit-cookies?token={}" class="btn" style="font-size:12px;background:#f0f2f5;color:#333;border:1px solid #ccc;">🍪 Enter Cookies</a>
+                    </div>"#,
+                    id, token, token
+                );
             } else {
                 hint_text = format!("{} account(s) connected — click Add Another to connect more", connected_count);
                 action_html = format!(
@@ -165,13 +174,26 @@ pub async fn onboard_page(
                 "youtube" | "google" => "Requires: YOUTUBE_CLIENT_ID + YOUTUBE_CLIENT_SECRET",
                 "telegram-bot" => "Requires: TELEGRAM_BOT_TOKENS",
                 "telegram-user" => "Requires: TELEGRAM_CLI_PATH (or tg in PATH)",
-                "reddit" => "Requires: REDDIT_CLIENT_ID + REDDIT_CLIENT_SECRET + REDDIT_USERNAME + REDDIT_PASSWORD",
+                "reddit" => "Cookie auth available (no env vars needed) — or set REDDIT_CLIENT_ID + REDDIT_CLIENT_SECRET for OAuth",
                 "bluesky" => "Requires: BLUESKY_HANDLE + BLUESKY_APP_PASSWORD",
                 "skool" => "Requires Chrome extension — install, login to Skool, extract auth_token cookie",
                 "github" => "Requires: GITHUB_TOKEN",
                 _ => "Missing environment variables",
             }.into();
-            action_html = format!(r#"<a href="/api/public/connect/{}" class="btn btn-disabled">Not Available</a>"#, id);
+            // Reddit and X can use cookie auth without any env vars
+            if id == "reddit" {
+                action_html = format!(
+                    r#"<a href="/api/public/connect/reddit-cookies?token={}" class="btn btn-primary">🍪 Connect via Cookies</a>"#,
+                    token
+                );
+            } else if id == "x" {
+                action_html = format!(
+                    r#"<a href="/api/public/connect/x-cookies?token={}" class="btn btn-primary">🍪 Connect via Cookies</a>"#,
+                    token
+                );
+            } else {
+                action_html = format!(r#"<a href="/api/public/connect/{}" class="btn btn-disabled">Not Available</a>"#, id);
+            }
         } else if is_onetime {
             badge_class = "badge-info";
             badge_text = "One-Time Token".into();
@@ -195,6 +217,14 @@ pub async fn onboard_page(
                     r#"<div style="display:flex;gap:6px;flex-direction:column;">
                         <a href="/api/public/connect/{}?token={}" class="btn btn-primary" style="font-size:12px;">OAuth ➜</a>
                         <a href="/api/public/connect/x-cookies?token={}" class="btn" style="font-size:12px;background:#f0f2f5;color:#333;border:1px solid #ccc;">🍪 Enter Cookies</a>
+                    </div>"#,
+                    id, token, token
+                );
+            } else if id == "reddit" {
+                action_html = format!(
+                    r#"<div style="display:flex;gap:6px;flex-direction:column;">
+                        <a href="/api/public/connect/{}?token={}" class="btn btn-primary" style="font-size:12px;">OAuth ➜</a>
+                        <a href="/api/public/connect/reddit-cookies?token={}" class="btn" style="font-size:12px;background:#f0f2f5;color:#333;border:1px solid #ccc;">🍪 Enter Cookies</a>
                     </div>"#,
                     id, token, token
                 );
