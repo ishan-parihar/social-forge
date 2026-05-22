@@ -8,6 +8,7 @@ use super::*;
 use crate::config::Config;
 use crate::services::whatsapp_daemon::WhatsAppDaemon;
 use crate::wa::WhaClient;
+use crate::wa::chats::{list_contacts, list_chats};
 
 #[allow(dead_code)]
 pub struct WhatsAppProvider {
@@ -197,5 +198,61 @@ impl SocialProvider for WhatsAppProvider {
         Err(ProviderError::Api(
             "WhatsApp does not support page management".into(),
         ))
+    }
+
+    async fn targets(&self, _access_token: &str) -> Result<Vec<TargetInfo>, ProviderError> {
+        let Some(ref wa_client) = self.wa_client else {
+            return Ok(vec![]);
+        };
+
+        {
+            let locked = wa_client.lock().await;
+            if !locked.is_authenticated() {
+                return Ok(vec![]);
+            }
+        }
+
+        let mut targets: Vec<TargetInfo> = Vec::new();
+
+        if let Ok(contacts) = list_contacts(wa_client, Some(500)).await {
+            for contact in contacts {
+                let display_name = if !contact.name.is_empty() {
+                    contact.name
+                } else if !contact.push_name.is_empty() {
+                    contact.push_name.clone()
+                } else {
+                    contact.jid.split('@').next().unwrap_or(&contact.jid).to_string()
+                };
+
+                targets.push(TargetInfo {
+                    id: contact.jid,
+                    name: display_name,
+                    target_type: "contact".into(),
+                    picture: None,
+                    metadata: None,
+                });
+            }
+        }
+
+        if let Ok(chats) = list_chats(wa_client, Some(500)).await {
+            for chat in chats {
+                if chat.jid.ends_with("@g.us") {
+                    let name = if chat.name.is_empty() {
+                        chat.jid.split('@').next().unwrap_or(&chat.jid).to_string()
+                    } else {
+                        chat.name
+                    };
+                    targets.push(TargetInfo {
+                        id: chat.jid,
+                        name,
+                        target_type: "group".into(),
+                        picture: None,
+                        metadata: None,
+                    });
+                }
+            }
+        }
+
+        Ok(targets)
     }
 }

@@ -1195,4 +1195,42 @@ impl SocialProvider for RedditProvider {
             "Reddit does not support page management".into(),
         ))
     }
+
+    async fn targets(&self, access_token: &str) -> Result<Vec<TargetInfo>, ProviderError> {
+        let response = match self.get_oauth(access_token, "/subreddits/mine/subscriber", &[("limit", "100")]).await {
+            Ok(r) => r,
+            Err(_) => return Ok(vec![]),
+        };
+
+        let children = response["data"]["children"]
+            .as_array()
+            .map(|c| c.to_vec())
+            .unwrap_or_default();
+
+        let targets = children
+            .iter()
+            .filter_map(|child| {
+                let data = &child["data"];
+                let display_name = data["display_name"].as_str()?;
+                let icon_img = data["icon_img"].as_str();
+                let picture = icon_img.and_then(|s| s.split('?').next()).map(String::from);
+
+                let metadata = serde_json::json!({
+                    "subscribers": data["subscribers"],
+                    "description": data["public_description"],
+                    "over18": data["over18"],
+                });
+
+                Some(TargetInfo {
+                    id: display_name.to_string(),
+                    name: format!("r/{display_name}"),
+                    target_type: "subreddit".to_string(),
+                    picture,
+                    metadata: Some(metadata),
+                })
+            })
+            .collect();
+
+        Ok(targets)
+    }
 }

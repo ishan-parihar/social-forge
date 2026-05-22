@@ -186,4 +186,39 @@ impl SocialProvider for TelegramUserProvider {
                 .into(),
         ))
     }
+
+    async fn targets(&self, _access_token: &str) -> Result<Vec<TargetInfo>, ProviderError> {
+        let mgr = match self.client_manager.as_ref() {
+            Some(mgr) => mgr,
+            None => return Ok(vec![]),
+        };
+
+        let result = match mgr.list_dialogs_detailed().await {
+            Ok(result) => result,
+            Err(_) => return Ok(vec![]),
+        };
+
+        let dialogs = result["dialogs"]
+            .as_array()
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|d| {
+                        let id = d["id"].to_string();
+                        let name = d["name"].as_str().unwrap_or("Unknown").to_string();
+                        let target_type = d["type"].as_str().unwrap_or("peer").to_string();
+
+                        Some(TargetInfo {
+                            id,
+                            name,
+                            target_type,
+                            picture: None,
+                            metadata: None,
+                        })
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+
+        Ok(dialogs)
+    }
 }
