@@ -168,10 +168,8 @@ pub enum RedditAction {
 
     /// Submit a post to a subreddit
     Post {
-        /// Target subreddit
-        subreddit: String,
-
         /// Post title
+        #[arg(long)]
         title: String,
 
         /// Self-text body
@@ -181,6 +179,14 @@ pub enum RedditAction {
         /// Link URL (for link posts)
         #[arg(long)]
         url: Option<String>,
+
+        /// Target subreddit (omit to pick interactively)
+        #[arg(long)]
+        target: Option<String>,
+
+        /// Multiple posting targets (comma-separated). Creates one post per target.
+        #[arg(long)]
+        targets: Option<String>,
     },
 
     /// Comment on a post or reply to a comment

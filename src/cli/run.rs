@@ -14,6 +14,8 @@ use crate::social::registry::ProviderRegistry;
 use crate::social::SocialProvider;
 
 use super::{Cli, Command, XAction, RedditAction, RedditModAction, LinkedinAction, LinkedinPageAction, FacebookAction, InstagramAction};
+use crate::social::TargetInfo;
+use crate::db::models::Integration;
 
 // ── Output Helpers ───────────────────────────────────────────
 
@@ -24,6 +26,59 @@ fn output_json(value: &serde_json::Value) {
 fn output_error(msg: &str) -> anyhow::Result<()> {
     eprintln!("{}", serde_json::json!({"error": msg}));
     std::process::exit(1);
+}
+
+// ── Target Discovery Helpers ─────────────────────────────────
+
+async fn fetch_targets(state: &AppState, integration: &Integration) -> anyhow::Result<Vec<TargetInfo>> {
+    let provider_obj = state.providers.get(&integration.provider_identifier)
+        .ok_or_else(|| anyhow::anyhow!("Provider not found in registry"))?;
+
+    let token = state.token_key.as_ref()
+        .and_then(|key| crypto::decrypt_string(&integration.access_token, key).ok())
+        .unwrap_or_else(|| integration.access_token.clone());
+
+    let targets = provider_obj.targets(&token).await
+        .map_err(|e| anyhow::anyhow!("Failed to fetch targets: {}", e))?;
+
+    Ok(targets)
+}
+
+async fn find_integration(state: &AppState, user_id: Uuid, provider: &str) -> anyhow::Result<Integration> {
+    let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
+    integrations.into_iter()
+        .find(|i| i.provider_identifier == provider)
+        .ok_or_else(|| anyhow::anyhow!("No {} integration found", provider))
+}
+
+fn pick_target_interactive(targets: &[TargetInfo], provider: &str) -> anyhow::Result<String> {
+    if targets.is_empty() {
+        return Err(anyhow::anyhow!("No posting targets found for this {} account", provider));
+    }
+
+    eprintln!("\nAvailable {} targets:", provider);
+    for (i, t) in targets.iter().enumerate() {
+        let type_label = if !t.target_type.is_empty() {
+            format!(" [{}]", t.target_type)
+        } else {
+            String::new()
+        };
+        eprintln!("  {}. {}{}", i + 1, t.name, type_label);
+    }
+    eprint!("\nSelect target (1-{}): ", targets.len());
+
+    let mut input = String::new();
+    std::io::stdin().read_line(&mut input)
+        .map_err(|e| anyhow::anyhow!("Failed to read input: {}", e))?;
+
+    let choice: usize = input.trim().parse()
+        .map_err(|_| anyhow::anyhow!("Invalid selection: {}", input.trim()))?;
+
+    if choice < 1 || choice > targets.len() {
+        return Err(anyhow::anyhow!("Selection out of range (1-{})", targets.len()));
+    }
+
+    Ok(targets[choice - 1].id.clone())
 }
 
 // ── Lightweight State Init ───────────────────────────────────
@@ -340,26 +395,61 @@ async fn handle_reddit(action: RedditAction) -> anyhow::Result<()> {
             provider.search(&token, &query, subreddit.as_deref(), &sort, 25, "all").await
                 .map_err(|e| e.to_string())
         }
-        RedditAction::Post { subreddit, title, text, url } => {
-            let sub = subreddit.replace("r/", "");
-            let kind = if url.is_some() { "link" } else { "self" };
-            let text_val = text.as_deref().unwrap_or("");
-            let url_val = url.as_deref().unwrap_or("");
-            let mut form: Vec<(&str, &str)> = vec![
-                ("api_type", "json"), ("sr", &sub), ("title", &title), ("kind", kind),
-            ];
-            if kind == "self" { form.push(("text", text_val)); }
-            else { form.push(("url", url_val)); }
+        RedditAction::Post { title, text, url, target, targets } => {
+            let subreddits: Vec<String> = if let Some(ref t) = targets {
+                t.split(',').map(|s| s.trim().replace("r/", "")).filter(|s| !s.is_empty()).collect()
+            } else if let Some(ref t) = target {
+                vec![t.trim().replace("r/", "")]
+            } else {
+                let integration = find_integration(&state, user_id, "reddit").await?;
+                match fetch_targets(&state, &integration).await {
+                    Ok(targets) => {
+                        let selected = pick_target_interactive(&targets, "reddit")?;
+                        vec![selected.replace("r/", "")]
+                    }
+                    Err(e) => {
+                        eprintln!("Warning: Could not fetch targets ({}).", e);
+                        eprintln!("Please specify a subreddit with --target or --targets.");
+                        return Err(anyhow::anyhow!("No subreddit specified and target discovery failed"));
+                    }
+                }
+            };
 
-            let resp = reqwest::Client::new()
-                .post("https://oauth.reddit.com/api/submit")
-                .header("Authorization", format!("Bearer {token}"))
-                .header("User-Agent", "social-forge:v0.1.0 (by /u/social_forge)")
-                .form(&form).send().await
-                .map_err(|e| format!("Reddit submit failed: {e}"));
-            match resp {
-                Ok(r) => r.json::<serde_json::Value>().await.map_err(|e| format!("Parse failed: {e}")),
-                Err(e) => Err(e),
+            let mut results = Vec::new();
+            for sub in &subreddits {
+                let kind = if url.is_some() { "link" } else { "self" };
+                let text_val = text.as_deref().unwrap_or("");
+                let url_val = url.as_deref().unwrap_or("");
+                let mut form: Vec<(&str, &str)> = vec![
+                    ("api_type", "json"), ("sr", sub), ("title", &title), ("kind", kind),
+                ];
+                if kind == "self" { form.push(("text", text_val)); }
+                else { form.push(("url", url_val)); }
+
+                let resp = reqwest::Client::new()
+                    .post("https://oauth.reddit.com/api/submit")
+                    .header("Authorization", format!("Bearer {token}"))
+                    .header("User-Agent", "social-forge:v0.1.0 (by /u/social_forge)")
+                    .form(&form).send().await
+                    .map_err(|e| format!("Reddit submit failed: {e}"));
+                let result = match resp {
+                    Ok(r) => r.json::<serde_json::Value>().await.map_err(|e| format!("Parse failed: {e}")),
+                    Err(e) => Err(e),
+                };
+                results.push((sub.clone(), result));
+            }
+
+            if results.len() == 1 {
+                let (_, result) = results.remove(0);
+                result
+            } else {
+                let output: Vec<serde_json::Value> = results.into_iter().map(|(sub, result)| {
+                    match result {
+                        Ok(v) => serde_json::json!({"subreddit": sub, "status": "success", "result": v}),
+                        Err(e) => serde_json::json!({"subreddit": sub, "status": "error", "error": e}),
+                    }
+                }).collect();
+                Ok(serde_json::json!({"posts": output}))
             }
         }
         RedditAction::Comment { thing_id, text } => {
