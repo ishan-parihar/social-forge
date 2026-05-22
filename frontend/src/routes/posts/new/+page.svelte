@@ -17,6 +17,8 @@
   import AiAssistant from "$lib/composer/AiAssistant.svelte";
   import AiHashtagSuggestions from "$lib/composer/AiHashtagSuggestions.svelte";
   import type { MediaItem } from "$lib/api/media";
+  import TargetPicker from "$lib/composer/TargetPicker.svelte";
+  import type { TargetInfo } from "$lib/api/integrations";
 
   let content = $state("");
   let title = $state("");
@@ -33,6 +35,11 @@
   let error = $state<string | null>(null);
   let firstComment = $state("");
   let showAi = $state(false);
+
+  // Target selection state
+  let integrationTargets = $state<Map<string, TargetInfo[]>>(new Map());
+  let selectedTargets = $state<Map<string, string[]>>(new Map());
+  let targetsLoading = $state<Set<string>>(new Set());
 
   // Auto-detect if X/Twitter is selected (for thread mode)
   let hasXIntegration = $derived(
@@ -77,6 +84,23 @@
     }, 1500);
   });
 
+  // Fetch targets for newly selected integrations
+  $effect(() => {
+    const _ = [selectedIntegrations];
+    for (const intId of selectedIntegrations) {
+      if (!integrationTargets.has(intId)) {
+        fetchTargets(intId);
+      }
+    }
+    // Remove targets for deselected integrations
+    for (const key of integrationTargets.keys()) {
+      if (!selectedIntegrations.includes(key)) {
+        integrationTargets.delete(key);
+        selectedTargets.delete(key);
+      }
+    }
+  });
+
   let providerOverride = $state<Map<string, string>>(new Map());
   let showPostSets = $state(false);
 
@@ -84,6 +108,29 @@
     if (set.content) content = set.content;
     if (set.channelIds.length > 0) selectedIntegrations = set.channelIds;
     if (set.scheduledAt) scheduledAt = set.scheduledAt;
+  }
+
+  async function fetchTargets(integrationId: string) {
+    targetsLoading.add(integrationId);
+    try {
+      const r = await integrationsApi.listTargets(integrationId);
+      if (r.data && r.data.targets.length > 0) {
+        integrationTargets.set(integrationId, r.data.targets);
+      }
+    } catch (e) {
+      console.error(`Failed to fetch targets for ${integrationId}:`, e);
+    } finally {
+      targetsLoading.delete(integrationId);
+    }
+  }
+
+  function toggleTarget(integrationId: string, targetId: string) {
+    const current = selectedTargets.get(integrationId) || [];
+    if (current.includes(targetId)) {
+      selectedTargets.set(integrationId, current.filter(t => t !== targetId));
+    } else {
+      selectedTargets.set(integrationId, [...current, targetId]);
+    }
   }
 
   async function handleCreateThread(parts: string[]) {
@@ -132,6 +179,13 @@
           overridesObj[id] = { content: html };
         }
       }
+      // Build settings with target info
+      const settings: Record<string, unknown> = {};
+      for (const [intId, targets] of selectedTargets) {
+        if (targets.length > 0) {
+          settings[intId] = { target_ids: targets };
+        }
+      }
       const r = await postsApi.create({
         integration_ids: selectedIntegrations,
         content,
@@ -141,6 +195,7 @@
         first_comment: firstComment || undefined,
         media: mediaItems.length > 0 ? mediaItems.map(m => ({ id: m.id, url: m.url, mime_type: m.mime_type, alt: undefined })) : undefined,
         overrides: Object.keys(overridesObj).length > 0 ? overridesObj : undefined,
+        settings: Object.keys(settings).length > 0 ? settings : undefined,
       });
       if (r.error) {
         error = r.error;
@@ -167,6 +222,13 @@
     submitting = true;
     error = null;
     try {
+      // Build settings with target info
+      const settings: Record<string, unknown> = {};
+      for (const [intId, targets] of selectedTargets) {
+        if (targets.length > 0) {
+          settings[intId] = { target_ids: targets };
+        }
+      }
       const r = await postsApi.create({
         integration_ids: selectedIntegrations,
         content,
@@ -174,6 +236,7 @@
         tag_ids: selectedTagIds,
         first_comment: firstComment || undefined,
         media: mediaItems.length > 0 ? mediaItems.map(m => ({ id: m.id, url: m.url, mime_type: m.mime_type, alt: undefined })) : undefined,
+        settings: Object.keys(settings).length > 0 ? settings : undefined,
       });
       if (r.error) { error = r.error; return; }
       if (r.data?.posts?.[0]?.id) {
@@ -243,6 +306,25 @@
       }}
     />
   </div>
+
+  <!-- Posting Targets (shown when selected integrations have discoverable targets) -->
+  {#each selectedIntegrations as intId}
+    {#if integrationTargets.has(intId)}
+      <div class="bg-[#131720] border border-[#1e2435] rounded-xl p-4">
+        <h3 class="text-sm font-semibold mb-3">
+          Posting Targets for {integrationNames.get(intId)}
+          {#if targetsLoading.has(intId)}
+            <span class="ml-2 text-xs text-[#6b7280]">Loading...</span>
+          {/if}
+        </h3>
+        <TargetPicker
+          targets={integrationTargets.get(intId) || []}
+          selectedTargets={selectedTargets.get(intId) || []}
+          onToggle={(targetId) => toggleTarget(intId, targetId)}
+        />
+      </div>
+    {/if}
+  {/each}
 
   <!-- Tags -->
   <div class="bg-[#131720] border border-[#1e2435] rounded-xl p-4">

@@ -33,6 +33,14 @@ export interface PageInfo {
   picture?: string; username?: string;
 }
 
+export interface TargetInfo {
+  id: string;
+  name: string;
+  target_type: string;
+  picture?: string;
+  metadata?: Record<string, unknown>;
+}
+
 export const integrationsApi = {
   list: () => api.get<{ integrations: Integration[] }>("/api/integrations"),
   connect: (provider: string) => api.get<{ url: string; state: string }>(`/api/integrations/connect/${provider}`),
@@ -79,4 +87,8 @@ export const integrationsApi = {
     api.post<{ integration: Integration }>("/api/integrations/connect/telegram-user/sign-in", { code }),
   connectTelegramBotToken: (token: string) =>
     api.post<{ integration: Integration }>("/api/integrations/connect/telegram-bot/token", { token }),
+  listTargets: (integrationId: string) =>
+    api.get<{ targets: TargetInfo[]; integration_id: string; provider: string }>(
+      `/api/integrations/${integrationId}/targets`
+    ),
 };
