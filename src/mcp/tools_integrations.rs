@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::api::AppState;
 use crate::services::integrations::IntegrationService;
+use crate::social::TargetInfo;
 
 // ── Input/Output Types ──────────────────────────────────────
 
@@ -261,5 +262,46 @@ pub async fn disconnect_integration(
     Ok(Json(super::SuccessOutput {
         success: true,
         message: "Integration disconnected".into(),
+    }))
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct ListTargetsInput {
+    pub integration_id: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct ListTargetsOutput {
+    pub targets: Vec<TargetInfo>,
+    pub integration_id: String,
+    pub provider: String,
+}
+
+pub async fn list_targets(
+    state: &AppState,
+    input: &ListTargetsInput,
+) -> Result<Json<ListTargetsOutput>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let integration_id = uuid::Uuid::parse_str(&input.integration_id)
+        .map_err(|_| "Invalid integration ID".to_string())?;
+
+    let integration = crate::db::queries::get_integration(&state.db, integration_id, user_id)
+        .await.map_err(|e| format!("DB error: {e}"))?
+        .ok_or_else(|| "Integration not found".to_string())?;
+
+    let provider = state.providers.get(&integration.provider_identifier)
+        .ok_or_else(|| format!("Provider '{}' not in registry", integration.provider_identifier))?;
+
+    let token = state.token_key.as_ref()
+        .and_then(|key| crate::crypto::decrypt_string(&integration.access_token, key).ok())
+        .unwrap_or_else(|| integration.access_token.clone());
+
+    let targets = provider.targets(&token).await
+        .map_err(|e| format!("Failed to fetch targets: {}", e))?;
+
+    Ok(Json(ListTargetsOutput {
+        targets,
+        integration_id: input.integration_id.clone(),
+        provider: integration.provider_identifier,
     }))
 }
