@@ -479,4 +479,94 @@ impl SocialProvider for DiscordProvider {
             None
         }
     }
+
+    async fn targets(&self, _access_token: &str) -> Result<Vec<TargetInfo>, ProviderError> {
+        if self.bot_token.is_empty() {
+            return Ok(vec![]);
+        }
+
+        // Fetch guilds the bot is in
+        let guilds_resp = self
+            .http
+            .get(format!("{DISCORD_API_BASE}/users/@me/guilds"))
+            .header("Authorization", format!("Bot {}", self.bot_token))
+            .send()
+            .await;
+
+        let guilds: Value = match guilds_resp {
+            Ok(resp) if resp.status().is_success() => match resp.json().await {
+                Ok(v) => v,
+                Err(_) => return Ok(vec![]),
+            },
+            _ => return Ok(vec![]),
+        };
+
+        let Some(guild_array) = guilds.as_array() else {
+            return Ok(vec![]);
+        };
+
+        let mut targets = Vec::new();
+
+        for guild in guild_array {
+            let guild_id = guild["id"].as_str().unwrap_or("").to_string();
+            let guild_name = guild["name"].as_str().unwrap_or("Unknown").to_string();
+
+            if guild_id.is_empty() {
+                continue;
+            }
+
+            // Fetch channels for this guild
+            let channels_resp = self
+                .http
+                .get(format!("{DISCORD_API_BASE}/guilds/{guild_id}/channels"))
+                .header("Authorization", format!("Bot {}", self.bot_token))
+                .send()
+                .await;
+
+            let channels: Value = match channels_resp {
+                Ok(resp) if resp.status().is_success() => match resp.json().await {
+                    Ok(v) => v,
+                    Err(_) => continue,
+                },
+                _ => continue,
+            };
+
+            let Some(channel_array) = channels.as_array() else {
+                continue;
+            };
+
+            for channel in channel_array {
+                // Filter to text channels only (type 0 = text, type 5 = announcement)
+                let channel_type = channel["type"].as_i64();
+                if channel_type != Some(0) && channel_type != Some(5) {
+                    continue;
+                }
+
+                let channel_id = channel["id"].as_str().unwrap_or("").to_string();
+                let channel_name = channel["name"].as_str().unwrap_or("unknown").to_string();
+
+                if channel_id.is_empty() {
+                    continue;
+                }
+
+                targets.push(TargetInfo {
+                    id: channel_id,
+                    name: format!("#{channel_name}"),
+                    target_type: "channel".into(),
+                    picture: None,
+                    metadata: Some(json!({
+                        "guild_id": guild_id,
+                        "guild_name": guild_name,
+                        "channel_type": channel_type,
+                    })),
+                });
+
+                if targets.len() >= 50 {
+                    return Ok(targets);
+                }
+            }
+        }
+
+        Ok(targets)
+    }
 }

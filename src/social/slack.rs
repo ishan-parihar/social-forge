@@ -453,4 +453,48 @@ impl SocialProvider for SlackProvider {
         }
         None
     }
+
+    async fn targets(&self, access_token: &str) -> Result<Vec<TargetInfo>, ProviderError> {
+        let channels = match self.get_channel_list(access_token).await {
+            Ok(channels) => channels,
+            Err(_) => return Ok(vec![]),
+        };
+
+        let channels_array = channels["channels"]
+            .as_array()
+            .map(|arr| arr.to_vec())
+            .unwrap_or_default();
+
+        let targets: Vec<TargetInfo> = channels_array
+            .iter()
+            .filter_map(|ch| {
+                let id = ch["id"].as_str()?.to_string();
+                let name = format!("#{}", ch["name"].as_str()?);
+                let is_private = ch["is_private"].as_bool().unwrap_or(false);
+                let target_type = if is_private {
+                    "private_channel".to_string()
+                } else {
+                    "public_channel".to_string()
+                };
+
+                let metadata = serde_json::json!({
+                    "member_count": ch["num_members"].as_u64(),
+                    "topic": ch["topic"]["value"].as_str().map(String::from),
+                    "purpose": ch["purpose"]["value"].as_str().map(String::from),
+                    "is_archived": ch["is_archived"].as_bool(),
+                    "is_general": ch["is_general"].as_bool(),
+                });
+
+                Some(TargetInfo {
+                    id,
+                    name,
+                    target_type,
+                    picture: None,
+                    metadata: Some(metadata),
+                })
+            })
+            .collect();
+
+        Ok(targets)
+    }
 }
