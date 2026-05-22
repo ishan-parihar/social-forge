@@ -284,6 +284,14 @@ impl SocialForgeMcpServer {
         tools_integrations::disconnect_integration(&self.state, &params.0).await
     }
 
+    #[tool(description = "List discoverable posting targets (channels, groups, subreddits, peers) for a connected integration")]
+    async fn integrations_list_targets(
+        &self,
+        params: Parameters<tools_integrations::ListTargetsInput>,
+    ) -> Result<Json<tools_integrations::ListTargetsOutput>, String> {
+        tools_integrations::list_targets(&self.state, &params.0).await
+    }
+
     // ── Post Tools ───────────────────────────────────────────
 
     #[tool(description = "Create a new post. Set scheduled_at to auto-schedule. Returns post ID and state.")]
