@@ -18,6 +18,7 @@ use crate::db::queries;
 use crate::error::AppError;
 use crate::services::integrations::IntegrationService;
 use crate::social::PageInfo;
+use crate::social::TargetInfo;
 
 use super::AppState;
 
@@ -1265,5 +1266,40 @@ pub async fn connect_page(
     Ok(Json(ConnectPageResponse {
         integration: integration.into(),
         parent_id: parent.id.to_string(),
+    }))
+}
+
+// ── Target Discovery ─────────────────────────────────────────
+
+#[derive(Debug, Serialize)]
+pub struct TargetsResponse {
+    pub targets: Vec<TargetInfo>,
+    pub integration_id: String,
+    pub provider: String,
+}
+
+/// GET /api/integrations/{id}/targets — list discoverable posting targets
+pub async fn list_targets(
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+    user: AuthenticatedUser,
+) -> Result<Json<TargetsResponse>, AppError> {
+    let integration = queries::get_integration(&state.db, id, user.user_id).await?
+        .ok_or_else(|| AppError::NotFound("Integration not found".into()))?;
+
+    let provider = state.providers.get(&integration.provider_identifier)
+        .ok_or_else(|| AppError::NotFound(format!("Provider '{}' not in registry", integration.provider_identifier)))?;
+
+    let token = state.token_key.as_ref()
+        .and_then(|key| crypto::decrypt_string(&integration.access_token, key).ok())
+        .unwrap_or_else(|| integration.access_token.clone());
+
+    let targets = provider.targets(&token).await
+        .map_err(|e| AppError::Internal(format!("Failed to fetch targets: {}", e)))?;
+
+    Ok(Json(TargetsResponse {
+        targets,
+        integration_id: id.to_string(),
+        provider: integration.provider_identifier.clone(),
     }))
 }
