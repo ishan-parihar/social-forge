@@ -174,6 +174,41 @@ impl TelegramClientManager {
         Ok(serde_json::json!({ "dialogs": dialogs }))
     }
 
+    pub async fn list_dialogs_detailed(&self) -> Result<Value, String> {
+        let guard = self.inner.lock().await;
+        let client = guard.client.as_ref().ok_or_else(|| {
+            "Telegram client not connected.".to_string()
+        })?;
+
+        let mut dialogs: Vec<Value> = Vec::new();
+        let mut iter = client.iter_dialogs();
+        while let Some(dialog) = iter
+            .next()
+            .await
+            .map_err(|e| format!("Dialog error: {e}"))?
+        {
+            let chat = dialog.chat();
+            let chat_id = chat.id();
+            // Telegram ID conventions: positive = user/peer,
+            // negative with -100 prefix = channel/supergroup,
+            // negative without prefix = group
+            let target_type = if chat_id < -1_000_000_000_000i64 {
+                "channel"
+            } else if chat_id < 0 {
+                "group"
+            } else {
+                "peer"
+            };
+            dialogs.push(serde_json::json!({
+                "id": chat_id,
+                "name": chat.name(),
+                "type": target_type,
+            }));
+        }
+
+        Ok(serde_json::json!({ "dialogs": dialogs }))
+    }
+
     pub async fn list_contacts(&self) -> Result<Value, String> {
         let guard = self.inner.lock().await;
         let client = guard.client.as_ref().ok_or_else(|| {
