@@ -114,6 +114,16 @@ pub struct PageInfo {
     pub username: Option<String>,
 }
 
+/// Discoverable posting target (channel, group, subreddit, peer, etc.)
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct TargetInfo {
+    pub id: String,
+    pub name: String,
+    pub target_type: String,
+    pub picture: Option<String>,
+    pub metadata: Option<serde_json::Value>,
+}
+
 /// Result of reconnecting after re-authentication
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct ReconnectResult {
@@ -277,6 +287,15 @@ pub trait SocialProvider: Send + Sync {
         &self,
         _access_token: &str,
     ) -> Result<Vec<PageInfo>, ProviderError> {
+        Ok(vec![])
+    }
+
+    /// Discover available posting targets (channels, groups, subreddits, peers, etc.)
+    /// Returns empty vec for providers where target = integration (e.g., X, LinkedIn personal)
+    async fn targets(
+        &self,
+        _access_token: &str,
+    ) -> Result<Vec<TargetInfo>, ProviderError> {
         Ok(vec![])
     }
 
