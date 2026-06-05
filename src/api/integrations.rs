@@ -36,8 +36,10 @@ pub struct ConnectResponse {
 
 #[derive(Debug, Deserialize)]
 pub struct CallbackQuery {
-    pub code: String,
-    pub state: String,
+    pub code: Option<String>,
+    pub state: Option<String>,
+    pub error: Option<String>,
+    pub error_description: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -203,12 +205,38 @@ pub async fn oauth_callback(
 ) -> Result<impl IntoResponse, AppError> {
     let app_url = state.config.app_url.clone();
 
+    // Log the full callback URL params for debugging
+    tracing::info!(
+        "OAuth callback received: code={:?} state={:?} error={:?} error_description={:?}",
+        query.code.as_deref().map(|c| &c[..c.len().min(20)]),
+        query.state,
+        query.error,
+        query.error_description,
+    );
+
+    // Handle error redirects from provider (e.g. LinkedIn denied access)
+    if let Some(ref error) = query.error {
+        let desc = query.error_description.as_deref().unwrap_or("no description");
+        tracing::warn!("OAuth provider returned error: {error} — {desc}");
+        return Ok(Redirect::to(&format!(
+            "{}/auth/callback?error={}",
+            app_url,
+            urlencoding::encode(&format!("{error}: {desc}")),
+        )));
+    }
+
+    let code = query.code.as_deref().ok_or_else(|| {
+        tracing::error!("OAuth callback missing both code and error params");
+        AppError::BadRequest("OAuth callback missing authorization code".into())
+    })?;
+    let state_val = query.state.as_deref().unwrap_or("");
+
     match IntegrationService::complete_connect(
         &state.db,
         &state.providers,
         &state.broadcast,
-        &query.state,
-        &query.code,
+        state_val,
+        code,
         state.token_key.as_ref(),
     )
     .await
