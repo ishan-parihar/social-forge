@@ -576,6 +576,217 @@ impl RedditProvider {
             .await
     }
 
+    /// Parse a Reddit listing JSON response into ExternalPostData vec
+    fn parse_reddit_listing(response: serde_json::Value) -> Result<Vec<ExternalPostData>, ProviderError> {
+        let children = response["data"]["children"].as_array()
+            .map(|c| c.to_vec())
+            .unwrap_or_default();
+
+        let mut posts = Vec::new();
+        for child in &children {
+            let data = &child["data"];
+            let id = data["id"].as_str().unwrap_or("").to_string();
+            if id.is_empty() { continue; }
+
+            let title = data["title"].as_str().unwrap_or("").to_string();
+            let selftext = data["selftext"].as_str().unwrap_or("").to_string();
+            let text = if selftext.is_empty() { title.clone() } else { format!("{title}\n\n{selftext}") };
+
+            let created_utc = data["created_utc"].as_f64().unwrap_or(0.0);
+            let created_at = chrono::DateTime::from_timestamp(created_utc as i64, 0)
+                .unwrap_or_else(chrono::Utc::now);
+
+            let permalink = data["permalink"].as_str().unwrap_or("").to_string();
+            let url = if permalink.is_empty() {
+                None
+            } else {
+                Some(format!("https://www.reddit.com{permalink}"))
+            };
+
+            // Extract author info
+            let author = data["author"].as_str().map(String::from);
+            let avatar = data["author_icon_img"].as_str()
+                .or_else(|| data["icon_img"].as_str())
+                .and_then(|s| s.split('?').next())
+                .map(String::from);
+
+            let mut media = Vec::new();
+
+            // Handle gallery posts (multi-image) — parse media_metadata + gallery_data
+            let is_gallery = data["is_gallery"].as_bool().unwrap_or(false);
+            if is_gallery {
+                if let Some(metadata) = data["media_metadata"].as_object() {
+                    // Use gallery_data for ordering; fall back to iterating metadata keys
+                    let ordered_ids: Vec<&str> = if let Some(items) = data["gallery_data"]["items"].as_array() {
+                        items.iter()
+                            .filter_map(|item| item["media_id"].as_str())
+                            .collect()
+                    } else {
+                        metadata.keys().map(|k| k.as_str()).collect()
+                    };
+                    for media_id in ordered_ids {
+                        if let Some(meta) = metadata.get(media_id) {
+                            // Use full-resolution image from `s.u`
+                            let url = meta["s"]["u"].as_str()
+                                .or_else(|| meta["s"]["gif"].as_str())
+                                .or_else(|| {
+                                    // Fallback: use the largest preview image
+                                    meta["p"].as_array()
+                                        .and_then(|p| p.last())
+                                        .and_then(|last| last["u"].as_str())
+                                });
+                            if let Some(url) = url {
+                                let mime = meta["m"].as_str().unwrap_or("image/jpeg");
+                                media.push(MediaAttachment {
+                                    url: url.to_string(),
+                                    mime_type: mime.to_string(),
+                                    alt: None,
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+
+            // For non-gallery posts, use the regular media extraction
+            if media.is_empty() {
+                // Check for hosted:video (v.redd.it video posts)
+                if let Some(hosted_video) = data["media"]["reddit_video"].as_object() {
+                    if let Some(video_url) = hosted_video["fallback_url"].as_str() {
+                        media.push(MediaAttachment {
+                            url: video_url.to_string(),
+                            mime_type: "video/mp4".to_string(),
+                            alt: None,
+                        });
+                    }
+                }
+
+                // Check for standard URL (images, external links)
+                if media.is_empty() {
+                    if let Some(url_str) = data["url"].as_str() {
+                        if !url_str.is_empty() && !selftext.contains(url_str) {
+                            let is_video = url_str.contains("v.redd.it")
+                                && (url_str.ends_with(".mp4") || url_str.contains("DASH_"));
+                            let is_image = url_str.ends_with(".jpg")
+                                || url_str.ends_with(".jpeg")
+                                || url_str.ends_with(".png")
+                                || url_str.ends_with(".gif")
+                                || url_str.ends_with(".webp");
+                            let mime_type = if is_video {
+                                "video/mp4".to_string()
+                            } else if url_str.contains(".gif") {
+                                "image/gif".to_string()
+                            } else if is_image {
+                                "image/jpeg".to_string()
+                            } else {
+                                "image/jpeg".to_string()
+                            };
+                            media.push(MediaAttachment {
+                                url: url_str.to_string(),
+                                mime_type,
+                                alt: None,
+                            });
+                        }
+                    }
+                }
+
+                // Fallback: use preview image if no media found yet
+                if media.is_empty() {
+                    if let Some(preview) = data["preview"]["images"].as_array() {
+                        if let Some(img) = preview.first() {
+                            if let Some(source) = img["source"]["url"].as_str() {
+                                // Decode Reddit's HTML-encoded URLs
+                                let decoded = source.replace("&amp;", "&");
+                                media.push(MediaAttachment {
+                                    url: decoded,
+                                    mime_type: "image/jpeg".to_string(),
+                                    alt: None,
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+
+            posts.push(ExternalPostData {
+                platform_post_id: id,
+                text,
+                url,
+                media,
+                created_at,
+                author_name: author.clone(),
+                author_avatar: avatar,
+                author_handle: author,
+                metadata: None,
+            });
+        }
+
+        Ok(posts)
+    }
+
+    /// Fetch recent posts via cookie-based www.reddit.com API
+    /// Makes inline HTTP requests since self.cookie_string isn't set on the Arc-wrapped provider.
+    async fn get_recent_posts_via_cookies(
+        &self,
+        access_token: &str,
+        limit: u32,
+    ) -> Result<Vec<ExternalPostData>, ProviderError> {
+        let (_session, _token_v2, extra_cookies) = crate::social::reddit_cookies::parse_cookie_token(access_token)
+            .ok_or_else(|| ProviderError::Auth("Invalid Reddit cookie token".into()))?;
+
+        let cookie_str = extra_cookies.as_deref()
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| ProviderError::Auth(
+                "Reddit cookie token missing cookie_string — re-authenticate via Reddit cookies".into()
+            ))?;
+
+        // Helper closure: cookie-authenticated GET to www.reddit.com
+        async fn cookie_get(
+            http: &reqwest::Client,
+            cookie: &str,
+            url: &str,
+            params: &[(&str, &str)],
+        ) -> Result<serde_json::Value, ProviderError> {
+            let resp = http
+                .get(url)
+                .header("Cookie", cookie)
+                .query(params)
+                .send()
+                .await
+                .map_err(ProviderError::Network)?;
+            let status = resp.status();
+            if status == 401 || status == 403 {
+                return Err(ProviderError::TokenExpired);
+            }
+            if !status.is_success() {
+                let body = resp.text().await.unwrap_or_default();
+                return Err(ProviderError::Api(format!("Reddit www API error ({status}): {body}")));
+            }
+            resp.json().await.map_err(ProviderError::Network)
+        }
+
+        // Fetch authenticated user info via www.reddit.com with cookie auth
+        let me = cookie_get(
+            &self.http,
+            cookie_str,
+            "https://www.reddit.com/api/me.json",
+            &[("raw_json", "1")],
+        ).await?;
+
+        let username = me["data"]["name"].as_str()
+            .ok_or_else(|| ProviderError::Api("Could not determine Reddit username from cookies".into()))?;
+
+        let limit_str = limit.to_string();
+        let response = cookie_get(
+            &self.http,
+            cookie_str,
+            &format!("https://www.reddit.com/user/{username}/submitted.json"),
+            &[("limit", &limit_str), ("raw_json", "1")],
+        ).await?;
+
+        Self::parse_reddit_listing(response)
+    }
+
     async fn fetch_me(&self, token: &str) -> Result<AuthToken, ProviderError> {
         let resp = self
             .http
@@ -1232,5 +1443,62 @@ impl SocialProvider for RedditProvider {
             .collect();
 
         Ok(targets)
+    }
+
+    async fn get_recent_posts(
+        &self,
+        access_token: &str,
+        _internal_id: &str,
+        limit: u32,
+    ) -> Result<Vec<ExternalPostData>, ProviderError> {
+        // Handle cookie-based auth (users who authenticated via Reddit cookies)
+        if Self::is_cookie_auth(access_token) {
+            return self.get_recent_posts_via_cookies(access_token, limit).await;
+        }
+
+        // OAuth path: use Bearer token with oauth.reddit.com
+        let me = self.get_oauth(access_token, "/api/v1/me", &[]).await?;
+        let username = me["name"].as_str()
+            .ok_or_else(|| ProviderError::Api("Could not determine Reddit username".into()))?;
+
+        tracing::info!("Reddit get_recent_posts: username='{}' limit={}", username, limit);
+
+        let limit_str = limit.to_string();
+        let response = self.get_oauth(
+            access_token,
+            &format!("/user/{username}/submitted"),
+            &[("limit", &limit_str)],
+        ).await?;
+
+        let children_count = response["data"]["children"].as_array().map(|a| a.len()).unwrap_or(0);
+        tracing::info!(
+            "Reddit get_recent_posts: {} children returned",
+            children_count,
+        );
+
+        Self::parse_reddit_listing(response)
+    }
+
+
+
+    async fn get_post_engagement(
+        &self,
+        access_token: &str,
+        platform_post_id: &str,
+    ) -> Result<Option<serde_json::Value>, ProviderError> {
+        let pid = platform_post_id.trim_start_matches("t3_");
+        let info_id = format!("t3_{pid}");
+        let info = self.get_oauth(access_token, "/api/info", &[("id", &info_id)]).await?;
+        let child = info["data"]["children"][0]["data"].clone();
+        if child.is_null() {
+            return Ok(None);
+        }
+        Ok(Some(serde_json::json!({
+            "score": child["score"],
+            "num_comments": child["num_comments"],
+            "upvote_ratio": child["upvote_ratio"],
+            "downs": child["downs"],
+            "ups": child["ups"],
+        })))
     }
 }

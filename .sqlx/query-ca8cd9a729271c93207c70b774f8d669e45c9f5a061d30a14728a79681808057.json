@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO integrations\n           (user_id, provider_identifier, provider_name, internal_id,\n            access_token, refresh_token, token_expires_at,\n            profile_name, profile_picture, profile_url,\n            root_internal_id)\n           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)\n           ON CONFLICT (user_id, provider_identifier, internal_id)\n           DO UPDATE SET access_token = $5, refresh_token = $6,\n             token_expires_at = $7, profile_name = $8,\n             profile_picture = $9, profile_url = $10,\n             root_internal_id = COALESCE($11, integrations.root_internal_id),\n             refresh_needed = false, disabled = false,\n             updated_at = now()\n           RETURNING id, user_id, provider_identifier, provider_name,\n             internal_id, access_token, refresh_token, token_expires_at,\n             profile_name, profile_picture, profile_url, disabled,\n             refresh_needed, root_internal_id, posting_times, created_at, updated_at",
+  "query": "SELECT id, user_id, provider_identifier, provider_name, internal_id,\n                access_token, refresh_token, token_expires_at,\n                profile_name, profile_picture, profile_url, disabled,\n                refresh_needed, root_internal_id, posting_times, auth_method, created_at, updated_at\n         FROM integrations WHERE user_id = $1 ORDER BY created_at DESC",
   "describe": {
     "columns": [
       {
@@ -80,28 +80,23 @@
       },
       {
         "ordinal": 15,
+        "name": "auth_method",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 16,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 16,
+        "ordinal": 17,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid",
-        "Text",
-        "Text",
-        "Text",
-        "Text",
-        "Text",
-        "Timestamptz",
-        "Text",
-        "Text",
-        "Text",
-        "Text"
+        "Uuid"
       ]
     },
     "nullable": [
@@ -121,8 +116,9 @@
       true,
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "7945000b7d30196411768007cef2bbe8be5da951df3249909a6ae0d9c9cefa69"
+  "hash": "ca8cd9a729271c93207c70b774f8d669e45c9f5a061d30a14728a79681808057"
 }

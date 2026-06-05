@@ -76,6 +76,54 @@ pub async fn refresh_access_token(
     Ok(json)
 }
 
+/// Parse a timestamp string to DateTime<Utc>.
+/// Handles RFC3339 and common non-standard formats like `+0000` (missing colon).
+/// Returns `Utc::now()` as fallback on parse failure.
+pub fn parse_timestamp(s: &str) -> chrono::DateTime<chrono::Utc> {
+    let s = s.trim();
+    // Normalize non-standard offsets like "+0000" → "+00:00" (insert colon before last 2 digits)
+    // Only applies to the trailing ±HHMM pattern (5 chars: sign + 4 digits)
+    let normalized = if s.len() >= 6 {
+        let (prefix, offset) = s.split_at(s.len() - 5);
+        let offset_chars: Vec<char> = offset.chars().collect();
+        if offset_chars.len() == 5 && (offset_chars[0] == '+' || offset_chars[0] == '-') {
+            format!("{}{}{}:{}", prefix, offset_chars[0], &offset[1..3], &offset[3..5])
+        } else {
+            s.to_string()
+        }
+    } else {
+        s.to_string()
+    };
+
+    chrono::DateTime::parse_from_rfc3339(&normalized)
+        .or_else(|_| chrono::DateTime::parse_from_rfc3339(s))
+        .map(|d| d.with_timezone(&chrono::Utc))
+        .unwrap_or_else(|_| {
+            // Final fallback: try basic ISO 8601 without timezone
+            chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S")
+                .map(|d| d.and_utc())
+                .unwrap_or_else(|_| chrono::Utc::now())
+        })
+}
+
+/// Strip HTML tags from content (basic implementation)
+pub fn strip_html_tags(s: &str) -> String {
+    let mut result = String::with_capacity(s.len());
+    let mut in_tag = false;
+    for ch in s.chars() {
+        match ch {
+            '<' => in_tag = true,
+            '>' => in_tag = false,
+            _ => {
+                if !in_tag {
+                    result.push(ch);
+                }
+            }
+        }
+    }
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

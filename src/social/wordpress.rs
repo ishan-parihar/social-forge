@@ -520,6 +520,81 @@ impl SocialProvider for WordPressProvider {
         }
     }
 
+    async fn get_recent_posts(
+        &self,
+        access_token: &str,
+        _internal_id: &str,
+        _limit: u32,
+    ) -> Result<Vec<ExternalPostData>, ProviderError> {
+        let (site_url, username, app_password) = self.parse_creds(access_token);
+        if site_url.is_empty() || username.is_empty() || app_password.is_empty() {
+            return Err(ProviderError::Auth("Invalid WordPress credentials".into()));
+        }
+
+        let limit = _limit.min(100);
+        let url = format!("{}/wp-json/wp/v2/posts?per_page={}&orderby=date&order=desc",
+            site_url.trim_end_matches('/'), limit);
+
+        let resp = self.http.get(&url)
+            .header("Authorization", self.basic_auth(&username, &app_password))
+            .send().await?;
+
+        let status_code = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        let json: serde_json::Value = serde_json::from_str(&body).unwrap_or(serde_json::Value::Null);
+
+        if !status_code.is_success() {
+            let msg = json["message"].as_str().unwrap_or(&body).to_string();
+            return Err(ProviderError::Api(format!("WordPress API error ({}): {}", status_code, msg)));
+        }
+
+        let posts: Vec<ExternalPostData> = json.as_array()
+            .map(|arr| {
+                arr.iter().map(|p| {
+                    let created_at = p["date_gmt"].as_str()
+                        .and_then(|t| chrono::DateTime::parse_from_rfc3339(t).ok())
+                        .map(|dt| dt.with_timezone(&chrono::Utc))
+                        .unwrap_or_else(chrono::Utc::now);
+                    let _content_text = p["content"]["rendered"].as_str()
+                        .map(|s| common::strip_html_tags(s))
+                        .unwrap_or_default();
+                    let excerpt_text = p["excerpt"]["rendered"].as_str()
+                        .map(|s| common::strip_html_tags(s))
+                        .unwrap_or_default();
+                    let featured_media_url = p["_embedded"]["wp:featuredmedia"][0]["source_url"]
+                        .as_str().map(String::from);
+                    let mut media = Vec::new();
+                    if let Some(url) = featured_media_url {
+                        media.push(MediaAttachment {
+                            url,
+                            mime_type: "image/jpeg".into(),
+                            alt: p["_embedded"]["wp:featuredmedia"][0]["alt_text"]
+                                .as_str().map(String::from),
+                        });
+                    }
+                    ExternalPostData {
+                        platform_post_id: p["id"].as_u64().map(|id| id.to_string()).unwrap_or_default(),
+                        text: excerpt_text,
+                        author_name: p["_embedded"]["author"][0]["name"].as_str().map(String::from),
+                        author_handle: p["_embedded"]["author"][0]["slug"].as_str().map(String::from),
+                        author_avatar: p["_embedded"]["author"][0]["avatar_urls"]["96"].as_str().map(String::from),
+                        created_at,
+                        url: p["link"].as_str().map(String::from),
+                        media,
+                        metadata: Some(serde_json::json!({
+                            "title": p["title"]["rendered"],
+                            "status": p["status"],
+                            "post_type": p["type"],
+                            "sticky": p["sticky"],
+                        })),
+                    }
+                }).collect()
+            })
+            .unwrap_or_default();
+
+        Ok(posts)
+    }
+
     fn map_error(&self, body: &str, status: u16) -> Option<String> {
         if status == 401 || status == 403 {
             Some(

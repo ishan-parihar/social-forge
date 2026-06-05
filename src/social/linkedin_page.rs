@@ -532,6 +532,97 @@ impl SocialProvider for LinkedInPageProvider {
 
         Ok(results)
     }
+
+    // ── Import recent posts from LinkedIn Page ────────────────
+    async fn get_recent_posts(
+        &self,
+        access_token: &str,
+        internal_id: &str,
+        limit: u32,
+    ) -> Result<Vec<ExternalPostData>, ProviderError> {
+        let page_id = if internal_id.is_empty() {
+            self.resolve_org_id(access_token).await?
+        } else {
+            internal_id.to_string()
+        };
+        let json = self.get_page_posts(access_token, &page_id, limit).await?;
+
+        let mut posts = Vec::new();
+        if let Some(elements) = json["elements"].as_array() {
+            for element in elements {
+                let post_urn = element["id"].as_str().unwrap_or("").to_string();
+                let commentary = element["commentary"]
+                    .as_object()
+                    .and_then(|c| c["text"].as_str())
+                    .unwrap_or("")
+                    .to_string();
+                let created_at = element["createdAt"].as_i64()
+                    .and_then(|ms| chrono::DateTime::from_timestamp_millis(ms))
+                    .unwrap_or_else(chrono::Utc::now);
+
+                let media = Vec::new();
+                posts.push(ExternalPostData {
+                    platform_post_id: post_urn,
+                    text: commentary,
+                    author_name: None,
+                    author_handle: None,
+                    author_avatar: None,
+                    created_at,
+                    url: None,
+                    media,
+                    metadata: Some(element.clone()),
+                });
+            }
+        }
+        Ok(posts)
+    }
+
+    // ── Fetch engagement for a Page post ─────────────────────
+    async fn get_post_engagement(
+        &self,
+        access_token: &str,
+        platform_post_id: &str,
+    ) -> Result<Option<serde_json::Value>, ProviderError> {
+        // Use the social actions API to get likes/comments/shares counts
+        let url = format!(
+            "https://api.linkedin.com/v2/rest/socialActions/{platform_post_id}"
+        );
+        let resp = self
+            .http
+            .get(&url)
+            .header("Authorization", format!("Bearer {access_token}"))
+            .header("X-Restli-Protocol-Version", "2.0.0")
+            .header("LinkedIn-Version", "202601")
+            .send()
+            .await?;
+
+        let status = resp.status();
+        if status == 401 {
+            return Err(ProviderError::TokenExpired);
+        }
+        if !status.is_success() {
+            return Ok(None);
+        }
+
+        let json: serde_json::Value = resp.json().await.unwrap_or_default();
+        let mut result = serde_json::Map::new();
+
+        if let Some(n) = json["likesSummary"]["totalLikes"].as_i64() {
+            result.insert("likeCount".into(), serde_json::json!(n));
+        }
+        if let Some(n) = json["commentsSummary"]["totalFirstLevelComments"].as_i64() {
+            result.insert("commentCount".into(), serde_json::json!(n));
+        }
+        if let Some(n) = json["sharesSummary"]["totalShares"].as_i64() {
+            result.insert("shareCount".into(), serde_json::json!(n));
+        }
+
+        if result.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(serde_json::Value::Object(result)))
+        }
+    }
 }
 
 impl LinkedInPageProvider {

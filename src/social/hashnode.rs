@@ -287,6 +287,50 @@ impl SocialProvider for HashnodeProvider {
         }
     }
 
+    async fn get_recent_posts(&self, access_token: &str, _internal_id: &str, limit: u32) -> Result<Vec<ExternalPostData>, ProviderError> {
+        let pages = self.pages(access_token).await?;
+        let mut posts = Vec::new();
+        let pages_to_check = (limit / 5).max(1).min(5);
+
+        for page in pages.iter().take(pages_to_check as usize) {
+            let data = self.list_posts(access_token, &page.id, 1).await?;
+            if let Some(stories) = data["stories"].as_array() {
+                for item in stories {
+                    let post_id = item["_id"].as_str().or_else(|| item["id"].as_str()).unwrap_or("").to_string();
+                    let title = item["title"].as_str().unwrap_or("").to_string();
+                    let brief = item["brief"].as_str().unwrap_or("");
+                    let slug = item["slug"].as_str().unwrap_or("");
+                    let cover = item["coverImage"].as_str().map(|s| s.to_string());
+                    let date_added = item["dateAdded"].as_str().unwrap_or("");
+
+                    let posted_at = crate::social::common::parse_timestamp(date_added);
+
+                    posts.push(ExternalPostData {
+                        platform_post_id: post_id,
+                        text: brief.to_string(),
+                        author_name: None,
+                        author_handle: None,
+                        author_avatar: None,
+                        media: cover.into_iter().map(|u| MediaAttachment {
+                            url: u,
+                            mime_type: String::new(),
+                            alt: None,
+                        }).collect(),
+                        created_at: posted_at,
+                        url: Some(format!("https://hashnode.com/post/{slug}")),
+                        metadata: Some(serde_json::json!({"title": title})),
+                    });
+                }
+            }
+        }
+
+        // Sort by posted_at descending, take top 20
+        posts.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        posts.truncate(20);
+
+        Ok(posts)
+    }
+
     async fn fetch_page_info(
         &self,
         _access_token: &str,

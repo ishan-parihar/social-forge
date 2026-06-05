@@ -242,6 +242,71 @@ impl SocialProvider for DevtoProvider {
         Err(ProviderError::Api("Dev.to does not support commenting via API".into()))
     }
 
+    async fn get_recent_posts(
+        &self,
+        access_token: &str,
+        _internal_id: &str,
+        _limit: u32,
+    ) -> Result<Vec<ExternalPostData>, ProviderError> {
+        let resp = self
+            .client
+            .get(format!("{DEVTO_API_BASE}/articles/me"))
+            .header("api-key", access_token)
+            .query(&[("per_page", _limit.to_string())])
+            .send()
+            .await?;
+
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+
+        if !status.is_success() {
+            return Err(ProviderError::Api("Failed to fetch Dev.to articles".into()));
+        }
+
+        let posts: Vec<ExternalPostData> = json.as_array()
+            .map(|arr| {
+                arr.iter().map(|article| {
+                    let created_at = article["published_at"].as_str()
+                        .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                        .map(|dt| dt.with_timezone(&chrono::Utc))
+                        .unwrap_or_else(chrono::Utc::now);
+                    let tags: Vec<String> = article["tag_list"].as_array()
+                        .map(|t| t.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                        .unwrap_or_default();
+                    let mut media = Vec::new();
+                    if let Some(cover_url) = article["cover_image"].as_str() {
+                        if !cover_url.is_empty() {
+                            media.push(MediaAttachment {
+                                url: cover_url.to_string(),
+                                mime_type: "image/jpeg".to_string(),
+                                alt: article["title"].as_str().map(String::from),
+                            });
+                        }
+                    }
+                    ExternalPostData {
+                        platform_post_id: article["id"].as_u64().map(|id| id.to_string()).unwrap_or_default(),
+                        text: article["body_markdown"].as_str().unwrap_or("").to_string(),
+                        author_name: article["user"]["name"].as_str().map(String::from),
+                        author_handle: article["user"]["username"].as_str().map(String::from),
+                        author_avatar: article["user"]["profile_image_90"].as_str().map(String::from),
+                        created_at,
+                        url: article["url"].as_str().map(String::from),
+                        media,
+                        metadata: Some(serde_json::json!({
+                            "title": article["title"],
+                            "tags": tags,
+                            "reading_time": article["reading_time_minutes"],
+                            "comments_count": article["comments_count"],
+                            "positive_reactions": article["positive_reactions_count"],
+                        })),
+                    }
+                }).collect()
+            })
+            .unwrap_or_default();
+
+        Ok(posts)
+    }
+
     fn map_error(&self, body: &str, status: u16) -> Option<String> {
         if status == 401 {
             Some("Invalid Dev.to API key. Check DEVTO_API_KEY in .env.".into())

@@ -664,6 +664,71 @@ impl SocialProvider for MastodonProvider {
         })
     }
 
+    async fn get_recent_posts(
+        &self,
+        access_token: &str,
+        _internal_id: &str,
+        _limit: u32,
+    ) -> Result<Vec<ExternalPostData>, ProviderError> {
+        let resp = self
+            .http
+            .get(self.api_url(&format!("/api/v1/accounts/{}/statuses?limit={}", _internal_id, _limit)))
+            .header("Authorization", format!("Bearer {access_token}"))
+            .send()
+            .await?;
+
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+
+        if status == 401 {
+            return Err(ProviderError::TokenExpired);
+        }
+
+        if !status.is_success() {
+            let msg = json["error"].as_str().unwrap_or("Failed to fetch statuses").to_string();
+            return Err(ProviderError::Api(msg));
+        }
+
+        let posts: Vec<ExternalPostData> = json.as_array()
+            .map(|arr| {
+                arr.iter().map(|s| {
+                    let created_at = s["created_at"].as_str()
+                        .and_then(|t| chrono::DateTime::parse_from_rfc3339(t).ok())
+                        .map(|dt| dt.with_timezone(&chrono::Utc))
+                        .unwrap_or_else(chrono::Utc::now);
+                    let media_urls: Vec<String> = s["media_attachments"].as_array()
+                        .map(|ma| {
+                            ma.iter().filter_map(|m| m["url"].as_str().map(String::from)).collect()
+                        })
+                        .unwrap_or_default();
+                    let media: Vec<MediaAttachment> = media_urls.into_iter().map(|url| {
+                        MediaAttachment { url, mime_type: "image/jpeg".into(), alt: None }
+                    }).collect();
+                    ExternalPostData {
+                        platform_post_id: s["id"].as_str().unwrap_or("").to_string(),
+                        text: s["content"].as_str().unwrap_or("").to_string(),
+                        author_name: s["account"]["display_name"].as_str().map(String::from),
+                        author_handle: s["account"]["acct"].as_str().map(String::from),
+                        author_avatar: s["account"]["avatar"].as_str().map(String::from),
+                        created_at,
+                        url: s["url"].as_str().map(String::from),
+                        media,
+                        metadata: Some(serde_json::json!({
+                            "visibility": s["visibility"],
+                            "favourites_count": s["favourites_count"],
+                            "reblogs_count": s["reblogs_count"],
+                            "replies_count": s["replies_count"],
+                            "sensitive": s["sensitive"],
+                            "spoiler_text": s["spoiler_text"],
+                        })),
+                    }
+                }).collect()
+            })
+            .unwrap_or_default();
+
+        Ok(posts)
+    }
+
     fn map_error(&self, body: &str, _status: u16) -> Option<String> {
         // Try to extract error from Mastodon's JSON error format
         if let Ok(v) = serde_json::from_str::<serde_json::Value>(body) {

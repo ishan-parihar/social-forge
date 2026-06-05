@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE posts SET content = $1, title = $2, media = $3, settings = $4,\n           updated_at = now()\n           WHERE id = $5 AND user_id = $6\n           RETURNING id, user_id, integration_id, state as \"state: PostState\",\n              content, title, media, settings, scheduled_at, published_at,\n              platform_post_id, platform_post_url, error_message,\n              created_at, updated_at,\n              repeat_interval_days, repeat_end_date, group_id",
+  "query": "INSERT INTO posts (user_id, integration_id, title, content, media, settings, scheduled_at, state, repeat_interval_days, repeat_end_date, group_id)\n           SELECT p.user_id, p.integration_id, p.title, p.content, p.media, p.settings, $1, p.state, NULL::int4, NULL::timestamptz, $3\n           FROM posts p WHERE p.id = $2 AND p.user_id = $4\n           RETURNING id, user_id, integration_id, state as \"state: PostState\",\n             content, title, media, settings, scheduled_at, published_at,\n             platform_post_id, platform_post_url, error_message,\n             created_at, updated_at,\n             repeat_interval_days, repeat_end_date, group_id,\n             first_comment, sequence",
   "describe": {
     "columns": [
       {
@@ -104,14 +104,22 @@
         "ordinal": 17,
         "name": "group_id",
         "type_info": "Uuid"
+      },
+      {
+        "ordinal": 18,
+        "name": "first_comment",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 19,
+        "name": "sequence",
+        "type_info": "Int4"
       }
     ],
     "parameters": {
       "Left": [
-        "Text",
-        "Text",
-        "Jsonb",
-        "Jsonb",
+        "Timestamptz",
+        "Uuid",
         "Uuid",
         "Uuid"
       ]
@@ -134,8 +142,10 @@
       false,
       true,
       true,
-      true
+      true,
+      true,
+      false
     ]
   },
-  "hash": "2e6b8236afbb02173d53007e07068183be0da4f9fb2166639218040250d2103a"
+  "hash": "215146e7f413e7402d7271072ca534b79e287a45fc9474618459cdbd7753c728"
 }

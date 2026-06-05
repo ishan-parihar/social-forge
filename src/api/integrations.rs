@@ -12,7 +12,6 @@ use uuid::Uuid;
 use crate::auth::jwt;
 use crate::auth::middleware::AuthenticatedUser;
 use crate::crypto;
-use crate::db::models::Integration;
 use crate::db::models::IntegrationPublic;
 use crate::db::queries;
 use crate::error::AppError;

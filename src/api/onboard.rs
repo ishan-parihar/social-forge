@@ -734,7 +734,7 @@ pub async fn x_cookies_form(
     State(state): State<AppState>,
     Query(query): Query<PublicConnectQuery>,
 ) -> Result<Html<String>, AppError> {
-    let user_id = if let Some(token_str) = &query.token {
+    let _user_id = if let Some(token_str) = &query.token {
         let claims = jwt::validate_token(token_str, &state.config.jwt_secret)
             .map_err(|_| AppError::BadRequest("Invalid token".into()))?;
         Uuid::parse_str(&claims.sub)
@@ -1036,7 +1036,7 @@ pub async fn reddit_cookies_form(
     State(state): State<AppState>,
     Query(query): Query<PublicConnectQuery>,
 ) -> Result<Html<String>, AppError> {
-    let user_id = if let Some(token_str) = &query.token {
+    let _user_id = if let Some(token_str) = &query.token {
         let claims = jwt::validate_token(token_str, &state.config.jwt_secret)
             .map_err(|_| AppError::BadRequest("Invalid token".into()))?;
         Uuid::parse_str(&claims.sub)
@@ -1337,11 +1337,14 @@ pub async fn telegram_bot_token_submit(
     let bot_name = bot["first_name"].as_str().unwrap_or("Bot");
     let bot_username = bot["username"].as_str().unwrap_or("");
 
-    let user_id = crate::auth::middleware::DEFAULT_USER_ID;
+    let user = match get_or_create_dev_user(&state).await {
+        Ok(u) => u,
+        Err(e) => return axum::response::Html(format!("<p>Error creating user: {e}</p>")).into_response(),
+    };
     let token_json = serde_json::json!({"bot_token": bot_token}).to_string();
     let _ = crate::db::queries::create_integration(
         &state.db,
-        user_id,
+        user.id,
         "telegram-bot",
         "Telegram Bot",
         &bot_id,

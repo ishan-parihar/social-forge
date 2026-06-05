@@ -76,6 +76,11 @@ async fn main() -> anyhow::Result<()> {
         .context("Failed to create database pool")?;
     tracing::info!("Database connected");
 
+    // Ensure the default dev user exists (survives volume wipes)
+    if let Err(e) = db::ensure_default_user(&db).await {
+        tracing::warn!("Failed to ensure default user: {e} — some auth paths may fail");
+    }
+
     // ── Realtime broadcaster ──────────────────────────────────
     let broadcaster = Broadcaster::new();
 
@@ -174,6 +179,29 @@ async fn main() -> anyhow::Result<()> {
         providers_arc.clone(),
         Arc::new(config.clone()),
         rss_rx,
+    );
+
+    // ── Start analytics cache refresh ─────────────────────────
+    let cache_db = db.clone();
+    let cache_providers = providers_arc.clone();
+    let cache_shutdown = shutdown_tx.subscribe();
+    tokio::spawn(async move {
+        scheduler::run_analytics_cache_refresh(
+            cache_db,
+            cache_providers,
+            cache_shutdown,
+        )
+        .await;
+    });
+
+    // ── Start feed refresher ────────────────────────────────────
+    let feed_rx = shutdown_tx.subscribe();
+    social_forge::feed::start_feed_refresher(
+        db.clone(),
+        providers_arc.clone(),
+        broadcaster.clone(),
+        token_key,
+        feed_rx,
     );
 
     // ── Build HTTP router ─────────────────────────────────────

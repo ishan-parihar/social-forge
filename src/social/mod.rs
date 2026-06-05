@@ -158,6 +158,57 @@ pub struct MentionResult {
     pub do_not_cache: Option<bool>,
 }
 
+/// Standardized engagement data for any social media post.
+/// All platforms normalize their metrics into this unified schema.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct EngagementData {
+    /// Core metrics (all platforms)
+    pub likes: i32,
+    pub comments: i32,
+    pub shares: i32,
+    pub views: i32,
+    /// Platform-specific
+    pub saves: i32,
+    pub quotes: i32,
+    pub reposts: i32,
+    pub replies: i32,
+    /// Reaction breakdown (e.g., Facebook: {"like": 42, "love": 7, "haha": 3})
+    pub reactions: Option<serde_json::Value>,
+    /// Reddit-specific
+    pub upvotes: i32,
+    pub downvotes: i32,
+    pub upvote_ratio: Option<f32>,
+    pub awards: i32,
+    /// Raw platform response for extensibility
+    pub raw: Option<serde_json::Value>,
+}
+
+/// A single comment from a social media post
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct CommentData {
+    pub id: String,
+    pub author_name: Option<String>,
+    pub author_avatar: Option<String>,
+    pub text: String,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub like_count: i32,
+    pub replies: Vec<CommentData>,
+}
+
+/// External post data for import (CLI command)
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct ExternalPostData {
+    pub platform_post_id: String,
+    pub text: String,
+    pub author_name: Option<String>,
+    pub author_handle: Option<String>,
+    pub author_avatar: Option<String>,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub url: Option<String>,
+    pub media: Vec<MediaAttachment>,
+    pub metadata: Option<serde_json::Value>,
+}
+
 /// Extra fields for provider OAuth config
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct CustomField {
@@ -340,6 +391,52 @@ pub trait SocialProvider: Send + Sync {
     /// Map provider API error body/status to user-friendly message
     fn map_error(&self, _body: &str, _status: u16) -> Option<String> { None }
 
+    /// Import recent posts from this platform (for the External Post Import CLI).
+    async fn get_recent_posts(
+        &self,
+        _access_token: &str,
+        _internal_id: &str,
+        _limit: u32,
+    ) -> Result<Vec<ExternalPostData>, ProviderError> {
+        Ok(vec![])
+    }
+
+    /// Fetch engagement data for a post (likes, comments, shares, etc.)
+    /// Returns raw JSON to be parsed into EngagementData by the caller.
+    async fn get_post_engagement(
+        &self,
+        _access_token: &str,
+        _platform_post_id: &str,
+    ) -> Result<Option<serde_json::Value>, ProviderError> {
+        Ok(None)
+    }
+
+    /// Fetch comments for a post.
+    /// Returns a flat or threaded list of comments from the platform.
+    async fn get_post_comments(
+        &self,
+        _access_token: &str,
+        _platform_post_id: &str,
+    ) -> Result<Vec<CommentData>, ProviderError> {
+        Ok(vec![])
+    }
+
+    /// Fetch normalized engagement data for a post.
+    /// This is the canonical method used by the engagement sync engine.
+    /// Returns None if the post has no engagement data or the API doesn't support it.
+    /// Default implementation calls get_post_engagement() and parses it.
+    async fn fetch_engagement(
+        &self,
+        access_token: &str,
+        platform_post_id: &str,
+    ) -> Result<Option<EngagementData>, ProviderError> {
+        let raw = self.get_post_engagement(access_token, platform_post_id).await?;
+        match raw {
+            Some(value) => Ok(Some(parse_engagement_data(self.identifier(), value))),
+            None => Ok(None),
+        }
+    }
+
     /// Validate content against platform-specific limits before publishing.
     fn validate_post(&self, post: &PostContent) -> Result<(), String> {
         if post.content.len() > self.max_content_length() {
@@ -379,5 +476,166 @@ impl ProviderError {
 
     pub fn is_rate_limited(&self) -> bool {
         matches!(self, ProviderError::RateLimited(_))
+    }
+}
+
+// ── Engagement Data Parser ────────────────────────────────────
+
+/// Parse a provider's raw engagement JSON into a normalized EngagementData struct.
+/// Each provider returns a different JSON shape from get_post_engagement().
+/// This function handles all known provider-specific formats.
+pub fn parse_engagement_data(provider: &str, raw: serde_json::Value) -> EngagementData {
+    let mut e = EngagementData {
+        likes: 0, comments: 0, shares: 0, views: 0,
+        saves: 0, quotes: 0, reposts: 0, replies: 0,
+        reactions: None,
+        upvotes: 0, downvotes: 0, upvote_ratio: None, awards: 0,
+        raw: Some(raw.clone()),
+    };
+
+    match provider {
+        // X/Twitter: { "public_metrics": { "like_count": 42, "retweet_count": 8, "reply_count": 3, "quote_count": 1, "impression_count": 1200, "bookmark_count": 5 } }
+        "x" => {
+            let pm = raw.get("public_metrics").or_else(|| raw.as_object().map(|_| &raw));
+            if let Some(m) = pm {
+                e.likes = m.get("like_count").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+                e.replies = m.get("reply_count").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+                e.reposts = m.get("retweet_count").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+                e.quotes = m.get("quote_count").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+                e.views = m.get("impression_count").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+                e.saves = m.get("bookmark_count").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            }
+        }
+
+        // Reddit: { "score": 42, "num_comments": 12, "upvote_ratio": 0.95, "ups": 45, "downs": 3, "total_awards_received": 2 }
+        "reddit" => {
+            e.upvotes = raw.get("ups").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            e.downvotes = raw.get("downs").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            e.upvote_ratio = raw.get("upvote_ratio").and_then(|v| v.as_f64()).map(|v| v as f32);
+            e.comments = raw.get("num_comments").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            e.awards = raw.get("total_awards_received").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            // Score as likes (positive engagement indicator)
+            e.likes = raw.get("score").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+        }
+
+        // Bluesky: { "likeCount": 42, "repostCount": 8, "replyCount": 3, "quoteCount": 1 }
+        "bluesky" => {
+            e.likes = raw.get("likeCount").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            e.reposts = raw.get("repostCount").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            e.replies = raw.get("replyCount").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            e.quotes = raw.get("quoteCount").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+        }
+
+        // Instagram: { "like_count": 42, "comments_count": 12 } (from Graph API)
+        "instagram" | "instagram_standalone" => {
+            e.likes = raw.get("like_count").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            e.comments = raw.get("comments_count").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            e.saves = raw.get("saved_count").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            e.views = raw.get("reach").and_then(|v| v.as_i64()).or_else(|| raw.get("impressions").and_then(|v| v.as_i64())).unwrap_or(0) as i32;
+        }
+
+        // LinkedIn: { "likeCount": 42, "commentCount": 12, "shareCount": 5 }
+        "linkedin" | "linkedin_page" => {
+            e.likes = raw.get("likeCount").or_else(|| raw.get("likes")).and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            e.comments = raw.get("commentCount").or_else(|| raw.get("comments")).and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            e.shares = raw.get("shareCount").or_else(|| raw.get("shares")).and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            e.views = raw.get("impressionCount").or_else(|| raw.get("impressions")).and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+        }
+
+        // Facebook: Graph API returns reactions.summary.total_count (not "likes")
+        // { "reactions": { "summary": { "total_count": 42 } }, "comments": { "summary": { "total_count": 12 } }, "shares": { "count": 5 } }
+        "facebook" => {
+            e.likes = raw.get("reactions").and_then(|l| l.get("summary")).and_then(|s| s.get("total_count")).and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            e.comments = raw.get("comments").and_then(|c| c.get("summary")).and_then(|s| s.get("total_count")).and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            e.shares = raw.get("shares").and_then(|s| s.get("count")).and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            // Reactions breakdown from data array (not the summary object)
+            if let Some(data) = raw.get("reactions").and_then(|r| r.get("data")).and_then(|d| d.as_array()) {
+                let mut rmap = serde_json::Map::new();
+                for reaction in data {
+                    if let Some(rtype) = reaction["type"].as_str() {
+                        let key = rtype.to_lowercase();
+                        let count = rmap.get(&key).and_then(|v| v.as_i64()).unwrap_or(0) + 1;
+                        rmap.insert(key, serde_json::json!(count));
+                    }
+                }
+                if !rmap.is_empty() {
+                    e.reactions = Some(serde_json::Value::Object(rmap));
+                }
+            }
+        }
+
+        // YouTube: { "viewCount": 1200, "likeCount": 42, "dislikeCount": 2, "commentCount": 12 }
+        "youtube" => {
+            e.views = raw.get("viewCount").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            e.likes = raw.get("likeCount").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            e.comments = raw.get("commentCount").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+        }
+
+        // Mastodon: { "favourites_count": 42, "reblogs_count": 8, "replies_count": 3 }
+        "mastodon" => {
+            e.likes = raw.get("favourites_count").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            e.reposts = raw.get("reblogs_count").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            e.replies = raw.get("replies_count").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+        }
+
+        // TikTok: { "like_count": 42, "comment_count": 12, "share_count": 5, "view_count": 1200 }
+        "tiktok" => {
+            e.likes = raw.get("like_count").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            e.comments = raw.get("comment_count").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            e.shares = raw.get("share_count").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            e.views = raw.get("view_count").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+        }
+
+        // Threads: { "like_count": 42, "reply_count": 12, "repost_count": 5, "quote_count": 1 }
+        "threads" => {
+            e.likes = raw.get("like_count").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            e.replies = raw.get("reply_count").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            e.reposts = raw.get("repost_count").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            e.quotes = raw.get("quote_count").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+        }
+
+        _ => {}
+    }
+
+    e
+}
+
+/// Convert EngagementData into the DB row format for upsert (all numeric fields plus JSON).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EngagementRow {
+    pub likes: i32,
+    pub comments: i32,
+    pub shares: i32,
+    pub views: i32,
+    pub saves: i32,
+    pub quotes: i32,
+    pub reposts: i32,
+    pub replies: i32,
+    pub reactions: serde_json::Value,
+    pub upvotes: i32,
+    pub downvotes: i32,
+    pub upvote_ratio: Option<f32>,
+    pub awards: i32,
+    pub raw: serde_json::Value,
+}
+
+impl From<EngagementData> for EngagementRow {
+    fn from(e: EngagementData) -> Self {
+        EngagementRow {
+            likes: e.likes,
+            comments: e.comments,
+            shares: e.shares,
+            views: e.views,
+            saves: e.saves,
+            quotes: e.quotes,
+            reposts: e.reposts,
+            replies: e.replies,
+            reactions: e.reactions.unwrap_or(serde_json::Value::Object(serde_json::Map::new())),
+            upvotes: e.upvotes,
+            downvotes: e.downvotes,
+            upvote_ratio: e.upvote_ratio,
+            awards: e.awards,
+            raw: e.raw.unwrap_or(serde_json::Value::Object(serde_json::Map::new())),
+        }
     }
 }

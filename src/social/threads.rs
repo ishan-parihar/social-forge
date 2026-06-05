@@ -309,6 +309,53 @@ impl SocialProvider for ThreadsProvider {
         ))
     }
 
+    async fn get_recent_posts(&self, access_token: &str, _internal_id: &str, limit: u32) -> Result<Vec<ExternalPostData>, ProviderError> {
+        let user_id = self.resolve_user_id(access_token).await?;
+        let threads = self.get_threads(access_token, &user_id, limit).await?;
+        let mut posts = Vec::new();
+        if let Some(data) = threads["data"].as_array() {
+            for item in data {
+                let id = item["id"].as_str().unwrap_or("").to_string();
+                let text_val = item["text"].as_str().unwrap_or("").to_string();
+                let timestamp = item["timestamp"].as_str().unwrap_or("");
+                let media_url = item["media_url"].as_str().map(|s| s.to_string());
+                let permalink = item["permalink"].as_str().map(|s| s.to_string());
+
+                let posted_at = crate::social::common::parse_timestamp(timestamp);
+
+                posts.push(ExternalPostData {
+                    platform_post_id: id,
+                    text: text_val,
+                    author_name: None,
+                    author_handle: None,
+                    author_avatar: None,
+                    media: media_url.into_iter().map(|u| MediaAttachment {
+                        url: u,
+                        mime_type: String::new(),
+                        alt: None,
+                    }).collect(),
+                    created_at: posted_at,
+                    url: permalink,
+                    metadata: None,
+                });
+            }
+        }
+        Ok(posts)
+    }
+
+    async fn get_post_engagement(
+        &self,
+        access_token: &str,
+        platform_post_id: &str,
+    ) -> Result<Option<serde_json::Value>, ProviderError> {
+        // get_thread_detail() returns like_count, reply_count, etc.
+        let json = self.get_thread_detail(access_token, platform_post_id).await?;
+        if json.get("error").is_some() || json.get("id").is_none() {
+            return Ok(None);
+        }
+        Ok(Some(json))
+    }
+
     fn map_error(&self, body: &str, _status: u16) -> Option<String> {
         if body.contains("Error validating access token") {
             Some("Threads access token expired".into())
@@ -327,12 +374,12 @@ impl SocialProvider for ThreadsProvider {
     ) -> Result<Vec<AnalyticsData>, ProviderError> {
         let user_id = self.resolve_user_id(access_token).await?;
 
-        let since = chrono::Utc::now()
+        let _since = chrono::Utc::now()
             .checked_sub_signed(chrono::Duration::days(days as i64))
             .unwrap_or_default()
             .format("%Y-%m-%d")
             .to_string();
-        let until = chrono::Utc::now().format("%Y-%m-%d").to_string();
+        let _until = chrono::Utc::now().format("%Y-%m-%d").to_string();
 
         let json = self
             .get_insights(

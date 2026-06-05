@@ -687,6 +687,101 @@ impl SocialProvider for GithubProvider {
         })
     }
 
+    async fn get_recent_posts(
+        &self,
+        access_token: &str,
+        _internal_id: &str,
+        _limit: u32,
+    ) -> Result<Vec<ExternalPostData>, ProviderError> {
+        let repos = self.github_get(access_token, "/user/repos", Some(&[
+            ("per_page", "5"),
+            ("sort", "updated"),
+            ("direction", "desc"),
+        ])).await?;
+
+        let gists = self.github_get(access_token, "/gists", Some(&[
+            ("per_page", "5"),
+            ("direction", "desc"),
+        ])).await?;
+
+        let mut posts: Vec<ExternalPostData> = Vec::new();
+
+        if let Some(repos_arr) = repos.as_array() {
+            for repo in repos_arr {
+                let created_at = repo["created_at"].as_str()
+                    .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                    .map(|dt| dt.with_timezone(&chrono::Utc))
+                    .unwrap_or_else(chrono::Utc::now);
+                let repo_avatar = repo["owner"]["avatar_url"].as_str().map(String::from);
+                let mut media = Vec::new();
+                if let Some(avatar) = &repo_avatar {
+                    media.push(MediaAttachment {
+                        url: avatar.clone(),
+                        mime_type: "image/jpeg".to_string(),
+                        alt: repo["full_name"].as_str().map(String::from),
+                    });
+                }
+                posts.push(ExternalPostData {
+                    platform_post_id: repo["id"].as_u64().map(|id| id.to_string()).unwrap_or_default(),
+                    text: repo["description"].as_str().unwrap_or("").to_string(),
+                    author_name: None,
+                    author_handle: Some(repo["owner"]["login"].as_str().unwrap_or("").to_string()),
+                    author_avatar: repo_avatar,
+                    created_at,
+                    url: repo["html_url"].as_str().map(String::from),
+                    media,
+                    metadata: Some(serde_json::json!({
+                        "type": "repo",
+                        "name": repo["name"],
+                        "full_name": repo["full_name"],
+                        "language": repo["language"],
+                        "stars": repo["stargazers_count"],
+                    })),
+                });
+            }
+        }
+
+        if let Some(gists_arr) = gists.as_array() {
+            for gist in gists_arr {
+                let created_at = gist["created_at"].as_str()
+                    .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                    .map(|dt| dt.with_timezone(&chrono::Utc))
+                    .unwrap_or_else(chrono::Utc::now);
+                let files: Vec<String> = gist["files"].as_object()
+                    .map(|obj| obj.keys().cloned().collect())
+                    .unwrap_or_default();
+                let gist_avatar = gist["owner"]["avatar_url"].as_str().map(String::from);
+                let mut media = Vec::new();
+                if let Some(avatar) = &gist_avatar {
+                    media.push(MediaAttachment {
+                        url: avatar.clone(),
+                        mime_type: "image/jpeg".to_string(),
+                        alt: gist["description"].as_str().map(String::from),
+                    });
+                }
+                posts.push(ExternalPostData {
+                    platform_post_id: gist["id"].as_str().unwrap_or("").to_string(),
+                    text: gist["description"].as_str().unwrap_or("").to_string(),
+                    author_name: None,
+                    author_handle: None,
+                    author_avatar: gist_avatar,
+                    created_at,
+                    url: gist["html_url"].as_str().map(String::from),
+                    media,
+                    metadata: Some(serde_json::json!({
+                        "type": "gist",
+                        "files": files,
+                        "public": gist["public"],
+                    })),
+                });
+            }
+        }
+
+        posts.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        posts.truncate(_limit as usize);
+        Ok(posts)
+    }
+
     fn map_error(&self, body: &str, status: u16) -> Option<String> {
         if status == 401 {
             Some("Invalid GitHub token. Check GITHUB_TOKEN in your .env file.".into())

@@ -48,6 +48,7 @@ pub mod tools_tiktok;
 pub mod tools_whatsapp;
 mod tools_notifications;
 mod tools_webhooks;
+mod tools_feed;
 pub mod tools_wordpress;
 pub mod tools_youtube;
 pub mod tools_x;
@@ -2163,6 +2164,24 @@ impl SocialForgeMcpServer {
         params: Parameters<tools_analytics::AnalyticsPostInput>,
     ) -> Result<Json<McpJsonValue>, String> {
         tools_analytics::handle_analytics_get_post(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    // ── Feed Tools ──────────────────────────────────────
+
+    #[tool(description = "List imported external posts (unified feed). Cursor-paginated. Optionally filter by provider.")]
+    async fn feed_list(
+        &self,
+        params: Parameters<tools_feed::FeedListInput>,
+    ) -> Result<Json<tools_feed::FeedListOutput>, String> {
+        tools_feed::handle_feed_list(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Trigger immediate import of recent posts from all connected providers. Returns count of new posts imported.")]
+    async fn feed_import(
+        &self,
+        _params: Parameters<()>,
+    ) -> Result<Json<tools_feed::FeedImportOutput>, String> {
+        tools_feed::handle_feed_import(&self.state).await
     }
 
     // ── Tags Tools ──────────────────────────────────────────────────

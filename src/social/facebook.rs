@@ -421,14 +421,190 @@ impl SocialProvider for FacebookProvider {
         Ok(result)
     }
 
-    async fn fetch_page_info(
+    async fn get_recent_posts(
+        &self,
+        access_token: &str,
+        _internal_id: &str,
+        limit: u32,
+    ) -> Result<Vec<ExternalPostData>, ProviderError> {
+        // Use _internal_id as the page_id if provided (from a connected page integration),
+        // otherwise fall back to resolving from the token.
+        let page_id = if !_internal_id.is_empty() {
+            _internal_id.to_string()
+        } else {
+            self.resolve_page_id(access_token).await?
+        };
+
+        // Fetch page info for author details (name, handle, avatar)
+        let page_info = self.fetch_page_info(access_token, &page_id).await.ok();
+        let page_name = page_info.as_ref().map(|p| p.name.clone());
+        let page_handle = page_info.as_ref().and_then(|p| p.username.clone());
+        let page_avatar = page_info.as_ref().and_then(|p| p.picture.clone());
+
+        let json = self.get_page_feed(access_token, &page_id, limit, None, None).await?;
+
+        let mut posts = Vec::new();
+        if let Some(data) = json["data"].as_array() {
+            for item in data {
+                let post_id = item["id"].as_str().unwrap_or("").to_string();
+                let message = item["message"].as_str().unwrap_or("").to_string();
+                let story = item["story"].as_str().map(|s| s.to_string());
+                let content = if message.is_empty() { story.unwrap_or_default() } else { message };
+                let created_time = item["created_time"].as_str()
+                    .map(crate::social::common::parse_timestamp)
+                    .unwrap_or_else(chrono::Utc::now);
+
+                // Build media vector — for video attachments, make a separate API call
+                // to get the actual playable video URL instead of the thumbnail.
+                let mut media = Vec::new();
+                if let Some(arr) = item["attachments"]["data"].as_array() {
+                    for a in arr {
+                        let attach_type = a["type"].as_str().unwrap_or("");
+
+                        // Handle album/carousel → extract individual items from subattachments
+                        if attach_type == "album" || attach_type == "multiple" {
+                            if let Some(children) = a["subattachments"]["data"].as_array() {
+                                for child in children {
+                                    if let Some(m) = Self::extract_single_media(child) {
+                                        media.push(m);
+                                    }
+                                }
+                            }
+                            continue;
+                        }
+
+                        // Handle video: extract target.id and make a dedicated API call
+                        // to get the actual playable video URL.
+                        if attach_type.contains("video") || attach_type == "animated_video" {
+                            if let Some(video_id) = a["target"]["id"].as_str() {
+                                match self.get_video_source(access_token, video_id).await {
+                                    Ok(url_str) => {
+                                        media.push(MediaAttachment {
+                                            url: url_str,
+                                            mime_type: "video/mp4".into(),
+                                            alt: None,
+                                        });
+                                    }
+                                    Err(e) => {
+                                        tracing::warn!(
+                                            "Failed to fetch video source for {}: {e}",
+                                            video_id
+                                        );
+                                        // Fallback: use extract_single_media which will try media.source
+                                        if let Some(m) = Self::extract_single_media(a) {
+                                            media.push(m);
+                                        }
+                                    }
+                                }
+                            } else {
+                                // No target.id — fallback to extract_single_media
+                                if let Some(m) = Self::extract_single_media(a) {
+                                    media.push(m);
+                                }
+                            }
+                        } else {
+                            // Handle all other types (photo, share, etc.)
+                            if let Some(m) = Self::extract_single_media(a) {
+                                media.push(m);
+                            }
+                        }
+                    }
+                }
+
+                let permalink = item["permalink_url"].as_str().map(String::from);
+
+                posts.push(ExternalPostData {
+                    platform_post_id: post_id,
+                    text: content,
+                    author_name: page_name.clone(),
+                    author_handle: page_handle.clone(),
+                    author_avatar: page_avatar.clone(),
+                    created_at: created_time,
+                    url: permalink,
+                    media,
+                    metadata: None,
+                });
+            }
+        }
+        Ok(posts)
+    }
+
+    async fn get_post_engagement(
+        &self,
+        access_token: &str,
+        platform_post_id: &str,
+    ) -> Result<Option<serde_json::Value>, ProviderError> {
+        // get_page_post already requests comments.summary(true),reactions.summary(true)
+        let json = self.get_page_post(access_token, platform_post_id).await?;
+        Ok(Some(json))
+    }
+
+    async fn get_post_comments(
+        &self,
+        access_token: &str,
+        platform_post_id: &str,
+    ) -> Result<Vec<CommentData>, ProviderError> {
+        let json = self.get_post_comments_raw(access_token, platform_post_id).await?;
+
+        let mut comments = Vec::new();
+        if let Some(data) = json["data"].as_array() {
+            for item in data {
+                let id = item["id"].as_str().unwrap_or("").to_string();
+                let text = item["message"].as_str().unwrap_or("").to_string();
+                let created_at = item["created_time"]
+                    .as_str()
+                    .map(crate::social::common::parse_timestamp)
+                    .unwrap_or_else(chrono::Utc::now);
+
+                let author_name = item["from"]["name"].as_str().map(String::from);
+                let author_avatar = None; // Facebook comments don't include avatar in basic fields
+
+                // Parse nested replies if present
+                let replies = if let Some(reply_data) = item["comments"]["data"].as_array() {
+                    reply_data.iter().filter_map(|r| {
+                        let rid = r["id"].as_str()?;
+                        let rtext = r["message"].as_str().unwrap_or("");
+                        let rcreated = r["created_time"]
+                            .as_str()
+                            .map(crate::social::common::parse_timestamp)
+                            .unwrap_or_else(chrono::Utc::now);
+                        let rauthor_name = r["from"]["name"].as_str().map(String::from);
+                        Some(CommentData {
+                            id: rid.to_string(),
+                            author_name: rauthor_name,
+                            author_avatar: None,
+                            text: rtext.to_string(),
+                            created_at: rcreated,
+                            like_count: 0,
+                            replies: vec![],
+                        })
+                    }).collect()
+                } else {
+                    vec![]
+                };
+
+                comments.push(CommentData {
+                    id,
+                    author_name,
+                    author_avatar,
+                    text,
+                    created_at,
+                    like_count: 0, // Facebook comments API doesn't include like count by default
+                    replies,
+                });
+            }
+        }
+        Ok(comments)
+    }
+
+        async fn fetch_page_info(
         &self,
         access_token: &str,
         page_id: &str,
     ) -> Result<PageInfo, ProviderError> {
         let resp = self
             .http
-            .get(format!("{}/{page_id}?fields=id,name,picture.type(large)", self.graph_url()))
+            .get(format!("{}/{page_id}?fields=id,name,username,picture.type(large)", self.graph_url()))
             .query(&[("access_token", access_token)])
             .send()
             .await?;
@@ -473,7 +649,7 @@ impl FacebookProvider {
     ) -> Result<serde_json::Value, ProviderError> {
         let limit = limit.min(100);
         let mut url = format!(
-            "{}/{page_id}/feed?fields=message,created_time,story,attachments&limit={limit}",
+            "{}/{page_id}/feed?fields=message,created_time,story,permalink_url,attachments{{media{{source,image{{src}}}},type,url,title,target{{id}},subattachments{{media{{source,image{{src}}}},type,url,title,target{{id}}}}}}&limit={limit}",
             self.graph_url()
         );
         if let Some(s) = since {
@@ -526,8 +702,8 @@ impl FacebookProvider {
         }
     }
 
-    /// Get comments on a post.
-    pub async fn get_post_comments(
+    /// Get comments on a post (raw Graph API response).
+    pub async fn get_post_comments_raw(
         &self, access_token: &str, post_id: &str
     ) -> Result<serde_json::Value, ProviderError> {
         let url = format!(
@@ -688,6 +864,61 @@ impl FacebookProvider {
                 json["error"]["message"].as_str().unwrap_or("Facebook API error").to_string()
             ))
         }
+    }    /// Get the actual playable video source URL for a video ID.
+    /// Facebook's feed endpoint `media.source` often returns a thumbnail/preview.
+    /// This makes a dedicated call to `/{video_id}?fields=source,embeddable,format`
+    /// which returns the actual playable mp4 URL.
+    pub async fn get_video_source(
+        &self, access_token: &str, video_id: &str
+    ) -> Result<String, ProviderError> {
+        let url = format!(
+            "{}/{video_id}?fields=source,embeddable,format",
+            self.graph_url()
+        );
+        let resp = self.http.get(&url)
+            .header("Authorization", format!("Bearer {access_token}"))
+            .send().await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            // Try direct `source` field first
+            if let Some(source) = json["source"].as_str() {
+                if !source.is_empty() {
+                    return Ok(source.to_string());
+                }
+            }
+            // Fallback: pick the highest-quality format from the `format` array
+            if let Some(formats) = json["format"].as_array() {
+                if let Some(best) = formats.iter()
+                    .filter(|f| f["filetype"].as_str() == Some("mp4") && f["embeddable"].as_bool() == Some(true))
+                    .max_by_key(|f| f["quality"].as_str().unwrap_or(""))
+                {
+                    if let Some(url_str) = best["embed_url"].as_str().or_else(|| best["preview_url"].as_str()) {
+                        return Ok(url_str.to_string());
+                    }
+                }
+                // If no embeddable mp4, try any mp4
+                if let Some(best) = formats.iter()
+                    .filter(|f| f["filetype"].as_str() == Some("mp4"))
+                    .max_by_key(|f| f["quality"].as_str().unwrap_or(""))
+                {
+                    if let Some(url_str) = best["embed_url"].as_str().or_else(|| best["preview_url"].as_str()) {
+                        return Ok(url_str.to_string());
+                    }
+                }
+            }
+            Err(ProviderError::Api("No usable video source found in response".into()))
+        } else if status == 429 {
+            Err(ProviderError::RateLimited("Facebook API rate limit".into()))
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            Err(ProviderError::Api(
+                json["error"]["message"]
+                    .as_str().unwrap_or("Facebook API error")
+                    .to_string()
+            ))
+        }
     }
 
     /// React to a post (LIKE, LOVE, WOW, HAHA, SAD, ANGRY).
@@ -827,6 +1058,57 @@ impl FacebookProvider {
                 json["error"]["message"].as_str().unwrap_or("Facebook API error").to_string()
             ))
         }
+    }
+
+    /// Extract a single media attachment from a raw attachment JSON object.
+    /// Checks `media.source` first (which returns the actual video/photo URL),
+    /// falls back to `media.image.src` for thumbnails, then `url`.
+    /// Determines mime type from URL extension when possible.
+    fn extract_single_media(a: &serde_json::Value) -> Option<MediaAttachment> {
+        let attach_type = a["type"].as_str().unwrap_or("");
+        let is_video = attach_type.contains("video") || attach_type == "animated_video";
+
+        // Check `media.source` first: this is the actual source URL for both videos and images.
+        // Facebook returns `media.source` for video attachments and some image types.
+        if let Some(url) = a["media"]["source"].as_str() {
+            let mime = if is_video || url.contains(".mp4") || url.contains(".webm") || url.contains(".mov") {
+                "video/mp4"
+            } else if url.contains(".gif") {
+                "image/gif"
+            } else {
+                "image/jpeg"
+            };
+            return Some(MediaAttachment {
+                url: url.to_string(),
+                mime_type: mime.into(),
+                alt: None,
+            });
+        }
+
+        // Fallback to `media.image.src` (thumbnail / photo URL)
+        if let Some(url) = a["media"]["image"]["src"].as_str() {
+            return Some(MediaAttachment {
+                url: url.to_string(),
+                mime_type: "image/jpeg".into(),
+                alt: None,
+            });
+        }
+
+        // Fallback: use the generic attachment URL
+        if let Some(url) = a["url"].as_str() {
+            let mime = if url.contains(".mp4") || url.contains(".webm") || url.contains(".mov") {
+                "video/mp4"
+            } else {
+                "image/jpeg"
+            };
+            return Some(MediaAttachment {
+                url: url.to_string(),
+                mime_type: mime.into(),
+                alt: None,
+            });
+        }
+
+        None
     }
 
     /// Search for Facebook pages by query string.

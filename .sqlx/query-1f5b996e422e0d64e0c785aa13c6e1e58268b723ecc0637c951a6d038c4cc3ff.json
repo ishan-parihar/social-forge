@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT scheduled_at as \"scheduled_at!\" FROM posts\n               WHERE user_id = $1 AND state != 'error'\n               AND scheduled_at >= $2 AND scheduled_at <= $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "scheduled_at!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "1f5b996e422e0d64e0c785aa13c6e1e58268b723ecc0637c951a6d038c4cc3ff"
+}

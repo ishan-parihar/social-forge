@@ -228,6 +228,65 @@ impl SocialProvider for VkProvider {
         })
     }
 
+    async fn get_recent_posts(&self, access_token: &str, internal_id: &str, limit: u32) -> Result<Vec<ExternalPostData>, ProviderError> {
+        let owner_id = if internal_id.is_empty() { "" } else { internal_id };
+        let count = limit.min(100).to_string();
+        let count_ref: &str = &count;
+        let mut params = vec![("count", count_ref)];
+        if !owner_id.is_empty() {
+            params.push(("owner_id", owner_id));
+        }
+
+        let json = self.api_call("wall.get", access_token, params).await?;
+        let mut posts = Vec::new();
+
+        if let Some(items) = json["response"]["items"].as_array() {
+            for item in items {
+                let post_id = item["id"].as_i64().unwrap_or(0).to_string();
+                let text_val = item["text"].as_str().unwrap_or("").to_string();
+                let date_ts = item["date"].as_i64().unwrap_or(0);
+
+                // Extract media attachments
+                let mut media = Vec::new();
+                if let Some(attachments) = item["attachments"].as_array() {
+                    for att in attachments {
+                        if let Some(photo) = att["photo"].as_object() {
+                            if let Some(sizes) = photo["sizes"].as_array() {
+                                if let Some(largest) = sizes.last() {
+                                    if let Some(url) = largest["url"].as_str() {
+                                        media.push(url.to_string());
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                let posted_at = chrono::DateTime::from_timestamp(date_ts, 0)
+                    .unwrap_or_default();
+
+                let post_url = Some(format!("https://vk.com/wall{owner_id}_{post_id}"));
+                posts.push(ExternalPostData {
+                    platform_post_id: post_id,
+                    text: text_val,
+                    author_name: None,
+                    author_handle: None,
+                    author_avatar: None,
+                    media: media.into_iter().map(|u| MediaAttachment {
+                        url: u,
+                        mime_type: String::new(),
+                        alt: None,
+                    }).collect(),
+                    created_at: posted_at,
+                    url: post_url,
+                    metadata: None,
+                });
+            }
+        }
+
+        Ok(posts)
+    }
+
     /// Return the authenticated user as a single page.
     async fn pages(&self, access_token: &str) -> Result<Vec<PageInfo>, ProviderError> {
         let user_info = self

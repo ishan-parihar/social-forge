@@ -8,7 +8,6 @@ use serde_json::{json, Value};
 use uuid::Uuid;
 
 use crate::api::AppState;
-use crate::crypto;
 use crate::social::slack::SlackProvider;
 use crate::social::SocialProvider;
 

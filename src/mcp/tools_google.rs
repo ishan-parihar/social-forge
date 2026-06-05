@@ -13,7 +13,6 @@ use crate::social::youtube::YoutubeProvider;
 use crate::social::gmail::GmailProvider;
 use crate::social::calendar::CalendarProvider;
 use crate::social::drive::DriveProvider;
-use super::McpJsonValue;
 
 // ══════════════════════════════════════════════════════════════
 // SHARED HELPERS
@@ -450,7 +449,7 @@ pub struct GcalDeleteEventInput {
 
 pub async fn handle_goog_list_calendars(
     state: &AppState,
-    input: &GcalListCalendarsInput,
+    _input: &GcalListCalendarsInput,
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_goog_token(state, user_id).await?;

@@ -6,7 +6,6 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::api::AppState;
-use crate::crypto;
 use crate::social::threads::ThreadsProvider;
 use crate::social::SocialProvider;
 

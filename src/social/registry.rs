@@ -164,6 +164,12 @@ impl ProviderRegistry {
             providers.insert("github", Arc::new(github::GithubProvider::new(config)));
         }
 
+        // YouTube — dedicated provider for importing recent videos
+        // Uses YOUTUBE_CLIENT_ID / YOUTUBE_CLIENT_SECRET
+        if config.youtube_client_id.is_some() {
+            providers.insert("youtube", Arc::new(youtube::YoutubeProvider::new(config)));
+        }
+
         // Google Suite — unified provider for YouTube, Gmail, Calendar, Drive
         // Uses YOUTUBE_CLIENT_ID / YOUTUBE_CLIENT_SECRET for all Google OAuth scopes
         if config.youtube_client_id.is_some() {

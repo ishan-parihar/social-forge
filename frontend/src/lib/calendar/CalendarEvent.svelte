@@ -1,5 +1,6 @@
-<script lang="ts">
+  <script lang="ts">
   import type { CalendarEvent as CEvent } from "./types";
+  import { engagementIcon, engagementLabel, formatMetricCount } from "./engagement";
   import RepeatingBadge from "./RepeatingBadge.svelte";
   import PostHoverToolbar from "./PostHoverToolbar.svelte";
 
@@ -14,7 +15,7 @@
   let visibleTags = $derived((event.tags || []).slice(0, 2));
   let overflowCount = $derived((event.tags?.length || 0) - 2);
 
-  let isPast = $derived(event.date < todayStr());
+  let isPast = $derived(event.date ? event.date < todayStr() : false);
   function todayStr() {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -43,10 +44,31 @@
       <span class="event-time">{event.time || ""}</span>
     {/if}
     <span class="event-content">{event.title}</span>
+    {#if !compact && (event.likes != null || event.impressions != null)}
+      <span class="event-metrics">
+        {#if event.likes != null}
+          <span class="metric-item" title="{engagementLabel('likes', event.platform)}">
+            {engagementIcon('likes', event.platform)} {formatMetricCount(event.likes)}
+          </span>
+        {/if}
+        {#if event.impressions != null}
+          <span class="metric-item" title="{engagementLabel('impressions', event.platform)}">
+            {engagementIcon('impressions', event.platform)} {formatMetricCount(event.impressions)}
+          </span>
+        {/if}
+      </span>
+    {/if}
   </div>
 
   {#if !compact}
-    <div class="opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+    <div class="opacity-0 group-hover:opacity-100 transition-opacity duration-150 flex items-center gap-1">
+      {#if event.state === 'published' && event.postUrl}
+        <a href={event.postUrl} target="_blank" rel="noopener noreferrer"
+           class="text-[8px] text-indigo-400/60 hover:text-indigo-300 px-1 py-0.5 rounded transition-colors"
+           title="View original post" onclick={(e) => e.stopPropagation()}>
+          🔗
+        </a>
+      {/if}
       <PostHoverToolbar eventId={event.id} {onDuplicate} {onStats} {onDelete} />
     </div>
   {/if}
@@ -67,4 +89,6 @@
   .tag-overflow { font-size: 0.5625rem; opacity: 0.6; margin-left: 1px; }
   .event-time { opacity: 0.7; flex-shrink: 0; }
   .event-content { overflow: hidden; text-overflow: ellipsis; }
+  .event-metrics { display: flex; align-items: center; gap: 0.25rem; flex-shrink: 0; margin-left: auto; }
+  .metric-item { font-size: 0.5625rem; opacity: 0.6; white-space: nowrap; }
 </style>

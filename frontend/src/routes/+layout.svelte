@@ -11,6 +11,7 @@
   const nav = [
     { href: '/', label: 'Dashboard', icon: '▦' },
     { href: '/calendar', label: 'Calendar', icon: '📅' },
+    { href: '/feed', label: 'Feed', icon: '📰' },
     { href: '/analytics', label: 'Analytics', icon: '📊' },
     { href: '/posts', label: 'Posts', icon: '📄' },
     { href: '/channels', label: 'Channels', icon: '🔗' },

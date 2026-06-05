@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT MAX(scheduled_at) FROM posts\n               WHERE user_id = $1 AND state != 'error'",
+  "query": "SELECT MAX(scheduled_at) FROM posts\n                   WHERE user_id = $1 AND state != 'error'",
   "describe": {
     "columns": [
       {
@@ -18,5 +18,5 @@
       null
     ]
   },
-  "hash": "f466783e7ddb6d48708d73670c9b31a75f81733b44334040e90613b98242c165"
+  "hash": "86e0085fd89bdccc00d9741a4e1863d0837bce9611213d6ebf804cc2eb6a4169"
 }

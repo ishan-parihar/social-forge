@@ -7,7 +7,6 @@ use serde_json::json;
 use uuid::Uuid;
 
 use crate::api::AppState;
-use crate::crypto;
 use crate::social::medium::MediumProvider;
 use crate::social::{PostContent, SocialProvider};
 
@@ -99,7 +98,7 @@ pub async fn handle_md_create_post(
 
 pub async fn handle_md_list_posts(
     state: &AppState,
-    input: &MdListPostsInput,
+    _input: &MdListPostsInput,
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_medium_token(state, user_id).await?;
