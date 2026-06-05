@@ -336,3 +336,102 @@ async fn mark_post_error(db: &PgPool, post_id: uuid::Uuid, error: &str) {
         tracing::error!("Failed to mark post {post_id} as error: {e}");
     }
 }
+
+// ── Analytics Cache Refresh ──────────────────────────────────
+
+const ANALYTICS_REFRESH_INTERVAL_SECS: u64 = 1800; // 30 minutes
+
+/// Background analytics cache refresh: polls every 30 minutes,
+/// iterates all users + integrations, fetches account-level analytics,
+/// and upserts them into the analytics_cache.
+/// Also cleans up expired cache entries each cycle.
+pub async fn run_analytics_cache_refresh(
+    db: PgPool,
+    providers: Arc<ProviderRegistry>,
+    mut shutdown: tokio::sync::watch::Receiver<bool>,
+) {
+    tracing::info!(
+        "Analytics cache refresher started (interval: {ANALYTICS_REFRESH_INTERVAL_SECS}s)"
+    );
+    let mut interval = tokio::time::interval(Duration::from_secs(ANALYTICS_REFRESH_INTERVAL_SECS));
+    interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+    loop {
+        tokio::select! {
+            _ = shutdown.changed() => {
+                if *shutdown.borrow() {
+                    tracing::info!("Analytics cache refresher shutting down...");
+                    break;
+                }
+            }
+            _ = interval.tick() => {
+                refresh_cache_cycle(&db, &providers).await;
+            }
+        }
+    }
+}
+
+async fn refresh_cache_cycle(db: &PgPool, providers: &ProviderRegistry) {
+    // Clean up expired entries first
+    if let Ok(count) = queries::delete_expired_analytics_cache(db).await {
+        if count > 0 {
+            tracing::info!("Cleaned up {count} expired analytics cache entries");
+        }
+    }
+
+    let users = match queries::list_all_users(db).await {
+        Ok(users) => users,
+        Err(e) => {
+            tracing::error!("Failed to list users for analytics refresh: {e}");
+            return;
+        }
+    };
+
+    for user in &users {
+        let integrations = match queries::list_integrations(db, user.id).await {
+            Ok(integrations) => integrations,
+            Err(e) => {
+                tracing::warn!("Failed to list integrations for user {}: {e}", user.id);
+                continue;
+            }
+        };
+
+        for integration in &integrations {
+            let provider = match providers.get(&integration.provider_identifier) {
+                Some(p) => p,
+                None => continue,
+            };
+
+            match provider
+                .analytics(&integration.access_token, &integration.internal_id, 7)
+                .await
+            {
+                Ok(analytics) => {
+                    let data = serde_json::to_value(&analytics).unwrap_or(serde_json::Value::Null);
+                    if let Err(e) = queries::upsert_analytics_cache(
+                        db,
+                        user.id,
+                        &integration.provider_identifier,
+                        None,
+                        &data,
+                    )
+                    .await
+                    {
+                        tracing::warn!(
+                            "Failed to cache analytics for user {} provider {}: {e}",
+                            user.id,
+                            integration.provider_identifier
+                        );
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        "Failed to fetch analytics for user {} provider {}: {e}",
+                        user.id,
+                        integration.provider_identifier
+                    );
+                }
+            }
+        }
+    }
+}

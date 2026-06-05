@@ -41,6 +41,11 @@ pub struct CalendarPost {
     pub group_id: Option<Uuid>,
     pub first_comment: Option<String>,
     pub sequence: i32,
+    // Engagement metrics (optional — only populated when analytics_cache has data)
+    pub likes: Option<i64>,
+    pub comments: Option<i64>,
+    pub shares: Option<i64>,
+    pub impressions: Option<i64>,
 }
 
 #[derive(Debug, Serialize)]
@@ -68,20 +73,18 @@ pub async fn get(
     let end = parse_date_or_datetime(&query.end)
         .ok_or_else(|| AppError::BadRequest("Invalid end date".into()))?;
 
-    let posts = queries::get_posts_by_date_range(&state.db, auth.user_id, start, end).await?;
+    let posts = queries::get_calendar_posts_with_metrics(&state.db, auth.user_id, start, end).await?;
 
     let mut day_map: std::collections::BTreeMap<String, Vec<CalendarPost>> = std::collections::BTreeMap::new();
     for p in posts {
-        let date_key = p
-            .scheduled_at
-            .map(|d| d.format("%Y-%m-%d").to_string())
-            .unwrap_or_else(|| "unscheduled".into());
-
-        let integration_name = if let Ok(Some(integ)) = queries::get_integration(&state.db, p.integration_id, auth.user_id).await {
-            integ.provider_name
+        // Use published_at for published posts, scheduled_at for queued/draft posts
+        let date_key = if p.state == "published" && p.published_at.is_some() {
+            p.published_at.map(|d| d.format("%Y-%m-%d").to_string())
         } else {
-            "Unknown".into()
-        };
+            p.scheduled_at.map(|d| d.format("%Y-%m-%d").to_string())
+        }.unwrap_or_else(|| "unscheduled".into());
+
+        let integration_name = p.integration_name.unwrap_or_else(|| "Unknown".into());
 
         let tags = queries::get_tags_for_post(&state.db, p.id, auth.user_id)
             .await
@@ -100,7 +103,7 @@ pub async fn get(
             id: p.id,
             integration_id: p.integration_id,
             integration_name,
-            state: p.state.to_string(),
+            state: p.state,
             content: p.content,
             title: p.title,
             media: p.media,
@@ -115,6 +118,10 @@ pub async fn get(
             group_id: p.group_id,
             first_comment: p.first_comment,
             sequence: p.sequence,
+            likes: p.likes,
+            comments: p.comments,
+            shares: p.shares,
+            impressions: p.impressions,
         });
     }
 

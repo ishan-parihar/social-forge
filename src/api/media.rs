@@ -3,16 +3,15 @@
 
 use axum::{
     body::{Body, HttpBody},
-    extract::{Path, Query, State},
+    extract::{Path, State},
     http::{header, Response},
     Json,
 };
 use axum_extra::extract::Multipart;
-use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::auth::middleware::AuthenticatedUser;
-use crate::db::models::{MediaEntry, MediaPublic};
+use crate::db::models::MediaPublic;
 use crate::db::queries;
 use crate::error::AppError;
 

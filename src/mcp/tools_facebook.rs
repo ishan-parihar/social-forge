@@ -9,6 +9,7 @@ use uuid::Uuid;
 use crate::api::AppState;
 use crate::crypto;
 use crate::social::facebook::FacebookProvider;
+use crate::social::SocialProvider;
 
 // ── Input Types ───────────────────────────────────────────────
 

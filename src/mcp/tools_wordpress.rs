@@ -7,7 +7,6 @@ use serde_json::json;
 use uuid::Uuid;
 
 use crate::api::AppState;
-use crate::crypto;
 use crate::social::wordpress::WordPressProvider;
 use crate::social::{PostContent, SocialProvider};
 
@@ -145,7 +144,7 @@ pub async fn handle_wp_get_post(
 
 pub async fn handle_wp_list_categories(
     state: &AppState,
-    input: &WpListCategoriesInput,
+    _input: &WpListCategoriesInput,
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_wordpress_token(state, user_id).await?;

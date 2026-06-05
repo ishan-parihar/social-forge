@@ -249,6 +249,89 @@ impl SocialProvider for MediumProvider {
         Err(ProviderError::Api("Medium does not support commenting via API".into()))
     }
 
+    async fn get_recent_posts(
+        &self,
+        access_token: &str,
+        _internal_id: &str,
+        _limit: u32,
+    ) -> Result<Vec<ExternalPostData>, ProviderError> {
+        let author_id = self.get_author_id(access_token).await?;
+        let limit = _limit.min(100);
+        let resp = self
+            .client
+            .get(format!("{MEDIUM_API_BASE}/users/{author_id}/posts"))
+            .header("Authorization", format!("Bearer {access_token}"))
+            .query(&[("limit", limit.to_string())])
+            .send()
+            .await?;
+
+        let status_code = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+
+        if !status_code.is_success() {
+            let msg = json["errors"][0]["message"]
+                .as_str()
+                .unwrap_or("Failed to fetch Medium posts")
+                .to_string();
+            return Err(ProviderError::Api(msg));
+        }
+
+        let posts: Vec<ExternalPostData> = json["data"].as_array()
+            .map(|arr| {
+                arr.iter().map(|p| {
+                    let created_at = p["createdAt"].as_u64()
+                        .and_then(|ts| {
+                            chrono::DateTime::from_timestamp(ts as i64 / 1000, 0)
+                        })
+                        .unwrap_or_else(chrono::Utc::now);
+                    let mut media = Vec::new();
+                    // Medium v1 API doesn't provide post images directly,
+                    // but some response formats include imageUrl or virtuals.previewImage
+                    if let Some(img_url) = p["imageUrl"].as_str() {
+                        if !img_url.is_empty() {
+                            media.push(MediaAttachment {
+                                url: img_url.to_string(),
+                                mime_type: "image/jpeg".to_string(),
+                                alt: p["title"].as_str().map(String::from),
+                            });
+                        }
+                    } else if let Some(img_id) = p["virtuals"]["previewImage"]["imageId"].as_str() {
+                        let img_url = format!("https://miro.medium.com/1/{img_id}");
+                        media.push(MediaAttachment {
+                            url: img_url,
+                            mime_type: "image/jpeg".to_string(),
+                            alt: p["title"].as_str().map(String::from),
+                        });
+                    }
+                    ExternalPostData {
+                        platform_post_id: p["id"].as_str().unwrap_or("").to_string(),
+                        text: p["content"].as_str()
+                            .or_else(|| p["body"].as_str())
+                            .unwrap_or("")
+                            .to_string(),
+                        author_name: p["author"]["name"].as_str().map(String::from),
+                        author_handle: p["author"]["username"].as_str().map(String::from),
+                        author_avatar: p["author"]["image"].as_str().map(String::from),
+                        created_at,
+                        url: p["url"].as_str().map(String::from),
+                        media,
+                        metadata: Some(serde_json::json!({
+                            "title": p["title"],
+                            "subtitle": p["subtitle"],
+                            "tags": p["tags"],
+                            "reading_time": p["readingTime"],
+                            "claps": p["claps"],
+                            "responses": p["responses"],
+                            "publication_id": p["publicationId"],
+                        })),
+                    }
+                }).collect()
+            })
+            .unwrap_or_default();
+
+        Ok(posts)
+    }
+
     fn map_error(&self, body: &str, status: u16) -> Option<String> {
         if status == 401 {
             Some("Invalid Medium access token. Check MEDIUM_ACCESS_TOKEN in .env.".into())

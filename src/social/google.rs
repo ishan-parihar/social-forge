@@ -1319,7 +1319,7 @@ impl SocialProvider for GoogleProvider {
         })
     }
 
-    fn map_error(&self, body: &str, status: u16) -> Option<String> {
+    fn map_error(&self, _body: &str, status: u16) -> Option<String> {
         if status == 401 {
             Some("Google token expired. Re-authenticate via Google OAuth.".into())
         } else if status == 403 {

@@ -375,6 +375,56 @@ impl SocialProvider for PinterestProvider {
         ))
     }
 
+    async fn get_recent_posts(&self, access_token: &str, _internal_id: &str, limit: u32) -> Result<Vec<ExternalPostData>, ProviderError> {
+        let boards = self.pages(access_token).await?;
+        let mut posts = Vec::new();
+        let max_pins = (limit / 5).max(1).min(10);
+
+        for board in boards.iter().take(max_pins as usize) {
+            let pins = self.get_board_pins(access_token, &board.id, limit.min(50)).await?;
+            if let Some(items) = pins["items"].as_array() {
+                for item in items {
+                    let pin_id = item["id"].as_str().unwrap_or("").to_string();
+                    let description = item["description"].as_str().unwrap_or("").to_string();
+                    let title = item["title"].as_str().map(|s| s.to_string());
+                    let media_url = item["media"]["images"]["originals"]["url"]
+                        .as_str()
+                        .map(|s| s.to_string());
+                    let link = item["link"].as_str().map(|s| s.to_string());
+                    let created_at = item["created_at"].as_str().unwrap_or("");
+
+                    let posted_at = crate::social::common::parse_timestamp(created_at);
+
+                    let post_url = link.or_else(|| {
+                        Some(format!("https://www.pinterest.com/pin/{}", item["id"].as_str().unwrap_or("")))
+                    });
+
+                    posts.push(ExternalPostData {
+                        platform_post_id: pin_id,
+                        text: description,
+                        author_name: None,
+                        author_handle: None,
+                        author_avatar: None,
+                        media: media_url.into_iter().map(|u| MediaAttachment {
+                            url: u,
+                            mime_type: String::new(),
+                            alt: None,
+                        }).collect(),
+                        created_at: posted_at,
+                        url: post_url,
+                        metadata: title.map(|t| serde_json::json!({"title": t})),
+                    });
+                }
+            }
+        }
+
+        // Sort by posted_at descending, take top 20
+        posts.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        posts.truncate(20);
+
+        Ok(posts)
+    }
+
     async fn publish(
         &self,
         access_token: &str,

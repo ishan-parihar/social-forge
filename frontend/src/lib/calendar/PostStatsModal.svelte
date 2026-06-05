@@ -1,5 +1,6 @@
 <script lang="ts">
   import { analyticsApi } from "$lib/api/analytics";
+  import { engagementIcon, engagementLabel, formatMetricCount } from "./engagement";
   import type { AnalyticsDataPoint } from "$lib/api/analytics";
 
   let { postId, postTitle, onclose }: {
@@ -51,10 +52,10 @@
   let maxComments = $derived(Math.max(...chartData.map(d => d.comments), 1));
 
   let metricCards = $derived<{ label: string; icon: string; value: number; color: string; key: keyof AnalyticsDataPoint }[]>([
-    { label: "Impressions", icon: "\u{1F441}\uFE0F", value: totalImpressions, color: "#818cf8", key: "impressions" },
-    { label: "Likes", icon: "\u2764\uFE0F", value: totalLikes, color: "#f472b6", key: "likes" },
-    { label: "Shares", icon: "\u{1F504}", value: totalShares, color: "#34d399", key: "shares" },
-    { label: "Comments", icon: "\u{1F4AC}", value: totalComments, color: "#fbbf24", key: "comments" },
+    { label: "Impressions", icon: '👁️', value: totalImpressions, color: "#818cf8", key: "impressions" },
+    { label: "Likes", icon: '❤️', value: totalLikes, color: "#f472b6", key: "likes" },
+    { label: "Shares", icon: '🔄', value: totalShares, color: "#34d399", key: "shares" },
+    { label: "Comments", icon: '💬', value: totalComments, color: "#fbbf24", key: "comments" },
   ]);
 
   function shortDate(dateStr: string): string {

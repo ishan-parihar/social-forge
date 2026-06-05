@@ -257,6 +257,8 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
         Command::LinkedinPage { action } => handle_linkedin_page(action).await,
         Command::Facebook { action } => handle_facebook(action).await,
         Command::Instagram { action } => handle_instagram(action).await,
+        Command::Import { provider, count } => handle_import(&provider, count).await,
+        Command::Feed { provider, limit } => handle_feed(provider.as_deref(), limit).await,
     }
 }
 
@@ -289,7 +291,75 @@ fn handle_init() -> anyhow::Result<()> {
             "message": "Config already exists. Edit it with your preferred editor."
         }));
     } else {
-        std::fs::write(&env_path, include_str!("../../.env.example"))?;
+        let template = r#"# ─── Server ──────────────────────────────────────────────
+DATABASE_URL=postgres://social_forge:social_forge@localhost:5432/social_forge
+JWT_SECRET=change-me-to-a-random-secret
+
+# ─── X/Twitter ────────────────────────────────────────────
+# X_AUTH_TOKEN=
+# X_CT0=
+
+# ─── Reddit ───────────────────────────────────────────────
+# REDDIT_CLIENT_ID=
+# REDDIT_CLIENT_SECRET=
+# REDDIT_REDIRECT_URI=http://localhost:3444/api/auth/reddit/callback
+
+# ─── LinkedIn ─────────────────────────────────────────────
+# LINKEDIN_CLIENT_ID=
+# LINKEDIN_CLIENT_SECRET=
+# LINKEDIN_REDIRECT_URI=http://localhost:3444/api/auth/linkedin/callback
+
+# ─── Facebook / Instagram / Threads ───────────────────────
+# META_CLIENT_ID=
+# META_CLIENT_SECRET=
+# META_REDIRECT_URI=http://localhost:3444/api/auth/meta/callback
+
+# ─── GitHub ───────────────────────────────────────────────
+# GITHUB_TOKEN=
+
+# ─── Dev.to ───────────────────────────────────────────────
+# DEVTO_API_KEY=
+
+# ─── Mastodon ─────────────────────────────────────────────
+# MASTODON_ACCESS_TOKEN=
+# MASTODON_INSTANCE_URL=
+
+# ─── Medium ───────────────────────────────────────────────
+# MEDIUM_TOKEN=
+
+# ─── WordPress ────────────────────────────────────────────
+# WORDPRESS_SITE_URL=
+# WORDPRESS_USERNAME=
+# WORDPRESS_PASSWORD=
+
+# ─── YouTube ──────────────────────────────────────────────
+# YOUTUBE_API_KEY=
+
+# ─── Pinterest ────────────────────────────────────────────
+# PINTEREST_APP_ID=
+# PINTEREST_APP_SECRET=
+
+# ─── TikTok ───────────────────────────────────────────────
+# TIKTOK_CLIENT_KEY=
+# TIKTOK_CLIENT_SECRET=
+
+# ─── Hashnode ─────────────────────────────────────────────
+# HASHNODE_PAT=
+
+# ─── VK ───────────────────────────────────────────────────
+# VK_CLIENT_ID=
+# VK_CLIENT_SECRET=
+
+# ─── Bluesky ──────────────────────────────────────────────
+# BLUESKY_IDENTIFIER=
+# BLUESKY_PASSWORD=
+
+# ─── Telegram ─────────────────────────────────────────────
+# TELEGRAM_API_ID=
+# TELEGRAM_API_HASH=
+# TELEGRAM_PHONE=
+"#;
+        std::fs::write(&env_path, template)?;
         output_json(&serde_json::json!({
             "status": "created",
             "path": env_path.display().to_string(),
@@ -741,6 +811,83 @@ async fn handle_facebook(action: FacebookAction) -> anyhow::Result<()> {
         Ok(v) => output_json(&v),
         Err(e) => return output_error(&e),
     }
+    Ok(())
+}
+
+// ── Import Handler ───────────────────────────────────────────
+
+async fn handle_import(provider_name: &str, count: u32) -> anyhow::Result<()> {
+    let state = init_state().await?;
+    let user_id = resolve_user(&state).await?;
+    let integration = find_integration(&state, user_id, provider_name).await?;
+    let token = state.token_key.as_ref()
+        .and_then(|key| crypto::decrypt_string(&integration.access_token, key).ok())
+        .unwrap_or_else(|| integration.access_token.clone());
+
+    let provider = state.providers.get(provider_name)
+        .ok_or_else(|| anyhow::anyhow!("Provider '{}' not found in registry", provider_name))?;
+
+    let posts = provider.get_recent_posts(&token, &integration.internal_id, count).await
+        .map_err(|e| anyhow::anyhow!("Failed to get posts from {provider_name}: {e}"))?;
+
+    let mut imported = 0u32;
+    for post in &posts {
+        let media_val = serde_json::to_value(&post.media).unwrap_or_default();
+        let metadata_val = post.metadata.clone().unwrap_or_default();
+        match db::queries::insert_external_post(
+            &state.db,
+            user_id,
+            provider_name,
+            &post.platform_post_id,
+            &post.text,
+            post.author_name.as_deref(),
+            post.author_handle.as_deref(),
+            post.author_avatar.as_deref(),
+            post.created_at,
+            post.url.as_deref(),
+            &media_val,
+            &metadata_val,
+        )
+        .await
+        {
+            Ok(Some(_)) => imported += 1,
+            Ok(None) => {}
+            Err(e) => {
+                tracing::warn!("Failed to import post {}: {e}", post.platform_post_id);
+            }
+        }
+    }
+
+    output_json(&serde_json::json!({
+        "provider": provider_name,
+        "imported": imported,
+        "total": posts.len(),
+        "posts": posts,
+    }));
+    Ok(())
+}
+
+// ── Feed Handler ────────────────────────────────────────────
+
+async fn handle_feed(provider: Option<&str>, limit: u32) -> anyhow::Result<()> {
+    let state = init_state().await?;
+    let user_id = resolve_user(&state).await?;
+    let limit = limit.min(100) as i64;
+
+    let posts = crate::db::queries::list_all_external_posts(
+        &state.db,
+        user_id,
+        provider,
+        None,
+        limit,
+    )
+    .await?;
+
+    output_json(&serde_json::json!({
+        "provider": provider,
+        "count": posts.len(),
+        "posts": posts,
+    }));
     Ok(())
 }
 

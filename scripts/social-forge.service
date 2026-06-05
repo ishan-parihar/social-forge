@@ -1,0 +1,19 @@
+[Unit]
+Description=Social-Forge API Server
+Documentation=https://github.com/ishan-parihar/social-forge
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ishanp
+Group=ishanp
+ExecStart=/usr/local/bin/social-forge-start.sh
+Restart=on-failure
+RestartSec=10s
+TimeoutStartSec=300
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

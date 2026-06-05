@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, user_id, integration_id, state as \"state: PostState\",\n            content, title, media, settings, scheduled_at, published_at,\n            platform_post_id, platform_post_url, error_message,\n            created_at, updated_at,\n            repeat_interval_days, repeat_end_date, group_id\n          FROM posts WHERE user_id = $1\n          ORDER BY scheduled_at DESC NULLS LAST, created_at DESC\n          LIMIT $2 OFFSET $3",
+  "query": "INSERT INTO posts (user_id, integration_id, title, content, media, settings, scheduled_at, state, repeat_interval_days, repeat_end_date, group_id)\n               SELECT p.user_id, p.integration_id, p.title, p.content, p.media, p.settings, $1, p.state, NULL::int4, NULL::timestamptz, $3\n               FROM posts p WHERE p.id = $2 AND p.user_id = $4\n               RETURNING id, user_id, integration_id, state as \"state: PostState\",\n                 content, title, media, settings, scheduled_at, published_at,\n                 platform_post_id, platform_post_url, error_message,\n                 created_at, updated_at,\n                 repeat_interval_days, repeat_end_date, group_id,\n                 first_comment, sequence",
   "describe": {
     "columns": [
       {
@@ -104,13 +104,24 @@
         "ordinal": 17,
         "name": "group_id",
         "type_info": "Uuid"
+      },
+      {
+        "ordinal": 18,
+        "name": "first_comment",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 19,
+        "name": "sequence",
+        "type_info": "Int4"
       }
     ],
     "parameters": {
       "Left": [
+        "Timestamptz",
         "Uuid",
-        "Int8",
-        "Int8"
+        "Uuid",
+        "Uuid"
       ]
     },
     "nullable": [
@@ -131,8 +142,10 @@
       false,
       true,
       true,
-      true
+      true,
+      true,
+      false
     ]
   },
-  "hash": "3fd59599b0360bf465148afb2ef125365d4891b6510ace97db37a567af822f8b"
+  "hash": "fe2bed83caa67abeea29990e42487d48d22c26e3da3a189c0552ef357ec877e5"
 }

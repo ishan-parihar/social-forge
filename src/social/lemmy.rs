@@ -304,6 +304,76 @@ impl SocialProvider for LemmyProvider {
         ))
     }
 
+    async fn get_recent_posts(
+        &self,
+        access_token: &str,
+        _internal_id: &str,
+        _limit: u32,
+    ) -> Result<Vec<ExternalPostData>, ProviderError> {
+        let (api_key, instance_url) = self.parse_creds(access_token);
+        if api_key.is_empty() {
+            return Err(ProviderError::Auth("Invalid Lemmy credentials".into()));
+        }
+
+        let url = format!("{}/api/v3/post/list?limit={}&auth={}",
+            instance_url.trim_end_matches('/'), _limit, api_key);
+        let resp = self.http.get(&url)
+            .header("Authorization", format!("Bearer {}", api_key))
+            .send().await?;
+
+        let status_code = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        let json: serde_json::Value = serde_json::from_str(&body).unwrap_or(serde_json::Value::Null);
+
+        if !status_code.is_success() {
+            let msg = json["error"].as_str().unwrap_or(&body).to_string();
+            return Err(ProviderError::Api(format!("Lemmy API error ({}): {}", status_code, msg)));
+        }
+
+        let posts: Vec<ExternalPostData> = json["posts"].as_array()
+            .map(|arr| {
+                arr.iter().filter_map(|entry| {
+                    let p = &entry["post"];
+                    let created_at = p["published"].as_str()
+                        .and_then(|t| chrono::DateTime::parse_from_rfc3339(t).ok())
+                        .map(|dt| dt.with_timezone(&chrono::Utc))
+                        .unwrap_or_else(chrono::Utc::now);
+                    let community = entry["community"].as_object();
+                    let author_name = community
+                        .and_then(|c| c["title"].as_str())
+                        .or_else(|| community.and_then(|c| c["name"].as_str()))
+                        .map(String::from);
+                    let author_handle = community.and_then(|c| c["actor_id"].as_str()
+                        .map(|s| s.trim_start_matches("https://").trim_start_matches("http://").to_string()));
+
+                    let post_id = p["id"].as_u64().map(|id| id.to_string()).unwrap_or_default();
+                    if post_id.is_empty() { return None; }
+
+                    Some(ExternalPostData {
+                        platform_post_id: post_id,
+                        text: p["body"].as_str().unwrap_or("").to_string(),
+                        author_name,
+                        author_handle,
+                        author_avatar: None,
+                        created_at,
+                        url: p["ap_id"].as_str().map(String::from),
+                        media: vec![],
+                        metadata: Some(serde_json::json!({
+                            "title": p["name"],
+                            "community_name": community.and_then(|c| c["name"].as_str()),
+                            "score": p["score"],
+                            "comments": p["comments"],
+                            "upvotes": p["upvotes"],
+                            "downvotes": p["downvotes"],
+                        })),
+                    })
+                }).collect()
+            })
+            .unwrap_or_default();
+
+        Ok(posts)
+    }
+
     fn map_error(&self, _body: &str, status: u16) -> Option<String> {
         if status == 401 {
             Some("Invalid Lemmy API key. Check your credentials and re-connect.".into())

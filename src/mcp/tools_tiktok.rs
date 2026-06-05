@@ -7,7 +7,6 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::api::AppState;
-use crate::crypto;
 use crate::social::tiktok::TikTokProvider;
 use crate::social::SocialProvider;
 

@@ -32,7 +32,7 @@ impl DiscordProvider {
 
     pub async fn get_channel(
         &self,
-        access_token: &str,
+        _access_token: &str,
         channel_id: &str,
     ) -> Result<serde_json::Value, ProviderError> {
         let resp = self
@@ -58,7 +58,7 @@ impl DiscordProvider {
 
     pub async fn get_channel_messages(
         &self,
-        access_token: &str,
+        _access_token: &str,
         channel_id: &str,
         limit: u32,
     ) -> Result<serde_json::Value, ProviderError> {
@@ -88,7 +88,7 @@ impl DiscordProvider {
 
     pub async fn get_guild(
         &self,
-        access_token: &str,
+        _access_token: &str,
         guild_id: &str,
     ) -> Result<serde_json::Value, ProviderError> {
         let resp = self
@@ -114,7 +114,7 @@ impl DiscordProvider {
 
     pub async fn get_thread_members(
         &self,
-        access_token: &str,
+        _access_token: &str,
         thread_id: &str,
     ) -> Result<serde_json::Value, ProviderError> {
         let resp = self

@@ -2,6 +2,7 @@
 // Typed SQL query functions using sqlx.
 
 use chrono::{DateTime, Utc};
+use serde::Serialize;
 use uuid::Uuid;
 
 use super::models::*;
@@ -141,6 +142,22 @@ pub async fn list_integrations(
                 refresh_needed, root_internal_id, posting_times, auth_method, created_at, updated_at
          FROM integrations WHERE user_id = $1 ORDER BY created_at DESC",
         user_id,
+    )
+    .fetch_all(pool)
+    .await
+}
+
+/// List all non-disabled integrations across all users
+pub async fn list_all_integrations_across_users(
+    pool: &PgPool,
+) -> Result<Vec<Integration>, sqlx::Error> {
+    sqlx::query_as!(
+        Integration,
+        "SELECT id, user_id, provider_identifier, provider_name, internal_id,
+                access_token, refresh_token, token_expires_at,
+                profile_name, profile_picture, profile_url, disabled,
+                refresh_needed, root_internal_id, posting_times, auth_method, created_at, updated_at
+         FROM integrations WHERE disabled = false ORDER BY user_id, provider_identifier",
     )
     .fetch_all(pool)
     .await
@@ -733,6 +750,50 @@ pub async fn get_posts_by_date_range(
         start,
         end,
     )
+    .fetch_all(pool)
+    .await
+}
+
+/// Get posts for a date range with engagement metrics from analytics_cache
+pub async fn get_calendar_posts_with_metrics(
+    pool: &PgPool,
+    user_id: Uuid,
+    start_date: DateTime<Utc>,
+    end_date: DateTime<Utc>,
+) -> Result<Vec<CalendarPostWithMetrics>, sqlx::Error> {
+    sqlx::query_as::<_, CalendarPostWithMetrics>(
+        r#"SELECT
+           p.id, p.user_id, p.integration_id,
+           p.state::text as state,
+           p.content, p.title, p.media,
+           p.scheduled_at, p.published_at,
+           p.platform_post_id, p.platform_post_url,
+           p.error_message,
+           p.created_at,
+           p.repeat_interval_days, p.repeat_end_date,
+           p.group_id, p.first_comment, p.sequence,
+           i.provider_name as integration_name,
+           (ac.data->>'likes')::bigint as likes,
+           (ac.data->>'comments')::bigint as comments,
+           (ac.data->>'shares')::bigint as shares,
+           (ac.data->>'impressions')::bigint as impressions
+         FROM posts p
+         LEFT JOIN integrations i ON p.integration_id = i.id
+         LEFT JOIN analytics_cache ac ON p.platform_post_id = ac.platform_post_id AND p.user_id = ac.user_id
+         WHERE p.user_id = $1
+           AND (
+             -- Queued/draft posts: filter by scheduled_at
+             (p.state != 'published' AND p.scheduled_at >= $2 AND p.scheduled_at <= $3)
+             OR
+             -- Published posts: filter by published_at
+             (p.state = 'published' AND p.published_at >= $2 AND p.published_at <= $3)
+           )
+         ORDER BY
+           CASE WHEN p.state = 'published' THEN p.published_at ELSE p.scheduled_at END ASC"#,
+    )
+    .bind(user_id)
+    .bind(start_date)
+    .bind(end_date)
     .fetch_all(pool)
     .await
 }
@@ -1412,6 +1473,219 @@ pub async fn delete_notification(
 }
 
 // ══════════════════════════════════════════════════════════════
+// POST ENGAGEMENT
+// ══════════════════════════════════════════════════════════════
+
+/// Upsert post_engagement for an external post.
+/// Inserts a new row or updates the existing one on conflict (post_id).
+pub async fn upsert_post_engagement(
+    pool: &PgPool,
+    post_id: Uuid,
+    data: &crate::social::EngagementRow,
+) -> Result<PostEngagement, sqlx::Error> {
+    sqlx::query_as::<_, PostEngagement>(
+        r#"INSERT INTO post_engagement
+           (post_id, likes, comments, shares, views, saves, quotes, reposts, replies,
+            reactions, upvotes, downvotes, upvote_ratio, awards, raw, fetched_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW())
+           ON CONFLICT (post_id) DO UPDATE SET
+             likes = EXCLUDED.likes,
+             comments = EXCLUDED.comments,
+             shares = EXCLUDED.shares,
+             views = EXCLUDED.views,
+             saves = EXCLUDED.saves,
+             quotes = EXCLUDED.quotes,
+             reposts = EXCLUDED.reposts,
+             replies = EXCLUDED.replies,
+             reactions = EXCLUDED.reactions,
+             upvotes = EXCLUDED.upvotes,
+             downvotes = EXCLUDED.downvotes,
+             upvote_ratio = EXCLUDED.upvote_ratio,
+             awards = EXCLUDED.awards,
+             raw = EXCLUDED.raw,
+             fetched_at = NOW(),
+             updated_at = NOW()
+           RETURNING id, post_id, likes, comments, shares, views, saves, quotes, reposts, replies,
+             reactions, upvotes, downvotes, upvote_ratio, awards, raw, fetched_at, created_at, updated_at"#,
+    )
+    .bind(post_id)
+    .bind(data.likes)
+    .bind(data.comments)
+    .bind(data.shares)
+    .bind(data.views)
+    .bind(data.saves)
+    .bind(data.quotes)
+    .bind(data.reposts)
+    .bind(data.replies)
+    .bind(&data.reactions)
+    .bind(data.upvotes)
+    .bind(data.downvotes)
+    .bind(data.upvote_ratio)
+    .bind(data.awards)
+    .bind(&data.raw)
+    .fetch_one(pool)
+    .await
+}
+
+/// Get engagement data for a specific post.
+pub async fn get_post_engagement_by_post_id(
+    pool: &PgPool,
+    post_id: Uuid,
+) -> Result<Option<PostEngagement>, sqlx::Error> {
+    sqlx::query_as::<_, PostEngagement>(
+        r#"SELECT id, post_id, likes, comments, shares, views, saves, quotes, reposts, replies,
+           reactions, upvotes, downvotes, upvote_ratio, awards, raw, fetched_at, created_at, updated_at
+         FROM post_engagement WHERE post_id = $1"#,
+    )
+    .bind(post_id)
+    .fetch_optional(pool)
+    .await
+}
+
+/// List external posts with their engagement data LEFT JOINed.
+/// Returns posts with engagement_* prefixed fields.
+pub async fn list_all_external_posts_with_engagement(
+    pool: &PgPool,
+    user_id: Uuid,
+    provider: Option<&str>,
+    author_handle: Option<&str>,
+    cursor: Option<DateTime<Utc>>,
+    limit: i64,
+) -> Result<Vec<ExternalPostWithEngagement>, sqlx::Error> {
+    if let Some(provider) = provider {
+        sqlx::query_as::<_, ExternalPostWithEngagement>(
+            r#"SELECT ep.id, ep.user_id, ep.provider, ep.platform_post_id,
+               ep.text, ep.author_name, ep.author_handle, ep.author_avatar,
+               ep.created_at, ep.url, ep.media, ep.metadata, ep.imported_at,
+               pe.likes AS engagement_likes,
+               pe.comments AS engagement_comments,
+               pe.shares AS engagement_shares,
+               pe.views AS engagement_views,
+               pe.saves AS engagement_saves,
+               pe.quotes AS engagement_quotes,
+               pe.reposts AS engagement_reposts,
+               pe.replies AS engagement_replies,
+               pe.reactions AS engagement_reactions,
+               pe.upvotes AS engagement_upvotes,
+               pe.downvotes AS engagement_downvotes,
+               pe.upvote_ratio AS engagement_upvote_ratio,
+               pe.awards AS engagement_awards,
+               pe.raw AS engagement_raw,
+               pe.fetched_at AS engagement_fetched_at
+             FROM external_posts ep
+             LEFT JOIN post_engagement pe ON pe.post_id = ep.id
+             WHERE ep.user_id = $1 AND ep.provider = $2
+               AND ($3::timestamptz IS NULL OR ep.created_at < $3)
+               AND ($4::text IS NULL OR ep.author_handle = $4)
+             ORDER BY ep.created_at DESC
+             LIMIT $5"#,
+        )
+        .bind(user_id)
+        .bind(provider)
+        .bind(cursor)
+        .bind(author_handle)
+        .bind(limit)
+        .fetch_all(pool)
+        .await
+    } else {
+        sqlx::query_as::<_, ExternalPostWithEngagement>(
+            r#"SELECT ep.id, ep.user_id, ep.provider, ep.platform_post_id,
+               ep.text, ep.author_name, ep.author_handle, ep.author_avatar,
+               ep.created_at, ep.url, ep.media, ep.metadata, ep.imported_at,
+               pe.likes AS engagement_likes,
+               pe.comments AS engagement_comments,
+               pe.shares AS engagement_shares,
+               pe.views AS engagement_views,
+               pe.saves AS engagement_saves,
+               pe.quotes AS engagement_quotes,
+               pe.reposts AS engagement_reposts,
+               pe.replies AS engagement_replies,
+               pe.reactions AS engagement_reactions,
+               pe.upvotes AS engagement_upvotes,
+               pe.downvotes AS engagement_downvotes,
+               pe.upvote_ratio AS engagement_upvote_ratio,
+               pe.awards AS engagement_awards,
+               pe.raw AS engagement_raw,
+               pe.fetched_at AS engagement_fetched_at
+             FROM external_posts ep
+             LEFT JOIN post_engagement pe ON pe.post_id = ep.id
+             WHERE ep.user_id = $1
+               AND ($2::timestamptz IS NULL OR ep.created_at < $2)
+               AND ($3::text IS NULL OR ep.author_handle = $3)
+             ORDER BY ep.created_at DESC
+             LIMIT $4"#,
+        )
+        .bind(user_id)
+        .bind(cursor)
+        .bind(author_handle)
+        .bind(limit)
+        .fetch_all(pool)
+        .await
+    }
+}
+
+/// Get total engagement summary across all posts for a user (for analytics dashboard).
+#[derive(Debug, Clone, sqlx::FromRow, Serialize)]
+pub struct EngagementSummary {
+    pub total_likes: Option<i64>,
+    pub total_comments: Option<i64>,
+    pub total_shares: Option<i64>,
+    pub total_views: Option<i64>,
+    pub total_reposts: Option<i64>,
+    pub total_replies: Option<i64>,
+    pub total_upvotes: Option<i64>,
+    pub total_awards: Option<i64>,
+    pub posts_with_engagement: Option<i64>,
+}
+
+pub async fn get_engagement_summary(
+    pool: &PgPool,
+    user_id: Uuid,
+    provider: Option<&str>,
+) -> Result<EngagementSummary, sqlx::Error> {
+    if let Some(provider) = provider {
+        sqlx::query_as::<_, EngagementSummary>(
+            r#"SELECT
+               SUM(pe.likes)::bigint AS total_likes,
+               SUM(pe.comments)::bigint AS total_comments,
+               SUM(pe.shares)::bigint AS total_shares,
+               SUM(pe.views)::bigint AS total_views,
+               SUM(pe.reposts)::bigint AS total_reposts,
+               SUM(pe.replies)::bigint AS total_replies,
+               SUM(pe.upvotes)::bigint AS total_upvotes,
+               SUM(pe.awards)::bigint AS total_awards,
+               COUNT(pe.id)::bigint AS posts_with_engagement
+             FROM external_posts ep
+             INNER JOIN post_engagement pe ON pe.post_id = ep.id
+             WHERE ep.user_id = $1 AND ep.provider = $2"#,
+        )
+        .bind(user_id)
+        .bind(provider)
+        .fetch_one(pool)
+        .await
+    } else {
+        sqlx::query_as::<_, EngagementSummary>(
+            r#"SELECT
+               SUM(pe.likes)::bigint AS total_likes,
+               SUM(pe.comments)::bigint AS total_comments,
+               SUM(pe.shares)::bigint AS total_shares,
+               SUM(pe.views)::bigint AS total_views,
+               SUM(pe.reposts)::bigint AS total_reposts,
+               SUM(pe.replies)::bigint AS total_replies,
+               SUM(pe.upvotes)::bigint AS total_upvotes,
+               SUM(pe.awards)::bigint AS total_awards,
+               COUNT(pe.id)::bigint AS posts_with_engagement
+             FROM external_posts ep
+             INNER JOIN post_engagement pe ON pe.post_id = ep.id
+             WHERE ep.user_id = $1"#,
+        )
+        .bind(user_id)
+        .fetch_one(pool)
+        .await
+    }
+}
+
+// ══════════════════════════════════════════════════════════════
 // SIGNATURES
 // ══════════════════════════════════════════════════════════════
 
@@ -1494,4 +1768,267 @@ pub async fn delete_signature(
     .execute(pool)
     .await?;
     Ok(r.rows_affected() > 0)
+}
+
+// ══════════════════════════════════════════════════════════════
+// ANALYTICS CACHE
+// ══════════════════════════════════════════════════════════════
+
+/// Get all users (for background cache refresh)
+pub async fn list_all_users(pool: &PgPool) -> Result<Vec<User>, sqlx::Error> {
+    sqlx::query_as!(
+        User,
+        "SELECT id, email, password, name, timezone, created_at, updated_at FROM users"
+    )
+    .fetch_all(pool)
+    .await
+}
+
+/// Upsert analytics cache: deletes existing entry for (user_id, provider, platform_post_id)
+/// then inserts a fresh one, all in a transaction.
+pub async fn upsert_analytics_cache(
+    pool: &PgPool,
+    user_id: Uuid,
+    provider: &str,
+    platform_post_id: Option<&str>,
+    data: &serde_json::Value,
+) -> Result<AnalyticsCache, sqlx::Error> {
+    let mut tx = pool.begin().await?;
+
+    sqlx::query(
+        "DELETE FROM analytics_cache WHERE user_id = $1 AND provider = $2 \
+         AND (platform_post_id = $3 OR ($3 IS NULL AND platform_post_id IS NULL))",
+    )
+    .bind(user_id)
+    .bind(provider)
+    .bind(platform_post_id)
+    .execute(&mut *tx)
+    .await?;
+
+    let result = sqlx::query_as::<_, AnalyticsCache>(
+        "INSERT INTO analytics_cache (user_id, provider, platform_post_id, data) \
+         VALUES ($1, $2, $3, $4) \
+         RETURNING id, user_id, provider, platform_post_id, data, cached_at, expires_at",
+    )
+    .bind(user_id)
+    .bind(provider)
+    .bind(platform_post_id)
+    .bind(data)
+    .fetch_one(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
+    Ok(result)
+}
+
+/// Get non-expired account-level analytics for (user_id, provider)
+pub async fn get_cached_analytics(
+    pool: &PgPool,
+    user_id: Uuid,
+    provider: &str,
+    now: DateTime<Utc>,
+) -> Result<Vec<AnalyticsCache>, sqlx::Error> {
+    sqlx::query_as::<_, AnalyticsCache>(
+        "SELECT id, user_id, provider, platform_post_id, data, cached_at, expires_at \
+         FROM analytics_cache \
+         WHERE user_id = $1 AND provider = $2 AND platform_post_id IS NULL AND expires_at > $3 \
+         ORDER BY provider",
+    )
+    .bind(user_id)
+    .bind(provider)
+    .bind(now)
+    .fetch_all(pool)
+    .await
+}
+
+/// Get a specific cached analytics entry for a post
+pub async fn get_single_cached_analytics(
+    pool: &PgPool,
+    user_id: Uuid,
+    provider: &str,
+    platform_post_id: &str,
+) -> Result<Option<AnalyticsCache>, sqlx::Error> {
+    sqlx::query_as::<_, AnalyticsCache>(
+        "SELECT id, user_id, provider, platform_post_id, data, cached_at, expires_at \
+         FROM analytics_cache \
+         WHERE user_id = $1 AND provider = $2 AND platform_post_id = $3 AND expires_at > NOW()",
+    )
+    .bind(user_id)
+    .bind(provider)
+    .bind(platform_post_id)
+    .fetch_optional(pool)
+    .await
+}
+
+/// Delete all expired analytics cache entries. Returns count of deleted rows.
+pub async fn delete_expired_analytics_cache(pool: &PgPool) -> Result<u64, sqlx::Error> {
+    let r = sqlx::query("DELETE FROM analytics_cache WHERE expires_at < NOW()")
+        .execute(pool)
+        .await?;
+    Ok(r.rows_affected())
+}
+
+// ── External Posts ──────────────────────────────────────────
+
+/// Insert a new external post. Returns the created record.
+/// Insert an external post, updating on conflict (provider + platform_post_id).
+/// Returns `Some(post)` always — either the newly inserted or the updated record.
+pub async fn insert_external_post(
+    pool: &PgPool,
+    user_id: Uuid,
+    provider: &str,
+    platform_post_id: &str,
+    text: &str,
+    author_name: Option<&str>,
+    author_handle: Option<&str>,
+    author_avatar: Option<&str>,
+    created_at: DateTime<Utc>,
+    url: Option<&str>,
+    media: &serde_json::Value,
+    metadata: &serde_json::Value,
+) -> Result<Option<ExternalPost>, sqlx::Error> {
+    tracing::info!(
+        "insert_external_post: provider={} post_id={} text_len={} name={:?} handle={:?} avatar_present={} url_present={}",
+        provider, platform_post_id, text.len(), author_name, author_handle, author_avatar.is_some(), url.is_some(),
+    );
+    let result = sqlx::query_as::<_, ExternalPost>(
+        "INSERT INTO external_posts \
+         (user_id, provider, platform_post_id, text, author_name, author_handle, author_avatar, created_at, url, media, metadata) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) \
+         ON CONFLICT (provider, platform_post_id) DO UPDATE SET \
+           text = EXCLUDED.text, \
+           author_name = COALESCE(EXCLUDED.author_name, external_posts.author_name), \
+           author_handle = COALESCE(EXCLUDED.author_handle, external_posts.author_handle), \
+           author_avatar = COALESCE(EXCLUDED.author_avatar, external_posts.author_avatar), \
+           created_at = EXCLUDED.created_at, \
+           url = EXCLUDED.url, \
+           media = EXCLUDED.media, \
+           metadata = EXCLUDED.metadata, \
+           imported_at = now() \
+         RETURNING id, user_id, provider, platform_post_id, text,
+           author_name, author_handle, author_avatar,
+           created_at, url, media, metadata, imported_at",
+    )
+    .bind(user_id)
+    .bind(provider)
+    .bind(platform_post_id)
+    .bind(text)
+    .bind(author_name)
+    .bind(author_handle)
+    .bind(author_avatar)
+    .bind(created_at)
+    .bind(url)
+    .bind(media)
+    .bind(metadata)
+    .fetch_optional(pool)
+    .await?;
+    if let Some(ref post) = result {
+        tracing::info!(
+            "insert_external_post RETURNED: id={} name={:?} handle={:?} avatar_present={}",
+            post.id, post.author_name, post.author_handle, post.author_avatar.is_some(),
+        );
+    } else {
+        tracing::info!("insert_external_post RETURNED: None");
+    }
+    Ok(result)
+}
+
+/// Update the metadata JSON of an external post (used for engagement updates).
+pub async fn update_external_post_metadata(
+    pool: &PgPool,
+    id: Uuid,
+    metadata: &serde_json::Value,
+) -> Result<ExternalPost, sqlx::Error> {
+    sqlx::query_as::<_, ExternalPost>(
+        "UPDATE external_posts SET metadata = $1 WHERE id = $2 \
+         RETURNING id, user_id, provider, platform_post_id, text,\
+           author_name, author_handle, author_avatar,\
+           created_at, url, media, metadata, imported_at",
+    )
+    .bind(metadata)
+    .bind(id)
+    .fetch_one(pool)
+    .await
+}
+
+/// Get a single external post by ID and user_id.
+pub async fn get_external_post_by_id(
+    pool: &PgPool,
+    user_id: Uuid,
+    post_id: Uuid,
+) -> Result<Option<ExternalPost>, sqlx::Error> {
+    sqlx::query_as::<_, ExternalPost>(
+        "SELECT id, user_id, provider, platform_post_id, text,\
+           author_name, author_handle, author_avatar,\
+           created_at, url, media, metadata, imported_at \
+         FROM external_posts WHERE id = $1 AND user_id = $2",
+    )
+    .bind(post_id)
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await
+}
+
+/// List external posts for a user + provider, newest first.
+pub async fn list_external_posts(
+    pool: &PgPool,
+    user_id: Uuid,
+    provider: &str,
+    limit: i64,
+) -> Result<Vec<ExternalPost>, sqlx::Error> {
+    sqlx::query_as::<_, ExternalPost>(
+        "SELECT id, user_id, provider, platform_post_id, text,\
+           author_name, author_handle, author_avatar,\
+           created_at, url, media, metadata, imported_at \
+         FROM external_posts WHERE user_id = $1 AND provider = $2 \
+         ORDER BY created_at DESC LIMIT $3",
+    )
+    .bind(user_id)
+    .bind(provider)
+    .bind(limit)
+    .fetch_all(pool)
+    .await
+}
+
+/// List all external posts for a user across all providers, cursor-paginated by created_at DESC.
+/// Pass cursor = None for the first page, then use the last post's created_at as the next cursor.
+pub async fn list_all_external_posts(
+    pool: &PgPool,
+    user_id: Uuid,
+    provider: Option<&str>,
+    cursor: Option<DateTime<Utc>>,
+    limit: i64,
+) -> Result<Vec<ExternalPost>, sqlx::Error> {
+    if let Some(provider) = provider {
+        sqlx::query_as::<_, ExternalPost>(
+            "SELECT id, user_id, provider, platform_post_id, text,\
+               author_name, author_handle, author_avatar,\
+               created_at, url, media, metadata, imported_at \
+             FROM external_posts \
+             WHERE user_id = $1 AND provider = $2 \
+               AND ($3::timestamptz IS NULL OR created_at < $3) \
+             ORDER BY created_at DESC LIMIT $4",
+        )
+        .bind(user_id)
+        .bind(provider)
+        .bind(cursor)
+        .bind(limit)
+        .fetch_all(pool)
+        .await
+    } else {
+        sqlx::query_as::<_, ExternalPost>(
+            "SELECT id, user_id, provider, platform_post_id, text,\
+               author_name, author_handle, author_avatar,\
+               created_at, url, media, metadata, imported_at \
+             FROM external_posts \
+             WHERE user_id = $1 \
+               AND ($2::timestamptz IS NULL OR created_at < $2) \
+             ORDER BY created_at DESC LIMIT $3",
+        )
+        .bind(user_id)
+        .bind(cursor)
+        .bind(limit)
+        .fetch_all(pool)
+        .await
+    }
 }

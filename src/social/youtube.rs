@@ -598,6 +598,95 @@ impl SocialProvider for YoutubeProvider {
         })
     }
 
+    async fn get_recent_posts(&self, access_token: &str, _internal_id: &str, limit: u32) -> Result<Vec<ExternalPostData>, ProviderError> {
+        // Get the user's channel
+        let channels = self.pages(access_token).await?;
+        if channels.is_empty() {
+            return Ok(vec![]);
+        }
+        let channel_id = &channels[0].id;
+        let max_results = limit.min(50).to_string();
+
+        // Search for the channel's recent uploads
+        let resp = self
+            .http
+            .get("https://youtube.googleapis.com/youtube/v3/search")
+            .query(&[
+                ("part", "snippet"),
+                ("channelId", channel_id.as_str()),
+                ("maxResults", &max_results),
+                ("order", "date"),
+                ("type", "video"),
+                ("access_token", access_token),
+            ])
+            .send()
+            .await?;
+
+        let json: serde_json::Value = resp.json().await?;
+        let mut posts = Vec::new();
+
+        if let Some(items) = json["items"].as_array() {
+            for item in items {
+                let snippet = &item["snippet"];
+                let video_id = item["id"]["videoId"].as_str().unwrap_or("");
+                let title = snippet["title"].as_str().unwrap_or("");
+                let description = snippet["description"].as_str().unwrap_or("");
+                let published_at = snippet["publishedAt"].as_str().unwrap_or("");
+                let thumb = snippet["thumbnails"]["default"]["url"].as_str().map(|s| s.to_string());
+
+                let posted_at = crate::social::common::parse_timestamp(published_at);
+
+                // Single media item: embed URL for iframe playback
+                // Thumbnail URL is stored in metadata.poster_url so frontend can show it as placeholder
+                let embed_url = format!("https://www.youtube.com/embed/{video_id}");
+                let meta = serde_json::json!({
+                    "title": title,
+                    "poster_url": thumb,
+                });
+
+                posts.push(ExternalPostData {
+                    platform_post_id: video_id.to_string(),
+                    text: description.to_string(),
+                    author_name: None,
+                    author_handle: None,
+                    author_avatar: None,
+                    media: vec![MediaAttachment {
+                        url: embed_url,
+                        mime_type: "text/html".into(),
+                        alt: Some(title.to_string()),
+                    }],
+                    created_at: posted_at,
+                    url: Some(format!("https://www.youtube.com/watch?v={video_id}")),
+                    metadata: Some(meta),
+                });
+            }
+        }
+
+        Ok(posts)
+    }
+
+    async fn get_post_engagement(
+        &self,
+        access_token: &str,
+        platform_post_id: &str,
+    ) -> Result<Option<serde_json::Value>, ProviderError> {
+        // get_video() returns statistics with viewCount, likeCount, commentCount
+        let json = self.get_video(access_token, platform_post_id).await?;
+        if let Some(items) = json["items"].as_array() {
+            if let Some(video) = items.first() {
+                if let Some(stats) = video["statistics"].as_object() {
+                    let result = serde_json::json!({
+                        "viewCount": stats.get("viewCount").and_then(|v| v.as_str()).and_then(|s| s.parse::<i64>().ok()).unwrap_or(0),
+                        "likeCount": stats.get("likeCount").and_then(|v| v.as_str()).and_then(|s| s.parse::<i64>().ok()).unwrap_or(0),
+                        "commentCount": stats.get("commentCount").and_then(|v| v.as_str()).and_then(|s| s.parse::<i64>().ok()).unwrap_or(0),
+                    });
+                    return Ok(Some(result));
+                }
+            }
+        }
+        Ok(None)
+    }
+
     async fn publish(
         &self,
         access_token: &str,

@@ -11,6 +11,11 @@ export interface PostSummary {
   group_id?: string | null;
   first_comment?: string | null;
   sequence?: number;
+  // Engagement metrics (optional — populated when analytics_cache available)
+  likes?: number | null;
+  comments?: number | null;
+  shares?: number | null;
+  impressions?: number | null;
 }
 export interface PostDetail {
   id: string; integration_id: string; integration_name: string; state: string;

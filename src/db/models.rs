@@ -223,6 +223,36 @@ pub struct PostWithIntegration {
     pub integration_refresh_needed: bool,
 }
 
+// ── Calendar Post with Engagement Metrics ──────────────────
+
+#[derive(Debug, Clone, sqlx::FromRow, Serialize)]
+pub struct CalendarPostWithMetrics {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub integration_id: Uuid,
+    pub integration_name: Option<String>,
+    pub state: String,
+    pub content: String,
+    pub title: Option<String>,
+    pub media: serde_json::Value,
+    pub scheduled_at: Option<DateTime<Utc>>,
+    pub published_at: Option<DateTime<Utc>>,
+    pub platform_post_id: Option<String>,
+    pub platform_post_url: Option<String>,
+    pub error_message: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub repeat_interval_days: Option<i32>,
+    pub repeat_end_date: Option<DateTime<Utc>>,
+    pub group_id: Option<Uuid>,
+    pub first_comment: Option<String>,
+    pub sequence: i32,
+    // Engagement metrics from analytics_cache LEFT JOIN
+    pub likes: Option<i64>,
+    pub comments: Option<i64>,
+    pub shares: Option<i64>,
+    pub impressions: Option<i64>,
+}
+
 // ── Media ───────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -347,6 +377,97 @@ pub struct RssPost {
     pub content_hash: String,
     pub is_imported: bool,
     pub created_at: DateTime<Utc>,
+}
+
+// ── Analytics Cache ────────────────────────────────────────
+
+#[derive(Debug, Clone, sqlx::FromRow, Serialize)]
+pub struct AnalyticsCache {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub provider: String,
+    pub platform_post_id: Option<String>,
+    pub data: serde_json::Value,
+    pub cached_at: DateTime<Utc>,
+    pub expires_at: DateTime<Utc>,
+}
+
+// ── External Posts ─────────────────────────────────────────
+
+#[derive(Debug, Clone, sqlx::FromRow, Serialize)]
+pub struct ExternalPost {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub provider: String,
+    pub platform_post_id: String,
+    pub text: String,
+    pub author_name: Option<String>,
+    pub author_handle: Option<String>,
+    pub author_avatar: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub url: Option<String>,
+    pub media: serde_json::Value,
+    pub metadata: serde_json::Value,
+    pub imported_at: DateTime<Utc>,
+}
+
+// ── Post Engagement Metrics ──────────────────────────────────
+
+#[derive(Debug, Clone, sqlx::FromRow, Serialize, Deserialize)]
+pub struct PostEngagement {
+    pub id: Uuid,
+    pub post_id: Uuid,
+    pub likes: i32,
+    pub comments: i32,
+    pub shares: i32,
+    pub views: i32,
+    pub saves: i32,
+    pub quotes: i32,
+    pub reposts: i32,
+    pub replies: i32,
+    pub reactions: serde_json::Value,
+    pub upvotes: i32,
+    pub downvotes: i32,
+    pub upvote_ratio: Option<f32>,
+    pub awards: i32,
+    pub raw: serde_json::Value,
+    pub fetched_at: DateTime<Utc>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+/// External post with its engagement metrics joined (for API responses).
+#[derive(Debug, Clone, sqlx::FromRow, Serialize)]
+pub struct ExternalPostWithEngagement {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub provider: String,
+    pub platform_post_id: String,
+    pub text: String,
+    pub author_name: Option<String>,
+    pub author_handle: Option<String>,
+    pub author_avatar: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub url: Option<String>,
+    pub media: serde_json::Value,
+    pub metadata: serde_json::Value,
+    pub imported_at: DateTime<Utc>,
+    // Engagement metrics (LEFT JOINed)
+    pub engagement_likes: Option<i32>,
+    pub engagement_comments: Option<i32>,
+    pub engagement_shares: Option<i32>,
+    pub engagement_views: Option<i32>,
+    pub engagement_saves: Option<i32>,
+    pub engagement_quotes: Option<i32>,
+    pub engagement_reposts: Option<i32>,
+    pub engagement_replies: Option<i32>,
+    pub engagement_reactions: Option<serde_json::Value>,
+    pub engagement_upvotes: Option<i32>,
+    pub engagement_downvotes: Option<i32>,
+    pub engagement_upvote_ratio: Option<f32>,
+    pub engagement_awards: Option<i32>,
+    pub engagement_raw: Option<serde_json::Value>,
+    pub engagement_fetched_at: Option<DateTime<Utc>>,
 }
 
 // ── Signature ──────────────────────────────────────────────

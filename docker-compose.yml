@@ -1,14 +1,18 @@
-version: "3.8"
+# ─── Social Forge — PostgreSQL only ──────────────────────────
+# Postgres runs via Docker (auto-starts on boot via restart: unless-stopped).
+# The social-forge binary runs directly via systemd for fast dev iteration.
+# See: systemctl status social-forge
 
 services:
   postgres:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_DB: social_forge
       POSTGRES_USER: social_forge
       POSTGRES_PASSWORD: social_forge
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -17,24 +21,5 @@ services:
       timeout: 3s
       retries: 5
 
-  social-forge:
-    build: .
-    depends_on:
-      postgres:
-        condition: service_healthy
-    ports:
-      - "3444:3444"
-    environment:
-      DATABASE_URL: postgres://social_forge:social_forge@postgres:5432/social_forge
-      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
-      APP_URL: http://localhost:3444
-      FRONTEND_URL: http://localhost:3444
-    env_file:
-      - .env
-    volumes:
-      - uploads:/app/uploads
-    restart: unless-stopped
-
 volumes:
-  pgdata:
-  uploads:
+  pgdata:        # Use `docker compose down` (NOT down -v) to preserve data

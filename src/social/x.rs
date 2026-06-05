@@ -521,7 +521,7 @@ impl XProvider {
 
     async fn upload_single_media(
         &self,
-        access_token: &str,
+        _access_token: &str,
         media_url: &str,
         mime_type: &str,
     ) -> Result<String, ProviderError> {
@@ -952,6 +952,253 @@ impl SocialProvider for XProvider {
         }
         Ok(result)
     }
+
+    async fn get_recent_posts(
+        &self,
+        access_token: &str,
+        internal_id: &str,
+        limit: u32,
+    ) -> Result<Vec<ExternalPostData>, ProviderError> {
+        tracing::info!(
+            "X get_recent_posts: internal_id='{}' limit={}",
+            internal_id, limit,
+        );
+        let response = self.user_tweets(access_token, internal_id, limit, None).await?;
+        tracing::info!(
+            "X get_recent_posts response: data array={}, includes.media={}, includes.users={}",
+            response["data"].as_array().map(|a| a.len()).unwrap_or(0),
+            response["includes"]["media"].as_array().map(|a| a.len()).unwrap_or(0),
+            response["includes"]["users"].as_array().map(|a| a.len()).unwrap_or(0),
+        );
+        let mut posts = Vec::new();
+
+        // OAuth v2 path: response["data"] is an array of tweet objects
+        if let Some(data) = response["data"].as_array() {
+            let media_map: std::collections::HashMap<String, MediaAttachment> = response["includes"]["media"]
+                .as_array()
+                .map(|arr| {
+                    arr.iter().filter_map(|m| {
+                        let key = m["media_key"].as_str()?;
+                        let media_type = m["type"].as_str().unwrap_or("photo");
+                        if media_type == "video" {
+                            // Video: prefer the highest-bitrate mp4 variant
+                            let video_url = m["variants"]
+                                .as_array()
+                                .and_then(|variants| {
+                                    let mut best: Option<(&str, u64)> = None;
+                                    for v in variants {
+                                        if v["content_type"].as_str() == Some("video/mp4") {
+                                            if let (Some(url), Some(bitrate)) = (v["url"].as_str(), v["bitrate"].as_u64()) {
+                                                if best.map_or(true, |(_, b)| bitrate > b) {
+                                                    best = Some((url, bitrate));
+                                                }
+                                            }
+                                        }
+                                    }
+                                    best.map(|(url, _)| url.to_string())
+                                })
+                                .or_else(|| m["url"].as_str().map(String::from));
+                            video_url.map(|url| (key.to_string(), MediaAttachment {
+                                url,
+                                mime_type: "video/mp4".to_string(),
+                                alt: m["alt_text"].as_str().map(String::from),
+                            }))
+                        } else {
+                            // Photo/animated_gif
+                            let url = m["url"].as_str()
+                                .or_else(|| m["preview_image_url"].as_str())?;
+                            Some((key.to_string(), MediaAttachment {
+                                url: url.to_string(),
+                                mime_type: if media_type == "animated_gif" { "image/gif".to_string() } else { "image/jpeg".to_string() },
+                                alt: m["alt_text"].as_str().map(String::from),
+                            }))
+                        }
+                    }).collect()
+                })
+                .unwrap_or_default();
+
+            // Build author lookup map from includes.users
+            let author_map: std::collections::HashMap<String, serde_json::Value> = response["includes"]["users"]
+                .as_array()
+                .map(|arr| {
+                    arr.iter().filter_map(|u| {
+                        let uid = u["id"].as_str()?;
+                        Some((uid.to_string(), u.clone()))
+                    }).collect()
+                })
+                .unwrap_or_default();
+
+            for item in data {
+                let id = item["id"].as_str().unwrap_or("").to_string();
+                if id.is_empty() { continue; }
+                let text = item["text"].as_str().unwrap_or("").to_string();
+                let created_at = item["created_at"].as_str()
+                    .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                    .map(|dt| dt.with_timezone(&chrono::Utc))
+                    .unwrap_or_else(chrono::Utc::now);
+
+                // Look up author from includes.users via author_id
+                let author_id = item["author_id"].as_str();
+                let author_name = author_id
+                    .and_then(|aid| author_map.get(aid))
+                    .and_then(|u| u["name"].as_str().map(String::from));
+                let author_handle = author_id
+                    .and_then(|aid| author_map.get(aid))
+                    .and_then(|u| u["username"].as_str().map(String::from));
+                let author_avatar = author_id
+                    .and_then(|aid| author_map.get(aid))
+                    .and_then(|u| u["profile_image_url"].as_str().map(String::from));
+
+                let mut media = Vec::new();
+                if let Some(keys) = item["attachments"]["media_keys"].as_array() {
+                    for key in keys.iter().filter_map(|k| k.as_str()) {
+                        if let Some(att) = media_map.get(key) {
+                            media.push(att.clone());
+                        }
+                    }
+                }
+
+                posts.push(ExternalPostData {
+                    platform_post_id: id,
+                    text,
+                    author_name,
+                    author_handle,
+                    author_avatar,
+                    created_at,
+                    url: None,
+                    media,
+                    metadata: Some(item.clone()),
+                });
+            }
+        } else if let Some(timeline) = response["data"].as_object() {
+            // Cookie auth (GraphQL) path: navigate instructions -> entries
+            if let Some(instructions) = timeline.get("instructions").and_then(|i| i.as_array()) {
+                for entry in instructions.iter()
+                    .filter_map(|inst| inst["entries"].as_array())
+                    .flatten()
+                {
+                    let result = match entry["content"]["itemContent"]["tweet_results"]["result"].as_object() {
+                        Some(r) => r,
+                        None => continue,
+                    };
+                    if result.get("__typename").and_then(|t| t.as_str()) == Some("TweetWithState") {
+                        continue;
+                    }
+                    let legacy = match result.get("legacy") {
+                        Some(l) => l,
+                        None => continue,
+                    };
+                    let id = result["rest_id"].as_str().unwrap_or("").to_string();
+                    if id.is_empty() { continue; }
+                    let text = legacy["full_text"].as_str()
+                        .or_else(|| legacy["text"].as_str())
+                        .unwrap_or("").to_string();
+                    let created_at_str = legacy["created_at"].as_str().unwrap_or("");
+                    let created_at = chrono::DateTime::parse_from_str(created_at_str, "%a %b %d %H:%M:%S %z %Y")
+                        .map(|dt| dt.with_timezone(&chrono::Utc))
+                        .unwrap_or_else(|_| chrono::Utc::now());
+                    let user = &result["core"]["user_results"]["result"]["legacy"];
+                    let author_name = user["name"].as_str().map(String::from);
+                    let author_handle = user["screen_name"].as_str().map(String::from);
+
+                    let mut media = Vec::new();
+                    if let Some(arr) = legacy["extended_entities"]["media"].as_array()
+                        .or_else(|| legacy["entities"]["media"].as_array())
+                    {
+                        for m in arr {
+                            let media_type = m["type"].as_str().unwrap_or("photo");
+                            if media_type == "video" || media_type == "animated_gif" {
+                                // Extract video URL from video_info.variants
+                                let video_url = m["video_info"]["variants"]
+                                    .as_array()
+                                    .and_then(|variants| {
+                                        // Prefer mp4 with highest bitrate
+                                        let mut best: Option<(&str, u64)> = None;
+                                        for v in variants {
+                                            if v["content_type"].as_str() == Some("video/mp4") {
+                                                if let (Some(url), Some(bitrate)) = (v["url"].as_str(), v["bitrate"].as_u64()) {
+                                                    if best.map_or(true, |(_, b)| bitrate > b) {
+                                                        best = Some((url, bitrate));
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        best.map(|(url, _)| url.to_string())
+                                    });
+                                if let Some(video_url) = video_url {
+                                    media.push(MediaAttachment {
+                                        url: video_url,
+                                        mime_type: "video/mp4".to_string(),
+                                        alt: m["alt_text"].as_str().map(String::from),
+                                    });
+                                } else {
+                                    // Fallback to thumbnail
+                                    let url = m["media_url_https"].as_str()
+                                        .or_else(|| m["media_url"].as_str())
+                                        .unwrap_or("").to_string();
+                                    if !url.is_empty() {
+                                        media.push(MediaAttachment {
+                                            url,
+                                            mime_type: "image/jpeg".to_string(),
+                                            alt: m["alt_text"].as_str().map(String::from),
+                                        });
+                                    }
+                                }
+                            } else {
+                                // Photo — use media_url_https
+                                let url = m["media_url_https"].as_str()
+                                    .or_else(|| m["media_url"].as_str())
+                                    .unwrap_or("").to_string();
+                                if !url.is_empty() {
+                                    media.push(MediaAttachment {
+                                        url,
+                                        mime_type: "image/jpeg".to_string(),
+                                        alt: m["alt_text"].as_str().map(String::from),
+                                    });
+                                }
+                            }
+                        }
+                    }
+
+                    let author_avatar = user["profile_image_url_https"].as_str().map(String::from);
+
+                    posts.push(ExternalPostData {
+                        platform_post_id: id,
+                        text,
+                        author_name,
+                        author_handle,
+                        author_avatar,
+                        created_at,
+                        url: None,
+                        media,
+                        metadata: Some(serde_json::Value::Object(result.clone())),
+                    });
+                }
+            }
+        }
+
+        Ok(posts)
+    }
+
+    async fn get_post_engagement(
+        &self,
+        access_token: &str,
+        platform_post_id: &str,
+    ) -> Result<Option<serde_json::Value>, ProviderError> {
+        let detail = self.tweet_detail(access_token, platform_post_id).await?;
+        let metrics = detail
+            .get("data")
+            .and_then(|d| d.get("public_metrics"))
+            .or_else(|| {
+                // GraphQL path: extract from tweet result
+                detail
+                    .get("data")
+                    .and_then(|d| d.get("legacy"))
+                    .and_then(|l| l.get("public_metrics"))
+            })
+            .cloned();
+        Ok(metrics.map(|m| serde_json::json!({ "public_metrics": m })))
+    }
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -1160,7 +1407,7 @@ impl XProvider {
             return Ok(result);
         }
         let mut url = format!(
-            "https://api.twitter.com/2/users/{user_id}/tweets?max_results={}&tweet.fields=created_at,public_metrics&expansions=attachments.media_keys&media.fields=url,preview_image_url",
+            "https://api.twitter.com/2/users/{user_id}/tweets?max_results={}&tweet.fields=created_at,public_metrics&expansions=author_id,attachments.media_keys&media.fields=url,preview_image_url&user.fields=profile_image_url",
             max_results.min(100)
         );
         if let Some(token) = pagination_token {

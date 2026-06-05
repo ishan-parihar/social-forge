@@ -201,6 +201,157 @@ impl SocialProvider for BlueskyProvider {
     ) -> Result<PageInfo, ProviderError> {
         Err(ProviderError::Api("Bluesky does not support page management".into()))
     }
+
+    async fn get_recent_posts(
+        &self,
+        access_token: &str,
+        _internal_id: &str,
+        limit: u32,
+    ) -> Result<Vec<ExternalPostData>, ProviderError> {
+        // Use the passed JWT directly, or create a fresh session if expired
+        let jwt = if access_token.is_empty() { self.create_session().await? } else { access_token.to_string() };
+        let did = self.resolve_handle().await?;
+
+        let resp = self.http
+            .get("https://bsky.social/xrpc/app.bsky.feed.getAuthorFeed")
+            .header("Authorization", format!("Bearer {jwt}"))
+            .query(&[("actor", &did), ("limit", &limit.to_string())])
+            .send()
+            .await?;
+
+        let json: serde_json::Value = resp.json().await?;
+        let feed = json["feed"].as_array().map(|a| a.to_vec()).unwrap_or_default();
+
+        let mut posts = Vec::new();
+        for item in &feed {
+            let post = &item["post"];
+            let record = &post["record"];
+
+            let cid = post["cid"].as_str().unwrap_or("").to_string();
+            if cid.is_empty() { continue; }
+
+            let text = record["text"].as_str().unwrap_or("").to_string();
+            let created_at = record["createdAt"].as_str()
+                .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                .map(|dt| dt.with_timezone(&chrono::Utc))
+                .unwrap_or_else(chrono::Utc::now);
+
+            let author = &post["author"];
+            let author_name = author["displayName"].as_str().map(String::from);
+            let author_handle = author["handle"].as_str().map(String::from);
+            let uri = post["uri"].as_str().map(String::from);
+
+            let mut media = Vec::new();
+            if let Some(embed) = post.get("embed") {
+                let embed_type = embed["$type"].as_str().unwrap_or("");
+                if embed_type == "app.bsky.embed.video" || embed_type == "app.bsky.embed.video#view" {
+                    // Bluesky video — resolve blob reference to a playable URL
+                    if let Some(video) = embed.get("video") {
+                        let mime = video["mimeType"].as_str().unwrap_or("video/mp4");
+                        // Try direct playlist URL first (video.playlist)
+                        if let Some(playlist) = video["playlist"].as_str() {
+                            media.push(MediaAttachment {
+                                url: playlist.to_string(),
+                                mime_type: mime.to_string(),
+                                alt: None,
+                            });
+                        } else if let Some(cid) = video["ref"]["$link"].as_str()
+                            .or_else(|| video["ref"]["cid"].as_str())
+                        {
+                            // Construct blob URL from DID + CID
+                            let did = post["author"]["did"]
+                                .as_str()
+                                .unwrap_or("");
+                            let blob_url = format!(
+                                "https://bsky.social/xrpc/com.atproto.sync.getBlob?did={did}&cid={cid}"
+                            );
+                            media.push(MediaAttachment {
+                                url: blob_url,
+                                mime_type: mime.to_string(),
+                                alt: None,
+                            });
+                        }
+                    }
+                } else if let Some(images) = embed["images"].as_array() {
+                    for img in images {
+                        if let Some(url) = img["fullsize"].as_str().or_else(|| img["thumb"].as_str()) {
+                            media.push(MediaAttachment {
+                                url: url.to_string(),
+                                mime_type: "image/jpeg".to_string(),
+                                alt: img["alt"].as_str().map(String::from),
+                            });
+                        }
+                    }
+                } else if let Some(external) = embed.get("external") {
+                    // External link embed — use thumbnail if available
+                    if let Some(thumb) = external["thumb"].as_str() {
+                        media.push(MediaAttachment {
+                            url: thumb.to_string(),
+                            mime_type: "image/jpeg".to_string(),
+                            alt: None,
+                        });
+                    }
+                }
+            }
+
+            let author_avatar = author["avatar"].as_str().map(String::from);
+
+            posts.push(ExternalPostData {
+                platform_post_id: cid,
+                text,
+                author_name,
+                author_handle,
+                author_avatar,
+                created_at,
+                url: uri,
+                media,
+                metadata: Some(post.clone()),
+            });
+        }
+
+        Ok(posts)
+    }
+
+    async fn get_post_engagement(
+        &self,
+        access_token: &str,
+        _platform_post_id: &str,
+    ) -> Result<Option<serde_json::Value>, ProviderError> {
+        // Use getAuthorFeed to find the post by matching against recent posts
+        let jwt = if access_token.is_empty() { self.create_session().await? } else { access_token.to_string() };
+        let did = self.resolve_handle().await?;
+
+        let resp = self.http
+            .get("https://bsky.social/xrpc/app.bsky.feed.getAuthorFeed")
+            .header("Authorization", format!("Bearer {jwt}"))
+            .query(&[("actor", &did), ("limit", &"30".to_string())])
+            .send()
+            .await?;
+
+        let json: serde_json::Value = resp.json().await?;
+        let feed = json["feed"].as_array().map(|a| a.to_vec()).unwrap_or_default();
+
+        for item in &feed {
+            let post = &item["post"];
+            let cid = post["cid"].as_str().unwrap_or("");
+            if cid == _platform_post_id {
+                let like_count = post["likeCount"].as_i64().unwrap_or(0);
+                let repost_count = post["repostCount"].as_i64().unwrap_or(0);
+                let reply_count = post["replyCount"].as_i64().unwrap_or(0);
+                let quote_count = post["quoteCount"].as_i64().unwrap_or(0);
+
+                let result = serde_json::json!({
+                    "likeCount": like_count,
+                    "repostCount": repost_count,
+                    "replyCount": reply_count,
+                    "quoteCount": quote_count,
+                });
+                return Ok(Some(result));
+            }
+        }
+
+        Ok(None)
+    }
 }
 
 impl BlueskyProvider {

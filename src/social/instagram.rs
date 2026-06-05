@@ -417,6 +417,207 @@ impl SocialProvider for InstagramProvider {
         Ok(result)
     }
 
+    async fn get_recent_posts(
+        &self,
+        access_token: &str,
+        _internal_id: &str,
+        limit: u32,
+    ) -> Result<Vec<ExternalPostData>, ProviderError> {
+        let ig_id = match self.resolve_ig_business_account(access_token).await {
+            Ok(id) => id,
+            Err(e) => {
+                // If we have an internal_id (page-scoped), use that directly
+                if _internal_id.is_empty() || _internal_id == access_token {
+                    return Err(ProviderError::Api(format!("Cannot resolve IG business account: {e}")));
+                }
+                // The internal_id might already be the IG business account ID
+                // Try fetching IG media directly with it
+                _internal_id.to_string()
+            }
+        };
+
+        // First try with the resolved ID; if that fails, try _internal_id as fallback
+        let mut effective_id = ig_id.as_str();
+        let result = self.get_ig_media(access_token, effective_id, limit).await;
+        let json = match result {
+            Ok(j) => j,
+            Err(_) => {
+                effective_id = _internal_id;
+                self.get_ig_media(access_token, effective_id, limit).await?
+            }
+        };
+
+        // Fetch IG account profile for author info using the same ID that worked for media
+        let (account_name, account_handle, account_avatar) = self
+            .get_ig_account_info(access_token, effective_id)
+            .await
+            .unwrap_or_else(|e| {
+                tracing::warn!("Failed to fetch IG account info for {effective_id}: {e}");
+                (None, None, None)
+            });
+
+        // Also try extracting username from individual media items as fallback
+        let media_fallback_username = json["data"][0]["username"].as_str().map(String::from);
+
+        // If account-level info failed but media items carry a username, use that
+        let account_handle = account_handle.or_else(|| media_fallback_username.clone());
+        let account_name = account_name.or_else(|| media_fallback_username.clone());
+
+        tracing::info!(
+            "IG author info for {}: name={:?} handle={:?} avatar={} (fallback_username={:?})",
+            effective_id,
+            account_name,
+            account_handle,
+            account_avatar.is_some(),
+            media_fallback_username,
+        );
+
+        let mut posts = Vec::new();
+        if let Some(data) = json["data"].as_array() {
+            for item in data {
+                let media_id = item["id"].as_str().unwrap_or("").to_string();
+                let caption = item["caption"].as_str().unwrap_or("").to_string();
+                let created_at = item["timestamp"]
+                    .as_str()
+                    .map(crate::social::common::parse_timestamp)
+                    .unwrap_or_else(chrono::Utc::now);
+                let permalink = item["permalink"].as_str().map(String::from);
+                let media_url = item["media_url"].as_str().map(String::from);
+
+                // Detect media type from API response
+                let media_type = item["media_type"].as_str().unwrap_or("IMAGE");
+
+                // Use per-item username as fallback for account-level info
+                let item_username = item["username"].as_str().map(String::from);
+                let post_author_name = account_name.clone().or_else(|| item_username.clone());
+                let post_author_handle = account_handle.clone().or_else(|| item_username.clone());
+                let post_author_avatar = account_avatar.clone();
+
+                let media = match media_type {
+                    "CAROUSEL_ALBUM" => {
+                        // CAROUSEL_ALBUM: iterate children for all album items
+                        let mut items = Vec::new();
+                        if let Some(children) = item["children"]["data"].as_array() {
+                            for child in children {
+                                let child_url = child["media_url"].as_str().map(String::from);
+                                let child_type = child["media_type"].as_str().unwrap_or("IMAGE");
+                                let child_mime = match child_type {
+                                    "VIDEO" => "video/mp4",
+                                    _ => "image/jpeg",
+                                };
+                                if let Some(url) = child_url {
+                                    items.push(MediaAttachment {
+                                        url,
+                                        mime_type: child_mime.into(),
+                                        alt: None,
+                                    });
+                                }
+                            }
+                        }
+                        items
+                    }
+                    _ => {
+                        // IMAGE or VIDEO: single media
+                        let mime_type = match media_type {
+                            "VIDEO" => "video/mp4",
+                            _ => "image/jpeg",
+                        };
+                        media_url
+                            .map(|u| vec![MediaAttachment {
+                                url: u,
+                                mime_type: mime_type.into(),
+                                alt: None,
+                            }])
+                            .unwrap_or_default()
+                    }
+                };
+
+                posts.push(ExternalPostData {
+                    platform_post_id: media_id,
+                    text: caption,
+                    author_name: post_author_name,
+                    author_handle: post_author_handle,
+                    author_avatar: post_author_avatar,
+                    created_at,
+                    url: permalink,
+                    media,
+                    metadata: Some(item.clone()),
+                });
+            }
+        }
+        Ok(posts)
+    }
+
+    async fn get_post_engagement(
+        &self,
+        access_token: &str,
+        platform_post_id: &str,
+    ) -> Result<Option<serde_json::Value>, ProviderError> {
+        let detail = self.get_ig_media_detail(access_token, platform_post_id).await?;
+        // If the response has a top-level error or no id, treat as not found
+        if detail.get("error").is_some() || detail.get("id").is_none() {
+            return Ok(None);
+        }
+        Ok(Some(detail))
+    }
+
+    async fn get_post_comments(
+        &self,
+        access_token: &str,
+        platform_post_id: &str,
+    ) -> Result<Vec<CommentData>, ProviderError> {
+        let json = self.get_ig_media_comments(access_token, platform_post_id).await?;
+
+        let mut comments = Vec::new();
+        if let Some(data) = json["data"].as_array() {
+            for item in data {
+                let id = item["id"].as_str().unwrap_or("").to_string();
+                let text = item["text"].as_str().unwrap_or("").to_string();
+                let created_at = item["timestamp"]
+                    .as_str()
+                    .map(crate::social::common::parse_timestamp)
+                    .unwrap_or_else(chrono::Utc::now);
+
+                let author_name = item["username"].as_str().map(String::from);
+                let like_count = item["like_count"].as_i64().unwrap_or(0) as i32;
+
+                // Parse nested replies if present
+                let replies = if let Some(reply_data) = item["replies"]["data"].as_array() {
+                    reply_data.iter().filter_map(|r| {
+                        let rid = r["id"].as_str()?;
+                        let rtext = r["text"].as_str().unwrap_or("");
+                        let rcreated = r["timestamp"]
+                            .as_str()
+                            .map(crate::social::common::parse_timestamp)
+                            .unwrap_or_else(chrono::Utc::now);
+                        Some(CommentData {
+                            id: rid.to_string(),
+                            author_name: r["username"].as_str().map(String::from),
+                            author_avatar: None,
+                            text: rtext.to_string(),
+                            created_at: rcreated,
+                            like_count: 0,
+                            replies: vec![],
+                        })
+                    }).collect()
+                } else {
+                    vec![]
+                };
+
+                comments.push(CommentData {
+                    id,
+                    author_name,
+                    author_avatar: None,
+                    text,
+                    created_at,
+                    like_count,
+                    replies,
+                });
+            }
+        }
+        Ok(comments)
+    }
+
     async fn fetch_page_info(
         &self,
         access_token: &str,
@@ -679,7 +880,7 @@ impl InstagramProvider {
         let resp = self
             .http
             .get(&url)
-            .query(&[("fields", "id,caption,media_type,media_url,permalink,timestamp,like_count,comments_count"), ("limit", &limit.to_string())])
+            .query(&[("fields", "id,caption,media_type,media_url,permalink,timestamp,username,like_count,comments_count,children.limit(100){id,media_url,media_type}"), ("limit", &limit.to_string())])
             .header("Authorization", format!("Bearer {access_token}"))
             .send()
             .await?;
@@ -702,7 +903,7 @@ impl InstagramProvider {
         let resp = self
             .http
             .get(&url)
-            .query(&[("fields", "id,caption,media_type,media_url,permalink,timestamp,username,like_count,comments_count,children{id,media_url,media_type}")])
+            .query(&[("fields", "id,caption,media_type,media_url,permalink,timestamp,username,like_count,comments_count,children.limit(100){id,media_url,media_type}")])
             .header("Authorization", format!("Bearer {access_token}"))
             .send()
             .await?;
@@ -725,7 +926,7 @@ impl InstagramProvider {
         let resp = self
             .http
             .get(&url)
-            .query(&[("fields", "id,text,timestamp,username,like_count,replies")])
+            .query(&[("fields", "id,text,timestamp,username,like_count,replies{id,text,timestamp,username,like_count}")])
             .header("Authorization", format!("Bearer {access_token}"))
             .send()
             .await?;
@@ -958,6 +1159,37 @@ impl InstagramProvider {
             let detail = json["error"]["message"].as_str().unwrap_or("Instagram API error").to_string();
             Err(ProviderError::Api(detail))
         }
+    }
+
+    /// Fetch IG account profile info (username, display name, avatar)
+    pub async fn get_ig_account_info(
+        &self,
+        access_token: &str,
+        ig_id: &str,
+    ) -> Result<(Option<String>, Option<String>, Option<String>), ProviderError> {
+        let url = format!("{}/{ig_id}", self.graph_url());
+        let resp = self
+            .http
+            .get(&url)
+            .query(&[("fields", "username,name,profile_picture_url")])
+            .header("Authorization", format!("Bearer {access_token}"))
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if !status.is_success() {
+            let msg = json["error"]["message"].as_str().unwrap_or("unknown");
+            return Err(ProviderError::Api(format!("IG account info: {msg}")));
+        }
+        if let Some(err) = json["error"].as_object() {
+            let msg = err["message"].as_str().unwrap_or("unknown");
+            return Err(ProviderError::Api(format!("IG account info: {msg}")));
+        }
+        tracing::debug!("get_ig_account_info response for {ig_id}: {:?}", json);
+        let username = json["username"].as_str().map(String::from);
+        let name = json["name"].as_str().map(String::from);
+        let avatar = json["profile_picture_url"].as_str().map(String::from);
+        Ok((name, username, avatar))
     }
 
     pub async fn get_ig_followers(&self, access_token: &str, ig_id: &str) -> Result<serde_json::Value, ProviderError> {

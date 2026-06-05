@@ -22,6 +22,7 @@ mod analytics;
 mod auth;
 mod billing;
 mod calendar;
+mod feed;
 mod integrations;
 mod media;
 mod notifications;
@@ -126,6 +127,11 @@ pub fn build_router(state: AppState) -> Router {
     .route("/api/integrations/{id}/refresh", axum::routing::post(integrations::refresh))
     .route("/api/integrations/{id}/targets", axum::routing::get(integrations::list_targets))
         .route("/api/calendar", axum::routing::get(calendar::get))
+        .route("/api/feed", axum::routing::get(feed::get))
+        .route("/api/feed/import", axum::routing::post(feed::import))
+        .route("/api/feed/accounts", axum::routing::get(feed::accounts))
+        .route("/api/feed/analytics", axum::routing::get(feed::analytics))
+        .route("/api/feed/{post_id}/comments", axum::routing::get(feed::get_comments))
         .route("/api/media", axum::routing::get(media::list).post(media::upload))
         .route("/api/media/{id}", axum::routing::delete(media::delete))
         .route("/api/analytics", axum::routing::get(analytics::get))

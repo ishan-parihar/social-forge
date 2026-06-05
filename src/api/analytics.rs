@@ -1,5 +1,6 @@
 // ─── Analytics API Routes ─────────────────────────────────────
 // Dashboard analytics for connected social providers.
+// Cache-first: reads from analytics_cache, falls back to live-fetch.
 
 use axum::{
     extract::{Path, Query, State},
@@ -23,7 +24,12 @@ pub struct AnalyticsQuery {
 
 // ── Handlers ─────────────────────────────────────────────────
 
-/// GET /api/analytics
+/// GET /api/analytics?provider=X&days=N
+///
+/// Cache-first strategy:
+/// 1. Check analytics_cache for (user_id, provider) where platform_post_id IS NULL
+/// 2. If cached and not expired (expires_at > now), return cached data
+/// 3. Otherwise live-fetch from provider, store in cache, return
 pub async fn get(
     State(state): State<AppState>,
     auth: AuthenticatedUser,
@@ -31,8 +37,27 @@ pub async fn get(
 ) -> Result<Json<serde_json::Value>, AppError> {
     let days = query.days.unwrap_or(7).max(1) as u32;
 
-    let integrations = crate::db::queries::list_integrations(&state.db, auth.user_id)
-        .await?;
+    // Check cache first
+    let now = chrono::Utc::now();
+    let cached = crate::db::queries::get_cached_analytics(
+        &state.db,
+        auth.user_id,
+        &query.provider,
+        now,
+    )
+    .await?;
+
+    // If we have cached data, return it directly
+    if let Some(entry) = cached.into_iter().next() {
+        return Ok(Json(serde_json::json!({
+            "data": entry.data,
+            "cached": true,
+            "cached_at": entry.cached_at.to_rfc3339(),
+        })));
+    }
+
+    // Cache miss — live-fetch from provider
+    let integrations = crate::db::queries::list_integrations(&state.db, auth.user_id).await?;
 
     let integration = integrations
         .iter()
@@ -49,10 +74,27 @@ pub async fn get(
         .await
         .map_err(AppError::from)?;
 
+    // Store in cache
+    let data = serde_json::to_value(&analytics).unwrap_or(serde_json::Value::Null);
+    let _ = crate::db::queries::upsert_analytics_cache(
+        &state.db,
+        auth.user_id,
+        &query.provider,
+        None,
+        &data,
+    )
+    .await;
+
     Ok(Json(serde_json::json!({ "data": analytics })))
 }
 
 /// GET /api/analytics/post/{id}
+///
+/// Cache-first strategy:
+/// 1. Get the post and its integration
+/// 2. Check analytics_cache for (user_id, provider, platform_post_id)
+/// 3. If cached and valid, return it
+/// 4. Otherwise live-fetch via provider.post_analytics(), store, return
 pub async fn get_post(
     State(state): State<AppState>,
     auth: AuthenticatedUser,
@@ -74,6 +116,24 @@ pub async fn get_post(
     .await?
     .ok_or_else(|| AppError::NotFound("Integration not found".into()))?;
 
+    // Check cache for this specific post
+    let cached = crate::db::queries::get_single_cached_analytics(
+        &state.db,
+        auth.user_id,
+        &integration.provider_identifier,
+        &platform_post_id,
+    )
+    .await?;
+
+    if let Some(entry) = cached {
+        return Ok(Json(serde_json::json!({
+            "data": entry.data,
+            "cached": true,
+            "cached_at": entry.cached_at.to_rfc3339(),
+        })));
+    }
+
+    // Cache miss — live-fetch
     let provider = state
         .providers
         .get(&integration.provider_identifier)
@@ -88,6 +148,17 @@ pub async fn get_post(
         .post_analytics(&integration.access_token, &platform_post_id)
         .await
         .map_err(AppError::from)?;
+
+    // Store in cache
+    let data = serde_json::to_value(&analytics).unwrap_or(serde_json::Value::Null);
+    let _ = crate::db::queries::upsert_analytics_cache(
+        &state.db,
+        auth.user_id,
+        &integration.provider_identifier,
+        Some(&platform_post_id),
+        &data,
+    )
+    .await;
 
     Ok(Json(serde_json::json!({ "data": analytics })))
 }
@@ -132,7 +203,6 @@ pub async fn get_summary(
     let days = query.days.unwrap_or(30).max(1);
     let cutoff = chrono::Utc::now() - chrono::Duration::days(days as i64);
 
-    // Count posts by state
     let state_rows: Vec<(String, i64)> = sqlx::query_as(
         "SELECT state::text, COUNT(*)::bigint FROM posts WHERE user_id = $1 AND created_at >= $2 GROUP BY state",
     )
@@ -141,7 +211,6 @@ pub async fn get_summary(
     .fetch_all(&state.db)
     .await?;
 
-    // Count posts by provider (JOIN integrations for provider_name)
     let provider_rows: Vec<(String, i64)> = sqlx::query_as(
         "SELECT i.provider_name, COUNT(*)::bigint \
          FROM posts p JOIN integrations i ON p.integration_id = i.id \
@@ -154,7 +223,6 @@ pub async fn get_summary(
     .fetch_all(&state.db)
     .await?;
 
-    // Count posts by day
     let day_rows: Vec<(String, i64)> = sqlx::query_as(
         "SELECT DATE(p.created_at)::text, COUNT(*)::bigint \
          FROM posts p WHERE p.user_id = $1 AND p.created_at >= $2 \

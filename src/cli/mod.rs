@@ -78,6 +78,25 @@ pub enum Command {
         #[command(subcommand)]
         action: InstagramAction,
     },
+
+    /// Import recent posts from a provider into local store
+    Import {
+        /// Provider name (x, reddit, bluesky)
+        provider: String,
+        /// Number of recent posts to import
+        #[arg(long, default_value_t = 20)]
+        count: u32,
+    },
+
+    /// Show unified feed of imported posts across all providers
+    Feed {
+        /// Filter by provider name (x, reddit, etc.)
+        #[arg(long)]
+        provider: Option<String>,
+        /// Number of posts to show
+        #[arg(long, default_value_t = 20)]
+        limit: u32,
+    },
 }
 
 // ─── X (Twitter) ────────────────────────────────────────────────────────────

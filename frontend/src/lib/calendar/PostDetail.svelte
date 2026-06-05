@@ -2,6 +2,7 @@
   import { tick } from "svelte";
   import { goto } from "$app/navigation";
   import Badge from "$lib/ui/Badge.svelte";
+  import { engagementIcon, engagementLabel } from "./engagement";
   import type { CalendarEvent as CEvent } from "./types";
 
   let { event, onclose, onDuplicate, duplicating = false }: { event?: CEvent | null; onclose: () => void; onDuplicate?: (id: string) => void; duplicating?: boolean } = $props();
@@ -45,8 +46,8 @@
           <Badge state={event.state} />
         </div>
         <div>
-          <div class="text-xs text-[#6b7280] mb-1">Scheduled</div>
-          <div class="text-sm">{event.date} {event.time || ""}</div>
+          <div class="text-xs text-[#6b7280] mb-1">{event.state === 'published' ? 'Posted' : 'Scheduled'}</div>
+          <div class="text-sm">{#if event.date}{event.date} {event.time || ""}{:else}<span class="text-[#6b7280]">Not scheduled (draft)</span>{/if}</div>
         </div>
         <div>
           <div class="text-xs text-[#6b7280] mb-1">Content</div>
@@ -58,9 +59,51 @@
             <div class="text-sm text-red-300">{event.error}</div>
           </div>
         {/if}
+        {#if event.likes != null || event.comments != null || event.shares != null || event.impressions != null}
+          <div>
+            <div class="text-xs text-[#6b7280] mb-2">Engagement</div>
+            <div class="grid grid-cols-2 gap-2">
+              <!-- Positive feedback: likes/upvotes/reactions unified -->
+              {#if event.likes != null}
+                <div class="bg-[#0d1117] border border-[#1e2435] rounded-lg p-2 text-center" title="{engagementLabel('likes', event.platform)}">
+                  <div class="text-xs text-pink-400">{engagementIcon('likes', event.platform)}</div>
+                  <div class="text-sm font-semibold">{event.likes.toLocaleString()}</div>
+                  <div class="text-[10px] text-[#6b7280]">{engagementLabel('likes', event.platform)}</div>
+                </div>
+              {/if}
+              <!-- Comments/replies unified -->
+              {#if event.comments != null}
+                <div class="bg-[#0d1117] border border-[#1e2435] rounded-lg p-2 text-center" title="{engagementLabel('comments', event.platform)}">
+                  <div class="text-xs text-yellow-400">{engagementIcon('comments', event.platform)}</div>
+                  <div class="text-sm font-semibold">{event.comments.toLocaleString()}</div>
+                  <div class="text-[10px] text-[#6b7280]">{engagementLabel('comments', event.platform)}</div>
+                </div>
+              {/if}
+              <!-- Shares/reposts/quotes unified -->
+              {#if event.shares != null}
+                <div class="bg-[#0d1117] border border-[#1e2435] rounded-lg p-2 text-center" title="{engagementLabel('shares', event.platform)}">
+                  <div class="text-xs text-green-400">{engagementIcon('shares', event.platform)}</div>
+                  <div class="text-sm font-semibold">{event.shares.toLocaleString()}</div>
+                  <div class="text-[10px] text-[#6b7280]">{engagementLabel('shares', event.platform)}</div>
+                </div>
+              {/if}
+              <!-- Views/impressions unified -->
+              {#if event.impressions != null}
+                <div class="bg-[#0d1117] border border-[#1e2435] rounded-lg p-2 text-center" title="{engagementLabel('impressions', event.platform)}">
+                  <div class="text-xs text-indigo-400">{engagementIcon('impressions', event.platform)}</div>
+                  <div class="text-sm font-semibold">{event.impressions.toLocaleString()}</div>
+                  <div class="text-[10px] text-[#6b7280]">{engagementLabel('impressions', event.platform)}</div>
+                </div>
+              {/if}
+            </div>
+          </div>
+        {/if}
         {#if event.postUrl}
-          <a href={event.postUrl} target="_blank" class="text-indigo-400 text-sm hover:underline block">
-            View on platform &rarr;
+          <a href={event.postUrl} target="_blank" class="inline-flex items-center gap-1.5 text-indigo-400 text-sm hover:text-indigo-300 hover:underline transition-colors">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M6 3l5 5-5 5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            View original post &rarr;
           </a>
         {/if}
         <button onclick={() => onDuplicate?.(event.id)} disabled={duplicating} class="w-full px-3 py-2 bg-[#1a1f2e] hover:bg-[#242b3d] border border-[#2a3045] rounded-lg text-sm text-indigo-400 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">

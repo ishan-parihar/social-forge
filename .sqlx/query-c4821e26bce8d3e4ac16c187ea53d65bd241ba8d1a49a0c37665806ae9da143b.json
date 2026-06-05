@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT p.id, p.user_id, p.integration_id,\n            p.state as \"state: PostState\",\n            p.content, p.title, p.media, p.settings,\n            p.scheduled_at, p.published_at,\n            p.platform_post_id, p.platform_post_url, p.error_message,\n            p.created_at, p.updated_at,\n            p.repeat_interval_days, p.repeat_end_date, p.group_id,\n            i.provider_identifier, i.access_token,\n            i.refresh_token, i.token_expires_at,\n            i.disabled as \"integration_disabled\",\n            i.refresh_needed as \"integration_refresh_needed\"\n          FROM posts p\n          JOIN integrations i ON p.integration_id = i.id\n          WHERE p.id = $1 AND p.user_id = $2",
+  "query": "UPDATE posts SET repeat_interval_days = $1, repeat_end_date = $2, group_id = $3,\n           updated_at = now()\n           WHERE id = $4 AND user_id = $5\n           RETURNING id, user_id, integration_id, state as \"state: PostState\",\n              content, title, media, settings, scheduled_at, published_at,\n              platform_post_id, platform_post_url, error_message,\n              created_at, updated_at,\n              repeat_interval_days, repeat_end_date, group_id,\n              first_comment, sequence",
   "describe": {
     "columns": [
       {
@@ -107,37 +107,20 @@
       },
       {
         "ordinal": 18,
-        "name": "provider_identifier",
+        "name": "first_comment",
         "type_info": "Text"
       },
       {
         "ordinal": 19,
-        "name": "access_token",
-        "type_info": "Text"
-      },
-      {
-        "ordinal": 20,
-        "name": "refresh_token",
-        "type_info": "Text"
-      },
-      {
-        "ordinal": 21,
-        "name": "token_expires_at",
-        "type_info": "Timestamptz"
-      },
-      {
-        "ordinal": 22,
-        "name": "integration_disabled",
-        "type_info": "Bool"
-      },
-      {
-        "ordinal": 23,
-        "name": "integration_refresh_needed",
-        "type_info": "Bool"
+        "name": "sequence",
+        "type_info": "Int4"
       }
     ],
     "parameters": {
       "Left": [
+        "Int4",
+        "Timestamptz",
+        "Uuid",
         "Uuid",
         "Uuid"
       ]
@@ -161,13 +144,9 @@
       true,
       true,
       true,
-      false,
-      false,
       true,
-      true,
-      false,
       false
     ]
   },
-  "hash": "04402bc6b90833d638585feee4503206e92ae77317a69f1f7b3fcb529faafdaa"
+  "hash": "c4821e26bce8d3e4ac16c187ea53d65bd241ba8d1a49a0c37665806ae9da143b"
 }

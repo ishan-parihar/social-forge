@@ -370,6 +370,51 @@ impl SocialProvider for TikTokProvider {
         })
     }
 
+    async fn get_recent_posts(&self, access_token: &str, _internal_id: &str, limit: u32) -> Result<Vec<ExternalPostData>, ProviderError> {
+        let max_count = limit.clamp(1, 100);
+        let videos = self.list_videos(access_token, max_count).await?;
+        let mut posts = Vec::new();
+
+        if let Some(data) = videos["data"]["videos"].as_array() {
+            for item in data {
+                let video_id = item["id"].as_str().unwrap_or("").to_string();
+                let title = item["title"].as_str().unwrap_or("").to_string();
+                let cover_url = item["cover_image_url"].as_str().map(|s| s.to_string());
+                let share_url = item["share_url"].as_str().map(|s| s.to_string());
+                let create_time_ts = item["create_time"].as_i64().unwrap_or(0);
+
+                let posted_at = chrono::DateTime::from_timestamp(create_time_ts, 0)
+                    .unwrap_or_default();
+
+                // Single media item: embed URL for iframe playback
+                // Cover image URL is stored in metadata.poster_url so frontend can show it as placeholder
+                let embed_url = format!("https://www.tiktok.com/embed/v2/{video_id}");
+                let meta = serde_json::json!({
+                    "title": title.clone(),
+                    "poster_url": cover_url,
+                });
+
+                posts.push(ExternalPostData {
+                    platform_post_id: video_id,
+                    text: title.clone(),
+                    author_name: None,
+                    author_handle: None,
+                    author_avatar: None,
+                    media: vec![MediaAttachment {
+                        url: embed_url,
+                        mime_type: "text/html".into(),
+                        alt: Some(title.clone()),
+                    }],
+                    created_at: posted_at,
+                    url: share_url,
+                    metadata: Some(meta),
+                });
+            }
+        }
+
+        Ok(posts)
+    }
+
     /// Return the authenticated user as a single "page" (TikTok has no multi-page concept).
     async fn pages(&self, access_token: &str) -> Result<Vec<PageInfo>, ProviderError> {
         let info = self.get_user_info(access_token).await?;
