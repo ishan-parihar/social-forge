@@ -1193,17 +1193,43 @@ impl SocialProvider for XProvider {
                     let author_name = user["name"].as_str().map(String::from);
                     let author_handle = user["screen_name"].as_str().map(String::from);
 
-                    // Debug: log first tweet's legacy keys to diagnose media extraction
+                    // Debug: log first tweet's full structure to diagnose media extraction
                     if posts.is_empty() {
                         let legacy_keys: Vec<String> = legacy.as_object().map(|o| o.keys().cloned().collect()).unwrap_or_default();
                         let has_ext_ent = legacy.pointer("/extended_entities/media").is_some();
                         let has_ent_media = legacy.pointer("/entities/media").is_some();
                         let has_card = result.get("card").is_some();
                         let has_media_details = result.get("mediaDetails").is_some();
+                        let has_rt = legacy.get("retweeted_status_result").is_some();
+                        let has_qt = legacy.get("quoted_status_result").is_some();
+                        // Log the retweeted_status_result structure for debugging
+                        let rt_debug = if let Some(rt) = legacy.get("retweeted_status_result") {
+                            let rt_str = serde_json::to_string(rt).unwrap_or_default();
+                            let truncated: String = rt_str.chars().take(400).collect();
+                            truncated
+                        } else {
+                            "none".to_string()
+                        };
+                        let qt_debug = if let Some(qt) = legacy.get("quoted_status_result") {
+                            let qt_str = serde_json::to_string(qt).unwrap_or_default();
+                            let truncated: String = qt_str.chars().take(400).collect();
+                            truncated
+                        } else {
+                            "none".to_string()
+                        };
                         tracing::info!(
-                            "X DEBUG first tweet: id={} legacy_keys={:?} has_ext_ent={} has_ent_media={} has_card={} has_media_details={} __typename={:?}",
+                            "X DEBUG first tweet: id={} legacy_keys={:?} has_ext_ent={} has_ent_media={} has_card={} has_media_details={} has_rt={} has_qt={} __typename={:?}",
                             id, legacy_keys, has_ext_ent, has_ent_media, has_card, has_media_details,
+                            has_rt, has_qt,
                             raw_result.get("__typename").and_then(|v| v.as_str()),
+                        );
+                        tracing::info!(
+                            "X DEBUG rt_status={}",
+                            rt_debug,
+                        );
+                        tracing::info!(
+                            "X DEBUG qt_status={}",
+                            qt_debug,
                         );
                     }
                     let mut media = Vec::new();
@@ -1244,14 +1270,22 @@ impl SocialProvider for XProvider {
                     }
                     // For retweets: also extract media from the original retweeted tweet
                     if media.is_empty() {
-                        if let Some(rt_legacy) = legacy.pointer("/retweeted_status_result/result/legacy") {
-                            Self::extract_media_from_legacy(rt_legacy, &mut media);
+                        // Try modern GraphQL path first: retweeted_status_result.result.result.legacy (TweetResults wrapper)
+                        // Fall back to legacy path: retweeted_status_result.result.legacy
+                        let rt_legacy = legacy.pointer("/retweeted_status_result/result/result/legacy")
+                            .or_else(|| legacy.pointer("/retweeted_status_result/result/legacy"));
+                        if let Some(rt) = rt_legacy {
+                            Self::extract_media_from_legacy(rt, &mut media);
                         }
                     }
                     // For quote tweets: also extract media from the quoted tweet
                     if media.is_empty() {
-                        if let Some(quoted_legacy) = legacy.pointer("/quoted_status_result/result/legacy") {
-                            Self::extract_media_from_legacy(quoted_legacy, &mut media);
+                        // Try modern GraphQL path first: quoted_status_result.result.result.legacy (TweetResults wrapper)
+                        // Fall back to legacy path: quoted_status_result.result.legacy
+                        let qt_legacy = legacy.pointer("/quoted_status_result/result/result/legacy")
+                            .or_else(|| legacy.pointer("/quoted_status_result/result/legacy"));
+                        if let Some(qt) = qt_legacy {
+                            Self::extract_media_from_legacy(qt, &mut media);
                         }
                     }
 

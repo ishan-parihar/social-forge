@@ -545,7 +545,19 @@ impl SocialProvider for LinkedInPageProvider {
         } else {
             internal_id.to_string()
         };
-        let json = self.get_page_posts(access_token, &page_id, limit).await?;
+        // Try fetching with the given page_id; if it fails, resolve the correct org ID
+        let json = match self.get_page_posts(access_token, &page_id, limit).await {
+            Ok(json) => json,
+            Err(ProviderError::Api(msg)) if msg.contains("No virtual resource") || msg.contains("not found") => {
+                tracing::warn!(
+                    "LinkedIn page posts failed with '{}' for page_id={}, resolving correct org ID...",
+                    msg, page_id,
+                );
+                let resolved_id = self.resolve_org_id(access_token).await?;
+                self.get_page_posts(access_token, &resolved_id, limit).await?
+            }
+            Err(e) => return Err(e),
+        };
 
         let mut posts = Vec::new();
         if let Some(elements) = json["elements"].as_array() {
@@ -729,7 +741,8 @@ impl LinkedInPageProvider {
 
     pub async fn get_page_posts(&self, access_token: &str, page_id: &str, limit: u32) -> Result<serde_json::Value, ProviderError> {
         let limit = limit.clamp(1, 100);
-        let url = format!("https://api.linkedin.com/v2/rest/posts?author=urn:li:organization:{page_id}&count={limit}");
+        let author_urn = format!("urn:li:organization:{page_id}");
+        let url = format!("https://api.linkedin.com/v2/rest/posts?author={author_urn}&count={limit}");
         let resp = self
             .http
             .get(&url)
@@ -742,12 +755,13 @@ impl LinkedInPageProvider {
         let status = resp.status();
         let json: serde_json::Value = resp.json().await?;
 
-        if status == 200 {
+        if status.is_success() {
             Ok(json)
         } else if status == 401 {
             Err(ProviderError::TokenExpired)
         } else {
             let msg = json["message"].as_str().unwrap_or("LinkedIn Page API error").to_string();
+            tracing::warn!("LinkedIn get_page_posts HTTP {status} for page_id={page_id}: {msg}");
             Err(ProviderError::Api(msg))
         }
     }
