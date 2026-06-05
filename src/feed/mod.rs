@@ -9,7 +9,7 @@ use crate::crypto;
 use crate::db::PgPool;
 use crate::realtime::Broadcaster;
 use crate::social::registry::ProviderRegistry;
-use crate::social::SocialProvider;
+use crate::social::{SocialProvider, ProviderError};
 
 /// Default interval between full refresh cycles (seconds)
 const DEFAULT_REFRESH_INTERVAL_SECS: u64 = 300; // 5 minutes
@@ -71,6 +71,50 @@ pub fn start_feed_refresher(
     // Shutdown subscription stays alive through `shutdown`
 }
 
+/// Attempt to auto-refresh an expired token and re-fetch posts.
+/// Returns Some(posts) on success, None if refresh fails.
+async fn try_refresh_and_fetch(
+    db: &PgPool,
+    provider: &Arc<dyn SocialProvider>,
+    integration: &crate::db::models::Integration,
+    token_key: Option<[u8; 32]>,
+) -> Option<Vec<crate::social::ExternalPostData>> {
+    tracing::info!(
+        "Token expired for integration {} ({}), attempting auto-refresh...",
+        integration.id, integration.provider_identifier
+    );
+    let refresh_token = integration.refresh_token.as_ref()?;
+    let rt = token_key
+        .as_ref()
+        .and_then(|key| crypto::decrypt_string(refresh_token, key).ok())
+        .unwrap_or_else(|| refresh_token.clone());
+    let new_token = match provider.refresh_token(&rt).await {
+        Ok(t) => t,
+        Err(e) => {
+            tracing::warn!("Token refresh failed for {} ({}): {e}", integration.id, integration.provider_identifier);
+            return None;
+        }
+    };
+    let new_access = new_token.access_token.clone();
+    let expires_at = new_token.expires_in.map(|e| {
+        chrono::Utc::now() + chrono::Duration::seconds(e as i64)
+    });
+    if let Err(e) = crate::db::queries::update_integration_token(
+        db, integration.id, &new_access, new_token.refresh_token.as_deref(), expires_at,
+    ).await {
+        tracing::warn!("Failed to update refreshed token for {}: {e}", integration.id);
+        return None;
+    }
+    tracing::info!("Token refreshed successfully for {} ({})", integration.id, integration.provider_identifier);
+    match provider.get_recent_posts(&new_access, &integration.internal_id, RECENT_POSTS_LIMIT).await {
+        Ok(p) => Some(p),
+        Err(e) => {
+            tracing::warn!("Failed to fetch posts after refresh for {} ({}): {e}", integration.id, integration.provider_identifier);
+            None
+        }
+    }
+}
+
 /// Poll all non-disabled integrations for a specific user and import their recent posts.
 /// Returns the count of newly imported posts.
 pub async fn refresh_user_posts(
@@ -110,6 +154,12 @@ pub async fn refresh_user_posts(
             .await
         {
             Ok(p) => p,
+            Err(ProviderError::TokenExpired) => {
+                match try_refresh_and_fetch(db, &provider, integration, token_key).await {
+                    Some(p) => p,
+                    None => continue,
+                }
+            }
             Err(e) => {
                 tracing::warn!(
                     "Failed to fetch posts for integration {} ({}): {e}",
@@ -202,11 +252,17 @@ async fn refresh_all_posts(
             .unwrap_or_else(|| integration.access_token.clone());
 
         // Fetch recent posts from provider
-        let posts = match provider
+        let mut posts = match provider
             .get_recent_posts(&token, &integration.internal_id, RECENT_POSTS_LIMIT)
             .await
         {
             Ok(p) => p,
+            Err(ProviderError::TokenExpired) => {
+                match try_refresh_and_fetch(db, &provider, integration, token_key).await {
+                    Some(p) => p,
+                    None => continue,
+                }
+            }
             Err(e) => {
                 tracing::warn!(
                     "Failed to fetch posts for integration {} ({}): {e}",
