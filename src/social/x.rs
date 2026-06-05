@@ -1193,9 +1193,55 @@ impl SocialProvider for XProvider {
                     let author_name = user["name"].as_str().map(String::from);
                     let author_handle = user["screen_name"].as_str().map(String::from);
 
+                    // Debug: log first tweet's legacy keys to diagnose media extraction
+                    if posts.is_empty() {
+                        let legacy_keys: Vec<String> = legacy.as_object().map(|o| o.keys().cloned().collect()).unwrap_or_default();
+                        let has_ext_ent = legacy.pointer("/extended_entities/media").is_some();
+                        let has_ent_media = legacy.pointer("/entities/media").is_some();
+                        let has_card = result.get("card").is_some();
+                        let has_media_details = result.get("mediaDetails").is_some();
+                        tracing::info!(
+                            "X DEBUG first tweet: id={} legacy_keys={:?} has_ext_ent={} has_ent_media={} has_card={} has_media_details={} __typename={:?}",
+                            id, legacy_keys, has_ext_ent, has_ent_media, has_card, has_media_details,
+                            raw_result.get("__typename").and_then(|v| v.as_str()),
+                        );
+                    }
                     let mut media = Vec::new();
                     // Extract media from the tweet's own legacy first
                     Self::extract_media_from_legacy(legacy, &mut media);
+                    // Also check result-level mediaDetails (X sometimes puts media here instead of legacy)
+                    if media.is_empty() {
+                        if let Some(media_details) = result.get("mediaDetails").and_then(|m| m.as_array()) {
+                            for m in media_details {
+                                let media_type = m["type"].as_str().unwrap_or("photo");
+                                if media_type == "video" || media_type == "animated_gif" {
+                                    let video_url = m["video_info"]["variants"]
+                                        .as_array()
+                                        .and_then(|variants| {
+                                            let mut best: Option<(&str, u64)> = None;
+                                            for v in variants {
+                                                if v["content_type"].as_str() == Some("video/mp4") {
+                                                    if let (Some(url), Some(bitrate)) = (v["url"].as_str(), v["bitrate"].as_u64()) {
+                                                        if best.map_or(true, |(_, b)| bitrate > b) {
+                                                            best = Some((url, bitrate));
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            best.map(|(url, _)| url.to_string())
+                                        });
+                                    if let Some(url) = video_url {
+                                        media.push(MediaAttachment { url, mime_type: "video/mp4".to_string(), alt: None });
+                                    }
+                                } else {
+                                    let url = m["media_url_https"].as_str().or_else(|| m["media_url"].as_str()).unwrap_or("").to_string();
+                                    if !url.is_empty() {
+                                        media.push(MediaAttachment { url, mime_type: "image/jpeg".to_string(), alt: None });
+                                    }
+                                }
+                            }
+                        }
+                    }
                     // For retweets: also extract media from the original retweeted tweet
                     if media.is_empty() {
                         if let Some(rt_legacy) = legacy.pointer("/retweeted_status_result/result/legacy") {
