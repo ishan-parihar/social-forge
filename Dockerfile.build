@@ -2,12 +2,16 @@
 # Use this if you want to compile from source instead of fetching releases.
 # Build: docker build -f Dockerfile.build -t social-forge .
 
-FROM rust:1.85-slim-bookworm AS builder
+FROM rust:1.94-slim-bookworm AS builder
 
 RUN apt-get update && \
-    apt-get install -y pkg-config libssl-dev musl-tools && \
+    apt-get install -y pkg-config libssl-dev musl-tools cmake perl g++ && \
     rustup target add x86_64-unknown-linux-musl && \
     rm -rf /var/lib/apt/lists/*
+
+ENV CC_x86_64_unknown_linux_musl=musl-gcc
+ENV CC=musl-gcc
+ENV CXX=musl-g++
 
 WORKDIR /app
 COPY Cargo.toml Cargo.lock* ./

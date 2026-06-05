@@ -264,6 +264,38 @@ impl XProvider {
         Ok(format!("https://x.com/i/api/graphql/{query_id}/{operation}?{query}"))
     }
 
+    /// Ensure the ct0 value in a cookie string matches the given ct0.
+    /// This prevents CSRF mismatches when the stored cookies have a stale ct0.
+    fn ensure_ct0_matches(cookie_str: &str, ct0: &str) -> String {
+        let mut parts: Vec<String> = cookie_str
+            .split(';')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.starts_with("ct0=") && !s.is_empty())
+            .collect();
+        parts.push(format!("ct0={ct0}"));
+        parts.join("; ")
+    }
+
+    /// Build the effective cookie string for a GraphQL request.
+    /// Prefers the access_token's embedded cookie_string over self.cookie_string,
+    /// and ensures ct0 matches the header value.
+    fn effective_cookie_str(&self, access_token: &str) -> (String, String) {
+        // Parse ct0 from the access token JSON blob
+        let ct0 = Self::parse_cookie_token(access_token)
+            .map(|(_, ct)| ct)
+            .unwrap_or_default();
+
+        // Prefer the full cookie_string from the access token if available
+        let base_cs = Self::extract_cookie_string(access_token)
+            .filter(|s| !s.is_empty() && s.contains("auth_token="))
+            .or_else(|| self.cookie_string.clone())
+            .unwrap_or_default();
+
+        // Ensure ct0 in cookie matches the header
+        let cs = Self::ensure_ct0_matches(&base_cs, &ct0);
+        (ct0, cs)
+    }
+
     fn add_cookie_header(&self, req: wreq::RequestBuilder, ct0: &str, _url: &str) -> wreq::RequestBuilder {
         let req = req.header("x-csrf-token", ct0);
         if let Some(ref cs) = self.cookie_string {
@@ -288,13 +320,13 @@ impl XProvider {
         query_id: &str,
         operation: &str,
         variables: &serde_json::Value,
-        ct0: &str,
+        access_token: &str,
     ) -> Result<serde_json::Value, ProviderError> {
         let url = self.graphql_url(query_id, operation, variables)?;
-        let cs = self.cookie_string.as_deref().unwrap_or("");
+        let (ct0, cs) = self.effective_cookie_str(access_token);
         let resp = self.http.get(&url)
-            .header("x-csrf-token", ct0)
-            .header("Cookie", cs)
+            .header("x-csrf-token", &ct0)
+            .header("Cookie", &cs)
             .send().await
             .map_err(|e| ProviderError::Api(format!("X GraphQL GET error: {e}")))?;
         let status = resp.status();
@@ -315,7 +347,7 @@ impl XProvider {
         query_id: &str,
         operation: &str,
         variables: &serde_json::Value,
-        ct0: &str,
+        access_token: &str,
     ) -> Result<serde_json::Value, ProviderError> {
         let url = format!("https://x.com/i/api/graphql/{query_id}/{operation}");
         let body = serde_json::json!({
@@ -323,10 +355,10 @@ impl XProvider {
             "queryId": query_id,
             "features": *GRAPHQL_FEATURES,
         });
-        let cs = self.cookie_string.as_deref().unwrap_or("");
+        let (ct0, cs) = self.effective_cookie_str(access_token);
         let resp = self.http.post(&url)
-            .header("x-csrf-token", ct0)
-            .header("Cookie", cs)
+            .header("x-csrf-token", &ct0)
+            .header("Cookie", &cs)
             .header("Priority", "u=1, i")
             .header("Referer", "https://x.com/compose/post")
             .json(&body)
@@ -814,7 +846,7 @@ impl SocialProvider for XProvider {
             let query_id = FALLBACK_QUERY_IDS
                 .get("CreateTweet")
                 .ok_or_else(|| ProviderError::Api("Missing CreateTweet queryId".into()))?;
-            let json = self.graphql_post(query_id, "CreateTweet", &variables, &ct0).await?;
+            let json = self.graphql_post(query_id, "CreateTweet", &variables, access_token).await?;
 
             let tweet_id = json["data"]["create_tweet"]["tweet_results"]["result"]["rest_id"]
                 .as_str()
@@ -1223,7 +1255,7 @@ impl XProvider {
             let qid = FALLBACK_QUERY_IDS
                 .get(gql_op)
                 .ok_or_else(|| ProviderError::Api(format!("Missing {gql_op} queryId")))?;
-            let result = self.graphql_get(qid, gql_op, gql_vars, &ct0).await?;
+            let result = self.graphql_get(qid, gql_op, gql_vars, access_token).await?;
             return Ok(v2_construct(result));
         }
         self.v2_get(v2_url, access_token).await
@@ -1263,7 +1295,7 @@ impl XProvider {
                     let vars = serde_json::json!({"screen_name": screen_name, "withSafetyModeUserFields": true});
                     let qid = FALLBACK_QUERY_IDS.get("UserByScreenName")
                         .ok_or_else(|| ProviderError::Api("Missing UserByScreenName queryId".into()))?;
-                    let profile = self.graphql_get(qid, "UserByScreenName", &vars, &ct0).await?;
+                    let profile = self.graphql_get(qid, "UserByScreenName", &vars, access_token).await?;
                     let data = profile.pointer("/data/user/result").and_then(|r| r.get("legacy")).or_else(|| profile.get("data"));
                     let name = data.and_then(|d| d.get("name")).and_then(|n| n.as_str()).unwrap_or("");
                     let username = data.and_then(|d| d.get("screen_name")).and_then(|n| n.as_str()).unwrap_or("");
@@ -1309,7 +1341,7 @@ impl XProvider {
             let vars = serde_json::json!({"screen_name": username, "withSafetyModeUserFields": true});
             let qid = FALLBACK_QUERY_IDS.get("UserByScreenName")
                 .ok_or_else(|| ProviderError::Api("Missing UserByScreenName queryId".into()))?;
-            let json = self.graphql_get(qid, "UserByScreenName", &vars, &ct0).await?;
+            let json = self.graphql_get(qid, "UserByScreenName", &vars, access_token).await?;
             let result = json.pointer("/data/user/result").cloned().unwrap_or(json);
             Ok(serde_json::json!({"data": {
                 "id": result["rest_id"].as_str().unwrap_or(""),
@@ -1349,7 +1381,7 @@ impl XProvider {
             let qid = FALLBACK_QUERY_IDS
                 .get("HomeLatestTimeline")
                 .ok_or_else(|| ProviderError::Api("Missing HomeLatestTimeline queryId".into()))?;
-            let json = self.graphql_get(qid, "HomeLatestTimeline", &vars, &ct0).await?;
+            let json = self.graphql_get(qid, "HomeLatestTimeline", &vars, access_token).await?;
             let cursor = Self::extract_next_cursor(&json);
             let timeline = json
                 .pointer("/data/home/home_timeline_urt")
@@ -1393,7 +1425,7 @@ impl XProvider {
             let qid = FALLBACK_QUERY_IDS
                 .get("UserTweets")
                 .ok_or_else(|| ProviderError::Api("Missing UserTweets queryId".into()))?;
-            let json = self.graphql_get(qid, "UserTweets", &vars, &ct0).await?;
+            let json = self.graphql_get(qid, "UserTweets", &vars, access_token).await?;
             let cursor = Self::extract_next_cursor(&json);
             let timeline = json
                 .pointer("/data/user/result/timeline_v2/timeline")
@@ -1437,7 +1469,7 @@ impl XProvider {
             let qid = FALLBACK_QUERY_IDS
                 .get("TweetDetail")
                 .ok_or_else(|| ProviderError::Api("Missing TweetDetail queryId".into()))?;
-            let json = self.graphql_get(qid, "TweetDetail", &vars, &ct0).await?;
+            let json = self.graphql_get(qid, "TweetDetail", &vars, access_token).await?;
             // Extract the focal tweet from the response
             let tweet = json
                 .pointer("/data/threaded_conversation_with_injections_v2/instructions")
@@ -1478,7 +1510,7 @@ impl XProvider {
             let qid = FALLBACK_QUERY_IDS
                 .get("SearchTimeline")
                 .ok_or_else(|| ProviderError::Api("Missing SearchTimeline queryId".into()))?;
-            let json = self.graphql_post(qid, "SearchTimeline", &vars, &ct0).await?;
+            let json = self.graphql_post(qid, "SearchTimeline", &vars, access_token).await?;
             let cursor = Self::extract_next_cursor(&json);
             let mut result = serde_json::json!({ "data": json });
             if let Some(c) = cursor {
@@ -1512,7 +1544,7 @@ impl XProvider {
             let qid = FALLBACK_QUERY_IDS
                 .get("DeleteTweet")
                 .ok_or_else(|| ProviderError::Api("Missing DeleteTweet queryId".into()))?;
-            let json = self.graphql_post(qid, "DeleteTweet", &vars, &ct0).await?;
+            let json = self.graphql_post(qid, "DeleteTweet", &vars, access_token).await?;
             Self::write_delay();
             return Ok(serde_json::json!({ "data": json.get("data") }));
         }
@@ -1531,7 +1563,7 @@ impl XProvider {
             let qid = FALLBACK_QUERY_IDS
                 .get("FavoriteTweet")
                 .ok_or_else(|| ProviderError::Api("Missing FavoriteTweet queryId".into()))?;
-            let json = self.graphql_post(qid, "FavoriteTweet", &vars, &ct0).await?;
+            let json = self.graphql_post(qid, "FavoriteTweet", &vars, access_token).await?;
             Self::write_delay();
             return Ok(serde_json::json!({ "data": json.get("data") }));
         }
@@ -1554,7 +1586,7 @@ impl XProvider {
             let qid = FALLBACK_QUERY_IDS
                 .get("UnfavoriteTweet")
                 .ok_or_else(|| ProviderError::Api("Missing UnfavoriteTweet queryId".into()))?;
-            let json = self.graphql_post(qid, "UnfavoriteTweet", &vars, &ct0).await?;
+            let json = self.graphql_post(qid, "UnfavoriteTweet", &vars, access_token).await?;
             Self::write_delay();
             return Ok(serde_json::json!({ "data": json.get("data") }));
         }
@@ -1576,7 +1608,7 @@ impl XProvider {
             let qid = FALLBACK_QUERY_IDS
                 .get("CreateRetweet")
                 .ok_or_else(|| ProviderError::Api("Missing CreateRetweet queryId".into()))?;
-            let json = self.graphql_post(qid, "CreateRetweet", &vars, &ct0).await?;
+            let json = self.graphql_post(qid, "CreateRetweet", &vars, access_token).await?;
             Self::write_delay();
             return Ok(serde_json::json!({ "data": json.get("data") }));
         }
@@ -1599,7 +1631,7 @@ impl XProvider {
             let qid = FALLBACK_QUERY_IDS
                 .get("DeleteRetweet")
                 .ok_or_else(|| ProviderError::Api("Missing DeleteRetweet queryId".into()))?;
-            let json = self.graphql_post(qid, "DeleteRetweet", &vars, &ct0).await?;
+            let json = self.graphql_post(qid, "DeleteRetweet", &vars, access_token).await?;
             Self::write_delay();
             return Ok(serde_json::json!({ "data": json.get("data") }));
         }
@@ -1626,7 +1658,7 @@ impl XProvider {
             let qid = FALLBACK_QUERY_IDS
                 .get("Bookmarks")
                 .ok_or_else(|| ProviderError::Api("Missing Bookmarks queryId".into()))?;
-            let json = self.graphql_get(qid, "Bookmarks", &vars, &ct0).await?;
+            let json = self.graphql_get(qid, "Bookmarks", &vars, access_token).await?;
             let cursor = Self::extract_next_cursor(&json);
             let timeline = json
                 .pointer("/data/bookmark_timeline_v2/timeline")
@@ -1660,7 +1692,7 @@ impl XProvider {
             let qid = FALLBACK_QUERY_IDS
                 .get("CreateBookmark")
                 .ok_or_else(|| ProviderError::Api("Missing CreateBookmark queryId".into()))?;
-            let json = self.graphql_post(qid, "CreateBookmark", &vars, &ct0).await?;
+            let json = self.graphql_post(qid, "CreateBookmark", &vars, access_token).await?;
             return Ok(serde_json::json!({ "data": json.get("data") }));
         }
         let url = format!("https://api.twitter.com/2/users/{user_id}/bookmarks");
@@ -1679,7 +1711,7 @@ impl XProvider {
             let qid = FALLBACK_QUERY_IDS
                 .get("DeleteBookmark")
                 .ok_or_else(|| ProviderError::Api("Missing DeleteBookmark queryId".into()))?;
-            let json = self.graphql_post(qid, "DeleteBookmark", &vars, &ct0).await?;
+            let json = self.graphql_post(qid, "DeleteBookmark", &vars, access_token).await?;
             return Ok(serde_json::json!({ "data": json.get("data") }));
         }
         let url = format!("https://api.twitter.com/2/users/{user_id}/bookmarks/{tweet_id}");
@@ -1708,7 +1740,7 @@ impl XProvider {
                 .get("UserByScreenName")
                 .ok_or_else(|| ProviderError::Api("Missing UserByScreenName queryId".into()))?;
             // Followers is a POST GraphQL query
-            let json = self.graphql_post(qid, "Followers", &vars, &ct0).await?;
+            let json = self.graphql_post(qid, "Followers", &vars, access_token).await?;
             let cursor = Self::extract_next_cursor(&json);
             let mut result = serde_json::json!({ "data": json });
             if let Some(c) = cursor {
@@ -1745,7 +1777,7 @@ impl XProvider {
             let qid = FALLBACK_QUERY_IDS
                 .get("UserByScreenName")
                 .ok_or_else(|| ProviderError::Api("Missing UserByScreenName queryId".into()))?;
-            let json = self.graphql_post(qid, "Following", &vars, &ct0).await?;
+            let json = self.graphql_post(qid, "Following", &vars, access_token).await?;
             let cursor = Self::extract_next_cursor(&json);
             let mut result = serde_json::json!({ "data": json });
             if let Some(c) = cursor {
@@ -1847,7 +1879,7 @@ impl XProvider {
             let qid = FALLBACK_QUERY_IDS
                 .get("ListLatestTweetsTimeline")
                 .ok_or_else(|| ProviderError::Api("Missing ListLatestTweetsTimeline queryId".into()))?;
-            let json = self.graphql_get(qid, "ListLatestTweetsTimeline", &vars, &ct0).await?;
+            let json = self.graphql_get(qid, "ListLatestTweetsTimeline", &vars, access_token).await?;
             let cursor = Self::extract_next_cursor(&json);
             let timeline = json
                 .pointer("/data/list/tweets_timeline/timeline")
