@@ -296,15 +296,6 @@ impl XProvider {
         (ct0, cs)
     }
 
-    fn add_cookie_header(&self, req: wreq::RequestBuilder, ct0: &str, _url: &str) -> wreq::RequestBuilder {
-        let req = req.header("x-csrf-token", ct0);
-        if let Some(ref cs) = self.cookie_string {
-            req.header("Cookie", cs.as_str())
-        } else {
-            req
-        }
-    }
-
     fn add_tx_header(&self, req: wreq::RequestBuilder, method: &str, url: &str) -> wreq::RequestBuilder {
         if let Some(ref tx) = self.transaction_generator {
             let path = url.split('?').next().unwrap_or(url);
@@ -651,6 +642,69 @@ impl XProvider {
             media_ids.push(id);
         }
         Ok(media_ids)
+    }
+
+    // ── Media Extraction Helper ──────────────────────────────
+
+    /// Extract media attachments from a legacy tweet object's extended_entities or entities.
+    /// Works for original tweets, retweets, and quote tweets.
+    fn extract_media_from_legacy(legacy: &serde_json::Value, media: &mut Vec<MediaAttachment>) {
+        let arr = legacy["extended_entities"]["media"].as_array()
+            .or_else(|| legacy["entities"]["media"].as_array());
+        if let Some(arr) = arr {
+            for m in arr {
+                let media_type = m["type"].as_str().unwrap_or("photo");
+                if media_type == "video" || media_type == "animated_gif" {
+                    // Extract video URL from video_info.variants — prefer highest-bitrate mp4
+                    let video_url = m["video_info"]["variants"]
+                        .as_array()
+                        .and_then(|variants| {
+                            let mut best: Option<(&str, u64)> = None;
+                            for v in variants {
+                                if v["content_type"].as_str() == Some("video/mp4") {
+                                    if let (Some(url), Some(bitrate)) = (v["url"].as_str(), v["bitrate"].as_u64()) {
+                                        if best.map_or(true, |(_, b)| bitrate > b) {
+                                            best = Some((url, bitrate));
+                                        }
+                                    }
+                                }
+                            }
+                            best.map(|(url, _)| url.to_string())
+                        });
+                    if let Some(video_url) = video_url {
+                        media.push(MediaAttachment {
+                            url: video_url,
+                            mime_type: "video/mp4".to_string(),
+                            alt: m["alt_text"].as_str().map(String::from),
+                        });
+                    } else {
+                        // Fallback to thumbnail
+                        let url = m["media_url_https"].as_str()
+                            .or_else(|| m["media_url"].as_str())
+                            .unwrap_or("").to_string();
+                        if !url.is_empty() {
+                            media.push(MediaAttachment {
+                                url,
+                                mime_type: "image/jpeg".to_string(),
+                                alt: m["alt_text"].as_str().map(String::from),
+                            });
+                        }
+                    }
+                } else {
+                    // Photo — use media_url_https
+                    let url = m["media_url_https"].as_str()
+                        .or_else(|| m["media_url"].as_str())
+                        .unwrap_or("").to_string();
+                    if !url.is_empty() {
+                        media.push(MediaAttachment {
+                            url,
+                            mime_type: "image/jpeg".to_string(),
+                            alt: m["alt_text"].as_str().map(String::from),
+                        });
+                    }
+                }
+            }
+        }
     }
 
     // ── Rate limit + write delay helpers ─────────────────────
@@ -1109,13 +1163,19 @@ impl SocialProvider for XProvider {
                     .filter_map(|inst| inst["entries"].as_array())
                     .flatten()
                 {
-                    let result = match entry["content"]["itemContent"]["tweet_results"]["result"].as_object() {
+                    let raw_result = match entry["content"]["itemContent"]["tweet_results"]["result"].as_object() {
                         Some(r) => r,
                         None => continue,
                     };
-                    if result.get("__typename").and_then(|t| t.as_str()) == Some("TweetWithState") {
-                        continue;
-                    }
+                    // Modern GraphQL wraps tweets in TweetWithState — unwrap the inner tweet
+                    let result = if raw_result.get("__typename").and_then(|t| t.as_str()) == Some("TweetWithState") {
+                        match raw_result.get("tweet").and_then(|t| t.as_object()) {
+                            Some(inner) => inner,
+                            None => raw_result,
+                        }
+                    } else {
+                        raw_result
+                    };
                     let legacy = match result.get("legacy") {
                         Some(l) => l,
                         None => continue,
@@ -1134,61 +1194,18 @@ impl SocialProvider for XProvider {
                     let author_handle = user["screen_name"].as_str().map(String::from);
 
                     let mut media = Vec::new();
-                    if let Some(arr) = legacy["extended_entities"]["media"].as_array()
-                        .or_else(|| legacy["entities"]["media"].as_array())
-                    {
-                        for m in arr {
-                            let media_type = m["type"].as_str().unwrap_or("photo");
-                            if media_type == "video" || media_type == "animated_gif" {
-                                // Extract video URL from video_info.variants
-                                let video_url = m["video_info"]["variants"]
-                                    .as_array()
-                                    .and_then(|variants| {
-                                        // Prefer mp4 with highest bitrate
-                                        let mut best: Option<(&str, u64)> = None;
-                                        for v in variants {
-                                            if v["content_type"].as_str() == Some("video/mp4") {
-                                                if let (Some(url), Some(bitrate)) = (v["url"].as_str(), v["bitrate"].as_u64()) {
-                                                    if best.map_or(true, |(_, b)| bitrate > b) {
-                                                        best = Some((url, bitrate));
-                                                    }
-                                                }
-                                            }
-                                        }
-                                        best.map(|(url, _)| url.to_string())
-                                    });
-                                if let Some(video_url) = video_url {
-                                    media.push(MediaAttachment {
-                                        url: video_url,
-                                        mime_type: "video/mp4".to_string(),
-                                        alt: m["alt_text"].as_str().map(String::from),
-                                    });
-                                } else {
-                                    // Fallback to thumbnail
-                                    let url = m["media_url_https"].as_str()
-                                        .or_else(|| m["media_url"].as_str())
-                                        .unwrap_or("").to_string();
-                                    if !url.is_empty() {
-                                        media.push(MediaAttachment {
-                                            url,
-                                            mime_type: "image/jpeg".to_string(),
-                                            alt: m["alt_text"].as_str().map(String::from),
-                                        });
-                                    }
-                                }
-                            } else {
-                                // Photo — use media_url_https
-                                let url = m["media_url_https"].as_str()
-                                    .or_else(|| m["media_url"].as_str())
-                                    .unwrap_or("").to_string();
-                                if !url.is_empty() {
-                                    media.push(MediaAttachment {
-                                        url,
-                                        mime_type: "image/jpeg".to_string(),
-                                        alt: m["alt_text"].as_str().map(String::from),
-                                    });
-                                }
-                            }
+                    // Extract media from the tweet's own legacy first
+                    Self::extract_media_from_legacy(legacy, &mut media);
+                    // For retweets: also extract media from the original retweeted tweet
+                    if media.is_empty() {
+                        if let Some(rt_legacy) = legacy.pointer("/retweeted_status_result/result/legacy") {
+                            Self::extract_media_from_legacy(rt_legacy, &mut media);
+                        }
+                    }
+                    // For quote tweets: also extract media from the quoted tweet
+                    if media.is_empty() {
+                        if let Some(quoted_legacy) = legacy.pointer("/quoted_status_result/result/legacy") {
+                            Self::extract_media_from_legacy(quoted_legacy, &mut media);
                         }
                     }
 
@@ -1267,15 +1284,15 @@ impl XProvider {
         &self,
         access_token: &str,
     ) -> Result<serde_json::Value, ProviderError> {
-        if let Some((_auth_token, ct0)) = Self::parse_cookie_token(access_token) {
+        if let Some((_auth_token, _ct0)) = Self::parse_cookie_token(access_token) {
             let url = "https://x.com/i/api/1.1/account/multi/list.json";
-            let cs = self.cookie_string.as_deref().unwrap_or("");
+            let (ct0, cs) = self.effective_cookie_str(access_token);
             let mut last_err = None;
             for attempt in 0..=RATE_LIMIT_RETRIES {
                 if attempt > 0 { rate_limit_sleep(attempt - 1).await; }
                 let resp = self.http.get(url)
                     .header("x-csrf-token", &ct0)
-                    .header("Cookie", cs)
+                    .header("Cookie", &cs)
                     .send().await
                     .map_err(|e| ProviderError::Api(format!("X whoami error: {e}")))?;
                 let status = resp.status();
@@ -1801,15 +1818,15 @@ impl XProvider {
         user_id: &str,
         target_user_id: &str,
     ) -> Result<serde_json::Value, ProviderError> {
-        if let Some((_at, ct0)) = Self::parse_cookie_token(access_token) {
+        if let Some((_at, _ct0)) = Self::parse_cookie_token(access_token) {
             // Use REST friendships/create.json (same as twitter-cli)
             let body = format!("user_id={target_user_id}");
             let url = "https://x.com/i/api/1.1/friendships/create.json";
-            let cs = self.cookie_string.as_deref().unwrap_or("");
+            let (ct0, cs) = self.effective_cookie_str(access_token);
             let resp = self.http.post(url)
                 .header("x-csrf-token", &ct0)
                 .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-                .header("Cookie", cs)
+                .header("Cookie", &cs)
                 .body(body)
                 .send().await
                 .map_err(|e| ProviderError::Api(format!("Follow error: {e}")))?;
@@ -1834,14 +1851,14 @@ impl XProvider {
         user_id: &str,
         target_user_id: &str,
     ) -> Result<serde_json::Value, ProviderError> {
-        if let Some((_at, ct0)) = Self::parse_cookie_token(access_token) {
+        if let Some((_at, _ct0)) = Self::parse_cookie_token(access_token) {
             let body = format!("user_id={target_user_id}");
             let url = "https://x.com/i/api/1.1/friendships/destroy.json";
-            let cs = self.cookie_string.as_deref().unwrap_or("");
+            let (ct0, cs) = self.effective_cookie_str(access_token);
             let resp = self.http.post(url)
                 .header("x-csrf-token", &ct0)
                 .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-                .header("Cookie", cs)
+                .header("Cookie", &cs)
                 .body(body)
                 .send().await
                 .map_err(|e| ProviderError::Api(format!("Unfollow error: {e}")))?;
