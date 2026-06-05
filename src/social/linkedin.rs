@@ -386,12 +386,15 @@ impl SocialProvider for LinkedInProvider {
     }
 
     fn scopes(&self) -> Vec<String> {
+        // NOTE: r_member_social removed to avoid unauthorized_scope_error.
+        // The LinkedIn app must have this scope enabled in the Developer Portal
+        // (https://www.linkedin.com/developers/) for get_recent_posts to work.
+        // Without it, connection succeeds but feed import will fail with a permission error.
         vec![
             "openid".into(),
             "profile".into(),
             "email".into(),
             "w_member_social".into(),
-            "r_member_social".into(),
         ]
     }
 
