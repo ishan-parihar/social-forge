@@ -560,7 +560,57 @@ impl SocialProvider for LinkedInPageProvider {
                     .and_then(|ms| chrono::DateTime::from_timestamp_millis(ms))
                     .unwrap_or_else(chrono::Utc::now);
 
-                let media = Vec::new();
+                // Extract media from the post content
+                let mut media = Vec::new();
+                const MAX_MEDIA_PER_POST: usize = 4;
+                if let Some(content) = element.get("content") {
+                    if !content.is_null() {
+                        // Single media: content.media { id: "urn:li:image:xxx" }
+                        if let Some(m) = content.get("media") {
+                            if let Some(media_urn) = m.get("id").and_then(|v| v.as_str()) {
+                                if let Some(url) = self.resolve_media_url(access_token, media_urn).await {
+                                    let is_video = media_urn.contains(":video:");
+                                    media.push(MediaAttachment {
+                                        url,
+                                        mime_type: if is_video { "video/mp4".to_string() } else { "image/jpeg".to_string() },
+                                        alt: m.get("title").and_then(|v| v.as_str()).map(String::from),
+                                    });
+                                }
+                            }
+                        }
+                        // Multi-image / carousel: content.multiImage array
+                        if media.is_empty() {
+                            if let Some(multi) = content.get("multiImage").and_then(|v| v.as_array()) {
+                                for img in multi.iter().take(MAX_MEDIA_PER_POST) {
+                                    if let Some(media_urn) = img.get("id").and_then(|v| v.as_str()) {
+                                        if let Some(url) = self.resolve_media_url(access_token, media_urn).await {
+                                            media.push(MediaAttachment {
+                                                url,
+                                                mime_type: "image/jpeg".to_string(),
+                                                alt: None,
+                                            });
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        // Article with thumbnail
+                        if media.is_empty() {
+                            if let Some(article) = content.get("article") {
+                                if let Some(thumb) = article.get("thumbnail").and_then(|v| v.as_str()) {
+                                    if !thumb.is_empty() {
+                                        media.push(MediaAttachment {
+                                            url: thumb.to_string(),
+                                            mime_type: "image/jpeg".to_string(),
+                                            alt: article.get("title").and_then(|v| v.as_str()).map(String::from),
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                let post_url = Some(format!("https://www.linkedin.com/feed/update/{post_urn}"));
                 posts.push(ExternalPostData {
                     platform_post_id: post_urn,
                     text: commentary,
@@ -568,7 +618,7 @@ impl SocialProvider for LinkedInPageProvider {
                     author_handle: None,
                     author_avatar: None,
                     created_at,
-                    url: None,
+                    url: post_url,
                     media,
                     metadata: Some(element.clone()),
                 });
@@ -626,6 +676,50 @@ impl SocialProvider for LinkedInPageProvider {
 }
 
 impl LinkedInPageProvider {
+    /// Resolve a LinkedIn media URN (e.g. "urn:li:image:12345") to a direct download/playback URL.
+    pub async fn resolve_media_url(&self, access_token: &str, media_urn: &str) -> Option<String> {
+        let parts: Vec<&str> = media_urn.split(':').collect();
+        if parts.len() < 4 { return None; }
+        let asset_type = parts[2];
+        let asset_id = parts[3];
+        let base_url = match asset_type {
+            "image" => "https://api.linkedin.com/rest/images",
+            "video" => "https://api.linkedin.com/rest/videos",
+            _ => return None,
+        };
+        let url = format!("{base_url}/{asset_id}");
+        let resp = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            self.http.get(&url)
+                .header("Authorization", format!("Bearer {access_token}"))
+                .header("X-Restli-Protocol-Version", "2.0.0")
+                .header("LinkedIn-Version", "202601")
+                .send(),
+        ).await;
+        match resp {
+            Ok(Ok(r)) if r.status().is_success() => {
+                if let Ok(json) = r.json::<serde_json::Value>().await {
+                    if let Some(dl) = json.pointer("/value/downloadUrl").and_then(|v| v.as_str()) {
+                        return Some(dl.to_string());
+                    }
+                    if let Some(streams) = json.pointer("/value/playbackStreams").and_then(|v| v.as_array()) {
+                        if let Some(stream) = streams.first() {
+                            if let Some(s) = stream.get("streamLocations").and_then(|v| v.as_array()) {
+                                if let Some(loc) = s.first() {
+                                    if let Some(u) = loc.get("url").and_then(|v| v.as_str()) {
+                                        return Some(u.to_string());
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+        None
+    }
+
     async fn resolve_org_id(&self, access_token: &str) -> Result<String, ProviderError> {
         let pages = self.pages(access_token).await?;
         pages.first()
