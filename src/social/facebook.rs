@@ -483,6 +483,7 @@ impl SocialProvider for FacebookProvider {
                                             url: url_str,
                                             mime_type: "video/mp4".into(),
                                             alt: None,
+                                            poster_url: None,
                                         });
                                     }
                                     Err(e) => {
@@ -1082,6 +1083,7 @@ impl FacebookProvider {
                 url: url.to_string(),
                 mime_type: mime.into(),
                 alt: None,
+                poster_url: None,
             });
         }
 
@@ -1091,6 +1093,7 @@ impl FacebookProvider {
                 url: url.to_string(),
                 mime_type: "image/jpeg".into(),
                 alt: None,
+                poster_url: None,
             });
         }
 
@@ -1105,6 +1108,7 @@ impl FacebookProvider {
                 url: url.to_string(),
                 mime_type: mime.into(),
                 alt: None,
+                poster_url: None,
             });
         }
 

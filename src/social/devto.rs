@@ -280,6 +280,7 @@ impl SocialProvider for DevtoProvider {
                                 url: cover_url.to_string(),
                                 mime_type: "image/jpeg".to_string(),
                                 alt: article["title"].as_str().map(String::from),
+                                poster_url: None,
                             });
                         }
                     }

@@ -654,6 +654,7 @@ impl SocialProvider for YoutubeProvider {
                         url: embed_url,
                         mime_type: "text/html".into(),
                         alt: Some(title.to_string()),
+                        poster_url: None,
                     }],
                     created_at: posted_at,
                     url: Some(format!("https://www.youtube.com/watch?v={video_id}")),

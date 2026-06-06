@@ -219,6 +219,7 @@ async fn test_ias_social_provider_publish_with_bad_token() {
             url: "https://example.com/test.jpg".into(),
             mime_type: "image/jpeg".into(),
             alt: None,
+            poster_url: None,
         }],
         settings: serde_json::Value::Object(serde_json::Map::new()),
     };

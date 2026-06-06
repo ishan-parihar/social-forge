@@ -4,6 +4,7 @@ export interface MediaAttachment {
   url: string;
   mime_type: string;
   alt: string | null;
+  poster_url?: string | null;
 }
 
 export interface EngagementMetrics {

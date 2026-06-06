@@ -197,6 +197,7 @@ pub async fn handle_th_create_thread(
                     })
                     .unwrap_or_else(|| "application/octet-stream".to_string()),
                 alt: None,
+                poster_url: None,
             }]
         } else {
             vec![]

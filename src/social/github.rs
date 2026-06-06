@@ -719,6 +719,7 @@ impl SocialProvider for GithubProvider {
                         url: avatar.clone(),
                         mime_type: "image/jpeg".to_string(),
                         alt: repo["full_name"].as_str().map(String::from),
+                        poster_url: None,
                     });
                 }
                 posts.push(ExternalPostData {
@@ -757,6 +758,7 @@ impl SocialProvider for GithubProvider {
                         url: avatar.clone(),
                         mime_type: "image/jpeg".to_string(),
                         alt: gist["description"].as_str().map(String::from),
+                        poster_url: None,
                     });
                 }
                 posts.push(ExternalPostData {

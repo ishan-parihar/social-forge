@@ -120,6 +120,7 @@ pub async fn handle_ms_create_post(
                     url: url.clone(),
                     mime_type: "image/jpeg".into(),
                     alt: None,
+                    poster_url: None,
                 });
             }
         }

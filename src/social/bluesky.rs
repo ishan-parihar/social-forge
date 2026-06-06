@@ -254,6 +254,7 @@ impl SocialProvider for BlueskyProvider {
                                 url: playlist.to_string(),
                                 mime_type: mime.to_string(),
                                 alt: None,
+                                poster_url: None,
                             });
                         } else if let Some(cid) = video["ref"]["$link"].as_str()
                             .or_else(|| video["ref"]["cid"].as_str())
@@ -269,6 +270,7 @@ impl SocialProvider for BlueskyProvider {
                                 url: blob_url,
                                 mime_type: mime.to_string(),
                                 alt: None,
+                                poster_url: None,
                             });
                         }
                     }
@@ -279,6 +281,7 @@ impl SocialProvider for BlueskyProvider {
                                 url: url.to_string(),
                                 mime_type: "image/jpeg".to_string(),
                                 alt: img["alt"].as_str().map(String::from),
+                                poster_url: None,
                             });
                         }
                     }
@@ -289,6 +292,7 @@ impl SocialProvider for BlueskyProvider {
                             url: thumb.to_string(),
                             mime_type: "image/jpeg".to_string(),
                             alt: None,
+                            poster_url: None,
                         });
                     }
                 }

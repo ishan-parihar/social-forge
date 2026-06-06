@@ -570,6 +570,7 @@ impl SocialProvider for WordPressProvider {
                             mime_type: "image/jpeg".into(),
                             alt: p["_embedded"]["wp:featuredmedia"][0]["alt_text"]
                                 .as_str().map(String::from),
+                                poster_url: None,
                         });
                     }
                     ExternalPostData {

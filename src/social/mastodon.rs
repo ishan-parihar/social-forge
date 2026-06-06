@@ -702,7 +702,7 @@ impl SocialProvider for MastodonProvider {
                         })
                         .unwrap_or_default();
                     let media: Vec<MediaAttachment> = media_urls.into_iter().map(|url| {
-                        MediaAttachment { url, mime_type: "image/jpeg".into(), alt: None }
+                        MediaAttachment { url, mime_type: "image/jpeg".into(), alt: None, poster_url: None }
                     }).collect();
                     ExternalPostData {
                         platform_post_id: s["id"].as_str().unwrap_or("").to_string(),

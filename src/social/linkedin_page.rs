@@ -586,6 +586,7 @@ impl SocialProvider for LinkedInPageProvider {
                                         url,
                                         mime_type: if is_video { "video/mp4".to_string() } else { "image/jpeg".to_string() },
                                         alt: m.get("title").and_then(|v| v.as_str()).map(String::from),
+                                        poster_url: None,
                                     });
                                 }
                             }
@@ -600,6 +601,7 @@ impl SocialProvider for LinkedInPageProvider {
                                                 url,
                                                 mime_type: "image/jpeg".to_string(),
                                                 alt: None,
+                                                poster_url: None,
                                             });
                                         }
                                     }
@@ -615,6 +617,7 @@ impl SocialProvider for LinkedInPageProvider {
                                             url: thumb.to_string(),
                                             mime_type: "image/jpeg".to_string(),
                                             alt: article.get("title").and_then(|v| v.as_str()).map(String::from),
+                                            poster_url: None,
                                         });
                                     }
                                 }
