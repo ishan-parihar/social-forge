@@ -564,19 +564,33 @@
                         </a>
                       </div>
                     {:else if isVideo(item.mime_type, item.url)}
-                      <video
-                        src={item.url}
-                        controls
-                        preload="metadata"
-                        playsinline
-                        class="w-full max-h-[65vh] bg-black"
-                        poster={item.poster_url ?? ''}
-                      >
-                        <a href={item.url} target="_blank" rel="noopener noreferrer"
-                          class="text-xs text-indigo-400 hover:text-indigo-300 underline p-2 block">
-                          Download video
-                        </a>
-                      </video>
+                      <div class="relative group/video">
+                        <video
+                          src={item.url}
+                          controls
+                          preload="metadata"
+                          playsinline
+                          class="w-full max-h-[65vh] bg-black"
+                          poster={item.poster_url ?? ''}
+                        >
+                          <a href={item.url} target="_blank" rel="noopener noreferrer"
+                            class="text-xs text-indigo-400 hover:text-indigo-300 underline p-2 block">
+                            Download video
+                          </a>
+                        </video>
+                        <!-- Play button overlay when no poster -->
+                        {#if !item.poster_url}
+                          <div class="absolute inset-0 flex items-center justify-center pointer-events-none
+                            bg-black/30 group-hover/video:bg-black/10 transition-colors duration-200">
+                            <div class="w-16 h-16 rounded-full bg-white/90 flex items-center justify-center
+                              shadow-lg shadow-black/30 group-hover/video:scale-110 transition-transform duration-200">
+                              <svg class="w-7 h-7 text-gray-900 ml-1" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M8 5v14l11-7z"/>
+                              </svg>
+                            </div>
+                          </div>
+                        {/if}
+                      </div>
                     {:else}
                       <a
                         href={item.url}
