@@ -317,6 +317,7 @@ async fn test_whatsapp_mcp_tool_compilation() {
         token_key: None,
         telegram_client_manager: None,
         wa_client: None,
+        media_http_client: reqwest::Client::new(),
     };
 
     let server = Social ForgeMcpServer::new(state.clone());
@@ -354,6 +355,7 @@ async fn test_whatsapp_mcp_handler_functions() {
         token_key: None,
         telegram_client_manager: None,
         wa_client: None,
+        media_http_client: reqwest::Client::new(),
     };
 
     let send_input = tools_whatsapp::WaSendTextInput {

@@ -40,6 +40,7 @@ async fn setup_state() -> AppState {
         token_key: None,
         telegram_client_manager: None,
         wa_client: None,
+        media_http_client: reqwest::Client::new(),
     }
 }
 

@@ -64,6 +64,31 @@ export interface AnalyticsResponse {
   posts_with_engagement: number;
 }
 
+/**
+ * Proxy an external media URL through the backend to bypass CDN CORS/referrer restrictions.
+ * Only proxies known CDN domains (video.twimg.com, pbs.twimg.com, etc.).
+ * Returns the proxy URL or the original URL if it's not a known CDN.
+ */
+export function proxyMediaUrl(url: string): string {
+  // Only proxy URLs from known CDN domains that block direct browser access
+  const proxyDomains = [
+    'video.twimg.com',
+    'pbs.twimg.com',
+    'media.tenor.com',
+    'i.imgur.com',
+    'i.ytimg.com',
+  ];
+  try {
+    const u = new URL(url);
+    if (proxyDomains.some(d => u.hostname === d || u.hostname.endsWith('.' + d))) {
+      return `/api/proxy-media?url=${encodeURIComponent(url)}`;
+    }
+  } catch {
+    // Not a valid URL — return as-is
+  }
+  return url;
+}
+
 export const feedApi = {
   list: (cursor?: string, provider?: string, authorHandle?: string, limit = 20) => {
     const params = new URLSearchParams();

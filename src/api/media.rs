@@ -151,6 +151,86 @@ pub async fn serve_media(
         .unwrap())
 }
 
+/// GET /api/proxy-media?url=... — proxy external media to bypass CORS/CDN restrictions
+/// Used for X/Twitter video CDN which returns 403 when loaded directly from browser.
+pub async fn proxy_media(
+    State(state): State<AppState>,
+    axum::extract::Query(params): axum::extract::Query<ProxyMediaQuery>,
+) -> Result<Response<Body>, AppError> {
+    use axum::http::header;
+
+    // Validate URL to prevent SSRF — only allow known CDN domains
+    let url = &params.url;
+    let parsed = url::Url::parse(url).map_err(|_| AppError::BadRequest("Invalid URL".into()))?;
+    let host = parsed.host_str().unwrap_or("");
+    let allowed = (parsed.scheme() == "https") && (
+        host == "video.twimg.com"
+        || host == "pbs.twimg.com"
+        || host == "media.tenor.com"
+        || host == "www.instagram.com"
+        || host == "i.ytimg.com"
+        || host == "files.catbox.moe"
+        || host == "i.imgur.com"
+        || (host.starts_with("scontent-") && host.contains(".fbcdn."))
+    );
+
+    if !allowed {
+        return Err(AppError::BadRequest("Domain not allowed for proxying".into()));
+    }
+
+    // Fetch the external resource with a proper referrer
+    let client = &state.media_http_client;
+    let resp = client
+        .get(url)
+        .header("Referer", "https://x.com/")
+        .header("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("Failed to fetch media: {e}")))?;
+
+    let status = resp.status();
+    if !status.is_success() {
+        return Err(AppError::Internal(format!("Upstream returned {status}")));
+    }
+
+    let content_type = resp
+        .headers()
+        .get(header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("application/octet-stream")
+        .to_string();
+
+    // Limit response size to 50MB to prevent OOM
+    const MAX_PROXY_SIZE: u64 = 50 * 1024 * 1024;
+    if let Some(cl) = resp.content_length() {
+        if cl > MAX_PROXY_SIZE {
+            return Err(AppError::BadRequest("Media file too large (max 50MB)".into()));
+        }
+    }
+
+    let bytes = resp
+        .bytes()
+        .await
+        .map_err(|e| AppError::Internal(format!("Failed to read upstream body: {e}")))?;
+
+    if bytes.len() as u64 > MAX_PROXY_SIZE {
+        return Err(AppError::BadRequest("Media file too large (max 50MB)".into()));
+    }
+
+    Ok(Response::builder()
+        .header(header::CONTENT_TYPE, &content_type)
+        .header(header::CONTENT_LENGTH, bytes.len())
+        .header(header::CACHE_CONTROL, "public, max-age=86400")
+        .header(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
+        .body(Body::from(bytes))
+        .unwrap())
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct ProxyMediaQuery {
+    pub url: String,
+}
+
 fn detect_image_dimensions(data: &[u8]) -> (Option<i32>, Option<i32>) {
     // Simple PNG dimensions check
     if data.len() > 24 && data[..8] == [137, 80, 78, 71, 13, 10, 26, 10] {
