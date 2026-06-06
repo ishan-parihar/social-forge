@@ -657,6 +657,7 @@ async fn test_ias_mcp_tool_handler_full_chain() {
         token_key: None,
         telegram_client_manager: None,
         wa_client: None,
+        media_http_client: reqwest::Client::new(),
     };
 
     // Verify MCP server can be created (all #[tool] macros compile)
@@ -708,6 +709,7 @@ async fn test_threads_mcp_tool_handler_full_chain() {
         token_key: None,
         telegram_client_manager: None,
         wa_client: None,
+        media_http_client: reqwest::Client::new(),
     };
 
     // Verify MCP server can be created
@@ -759,6 +761,7 @@ async fn test_linkedin_mcp_tool_handler_full_chain() {
         token_key: None,
         telegram_client_manager: None,
         wa_client: None,
+        media_http_client: reqwest::Client::new(),
     };
 
     // Verify MCP server can be created

@@ -51,6 +51,8 @@ pub struct AppState {
     pub telegram_client_manager: OptionalTelegramClient,
     /// Shared WhatsApp Web client (wa-rs-based, replaces Go wacli sidecar)
     pub wa_client: OptionalWhaClient,
+    /// Shared HTTP client for media proxying (CDN bypass)
+    pub media_http_client: reqwest::Client,
 }
 
 /// Build the axum router with all routes
@@ -78,6 +80,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/integrations/social/{provider}", axum::routing::get(integrations::oauth_callback))
         .route("/api/events", axum::routing::get(sse::sse_handler))
         .route("/api/media/{id}", axum::routing::get(media::serve_media))
+        .route("/api/proxy-media", axum::routing::get(media::proxy_media))
         // Public onboarding — browser-accessible OAuth flow (no JWT header needed)
         .route("/setup", axum::routing::get(onboard::onboard_page))
         .route("/api/public/connect/x-cookies", axum::routing::get(onboard::x_cookies_form).post(onboard::x_cookies_submit))

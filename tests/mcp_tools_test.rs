@@ -204,6 +204,7 @@ async fn test_mcp_tools_registration() {
         token_key: None,
         telegram_client_manager: None,
         wa_client: None,
+        media_http_client: reqwest::Client::new(),
     };
 
     let server = Social ForgeMcpServer::new(state.clone());

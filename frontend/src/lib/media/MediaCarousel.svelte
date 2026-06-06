@@ -1,5 +1,6 @@
 <script lang="ts">
   import { tick } from 'svelte';
+  import { proxyMediaUrl } from '$lib/api/feed';
   import type { MediaAttachment } from '$lib/api/feed';
 
   let {
@@ -111,12 +112,12 @@
           {:else if isVideo(item.mime_type, item.url)}
             <div class="relative w-full h-full">
               <video
-                src={item.url}
+                src={proxyMediaUrl(item.url)}
                 controls
                 preload="metadata"
                 playsinline
                 class="w-full h-full object-contain"
-                poster={item.poster_url ?? ''}
+                poster={item.poster_url ? proxyMediaUrl(item.poster_url) : ''}
               >
                 <a href={item.url} target="_blank" rel="noopener noreferrer"
                   class="text-xs text-indigo-400 hover:text-indigo-300 underline p-2 block">
@@ -140,7 +141,7 @@
               aria-label="View fullscreen"
             >
               <img
-                src={item.url}
+                src={proxyMediaUrl(item.url)}
                 alt={item.alt ?? ''}
                 class="w-full h-full object-contain"
                 loading="lazy"
@@ -307,14 +308,14 @@
         ></iframe>
       {:else if isVideo(items[current]?.mime_type ?? '', items[current]?.url ?? '')}
         <video
-          src={items[current].url}
+          src={proxyMediaUrl(items[current].url)}
           controls
           autoplay
           class="max-w-full max-h-[85vh] rounded-lg"
         />
       {:else}
         <img
-          src={items[current].url}
+          src={proxyMediaUrl(items[current].url)}
           alt={items[current].alt ?? ''}
           class="max-w-full max-h-[85vh] object-contain rounded-lg"
           draggable="false"

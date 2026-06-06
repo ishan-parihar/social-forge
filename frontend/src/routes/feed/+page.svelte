@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { feedApi, type FeedPost, type FeedAccount } from "$lib/api/feed";
+  import { feedApi, proxyMediaUrl, type FeedPost, type FeedAccount } from "$lib/api/feed";
   import EngagementCard from "$lib/components/EngagementCard.svelte";
   import CommentsThread from "$lib/components/CommentsThread.svelte";
   import MediaCarousel from "$lib/media/MediaCarousel.svelte";
@@ -566,12 +566,12 @@
                     {:else if isVideo(item.mime_type, item.url)}
                       <div class="relative group/video">
                         <video
-                          src={item.url}
+                          src={proxyMediaUrl(item.url)}
                           controls
                           preload="metadata"
                           playsinline
                           class="w-full max-h-[65vh] bg-black"
-                          poster={item.poster_url ?? ''}
+                          poster={item.poster_url ? proxyMediaUrl(item.poster_url) : ''}
                         >
                           <a href={item.url} target="_blank" rel="noopener noreferrer"
                             class="text-xs text-indigo-400 hover:text-indigo-300 underline p-2 block">
@@ -599,7 +599,7 @@
                         class="block"
                       >
                         <img
-                          src={item.url}
+                          src={proxyMediaUrl(item.url)}
                           alt={item.alt ?? ''}
                           class="w-full h-auto object-contain max-h-[65vh] transition-transform duration-300 hover:scale-[1.02]"
                           loading="lazy"

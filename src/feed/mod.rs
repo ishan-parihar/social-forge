@@ -160,12 +160,23 @@ pub async fn refresh_user_posts(
                     None => continue,
                 }
             }
-            Err(e) => {
-                tracing::warn!(
-                    "Failed to fetch posts for integration {} ({}): {e}",
-                    integration.id,
-                    integration.provider_identifier
-                );
+            Err(ref e) => {
+                let msg = e.to_string();
+                if msg.contains("No virtual resource") || msg.contains("RESOURCE_NOT_FOUND") {
+                    tracing::warn!(
+                        "Integration {} ({}) lacks API scope — marking refresh_needed",
+                        integration.id, integration.provider_identifier
+                    );
+                    if let Err(e2) = crate::db::queries::mark_integration_refresh_needed(db, integration.id).await {
+                        tracing::warn!("Failed to mark refresh_needed: {e2}");
+                    }
+                } else {
+                    tracing::warn!(
+                        "Failed to fetch posts for integration {} ({}): {e}",
+                        integration.id,
+                        integration.provider_identifier
+                    );
+                }
                 continue;
             }
         };
@@ -263,12 +274,24 @@ async fn refresh_all_posts(
                     None => continue,
                 }
             }
-            Err(e) => {
-                tracing::warn!(
-                    "Failed to fetch posts for integration {} ({}): {e}",
-                    integration.id,
-                    integration.provider_identifier
-                );
+            Err(ref e) => {
+                let msg = e.to_string();
+                // Detect scope/permission errors and mark integration for reconnection
+                if msg.contains("No virtual resource") || msg.contains("RESOURCE_NOT_FOUND") {
+                    tracing::warn!(
+                        "Integration {} ({}) lacks API scope — marking refresh_needed",
+                        integration.id, integration.provider_identifier
+                    );
+                    if let Err(e2) = crate::db::queries::mark_integration_refresh_needed(db, integration.id).await {
+                        tracing::warn!("Failed to mark refresh_needed: {e2}");
+                    }
+                } else {
+                    tracing::warn!(
+                        "Failed to fetch posts for integration {} ({}): {e}",
+                        integration.id,
+                        integration.provider_identifier
+                    );
+                }
                 continue;
             }
         };

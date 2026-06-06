@@ -203,6 +203,20 @@ pub async fn update_integration_token(
     Ok(())
 }
 
+/// Mark an integration as needing reconnection (e.g. scope mismatch, revoked token).
+pub async fn mark_integration_refresh_needed(
+    pool: &PgPool,
+    id: Uuid,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "UPDATE integrations SET refresh_needed = true, updated_at = now() WHERE id = $1",
+        id,
+    )
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
 pub async fn delete_integration(
     pool: &PgPool,
     id: Uuid,

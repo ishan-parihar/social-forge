@@ -149,6 +149,11 @@ async fn main() -> anyhow::Result<()> {
     }
 
     // ── Build shared state (clone for MCP if needed) ──────────
+    let media_http_client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(15))
+        .build()
+        .unwrap_or_else(|_| reqwest::Client::new());
+
     let state = AppState {
         db: db.clone(),
         config: config.clone(),
@@ -158,6 +163,7 @@ async fn main() -> anyhow::Result<()> {
         token_key,
         telegram_client_manager: telegram_client_manager.clone(),
         wa_client,
+        media_http_client,
     };
     let state_for_mcp = state.clone();
 

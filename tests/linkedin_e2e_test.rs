@@ -53,6 +53,7 @@ async fn create_test_state(config: &Config) -> AppState {
         token_key: None,
         telegram_client_manager: None,
         wa_client: None,
+        media_http_client: reqwest::Client::new(),
     }
 }
 
@@ -106,7 +107,8 @@ async fn test_linkedin_scopes_correct() {
     assert!(scopes.contains(&"profile".into()), "Missing profile scope");
     assert!(scopes.contains(&"email".into()), "Missing email scope");
     assert!(scopes.contains(&"w_member_social".into()), "Missing w_member_social scope");
-    assert_eq!(scopes.len(), 4, "Personal LinkedIn should have exactly 4 scopes");
+    assert!(scopes.contains(&"r_member_social".into()), "Missing r_member_social scope");
+    assert_eq!(scopes.len(), 5, "Personal LinkedIn should have exactly 5 scopes");
 
     // Page scopes
     let lip = registry.get("linkedin-page").unwrap();
