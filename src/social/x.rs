@@ -28,11 +28,7 @@ static TWITTER_BEARER_TOKEN: &str = "AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCO
 
 static USER_AGENT: &str = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 
-static CHROME_VERSION: &str = "131";
-static CHROME_FULL_VERSION: &str = "131.0.6778.265";
-static OS_PLATFORM: &str = "Linux";
-static OS_ARCH: &str = "x86";
-static OS_VERSION: &str = "";
+// static constants removed — unused dead code
 
 // sec_ch_ua() and sec_ch_ua_full_version_list() removed — unused dead code
 
