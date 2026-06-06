@@ -153,8 +153,10 @@ pub async fn serve_media(
 
 /// GET /api/proxy-media?url=... — proxy external media to bypass CORS/CDN restrictions
 /// Used for X/Twitter video CDN which returns 403 when loaded directly from browser.
+/// Supports Range requests for video playback (seeking, adaptive streaming).
 pub async fn proxy_media(
     State(state): State<AppState>,
+    req_headers: axum::http::header::HeaderMap,
     axum::extract::Query(params): axum::extract::Query<ProxyMediaQuery>,
 ) -> Result<Response<Body>, AppError> {
     use axum::http::header;
@@ -178,19 +180,27 @@ pub async fn proxy_media(
         return Err(AppError::BadRequest("Domain not allowed for proxying".into()));
     }
 
-    // Fetch the external resource with a proper referrer
-    let client = &state.media_http_client;
-    let resp = client
+    // Forward Range header from the browser to the upstream CDN
+    let mut upstream_req = state
+        .media_http_client
         .get(url)
         .header("Referer", "https://x.com/")
-        .header("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
+        .header("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36");
+
+    if let Some(range) = req_headers.get(header::RANGE) {
+        if let Ok(range_str) = range.to_str() {
+            upstream_req = upstream_req.header(header::RANGE, range_str);
+        }
+    }
+
+    let resp = upstream_req
         .send()
         .await
         .map_err(|e| AppError::Internal(format!("Failed to fetch media: {e}")))?;
 
-    let status = resp.status();
-    if !status.is_success() {
-        return Err(AppError::Internal(format!("Upstream returned {status}")));
+    let upstream_status = resp.status();
+    if !upstream_status.is_success() && upstream_status.as_u16() != 206 {
+        return Err(AppError::Internal(format!("Upstream returned {upstream_status}")));
     }
 
     let content_type = resp
@@ -200,30 +210,34 @@ pub async fn proxy_media(
         .unwrap_or("application/octet-stream")
         .to_string();
 
-    // Limit response size to 50MB to prevent OOM
-    const MAX_PROXY_SIZE: u64 = 50 * 1024 * 1024;
+    // Build response headers — forward status (200 or 206 for Range)
+    let mut builder = Response::builder()
+        .status(upstream_status.as_u16())
+        .header(header::CONTENT_TYPE, &content_type)
+        .header(header::CACHE_CONTROL, "public, max-age=86400")
+        .header(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
+        .header(header::ACCESS_CONTROL_ALLOW_HEADERS, "Range")
+        .header(header::ACCEPT_RANGES, "bytes");
+
+    // Forward content-length and content-range from upstream
     if let Some(cl) = resp.content_length() {
-        if cl > MAX_PROXY_SIZE {
-            return Err(AppError::BadRequest("Media file too large (max 50MB)".into()));
+        builder = builder.header(header::CONTENT_LENGTH, cl);
+    }
+    if let Some(cr) = resp.headers().get("content-range") {
+        if let Ok(cr_str) = cr.to_str() {
+            builder = builder.header("Content-Range", cr_str);
         }
     }
 
+    // Read the upstream response body
     let bytes = resp
         .bytes()
         .await
         .map_err(|e| AppError::Internal(format!("Failed to read upstream body: {e}")))?;
 
-    if bytes.len() as u64 > MAX_PROXY_SIZE {
-        return Err(AppError::BadRequest("Media file too large (max 50MB)".into()));
-    }
+    let body = Body::from(bytes);
 
-    Ok(Response::builder()
-        .header(header::CONTENT_TYPE, &content_type)
-        .header(header::CONTENT_LENGTH, bytes.len())
-        .header(header::CACHE_CONTROL, "public, max-age=86400")
-        .header(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
-        .body(Body::from(bytes))
-        .unwrap())
+    builder.body(body).map_err(|e| AppError::Internal(e.to_string()))
 }
 
 #[derive(Debug, serde::Deserialize)]
