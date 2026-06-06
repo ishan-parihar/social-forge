@@ -404,6 +404,7 @@ impl SocialProvider for TikTokProvider {
                         url: embed_url,
                         mime_type: "text/html".into(),
                         alt: Some(title.clone()),
+                        poster_url: None,
                     }],
                     created_at: posted_at,
                     url: share_url,

@@ -333,6 +333,7 @@ impl SocialProvider for ThreadsProvider {
                         url: u,
                         mime_type: String::new(),
                         alt: None,
+                        poster_url: None,
                     }).collect(),
                     created_at: posted_at,
                     url: permalink,

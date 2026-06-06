@@ -510,6 +510,7 @@ impl SocialProvider for InstagramProvider {
                                         url,
                                         mime_type: child_mime.into(),
                                         alt: None,
+                                        poster_url: None,
                                     });
                                 }
                             }
@@ -527,6 +528,7 @@ impl SocialProvider for InstagramProvider {
                                 url: u,
                                 mime_type: mime_type.into(),
                                 alt: None,
+                                poster_url: None,
                             }])
                             .unwrap_or_default()
                     }

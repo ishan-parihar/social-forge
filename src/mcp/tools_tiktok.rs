@@ -114,6 +114,7 @@ pub async fn handle_tt_create_post(
                 url: url.clone(),
                 mime_type: "video/mp4".into(),
                 alt: Some(input.text.clone()),
+                poster_url: None,
             });
         }
     }

@@ -641,6 +641,7 @@ impl RedditProvider {
                                     url: url.to_string(),
                                     mime_type: mime.to_string(),
                                     alt: None,
+                                    poster_url: None,
                                 });
                             }
                         }
@@ -657,6 +658,7 @@ impl RedditProvider {
                             url: video_url.to_string(),
                             mime_type: "video/mp4".to_string(),
                             alt: None,
+                            poster_url: None,
                         });
                     }
                 }
@@ -685,6 +687,7 @@ impl RedditProvider {
                                 url: url_str.to_string(),
                                 mime_type,
                                 alt: None,
+                                poster_url: None,
                             });
                         }
                     }
@@ -701,6 +704,7 @@ impl RedditProvider {
                                     url: decoded,
                                     mime_type: "image/jpeg".to_string(),
                                     alt: None,
+                                    poster_url: None,
                                 });
                             }
                         }

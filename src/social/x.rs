@@ -34,25 +34,7 @@ static OS_PLATFORM: &str = "Linux";
 static OS_ARCH: &str = "x86";
 static OS_VERSION: &str = "";
 
-fn sec_ch_ua() -> &'static str {
-    static VAL: LazyLock<String> = LazyLock::new(|| {
-        format!(
-            r#""Chromium";v="{}", "Not(A:Brand";v="24", "Google Chrome";v="{}""#,
-            CHROME_VERSION, CHROME_VERSION
-        )
-    });
-    &VAL
-}
-
-fn sec_ch_ua_full_version_list() -> &'static str {
-    static VAL: LazyLock<String> = LazyLock::new(|| {
-        format!(
-            r#""Chromium";v="{}", "Not(A:Brand";v="24.0.0.0", "Google Chrome";v="{}""#,
-            CHROME_FULL_VERSION, CHROME_FULL_VERSION
-        )
-    });
-    &VAL
-}
+// sec_ch_ua() and sec_ch_ua_full_version_list() removed — unused dead code
 
 // GraphQL Query IDs (hardcoded fallbacks — updated from JS bundle when stale)
 static FALLBACK_QUERY_IDS: LazyLock<HashMap<&'static str, &'static str>> = LazyLock::new(|| {
@@ -654,6 +636,10 @@ impl XProvider {
         if let Some(arr) = arr {
             for m in arr {
                 let media_type = m["type"].as_str().unwrap_or("photo");
+                // Thumbnail/poster URL available for all media types
+                let poster = m["media_url_https"].as_str()
+                    .or_else(|| m["media_url"].as_str())
+                    .map(|s| s.to_string());
                 if media_type == "video" || media_type == "animated_gif" {
                     // Extract video URL from video_info.variants — prefer highest-bitrate mp4
                     let video_url = m["video_info"]["variants"]
@@ -676,30 +662,25 @@ impl XProvider {
                             url: video_url,
                             mime_type: "video/mp4".to_string(),
                             alt: m["alt_text"].as_str().map(String::from),
+                            poster_url: poster,
                         });
-                    } else {
+                    } else if let Some(url) = poster {
                         // Fallback to thumbnail
-                        let url = m["media_url_https"].as_str()
-                            .or_else(|| m["media_url"].as_str())
-                            .unwrap_or("").to_string();
-                        if !url.is_empty() {
-                            media.push(MediaAttachment {
-                                url,
-                                mime_type: "image/jpeg".to_string(),
-                                alt: m["alt_text"].as_str().map(String::from),
-                            });
-                        }
-                    }
-                } else {
-                    // Photo — use media_url_https
-                    let url = m["media_url_https"].as_str()
-                        .or_else(|| m["media_url"].as_str())
-                        .unwrap_or("").to_string();
-                    if !url.is_empty() {
                         media.push(MediaAttachment {
                             url,
                             mime_type: "image/jpeg".to_string(),
                             alt: m["alt_text"].as_str().map(String::from),
+                            poster_url: None,
+                        });
+                    }
+                } else {
+                    // Photo — use media_url_https
+                    if let Some(url) = poster {
+                        media.push(MediaAttachment {
+                            url,
+                            mime_type: "image/jpeg".to_string(),
+                            alt: m["alt_text"].as_str().map(String::from),
+                            poster_url: None,
                         });
                     }
                 }
@@ -1088,6 +1069,7 @@ impl SocialProvider for XProvider {
                                 url,
                                 mime_type: "video/mp4".to_string(),
                                 alt: m["alt_text"].as_str().map(String::from),
+                                poster_url: m["preview_image_url"].as_str().map(String::from),
                             }))
                         } else {
                             // Photo/animated_gif
@@ -1097,6 +1079,7 @@ impl SocialProvider for XProvider {
                                 url: url.to_string(),
                                 mime_type: if media_type == "animated_gif" { "image/gif".to_string() } else { "image/jpeg".to_string() },
                                 alt: m["alt_text"].as_str().map(String::from),
+                                poster_url: None,
                             }))
                         }
                     }).collect()
@@ -1257,12 +1240,12 @@ impl SocialProvider for XProvider {
                                             best.map(|(url, _)| url.to_string())
                                         });
                                     if let Some(url) = video_url {
-                                        media.push(MediaAttachment { url, mime_type: "video/mp4".to_string(), alt: None });
+                                        media.push(MediaAttachment { url, mime_type: "video/mp4".to_string(), alt: None, poster_url: m["media_url_https"].as_str().map(String::from) });
                                     }
                                 } else {
                                     let url = m["media_url_https"].as_str().or_else(|| m["media_url"].as_str()).unwrap_or("").to_string();
                                     if !url.is_empty() {
-                                        media.push(MediaAttachment { url, mime_type: "image/jpeg".to_string(), alt: None });
+                                        media.push(MediaAttachment { url, mime_type: "image/jpeg".to_string(), alt: None, poster_url: None });
                                     }
                                 }
                             }

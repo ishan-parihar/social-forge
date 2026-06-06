@@ -140,6 +140,7 @@ pub async fn handle_bs_create_post(
                 url: url.clone(),
                 mime_type: "image/jpeg".to_string(),
                 alt: None,
+                poster_url: None,
             })
             .collect()
     } else {

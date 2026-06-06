@@ -293,6 +293,7 @@ impl SocialProvider for MediumProvider {
                                 url: img_url.to_string(),
                                 mime_type: "image/jpeg".to_string(),
                                 alt: p["title"].as_str().map(String::from),
+                                poster_url: None,
                             });
                         }
                     } else if let Some(img_id) = p["virtuals"]["previewImage"]["imageId"].as_str() {
@@ -301,6 +302,7 @@ impl SocialProvider for MediumProvider {
                             url: img_url,
                             mime_type: "image/jpeg".to_string(),
                             alt: p["title"].as_str().map(String::from),
+                            poster_url: None,
                         });
                     }
                     ExternalPostData {

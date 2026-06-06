@@ -386,15 +386,12 @@ impl SocialProvider for LinkedInProvider {
     }
 
     fn scopes(&self) -> Vec<String> {
-        // NOTE: r_member_social removed to avoid unauthorized_scope_error.
-        // The LinkedIn app must have this scope enabled in the Developer Portal
-        // (https://www.linkedin.com/developers/) for get_recent_posts to work.
-        // Without it, connection succeeds but feed import will fail with a permission error.
         vec![
             "openid".into(),
             "profile".into(),
             "email".into(),
             "w_member_social".into(),
+            "r_member_social".into(),
         ]
     }
 
@@ -785,6 +782,7 @@ impl SocialProvider for LinkedInProvider {
                                         url,
                                         mime_type: if is_video { "video/mp4".to_string() } else { "image/jpeg".to_string() },
                                         alt: m.get("title").and_then(|v| v.as_str()).map(String::from),
+                                        poster_url: None,
                                     });
                                 }
                             }
@@ -800,6 +798,7 @@ impl SocialProvider for LinkedInProvider {
                                                 url,
                                                 mime_type: "image/jpeg".to_string(),
                                                 alt: None,
+                                                poster_url: None,
                                             });
                                         }
                                     }
@@ -816,6 +815,7 @@ impl SocialProvider for LinkedInProvider {
                                             url: thumb.to_string(),
                                             mime_type: "image/jpeg".to_string(),
                                             alt: article.get("title").and_then(|v| v.as_str()).map(String::from),
+                                            poster_url: None,
                                         });
                                     }
                                 }
@@ -831,6 +831,7 @@ impl SocialProvider for LinkedInProvider {
                                             url,
                                             mime_type: "application/pdf".to_string(),
                                             alt: file.get("title").and_then(|v| v.as_str()).map(String::from),
+                                            poster_url: None,
                                         });
                                     }
                                 }

@@ -570,7 +570,7 @@
                         preload="metadata"
                         playsinline
                         class="w-full max-h-[65vh] bg-black"
-                        poster=""
+                        poster={item.poster_url ?? ''}
                       >
                         <a href={item.url} target="_blank" rel="noopener noreferrer"
                           class="text-xs text-indigo-400 hover:text-indigo-300 underline p-2 block">

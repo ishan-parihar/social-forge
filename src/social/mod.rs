@@ -80,6 +80,9 @@ pub struct MediaAttachment {
     pub url: String,
     pub mime_type: String,
     pub alt: Option<String>,
+    /// Optional poster/thumbnail URL for videos
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub poster_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
