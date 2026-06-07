@@ -53,6 +53,8 @@ pub struct AppState {
     pub wa_client: OptionalWhaClient,
     /// Shared HTTP client for media proxying (CDN bypass)
     pub media_http_client: reqwest::Client,
+    /// Shared HTTP client with Chrome TLS fingerprinting for X/Twitter CDN
+    pub media_wreq_client: wreq::Client,
 }
 
 /// Build the axum router with all routes

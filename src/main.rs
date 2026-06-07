@@ -150,9 +150,21 @@ async fn main() -> anyhow::Result<()> {
 
     // ── Build shared state (clone for MCP if needed) ──────────
     let media_http_client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(15))
+        .connect_timeout(std::time::Duration::from_secs(10))
+        // No total timeout — needed for streaming large video files via proxy.
+        // The browser manages video playback timeout independently.
         .build()
         .unwrap_or_else(|_| reqwest::Client::new());
+
+    // wreq client with Chrome TLS fingerprinting for X/Twitter CDN.
+    // video.twimg.com blocks requests that don't match a real browser's TLS fingerprint.
+    let media_wreq_client = wreq::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(10))
+        .emulation(wreq_util::Emulation::Chrome131)
+        .gzip(true)
+        .brotli(true)
+        .build()
+        .unwrap_or_else(|_| wreq::Client::new());
 
     let state = AppState {
         db: db.clone(),
@@ -164,6 +176,7 @@ async fn main() -> anyhow::Result<()> {
         telegram_client_manager: telegram_client_manager.clone(),
         wa_client,
         media_http_client,
+        media_wreq_client,
     };
     let state_for_mcp = state.clone();
 

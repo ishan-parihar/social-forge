@@ -176,17 +176,34 @@ impl SocialProvider for LinkedInPageProvider {
         let resp = self.http.post(self.token_url()).form(&params).send().await?;
         let json: serde_json::Value = resp.json().await?;
 
+        let access_token = json["access_token"]
+            .as_str()
+            .ok_or_else(|| ProviderError::Auth("Missing access_token".into()))?
+            .to_string();
+
+        // Fetch profile info so it's not lost on refresh.
+        // Use async match — page-scoped tokens may not have openid/profile scope.
+        let profile = match self
+            .http
+            .get("https://api.linkedin.com/v2/userinfo")
+            .header("Authorization", format!("Bearer {access_token}"))
+            .header("X-Restli-Protocol-Version", "2.0.0")
+            .header("LinkedIn-Version", "202601")
+            .send()
+            .await
+        {
+            Ok(r) => r.json::<serde_json::Value>().await.ok(),
+            Err(_) => None,
+        };
+
         Ok(AuthToken {
-            access_token: json["access_token"]
-                .as_str()
-                .ok_or_else(|| ProviderError::Auth("Missing access_token".into()))?
-                .to_string(),
+            access_token,
             refresh_token: json["refresh_token"].as_str().map(String::from),
             expires_in: json["expires_in"].as_u64().map(|v| v as u32),
-            provider_user_id: String::new(),
-            name: String::new(),
-            username: String::new(),
-            picture: None,
+            provider_user_id: profile.as_ref().and_then(|p| p["sub"].as_str()).unwrap_or("").to_string(),
+            name: profile.as_ref().and_then(|p| p["name"].as_str()).unwrap_or("").to_string(),
+            username: profile.as_ref().and_then(|p| p["preferred_username"].as_str()).unwrap_or("").to_string(),
+            picture: profile.as_ref().and_then(|p| p["picture"].as_str()).map(String::from),
         })
     }
 

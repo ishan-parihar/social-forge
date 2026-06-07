@@ -153,6 +153,7 @@ pub async fn serve_media(
 
 /// GET /api/proxy-media?url=... — proxy external media to bypass CORS/CDN restrictions
 /// Used for X/Twitter video CDN which returns 403 when loaded directly from browser.
+/// Uses wreq (Chrome TLS fingerprinting) for X/Twitter CDN domains to bypass bot detection.
 /// Supports Range requests for video playback (seeking, adaptive streaming).
 pub async fn proxy_media(
     State(state): State<AppState>,
@@ -180,35 +181,72 @@ pub async fn proxy_media(
         return Err(AppError::BadRequest("Domain not allowed for proxying".into()));
     }
 
-    // Forward Range header from the browser to the upstream CDN
-    let mut upstream_req = state
-        .media_http_client
-        .get(url)
-        .header("Referer", "https://x.com/")
-        .header("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36");
+    // X/Twitter CDN domains use wreq for Chrome TLS fingerprinting.
+    // Other CDNs use the standard reqwest client.
+    // We must fetch inside each branch because wreq::Response and reqwest::Response
+    // are different types — Rust's if/else requires both branches to match.
+    let is_x_cdn = host == "video.twimg.com" || host == "pbs.twimg.com";
+    let range_header = req_headers.get(header::RANGE).and_then(|v| v.to_str().ok()).map(String::from);
 
-    if let Some(range) = req_headers.get(header::RANGE) {
-        if let Ok(range_str) = range.to_str() {
-            upstream_req = upstream_req.header(header::RANGE, range_str);
+    // Shared headers for all upstream requests
+    const UPSTREAM_REFERER: &str = "https://x.com/";
+    const UPSTREAM_UA: &str = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+
+    // Fetch from upstream and extract common fields.
+    // Both branches produce identical (status, content_type, content_length, content_range, bytes).
+    let (upstream_status, content_type, content_length, content_range, bytes) = if is_x_cdn {
+        let mut req = state
+            .media_wreq_client
+            .get(url)
+            .header(header::REFERER, UPSTREAM_REFERER)
+            .header(header::USER_AGENT, UPSTREAM_UA);
+        if let Some(ref range) = range_header {
+            req = req.header(header::RANGE, range.as_str());
         }
-    }
-
-    let resp = upstream_req
-        .send()
-        .await
-        .map_err(|e| AppError::Internal(format!("Failed to fetch media: {e}")))?;
-
-    let upstream_status = resp.status();
-    if !upstream_status.is_success() && upstream_status.as_u16() != 206 {
-        return Err(AppError::Internal(format!("Upstream returned {upstream_status}")));
-    }
-
-    let content_type = resp
-        .headers()
-        .get(header::CONTENT_TYPE)
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("application/octet-stream")
-        .to_string();
+        let resp = req.send().await
+            .map_err(|e| AppError::Internal(format!("Failed to fetch media (wreq): {e}")))?;
+        let status = resp.status();
+        if !status.is_success() && status.as_u16() != 206 {
+            return Err(AppError::Internal(format!("Upstream returned {status}")));
+        }
+        let ct = resp.headers().get(header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("application/octet-stream")
+            .to_string();
+        let cl = resp.content_length();
+        let cr = resp.headers().get("content-range")
+            .and_then(|v| v.to_str().ok())
+            .map(String::from);
+        let bytes = resp.bytes().await
+            .map_err(|e| AppError::Internal(format!("Failed to read upstream body (wreq): {e}")))?;
+        (status, ct, cl, cr, bytes)
+    } else {
+        let mut req = state
+            .media_http_client
+            .get(url)
+            .header(header::REFERER, UPSTREAM_REFERER)
+            .header(header::USER_AGENT, UPSTREAM_UA);
+        if let Some(ref range) = range_header {
+            req = req.header(header::RANGE, range.as_str());
+        }
+        let resp = req.send().await
+            .map_err(|e| AppError::Internal(format!("Failed to fetch media (reqwest): {e}")))?;
+        let status = resp.status();
+        if !status.is_success() && status.as_u16() != 206 {
+            return Err(AppError::Internal(format!("Upstream returned {status}")));
+        }
+        let ct = resp.headers().get(header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("application/octet-stream")
+            .to_string();
+        let cl = resp.content_length();
+        let cr = resp.headers().get("content-range")
+            .and_then(|v| v.to_str().ok())
+            .map(String::from);
+        let bytes = resp.bytes().await
+            .map_err(|e| AppError::Internal(format!("Failed to read upstream body (reqwest): {e}")))?;
+        (status, ct, cl, cr, bytes)
+    };
 
     // Build response headers — forward status (200 or 206 for Range)
     let mut builder = Response::builder()
@@ -220,20 +258,12 @@ pub async fn proxy_media(
         .header(header::ACCEPT_RANGES, "bytes");
 
     // Forward content-length and content-range from upstream
-    if let Some(cl) = resp.content_length() {
+    if let Some(cl) = content_length {
         builder = builder.header(header::CONTENT_LENGTH, cl);
     }
-    if let Some(cr) = resp.headers().get("content-range") {
-        if let Ok(cr_str) = cr.to_str() {
-            builder = builder.header("Content-Range", cr_str);
-        }
+    if let Some(cr) = &content_range {
+        builder = builder.header("Content-Range", cr.as_str());
     }
-
-    // Read the upstream response body
-    let bytes = resp
-        .bytes()
-        .await
-        .map_err(|e| AppError::Internal(format!("Failed to read upstream body: {e}")))?;
 
     let body = Body::from(bytes);
 
