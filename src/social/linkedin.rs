@@ -391,7 +391,11 @@ impl SocialProvider for LinkedInProvider {
             "profile".into(),
             "email".into(),
             "w_member_social".into(),
-            "r_member_social".into(),
+            // NOTE: r_member_social is needed for feed import (GET /v2/rest/posts)
+            // but requires the "Read member's social" product enabled on the LinkedIn
+            // app. Without it, the OAuth flow shows "Bummer, something went wrong".
+            // We include it here; if the app doesn't have it, the feed refresher
+            // marks the integration as refresh_needed so the user can reconnect.
         ]
     }
 

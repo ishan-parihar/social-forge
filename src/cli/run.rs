@@ -102,6 +102,7 @@ async fn init_state() -> anyhow::Result<AppState> {
         telegram_client_manager: None,
         wa_client: None,
         media_http_client: reqwest::Client::new(),
+        media_wreq_client: wreq::Client::new(),
     })
 }
 
