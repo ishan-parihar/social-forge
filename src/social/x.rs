@@ -622,7 +622,217 @@ impl XProvider {
         Ok(media_ids)
     }
 
-    // ── Media Extraction Helper ──────────────────────────────
+    // ── Page Parser ────────────────────────────────────────
+
+    /// Parse one page of user tweets (GraphQL or v2) into ExternalPostData + cursor.
+    fn parse_user_tweets_page(&self, response: &serde_json::Value) -> UserTweetsPage {
+    let mut posts = Vec::new();
+    let mut next_cursor = None;
+
+    // ── OAuth v2 path: response["data"] is an array of tweet objects ──
+    if let Some(data) = response["data"].as_array() {
+        let media_map: std::collections::HashMap<String, MediaAttachment> = response["includes"]["media"]
+            .as_array()
+            .map(|arr| {
+                arr.iter().filter_map(|m| {
+                    let key = m["media_key"].as_str()?;
+                    let media_type = m["type"].as_str().unwrap_or("photo");
+                    if media_type == "video" {
+                        let video_url = m["variants"]
+                            .as_array()
+                            .and_then(|variants| {
+                                let mut best: Option<(&str, u64)> = None;
+                                for v in variants {
+                                    if v["content_type"].as_str() == Some("video/mp4") {
+                                        if let (Some(url), Some(bitrate)) = (v["url"].as_str(), v["bitrate"].as_u64()) {
+                                            if best.map_or(true, |(_, b)| bitrate > b) {
+                                                best = Some((url, bitrate));
+                                            }
+                                        }
+                                    }
+                                }
+                                best.map(|(url, _)| url.to_string())
+                            })
+                            .or_else(|| m["url"].as_str().map(String::from));
+                        video_url.map(|url| (key.to_string(), MediaAttachment {
+                            url,
+                            mime_type: "video/mp4".to_string(),
+                            alt: m["alt_text"].as_str().map(String::from),
+                            poster_url: m["preview_image_url"].as_str().map(String::from),
+                        }))
+                    } else {
+                        let url = m["url"].as_str()
+                            .or_else(|| m["preview_image_url"].as_str())?;
+                        Some((key.to_string(), MediaAttachment {
+                            url: url.to_string(),
+                            mime_type: if media_type == "animated_gif" { "image/gif".to_string() } else { "image/jpeg".to_string() },
+                            alt: m["alt_text"].as_str().map(String::from),
+                            poster_url: None,
+                        }))
+                    }
+                }).collect()
+            })
+            .unwrap_or_default();
+
+        let author_map: std::collections::HashMap<String, serde_json::Value> = response["includes"]["users"]
+            .as_array()
+            .map(|arr| {
+                arr.iter().filter_map(|u| {
+                    let uid = u["id"].as_str()?;
+                    Some((uid.to_string(), u.clone()))
+                }).collect()
+            })
+            .unwrap_or_default();
+
+        for item in data {
+            let id = item["id"].as_str().unwrap_or("").to_string();
+            if id.is_empty() { continue; }
+            let text = item["text"].as_str().unwrap_or("").to_string();
+            let created_at = item["created_at"].as_str()
+                .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                .map(|dt| dt.with_timezone(&chrono::Utc))
+                .unwrap_or_else(chrono::Utc::now);
+
+            let author_id = item["author_id"].as_str();
+            let author_name = author_id
+                .and_then(|aid| author_map.get(aid))
+                .and_then(|u| u["name"].as_str().map(String::from));
+            let author_handle = author_id
+                .and_then(|aid| author_map.get(aid))
+                .and_then(|u| u["username"].as_str().map(String::from));
+            let author_avatar = author_id
+                .and_then(|aid| author_map.get(aid))
+                .and_then(|u| u["profile_image_url"].as_str().map(String::from));
+
+            let mut media = Vec::new();
+            if let Some(keys) = item["attachments"]["media_keys"].as_array() {
+                for key in keys.iter().filter_map(|k| k.as_str()) {
+                    if let Some(att) = media_map.get(key) {
+                        media.push(att.clone());
+                    }
+                }
+            }
+
+            posts.push(ExternalPostData {
+                platform_post_id: id,
+                text,
+                author_name,
+                author_handle,
+                author_avatar,
+                created_at,
+                url: None,
+                media,
+                metadata: Some(item.clone()),
+            });
+        }
+        next_cursor = response["meta"]["next_token"].as_str().map(String::from);
+    } else if let Some(timeline) = response["data"].as_object() {
+        // ── Cookie auth (GraphQL) path: navigate instructions → entries ──
+        if let Some(instructions) = timeline.get("instructions").and_then(|i| i.as_array()) {
+            for entry in instructions.iter()
+                .filter_map(|inst| inst["entries"].as_array())
+                .flatten()
+            {
+                let raw_result = match entry["content"]["itemContent"]["tweet_results"]["result"].as_object() {
+                    Some(r) => r,
+                    None => continue,
+                };
+                let result = if raw_result.get("__typename").and_then(|t| t.as_str()) == Some("TweetWithState") {
+                    match raw_result.get("tweet").and_then(|t| t.as_object()) {
+                        Some(inner) => inner,
+                        None => raw_result,
+                    }
+                } else {
+                    raw_result
+                };
+                let legacy = match result.get("legacy") {
+                    Some(l) => l,
+                    None => continue,
+                };
+                let id = result["rest_id"].as_str().unwrap_or("").to_string();
+                if id.is_empty() { continue; }
+                let text = legacy["full_text"].as_str()
+                    .or_else(|| legacy["text"].as_str())
+                    .unwrap_or("").to_string();
+                let created_at_str = legacy["created_at"].as_str().unwrap_or("");
+                let created_at = chrono::DateTime::parse_from_str(created_at_str, "%a %b %d %H:%M:%S %z %Y")
+                    .map(|dt| dt.with_timezone(&chrono::Utc))
+                    .unwrap_or_else(|_| chrono::Utc::now());
+                let user = &result["core"]["user_results"]["result"]["legacy"];
+                let author_name = user["name"].as_str().map(String::from);
+                let author_handle = user["screen_name"].as_str().map(String::from);
+
+                let mut media = Vec::new();
+                Self::extract_media_from_legacy(legacy, &mut media);
+                if media.is_empty() {
+                    if let Some(media_details) = result.get("mediaDetails").and_then(|m| m.as_array()) {
+                        for m in media_details {
+                            let media_type = m["type"].as_str().unwrap_or("photo");
+                            if media_type == "video" || media_type == "animated_gif" {
+                                let video_url = m["video_info"]["variants"]
+                                    .as_array()
+                                    .and_then(|variants| {
+                                        let mut best: Option<(&str, u64)> = None;
+                                        for v in variants {
+                                            if v["content_type"].as_str() == Some("video/mp4") {
+                                                if let (Some(url), Some(bitrate)) = (v["url"].as_str(), v["bitrate"].as_u64()) {
+                                                    if best.map_or(true, |(_, b)| bitrate > b) {
+                                                        best = Some((url, bitrate));
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        best.map(|(url, _)| url.to_string())
+                                    });
+                                if let Some(url) = video_url {
+                                    media.push(MediaAttachment { url, mime_type: "video/mp4".to_string(), alt: None, poster_url: m["media_url_https"].as_str().map(String::from) });
+                                }
+                            } else {
+                                let url = m["media_url_https"].as_str().or_else(|| m["media_url"].as_str()).unwrap_or("").to_string();
+                                if !url.is_empty() {
+                                    media.push(MediaAttachment { url, mime_type: "image/jpeg".to_string(), alt: None, poster_url: None });
+                                }
+                            }
+                        }
+                    }
+                }
+                if media.is_empty() {
+                    let rt_legacy = legacy.pointer("/retweeted_status_result/result/result/legacy")
+                        .or_else(|| legacy.pointer("/retweeted_status_result/result/legacy"));
+                    if let Some(rt) = rt_legacy {
+                        Self::extract_media_from_legacy(rt, &mut media);
+                    }
+                }
+                if media.is_empty() {
+                    let qt_legacy = legacy.pointer("/quoted_status_result/result/result/legacy")
+                        .or_else(|| legacy.pointer("/quoted_status_result/result/legacy"));
+                    if let Some(qt) = qt_legacy {
+                        Self::extract_media_from_legacy(qt, &mut media);
+                    }
+                }
+
+                let author_avatar = user["profile_image_url_https"].as_str().map(String::from);
+
+                posts.push(ExternalPostData {
+                    platform_post_id: id,
+                    text,
+                    author_name,
+                    author_handle,
+                    author_avatar,
+                    created_at,
+                    url: None,
+                    media,
+                    metadata: Some(serde_json::Value::Object(result.clone())),
+                });
+            }
+        }
+        next_cursor = Self::extract_next_cursor(response);
+    }
+
+    UserTweetsPage { posts, next_cursor }
+}
+
+// ── Media Extraction Helper ──────────────────────────────
 
     /// Extract media attachments from a legacy tweet object's extended_entities or entities.
     /// Works for original tweets, retweets, and quote tweets.
@@ -695,6 +905,12 @@ impl XProvider {
 // ════════════════════════════════════════════════════════════════
 // SocialProvider Trait Implementation
 // ════════════════════════════════════════════════════════════════
+
+/// Result of parsing a single page of user tweets.
+struct UserTweetsPage {
+    posts: Vec<ExternalPostData>,
+    next_cursor: Option<String>,
+}
 
 #[async_trait]
 impl SocialProvider for XProvider {
@@ -1026,266 +1242,65 @@ impl SocialProvider for XProvider {
             "X get_recent_posts: internal_id='{}' limit={}",
             internal_id, limit,
         );
-        let response = self.user_tweets(access_token, internal_id, limit, None).await?;
-        tracing::info!(
-            "X get_recent_posts response: data array={}, includes.media={}, includes.users={}",
-            response["data"].as_array().map(|a| a.len()).unwrap_or(0),
-            response["includes"]["media"].as_array().map(|a| a.len()).unwrap_or(0),
-            response["includes"]["users"].as_array().map(|a| a.len()).unwrap_or(0),
-        );
-        let mut posts = Vec::new();
+        let page_size = limit.min(100);
+        let mut all_posts = Vec::new();
+        let mut cursor: Option<String> = None;
+        let mut pages_fetched = 0u32;
+        const MAX_PAGES: u32 = 10;
 
-        // OAuth v2 path: response["data"] is an array of tweet objects
-        if let Some(data) = response["data"].as_array() {
-            let media_map: std::collections::HashMap<String, MediaAttachment> = response["includes"]["media"]
-                .as_array()
-                .map(|arr| {
-                    arr.iter().filter_map(|m| {
-                        let key = m["media_key"].as_str()?;
-                        let media_type = m["type"].as_str().unwrap_or("photo");
-                        if media_type == "video" {
-                            // Video: prefer the highest-bitrate mp4 variant
-                            let video_url = m["variants"]
-                                .as_array()
-                                .and_then(|variants| {
-                                    let mut best: Option<(&str, u64)> = None;
-                                    for v in variants {
-                                        if v["content_type"].as_str() == Some("video/mp4") {
-                                            if let (Some(url), Some(bitrate)) = (v["url"].as_str(), v["bitrate"].as_u64()) {
-                                                if best.map_or(true, |(_, b)| bitrate > b) {
-                                                    best = Some((url, bitrate));
-                                                }
-                                            }
-                                        }
-                                    }
-                                    best.map(|(url, _)| url.to_string())
-                                })
-                                .or_else(|| m["url"].as_str().map(String::from));
-                            video_url.map(|url| (key.to_string(), MediaAttachment {
-                                url,
-                                mime_type: "video/mp4".to_string(),
-                                alt: m["alt_text"].as_str().map(String::from),
-                                poster_url: m["preview_image_url"].as_str().map(String::from),
-                            }))
-                        } else {
-                            // Photo/animated_gif
-                            let url = m["url"].as_str()
-                                .or_else(|| m["preview_image_url"].as_str())?;
-                            Some((key.to_string(), MediaAttachment {
-                                url: url.to_string(),
-                                mime_type: if media_type == "animated_gif" { "image/gif".to_string() } else { "image/jpeg".to_string() },
-                                alt: m["alt_text"].as_str().map(String::from),
-                                poster_url: None,
-                            }))
-                        }
-                    }).collect()
-                })
-                .unwrap_or_default();
+        loop {
+            let response = self.user_tweets(access_token, internal_id, page_size, cursor.as_deref()).await?;
+            pages_fetched += 1;
+            let data_count = response["data"].as_array().map(|a| a.len()).unwrap_or(0);
+            tracing::info!(
+                "X get_recent_posts page {}: data_count={}, total_so_far={}",
+                pages_fetched, data_count, all_posts.len(),
+            );
 
-            // Build author lookup map from includes.users
-            let author_map: std::collections::HashMap<String, serde_json::Value> = response["includes"]["users"]
-                .as_array()
-                .map(|arr| {
-                    arr.iter().filter_map(|u| {
-                        let uid = u["id"].as_str()?;
-                        Some((uid.to_string(), u.clone()))
-                    }).collect()
-                })
-                .unwrap_or_default();
+            let page = self.parse_user_tweets_page(&response);
+            let page_post_count = page.posts.len() as u32;
+            all_posts.extend(page.posts);
 
-            for item in data {
-                let id = item["id"].as_str().unwrap_or("").to_string();
-                if id.is_empty() { continue; }
-                let text = item["text"].as_str().unwrap_or("").to_string();
-                let created_at = item["created_at"].as_str()
-                    .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
-                    .map(|dt| dt.with_timezone(&chrono::Utc))
-                    .unwrap_or_else(chrono::Utc::now);
+            cursor = page.next_cursor;
 
-                // Look up author from includes.users via author_id
-                let author_id = item["author_id"].as_str();
-                let author_name = author_id
-                    .and_then(|aid| author_map.get(aid))
-                    .and_then(|u| u["name"].as_str().map(String::from));
-                let author_handle = author_id
-                    .and_then(|aid| author_map.get(aid))
-                    .and_then(|u| u["username"].as_str().map(String::from));
-                let author_avatar = author_id
-                    .and_then(|aid| author_map.get(aid))
-                    .and_then(|u| u["profile_image_url"].as_str().map(String::from));
-
-                let mut media = Vec::new();
-                if let Some(keys) = item["attachments"]["media_keys"].as_array() {
-                    for key in keys.iter().filter_map(|k| k.as_str()) {
-                        if let Some(att) = media_map.get(key) {
-                            media.push(att.clone());
-                        }
-                    }
-                }
-
-                posts.push(ExternalPostData {
-                    platform_post_id: id,
-                    text,
-                    author_name,
-                    author_handle,
-                    author_avatar,
-                    created_at,
-                    url: None,
-                    media,
-                    metadata: Some(item.clone()),
-                });
+            if all_posts.len() as u32 >= limit {
+                tracing::info!(
+                    "X get_recent_posts: reached limit={} (got {}), stopping",
+                    limit, all_posts.len(),
+                );
+                break;
             }
-        } else if let Some(timeline) = response["data"].as_object() {
-            // Cookie auth (GraphQL) path: navigate instructions -> entries
-            if let Some(instructions) = timeline.get("instructions").and_then(|i| i.as_array()) {
-                for entry in instructions.iter()
-                    .filter_map(|inst| inst["entries"].as_array())
-                    .flatten()
-                {
-                    let raw_result = match entry["content"]["itemContent"]["tweet_results"]["result"].as_object() {
-                        Some(r) => r,
-                        None => continue,
-                    };
-                    // Modern GraphQL wraps tweets in TweetWithState — unwrap the inner tweet
-                    let result = if raw_result.get("__typename").and_then(|t| t.as_str()) == Some("TweetWithState") {
-                        match raw_result.get("tweet").and_then(|t| t.as_object()) {
-                            Some(inner) => inner,
-                            None => raw_result,
-                        }
-                    } else {
-                        raw_result
-                    };
-                    let legacy = match result.get("legacy") {
-                        Some(l) => l,
-                        None => continue,
-                    };
-                    let id = result["rest_id"].as_str().unwrap_or("").to_string();
-                    if id.is_empty() { continue; }
-                    let text = legacy["full_text"].as_str()
-                        .or_else(|| legacy["text"].as_str())
-                        .unwrap_or("").to_string();
-                    let created_at_str = legacy["created_at"].as_str().unwrap_or("");
-                    let created_at = chrono::DateTime::parse_from_str(created_at_str, "%a %b %d %H:%M:%S %z %Y")
-                        .map(|dt| dt.with_timezone(&chrono::Utc))
-                        .unwrap_or_else(|_| chrono::Utc::now());
-                    let user = &result["core"]["user_results"]["result"]["legacy"];
-                    let author_name = user["name"].as_str().map(String::from);
-                    let author_handle = user["screen_name"].as_str().map(String::from);
-
-                    // Debug: log first tweet's full structure to diagnose media extraction
-                    if posts.is_empty() {
-                        let legacy_keys: Vec<String> = legacy.as_object().map(|o| o.keys().cloned().collect()).unwrap_or_default();
-                        let has_ext_ent = legacy.pointer("/extended_entities/media").is_some();
-                        let has_ent_media = legacy.pointer("/entities/media").is_some();
-                        let has_card = result.get("card").is_some();
-                        let has_media_details = result.get("mediaDetails").is_some();
-                        let has_rt = legacy.get("retweeted_status_result").is_some();
-                        let has_qt = legacy.get("quoted_status_result").is_some();
-                        // Log the retweeted_status_result structure for debugging
-                        let rt_debug = if let Some(rt) = legacy.get("retweeted_status_result") {
-                            let rt_str = serde_json::to_string(rt).unwrap_or_default();
-                            let truncated: String = rt_str.chars().take(400).collect();
-                            truncated
-                        } else {
-                            "none".to_string()
-                        };
-                        let qt_debug = if let Some(qt) = legacy.get("quoted_status_result") {
-                            let qt_str = serde_json::to_string(qt).unwrap_or_default();
-                            let truncated: String = qt_str.chars().take(400).collect();
-                            truncated
-                        } else {
-                            "none".to_string()
-                        };
-                        tracing::info!(
-                            "X DEBUG first tweet: id={} legacy_keys={:?} has_ext_ent={} has_ent_media={} has_card={} has_media_details={} has_rt={} has_qt={} __typename={:?}",
-                            id, legacy_keys, has_ext_ent, has_ent_media, has_card, has_media_details,
-                            has_rt, has_qt,
-                            raw_result.get("__typename").and_then(|v| v.as_str()),
-                        );
-                        tracing::info!(
-                            "X DEBUG rt_status={}",
-                            rt_debug,
-                        );
-                        tracing::info!(
-                            "X DEBUG qt_status={}",
-                            qt_debug,
-                        );
-                    }
-                    let mut media = Vec::new();
-                    // Extract media from the tweet's own legacy first
-                    Self::extract_media_from_legacy(legacy, &mut media);
-                    // Also check result-level mediaDetails (X sometimes puts media here instead of legacy)
-                    if media.is_empty() {
-                        if let Some(media_details) = result.get("mediaDetails").and_then(|m| m.as_array()) {
-                            for m in media_details {
-                                let media_type = m["type"].as_str().unwrap_or("photo");
-                                if media_type == "video" || media_type == "animated_gif" {
-                                    let video_url = m["video_info"]["variants"]
-                                        .as_array()
-                                        .and_then(|variants| {
-                                            let mut best: Option<(&str, u64)> = None;
-                                            for v in variants {
-                                                if v["content_type"].as_str() == Some("video/mp4") {
-                                                    if let (Some(url), Some(bitrate)) = (v["url"].as_str(), v["bitrate"].as_u64()) {
-                                                        if best.map_or(true, |(_, b)| bitrate > b) {
-                                                            best = Some((url, bitrate));
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                            best.map(|(url, _)| url.to_string())
-                                        });
-                                    if let Some(url) = video_url {
-                                        media.push(MediaAttachment { url, mime_type: "video/mp4".to_string(), alt: None, poster_url: m["media_url_https"].as_str().map(String::from) });
-                                    }
-                                } else {
-                                    let url = m["media_url_https"].as_str().or_else(|| m["media_url"].as_str()).unwrap_or("").to_string();
-                                    if !url.is_empty() {
-                                        media.push(MediaAttachment { url, mime_type: "image/jpeg".to_string(), alt: None, poster_url: None });
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    // For retweets: also extract media from the original retweeted tweet
-                    if media.is_empty() {
-                        // Try modern GraphQL path first: retweeted_status_result.result.result.legacy (TweetResults wrapper)
-                        // Fall back to legacy path: retweeted_status_result.result.legacy
-                        let rt_legacy = legacy.pointer("/retweeted_status_result/result/result/legacy")
-                            .or_else(|| legacy.pointer("/retweeted_status_result/result/legacy"));
-                        if let Some(rt) = rt_legacy {
-                            Self::extract_media_from_legacy(rt, &mut media);
-                        }
-                    }
-                    // For quote tweets: also extract media from the quoted tweet
-                    if media.is_empty() {
-                        // Try modern GraphQL path first: quoted_status_result.result.result.legacy (TweetResults wrapper)
-                        // Fall back to legacy path: quoted_status_result.result.legacy
-                        let qt_legacy = legacy.pointer("/quoted_status_result/result/result/legacy")
-                            .or_else(|| legacy.pointer("/quoted_status_result/result/legacy"));
-                        if let Some(qt) = qt_legacy {
-                            Self::extract_media_from_legacy(qt, &mut media);
-                        }
-                    }
-
-                    let author_avatar = user["profile_image_url_https"].as_str().map(String::from);
-
-                    posts.push(ExternalPostData {
-                        platform_post_id: id,
-                        text,
-                        author_name,
-                        author_handle,
-                        author_avatar,
-                        created_at,
-                        url: None,
-                        media,
-                        metadata: Some(serde_json::Value::Object(result.clone())),
-                    });
-                }
+            if cursor.is_none() {
+                tracing::info!(
+                    "X get_recent_posts: no more pages after page {}",
+                    pages_fetched,
+                );
+                break;
             }
+            if pages_fetched >= MAX_PAGES {
+                tracing::info!(
+                    "X get_recent_posts: hit MAX_PAGES={} after {} posts",
+                    MAX_PAGES, all_posts.len(),
+                );
+                break;
+            }
+            if page_post_count == 0 {
+                tracing::info!(
+                    "X get_recent_posts: empty page after {} posts",
+                    all_posts.len(),
+                );
+                break;
+            }
+
+            // Small delay between pages to avoid rate limiting
+            tokio::time::sleep(Duration::from_millis(500)).await;
         }
 
-        Ok(posts)
+        tracing::info!(
+            "X get_recent_posts: returning {} posts (pages={})",
+            all_posts.len(), pages_fetched,
+        );
+        Ok(all_posts)
     }
 
     async fn get_post_engagement(

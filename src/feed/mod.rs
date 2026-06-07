@@ -18,7 +18,7 @@ const DEFAULT_REFRESH_INTERVAL_SECS: u64 = 300; // 5 minutes
 const DEFAULT_ENGAGEMENT_INTERVAL_SECS: u64 = 1800; // 30 minutes
 
 /// How many recent posts to fetch per integration per cycle
-const RECENT_POSTS_LIMIT: u32 = 50;
+const RECENT_POSTS_LIMIT: u32 = 200;
 
 /// Start the feed refresher background task.
 /// Polls all integrations for new posts and periodically fetches engagement data.
