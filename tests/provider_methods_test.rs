@@ -639,7 +639,7 @@ async fn test_ias_mcp_tool_handler_full_chain() {
         .expect("Failed to connect to DB");
 
     use social_forge::api::AppState;
-    use social_forge::mcp::Social ForgeMcpServer;
+    use social_forge::mcp::SocialForgeMcpServer;
     use social_forge::realtime::Broadcaster;
     use social_forge::api::rate_limiter::AuthRateLimiter;
     use social_forge::social::registry::ProviderRegistry;
@@ -658,10 +658,11 @@ async fn test_ias_mcp_tool_handler_full_chain() {
         telegram_client_manager: None,
         wa_client: None,
         media_http_client: reqwest::Client::new(),
+        media_wreq_client: wreq::Client::new(),
     };
 
     // Verify MCP server can be created (all #[tool] macros compile)
-    let server = Social ForgeMcpServer::new(state.clone());
+    let server = SocialForgeMcpServer::new(state.clone());
     drop(server);
 
     // Verify Instagram Standalone provider is registered
@@ -680,7 +681,7 @@ async fn test_ias_mcp_tool_handler_full_chain() {
     assert!(url.contains("instagram.com/oauth/authorize"), "URL should go to Instagram OAuth");
     assert!(url.contains("instagram_business_basic"), "Should contain business scopes (matching social-forge-app pattern)");
 
-    println!("✅ ias_mcp_handler: Full chain verified (provider registration, auth URL, server creation)");
+    println!("✅ ias_mcp_handler: Full chain verified");
 }
 
 #[tokio::test]
@@ -691,7 +692,7 @@ async fn test_threads_mcp_tool_handler_full_chain() {
         .expect("Failed to connect to DB");
 
     use social_forge::api::AppState;
-    use social_forge::mcp::Social ForgeMcpServer;
+    use social_forge::mcp::SocialForgeMcpServer;
     use social_forge::realtime::Broadcaster;
     use social_forge::api::rate_limiter::AuthRateLimiter;
     use social_forge::social::registry::ProviderRegistry;
@@ -710,10 +711,11 @@ async fn test_threads_mcp_tool_handler_full_chain() {
         telegram_client_manager: None,
         wa_client: None,
         media_http_client: reqwest::Client::new(),
+        media_wreq_client: wreq::Client::new(),
     };
 
     // Verify MCP server can be created
-    let server = Social ForgeMcpServer::new(state.clone());
+    let server = SocialForgeMcpServer::new(state.clone());
     drop(server);
 
     // Verify Threads provider is registered
@@ -732,7 +734,7 @@ async fn test_threads_mcp_tool_handler_full_chain() {
     assert!(url.contains("threads.net/oauth/authorize"), "URL should go to Threads OAuth");
     assert!(url.contains("threads_basic"), "Should contain the right scopes");
 
-    println!("✅ threads_mcp_handler: Full chain verified (provider registration, auth URL, server creation)");
+    println!("✅ threads_mcp_handler: Full chain verified");
 }
 
 #[tokio::test]
@@ -743,7 +745,7 @@ async fn test_linkedin_mcp_tool_handler_full_chain() {
         .expect("Failed to connect to DB");
 
     use social_forge::api::AppState;
-    use social_forge::mcp::Social ForgeMcpServer;
+    use social_forge::mcp::SocialForgeMcpServer;
     use social_forge::realtime::Broadcaster;
     use social_forge::api::rate_limiter::AuthRateLimiter;
     use social_forge::social::registry::ProviderRegistry;
@@ -762,10 +764,11 @@ async fn test_linkedin_mcp_tool_handler_full_chain() {
         telegram_client_manager: None,
         wa_client: None,
         media_http_client: reqwest::Client::new(),
+        media_wreq_client: wreq::Client::new(),
     };
 
     // Verify MCP server can be created
-    let server = Social ForgeMcpServer::new(state.clone());
+    let server = SocialForgeMcpServer::new(state.clone());
     drop(server);
 
     // Verify LinkedIn provider is registered
@@ -791,7 +794,7 @@ async fn test_linkedin_mcp_tool_handler_full_chain() {
     assert!(url.contains("linkedin.com/oauth/v2/authorization"), "URL should go to LinkedIn OAuth");
     assert!(url.contains("w_member_social"), "Should contain the right scopes");
 
-    println!("✅ linkedin_mcp_handler: Full chain verified (both providers registered, auth URLs, server creation)");
+    println!("✅ linkedin_mcp_handler: Full chain verified");
 }
 
 // ── Provider Configuration Verification ─────────────────────

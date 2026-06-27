@@ -301,7 +301,7 @@ async fn test_whatsapp_mcp_tool_compilation() {
         .expect("Failed to connect to DB");
 
     use social_forge::api::AppState;
-    use social_forge::mcp::Social ForgeMcpServer;
+    use social_forge::mcp::SocialForgeMcpServer;
     use social_forge::realtime::Broadcaster;
 
     let broadcaster = Broadcaster::new();
@@ -318,9 +318,10 @@ async fn test_whatsapp_mcp_tool_compilation() {
         telegram_client_manager: None,
         wa_client: None,
         media_http_client: reqwest::Client::new(),
+        media_wreq_client: wreq::Client::new(),
     };
 
-    let server = Social ForgeMcpServer::new(state.clone());
+    let server = SocialForgeMcpServer::new(state.clone());
     assert!(server.state.config.whatsapp_store_dir.is_some() || server.state.config.whatsapp_store_dir.is_none());
 
     let wa_provider = server.state.providers.get("whatsapp");
@@ -329,7 +330,7 @@ async fn test_whatsapp_mcp_tool_compilation() {
     assert_eq!(wa.identifier(), "whatsapp");
     assert_eq!(wa.name(), "WhatsApp");
 
-    println!("PASS: Social ForgeMcpServer includes WhatsApp provider");
+    println!("PASS: SocialForgeMcpServer includes WhatsApp provider");
 }
 
 #[tokio::test]
@@ -356,6 +357,7 @@ async fn test_whatsapp_mcp_handler_functions() {
         telegram_client_manager: None,
         wa_client: None,
         media_http_client: reqwest::Client::new(),
+        media_wreq_client: wreq::Client::new(),
     };
 
     let send_input = tools_whatsapp::WaSendTextInput {

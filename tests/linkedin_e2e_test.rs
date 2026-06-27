@@ -17,7 +17,7 @@ use social_forge::api::AppState;
 use social_forge::api::rate_limiter::AuthRateLimiter;
 use social_forge::config::Config;
 use social_forge::db;
-use social_forge::mcp::Social ForgeMcpServer;
+use social_forge::mcp::SocialForgeMcpServer;
 use social_forge::realtime::Broadcaster;
 use social_forge::social::linkedin::LinkedInProvider;
 use social_forge::social::linkedin_page::LinkedInPageProvider;
@@ -54,6 +54,7 @@ async fn create_test_state(config: &Config) -> AppState {
         telegram_client_manager: None,
         wa_client: None,
         media_http_client: reqwest::Client::new(),
+        media_wreq_client: wreq::Client::new(),
     }
 }
 
@@ -237,7 +238,7 @@ async fn test_linkedin_provider_constructors() {
 #[tokio::test]
 async fn test_linkedin_mcp_server_startup_and_registration() {
     let state = create_test_state(&get_config()).await;
-    let server = Social ForgeMcpServer::new(state.clone());
+    let server = SocialForgeMcpServer::new(state.clone());
 
     // Verify server created
     assert!(
