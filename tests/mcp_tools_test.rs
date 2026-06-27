@@ -188,7 +188,7 @@ async fn test_mcp_tools_registration() {
         .expect("Failed to connect to DB");
 
     use social_forge::api::AppState;
-    use social_forge::mcp::Social ForgeMcpServer;
+    use social_forge::mcp::SocialForgeMcpServer;
     use social_forge::realtime::Broadcaster;
 
     let broadcaster = Broadcaster::new();
@@ -205,14 +205,15 @@ async fn test_mcp_tools_registration() {
         telegram_client_manager: None,
         wa_client: None,
         media_http_client: reqwest::Client::new(),
+        media_wreq_client: wreq::Client::new(),
     };
 
-    let server = Social ForgeMcpServer::new(state.clone());
+    let server = SocialForgeMcpServer::new(state.clone());
     // Verify server creation succeeds (tests that all #[tool] macros compile)
     assert!(server.state.config.provider_credentials("x").is_some(), "X credentials should be loaded");
     assert!(server.state.config.provider_credentials("reddit").is_some(), "Reddit credentials should be loaded");
 
-    println!("✅ MCP server: Social ForgeMcpServer instantiated successfully");
+    println!("✅ MCP server: SocialForgeMcpServer instantiated successfully");
     println!("✅ MCP tools: All {} #[tool] entries compile", 115); // 7 reddit + 20 x + 16 fb + 17 ig + 7 ias + 9 th + 6 li + 4 lip + 9 yt + 7 pi + 10 di + 5 sk
 }
 

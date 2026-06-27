@@ -221,7 +221,7 @@ async fn test_li_get_post_comments() {
 
     match provider.get_post_comments(&token, &post_urn).await {
         Ok(data) => {
-            let arr = data.as_array().map(|a| a.len()).unwrap_or(0);
+            let arr = data.len();
             log_result("li_get_post_comments", true, &format!("{arr} comments"));
         }
         Err(e) => log_result("li_get_post_comments", false, &format!("{e}")),
