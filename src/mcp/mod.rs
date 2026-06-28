@@ -1175,6 +1175,30 @@ impl SocialForgeMcpServer {
         tools_instagram::handle_ig_get_insights_audience(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
+    #[tool(description = "Send a direct message on Instagram")]
+    pub async fn ig_send_dm(
+        &self,
+        params: Parameters<tools_instagram::IgSendDmInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_instagram::handle_ig_send_dm(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "List Instagram message conversations")]
+    pub async fn ig_list_conversations(
+        &self,
+        params: Parameters<tools_instagram::IgListConversationsInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_instagram::handle_ig_list_conversations(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Get messages in an Instagram conversation")]
+    pub async fn ig_get_messages(
+        &self,
+        params: Parameters<tools_instagram::IgGetMessagesInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_instagram::handle_ig_get_messages(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
     // ── Instagram Standalone (Basic Display API) Tools ─────────────────
 
     #[tool(description = "Get Instagram media feed for a")]
@@ -1306,6 +1330,14 @@ impl SocialForgeMcpServer {
         params: Parameters<tools_google::YtFindCreatorsInput>,
     ) -> Result<Json<McpJsonValue>, String> {
         tools_google::handle_goog_find_creators(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Reply to a YouTube comment")]
+    pub async fn yt_reply_comment(
+        &self,
+        params: Parameters<tools_youtube::YtReplyCommentInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_youtube::handle_yt_reply_comment(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get Gmail profile info")]
@@ -2248,6 +2280,14 @@ impl SocialForgeMcpServer {
         tools_bluesky::handle_bs_feed(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
+    #[tool(description = "Reply to a Bluesky post")]
+    pub async fn bs_reply(
+        &self,
+        params: Parameters<tools_bluesky::BsReplyInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_bluesky::handle_bs_reply(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
     // ── TikTok Tools ─────────────────────────────────────────────────
 
     #[tool(description = "Get TikTok user profile info")]
@@ -2306,6 +2346,14 @@ impl SocialForgeMcpServer {
         params: Parameters<tools_mastodon::MsSearchInput>,
     ) -> Result<Json<McpJsonValue>, String> {
         tools_mastodon::handle_ms_search(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Reply to a Mastodon status")]
+    pub async fn ms_reply(
+        &self,
+        params: Parameters<tools_mastodon::MsReplyInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_mastodon::handle_ms_reply(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     // ── Medium Tools ─────────────────────────────────────────────────

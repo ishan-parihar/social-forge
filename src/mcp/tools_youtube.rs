@@ -243,3 +243,42 @@ pub async fn handle_yt_find_creators(
         .map_err(|e| format!("YouTube find creators failed: {e}"))?;
     Ok(Json(serde_json::json!({ "data": result })))
 }
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct YtReplyCommentInput {
+    pub channel_id: String,
+    pub comment_id: String,
+    pub content: String,
+}
+
+pub async fn handle_yt_reply_comment(
+    state: &AppState,
+    input: &YtReplyCommentInput,
+) -> Result<Json<serde_json::Value>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let provider = create_yt_provider(state);
+    let integrations = crate::db::queries::list_integrations(&state.db, user_id)
+        .await
+        .map_err(|e| format!("DB error: {e}"))?;
+    let token = integrations
+        .iter()
+        .find(|i| i.provider_identifier == "youtube")
+        .ok_or_else(|| "No YouTube integration found".to_string())?
+        .access_token
+        .clone();
+    let post = crate::social::PostContent {
+        content: input.content.clone(),
+        media: vec![],
+        settings: serde_json::json!({}),
+    };
+    let result = provider
+        .reply_to_comment(&token, &input.comment_id, &post)
+        .await
+        .map_err(|e| format!("YouTube reply comment failed: {e}"))?;
+    Ok(Json(serde_json::json!({
+        "data": {
+            "id": result.platform_post_id,
+            "status": result.status,
+        }
+    })))
+}

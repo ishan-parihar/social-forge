@@ -467,3 +467,87 @@ pub async fn handle_ig_poll_container(
         .map_err(|e| format!("Instagram poll container failed: {e}"))?;
     Ok(Json(serde_json::json!({ "status": status })))
 }
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct IgSendDmInput {
+    pub ig_id: String,
+    pub recipient_id: String,
+    pub content: String,
+}
+
+pub async fn handle_ig_send_dm(
+    state: &AppState,
+    input: &IgSendDmInput,
+) -> Result<Json<serde_json::Value>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let token = find_instagram_token(state, user_id, &input.ig_id).await?;
+    let provider = create_provider(state);
+    let post = crate::social::PostContent {
+        content: input.content.clone(),
+        media: vec![],
+        settings: serde_json::json!({}),
+    };
+    let result = provider.send_dm(&token, &input.recipient_id, &post).await
+        .map_err(|e| format!("Instagram send DM failed: {e}"))?;
+    Ok(Json(serde_json::json!({
+        "data": {
+            "id": result.platform_post_id,
+            "status": result.status,
+        }
+    })))
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct IgListConversationsInput {
+    pub ig_id: String,
+    pub limit: Option<u32>,
+}
+
+pub async fn handle_ig_list_conversations(
+    state: &AppState,
+    input: &IgListConversationsInput,
+) -> Result<Json<serde_json::Value>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let token = find_instagram_token(state, user_id, &input.ig_id).await?;
+    let provider = create_provider(state);
+    let limit = input.limit.unwrap_or(20);
+    let conversations = provider.get_dm_conversations(&token, limit).await
+        .map_err(|e| format!("Instagram list conversations failed: {e}"))?;
+    let conv_values: Vec<serde_json::Value> = conversations.into_iter().map(|c| {
+        serde_json::json!({
+            "id": c.id,
+            "last_message": c.last_message,
+            "last_message_at": c.last_message_at.map(|dt| dt.to_rfc3339()),
+            "unread_count": c.unread_count,
+        })
+    }).collect();
+    Ok(Json(serde_json::json!({ "data": conv_values })))
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct IgGetMessagesInput {
+    pub ig_id: String,
+    pub conversation_id: String,
+    pub limit: Option<u32>,
+}
+
+pub async fn handle_ig_get_messages(
+    state: &AppState,
+    input: &IgGetMessagesInput,
+) -> Result<Json<serde_json::Value>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let token = find_instagram_token(state, user_id, &input.ig_id).await?;
+    let provider = create_provider(state);
+    let limit = input.limit.unwrap_or(20);
+    let messages = provider.get_dm_messages(&token, &input.conversation_id, limit).await
+        .map_err(|e| format!("Instagram get messages failed: {e}"))?;
+    let msg_values: Vec<serde_json::Value> = messages.into_iter().map(|m| {
+        serde_json::json!({
+            "id": m.id,
+            "sender": m.sender,
+            "content": m.content,
+            "created_at": m.created_at.to_rfc3339(),
+        })
+    }).collect();
+    Ok(Json(serde_json::json!({ "data": msg_values })))
+}
