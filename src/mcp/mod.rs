@@ -39,6 +39,9 @@ mod tools_hashnode;
 pub mod tools_pinterest;
 mod tools_posts;
 mod tools_media;
+mod tools_comments;
+mod tools_dm;
+mod tools_automation;
 pub mod tools_discord;
 pub mod tools_reddit;
 mod tools_skool;
@@ -434,6 +437,100 @@ impl SocialForgeMcpServer {
         params: Parameters<tools_posts::StagePostInput>,
     ) -> Result<Json<tools_posts::StagePostOutput>, String> {
         tools_posts::stage_post(&self.state, &params.0).await
+    }
+
+    // ── Comment Tools ───────────────────────────────────────
+
+    #[tool(description = "Get comments for a post on any platform")]
+    async fn get_comments(
+        &self,
+        params: Parameters<tools_comments::GetCommentsInput>,
+    ) -> Result<Json<tools_comments::GetCommentsOutput>, String> {
+        tools_comments::get_comments(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Reply to a comment on any platform")]
+    async fn reply_to_comment(
+        &self,
+        params: Parameters<tools_comments::ReplyToCommentInput>,
+    ) -> Result<Json<tools_comments::ReplyToCommentOutput>, String> {
+        tools_comments::reply_to_comment(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Delete a comment on any platform")]
+    async fn delete_comment(
+        &self,
+        params: Parameters<tools_comments::DeleteCommentInput>,
+    ) -> Result<Json<SuccessOutput>, String> {
+        tools_comments::delete_comment(&self.state, &params.0).await
+    }
+
+    // ── DM Tools ────────────────────────────────────────────
+
+    #[tool(description = "Send a direct message on any platform")]
+    async fn send_dm(
+        &self,
+        params: Parameters<tools_dm::SendDmInput>,
+    ) -> Result<Json<tools_dm::SendDmOutput>, String> {
+        tools_dm::send_dm(&self.state, &params.0).await
+    }
+
+    #[tool(description = "List DM conversations on any platform")]
+    async fn list_dm_conversations(
+        &self,
+        params: Parameters<tools_dm::ListDmInput>,
+    ) -> Result<Json<tools_dm::ListDmOutput>, String> {
+        tools_dm::list_dm_conversations(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get messages in a DM conversation")]
+    async fn get_dm_messages(
+        &self,
+        params: Parameters<tools_dm::GetDmInput>,
+    ) -> Result<Json<tools_dm::GetDmOutput>, String> {
+        tools_dm::get_dm_messages(&self.state, &params.0).await
+    }
+
+    // ── Automation Tools ─────────────────────────────────────
+
+    #[tool(description = "Create an automation rule for auto-reply to comments/DMs")]
+    async fn create_automation_rule(
+        &self,
+        params: Parameters<tools_automation::CreateRuleInput>,
+    ) -> Result<Json<tools_automation::CreateRuleOutput>, String> {
+        tools_automation::create_rule(&self.state, &params.0).await
+    }
+
+    #[tool(description = "List automation rules")]
+    async fn list_automation_rules(
+        &self,
+        params: Parameters<tools_automation::ListRulesInput>,
+    ) -> Result<Json<tools_automation::ListRulesOutput>, String> {
+        tools_automation::list_rules(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Update an automation rule")]
+    async fn update_automation_rule(
+        &self,
+        params: Parameters<tools_automation::UpdateRuleInput>,
+    ) -> Result<Json<SuccessOutput>, String> {
+        tools_automation::update_rule(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Delete an automation rule")]
+    async fn delete_automation_rule(
+        &self,
+        params: Parameters<tools_automation::DeleteRuleInput>,
+    ) -> Result<Json<SuccessOutput>, String> {
+        tools_automation::delete_rule(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get execution logs for an automation rule")]
+    async fn get_automation_logs(
+        &self,
+        params: Parameters<tools_automation::GetLogsInput>,
+    ) -> Result<Json<tools_automation::GetLogsOutput>, String> {
+        tools_automation::get_logs(&self.state, &params.0).await
     }
 
     // ── Reddit Read/Query Tools ──────────────────────────────────
