@@ -403,6 +403,17 @@ impl SocialProvider for LinkedInProvider {
         3000
     }
 
+    /// LinkedIn uses rotating refresh tokens that expire after ~60 days.
+    /// Proactive refresh ensures tokens don't silently expire between API calls.
+    fn needs_cron_refresh(&self) -> bool {
+        true
+    }
+
+    /// LinkedIn needs a 10-second propagation delay after token rotation.
+    fn refresh_wait(&self) -> bool {
+        true
+    }
+
     async fn generate_auth_url(
         &self,
         state: &str,
