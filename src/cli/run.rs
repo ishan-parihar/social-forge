@@ -13,7 +13,7 @@ use crate::realtime::Broadcaster;
 use crate::social::registry::ProviderRegistry;
 use crate::social::SocialProvider;
 
-use super::{Cli, Command, ConfigAction, XAction, RedditAction, RedditModAction, LinkedinAction, LinkedinPageAction, FacebookAction, InstagramAction, YoutubeAction, BlueskyAction, MastodonAction, CommentAction, DmAction, AutomationAction};
+use super::{Cli, Command, ConfigAction, XAction, RedditAction, RedditModAction, LinkedinAction, LinkedinPageAction, FacebookAction, InstagramAction, YoutubeAction, BlueskyAction, MastodonAction, CommentAction, DmAction, AutomationAction, MediaAction};
 use crate::social::TargetInfo;
 use crate::db::models::Integration;
 
@@ -271,6 +271,18 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
         Command::Automation { action } => handle_automation(action).await,
         Command::Import { provider, count } => handle_import(&provider, count).await,
         Command::Feed { provider, limit } => handle_feed(provider.as_deref(), limit).await,
+        Command::Post { text, platforms, media, schedule, first_comment } => {
+            handle_post(&text, platforms.as_deref(), media.as_deref(), schedule.as_deref(), first_comment.as_deref()).await
+        }
+        Command::Stage { text, integrations, media, schedule, preview } => {
+            handle_stage(&text, integrations.as_deref(), media.as_deref(), schedule.as_deref(), preview).await
+        }
+        Command::Media { action } => handle_media(action).await,
+        Command::McpCall { tool, json } => handle_mcp_call(&tool, &json).await,
+        Command::McpTools => handle_mcp_tools(),
+        Command::SplitPreview { text, platforms } => {
+            handle_split_preview(&text, platforms.as_deref())
+        }
     }
 }
 
@@ -2475,3 +2487,208 @@ async fn handle_automation(action: AutomationAction) -> anyhow::Result<()> {
     Ok(())
 }
 
+
+
+// Unified Post Handler
+async fn handle_post(
+    text: &str,
+    platforms: Option<&str>,
+    media: Option<&str>,
+    schedule: Option<&str>,
+    first_comment: Option<&str>,
+) -> anyhow::Result<()> {
+    let state = init_state().await?;
+    let user_id = resolve_user(&state).await?;
+    let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
+    let target_integrations: Vec<_> = if let Some(platforms_str) = platforms {
+        let requested: Vec<&str> = platforms_str.split(',').map(|s| s.trim()).collect();
+        integrations.iter().filter(|i| requested.iter().any(|p| i.provider_identifier == *p)).collect()
+    } else {
+        integrations.iter().collect()
+    };
+    if target_integrations.is_empty() {
+        return Err(anyhow::anyhow!("No matching integrations found. Use 'social-forge providers' to see connected accounts."));
+    }
+    let media_json = match media {
+        Some(m) => serde_json::json!(m.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()).map(|u| serde_json::json!({"url": u})).collect::<Vec<_>>()),
+        None => serde_json::json!([]),
+    };
+    let scheduled_at = match schedule {
+        Some(s) => Some(chrono::DateTime::parse_from_rfc3339(s).map_err(|_| anyhow::anyhow!("Invalid date format, use ISO8601"))?.with_timezone(&chrono::Utc)),
+        None => None,
+    };
+    let mut results: Vec<serde_json::Value> = Vec::new();
+    for integration in &target_integrations {
+        let provider_name = &integration.provider_identifier;
+        let segments = crate::services::content_splitter::split_content(text, provider_name, 4);
+        for segment in &segments {
+            let segment_media = if segment.sequence == 1 { media_json.clone() } else { serde_json::json!([]) };
+            let state_str = if scheduled_at.is_some() { "queued" } else { "draft" };
+            let post = crate::services::posts::PostService::create(&state.db, &state.broadcast, crate::services::posts::CreatePostInput { user_id, integration_id: integration.id, content: segment.content.clone(), title: None, media_urls: segment_media.clone(), scheduled_at, settings: serde_json::json!({}) }).await.map_err(|e| anyhow::anyhow!("Failed to create post for {}: {e}", provider_name))?;
+            if let Some(sat) = scheduled_at {
+                crate::db::queries::schedule_post(&state.db, post.id, user_id, sat).await.map_err(|e| anyhow::anyhow!("Failed to schedule: {e}"))?;
+            }
+            results.push(serde_json::json!({"integration_id": integration.id.to_string(), "provider": provider_name, "post_id": post.id.to_string(), "sequence": segment.sequence, "total_segments": segment.total, "state": state_str, "content_preview": segment.content.chars().take(80).collect::<String>()}));
+        }
+    }
+    output_json(&serde_json::json!({"status": "created", "total": results.len(), "scheduled_at": scheduled_at.map(|d| d.to_rfc3339()), "posts": results}));
+    Ok(())
+}
+
+
+// Stage Handler
+async fn handle_stage(
+    text: &str,
+    integrations_str: Option<&str>,
+    media: Option<&str>,
+    schedule: Option<&str>,
+    preview_only: bool,
+) -> anyhow::Result<()> {
+    let state = init_state().await?;
+    let user_id = resolve_user(&state).await?;
+    let all_integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
+    let integration_ids: Vec<Uuid> = if let Some(iids) = integrations_str {
+        iids.split(',').map(|s| s.trim()).filter(|s| !s.is_empty())
+            .map(|s| Uuid::parse_str(s).map_err(|_| anyhow::anyhow!("Invalid integration_id: {s}")))
+            .collect::<Result<_, _>>()?
+    } else {
+        all_integrations.iter().map(|i| i.id).collect()
+    };
+    if integration_ids.is_empty() {
+        return Err(anyhow::anyhow!("No integration IDs specified and no connected accounts found."));
+    }
+    let media_json = match media {
+        Some(m) => {
+            let urls: Vec<String> = m.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+            serde_json::json!(urls.iter().map(|u| serde_json::json!({"url": u})).collect::<Vec<_>>())
+        }
+        None => serde_json::json!([]),
+    };
+    let scheduled_at = match schedule {
+        Some(s) => Some(chrono::DateTime::parse_from_rfc3339(s)
+            .map_err(|_| anyhow::anyhow!("Invalid date format, use ISO8601"))?
+            .with_timezone(&chrono::Utc)),
+        None => None,
+    };
+    if preview_only {
+        let previews: Vec<serde_json::Value> = integration_ids.iter().filter_map(|iid| {
+            let integration = all_integrations.iter().find(|i| i.id == *iid)?;
+            let segments = crate::services::content_splitter::split_content(text, &integration.provider_identifier, 4);
+            Some(serde_json::json!({
+                "provider": integration.provider_identifier,
+                "limit": crate::services::content_splitter::platform_limit(&integration.provider_identifier),
+                "segments": segments.len(),
+                "posts": segments.iter().map(|s| serde_json::json!({"sequence": s.sequence, "total": s.total, "content": s.content, "char_count": s.content.len()})).collect::<Vec<_>>(),
+            }))
+        }).collect();
+        output_json(&serde_json::json!({"preview": true, "total_integrations": previews.len(), "integrations": previews}));
+        return Ok(());
+    }
+    let request = crate::services::staging::StagingRequest {
+        content: text.to_string(),
+        media: media_json,
+        integration_ids,
+        settings: serde_json::json!({}),
+        scheduled_at,
+    };
+    crate::services::staging::validate_staging_request(&request).map_err(|e| anyhow::anyhow!("Validation failed: {e}"))?;
+    let result = crate::services::staging::stage_post(&state.db, user_id, request).await.map_err(|e| anyhow::anyhow!("Staging failed: {e}"))?;
+    let staged: Vec<serde_json::Value> = result.staged.into_iter().map(|s| {
+        serde_json::json!({"post_id": s.post_id.to_string(), "provider": s.provider, "sequence": s.sequence, "total_segments": s.total_segments, "state": s.state})
+    }).collect();
+    output_json(&serde_json::json!({"status": "staged", "total_posts": result.total_posts, "warnings": result.warnings, "staged": staged}));
+    Ok(())
+}
+
+// Media Handler
+async fn handle_media(action: MediaAction) -> anyhow::Result<()> {
+    let state = init_state().await?;
+    let user_id = resolve_user(&state).await?;
+    match action {
+        MediaAction::Upload { path, alt } => {
+            let file_path = std::path::Path::new(&path);
+            if !file_path.exists() { return Err(anyhow::anyhow!("File not found: {path}")); }
+            let data = std::fs::read(file_path).map_err(|e| anyhow::anyhow!("Failed to read file: {e}"))?;
+            if data.len() > 50 * 1024 * 1024 { return Err(anyhow::anyhow!("File too large (max 50 MB)")); }
+            let filename = file_path.file_name().and_then(|f| f.to_str()).unwrap_or("upload.bin").to_string();
+            let mime = match file_path.extension().and_then(|e| e.to_str()) {
+                Some("jpg") | Some("jpeg") => "image/jpeg",
+                Some("png") => "image/png",
+                Some("gif") => "image/gif",
+                Some("webp") => "image/webp",
+                Some("mp4") => "video/mp4",
+                Some("mov") => "video/quicktime",
+                _ => "application/octet-stream",
+            };
+            let file_id = uuid::Uuid::new_v4();
+            let ext = file_path.extension().and_then(|e| e.to_str()).unwrap_or("bin");
+            let stored_name = format!("{file_id}.{ext}");
+            let upload_dir = std::path::Path::new(&state.config.media_dir);
+            tokio::fs::create_dir_all(upload_dir).await.map_err(|e| anyhow::anyhow!("Failed to create upload dir: {e}"))?;
+            let filepath = upload_dir.join(&stored_name);
+            tokio::fs::write(&filepath, &data).await.map_err(|e| anyhow::anyhow!("Failed to write file: {e}"))?;
+            let entry = crate::db::queries::create_media(&state.db, user_id, &filename, &stored_name, mime, data.len() as i64, None, None).await.map_err(|e| anyhow::anyhow!("DB error: {e}"))?;
+            output_json(&serde_json::json!({"id": entry.id.to_string(), "url": format!("/api/media/{}", entry.id), "mime_type": mime, "filename": filename, "size": data.len() as i64}));
+        }
+        MediaAction::List { limit, search } => {
+            let entries = crate::db::queries::list_media(&state.db, user_id, limit.min(200) as i64, 0, search.as_deref()).await.map_err(|e| anyhow::anyhow!("DB error: {e}"))?;
+            let media: Vec<serde_json::Value> = entries.into_iter().map(|e| {
+                serde_json::json!({"id": e.id.to_string(), "url": format!("/api/media/{}", e.id), "filename": e.original_name, "mime_type": e.mime_type, "size": e.file_size, "created_at": e.created_at.to_rfc3339()})
+            }).collect();
+            output_json(&serde_json::json!({"count": media.len(), "media": media}));
+        }
+        MediaAction::Download { url, output } => {
+            let resp = reqwest::Client::new().get(&url).send().await.map_err(|e| anyhow::anyhow!("Failed to download: {e}"))?;
+            let status = resp.status();
+            if !status.is_success() { return Err(anyhow::anyhow!("Download failed with HTTP {}", status)); }
+            let content_type = resp.headers().get("content-type").and_then(|v| v.to_str().ok()).unwrap_or("application/octet-stream").to_string();
+            let bytes = resp.bytes().await.map_err(|e| anyhow::anyhow!("Failed to read response: {e}"))?;
+            let out_path = if std::path::Path::new(&output).is_dir() {
+                let filename = url.rsplit('/').next().unwrap_or("download");
+                let filename = filename.split('?').next().unwrap_or(filename);
+                std::path::Path::new(&output).join(filename)
+            } else { std::path::PathBuf::from(&output) };
+            if let Some(parent) = out_path.parent() { std::fs::create_dir_all(parent).map_err(|e| anyhow::anyhow!("Failed to create directory: {e}"))?; }
+            std::fs::write(&out_path, &bytes).map_err(|e| anyhow::anyhow!("Failed to write file: {e}"))?;
+            output_json(&serde_json::json!({"status": "downloaded", "url": url, "path": out_path.display().to_string(), "size": bytes.len() as i64, "content_type": content_type}));
+        }
+    }
+    Ok(())
+}
+
+// MCP Call Handler
+async fn handle_mcp_call(tool_name: &str, args_json: &str) -> anyhow::Result<()> {
+    let state = init_state().await?;
+    let result = crate::cli::mcp_bridge::call_tool(&state, tool_name, args_json).await.map_err(|e| anyhow::anyhow!("{}", e))?;
+    output_json(&result);
+    Ok(())
+}
+
+// MCP Tools List Handler
+fn handle_mcp_tools() -> anyhow::Result<()> {
+    let tools = crate::cli::mcp_bridge::list_tools();
+    let list: Vec<serde_json::Value> = tools.into_iter().map(|(name, desc)| {
+        serde_json::json!({"name": name, "description": desc})
+    }).collect();
+    output_json(&serde_json::json!({"count": list.len(), "tools": list}));
+    Ok(())
+}
+
+// Split Preview Handler
+fn handle_split_preview(text: &str, platforms: Option<&str>) -> anyhow::Result<()> {
+    let provider_list: Vec<&str> = match platforms {
+        Some(p) => p.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()).collect(),
+        None => vec!["x", "bluesky", "linkedin", "reddit", "mastodon", "facebook", "instagram", "youtube"],
+    };
+    let preview: Vec<serde_json::Value> = provider_list.iter().map(|&provider| {
+        let segments = crate::services::content_splitter::split_content(text, provider, 4);
+        let limit = crate::services::content_splitter::platform_limit(provider);
+        let needs_split = crate::services::content_splitter::needs_splitting(text, provider);
+        serde_json::json!({
+            "provider": provider, "char_limit": limit, "content_length": text.len(), "needs_splitting": needs_split, "segments": segments.len(),
+            "posts": segments.iter().map(|s| serde_json::json!({"sequence": s.sequence, "total": s.total, "content": s.content, "char_count": s.content.len()})).collect::<Vec<_>>(),
+        })
+    }).collect();
+    output_json(&serde_json::json!({"content_length": text.len(), "platforms": preview}));
+    Ok(())
+}

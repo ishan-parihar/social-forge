@@ -1,4 +1,5 @@
 pub mod run;
+pub mod mcp_bridge;
 pub use run::run_cli;
 
 use clap::{Parser, Subcommand};
@@ -148,6 +149,71 @@ pub enum Command {
         #[command(subcommand)]
         action: AutomationAction,
     },
+
+    // ── Unified Commands (mirror MCP tools) ──────────────────
+
+    /// Unified post command — post to any platform with auto content-splitting
+    Post {
+        /// Post text content
+        text: String,
+        /// Target platforms (comma-separated: x,bluesky,linkedin,reddit,...). Uses all connected if omitted.
+        #[arg(long)]
+        platforms: Option<String>,
+        /// Media URLs to attach (comma-separated)
+        #[arg(long)]
+        media: Option<String>,
+        /// Schedule for later (ISO8601 datetime)
+        #[arg(long)]
+        schedule: Option<String>,
+        /// First comment (for platforms that support it, e.g. Instagram)
+        #[arg(long)]
+        first_comment: Option<String>,
+    },
+
+    /// Stage a post across multiple platforms with auto content-splitting
+    Stage {
+        /// Post text content
+        text: String,
+        /// Target integration IDs (comma-separated UUIDs). Uses all connected if omitted.
+        #[arg(long)]
+        integrations: Option<String>,
+        /// Media URLs to attach (comma-separated)
+        #[arg(long)]
+        media: Option<String>,
+        /// Schedule for later (ISO8601 datetime)
+        #[arg(long)]
+        schedule: Option<String>,
+        /// Preview splits without creating drafts
+        #[arg(long, default_value_t = false)]
+        preview: bool,
+    },
+
+    /// Media management — upload, list, download
+    Media {
+        #[command(subcommand)]
+        action: MediaAction,
+    },
+
+    /// Call any MCP tool directly by name with JSON arguments
+    McpCall {
+        /// MCP tool name (e.g. posts_create, x_home_timeline, bs_create_post)
+        tool: String,
+        /// JSON arguments for the tool
+        #[arg(long, default_value = "{}")]
+        json: String,
+    },
+
+    /// List all available MCP tools that can be called via mcp-call
+    McpTools,
+
+    /// Content split preview — see how content will be split across platforms
+    SplitPreview {
+        /// Content to preview splitting for
+        text: String,
+        /// Platforms to preview (comma-separated). Shows all if omitted.
+        #[arg(long)]
+        platforms: Option<String>,
+    },
 }
 
 // ─── Comment Actions ────────────────────────────────────────────────────────
@@ -260,6 +326,37 @@ pub enum AutomationAction {
         /// Number of logs to fetch
         #[arg(long, default_value_t = 50)]
         limit: u32,
+    },
+}
+
+// ─── Media Actions ──────────────────────────────────────────────────────
+
+#[derive(Subcommand, Debug)]
+pub enum MediaAction {
+    /// Upload a media file (image/video) for post attachments
+    Upload {
+        /// File path to upload
+        path: String,
+        /// Alt text for accessibility
+        #[arg(long)]
+        alt: Option<String>,
+    },
+    /// List uploaded media files
+    List {
+        /// Number of items to show
+        #[arg(long, default_value_t = 20)]
+        limit: u32,
+        /// Search filter
+        #[arg(long)]
+        search: Option<String>,
+    },
+    /// Download media from a URL to local file
+    Download {
+        /// URL to download
+        url: String,
+        /// Output file path
+        #[arg(long, default_value = "./download")]
+        output: String,
     },
 }
 
