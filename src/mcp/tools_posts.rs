@@ -372,3 +372,74 @@ pub(crate) async fn resolve_first_user(state: &AppState) -> Result<Uuid, String>
         .map_err(|e| e.to_string())?
         .ok_or_else(|| "No user registered. Use auth.register first.".to_string())
 }
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct StagePostInput {
+    pub content: String,
+    pub media: Option<serde_json::Value>,
+    pub integration_ids: Vec<String>,
+    pub settings: Option<serde_json::Value>,
+    pub scheduled_at: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct StagedPostInfo {
+    pub post_id: String,
+    pub provider: String,
+    pub sequence: usize,
+    pub total_segments: usize,
+    pub state: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct StagePostOutput {
+    pub staged: Vec<StagedPostInfo>,
+    pub total_posts: usize,
+    pub warnings: Vec<String>,
+}
+
+pub async fn stage_post(
+    state: &AppState,
+    input: &StagePostInput,
+) -> Result<Json<StagePostOutput>, String> {
+    let user_id = resolve_first_user(state).await?;
+
+    let integration_ids: Vec<Uuid> = input.integration_ids.iter()
+        .map(|s| Uuid::parse_str(s).map_err(|_| format!("Invalid integration_id: {s}")))
+        .collect::<Result<_, _>>()?;
+
+    let scheduled_at = match &input.scheduled_at {
+        Some(s) => {
+            let dt = chrono::DateTime::parse_from_rfc3339(s)
+                .map_err(|_| "Invalid date format, use ISO8601".to_string())?;
+            Some(dt.with_timezone(&chrono::Utc))
+        }
+        None => None,
+    };
+
+    let request = crate::services::staging::StagingRequest {
+        content: input.content.clone(),
+        media: input.media.clone().unwrap_or(serde_json::json!([])),
+        integration_ids,
+        settings: input.settings.clone().unwrap_or(serde_json::json!({})),
+        scheduled_at,
+    };
+
+    crate::services::staging::validate_staging_request(&request)?;
+
+    let result = crate::services::staging::stage_post(&state.db, user_id, request).await?;
+
+    let staged = result.staged.into_iter().map(|s| StagedPostInfo {
+        post_id: s.post_id.to_string(),
+        provider: s.provider,
+        sequence: s.sequence,
+        total_segments: s.total_segments,
+        state: s.state,
+    }).collect();
+
+    Ok(Json(StagePostOutput {
+        staged,
+        total_posts: result.total_posts,
+        warnings: result.warnings,
+    }))
+}

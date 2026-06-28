@@ -38,6 +38,7 @@ mod tools_medium;
 mod tools_hashnode;
 pub mod tools_pinterest;
 mod tools_posts;
+mod tools_media;
 pub mod tools_discord;
 pub mod tools_reddit;
 mod tools_skool;
@@ -409,6 +410,30 @@ impl SocialForgeMcpServer {
         params: Parameters<tools_posts::UpdatePostInput>,
     ) -> Result<Json<tools_posts::UpdatePostOutput>, String> {
         tools_posts::update_post(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Upload media (image/video) for post attachments. Pass base64-encoded file data.")]
+    async fn posts_media_upload(
+        &self,
+        params: Parameters<tools_media::MediaUploadInput>,
+    ) -> Result<Json<tools_media::MediaUploadOutput>, String> {
+        tools_media::upload_media(&self.state, &params.0).await
+    }
+
+    #[tool(description = "List uploaded media files")]
+    async fn posts_media_list(
+        &self,
+        params: Parameters<tools_media::MediaListInput>,
+    ) -> Result<Json<tools_media::MediaListOutput>, String> {
+        tools_media::list_media(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Stage a post across multiple platforms. Auto-splits content per platform character limits. Creates draft posts for each integration.")]
+    async fn posts_stage(
+        &self,
+        params: Parameters<tools_posts::StagePostInput>,
+    ) -> Result<Json<tools_posts::StagePostOutput>, String> {
+        tools_posts::stage_post(&self.state, &params.0).await
     }
 
     // ── Reddit Read/Query Tools ──────────────────────────────────
