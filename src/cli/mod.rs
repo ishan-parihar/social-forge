@@ -186,6 +186,38 @@ pub enum XAction {
         /// Username to look up
         username: String,
     },
+
+    /// Reply to a tweet
+    Reply {
+        /// Tweet ID to reply to
+        tweet_id: String,
+        /// Reply text
+        text: String,
+    },
+
+    /// Send a direct message
+    Dm {
+        /// Recipient user ID
+        recipient: String,
+        /// Message text
+        text: String,
+    },
+
+    /// List DM conversations
+    DmList {
+        /// Number of conversations to fetch
+        #[arg(long, default_value_t = 20)]
+        count: u32,
+    },
+
+    /// Get messages in a DM conversation
+    DmMessages {
+        /// Conversation ID
+        conversation_id: String,
+        /// Number of messages to fetch
+        #[arg(long, default_value_t = 20)]
+        count: u32,
+    },
 }
 
 // ─── Reddit ─────────────────────────────────────────────────────────────────
@@ -364,6 +396,38 @@ pub enum LinkedinAction {
 
     /// View profile analytics
     Analytics,
+
+    /// Reply to a LinkedIn comment
+    Reply {
+        /// Comment URN
+        comment_id: String,
+        /// Reply content
+        content: String,
+    },
+
+    /// Send a direct message on LinkedIn
+    Dm {
+        /// Recipient URN
+        recipient: String,
+        /// Message content
+        content: String,
+    },
+
+    /// List LinkedIn message conversations
+    DmList {
+        /// Number of conversations to fetch
+        #[arg(long, default_value_t = 20)]
+        count: u32,
+    },
+
+    /// Get messages in a LinkedIn conversation
+    DmMessages {
+        /// Conversation ID
+        conversation_id: String,
+        /// Number of messages to fetch
+        #[arg(long, default_value_t = 20)]
+        count: u32,
+    },
 }
 
 // ─── LinkedIn Page ──────────────────────────────────────────────────────────
@@ -454,5 +518,35 @@ pub enum InstagramAction {
 
         /// Comment text
         text: String,
+    },
+
+    /// Send a direct message on Instagram
+    Dm {
+        /// Account ID
+        account_id: String,
+        /// Recipient ID
+        recipient: String,
+        /// Message content
+        content: String,
+    },
+
+    /// List Instagram message conversations
+    DmList {
+        /// Account ID
+        account_id: String,
+        /// Number of conversations to fetch
+        #[arg(long, default_value_t = 20)]
+        count: u32,
+    },
+
+    /// Get messages in an Instagram conversation
+    DmMessages {
+        /// Account ID
+        account_id: String,
+        /// Conversation ID
+        conversation_id: String,
+        /// Number of messages to fetch
+        #[arg(long, default_value_t = 20)]
+        count: u32,
     },
 }
