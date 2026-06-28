@@ -14,6 +14,7 @@ pub struct StagingRequest {
     pub integration_ids: Vec<Uuid>,
     pub settings: serde_json::Value,
     pub scheduled_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub first_comment: Option<String>,
 }
 
 #[derive(Debug)]
@@ -81,7 +82,7 @@ pub async fn stage_post(
                 &request.settings,
                 request.scheduled_at,
                 None,
-                None,
+                request.first_comment.as_deref(),
                 segment.sequence as i32,
             )
             .await

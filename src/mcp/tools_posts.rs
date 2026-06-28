@@ -380,6 +380,7 @@ pub struct StagePostInput {
     pub integration_ids: Vec<String>,
     pub settings: Option<serde_json::Value>,
     pub scheduled_at: Option<String>,
+    pub first_comment: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
@@ -423,6 +424,7 @@ pub async fn stage_post(
         integration_ids,
         settings: input.settings.clone().unwrap_or(serde_json::json!({})),
         scheduled_at,
+        first_comment: input.first_comment.clone(),
     };
 
     crate::services::staging::validate_staging_request(&request)?;

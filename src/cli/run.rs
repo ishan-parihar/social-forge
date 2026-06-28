@@ -275,7 +275,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
             handle_post(&text, platforms.as_deref(), media.as_deref(), schedule.as_deref(), first_comment.as_deref()).await
         }
         Command::Stage { text, integrations, media, schedule, preview } => {
-            handle_stage(&text, integrations.as_deref(), media.as_deref(), schedule.as_deref(), preview).await
+            handle_stage(&text, integrations.as_deref(), media.as_deref(), schedule.as_deref(), preview, None).await
         }
         Command::Media { action } => handle_media(action).await,
         Command::McpCall { tool, json } => handle_mcp_call(&tool, &json).await,
@@ -2543,6 +2543,7 @@ async fn handle_stage(
     media: Option<&str>,
     schedule: Option<&str>,
     preview_only: bool,
+    first_comment: Option<&str>,
 ) -> anyhow::Result<()> {
     let state = init_state().await?;
     let user_id = resolve_user(&state).await?;
@@ -2590,6 +2591,7 @@ async fn handle_stage(
         integration_ids,
         settings: serde_json::json!({}),
         scheduled_at,
+        first_comment: first_comment.map(String::from),
     };
     crate::services::staging::validate_staging_request(&request).map_err(|e| anyhow::anyhow!("Validation failed: {e}"))?;
     let result = crate::services::staging::stage_post(&state.db, user_id, request).await.map_err(|e| anyhow::anyhow!("Staging failed: {e}"))?;
