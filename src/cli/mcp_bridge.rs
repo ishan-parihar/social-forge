@@ -277,25 +277,27 @@ pub fn list_tools() -> Vec<(&'static str, &'static str)> {
 mod tests {
     use super::*;
 
-    /// Ensures the bridge tool list stays in sync with the dispatch table.
-    /// If you add a new MCP tool, update list_tools() AND this count.
+    /// Ensures list_tools() returns a reasonable number of tools.
+    /// If you add a new MCP tool, increment this count.
     #[test]
-    fn bridge_tool_count_matches_dispatch() {
+    fn list_tools_count() {
         let tools = list_tools();
         // Update this number when adding new tools to the bridge.
-        // This is a safety net — if you add a tool to the match but forget
-        // list_tools(), or vice versa, this test will fail.
-        assert!(tools.len() >= 28, "Expected at least 28 tools in bridge, got {}", tools.len());
+        // This catches tools added to list_tools but not the match (or vice versa)
+        // as long as you remember to bump the count.
+        assert_eq!(tools.len(), 31, "Expected 31 tools in bridge, got {}. If you added a tool, update this count.", tools.len());
     }
 
-    /// Ensures all tool names in list_tools() have a corresponding match arm.
+    /// Ensures all listed tools are well-formed.
     #[test]
-    fn all_listed_tools_have_dispatch_arms() {
-        let tools = list_tools();
-        let tool_names: Vec<&str> = tools.iter().map(|(name, _)| *name).collect();
-        // Verify each tool name would match something in the dispatch
-        for name in &tool_names {
+    fn tool_names_are_well_formed() {
+        for (name, desc) in list_tools() {
             assert!(!name.is_empty(), "Tool name cannot be empty");
+            assert!(!desc.is_empty(), "Tool '{name}' has no description");
+            assert!(
+                name.chars().all(|c| c.is_ascii_lowercase() || c == '_'),
+                "Tool name '{name}' is not lowercase_snake_case"
+            );
         }
     }
 }
