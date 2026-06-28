@@ -94,6 +94,24 @@ pub enum Command {
         action: InstagramAction,
     },
 
+    /// YouTube operations
+    Youtube {
+        #[command(subcommand)]
+        action: YoutubeAction,
+    },
+
+    /// Bluesky operations
+    Bluesky {
+        #[command(subcommand)]
+        action: BlueskyAction,
+    },
+
+    /// Mastodon operations
+    Mastodon {
+        #[command(subcommand)]
+        action: MastodonAction,
+    },
+
     /// Import recent posts from a provider into local store
     Import {
         /// Provider name (x, reddit, bluesky)
@@ -548,5 +566,103 @@ pub enum InstagramAction {
         /// Number of messages to fetch
         #[arg(long, default_value_t = 20)]
         count: u32,
+    },
+}
+
+// ─── YouTube ────────────────────────────────────────────────────────────────
+
+#[derive(Subcommand, Debug)]
+pub enum YoutubeAction {
+    /// Reply to a YouTube comment
+    Reply {
+        /// Comment ID
+        comment_id: String,
+        /// Reply content
+        content: String,
+    },
+
+    /// Search YouTube videos
+    Search {
+        /// Search query
+        query: String,
+        /// Maximum results
+        #[arg(long, default_value_t = 10)]
+        limit: u32,
+    },
+
+    /// Get video details
+    Video {
+        /// Video ID
+        video_id: String,
+    },
+}
+
+// ─── Bluesky ────────────────────────────────────────────────────────────────
+
+#[derive(Subcommand, Debug)]
+pub enum BlueskyAction {
+    /// Reply to a Bluesky post
+    Reply {
+        /// Post URI
+        post_uri: String,
+        /// Reply content
+        content: String,
+    },
+
+    /// Get user profile
+    Profile {
+        /// Handle or DID
+        handle: String,
+    },
+
+    /// Get timeline
+    Timeline {
+        /// Number of posts to fetch
+        #[arg(long, default_value_t = 20)]
+        limit: u32,
+    },
+
+    /// Search posts
+    Search {
+        /// Search query
+        query: String,
+        /// Maximum results
+        #[arg(long, default_value_t = 20)]
+        limit: u32,
+    },
+}
+
+// ─── Mastodon ───────────────────────────────────────────────────────────────
+
+#[derive(Subcommand, Debug)]
+pub enum MastodonAction {
+    /// Reply to a Mastodon status
+    Reply {
+        /// Status ID
+        status_id: String,
+        /// Reply content
+        content: String,
+    },
+
+    /// Get user info
+    Whoami,
+
+    /// Get timeline
+    Timeline {
+        /// Timeline type (home, local, public)
+        #[arg(long, default_value = "home")]
+        kind: String,
+        /// Number of posts to fetch
+        #[arg(long, default_value_t = 20)]
+        limit: u32,
+    },
+
+    /// Search
+    Search {
+        /// Search query
+        query: String,
+        /// Maximum results
+        #[arg(long, default_value_t = 20)]
+        limit: u32,
     },
 }

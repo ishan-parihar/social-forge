@@ -36,7 +36,7 @@ impl MastodonProvider {
     }
 
     /// Instance URL (e.g. "mastodon.social" or "https://mastodon.social")
-    fn api_url(&self, path: &str) -> String {
+    pub fn api_url(&self, path: &str) -> String {
         let base = self.instance_url.trim_end_matches('/');
         // If user provided a full URL (https://...), use it directly
         if base.starts_with("http://") || base.starts_with("https://") {
