@@ -183,7 +183,7 @@ impl MastodonProvider {
     ) -> Result<serde_json::Value, ProviderError> {
         let url = self.api_url(&format!(
             "/api/v2/search?q={}&limit={}",
-            urlencoding(query),
+            urlencoding::encode(query),
             limit
         ));
         let resp = self
@@ -273,24 +273,6 @@ impl MastodonProvider {
             .to_string();
         Ok(id)
     }
-}
-
-/// URL-encode a string for query parameters (simple replacement).
-fn urlencoding(s: &str) -> String {
-    use std::fmt::Write;
-    let mut result = String::with_capacity(s.len());
-    for byte in s.bytes() {
-        match byte {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
-                result.push(byte as char);
-            }
-            b' ' => result.push_str("%20"),
-            _ => {
-                let _ = write!(result, "%{:02X}", byte);
-            }
-        }
-    }
-    result
 }
 
 #[async_trait]

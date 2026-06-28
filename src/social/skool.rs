@@ -225,7 +225,7 @@ impl SocialProvider for SkoolProvider {
             .and_then(|v| v.as_str())
             .unwrap_or("");
 
-        let content = strip_html_tags(&post.content);
+        let content = common::strip_html_tags(&post.content);
 
         // Parse media URLs if present
         let media: Vec<&str> = post.media.iter().map(|m| m.url.as_str()).collect();
@@ -309,22 +309,4 @@ impl SocialProvider for SkoolProvider {
         }
         Ok(())
     }
-}
-
-/// Strip HTML tags from content (basic implementation)
-fn strip_html_tags(s: &str) -> String {
-    let mut result = String::with_capacity(s.len());
-    let mut in_tag = false;
-    for ch in s.chars() {
-        match ch {
-            '<' => in_tag = true,
-            '>' => in_tag = false,
-            _ => {
-                if !in_tag {
-                    result.push(ch);
-                }
-            }
-        }
-    }
-    result
 }

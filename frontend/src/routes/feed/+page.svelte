@@ -170,28 +170,28 @@
     return null;
   }
 
-  function providerMeta(provider: string): { label: string; color: string; bg: string; dot: string } {
-    const meta: Record<string, { label: string; color: string; bg: string; dot: string }> = {
-      x:          { label: 'X',      color: '#9ca3af', bg: '#1f222e', dot: '#9ca3af' },
-      reddit:     { label: 'Reddit', color: '#fb923c', bg: '#2a1e1a', dot: '#fb923c' },
-      bluesky:    { label: 'Bluesky',color: '#38bdf8', bg: '#18222e', dot: '#38bdf8' },
-      github:     { label: 'GitHub', color: '#d1d5db', bg: '#1c212e', dot: '#d1d5db' },
-      devto:      { label: 'Dev.to', color: '#9ca3af', bg: '#1c212e', dot: '#9ca3af' },
-      mastodon:   { label: 'Mastodon',color:'#38bdf8',bg: '#18222e', dot: '#38bdf8' },
-      lemmy:      { label: 'Lemmy',  color: '#f97316', bg: '#2a1e1a', dot: '#f97316' },
-      medium:     { label: 'Medium', color: '#22c55e', bg: '#18221a', dot: '#22c55e' },
-      wordpress:  { label: 'WordPress',color:'#60a5fa',bg: '#1a222e', dot: '#60a5fa' },
-      linkedin:   { label: 'LinkedIn',color:'#3b82f6',bg: '#1a2230', dot: '#3b82f6' },
-      facebook:   { label: 'Facebook',color:'#2563eb',bg: '#161e2e', dot: '#2563eb' },
-      instagram:  { label: 'Instagram',color:'#f472b6',bg: '#2a1a24', dot: '#f472b6' },
-      threads:    { label: 'Threads',color:'#a78bfa',bg: '#1e1a2e', dot: '#a78bfa' },
-      youtube:    { label: 'YouTube',color:'#ef4444',bg: '#2a1a1a', dot: '#ef4444' },
-      pinterest:  { label: 'Pinterest',color:'#f87171',bg: '#2a1a1a', dot: '#f87171' },
-      tiktok:     { label: 'TikTok', color:'#67e8f9',bg: '#16222e', dot: '#67e8f9' },
-      hashnode:   { label: 'Hashnode',color:'#60a5fa',bg: '#1a222e', dot: '#60a5fa' },
-      vk:         { label: 'VK',     color:'#60a5fa',bg: '#1a222e', dot: '#60a5fa' },
+  function providerMeta(provider: string): { label: string; color: string; dot: string } {
+    const meta: Record<string, { label: string; color: string; dot: string }> = {
+      x:          { label: 'X',      color: '#9ca3af', dot: '#9ca3af' },
+      reddit:     { label: 'Reddit', color: '#fb923c', dot: '#fb923c' },
+      bluesky:    { label: 'Bluesky',color: '#38bdf8', dot: '#38bdf8' },
+      github:     { label: 'GitHub', color: '#d1d5db', dot: '#d1d5db' },
+      devto:      { label: 'Dev.to', color: '#9ca3af', dot: '#9ca3af' },
+      mastodon:   { label: 'Mastodon',color:'#38bdf8', dot: '#38bdf8' },
+      lemmy:      { label: 'Lemmy',  color: '#f97316', dot: '#f97316' },
+      medium:     { label: 'Medium', color: '#22c55e', dot: '#22c55e' },
+      wordpress:  { label: 'WordPress',color:'#60a5fa', dot: '#60a5fa' },
+      linkedin:   { label: 'LinkedIn',color:'#3b82f6', dot: '#3b82f6' },
+      facebook:   { label: 'Facebook',color:'#2563eb', dot: '#2563eb' },
+      instagram:  { label: 'Instagram',color:'#f472b6', dot: '#f472b6' },
+      threads:    { label: 'Threads',color:'#a78bfa', dot: '#a78bfa' },
+      youtube:    { label: 'YouTube',color:'#ef4444', dot: '#ef4444' },
+      pinterest:  { label: 'Pinterest',color:'#f87171', dot: '#f87171' },
+      tiktok:     { label: 'TikTok', color:'#67e8f9', dot: '#67e8f9' },
+      hashnode:   { label: 'Hashnode',color:'#60a5fa', dot: '#60a5fa' },
+      vk:         { label: 'VK',     color:'#60a5fa', dot: '#60a5fa' },
     };
-    return meta[provider] || { label: provider.replace(/_/g, ' '), color: '#818cf8', bg: '#1a1a2e', dot: '#818cf8' };
+    return meta[provider] || { label: provider.replace(/_/g, ' '), color: '#818cf8', dot: '#818cf8' };
   }
 
   // Click outside to close filter

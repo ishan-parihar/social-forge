@@ -29,7 +29,6 @@ pub struct IpcError {
     pub message: String,
 }
 
-#[allow(dead_code)]
 pub struct WhatsAppDaemon {
     process: Mutex<Child>,
     next_id: AtomicU64,
@@ -129,34 +128,6 @@ impl WhatsAppDaemon {
         self.send_request("auth_status", None)
     }
 
-    /// List chats
-    pub fn list_chats(&self, limit: Option<u64>, query: Option<String>) -> Result<Value, String> {
-        let mut params = serde_json::Map::new();
-        if let Some(l) = limit {
-            params.insert("limit".into(), l.into());
-        }
-        if let Some(q) = query {
-            params.insert("query".into(), q.into());
-        }
-        self.send_request("chats", Some(Value::Object(params)))
-    }
-
-    /// List contacts
-    pub fn list_contacts(
-        &self,
-        limit: Option<u64>,
-        query: Option<String>,
-    ) -> Result<Value, String> {
-        let mut params = serde_json::Map::new();
-        if let Some(l) = limit {
-            params.insert("limit".into(), l.into());
-        }
-        if let Some(q) = query {
-            params.insert("query".into(), q.into());
-        }
-        self.send_request("contacts", Some(Value::Object(params)))
-    }
-
     /// Send text message
     pub fn send_text(&self, to: &str, text: &str) -> Result<Value, String> {
         let params = serde_json::json!({
@@ -164,26 +135,6 @@ impl WhatsAppDaemon {
             "text": text,
         });
         self.send_request("send_text", Some(params))
-    }
-
-    pub fn is_running(&self) -> bool {
-        match self.process.lock() {
-            Ok(mut proc) => {
-                match proc.try_wait() {
-                    Ok(Some(_)) => false,  // Process exited
-                    Ok(None) => true,       // Still running
-                    Err(_) => false,
-                }
-            }
-            Err(_) => false,
-        }
-    }
-
-    pub fn stop(&self) -> Result<(), String> {
-        let mut proc = self.process.lock().map_err(|e| format!("Lock: {e}"))?;
-        let _ = proc.kill();
-        let _ = proc.wait();
-        Ok(())
     }
 }
 
