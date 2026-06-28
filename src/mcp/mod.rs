@@ -882,6 +882,38 @@ impl SocialForgeMcpServer {
         tools_x::x_list_timeline(&self.state, &params.0).await
     }
 
+    #[tool(description = "Reply to an X/Twitter tweet")]
+    async fn x_reply_tweet(
+        &self,
+        params: Parameters<tools_x::XReplyTweetInput>,
+    ) -> Result<Json<tools_x::XReplyTweetOutput>, String> {
+        tools_x::x_reply_tweet(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Send a direct message on X/Twitter")]
+    async fn x_send_dm(
+        &self,
+        params: Parameters<tools_x::XSendDmInput>,
+    ) -> Result<Json<tools_x::XSendDmOutput>, String> {
+        tools_x::x_send_dm(&self.state, &params.0).await
+    }
+
+    #[tool(description = "List X/Twitter DM conversations")]
+    async fn x_list_dms(
+        &self,
+        params: Parameters<tools_x::XListDmsInput>,
+    ) -> Result<Json<tools_x::XListDmsOutput>, String> {
+        tools_x::x_list_dms(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get messages in an X/Twitter DM conversation")]
+    async fn x_get_dm_conversation(
+        &self,
+        params: Parameters<tools_x::XGetDmConversationInput>,
+    ) -> Result<Json<tools_x::XGetDmConversationOutput>, String> {
+        tools_x::x_get_dm_conversation(&self.state, &params.0).await
+    }
+
     // ── Facebook Tools ──────────────────────────────────────────────
 
     #[tool(description = "Get a Facebook page's feed (recent")]
