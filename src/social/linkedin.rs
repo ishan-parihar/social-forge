@@ -980,6 +980,238 @@ impl SocialProvider for LinkedInProvider {
     }
 }
 
+impl LinkedInProvider {
+    pub async fn reply_to_comment(
+        &self,
+        access_token: &str,
+        comment_id: &str,
+        post: &PostContent,
+    ) -> Result<PublishResult, ProviderError> {
+        let profile = self
+            .http
+            .get("https://api.linkedin.com/v2/userinfo")
+            .header("Authorization", format!("Bearer {access_token}"))
+            .send()
+            .await?
+            .json::<serde_json::Value>()
+            .await?;
+
+        let user_id = profile["sub"]
+            .as_str()
+            .ok_or_else(|| ProviderError::Api("Could not get user profile".into()))?;
+
+        let body = serde_json::json!({
+            "author": format!("urn:li:person:{user_id}"),
+            "lifecycleState": "PUBLISHED",
+            "specificContent": {
+                "com.linkedin.ugc.ShareContent": {
+                    "shareCommentary": {
+                        "text": post.content,
+                    },
+                    "shareMediaCategory": "NONE",
+                    "parentComment": comment_id,
+                }
+            },
+            "visibility": {
+                "com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC"
+            }
+        });
+
+        let resp = self
+            .http
+            .post("https://api.linkedin.com/v2/ugcPosts")
+            .header("Authorization", format!("Bearer {access_token}"))
+            .header("X-Restli-Protocol-Version", "2.0.0")
+            .json(&body)
+            .send()
+            .await?;
+
+        let status = resp.status();
+
+        if status == 201 {
+            let location = resp
+                .headers()
+                .get("location")
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or("")
+                .to_string();
+            let post_id = location.rsplit('/').next().unwrap_or("").to_string();
+            return Ok(PublishResult {
+                platform_post_id: post_id,
+                platform_post_url: None,
+                status: "published".into(),
+            });
+        }
+
+        let json: serde_json::Value = resp.json().await?;
+        let msg = json["message"]
+            .as_str()
+            .or_else(|| json["error_description"].as_str())
+            .unwrap_or("LinkedIn reply failed")
+            .to_string();
+        Err(ProviderError::Api(msg))
+    }
+
+    pub async fn send_dm(
+        &self,
+        access_token: &str,
+        recipient: &str,
+        post: &PostContent,
+    ) -> Result<PublishResult, ProviderError> {
+        let body = serde_json::json!({
+            "recipients": {
+                "elements": [{
+                    "id": recipient,
+                }]
+            },
+            "messageBody": {
+                "text": post.content,
+            },
+        });
+
+        let resp = self
+            .http
+            .post("https://api.linkedin.com/v2/messages")
+            .header("Authorization", format!("Bearer {access_token}"))
+            .header("X-Restli-Protocol-Version", "2.0.0")
+            .header("LinkedIn-Version", "202601")
+            .json(&body)
+            .send()
+            .await?;
+
+        let status = resp.status();
+
+        if status == 201 {
+            let location = resp
+                .headers()
+                .get("location")
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or("")
+                .to_string();
+            let message_id = location.rsplit('/').next().unwrap_or("").to_string();
+            return Ok(PublishResult {
+                platform_post_id: message_id,
+                platform_post_url: None,
+                status: "sent".into(),
+            });
+        }
+
+        let json: serde_json::Value = resp.json().await?;
+        let msg = json["message"]
+            .as_str()
+            .or_else(|| json["error_description"].as_str())
+            .unwrap_or("LinkedIn send DM failed")
+            .to_string();
+        Err(ProviderError::Api(msg))
+    }
+
+    pub async fn get_dm_conversations(
+        &self,
+        access_token: &str,
+        limit: u32,
+    ) -> Result<Vec<super::DmConversation>, ProviderError> {
+        let url = format!(
+            "https://api.linkedin.com/v2/messages?action=search&count={}",
+            limit.min(50)
+        );
+        let resp = self
+            .http
+            .get(&url)
+            .header("Authorization", format!("Bearer {access_token}"))
+            .header("X-Restli-Protocol-Version", "2.0.0")
+            .header("LinkedIn-Version", "202601")
+            .send()
+            .await?;
+
+        let json: serde_json::Value = resp.json().await.unwrap_or_default();
+        let mut conversations = Vec::new();
+
+        if let Some(elements) = json["elements"].as_array() {
+            for elem in elements {
+                let id = elem["conversationId"].as_str().unwrap_or("").to_string();
+                let participants = elem["participants"]
+                    .as_array()
+                    .and_then(|p| p.first())
+                    .and_then(|p| p["id"].as_str())
+                    .unwrap_or("")
+                    .to_string();
+                let last_message = elem["body"].as_str().map(|s| s.to_string());
+                let last_message_at = elem["createdAt"]
+                    .as_i64()
+                    .map(|ts| chrono::DateTime::from_timestamp(ts / 1000, 0))
+                    .flatten();
+
+                conversations.push(super::DmConversation {
+                    id,
+                    participant: participants,
+                    participant_name: None,
+                    participant_avatar: None,
+                    last_message,
+                    last_message_at,
+                    unread_count: 0,
+                });
+            }
+        }
+
+        Ok(conversations)
+    }
+
+    pub async fn get_dm_messages(
+        &self,
+        access_token: &str,
+        conversation_id: &str,
+        limit: u32,
+    ) -> Result<Vec<super::DmMessage>, ProviderError> {
+        let url = format!(
+            "https://api.linkedin.com/v2/messages?action=byConversation&conversationId={}&count={}",
+            conversation_id,
+            limit.min(50)
+        );
+        let resp = self
+            .http
+            .get(&url)
+            .header("Authorization", format!("Bearer {access_token}"))
+            .header("X-Restli-Protocol-Version", "2.0.0")
+            .header("LinkedIn-Version", "202601")
+            .send()
+            .await?;
+
+        let json: serde_json::Value = resp.json().await.unwrap_or_default();
+        let mut messages = Vec::new();
+
+        if let Some(elements) = json["elements"].as_array() {
+            for elem in elements {
+                let id = elem["id"].as_str().unwrap_or("").to_string();
+                let sender = elem["sender"]
+                    .as_object()
+                    .and_then(|s| s.get("id"))
+                    .and_then(|id| id.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                let content = elem["body"].as_str().unwrap_or("").to_string();
+                let created_at = elem["createdAt"]
+                    .as_i64()
+                    .map(|ts| chrono::DateTime::from_timestamp(ts / 1000, 0))
+                    .flatten()
+                    .unwrap_or_else(chrono::Utc::now);
+
+                messages.push(super::DmMessage {
+                    id,
+                    conversation_id: conversation_id.to_string(),
+                    sender,
+                    sender_name: None,
+                    content,
+                    media: vec![],
+                    created_at,
+                    read: true,
+                });
+            }
+        }
+
+        Ok(messages)
+    }
+}
+
 /// Recursively search a JSON value for the first string that looks like a URL.
 fn find_first_url(val: &serde_json::Value) -> Option<String> {
     match val {
