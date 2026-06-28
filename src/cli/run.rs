@@ -13,7 +13,7 @@ use crate::realtime::Broadcaster;
 use crate::social::registry::ProviderRegistry;
 use crate::social::SocialProvider;
 
-use super::{Cli, Command, ConfigAction, XAction, RedditAction, RedditModAction, LinkedinAction, LinkedinPageAction, FacebookAction, InstagramAction};
+use super::{Cli, Command, ConfigAction, XAction, RedditAction, RedditModAction, LinkedinAction, LinkedinPageAction, FacebookAction, InstagramAction, YoutubeAction, BlueskyAction, MastodonAction, CommentAction, DmAction, AutomationAction};
 use crate::social::TargetInfo;
 use crate::db::models::Integration;
 
@@ -266,9 +266,199 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
         Command::Youtube { action } => handle_youtube(action).await,
         Command::Bluesky { action } => handle_bluesky(action).await,
         Command::Mastodon { action } => handle_mastodon(action).await,
+        Command::Comment { action } => handle_comment(action).await,
+        Command::Dm { action } => handle_dm(action).await,
+        Command::Automation { action } => handle_automation(action).await,
         Command::Import { provider, count } => handle_import(&provider, count).await,
         Command::Feed { provider, limit } => handle_feed(provider.as_deref(), limit).await,
     }
+}
+
+// ── YouTube Handler ──────────────────────────────────────────
+
+async fn handle_youtube(action: YoutubeAction) -> anyhow::Result<()> {
+    let state = init_state().await?;
+    let user_id = resolve_user(&state).await?;
+
+    let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
+    let yt = integrations.iter()
+        .find(|i| i.provider_identifier == "youtube")
+        .ok_or_else(|| anyhow::anyhow!("No YouTube integration found"))?;
+    let token = yt.access_token.clone();
+    let token = state.token_key.as_ref()
+        .and_then(|key| crypto::decrypt_string(&token, key).ok())
+        .unwrap_or(token);
+
+    let provider = crate::social::youtube::YoutubeProvider::new(&state.config);
+
+    let result: Result<serde_json::Value, String> = match action {
+        YoutubeAction::Reply { comment_id, content } => {
+            let post = crate::social::PostContent {
+                content,
+                media: vec![],
+                settings: serde_json::Value::Object(serde_json::Map::new()),
+            };
+            provider.reply_to_comment(&token, &comment_id, &post).await
+                .map(|r| serde_json::json!({"id": r.platform_post_id, "status": r.status}))
+                .map_err(|e| e.to_string())
+        }
+        YoutubeAction::Search { query, limit } => {
+            provider.search_videos(&token, &query, limit).await
+                .map_err(|e| e.to_string())
+        }
+        YoutubeAction::Video { video_id } => {
+            provider.get_video(&token, &video_id).await
+                .map_err(|e| e.to_string())
+        }
+    };
+
+    match result {
+        Ok(v) => output_json(&v),
+        Err(e) => return output_error(&e),
+    }
+    Ok(())
+}
+
+// ── Bluesky Handler ──────────────────────────────────────────
+
+async fn handle_bluesky(action: BlueskyAction) -> anyhow::Result<()> {
+    let state = init_state().await?;
+    let user_id = resolve_user(&state).await?;
+
+    let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
+    let bs = integrations.iter()
+        .find(|i| i.provider_identifier == "bluesky")
+        .ok_or_else(|| anyhow::anyhow!("No Bluesky integration found"))?;
+    let token = bs.access_token.clone();
+    let token = state.token_key.as_ref()
+        .and_then(|key| crypto::decrypt_string(&token, key).ok())
+        .unwrap_or(token);
+
+    let provider = crate::social::bluesky::BlueskyProvider::new(&state.config);
+
+    let result: Result<serde_json::Value, String> = match action {
+        BlueskyAction::Reply { post_uri, content } => {
+            let post = crate::social::PostContent {
+                content,
+                media: vec![],
+                settings: serde_json::Value::Object(serde_json::Map::new()),
+            };
+            provider.reply_to_comment(&token, &post_uri, &post).await
+                .map(|r| serde_json::json!({"id": r.platform_post_id, "url": r.platform_post_url, "status": r.status}))
+                .map_err(|e| e.to_string())
+        }
+        BlueskyAction::Profile { handle } => {
+            match reqwest::Client::new()
+                .get("https://bsky.social/xrpc/app.bsky.actor.getProfile")
+                .query(&[("actor", &handle)])
+                .header("Authorization", format!("Bearer {token}"))
+                .send().await
+            {
+                Ok(resp) => resp.json::<serde_json::Value>().await
+                    .map_err(|e| format!("Parse error: {e}")),
+                Err(e) => Err(format!("Bluesky profile request failed: {e}")),
+            }
+        }
+        BlueskyAction::Timeline { limit } => {
+            match reqwest::Client::new()
+                .get("https://bsky.social/xrpc/app.bsky.feed.getTimeline")
+                .query(&[("limit", &limit.to_string())])
+                .header("Authorization", format!("Bearer {token}"))
+                .send().await
+            {
+                Ok(resp) => resp.json::<serde_json::Value>().await
+                    .map_err(|e| format!("Parse error: {e}")),
+                Err(e) => Err(format!("Bluesky timeline request failed: {e}")),
+            }
+        }
+        BlueskyAction::Search { query, limit } => {
+            match reqwest::Client::new()
+                .get("https://bsky.social/xrpc/app.bsky.feed.searchPosts")
+                .query(&[("q", &query), ("limit", &limit.to_string())])
+                .header("Authorization", format!("Bearer {token}"))
+                .send().await
+            {
+                Ok(resp) => resp.json::<serde_json::Value>().await
+                    .map_err(|e| format!("Parse error: {e}")),
+                Err(e) => Err(format!("Bluesky search request failed: {e}")),
+            }
+        }
+    };
+
+    match result {
+        Ok(v) => output_json(&v),
+        Err(e) => return output_error(&e),
+    }
+    Ok(())
+}
+
+// ── Mastodon Handler ─────────────────────────────────────────
+
+async fn handle_mastodon(action: MastodonAction) -> anyhow::Result<()> {
+    let state = init_state().await?;
+    let user_id = resolve_user(&state).await?;
+
+    let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
+    let ms = integrations.iter()
+        .find(|i| i.provider_identifier == "mastodon")
+        .ok_or_else(|| anyhow::anyhow!("No Mastodon integration found"))?;
+    let token = ms.access_token.clone();
+    let token = state.token_key.as_ref()
+        .and_then(|key| crypto::decrypt_string(&token, key).ok())
+        .unwrap_or(token);
+
+    let provider = crate::social::mastodon::MastodonProvider::new(&state.config);
+
+    let result: Result<serde_json::Value, String> = match action {
+        MastodonAction::Reply { status_id, content } => {
+            let post = crate::social::PostContent {
+                content,
+                media: vec![],
+                settings: serde_json::Value::Object(serde_json::Map::new()),
+            };
+            provider.reply_to_comment(&token, &status_id, &post).await
+                .map(|r| serde_json::json!({"id": r.platform_post_id, "url": r.platform_post_url, "status": r.status}))
+                .map_err(|e| e.to_string())
+        }
+        MastodonAction::Whoami => {
+            provider.get_user_info(&token).await
+                .map_err(|e| e.to_string())
+        }
+        MastodonAction::Timeline { kind, limit } => {
+            let url = match kind.as_str() {
+                "local" => format!("/api/v1/timelines/public?local=true&limit={}", limit.min(40)),
+                "public" => format!("/api/v1/timelines/public?limit={}", limit.min(40)),
+                _ => format!("/api/v1/timelines/home?limit={}", limit.min(40)),
+            };
+            match reqwest::Client::new()
+                .get(provider.api_url(&url))
+                .header("Authorization", format!("Bearer {token}"))
+                .send().await
+            {
+                Ok(resp) => resp.json::<serde_json::Value>().await
+                    .map_err(|e| format!("Parse error: {e}")),
+                Err(e) => Err(format!("Mastodon timeline request failed: {e}")),
+            }
+        }
+        MastodonAction::Search { query, limit } => {
+            let url = format!("/api/v2/search?q={}&limit={}", urlencoding::encode(&query), limit.min(40));
+            match reqwest::Client::new()
+                .get(provider.api_url(&url))
+                .header("Authorization", format!("Bearer {token}"))
+                .send().await
+            {
+                Ok(resp) => resp.json::<serde_json::Value>().await
+                    .map_err(|e| format!("Parse error: {e}")),
+                Err(e) => Err(format!("Mastodon search request failed: {e}")),
+            }
+        }
+    };
+
+    match result {
+        Ok(v) => output_json(&v),
+        Err(e) => return output_error(&e),
+    }
+    Ok(())
 }
 
 // ── Providers / Connect ──────────────────────────────────────
@@ -1965,27 +2155,52 @@ async fn handle_instagram(action: InstagramAction) -> anyhow::Result<()> {
     Ok(())
 }
 
-// ── YouTube Handler ──────────────────────────────────────────
+// ── Comment Handler ──────────────────────────────────────────
 
-use super::YoutubeAction;
-
-async fn handle_youtube(action: YoutubeAction) -> anyhow::Result<()> {
+async fn handle_comment(action: CommentAction) -> anyhow::Result<()> {
     let state = init_state().await?;
     let user_id = resolve_user(&state).await?;
 
-    let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
-    let yt = integrations.iter()
-        .find(|i| i.provider_identifier == "youtube")
-        .ok_or_else(|| anyhow::anyhow!("No YouTube integration found"))?;
-    let token = yt.access_token.clone();
-    let token = state.token_key.as_ref()
-        .and_then(|key| crypto::decrypt_string(&token, key).ok())
-        .unwrap_or(token);
-
-    let provider = crate::social::youtube::YoutubeProvider::new(&state.config);
-
     let result: Result<serde_json::Value, String> = match action {
-        YoutubeAction::Reply { comment_id, content } => {
+        CommentAction::Get { integration_id, post_id, limit } => {
+            let integration_id = Uuid::parse_str(&integration_id)
+                .map_err(|e| format!("Invalid integration_id: {e}"))?;
+            let integration = crate::db::queries::get_integration(&state.db, integration_id, user_id)
+                .await
+                .map_err(|e| format!("Integration not found: {e}"))?
+                .ok_or_else(|| "Integration not found".to_string())?;
+            let provider = state.providers.get(&integration.provider_identifier)
+                .ok_or_else(|| format!("Provider {} not found", integration.provider_identifier))?;
+            let token = state.token_key.as_ref()
+                .and_then(|key| crypto::decrypt_string(&integration.access_token, key).ok())
+                .unwrap_or_else(|| integration.access_token.clone());
+            provider.get_post_comments(&token, &post_id).await
+                .map(|comments| {
+                    let list: Vec<serde_json::Value> = comments.into_iter().take(limit as usize).map(|c| {
+                        serde_json::json!({
+                            "id": c.id,
+                            "author_name": c.author_name,
+                            "text": c.text,
+                            "created_at": c.created_at.to_rfc3339(),
+                            "like_count": c.like_count,
+                        })
+                    }).collect();
+                    serde_json::json!({"comments": list, "total": list.len()})
+                })
+                .map_err(|e| e.to_string())
+        }
+        CommentAction::Reply { integration_id, comment_id, content } => {
+            let integration_id = Uuid::parse_str(&integration_id)
+                .map_err(|e| format!("Invalid integration_id: {e}"))?;
+            let integration = crate::db::queries::get_integration(&state.db, integration_id, user_id)
+                .await
+                .map_err(|e| format!("Integration not found: {e}"))?
+                .ok_or_else(|| "Integration not found".to_string())?;
+            let provider = state.providers.get(&integration.provider_identifier)
+                .ok_or_else(|| format!("Provider {} not found", integration.provider_identifier))?;
+            let token = state.token_key.as_ref()
+                .and_then(|key| crypto::decrypt_string(&integration.access_token, key).ok())
+                .unwrap_or_else(|| integration.access_token.clone());
             let post = crate::social::PostContent {
                 content,
                 media: vec![],
@@ -1995,12 +2210,20 @@ async fn handle_youtube(action: YoutubeAction) -> anyhow::Result<()> {
                 .map(|r| serde_json::json!({"id": r.platform_post_id, "status": r.status}))
                 .map_err(|e| e.to_string())
         }
-        YoutubeAction::Search { query, limit } => {
-            provider.search_videos(&token, &query, limit).await
-                .map_err(|e| e.to_string())
-        }
-        YoutubeAction::Video { video_id } => {
-            provider.get_video(&token, &video_id).await
+        CommentAction::Delete { integration_id, comment_id } => {
+            let integration_id = Uuid::parse_str(&integration_id)
+                .map_err(|e| format!("Invalid integration_id: {e}"))?;
+            let integration = crate::db::queries::get_integration(&state.db, integration_id, user_id)
+                .await
+                .map_err(|e| format!("Integration not found: {e}"))?
+                .ok_or_else(|| "Integration not found".to_string())?;
+            let provider = state.providers.get(&integration.provider_identifier)
+                .ok_or_else(|| format!("Provider {} not found", integration.provider_identifier))?;
+            let token = state.token_key.as_ref()
+                .and_then(|key| crypto::decrypt_string(&integration.access_token, key).ok())
+                .unwrap_or_else(|| integration.access_token.clone());
+            provider.delete_comment(&token, &comment_id).await
+                .map(|_| serde_json::json!({"deleted": true}))
                 .map_err(|e| e.to_string())
         }
     };
@@ -2012,71 +2235,85 @@ async fn handle_youtube(action: YoutubeAction) -> anyhow::Result<()> {
     Ok(())
 }
 
-// ── Bluesky Handler ──────────────────────────────────────────
+// ── DM Handler ───────────────────────────────────────────────
 
-use super::BlueskyAction;
-
-async fn handle_bluesky(action: BlueskyAction) -> anyhow::Result<()> {
+async fn handle_dm(action: DmAction) -> anyhow::Result<()> {
     let state = init_state().await?;
     let user_id = resolve_user(&state).await?;
 
-    let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
-    let bs = integrations.iter()
-        .find(|i| i.provider_identifier == "bluesky")
-        .ok_or_else(|| anyhow::anyhow!("No Bluesky integration found"))?;
-    let token = bs.access_token.clone();
-    let token = state.token_key.as_ref()
-        .and_then(|key| crypto::decrypt_string(&token, key).ok())
-        .unwrap_or(token);
-
-    let provider = crate::social::bluesky::BlueskyProvider::new(&state.config);
-
     let result: Result<serde_json::Value, String> = match action {
-        BlueskyAction::Reply { post_uri, content } => {
+        DmAction::Send { integration_id, recipient, content } => {
+            let integration_id = Uuid::parse_str(&integration_id)
+                .map_err(|e| format!("Invalid integration_id: {e}"))?;
+            let integration = crate::db::queries::get_integration(&state.db, integration_id, user_id)
+                .await
+                .map_err(|e| format!("Integration not found: {e}"))?
+                .ok_or_else(|| "Integration not found".to_string())?;
+            let provider = state.providers.get(&integration.provider_identifier)
+                .ok_or_else(|| format!("Provider {} not found", integration.provider_identifier))?;
+            let token = state.token_key.as_ref()
+                .and_then(|key| crypto::decrypt_string(&integration.access_token, key).ok())
+                .unwrap_or_else(|| integration.access_token.clone());
             let post = crate::social::PostContent {
                 content,
                 media: vec![],
                 settings: serde_json::Value::Object(serde_json::Map::new()),
             };
-            provider.reply_to_comment(&token, &post_uri, &post).await
-                .map(|r| serde_json::json!({"id": r.platform_post_id, "url": r.platform_post_url, "status": r.status}))
+            provider.send_dm(&token, &recipient, &post).await
+                .map(|r| serde_json::json!({"id": r.platform_post_id, "status": r.status}))
                 .map_err(|e| e.to_string())
         }
-        BlueskyAction::Profile { handle } => {
-            match reqwest::Client::new()
-                .get("https://bsky.social/xrpc/app.bsky.actor.getProfile")
-                .query(&[("actor", &handle)])
-                .header("Authorization", format!("Bearer {token}"))
-                .send().await
-            {
-                Ok(resp) => resp.json::<serde_json::Value>().await
-                    .map_err(|e| format!("Parse error: {e}")),
-                Err(e) => Err(format!("Bluesky profile request failed: {e}")),
-            }
+        DmAction::List { integration_id, limit } => {
+            let integration_id = Uuid::parse_str(&integration_id)
+                .map_err(|e| format!("Invalid integration_id: {e}"))?;
+            let integration = crate::db::queries::get_integration(&state.db, integration_id, user_id)
+                .await
+                .map_err(|e| format!("Integration not found: {e}"))?
+                .ok_or_else(|| "Integration not found".to_string())?;
+            let provider = state.providers.get(&integration.provider_identifier)
+                .ok_or_else(|| format!("Provider {} not found", integration.provider_identifier))?;
+            let token = state.token_key.as_ref()
+                .and_then(|key| crypto::decrypt_string(&integration.access_token, key).ok())
+                .unwrap_or_else(|| integration.access_token.clone());
+            provider.get_dm_conversations(&token, limit).await
+                .map(|convs| {
+                    let list: Vec<serde_json::Value> = convs.into_iter().map(|c| {
+                        serde_json::json!({
+                            "id": c.id,
+                            "participant": c.participant,
+                            "last_message": c.last_message,
+                            "last_message_at": c.last_message_at.map(|dt| dt.to_rfc3339()),
+                        })
+                    }).collect();
+                    serde_json::json!({"conversations": list, "total": list.len()})
+                })
+                .map_err(|e| e.to_string())
         }
-        BlueskyAction::Timeline { limit } => {
-            match reqwest::Client::new()
-                .get("https://bsky.social/xrpc/app.bsky.feed.getTimeline")
-                .query(&[("limit", &limit.to_string())])
-                .header("Authorization", format!("Bearer {token}"))
-                .send().await
-            {
-                Ok(resp) => resp.json::<serde_json::Value>().await
-                    .map_err(|e| format!("Parse error: {e}")),
-                Err(e) => Err(format!("Bluesky timeline request failed: {e}")),
-            }
-        }
-        BlueskyAction::Search { query, limit } => {
-            match reqwest::Client::new()
-                .get("https://bsky.social/xrpc/app.bsky.feed.searchPosts")
-                .query(&[("q", &query), ("limit", &limit.to_string())])
-                .header("Authorization", format!("Bearer {token}"))
-                .send().await
-            {
-                Ok(resp) => resp.json::<serde_json::Value>().await
-                    .map_err(|e| format!("Parse error: {e}")),
-                Err(e) => Err(format!("Bluesky search request failed: {e}")),
-            }
+        DmAction::Messages { integration_id, conversation_id, limit } => {
+            let integration_id = Uuid::parse_str(&integration_id)
+                .map_err(|e| format!("Invalid integration_id: {e}"))?;
+            let integration = crate::db::queries::get_integration(&state.db, integration_id, user_id)
+                .await
+                .map_err(|e| format!("Integration not found: {e}"))?
+                .ok_or_else(|| "Integration not found".to_string())?;
+            let provider = state.providers.get(&integration.provider_identifier)
+                .ok_or_else(|| format!("Provider {} not found", integration.provider_identifier))?;
+            let token = state.token_key.as_ref()
+                .and_then(|key| crypto::decrypt_string(&integration.access_token, key).ok())
+                .unwrap_or_else(|| integration.access_token.clone());
+            provider.get_dm_messages(&token, &conversation_id, limit).await
+                .map(|msgs| {
+                    let list: Vec<serde_json::Value> = msgs.into_iter().map(|m| {
+                        serde_json::json!({
+                            "id": m.id,
+                            "sender": m.sender,
+                            "content": m.content,
+                            "created_at": m.created_at.to_rfc3339(),
+                        })
+                    }).collect();
+                    serde_json::json!({"messages": list, "total": list.len()})
+                })
+                .map_err(|e| e.to_string())
         }
     };
 
@@ -2087,67 +2324,136 @@ async fn handle_bluesky(action: BlueskyAction) -> anyhow::Result<()> {
     Ok(())
 }
 
-// ── Mastodon Handler ─────────────────────────────────────────
+// ── Automation Handler ───────────────────────────────────────
 
-use super::MastodonAction;
-
-async fn handle_mastodon(action: MastodonAction) -> anyhow::Result<()> {
+async fn handle_automation(action: AutomationAction) -> anyhow::Result<()> {
     let state = init_state().await?;
     let user_id = resolve_user(&state).await?;
 
-    let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
-    let ms = integrations.iter()
-        .find(|i| i.provider_identifier == "mastodon")
-        .ok_or_else(|| anyhow::anyhow!("No Mastodon integration found"))?;
-    let token = ms.access_token.clone();
-    let token = state.token_key.as_ref()
-        .and_then(|key| crypto::decrypt_string(&token, key).ok())
-        .unwrap_or(token);
-
-    let provider = crate::social::mastodon::MastodonProvider::new(&state.config);
-
     let result: Result<serde_json::Value, String> = match action {
-        MastodonAction::Reply { status_id, content } => {
-            let post = crate::social::PostContent {
-                content,
-                media: vec![],
-                settings: serde_json::Value::Object(serde_json::Map::new()),
+        AutomationAction::Create { integration_id, name, trigger_type, response_template, response_type } => {
+            let integration_id = Uuid::parse_str(&integration_id)
+                .map_err(|e| format!("Invalid integration_id: {e}"))?;
+            let rule = sqlx::query!(
+                r#"INSERT INTO automation_rules
+                   (user_id, integration_id, name, trigger_type, trigger_filter,
+                    response_template, response_type)
+                   VALUES ($1, $2, $3, $4, '{}', $5, $6)
+                   RETURNING id, name, is_active"#,
+                user_id,
+                integration_id,
+                name,
+                trigger_type,
+                response_template,
+                response_type,
+            )
+            .fetch_one(&state.db)
+            .await
+            .map_err(|e| format!("Failed to create rule: {e}"))?;
+            Ok(serde_json::json!({
+                "id": rule.id,
+                "name": rule.name,
+                "is_active": rule.is_active.unwrap_or(true),
+            }))
+        }
+        AutomationAction::List { integration_id } => {
+            let rules = if let Some(ref iid) = integration_id {
+                let iid = Uuid::parse_str(iid)
+                    .map_err(|e| format!("Invalid integration_id: {e}"))?;
+                sqlx::query!(
+                    r#"SELECT id, name, trigger_type, response_type, is_active, created_at
+                       FROM automation_rules
+                       WHERE user_id = $1 AND integration_id = $2
+                       ORDER BY created_at DESC"#,
+                    user_id,
+                    iid,
+                )
+                .fetch_all(&state.db)
+                .await
+                .map_err(|e| format!("Failed to list rules: {e}"))?
+            } else {
+                sqlx::query!(
+                    r#"SELECT id, name, trigger_type, response_type, is_active, created_at
+                       FROM automation_rules
+                       WHERE user_id = $1
+                       ORDER BY created_at DESC"#,
+                    user_id,
+                )
+                .fetch_all(&state.db)
+                .await
+                .map_err(|e| format!("Failed to list rules: {e}"))?
             };
-            provider.reply_to_comment(&token, &status_id, &post).await
-                .map(|r| serde_json::json!({"id": r.platform_post_id, "url": r.platform_post_url, "status": r.status}))
-                .map_err(|e| e.to_string())
+            let list: Vec<serde_json::Value> = rules.into_iter().map(|r| {
+                serde_json::json!({
+                    "id": r.id,
+                    "name": r.name,
+                    "trigger_type": r.trigger_type,
+                    "response_type": r.response_type,
+                    "is_active": r.is_active.unwrap_or(true),
+                    "created_at": r.created_at.map(|dt| dt.to_rfc3339()),
+                })
+            }).collect();
+            Ok(serde_json::json!({"rules": list, "total": list.len()}))
         }
-        MastodonAction::Whoami => {
-            provider.get_user_info(&token).await
-                .map_err(|e| e.to_string())
+        AutomationAction::Update { rule_id, name, response_template, is_active } => {
+            let rule_id = Uuid::parse_str(&rule_id)
+                .map_err(|e| format!("Invalid rule_id: {e}"))?;
+            sqlx::query!(
+                r#"UPDATE automation_rules
+                   SET name = COALESCE($2, name),
+                       response_template = COALESCE($3, response_template),
+                       is_active = COALESCE($4, is_active),
+                       updated_at = NOW()
+                   WHERE id = $1"#,
+                rule_id,
+                name,
+                response_template,
+                is_active,
+            )
+            .execute(&state.db)
+            .await
+            .map_err(|e| format!("Failed to update rule: {e}"))?;
+            Ok(serde_json::json!({"updated": true}))
         }
-        MastodonAction::Timeline { kind, limit } => {
-            let url = match kind.as_str() {
-                "local" => format!("/api/v1/timelines/public?local=true&limit={}", limit.min(40)),
-                "public" => format!("/api/v1/timelines/public?limit={}", limit.min(40)),
-                _ => format!("/api/v1/timelines/home?limit={}", limit.min(40)),
-            };
-            match reqwest::Client::new()
-                .get(provider.api_url(&url))
-                .header("Authorization", format!("Bearer {token}"))
-                .send().await
-            {
-                Ok(resp) => resp.json::<serde_json::Value>().await
-                    .map_err(|e| format!("Parse error: {e}")),
-                Err(e) => Err(format!("Mastodon timeline request failed: {e}")),
-            }
+        AutomationAction::Delete { rule_id } => {
+            let rule_id = Uuid::parse_str(&rule_id)
+                .map_err(|e| format!("Invalid rule_id: {e}"))?;
+            sqlx::query!(
+                r#"DELETE FROM automation_rules WHERE id = $1"#,
+                rule_id,
+            )
+            .execute(&state.db)
+            .await
+            .map_err(|e| format!("Failed to delete rule: {e}"))?;
+            Ok(serde_json::json!({"deleted": true}))
         }
-        MastodonAction::Search { query, limit } => {
-            let url = format!("/api/v2/search?q={}&limit={}", urlencoding::encode(&query), limit.min(40));
-            match reqwest::Client::new()
-                .get(provider.api_url(&url))
-                .header("Authorization", format!("Bearer {token}"))
-                .send().await
-            {
-                Ok(resp) => resp.json::<serde_json::Value>().await
-                    .map_err(|e| format!("Parse error: {e}")),
-                Err(e) => Err(format!("Mastodon search request failed: {e}")),
-            }
+        AutomationAction::Logs { rule_id, limit } => {
+            let rule_id = Uuid::parse_str(&rule_id)
+                .map_err(|e| format!("Invalid rule_id: {e}"))?;
+            let logs = sqlx::query!(
+                r#"SELECT id, trigger_id, trigger_type, response, status, error_message, created_at
+                   FROM automation_logs
+                   WHERE rule_id = $1
+                   ORDER BY created_at DESC
+                   LIMIT $2"#,
+                rule_id,
+                limit,
+            )
+            .fetch_all(&state.db)
+            .await
+            .map_err(|e| format!("Failed to get logs: {e}"))?;
+            let list: Vec<serde_json::Value> = logs.into_iter().map(|l| {
+                serde_json::json!({
+                    "id": l.id,
+                    "trigger_id": l.trigger_id,
+                    "trigger_type": l.trigger_type,
+                    "response": l.response,
+                    "status": l.status,
+                    "error_message": l.error_message,
+                    "created_at": l.created_at.map(|dt| dt.to_rfc3339()),
+                })
+            }).collect();
+            Ok(serde_json::json!({"logs": list, "total": list.len()}))
         }
     };
 
@@ -2157,3 +2463,4 @@ async fn handle_mastodon(action: MastodonAction) -> anyhow::Result<()> {
     }
     Ok(())
 }
+
