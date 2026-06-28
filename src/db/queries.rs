@@ -217,6 +217,33 @@ pub async fn mark_integration_refresh_needed(
     Ok(())
 }
 
+/// Get integrations that need proactive token refresh (tokens expiring within `window_hours`)
+pub async fn get_integrations_needing_refresh(
+    pool: &PgPool,
+    provider_identifier: &str,
+    window_hours: i64,
+) -> Result<Vec<Integration>, sqlx::Error> {
+    let cutoff_time = chrono::Utc::now() + chrono::Duration::hours(window_hours);
+    sqlx::query_as!(
+        Integration,
+        r#"SELECT id, user_id, provider_identifier, provider_name, internal_id,
+                access_token, refresh_token, token_expires_at,
+                profile_name, profile_picture, profile_url, disabled,
+                refresh_needed, root_internal_id, posting_times, auth_method, created_at, updated_at
+         FROM integrations
+         WHERE provider_identifier = $1
+           AND disabled = false
+           AND refresh_needed = false
+           AND refresh_token IS NOT NULL
+           AND token_expires_at IS NOT NULL
+           AND token_expires_at <= $2"#,
+        provider_identifier,
+        cutoff_time,
+    )
+    .fetch_all(pool)
+    .await
+}
+
 pub async fn delete_integration(
     pool: &PgPool,
     id: Uuid,

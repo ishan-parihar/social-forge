@@ -41,6 +41,7 @@ pub fn start_scheduler(
 ) {
     // Main post publishing scheduler
     let db1 = db.clone();
+    let providers1 = providers.clone();
     let mut shutdown1 = shutdown.clone();
     tokio::spawn(async move {
         tracing::info!("Scheduler started (poll interval: {POLL_INTERVAL_SECS}s)");
@@ -56,7 +57,7 @@ pub fn start_scheduler(
                     }
                 }
                 _ = interval.tick() => {
-                    if let Err(e) = process_due_posts(&db1, &providers, &broadcaster, token_key).await {
+                    if let Err(e) = process_due_posts(&db1, &providers1, &broadcaster, token_key).await {
                         tracing::error!("Scheduler tick error: {e}");
                     }
                 }
@@ -65,19 +66,21 @@ pub fn start_scheduler(
     });
 
     // Background cleanup task for expired oauth_states (runs every 10 minutes)
+    let db_cleanup = db.clone();
+    let mut shutdown_cleanup = shutdown.clone();
     tokio::spawn(async move {
         let mut interval = tokio::time::interval(Duration::from_secs(600));
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         loop {
             tokio::select! {
-                _ = shutdown.changed() => {
-                    if *shutdown.borrow() {
+                _ = shutdown_cleanup.changed() => {
+                    if *shutdown_cleanup.borrow() {
                         tracing::info!("OAuth cleanup task shutting down...");
                         break;
                     }
                 }
                 _ = interval.tick() => {
-                    match queries::cleanup_expired_oauth_states(&db).await {
+                    match queries::cleanup_expired_oauth_states(&db_cleanup).await {
                         Ok(count) if count > 0 => {
                             tracing::info!("Cleaned up {count} expired OAuth state(s)");
                         }
@@ -90,6 +93,179 @@ pub fn start_scheduler(
             }
         }
     });
+
+    // Proactive token refresh task (runs every 6 hours)
+    // Refreshes tokens expiring within 24h to prevent silent expiration
+    let db2 = db.clone();
+    let providers2 = providers.clone();
+    let mut shutdown_token = shutdown.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(Duration::from_secs(21600)); // 6 hours
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        loop {
+            tokio::select! {
+                _ = shutdown_token.changed() => {
+                    if *shutdown_token.borrow() {
+                        tracing::info!("Proactive token refresh shutting down...");
+                        break;
+                    }
+                }
+                _ = interval.tick() => {
+                    if let Err(e) = proactive_token_refresh(&db2, &providers2, token_key).await {
+                        tracing::error!("Proactive token refresh error: {e}");
+                    }
+                }
+            }
+        }
+    });
+}
+
+/// Proactive token refresh: refreshes tokens expiring within 24h for providers that need cron refresh
+async fn proactive_token_refresh(
+    db: &PgPool,
+    providers: &ProviderRegistry,
+    token_key: Option<[u8; 32]>,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    const PROACTIVE_REFRESH_WINDOW_HOURS: i64 = 24;
+    
+    // Get all providers that need cron refresh
+    let providers_needing_refresh: Vec<_> = providers
+        .list()
+        .into_iter()
+        .filter(|id| {
+            providers.get(id)
+                .map(|p| p.needs_cron_refresh())
+                .unwrap_or(false)
+        })
+        .collect();
+    
+    if providers_needing_refresh.is_empty() {
+        return Ok(());
+    }
+    
+    tracing::info!(
+        "Running proactive token refresh for {} provider(s): {:?}",
+        providers_needing_refresh.len(),
+        providers_needing_refresh
+    );
+    
+    let mut refreshed_count = 0;
+    let mut failed_count = 0;
+    
+    for provider_id in &providers_needing_refresh {
+        let provider = match providers.get(provider_id) {
+            Some(p) => p,
+            None => continue,
+        };
+        
+        // Get integrations with tokens expiring within 24h
+        let integrations = queries::get_integrations_needing_refresh(
+            db,
+            provider_id,
+            PROACTIVE_REFRESH_WINDOW_HOURS,
+        )
+        .await?;
+        
+        if integrations.is_empty() {
+            continue;
+        }
+        
+        tracing::info!(
+            "Proactive refresh: {} {} integration(s) need refresh",
+            integrations.len(),
+            provider_id
+        );
+        
+        for integration in &integrations {
+            // Skip if integration already has refresh_needed flag
+            if integration.refresh_needed {
+                continue;
+            }
+            
+            let refresh_token = match &integration.refresh_token {
+                Some(rt) => rt,
+                None => {
+                    tracing::warn!(
+                        "Integration {} has no refresh token, marking as refresh_needed",
+                        integration.id
+                    );
+                    let _ = queries::mark_integration_refresh_needed(db, integration.id).await;
+                    failed_count += 1;
+                    continue;
+                }
+            };
+            
+            // Decrypt refresh token if encrypted
+            let decrypted_refresh_token = if let Some(key) = token_key {
+                crate::crypto::decrypt_string(refresh_token, &key)
+                    .unwrap_or_else(|_| refresh_token.clone())
+            } else {
+                refresh_token.clone()
+            };
+            
+            // Attempt token refresh
+            match provider.refresh_token(&decrypted_refresh_token).await {
+                Ok(new_token) => {
+                    // Encrypt new tokens if encryption is enabled
+                    let (access_token, refresh_token_to_store) = if let Some(key) = token_key {
+                        let enc_access = crate::crypto::encrypt_string(&new_token.access_token, &key)?;
+                        let enc_refresh = new_token.refresh_token.as_ref()
+                            .map(|rt| crate::crypto::encrypt_string(rt, &key))
+                            .transpose()?;
+                        (enc_access, enc_refresh)
+                    } else {
+                        (new_token.access_token.clone(), new_token.refresh_token.clone())
+                    };
+                    
+                    // Atomic persistence of the rotating refresh token
+                    let expires_at = new_token.expires_in
+                        .map(|e| Utc::now() + chrono::Duration::seconds(e as i64));
+                    
+                    queries::update_integration_token(
+                        db,
+                        integration.id,
+                        &access_token,
+                        refresh_token_to_store.as_deref(),
+                        expires_at,
+                    )
+                    .await?;
+                    
+                    tracing::debug!(
+                        "Proactively refreshed token for {} integration {}",
+                        provider_id,
+                        integration.id
+                    );
+                    
+                    // LinkedIn needs 10s propagation delay after refresh
+                    if provider.refresh_wait() {
+                        tokio::time::sleep(Duration::from_secs(10)).await;
+                    }
+                    
+                    refreshed_count += 1;
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        "Proactive refresh failed for {} integration {}: {e}",
+                        provider_id,
+                        integration.id
+                    );
+                    // Mark as needing reconnection
+                    let _ = queries::mark_integration_refresh_needed(db, integration.id).await;
+                    failed_count += 1;
+                }
+            }
+        }
+    }
+    
+    if refreshed_count > 0 || failed_count > 0 {
+        tracing::info!(
+            "Proactive token refresh complete: {} refreshed, {} failed",
+            refreshed_count,
+            failed_count
+        );
+    }
+    
+    Ok(())
 }
 
 /// Process all posts due for publishing
