@@ -186,6 +186,9 @@ pub enum Command {
         /// Preview splits without creating drafts
         #[arg(long, default_value_t = false)]
         preview: bool,
+        /// First comment (for platforms that support it, e.g. Instagram)
+        #[arg(long)]
+        first_comment: Option<String>,
     },
 
     /// Media management — upload, list, download
