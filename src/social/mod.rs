@@ -3,6 +3,7 @@
 // Each platform implements this trait for OAuth + publishing.
 
 pub mod bluesky;
+pub mod browser_cookies;
 pub mod calendar;
 pub mod common;
 pub mod devto;
