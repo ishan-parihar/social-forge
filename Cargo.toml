@@ -131,6 +131,3 @@ urlencoding = "2"
 
 # RSS feed parsing
 feed-rs = "2.1"
-
-# XML parsing
-quick-xml = "0.36"

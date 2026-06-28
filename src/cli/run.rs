@@ -2161,16 +2161,16 @@ async fn handle_comment(action: CommentAction) -> anyhow::Result<()> {
     let state = init_state().await?;
     let user_id = resolve_user(&state).await?;
 
-    let result: Result<serde_json::Value, String> = match action {
+    let result: anyhow::Result<serde_json::Value> = match action {
         CommentAction::Get { integration_id, post_id, limit } => {
             let integration_id = Uuid::parse_str(&integration_id)
-                .map_err(|e| format!("Invalid integration_id: {e}"))?;
+                .map_err(|e| anyhow::anyhow!("Invalid integration_id: {e}"))?;
             let integration = crate::db::queries::get_integration(&state.db, integration_id, user_id)
                 .await
-                .map_err(|e| format!("Integration not found: {e}"))?
-                .ok_or_else(|| "Integration not found".to_string())?;
+                .map_err(|e| anyhow::anyhow!("Integration not found: {e}"))?
+                .ok_or_else(|| anyhow::anyhow!(""))?;
             let provider = state.providers.get(&integration.provider_identifier)
-                .ok_or_else(|| format!("Provider {} not found", integration.provider_identifier))?;
+                .ok_or_else(|| anyhow::anyhow!("Provider {} not found", integration.provider_identifier))?;
             let token = state.token_key.as_ref()
                 .and_then(|key| crypto::decrypt_string(&integration.access_token, key).ok())
                 .unwrap_or_else(|| integration.access_token.clone());
@@ -2187,17 +2187,17 @@ async fn handle_comment(action: CommentAction) -> anyhow::Result<()> {
                     }).collect();
                     serde_json::json!({"comments": list, "total": list.len()})
                 })
-                .map_err(|e| e.to_string())
+                .map_err(|e| anyhow::anyhow!(e))
         }
         CommentAction::Reply { integration_id, comment_id, content } => {
             let integration_id = Uuid::parse_str(&integration_id)
-                .map_err(|e| format!("Invalid integration_id: {e}"))?;
+                .map_err(|e| anyhow::anyhow!("Invalid integration_id: {e}"))?;
             let integration = crate::db::queries::get_integration(&state.db, integration_id, user_id)
                 .await
-                .map_err(|e| format!("Integration not found: {e}"))?
-                .ok_or_else(|| "Integration not found".to_string())?;
+                .map_err(|e| anyhow::anyhow!("Integration not found: {e}"))?
+                .ok_or_else(|| anyhow::anyhow!(""))?;
             let provider = state.providers.get(&integration.provider_identifier)
-                .ok_or_else(|| format!("Provider {} not found", integration.provider_identifier))?;
+                .ok_or_else(|| anyhow::anyhow!("Provider {} not found", integration.provider_identifier))?;
             let token = state.token_key.as_ref()
                 .and_then(|key| crypto::decrypt_string(&integration.access_token, key).ok())
                 .unwrap_or_else(|| integration.access_token.clone());
@@ -2208,29 +2208,29 @@ async fn handle_comment(action: CommentAction) -> anyhow::Result<()> {
             };
             provider.reply_to_comment(&token, &comment_id, &post).await
                 .map(|r| serde_json::json!({"id": r.platform_post_id, "status": r.status}))
-                .map_err(|e| e.to_string())
+                .map_err(|e| anyhow::anyhow!(e))
         }
         CommentAction::Delete { integration_id, comment_id } => {
             let integration_id = Uuid::parse_str(&integration_id)
-                .map_err(|e| format!("Invalid integration_id: {e}"))?;
+                .map_err(|e| anyhow::anyhow!("Invalid integration_id: {e}"))?;
             let integration = crate::db::queries::get_integration(&state.db, integration_id, user_id)
                 .await
-                .map_err(|e| format!("Integration not found: {e}"))?
-                .ok_or_else(|| "Integration not found".to_string())?;
+                .map_err(|e| anyhow::anyhow!("Integration not found: {e}"))?
+                .ok_or_else(|| anyhow::anyhow!(""))?;
             let provider = state.providers.get(&integration.provider_identifier)
-                .ok_or_else(|| format!("Provider {} not found", integration.provider_identifier))?;
+                .ok_or_else(|| anyhow::anyhow!("Provider {} not found", integration.provider_identifier))?;
             let token = state.token_key.as_ref()
                 .and_then(|key| crypto::decrypt_string(&integration.access_token, key).ok())
                 .unwrap_or_else(|| integration.access_token.clone());
             provider.delete_comment(&token, &comment_id).await
                 .map(|_| serde_json::json!({"deleted": true}))
-                .map_err(|e| e.to_string())
+                .map_err(|e| anyhow::anyhow!(e))
         }
     };
 
     match result {
         Ok(v) => output_json(&v),
-        Err(e) => return output_error(&e),
+        Err(e) => return output_error(&e.to_string()),
     }
     Ok(())
 }
@@ -2241,16 +2241,16 @@ async fn handle_dm(action: DmAction) -> anyhow::Result<()> {
     let state = init_state().await?;
     let user_id = resolve_user(&state).await?;
 
-    let result: Result<serde_json::Value, String> = match action {
+    let result: anyhow::Result<serde_json::Value> = match action {
         DmAction::Send { integration_id, recipient, content } => {
             let integration_id = Uuid::parse_str(&integration_id)
-                .map_err(|e| format!("Invalid integration_id: {e}"))?;
+                .map_err(|e| anyhow::anyhow!("Invalid integration_id: {e}"))?;
             let integration = crate::db::queries::get_integration(&state.db, integration_id, user_id)
                 .await
-                .map_err(|e| format!("Integration not found: {e}"))?
-                .ok_or_else(|| "Integration not found".to_string())?;
+                .map_err(|e| anyhow::anyhow!("Integration not found: {e}"))?
+                .ok_or_else(|| anyhow::anyhow!(""))?;
             let provider = state.providers.get(&integration.provider_identifier)
-                .ok_or_else(|| format!("Provider {} not found", integration.provider_identifier))?;
+                .ok_or_else(|| anyhow::anyhow!("Provider {} not found", integration.provider_identifier))?;
             let token = state.token_key.as_ref()
                 .and_then(|key| crypto::decrypt_string(&integration.access_token, key).ok())
                 .unwrap_or_else(|| integration.access_token.clone());
@@ -2261,17 +2261,17 @@ async fn handle_dm(action: DmAction) -> anyhow::Result<()> {
             };
             provider.send_dm(&token, &recipient, &post).await
                 .map(|r| serde_json::json!({"id": r.platform_post_id, "status": r.status}))
-                .map_err(|e| e.to_string())
+                .map_err(|e| anyhow::anyhow!(e))
         }
         DmAction::List { integration_id, limit } => {
             let integration_id = Uuid::parse_str(&integration_id)
-                .map_err(|e| format!("Invalid integration_id: {e}"))?;
+                .map_err(|e| anyhow::anyhow!("Invalid integration_id: {e}"))?;
             let integration = crate::db::queries::get_integration(&state.db, integration_id, user_id)
                 .await
-                .map_err(|e| format!("Integration not found: {e}"))?
-                .ok_or_else(|| "Integration not found".to_string())?;
+                .map_err(|e| anyhow::anyhow!("Integration not found: {e}"))?
+                .ok_or_else(|| anyhow::anyhow!(""))?;
             let provider = state.providers.get(&integration.provider_identifier)
-                .ok_or_else(|| format!("Provider {} not found", integration.provider_identifier))?;
+                .ok_or_else(|| anyhow::anyhow!("Provider {} not found", integration.provider_identifier))?;
             let token = state.token_key.as_ref()
                 .and_then(|key| crypto::decrypt_string(&integration.access_token, key).ok())
                 .unwrap_or_else(|| integration.access_token.clone());
@@ -2287,17 +2287,17 @@ async fn handle_dm(action: DmAction) -> anyhow::Result<()> {
                     }).collect();
                     serde_json::json!({"conversations": list, "total": list.len()})
                 })
-                .map_err(|e| e.to_string())
+                .map_err(|e| anyhow::anyhow!(e))
         }
         DmAction::Messages { integration_id, conversation_id, limit } => {
             let integration_id = Uuid::parse_str(&integration_id)
-                .map_err(|e| format!("Invalid integration_id: {e}"))?;
+                .map_err(|e| anyhow::anyhow!("Invalid integration_id: {e}"))?;
             let integration = crate::db::queries::get_integration(&state.db, integration_id, user_id)
                 .await
-                .map_err(|e| format!("Integration not found: {e}"))?
-                .ok_or_else(|| "Integration not found".to_string())?;
+                .map_err(|e| anyhow::anyhow!("Integration not found: {e}"))?
+                .ok_or_else(|| anyhow::anyhow!(""))?;
             let provider = state.providers.get(&integration.provider_identifier)
-                .ok_or_else(|| format!("Provider {} not found", integration.provider_identifier))?;
+                .ok_or_else(|| anyhow::anyhow!("Provider {} not found", integration.provider_identifier))?;
             let token = state.token_key.as_ref()
                 .and_then(|key| crypto::decrypt_string(&integration.access_token, key).ok())
                 .unwrap_or_else(|| integration.access_token.clone());
@@ -2313,13 +2313,13 @@ async fn handle_dm(action: DmAction) -> anyhow::Result<()> {
                     }).collect();
                     serde_json::json!({"messages": list, "total": list.len()})
                 })
-                .map_err(|e| e.to_string())
+                .map_err(|e| anyhow::anyhow!(e))
         }
     };
 
     match result {
         Ok(v) => output_json(&v),
-        Err(e) => return output_error(&e),
+        Err(e) => return output_error(&e.to_string()),
     }
     Ok(())
 }
@@ -2330,10 +2330,10 @@ async fn handle_automation(action: AutomationAction) -> anyhow::Result<()> {
     let state = init_state().await?;
     let user_id = resolve_user(&state).await?;
 
-    let result: Result<serde_json::Value, String> = match action {
+    let result: anyhow::Result<serde_json::Value> = match action {
         AutomationAction::Create { integration_id, name, trigger_type, response_template, response_type } => {
             let integration_id = Uuid::parse_str(&integration_id)
-                .map_err(|e| format!("Invalid integration_id: {e}"))?;
+                .map_err(|e| anyhow::anyhow!("Invalid integration_id: {e}"))?;
             let rule = sqlx::query!(
                 r#"INSERT INTO automation_rules
                    (user_id, integration_id, name, trigger_type, trigger_filter,
@@ -2349,7 +2349,7 @@ async fn handle_automation(action: AutomationAction) -> anyhow::Result<()> {
             )
             .fetch_one(&state.db)
             .await
-            .map_err(|e| format!("Failed to create rule: {e}"))?;
+            .map_err(|e| anyhow::anyhow!("Failed to create rule: {e}"))?;
             Ok(serde_json::json!({
                 "id": rule.id,
                 "name": rule.name,
@@ -2357,10 +2357,10 @@ async fn handle_automation(action: AutomationAction) -> anyhow::Result<()> {
             }))
         }
         AutomationAction::List { integration_id } => {
-            let rules = if let Some(ref iid) = integration_id {
+            let list: Vec<serde_json::Value> = if let Some(ref iid) = integration_id {
                 let iid = Uuid::parse_str(iid)
-                    .map_err(|e| format!("Invalid integration_id: {e}"))?;
-                sqlx::query!(
+                    .map_err(|e| anyhow::anyhow!("Invalid integration_id: {e}"))?;
+                let rules = sqlx::query!(
                     r#"SELECT id, name, trigger_type, response_type, is_active, created_at
                        FROM automation_rules
                        WHERE user_id = $1 AND integration_id = $2
@@ -2370,9 +2370,19 @@ async fn handle_automation(action: AutomationAction) -> anyhow::Result<()> {
                 )
                 .fetch_all(&state.db)
                 .await
-                .map_err(|e| format!("Failed to list rules: {e}"))?
+                .map_err(|e| anyhow::anyhow!("Failed to list rules: {e}"))?;
+                rules.into_iter().map(|r| {
+                    serde_json::json!({
+                        "id": r.id,
+                        "name": r.name,
+                        "trigger_type": r.trigger_type,
+                        "response_type": r.response_type,
+                        "is_active": r.is_active.unwrap_or(true),
+                        "created_at": r.created_at.map(|dt| dt.to_rfc3339()),
+                    })
+                }).collect()
             } else {
-                sqlx::query!(
+                let rules = sqlx::query!(
                     r#"SELECT id, name, trigger_type, response_type, is_active, created_at
                        FROM automation_rules
                        WHERE user_id = $1
@@ -2381,23 +2391,24 @@ async fn handle_automation(action: AutomationAction) -> anyhow::Result<()> {
                 )
                 .fetch_all(&state.db)
                 .await
-                .map_err(|e| format!("Failed to list rules: {e}"))?
+                .map_err(|e| anyhow::anyhow!("Failed to list rules: {e}"))?;
+                rules.into_iter().map(|r| {
+                    serde_json::json!({
+                        "id": r.id,
+                        "name": r.name,
+                        "trigger_type": r.trigger_type,
+                        "response_type": r.response_type,
+                        "is_active": r.is_active.unwrap_or(true),
+                        "created_at": r.created_at.map(|dt| dt.to_rfc3339()),
+                    })
+                }).collect()
             };
-            let list: Vec<serde_json::Value> = rules.into_iter().map(|r| {
-                serde_json::json!({
-                    "id": r.id,
-                    "name": r.name,
-                    "trigger_type": r.trigger_type,
-                    "response_type": r.response_type,
-                    "is_active": r.is_active.unwrap_or(true),
-                    "created_at": r.created_at.map(|dt| dt.to_rfc3339()),
-                })
-            }).collect();
-            Ok(serde_json::json!({"rules": list, "total": list.len()}))
+            let total = list.len();
+            Ok(serde_json::json!({"rules": list, "total": total}))
         }
         AutomationAction::Update { rule_id, name, response_template, is_active } => {
             let rule_id = Uuid::parse_str(&rule_id)
-                .map_err(|e| format!("Invalid rule_id: {e}"))?;
+                .map_err(|e| anyhow::anyhow!("Invalid rule_id: {e}"))?;
             sqlx::query!(
                 r#"UPDATE automation_rules
                    SET name = COALESCE($2, name),
@@ -2412,24 +2423,24 @@ async fn handle_automation(action: AutomationAction) -> anyhow::Result<()> {
             )
             .execute(&state.db)
             .await
-            .map_err(|e| format!("Failed to update rule: {e}"))?;
+            .map_err(|e| anyhow::anyhow!("Failed to update rule: {e}"))?;
             Ok(serde_json::json!({"updated": true}))
         }
         AutomationAction::Delete { rule_id } => {
             let rule_id = Uuid::parse_str(&rule_id)
-                .map_err(|e| format!("Invalid rule_id: {e}"))?;
+                .map_err(|e| anyhow::anyhow!("Invalid rule_id: {e}"))?;
             sqlx::query!(
                 r#"DELETE FROM automation_rules WHERE id = $1"#,
                 rule_id,
             )
             .execute(&state.db)
             .await
-            .map_err(|e| format!("Failed to delete rule: {e}"))?;
+            .map_err(|e| anyhow::anyhow!("Failed to delete rule: {e}"))?;
             Ok(serde_json::json!({"deleted": true}))
         }
         AutomationAction::Logs { rule_id, limit } => {
             let rule_id = Uuid::parse_str(&rule_id)
-                .map_err(|e| format!("Invalid rule_id: {e}"))?;
+                .map_err(|e| anyhow::anyhow!("Invalid rule_id: {e}"))?;
             let logs = sqlx::query!(
                 r#"SELECT id, trigger_id, trigger_type, response, status, error_message, created_at
                    FROM automation_logs
@@ -2437,11 +2448,11 @@ async fn handle_automation(action: AutomationAction) -> anyhow::Result<()> {
                    ORDER BY created_at DESC
                    LIMIT $2"#,
                 rule_id,
-                limit,
+                limit as i64,
             )
             .fetch_all(&state.db)
             .await
-            .map_err(|e| format!("Failed to get logs: {e}"))?;
+            .map_err(|e| anyhow::anyhow!("Failed to get logs: {e}"))?;
             let list: Vec<serde_json::Value> = logs.into_iter().map(|l| {
                 serde_json::json!({
                     "id": l.id,
@@ -2459,7 +2470,7 @@ async fn handle_automation(action: AutomationAction) -> anyhow::Result<()> {
 
     match result {
         Ok(v) => output_json(&v),
-        Err(e) => return output_error(&e),
+        Err(e) => return output_error(&e.to_string()),
     }
     Ok(())
 }

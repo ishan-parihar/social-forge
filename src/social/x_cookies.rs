@@ -5,6 +5,8 @@
 
 use std::path::{Path, PathBuf};
 
+use super::browser_cookies::{home_dir as shared_home_dir, chrome_default_profile as shared_chrome_default_profile};
+
 /// Result of browser cookie extraction
 #[derive(Debug)]
 pub struct ExtractedCookies {
@@ -40,7 +42,7 @@ pub fn extract_x_cookies() -> Option<ExtractedCookies> {
 // ── Chrome / Brave ─────────────────────────────────────────────
 
 fn home_dir() -> PathBuf {
-    std::env::var("HOME").map(PathBuf::from).unwrap_or_else(|_| PathBuf::from("/tmp"))
+    shared_home_dir()
 }
 
 fn chrome_cookie_path(profile_dir: &Path) -> PathBuf {
@@ -53,7 +55,7 @@ fn chrome_local_state_path(profile_dir: &Path) -> PathBuf {
 }
 
 fn chrome_default_profile(home: &Path, config_dir: &str) -> PathBuf {
-    home.join(".config").join(config_dir).join("Default")
+    shared_chrome_default_profile(home, config_dir)
 }
 
 fn extract_chrome_impl(profile_dir: &Path, browser: &str) -> Option<(String, String, String)> {
