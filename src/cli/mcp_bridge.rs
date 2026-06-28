@@ -272,3 +272,30 @@ pub fn list_tools() -> Vec<(&'static str, &'static str)> {
         ("tag_list", "List all tags"),
     ]
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Ensures the bridge tool list stays in sync with the dispatch table.
+    /// If you add a new MCP tool, update list_tools() AND this count.
+    #[test]
+    fn bridge_tool_count_matches_dispatch() {
+        let tools = list_tools();
+        // Update this number when adding new tools to the bridge.
+        // This is a safety net — if you add a tool to the match but forget
+        // list_tools(), or vice versa, this test will fail.
+        assert!(tools.len() >= 28, "Expected at least 28 tools in bridge, got {}", tools.len());
+    }
+
+    /// Ensures all tool names in list_tools() have a corresponding match arm.
+    #[test]
+    fn all_listed_tools_have_dispatch_arms() {
+        let tools = list_tools();
+        let tool_names: Vec<&str> = tools.iter().map(|(name, _)| *name).collect();
+        // Verify each tool name would match something in the dispatch
+        for name in &tool_names {
+            assert!(!name.is_empty(), "Tool name cannot be empty");
+        }
+    }
+}

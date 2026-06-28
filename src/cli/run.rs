@@ -274,8 +274,8 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
         Command::Post { text, platforms, media, schedule, first_comment } => {
             handle_post(&text, platforms.as_deref(), media.as_deref(), schedule.as_deref(), first_comment.as_deref()).await
         }
-        Command::Stage { text, integrations, media, schedule, preview } => {
-            handle_stage(&text, integrations.as_deref(), media.as_deref(), schedule.as_deref(), preview, None).await
+        Command::Stage { text, integrations, media, schedule, preview, first_comment } => {
+            handle_stage(&text, integrations.as_deref(), media.as_deref(), schedule.as_deref(), preview, first_comment.as_deref()).await
         }
         Command::Media { action } => handle_media(action).await,
         Command::McpCall { tool, json } => handle_mcp_call(&tool, &json).await,
