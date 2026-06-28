@@ -263,6 +263,9 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
         Command::LinkedinPage { action } => handle_linkedin_page(action).await,
         Command::Facebook { action } => handle_facebook(action).await,
         Command::Instagram { action } => handle_instagram(action).await,
+        Command::Youtube { action } => handle_youtube(action).await,
+        Command::Bluesky { action } => handle_bluesky(action).await,
+        Command::Mastodon { action } => handle_mastodon(action).await,
         Command::Import { provider, count } => handle_import(&provider, count).await,
         Command::Feed { provider, limit } => handle_feed(provider.as_deref(), limit).await,
     }
@@ -1951,6 +1954,199 @@ async fn handle_instagram(action: InstagramAction) -> anyhow::Result<()> {
                         })
                         .map_err(|e| e.to_string())
                 }
+            }
+        }
+    };
+
+    match result {
+        Ok(v) => output_json(&v),
+        Err(e) => return output_error(&e),
+    }
+    Ok(())
+}
+
+// ── YouTube Handler ──────────────────────────────────────────
+
+use super::YoutubeAction;
+
+async fn handle_youtube(action: YoutubeAction) -> anyhow::Result<()> {
+    let state = init_state().await?;
+    let user_id = resolve_user(&state).await?;
+
+    let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
+    let yt = integrations.iter()
+        .find(|i| i.provider_identifier == "youtube")
+        .ok_or_else(|| anyhow::anyhow!("No YouTube integration found"))?;
+    let token = yt.access_token.clone();
+    let token = state.token_key.as_ref()
+        .and_then(|key| crypto::decrypt_string(&token, key).ok())
+        .unwrap_or(token);
+
+    let provider = crate::social::youtube::YoutubeProvider::new(&state.config);
+
+    let result: Result<serde_json::Value, String> = match action {
+        YoutubeAction::Reply { comment_id, content } => {
+            let post = crate::social::PostContent {
+                content,
+                media: vec![],
+                settings: serde_json::Value::Object(serde_json::Map::new()),
+            };
+            provider.reply_to_comment(&token, &comment_id, &post).await
+                .map(|r| serde_json::json!({"id": r.platform_post_id, "status": r.status}))
+                .map_err(|e| e.to_string())
+        }
+        YoutubeAction::Search { query, limit } => {
+            provider.search_videos(&token, &query, limit).await
+                .map_err(|e| e.to_string())
+        }
+        YoutubeAction::Video { video_id } => {
+            provider.get_video(&token, &video_id).await
+                .map_err(|e| e.to_string())
+        }
+    };
+
+    match result {
+        Ok(v) => output_json(&v),
+        Err(e) => return output_error(&e),
+    }
+    Ok(())
+}
+
+// ── Bluesky Handler ──────────────────────────────────────────
+
+use super::BlueskyAction;
+
+async fn handle_bluesky(action: BlueskyAction) -> anyhow::Result<()> {
+    let state = init_state().await?;
+    let user_id = resolve_user(&state).await?;
+
+    let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
+    let bs = integrations.iter()
+        .find(|i| i.provider_identifier == "bluesky")
+        .ok_or_else(|| anyhow::anyhow!("No Bluesky integration found"))?;
+    let token = bs.access_token.clone();
+    let token = state.token_key.as_ref()
+        .and_then(|key| crypto::decrypt_string(&token, key).ok())
+        .unwrap_or(token);
+
+    let provider = crate::social::bluesky::BlueskyProvider::new(&state.config);
+
+    let result: Result<serde_json::Value, String> = match action {
+        BlueskyAction::Reply { post_uri, content } => {
+            let post = crate::social::PostContent {
+                content,
+                media: vec![],
+                settings: serde_json::Value::Object(serde_json::Map::new()),
+            };
+            provider.reply_to_comment(&token, &post_uri, &post).await
+                .map(|r| serde_json::json!({"id": r.platform_post_id, "url": r.platform_post_url, "status": r.status}))
+                .map_err(|e| e.to_string())
+        }
+        BlueskyAction::Profile { handle } => {
+            match reqwest::Client::new()
+                .get("https://bsky.social/xrpc/app.bsky.actor.getProfile")
+                .query(&[("actor", &handle)])
+                .header("Authorization", format!("Bearer {token}"))
+                .send().await
+            {
+                Ok(resp) => resp.json::<serde_json::Value>().await
+                    .map_err(|e| format!("Parse error: {e}")),
+                Err(e) => Err(format!("Bluesky profile request failed: {e}")),
+            }
+        }
+        BlueskyAction::Timeline { limit } => {
+            match reqwest::Client::new()
+                .get("https://bsky.social/xrpc/app.bsky.feed.getTimeline")
+                .query(&[("limit", &limit.to_string())])
+                .header("Authorization", format!("Bearer {token}"))
+                .send().await
+            {
+                Ok(resp) => resp.json::<serde_json::Value>().await
+                    .map_err(|e| format!("Parse error: {e}")),
+                Err(e) => Err(format!("Bluesky timeline request failed: {e}")),
+            }
+        }
+        BlueskyAction::Search { query, limit } => {
+            match reqwest::Client::new()
+                .get("https://bsky.social/xrpc/app.bsky.feed.searchPosts")
+                .query(&[("q", &query), ("limit", &limit.to_string())])
+                .header("Authorization", format!("Bearer {token}"))
+                .send().await
+            {
+                Ok(resp) => resp.json::<serde_json::Value>().await
+                    .map_err(|e| format!("Parse error: {e}")),
+                Err(e) => Err(format!("Bluesky search request failed: {e}")),
+            }
+        }
+    };
+
+    match result {
+        Ok(v) => output_json(&v),
+        Err(e) => return output_error(&e),
+    }
+    Ok(())
+}
+
+// ── Mastodon Handler ─────────────────────────────────────────
+
+use super::MastodonAction;
+
+async fn handle_mastodon(action: MastodonAction) -> anyhow::Result<()> {
+    let state = init_state().await?;
+    let user_id = resolve_user(&state).await?;
+
+    let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
+    let ms = integrations.iter()
+        .find(|i| i.provider_identifier == "mastodon")
+        .ok_or_else(|| anyhow::anyhow!("No Mastodon integration found"))?;
+    let token = ms.access_token.clone();
+    let token = state.token_key.as_ref()
+        .and_then(|key| crypto::decrypt_string(&token, key).ok())
+        .unwrap_or(token);
+
+    let provider = crate::social::mastodon::MastodonProvider::new(&state.config);
+
+    let result: Result<serde_json::Value, String> = match action {
+        MastodonAction::Reply { status_id, content } => {
+            let post = crate::social::PostContent {
+                content,
+                media: vec![],
+                settings: serde_json::Value::Object(serde_json::Map::new()),
+            };
+            provider.reply_to_comment(&token, &status_id, &post).await
+                .map(|r| serde_json::json!({"id": r.platform_post_id, "url": r.platform_post_url, "status": r.status}))
+                .map_err(|e| e.to_string())
+        }
+        MastodonAction::Whoami => {
+            provider.get_user_info(&token).await
+                .map_err(|e| e.to_string())
+        }
+        MastodonAction::Timeline { kind, limit } => {
+            let url = match kind.as_str() {
+                "local" => format!("/api/v1/timelines/public?local=true&limit={}", limit.min(40)),
+                "public" => format!("/api/v1/timelines/public?limit={}", limit.min(40)),
+                _ => format!("/api/v1/timelines/home?limit={}", limit.min(40)),
+            };
+            match reqwest::Client::new()
+                .get(provider.api_url(&url))
+                .header("Authorization", format!("Bearer {token}"))
+                .send().await
+            {
+                Ok(resp) => resp.json::<serde_json::Value>().await
+                    .map_err(|e| format!("Parse error: {e}")),
+                Err(e) => Err(format!("Mastodon timeline request failed: {e}")),
+            }
+        }
+        MastodonAction::Search { query, limit } => {
+            let url = format!("/api/v2/search?q={}&limit={}", urlencoding::encode(&query), limit.min(40));
+            match reqwest::Client::new()
+                .get(provider.api_url(&url))
+                .header("Authorization", format!("Bearer {token}"))
+                .send().await
+            {
+                Ok(resp) => resp.json::<serde_json::Value>().await
+                    .map_err(|e| format!("Parse error: {e}")),
+                Err(e) => Err(format!("Mastodon search request failed: {e}")),
             }
         }
     };
