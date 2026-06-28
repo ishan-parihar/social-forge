@@ -4,9 +4,10 @@
   import { groupIntegrations } from "./group-integrations";
   import ChannelCard from "./ChannelCard.svelte";
 
-  let { onConnect, onDisconnect: externalDisconnect }: {
+  let { onConnect, onDisconnect: externalDisconnect, onRefresh: externalRefresh }: {
     onConnect?: (provider: string) => void;
     onDisconnect?: (id: string) => void;
+    onRefresh?: (id: string) => void;
   } = $props();
   let integrations = $state<Integration[]>([]);
   let loading = $state(true);
@@ -62,7 +63,7 @@
       <div>
         <div class="text-xs text-[#6b7280] px-3 py-1">{name} ({ints.length})</div>
         {#each ints as int}
-          <ChannelCard integration={int} onDisconnect={disconnect} />
+          <ChannelCard integration={int} onDisconnect={disconnect} onRefresh={externalRefresh ? () => externalRefresh(int.id) : undefined} />
         {/each}
       </div>
     {/each}

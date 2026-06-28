@@ -437,7 +437,7 @@ pub async fn toggle_disable(
     Ok(Json(serde_json::json!({"success": true, "disabled": body.disabled})))
 }
 
-/// POST /api/integrations/{id}/refresh — re-fetch profile info from provider
+/// POST /api/integrations/{id}/refresh — refresh OAuth token and profile info
 pub async fn refresh(
     State(state): State<AppState>,
     auth: AuthenticatedUser,
@@ -458,15 +458,60 @@ pub async fn refresh(
             .unwrap_or_else(|| token.to_string())
     };
 
-    let token = resolve_token(&integration.access_token);
+    let mut new_access_token = None;
+    if let Some(ref refresh_token_encrypted) = integration.refresh_token {
+        let refresh_token = resolve_token(refresh_token_encrypted);
+        match provider_obj.refresh_token(&refresh_token).await {
+            Ok(new_token) => {
+                let (access_token, refresh_token_to_store) = if let Some(key) = state.token_key {
+                    let enc_access = crypto::encrypt_string(&new_token.access_token, &key)
+                        .map_err(|e| AppError::Internal(format!("Encryption failed: {e}")))?;
+                    let enc_refresh = new_token.refresh_token.as_ref()
+                        .map(|rt| crypto::encrypt_string(rt, &key))
+                        .transpose()
+                        .map_err(|e| AppError::Internal(format!("Encryption failed: {e}")))?;
+                    (enc_access, enc_refresh)
+                } else {
+                    (new_token.access_token.clone(), new_token.refresh_token.clone())
+                };
+
+                let expires_at = new_token.expires_in
+                    .map(|e| chrono::Utc::now() + chrono::Duration::seconds(e as i64));
+
+                queries::update_integration_token(
+                    &state.db,
+                    id,
+                    &access_token,
+                    refresh_token_to_store.as_deref(),
+                    expires_at,
+                )
+                .await?;
+
+                new_access_token = Some(access_token);
+
+                if provider_obj.refresh_wait() {
+                    tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+                }
+            }
+            Err(e) => {
+                tracing::warn!("Token refresh failed for integration {}: {e}", id);
+                let _ = queries::mark_integration_refresh_needed(&state.db, id).await;
+                return Err(AppError::Provider(format!("Token refresh failed: {e}")));
+            }
+        }
+    }
+
+    let fallback_token = resolve_token(&integration.access_token);
+    let token_to_use = new_access_token.as_deref()
+        .unwrap_or(&fallback_token);
 
     let info = provider_obj
-        .reconnect(&token, &integration.internal_id, &integration.internal_id)
+        .reconnect(token_to_use, &integration.internal_id, &integration.internal_id)
         .await
-        .map_err(|e| AppError::Provider(format!("Failed to refresh: {e}")))?;
+        .map_err(|e| AppError::Provider(format!("Failed to refresh profile: {e}")))?;
 
     sqlx::query(
-        "UPDATE integrations SET profile_name = $1, profile_picture = COALESCE($2, profile_picture), updated_at = NOW() WHERE id = $3 AND user_id = $4",
+        "UPDATE integrations SET profile_name = $1, profile_picture = COALESCE($2, profile_picture), refresh_needed = false, updated_at = NOW() WHERE id = $3 AND user_id = $4",
     )
     .bind(&info.name)
     .bind(info.picture.clone())
@@ -479,6 +524,7 @@ pub async fn refresh(
         "success": true,
         "profile_name": info.name,
         "profile_picture": info.picture,
+        "token_refreshed": new_access_token.is_some(),
     })))
 }
 

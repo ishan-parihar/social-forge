@@ -47,7 +47,6 @@ export const developerApi = {
 
   // Webhooks (backend already exists)
   listWebhooks: () => api.get<Webhook[]>("/api/webhooks"),
-  getWebhook: (id: string) => api.get<Webhook>(`/api/webhooks/${id}`),
   createWebhook: (data: { name: string; url: string; secret?: string; event_types: string[] }) =>
     api.post<Webhook>("/api/webhooks", data),
   updateWebhook: (id: string, data: { name?: string; url?: string; secret?: string; event_types?: string[]; is_active?: boolean }) =>

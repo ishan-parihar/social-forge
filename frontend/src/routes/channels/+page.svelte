@@ -174,14 +174,36 @@
     credFields = {};
   }
 
+  let refreshing = $state<string | null>(null);
+
   async function handleChannelRefresh(id: string) {
+    refreshing = id;
     try {
-      await integrationsApi.refresh(id);
-      await load();
-    } catch (e) {
-      error = "Failed to refresh token";
-      console.error("Refresh failed:", e);
+      const r = await integrationsApi.refresh(id);
+      if (r.error) {
+        error = `Refresh failed: ${r.error}`;
+      } else {
+        await load();
+      }
+    } catch (e: any) {
+      error = `Refresh failed: ${e?.message || "Unknown error"}`;
     }
+    refreshing = null;
+  }
+
+  async function handleReconnect(id: string) {
+    refreshing = id;
+    try {
+      // Delete existing integration, then start fresh OAuth
+      const int = integrations.find(i => i.id === id);
+      if (!int) { error = "Integration not found"; refreshing = null; return; }
+      await integrationsApi.disconnect(id);
+      // Re-initiate the connect flow for this provider
+      initiateConnect(int.provider_identifier);
+    } catch (e: any) {
+      error = `Reconnect failed: ${e?.message || "Unknown error"}`;
+    }
+    refreshing = null;
   }
 
   async function handleToggleDisableIntegration(id: string, disabled: boolean) {
@@ -286,7 +308,14 @@
           <div class="text-xs text-[#6b7280] px-1 mb-1">{name} ({ints.length})</div>
           <div class="space-y-0.5">
             {#each ints as int (int.id)}
-              <ChannelCard integration={int} onDisconnect={disconnect} onRefresh={() => handleChannelRefresh(int.id)} onToggleDisable={handleToggleDisableIntegration} />
+              <ChannelCard
+                integration={int}
+                onDisconnect={disconnect}
+                onRefresh={() => handleChannelRefresh(int.id)}
+                onReconnect={() => handleReconnect(int.id)}
+                onToggleDisable={handleToggleDisableIntegration}
+                isRefreshing={refreshing === int.id}
+              />
             {/each}
           </div>
         </div>
