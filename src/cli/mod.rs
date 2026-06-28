@@ -37,10 +37,25 @@ pub enum Command {
     /// List connected social providers
     Providers,
 
-    /// Show connection instructions for a provider
+    /// Connect a provider (auto-imports browser cookies for X/Reddit, shows OAuth URL for others)
     Connect {
-        /// Provider name (x, reddit, linkedin, facebook, instagram)
+        /// Provider name (x, reddit, linkedin, facebook, instagram, bluesky, github)
         provider: String,
+    },
+
+    /// Check health of all connected providers and report status
+    Doctor,
+
+    /// Full guided onboarding: check status, import cookies, connect providers
+    Setup,
+
+    /// Auto-import browser cookies for all cookie-based providers (X, Reddit)
+    ConnectAll,
+
+    /// Manage configuration values in ~/.social-forge/.env
+    Config {
+        #[command(subcommand)]
+        action: ConfigAction,
     },
 
     /// X (Twitter) operations
@@ -97,6 +112,26 @@ pub enum Command {
         #[arg(long, default_value_t = 20)]
         limit: u32,
     },
+}
+
+// ─── Config Management ─────────────────────────────────────────────────────
+
+#[derive(Subcommand, Debug)]
+pub enum ConfigAction {
+    /// Set a configuration value in ~/.social-forge/.env
+    Set {
+        /// Environment variable name (e.g. BLUESKY_HANDLE, GITHUB_TOKEN)
+        key: String,
+        /// Value to set
+        value: String,
+    },
+    /// Get a configuration value
+    Get {
+        /// Environment variable name
+        key: String,
+    },
+    /// List all configured values (redacts secrets)
+    List,
 }
 
 // ─── X (Twitter) ────────────────────────────────────────────────────────────
@@ -374,6 +409,11 @@ pub enum FacebookAction {
     Insights {
         /// Facebook Page ID
         page_id: String,
+
+        /// Comma-separated metrics (e.g. page_impressions,page_engaged_users,page_fans).
+        /// Default: page_impressions,page_engaged_users,page_fans
+        #[arg(long, default_value = "page_impressions,page_engaged_users,page_fans")]
+        metric: String,
     },
 
     /// Comment on a post
@@ -400,6 +440,11 @@ pub enum InstagramAction {
     Insights {
         /// Instagram account ID
         account_id: String,
+
+        /// Comma-separated metrics (e.g. reach,follower_count,profile_views).
+        /// Default: reach,follower_count
+        #[arg(long, default_value = "reach,follower_count")]
+        metric: String,
     },
 
     /// Comment on a media post

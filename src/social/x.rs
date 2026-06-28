@@ -1416,7 +1416,37 @@ impl XProvider {
         access_token: &str,
         user_id: &str,
     ) -> Result<serde_json::Value, ProviderError> {
-        // v2 REST API (works with Bearer token in default_headers)
+        if let Some((_at, _ct0)) = Self::parse_cookie_token(access_token) {
+            // Cookie auth: use x.com internal v2 API with cookie headers
+            let url = format!(
+                "https://x.com/i/api/2/users/{user_id}.json?user.fields=profile_image_url,description,public_metrics"
+            );
+            let (ct0, cs) = self.effective_cookie_str(access_token);
+            let mut last_err = None;
+            for attempt in 0..=RATE_LIMIT_RETRIES {
+                if attempt > 0 { rate_limit_sleep(attempt - 1).await; }
+                let resp = self.http.get(&url)
+                    .header("x-csrf-token", &ct0)
+                    .header("Cookie", &cs)
+                    .send().await
+                    .map_err(|e| ProviderError::Api(format!("X user lookup error: {e}")))?;
+                let status = resp.status();
+                let body_text = resp.text().await.unwrap_or_default();
+                if status.is_success() {
+                    let json: serde_json::Value = serde_json::from_str(&body_text)
+                        .map_err(|e| ProviderError::Api(format!("X JSON parse error: {e}")))?;
+                    return Ok(json);
+                }
+                if status.as_u16() == 429 && is_rate_limited(&body_text) && attempt < RATE_LIMIT_RETRIES {
+                    last_err = Some(format!("rate limited (attempt {})", attempt + 1));
+                    continue;
+                }
+                let snippet = body_text.chars().take(200).collect::<String>();
+                return Err(ProviderError::Api(format!("X user lookup failed: HTTP {status}: {snippet}")));
+            }
+            return Err(ProviderError::Api(format!("X user lookup failed after {} retries: {}", RATE_LIMIT_RETRIES, last_err.unwrap_or_default())));
+        }
+        // Fallback: v2 REST API (works with Bearer token in default_headers)
         let url = format!(
             "https://api.twitter.com/2/users/{user_id}?user.fields=profile_image_url,description,public_metrics"
         );
