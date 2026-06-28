@@ -300,8 +300,17 @@ fn extract_chrome() -> Option<(String, String, String)> {
 
 fn extract_brave() -> Option<(String, String, String)> {
     let home = home_dir();
-    let profile = chrome_default_profile(&home, "BraveSoftware/Brave-Browser");
-    extract_chrome_impl(&profile, "brave")
+    // Try standard Brave profile first, then Origin Beta
+    let profiles = [
+        chrome_default_profile(&home, "BraveSoftware/Brave-Browser"),
+        chrome_default_profile(&home, "BraveSoftware/Brave-Origin-Beta"),
+    ];
+    for profile in &profiles {
+        if let Some(result) = extract_chrome_impl(profile, "brave") {
+            return Some(result);
+        }
+    }
+    None
 }
 
 fn extract_firefox() -> Option<(String, String, String)> {

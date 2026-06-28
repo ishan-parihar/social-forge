@@ -1,0 +1,35 @@
+{
+  "skill_name": "social-forge-agent",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Post a tweet saying 'Just shipped the new social media CLI tool! Check it out at social-forge.dev 🚀' and then check my X timeline to see what's happening",
+      "expected_output": "Agent should use social-forge x post to tweet, then social-forge x timeline to read the feed",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "I need to post the same announcement to all my Facebook pages. Can you check what pages I have connected and post to each one?",
+      "expected_output": "Agent should first run social-forge providers to find Facebook pages, then post to each using social-forge facebook comment or the MCP fb_create_post tool with each page ID",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "Browse the r/rust subreddit for the latest posts about async Rust, search for 'tokio runtime' on Reddit, and save any interesting posts I find",
+      "expected_output": "Agent should use social-forge reddit browse rust and social-forge reddit search to find content, then social-forge reddit save to bookmark interesting posts",
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "Get the Instagram insights for my designaesthetics.co.in account — I want to see reach and follower count for the last week, and also get the LinkedIn page analytics for Design Aesthetics",
+      "expected_output": "Agent should use social-forge instagram insights with --metric reach,follower_count, and social-forge linkedin-page analytics for the Design Aesthetics page",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "I want to schedule a LinkedIn post for tomorrow at 9am. The post should say 'Excited to announce our new architecture consultation service. DM me for details!' First check if I have any LinkedIn pages connected.",
+      "expected_output": "Agent should check providers, create a post via MCP or CLI, then schedule it for the specified time using posts_schedule or the linkedin-page post command",
+      "files": []
+    }
+  ]
+}

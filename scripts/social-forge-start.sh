@@ -47,6 +47,18 @@ for i in $(seq 1 30); do
   sleep 2
 done
 
+# ── Install AI Agent Skill to ~/.agents/skills/ ────────────────
+SKILL_SRC="$APP_DIR/skills/social-forge-agent"
+SKILL_DEST="$HOME/.agents/skills/social-forge-agent"
+if [ -d "$SKILL_SRC" ]; then
+    mkdir -p "$SKILL_DEST/references"
+    cp "$SKILL_SRC/SKILL.md" "$SKILL_DEST/SKILL.md"
+    cp "$SKILL_SRC/references/providers.md" "$SKILL_DEST/references/providers.md"
+    echo "[social-forge] Skill installed to $SKILL_DEST"
+else
+    echo "[social-forge] WARNING: Skill source not found at $SKILL_SRC"
+fi
+
 # ── Start the pre-built binary ──────────────────────────────────
 echo "[social-forge] Starting server..."
 cd "$APP_DIR"

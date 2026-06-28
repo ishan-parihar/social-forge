@@ -15,6 +15,7 @@ use crate::social::reddit::RedditProvider;
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct RedditGetCommentsInput {
     pub post_id: String,
+    /// Sort: confidence, top, new, controversial, old, qa (default: confidence)
     pub sort: Option<String>,
     pub depth: Option<u32>,
     pub limit: Option<u32>,
@@ -29,8 +30,10 @@ pub struct RedditGetCommentsOutput {
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct RedditBrowseInput {
     pub subreddit: String,
+    /// Sort: hot, new, top, rising, controversial (default: hot)
     pub sort: Option<String>,
     pub limit: Option<u32>,
+    /// Time filter for top/controversial: hour, day, week, month, year, all
     pub time: Option<String>,
 }
 
@@ -43,8 +46,10 @@ pub struct RedditBrowseOutput {
 pub struct RedditSearchInput {
     pub query: String,
     pub subreddit: Option<String>,
+    /// Sort: relevance, hot, top, new, comments (default: relevance)
     pub sort: Option<String>,
     pub limit: Option<u32>,
+    /// Time filter: hour, day, week, month, year, all
     pub time: Option<String>,
 }
 
@@ -93,6 +98,7 @@ pub struct RedditSendDmOutput {
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct RedditInboxInput {
+    /// Folder: inbox, unread, sent, messages, mentions, comments, selfreply
     pub folder: Option<String>,
     pub limit: Option<u32>,
 }

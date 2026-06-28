@@ -13,7 +13,7 @@ use crate::realtime::Broadcaster;
 use crate::social::registry::ProviderRegistry;
 use crate::social::SocialProvider;
 
-use super::{Cli, Command, XAction, RedditAction, RedditModAction, LinkedinAction, LinkedinPageAction, FacebookAction, InstagramAction};
+use super::{Cli, Command, ConfigAction, XAction, RedditAction, RedditModAction, LinkedinAction, LinkedinPageAction, FacebookAction, InstagramAction};
 use crate::social::TargetInfo;
 use crate::db::models::Integration;
 
@@ -252,7 +252,11 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
         }
         Command::Init => handle_init(),
         Command::Providers => handle_providers().await,
-        Command::Connect { provider } => handle_connect(&provider),
+        Command::Connect { provider } => handle_connect(&provider).await,
+        Command::Doctor => handle_doctor().await,
+        Command::Setup => handle_setup().await,
+        Command::ConnectAll => handle_connect_all().await,
+        Command::Config { action } => handle_config(action),
         Command::X { action } => handle_x(action).await,
         Command::Reddit { action } => handle_reddit(action).await,
         Command::Linkedin { action } => handle_linkedin(action).await,
@@ -371,16 +375,859 @@ JWT_SECRET=change-me-to-a-random-secret
     Ok(())
 }
 
-fn handle_connect(provider: &str) -> anyhow::Result<()> {
-    let instructions = match provider {
-        "x" => "Visit /api/public/connect/x-cookies to submit X/Twitter cookies, or set X_AUTH_TOKEN + X_CT0 env vars.",
-        "reddit" => "Visit /api/public/connect/reddit-cookies to submit Reddit cookies.",
-        "linkedin" => "Visit /api/public/connect/linkedin to start OAuth flow.",
-        "facebook" => "Visit /api/public/connect/facebook to start OAuth flow.",
-        "instagram" => "Visit /api/public/connect/instagram to start OAuth flow.",
-        _ => "Unknown provider. Supported: x, reddit, linkedin, facebook, instagram",
+async fn handle_connect(provider: &str) -> anyhow::Result<()> {
+    let state = init_state().await?;
+    let user_id = resolve_user(&state).await?;
+
+    match provider {
+        // ── X/Twitter: auto-import from browser ────────────────
+        "x" => {
+            // Check if already connected
+            let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
+            if integrations.iter().any(|i| i.provider_identifier == "x") {
+                let existing: Vec<_> = integrations.iter().filter(|i| i.provider_identifier == "x").collect();
+                output_json(&serde_json::json!({
+                    "status": "already_connected",
+                    "provider": "x",
+                    "count": existing.len(),
+                    "accounts": existing.iter().map(|i| serde_json::json!({
+                        "name": i.profile_name,
+                        "internal_id": i.internal_id,
+                    })).collect::<Vec<_>>(),
+                    "hint": "Already connected. Use 'social-forge x timeline' to verify.",
+                }));
+                return Ok(());
+            }
+
+            // Try auto-import from browser
+            match crate::social::x_cookies::extract_x_cookies() {
+                Some(cookies) => {
+                    let token_str = crate::social::x_cookies::build_cookie_token(
+                        &cookies.auth_token, &cookies.ct0, Some(&cookies.cookie_string)
+                    );
+
+                    // Validate by calling get_me
+                    let mut provider_obj = crate::social::x::XProvider::new(&state.config);
+                    provider_obj.prepare_from_token(&token_str);
+                    match provider_obj.get_me(&token_str).await {
+                        Ok(json) => {
+                            let data = json.get("data");
+                            let name = data.and_then(|d| d.get("name")).and_then(|s| s.as_str()).unwrap_or("X User");
+                            let username = data.and_then(|d| d.get("username")).and_then(|s| s.as_str()).unwrap_or("");
+                            let avatar = data.and_then(|d| d.get("profile_image_url")).and_then(|s| s.as_str());
+                            let id = data.and_then(|d| d.get("id")).and_then(|s| s.as_str()).unwrap_or("").to_string();
+
+                            crate::db::queries::create_integration(
+                                &state.db, user_id, "x", "X (Twitter)", &id, &token_str,
+                                None, None, Some(name), None, avatar, None, None,
+                            ).await?;
+
+                            output_json(&serde_json::json!({
+                                "status": "connected",
+                                "provider": "x",
+                                "method": "browser-import",
+                                "source": cookies.source,
+                                "name": name,
+                                "username": username,
+                                "id": id,
+                            }));
+                        }
+                        Err(e) => {
+                            output_json(&serde_json::json!({
+                                "status": "error",
+                                "provider": "x",
+                                "error": format!("Cookie import succeeded but validation failed: {e}. The cookies may be expired."),
+                                "hint": "Log into x.com in your browser, then run this command again.",
+                            }));
+                        }
+                    }
+                }
+                None => {
+                    output_json(&serde_json::json!({
+                        "status": "no_browser_cookies",
+                        "provider": "x",
+                        "error": "No X/Twitter cookies found in any browser.",
+                        "hints": [
+                            "Log into x.com in Chrome, Brave, Firefox, or Zen browser",
+                            "Then run 'social-forge connect x' again",
+                            "Or set X_AUTH_TOKEN + X_CT0 in ~/.social-forge/.env",
+                            "Or visit http://localhost:6543/api/public/connect/x-cookies for manual entry",
+                        ],
+                    }));
+                }
+            }
+        }
+
+        // ── Reddit: auto-import from browser ──────────────────
+        "reddit" => {
+            let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
+            if integrations.iter().any(|i| i.provider_identifier == "reddit") {
+                let existing: Vec<_> = integrations.iter().filter(|i| i.provider_identifier == "reddit").collect();
+                output_json(&serde_json::json!({
+                    "status": "already_connected",
+                    "provider": "reddit",
+                    "count": existing.len(),
+                    "accounts": existing.iter().map(|i| serde_json::json!({
+                        "name": i.profile_name,
+                        "internal_id": i.internal_id,
+                    })).collect::<Vec<_>>(),
+                    "hint": "Already connected. Use 'social-forge reddit browse rust' to verify.",
+                }));
+                return Ok(());
+            }
+
+            match crate::social::reddit_cookies::extract_reddit_cookies() {
+                Some(cookies) => {
+                    let token_str = crate::social::reddit_cookies::build_cookie_token(
+                        &cookies.reddit_session, cookies.token_v2.as_deref(), Some(&cookies.cookie_string)
+                    );
+
+                    let mut provider_obj = crate::social::reddit::RedditProvider::new(&state.config);
+                    provider_obj.prepare_from_token(&token_str);
+                    match provider_obj.get_www("/api/me.json", &[]).await {
+                        Ok(json) => {
+                            let name = json["data"]["name"].as_str().unwrap_or("Reddit User").to_string();
+                            let id = json["data"]["id"].as_str().unwrap_or("").to_string();
+                            let icon = json["data"]["icon_img"].as_str()
+                                .and_then(|s| s.split('?').next())
+                                .map(String::from);
+
+                            crate::db::queries::create_integration(
+                                &state.db, user_id, "reddit", "Reddit", &id, &token_str,
+                                None, None, Some(&name), None, icon.as_deref(), None, None,
+                            ).await?;
+
+                            output_json(&serde_json::json!({
+                                "status": "connected",
+                                "provider": "reddit",
+                                "method": "browser-import",
+                                "source": cookies.source,
+                                "name": name,
+                                "id": id,
+                            }));
+                        }
+                        Err(e) => {
+                            output_json(&serde_json::json!({
+                                "status": "error",
+                                "provider": "reddit",
+                                "error": format!("Cookie import succeeded but validation failed: {e}. The cookies may be expired."),
+                                "hint": "Log into reddit.com in your browser, then run this command again.",
+                            }));
+                        }
+                    }
+                }
+                None => {
+                    output_json(&serde_json::json!({
+                        "status": "no_browser_cookies",
+                        "provider": "reddit",
+                        "error": "No Reddit cookies found in any browser.",
+                        "hints": [
+                            "Log into reddit.com in Chrome, Brave, Firefox, or Zen browser",
+                            "Then run 'social-forge connect reddit' again",
+                            "Or visit http://localhost:6543/api/public/connect/reddit-cookies for manual entry",
+                        ],
+                    }));
+                }
+            }
+        }
+
+        // ── OAuth providers: check status and provide URL ──────
+        "linkedin" | "linkedin-page" => {
+            let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
+            let connected: Vec<_> = integrations.iter()
+                .filter(|i| i.provider_identifier == "linkedin" || i.provider_identifier == "linkedin-page")
+                .collect();
+            if !connected.is_empty() {
+                output_json(&serde_json::json!({
+                    "status": "already_connected",
+                    "provider": provider,
+                    "count": connected.len(),
+                    "accounts": connected.iter().map(|i| serde_json::json!({
+                        "name": i.profile_name,
+                        "internal_id": i.internal_id,
+                        "type": i.provider_identifier,
+                    })).collect::<Vec<_>>(),
+                }));
+            } else {
+                let app_url = &state.config.app_url;
+                output_json(&serde_json::json!({
+                    "status": "not_connected",
+                    "provider": provider,
+                    "method": "oauth",
+                    "auth_url": format!("{}/api/public/connect/{}", app_url, provider),
+                    "hint": "Open the auth_url in a browser to complete OAuth authorization.",
+                }));
+            }
+        }
+        "facebook" | "instagram" | "instagram-standalone" => {
+            let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
+            let connected: Vec<_> = integrations.iter()
+                .filter(|i| i.provider_identifier == provider)
+                .collect();
+            if !connected.is_empty() {
+                output_json(&serde_json::json!({
+                    "status": "already_connected",
+                    "provider": provider,
+                    "count": connected.len(),
+                    "accounts": connected.iter().map(|i| serde_json::json!({
+                        "name": i.profile_name,
+                        "internal_id": i.internal_id,
+                    })).collect::<Vec<_>>(),
+                }));
+            } else {
+                let app_url = &state.config.app_url;
+                output_json(&serde_json::json!({
+                    "status": "not_connected",
+                    "provider": provider,
+                    "method": "oauth",
+                    "auth_url": format!("{}/api/public/connect/{}", app_url, provider),
+                    "hint": "Open the auth_url in a browser to complete OAuth authorization.",
+                }));
+            }
+        }
+
+        // ── Direct-connect providers ──────────────────────────
+        // ── Env-var credential providers ─────────────────────
+        "bluesky" => {
+            let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
+            if integrations.iter().any(|i| i.provider_identifier == "bluesky") {
+                let existing: Vec<_> = integrations.iter().filter(|i| i.provider_identifier == "bluesky").collect();
+                output_json(&serde_json::json!({"status": "already_connected", "provider": "bluesky", "count": existing.len()}));
+            } else if state.config.bluesky_handle.is_some() && state.config.bluesky_app_password.is_some() {
+                output_json(&serde_json::json!({"status": "configured", "provider": "bluesky", "method": "env_vars", "hint": "BLUESKY_HANDLE + BLUESKY_APP_PASSWORD are set. The provider will connect automatically on first use."}));
+            } else {
+                output_json(&serde_json::json!({"status": "not_configured", "provider": "bluesky", "requires": ["BLUESKY_HANDLE", "BLUESKY_APP_PASSWORD"], "hint": "Set these in ~/.social-forge/.env. Get an app password at Bluesky Settings > Advanced > App Passwords."}));
+            }
+        }
+        "github" => {
+            let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
+            if integrations.iter().any(|i| i.provider_identifier == "github") {
+                output_json(&serde_json::json!({"status": "already_connected", "provider": "github"}));
+            } else if state.config.github_token.is_some() {
+                output_json(&serde_json::json!({"status": "configured", "provider": "github", "method": "env_vars", "hint": "GITHUB_TOKEN is set. The provider will connect automatically on first use."}));
+            } else {
+                output_json(&serde_json::json!({"status": "not_configured", "provider": "github", "requires": ["GITHUB_TOKEN"], "hint": "Create a PAT at https://github.com/settings/tokens and set GITHUB_TOKEN in ~/.social-forge/.env"}));
+            }
+        }
+        "telegram-bot" | "telegram" => {
+            let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
+            if integrations.iter().any(|i| i.provider_identifier == "telegram-bot") {
+                output_json(&serde_json::json!({"status": "already_connected", "provider": "telegram-bot"}));
+            } else if state.config.telegram_bot_tokens.is_some() {
+                output_json(&serde_json::json!({"status": "configured", "provider": "telegram-bot", "method": "env_vars", "hint": "TELEGRAM_BOT_TOKENS is set. The provider will connect automatically on first use."}));
+            } else {
+                output_json(&serde_json::json!({"status": "not_configured", "provider": "telegram-bot", "requires": ["TELEGRAM_BOT_TOKENS"], "hint": "Message @BotFather on Telegram to create a bot, get the token, and set TELEGRAM_BOT_TOKENS in ~/.social-forge/.env"}));
+            }
+        }
+        "discord" => {
+            let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
+            if integrations.iter().any(|i| i.provider_identifier == "discord") {
+                output_json(&serde_json::json!({"status": "already_connected", "provider": "discord"}));
+            } else if state.config.discord_client_id.is_some() && state.config.discord_client_secret.is_some() {
+                output_json(&serde_json::json!({"status": "configured", "provider": "discord", "method": "oauth", "hint": "DISCORD_CLIENT_ID + DISCORD_CLIENT_SECRET are set. Authorize via the web UI."}));
+            } else {
+                output_json(&serde_json::json!({"status": "not_configured", "provider": "discord", "requires": ["DISCORD_CLIENT_ID", "DISCORD_CLIENT_SECRET"], "hint": "Create an app at https://discord.com/developers/applications and set credentials in ~/.social-forge/.env"}));
+            }
+        }
+        "slack" => {
+            let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
+            if integrations.iter().any(|i| i.provider_identifier == "slack") {
+                output_json(&serde_json::json!({"status": "already_connected", "provider": "slack"}));
+            } else if state.config.slack_client_id.is_some() && state.config.slack_client_secret.is_some() {
+                output_json(&serde_json::json!({"status": "configured", "provider": "slack", "method": "oauth", "hint": "SLACK_CLIENT_ID + SLACK_CLIENT_SECRET are set. Authorize via the web UI."}));
+            } else {
+                output_json(&serde_json::json!({"status": "not_configured", "provider": "slack", "requires": ["SLACK_CLIENT_ID", "SLACK_CLIENT_SECRET"], "hint": "Create an app at https://api.slack.com/apps and set credentials in ~/.social-forge/.env"}));
+            }
+        }
+        "pinterest" => {
+            let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
+            if integrations.iter().any(|i| i.provider_identifier == "pinterest") {
+                output_json(&serde_json::json!({"status": "already_connected", "provider": "pinterest"}));
+            } else if state.config.pinterest_client_id.is_some() && state.config.pinterest_client_secret.is_some() {
+                output_json(&serde_json::json!({"status": "configured", "provider": "pinterest", "method": "oauth"}));
+            } else {
+                output_json(&serde_json::json!({"status": "not_configured", "provider": "pinterest", "requires": ["PINTEREST_CLIENT_ID", "PINTEREST_CLIENT_SECRET"], "hint": "Create an app at https://developers.pinterest.com/apps/ and set credentials in ~/.social-forge/.env"}));
+            }
+        }
+        "tiktok" => {
+            let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
+            if integrations.iter().any(|i| i.provider_identifier == "tiktok") {
+                output_json(&serde_json::json!({"status": "already_connected", "provider": "tiktok"}));
+            } else if state.config.tiktok_client_id.is_some() && state.config.tiktok_client_secret.is_some() {
+                output_json(&serde_json::json!({"status": "configured", "provider": "tiktok", "method": "oauth"}));
+            } else {
+                output_json(&serde_json::json!({"status": "not_configured", "provider": "tiktok", "requires": ["TIKTOK_CLIENT_ID", "TIKTOK_CLIENT_SECRET"], "hint": "Create an app at https://developers.tiktok.com/ and set credentials in ~/.social-forge/.env"}));
+            }
+        }
+        "mastodon" => {
+            let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
+            if integrations.iter().any(|i| i.provider_identifier == "mastodon") {
+                output_json(&serde_json::json!({"status": "already_connected", "provider": "mastodon"}));
+            } else if state.config.mastodon_client_id.is_some() && state.config.mastodon_client_secret.is_some() && state.config.mastodon_instance_url.is_some() {
+                output_json(&serde_json::json!({"status": "configured", "provider": "mastodon", "method": "oauth"}));
+            } else {
+                output_json(&serde_json::json!({"status": "not_configured", "provider": "mastodon", "requires": ["MASTODON_CLIENT_ID", "MASTODON_CLIENT_SECRET", "MASTODON_INSTANCE_URL"], "hint": "Register an app on your Mastodon instance and set credentials in ~/.social-forge/.env"}));
+            }
+        }
+        "youtube" | "google" => {
+            let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
+            let connected = integrations.iter().any(|i| i.provider_identifier == "youtube" || i.provider_identifier == "google");
+            if connected {
+                output_json(&serde_json::json!({"status": "already_connected", "provider": "youtube"}));
+            } else if state.config.youtube_client_id.is_some() && state.config.youtube_client_secret.is_some() {
+                output_json(&serde_json::json!({"status": "configured", "provider": "youtube", "method": "oauth", "hint": "YOUTUBE_CLIENT_ID + YOUTUBE_CLIENT_SECRET are set. Authorize via the web UI."}));
+            } else {
+                output_json(&serde_json::json!({"status": "not_configured", "provider": "youtube", "requires": ["YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET"], "hint": "Create a Google Cloud project, enable YouTube Data API v3, create OAuth credentials, and set in ~/.social-forge/.env"}));
+            }
+        }
+        "medium" => {
+            if state.config.medium_access_token.is_some() {
+                output_json(&serde_json::json!({"status": "configured", "provider": "medium", "method": "env_vars"}));
+            } else {
+                output_json(&serde_json::json!({"status": "not_configured", "provider": "medium", "requires": ["MEDIUM_ACCESS_TOKEN"], "hint": "Get an integration token at https://medium.com/me/settings/security"}));
+            }
+        }
+        "devto" => {
+            if state.config.devto_api_key.is_some() {
+                output_json(&serde_json::json!({"status": "configured", "provider": "devto", "method": "env_vars"}));
+            } else {
+                output_json(&serde_json::json!({"status": "not_configured", "provider": "devto", "requires": ["DEVTO_API_KEY"], "hint": "Generate an API key at https://dev.to/settings/extensions"}));
+            }
+        }
+        "hashnode" => {
+            if state.config.hashnode_api_key.is_some() {
+                output_json(&serde_json::json!({"status": "configured", "provider": "hashnode", "method": "env_vars"}));
+            } else {
+                output_json(&serde_json::json!({"status": "not_configured", "provider": "hashnode", "requires": ["HASHNODE_API_KEY"], "hint": "Generate a PAT at https://hashnode.com/settings/integrations"}));
+            }
+        }
+        "wordpress" => {
+            output_json(&serde_json::json!({"status": "per_site", "provider": "wordpress", "hint": "WordPress uses per-site Application Passwords. Connect via the web UI with site URL, username, and app password."}));
+        }
+        "skool" => {
+            output_json(&serde_json::json!({"status": "chrome_extension", "provider": "skool", "hint": "Skool uses Chrome extension cookie extraction. Install the Skool Chrome extension, log into skool.com, and cookies are auto-extracted."}));
+        }
+        "farcaster" | "nostr" | "lemmy" => {
+            output_json(&serde_json::json!({"status": "per_user", "provider": provider, "hint": format!("{provider} uses per-user credentials stored in the integration record. Connect via the web UI.")}));
+        }
+        "whatsapp" => {
+            output_json(&serde_json::json!({"status": "native_client", "provider": "whatsapp", "hint": "WhatsApp uses a native client. Connect via the web UI to scan the QR code."}));
+        }
+        "twitch" => {
+            if state.config.twitch_client_id.is_some() && state.config.twitch_client_secret.is_some() {
+                output_json(&serde_json::json!({"status": "configured", "provider": "twitch", "method": "oauth"}));
+            } else {
+                output_json(&serde_json::json!({"status": "not_configured", "provider": "twitch", "requires": ["TWITCH_CLIENT_ID", "TWITCH_CLIENT_SECRET"], "hint": "Create an app at https://dev.twitch.tv/console/apps and set credentials in ~/.social-forge/.env"}));
+            }
+        }
+        "vk" => {
+            if state.config.vk_client_id.is_some() && state.config.vk_client_secret.is_some() {
+                output_json(&serde_json::json!({"status": "configured", "provider": "vk", "method": "oauth"}));
+            } else {
+                output_json(&serde_json::json!({"status": "not_configured", "provider": "vk", "requires": ["VK_CLIENT_ID", "VK_CLIENT_SECRET"], "hint": "Create an app at https://vk.com/editapp?act=create and set credentials in ~/.social-forge/.env"}));
+            }
+        }
+        "threads" => {
+            if state.config.threads_app_id.is_some() && state.config.threads_app_secret.is_some() {
+                output_json(&serde_json::json!({"status": "configured", "provider": "threads", "method": "oauth"}));
+            } else {
+                output_json(&serde_json::json!({"status": "not_configured", "provider": "threads", "requires": ["THREADS_APP_ID", "THREADS_APP_SECRET"], "hint": "Threads uses Meta credentials. Set THREADS_APP_ID and THREADS_APP_SECRET in ~/.social-forge/.env"}));
+            }
+        }
+        "instagram-standalone" => {
+            if state.config.instagram_app_id.is_some() && state.config.instagram_app_secret.is_some() {
+                output_json(&serde_json::json!({"status": "configured", "provider": "instagram-standalone", "method": "env_vars"}));
+            } else {
+                output_json(&serde_json::json!({"status": "not_configured", "provider": "instagram-standalone", "requires": ["INSTAGRAM_APP_ID", "INSTAGRAM_APP_SECRET"], "hint": "Set these for the Instagram Basic Display API"}));
+            }
+        }
+
+        _ => {
+            output_json(&serde_json::json!({
+                "status": "unknown",
+                "provider": provider,
+                "error": format!("Unknown provider '{provider}'. Use 'social-forge connect --help' for supported providers."),
+                "hint": "Try: x, reddit, linkedin, facebook, instagram, bluesky, github, telegram, discord, slack, pinterest, tiktok, mastodon, youtube, medium, devto, hashnode, wordpress, threads, twitch, vk, skool",
+            }));
+        }
+    }
+
+    Ok(())
+}
+
+// ── Doctor: health check for all providers ───────────────────
+
+async fn handle_doctor() -> anyhow::Result<()> {
+    let state = init_state().await?;
+    let user_id = resolve_user(&state).await?;
+    let integrations = crate::db::queries::list_integrations(&state.db, user_id).await.unwrap_or_default();
+
+    let mut checks: Vec<serde_json::Value> = Vec::new();
+
+    // Check each connected provider by making a lightweight API call
+    for integration in &integrations {
+        let provider_id = &integration.provider_identifier;
+        let name = integration.profile_name.as_deref().unwrap_or("Unknown");
+        let token = state.token_key.as_ref()
+            .and_then(|key| crypto::decrypt_string(&integration.access_token, key).ok())
+            .unwrap_or_else(|| integration.access_token.clone());
+
+        let (status, detail) = match provider_id.as_str() {
+            "x" => {
+                let mut p = crate::social::x::XProvider::new(&state.config);
+                p.prepare_from_token(&token);
+                match p.get_me(&token).await {
+                    Ok(_) => ("healthy".to_string(), None),
+                    Err(e) => ("error".to_string(), Some(format!("{e}"))),
+                }
+            }
+            "reddit" => {
+                let mut p = crate::social::reddit::RedditProvider::new(&state.config);
+                p.prepare_from_token(&token);
+                match p.get_www("/api/me.json", &[]).await {
+                    Ok(_) => ("healthy".to_string(), None),
+                    Err(e) => ("error".to_string(), Some(format!("{e}"))),
+                }
+            }
+            "linkedin" => {
+                let p = crate::social::linkedin::LinkedInProvider::new(&state.config);
+                match p.get_profile(&token).await {
+                    Ok(_) => ("healthy".to_string(), None),
+                    Err(e) => ("error".to_string(), Some(format!("{e}"))),
+                }
+            }
+            "linkedin-page" => {
+                let p = crate::social::linkedin_page::LinkedInPageProvider::new(&state.config);
+                match p.get_page_posts(&token, &integration.internal_id, 1).await {
+                    Ok(_) => ("healthy".to_string(), None),
+                    Err(e) => ("error".to_string(), Some(format!("{e}"))),
+                }
+            }
+            "facebook" => {
+                let url = format!("https://graph.facebook.com/v19.0/{}?fields=name", integration.internal_id);
+                match reqwest::Client::new().get(&url).bearer_auth(&token).send().await {
+                    Ok(r) if r.status().is_success() => ("healthy".to_string(), None),
+                    Ok(r) => {
+                        let status = r.status();
+                        let body = r.text().await.unwrap_or_default();
+                        ("error".to_string(), Some(format!("HTTP {}: {}", status, body.chars().take(200).collect::<String>())))
+                    }
+                    Err(e) => ("error".to_string(), Some(format!("{e}"))),
+                }
+            }
+            "instagram" | "instagram-standalone" => {
+                let url = format!("https://graph.facebook.com/v19.0/{}?fields=id,name", integration.internal_id);
+                match reqwest::Client::new().get(&url).bearer_auth(&token).send().await {
+                    Ok(r) if r.status().is_success() => ("healthy".to_string(), None),
+                    Ok(r) => {
+                        let status = r.status();
+                        let body = r.text().await.unwrap_or_default();
+                        ("error".to_string(), Some(format!("HTTP {}: {}", status, body.chars().take(200).collect::<String>())))
+                    }
+                    Err(e) => ("error".to_string(), Some(format!("{e}"))),
+                }
+            }
+            _ => ("skipped".to_string(), Some("No health check available for this provider".to_string())),
+        };
+
+        let mut check = serde_json::json!({
+            "provider": provider_id,
+            "name": name,
+            "internal_id": integration.internal_id,
+            "status": status,
+        });
+        if let Some(d) = detail {
+            check["detail"] = serde_json::Value::String(d);
+        }
+        checks.push(check);
+    }
+
+    // Check for missing providers that have env vars configured
+    let missing_providers: Vec<serde_json::Value> = vec![
+        ("linkedin", "LinkedIn Personal", state.config.linkedin_client_id.is_some() && state.config.linkedin_client_secret.is_some()),
+        ("facebook", "Facebook Pages", state.config.facebook_client_id.is_some() && state.config.facebook_client_secret.is_some()),
+        ("instagram", "Instagram", state.config.facebook_client_id.is_some() && state.config.facebook_client_secret.is_some()),
+    ]
+    .into_iter()
+    .filter(|(id, _, _)| !integrations.iter().any(|i| i.provider_identifier == *id))
+    .filter(|(_, _, has_creds)| *has_creds)
+    .map(|(id, name, _)| serde_json::json!({
+        "provider": id,
+        "name": name,
+        "status": "needs_oauth",
+        "hint": format!("Credentials configured but not connected. Run 'social-forge connect {id}' or visit the onboarding page.")
+    }))
+    .collect();
+
+    let healthy = checks.iter().filter(|c| c["status"] == "healthy").count();
+    let errored = checks.iter().filter(|c| c["status"] == "error").count();
+
+    output_json(&serde_json::json!({
+        "healthy": healthy,
+        "errors": errored,
+        "connected": checks.len(),
+        "providers": checks,
+        "missing_oauth": missing_providers,
+    }));
+    Ok(())
+}
+
+// ── Setup: Full Guided Onboarding ──────────────────────────
+
+async fn handle_setup() -> anyhow::Result<()> {
+    crate::config::load_dotenv();
+    let mut steps: Vec<serde_json::Value> = Vec::new();
+
+    // Step 1: Config file
+    let env_path = crate::config::config_dir().join(".env");
+    let config_exists = env_path.exists();
+    let has_database_url = std::env::var("DATABASE_URL").is_ok();
+    steps.push(serde_json::json!({
+        "step": 1,
+        "name": "config",
+        "status": if config_exists && has_database_url { "ok" } else { "action_needed" },
+        "detail": if !config_exists {
+            "Run 'social-forge init' to create ~/.social-forge/.env"
+        } else if !has_database_url {
+            "DATABASE_URL not found. Set it in ~/.social-forge/.env or environment."
+        } else {
+            "Config file exists and DATABASE_URL is set."
+        },
+        "action": if !config_exists { Some("social-forge init") } else { None },
+    }));
+
+    // Step 2: Database (graceful — don't crash if DB isn't configured)
+    let db_result = init_state().await;
+    let db_ok = db_result.is_ok();
+    steps.push(serde_json::json!({
+        "step": 2,
+        "name": "database",
+        "status": if db_ok { "ok" } else { "error" },
+        "detail": if db_ok { "PostgreSQL connection successful." } else { "Cannot connect to PostgreSQL. Check DATABASE_URL in ~/.social-forge/.env" },
+    }));
+
+    // If DB failed, we can still report config + cookie status
+    let state = match db_result {
+        Ok(s) => s,
+        Err(e) => {
+            // Add remaining steps with limited info
+            let x_cookies = crate::social::x_cookies::extract_x_cookies();
+            let reddit_cookies = crate::social::reddit_cookies::extract_reddit_cookies();
+            steps.push(serde_json::json!({
+                "step": 3, "name": "user", "status": "skipped",
+                "detail": format!("Skipped: {e}"),
+            }));
+            steps.push(serde_json::json!({
+                "step": 4, "name": "browser_cookies", "status": "info",
+                "detail": format!("X cookies: {}. Reddit cookies: {}.",
+                    if x_cookies.is_some() { "found" } else { "not_found" },
+                    if reddit_cookies.is_some() { "found" } else { "not_found" }),
+            }));
+            output_json(&serde_json::json!({
+                "status": "setup_incomplete",
+                "steps": steps,
+                "next_actions": {
+                    "fix_db": "Set DATABASE_URL in ~/.social-forge/.env and ensure PostgreSQL is running",
+                    "init": "social-forge init",
+                },
+            }));
+            return Ok(());
+        }
     };
-    output_json(&serde_json::json!({"instructions": instructions}));
+
+    // Step 3: User
+    let user_result = resolve_user(&state).await;
+    let user_ok = user_result.is_ok();
+    steps.push(serde_json::json!({
+        "step": 3,
+        "name": "user",
+        "status": if user_ok { "ok" } else { "action_needed" },
+        "detail": if user_ok { "User account exists." } else { "No user registered. Register via the web UI or API." },
+    }));
+
+    // Step 4: Cookie-based providers (X, Reddit)
+    let x_cookies = crate::social::x_cookies::extract_x_cookies();
+    let reddit_cookies = crate::social::reddit_cookies::extract_reddit_cookies();
+    let x_cookie_status = if x_cookies.is_some() { "found" } else { "not_found" };
+    let reddit_cookie_status = if reddit_cookies.is_some() { "found" } else { "not_found" };
+    steps.push(serde_json::json!({
+        "step": 4,
+        "name": "browser_cookies",
+        "status": "info",
+        "detail": format!("X cookies: {}. Reddit cookies: {}.", x_cookie_status, reddit_cookie_status),
+        "hint": "Run 'social-forge connect-all' to auto-import cookies from your browser.",
+    }));
+
+    // Step 5: Existing integrations
+    if let Ok(uid) = user_result {
+        let integrations = crate::db::queries::list_integrations(&state.db, uid).await.unwrap_or_default();
+        let provider_summary: Vec<serde_json::Value> = integrations.iter().map(|i| {
+            serde_json::json!({
+                "provider": i.provider_identifier,
+                "name": i.profile_name,
+            })
+        }).collect();
+        steps.push(serde_json::json!({
+            "step": 5,
+            "name": "integrations",
+            "status": if provider_summary.is_empty() { "action_needed" } else { "ok" },
+            "connected_count": provider_summary.len(),
+            "connected": provider_summary,
+        }));
+    }
+
+    // Step 6: Env-var providers status
+    let env_providers: Vec<serde_json::Value> = vec![
+        serde_json::json!({"name": "Bluesky", "key": "BLUESKY_HANDLE", "configured": state.config.bluesky_handle.is_some()}),
+        serde_json::json!({"name": "GitHub", "key": "GITHUB_TOKEN", "configured": state.config.github_token.is_some()}),
+        serde_json::json!({"name": "Telegram Bot", "key": "TELEGRAM_BOT_TOKENS", "configured": state.config.telegram_bot_tokens.is_some()}),
+        serde_json::json!({"name": "Discord Bot", "key": "DISCORD_BOT_TOKEN", "configured": state.config.discord_bot_token.is_some()}),
+        serde_json::json!({"name": "Dev.to", "key": "DEVTO_API_KEY", "configured": state.config.devto_api_key.is_some()}),
+        serde_json::json!({"name": "Medium", "key": "MEDIUM_ACCESS_TOKEN", "configured": state.config.medium_access_token.is_some()}),
+        serde_json::json!({"name": "Hashnode", "key": "HASHNODE_API_KEY", "configured": state.config.hashnode_api_key.is_some()}),
+    ];
+    let configured_count = env_providers.iter().filter(|p| p["configured"] == true).count();
+    steps.push(serde_json::json!({
+        "step": 6,
+        "name": "env_providers",
+        "status": "info",
+        "configured_count": configured_count,
+        "total": env_providers.len(),
+        "providers": env_providers,
+        "hint": "Use 'social-forge config set KEY VALUE' to add API keys.",
+    }));
+
+    // Summary
+    let action_needed = steps.iter().any(|s| s["status"] == "action_needed" || s["status"] == "error");
+    output_json(&serde_json::json!({
+        "status": if action_needed { "setup_incomplete" } else { "ready" },
+        "steps": steps,
+        "next_actions": {
+            "connect_all": "social-forge connect-all  (import browser cookies for X + Reddit)",
+            "doctor": "social-forge doctor  (health-check all providers)",
+            "config_set": "social-forge config set KEY VALUE  (add API keys)",
+        },
+    }));
+    Ok(())
+}
+
+// ── Connect All: Bulk Cookie Import ──────────────────────────
+
+async fn handle_connect_all() -> anyhow::Result<()> {
+    let state = init_state().await?;
+    let user_id = resolve_user(&state).await?;
+    let mut results: Vec<serde_json::Value> = Vec::new();
+
+    // ── X/Twitter ─────────────────────────────────────────────
+    let x_result = {
+        let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
+        if integrations.iter().any(|i| i.provider_identifier == "x") {
+            serde_json::json!({"provider": "x", "status": "already_connected"})
+        } else {
+            match crate::social::x_cookies::extract_x_cookies() {
+                Some(cookies) => {
+                    let token_str = crate::social::x_cookies::build_cookie_token(
+                        &cookies.auth_token, &cookies.ct0, Some(&cookies.cookie_string)
+                    );
+                    let mut provider_obj = crate::social::x::XProvider::new(&state.config);
+                    provider_obj.prepare_from_token(&token_str);
+                    match provider_obj.get_me(&token_str).await {
+                        Ok(json) => {
+                            let data = json.get("data");
+                            let name = data.and_then(|d| d.get("name")).and_then(|s| s.as_str()).unwrap_or("X User");
+                            let id = data.and_then(|d| d.get("id")).and_then(|s| s.as_str()).unwrap_or("").to_string();
+                            let avatar = data.and_then(|d| d.get("profile_image_url")).and_then(|s| s.as_str());
+                            let _ = crate::db::queries::create_integration(
+                                &state.db, user_id, "x", "X (Twitter)", &id, &token_str,
+                                None, None, Some(name), None, avatar, None, None,
+                            ).await;
+                            serde_json::json!({"provider": "x", "status": "connected", "name": name, "source": cookies.source})
+                        }
+                        Err(e) => serde_json::json!({"provider": "x", "status": "error", "error": format!("{e}")}),
+                    }
+                }
+                None => serde_json::json!({"provider": "x", "status": "no_cookies", "hint": "Log into x.com in your browser first."}),
+            }
+        }
+    };
+    results.push(x_result);
+
+    // ── Reddit ────────────────────────────────────────────────
+    let reddit_result = {
+        let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
+        if integrations.iter().any(|i| i.provider_identifier == "reddit") {
+            serde_json::json!({"provider": "reddit", "status": "already_connected"})
+        } else {
+            match crate::social::reddit_cookies::extract_reddit_cookies() {
+                Some(cookies) => {
+                    let token_str = crate::social::reddit_cookies::build_cookie_token(
+                        &cookies.reddit_session, cookies.token_v2.as_deref(), Some(&cookies.cookie_string)
+                    );
+                    let mut provider_obj = crate::social::reddit::RedditProvider::new(&state.config);
+                    provider_obj.prepare_from_token(&token_str);
+                    match provider_obj.get_www("/api/me.json", &[]).await {
+                        Ok(json) => {
+                            let name = json["data"]["name"].as_str().unwrap_or("Reddit User").to_string();
+                            let id = json["data"]["id"].as_str().unwrap_or("").to_string();
+                            let icon = json["data"]["icon_img"].as_str().and_then(|s| s.split('?').next()).map(String::from);
+                            let _ = crate::db::queries::create_integration(
+                                &state.db, user_id, "reddit", "Reddit", &id, &token_str,
+                                None, None, Some(&name), None, icon.as_deref(), None, None,
+                            ).await;
+                            serde_json::json!({"provider": "reddit", "status": "connected", "name": name, "source": cookies.source})
+                        }
+                        Err(e) => serde_json::json!({"provider": "reddit", "status": "error", "error": format!("{e}")}),
+                    }
+                }
+                None => serde_json::json!({"provider": "reddit", "status": "no_cookies", "hint": "Log into reddit.com in your browser first."}),
+            }
+        }
+    };
+    results.push(reddit_result);
+
+    let connected = results.iter().filter(|r| r["status"] == "connected").count();
+    let already = results.iter().filter(|r| r["status"] == "already_connected").count();
+    let failed = results.iter().filter(|r| r["status"] == "error").count();
+    let no_cookies = results.iter().filter(|r| r["status"] == "no_cookies").count();
+
+    output_json(&serde_json::json!({
+        "connected": connected,
+        "already_connected": already,
+        "errors": failed,
+        "no_cookies": no_cookies,
+        "results": results,
+    }));
+    Ok(())
+}
+
+// ── Config: Manage ~/.social-forge/.env ──────────────────────
+
+fn handle_config(action: ConfigAction) -> anyhow::Result<()> {
+    crate::config::load_dotenv();
+    let dir = crate::config::config_dir();
+    std::fs::create_dir_all(&dir)?;
+    let env_path = dir.join(".env");
+
+    match action {
+        ConfigAction::Set { key, value } => {
+            // Read existing content
+            let content = if env_path.exists() {
+                std::fs::read_to_string(&env_path)?
+            } else {
+                String::new()
+            };
+
+            let key_upper = key.to_uppercase();
+            let new_line = format!("{key_upper}={value}");
+
+            // Check if key already exists and replace it
+            let mut found = false;
+            let new_content: String = content.lines().map(|line| {
+                let trimmed = line.trim();
+                if trimmed.starts_with(&format!("{key_upper}=")) ||
+                   trimmed.starts_with(&format!("# {key_upper}=")) ||
+                   trimmed.starts_with(&format!("#{key_upper}=")) {
+                    found = true;
+                    new_line.clone()
+                } else {
+                    line.to_string()
+                }
+            }).collect::<Vec<_>>().join("\n");
+
+            if found {
+                std::fs::write(&env_path, &new_content)?;
+            } else {
+                let mut to_write = new_content;
+                if !to_write.ends_with('\n') {
+                    to_write.push('\n');
+                }
+                to_write.push_str(&new_line);
+                to_write.push('\n');
+                std::fs::write(&env_path, &to_write)?;
+            }
+
+            output_json(&serde_json::json!({
+                "status": "set",
+                "key": key_upper,
+                "path": env_path.display().to_string(),
+                "message": format!("Set {key_upper}. Restart social-forge to apply."),
+            }));
+        }
+        ConfigAction::Get { key } => {
+            let key_upper = key.to_uppercase();
+            match std::env::var(&key_upper) {
+                Ok(val) => {
+                    // Redact secrets
+                    let display = if key_upper.contains("SECRET") || key_upper.contains("PASSWORD") ||
+                                   key_upper.contains("TOKEN") || key_upper.contains("KEY") ||
+                                   key_upper.contains("PRIVATE") {
+                        if val.len() > 8 {
+                            format!("{}...{}", &val[..4], &val[val.len()-4..])
+                        } else {
+                            "****".into()
+                        }
+                    } else {
+                        val
+                    };
+                    output_json(&serde_json::json!({
+                        "key": key_upper,
+                        "value": display,
+                        "is_secret": key_upper.contains("SECRET") || key_upper.contains("PASSWORD") ||
+                                       key_upper.contains("TOKEN") || key_upper.contains("KEY") ||
+                                       key_upper.contains("PRIVATE"),
+                    }));
+                }
+                Err(_) => {
+                    output_json(&serde_json::json!({
+                        "key": key_upper,
+                        "value": null,
+                        "error": format!("'{key_upper}' is not set."),
+                    }));
+                }
+            }
+        }
+        ConfigAction::List => {
+            // Read from .env file to show all keys (without loading into env)
+            let mut entries: Vec<serde_json::Value> = Vec::new();
+            if env_path.exists() {
+                let content = std::fs::read_to_string(&env_path)?;
+                for line in content.lines() {
+                    let trimmed = line.trim();
+                    if trimmed.is_empty() || trimmed.starts_with('#') {
+                        continue;
+                    }
+                    if let Some((k, v)) = trimmed.split_once('=') {
+                        let k = k.trim().to_uppercase();
+                        let is_secret = k.contains("SECRET") || k.contains("PASSWORD") ||
+                                        k.contains("TOKEN") || k.contains("KEY") ||
+                                        k.contains("PRIVATE");
+                        let display = if is_secret {
+                            if v.len() > 8 {
+                                format!("{}...{}", &v[..4], &v[v.len()-4..])
+                            } else if !v.is_empty() {
+                                "****".into()
+                            } else {
+                                "(empty)".into()
+                            }
+                        } else {
+                            v.to_string()
+                        };
+                        entries.push(serde_json::json!({
+                            "key": k,
+                            "value": display,
+                            "is_secret": is_secret,
+                        }));
+                    }
+                }
+            }
+            output_json(&serde_json::json!({
+                "path": env_path.display().to_string(),
+                "exists": env_path.exists(),
+                "count": entries.len(),
+                "entries": entries,
+            }));
+        }
+    }
     Ok(())
 }
 
@@ -433,8 +1280,14 @@ async fn handle_x(action: XAction) -> anyhow::Result<()> {
                 .map_err(|e| e.to_string())
         }
         XAction::User { username } => {
-            provider.user_lookup_by_username(&token, &username).await
-                .map_err(|e| e.to_string())
+            // Detect numeric IDs (e.g. 995846917157367809) vs usernames
+            if username.chars().all(|c| c.is_ascii_digit()) {
+                provider.user_lookup(&token, &username).await
+                    .map_err(|e| e.to_string())
+            } else {
+                provider.user_lookup_by_username(&token, &username).await
+                    .map_err(|e| e.to_string())
+            }
         }
     };
 
@@ -727,7 +1580,7 @@ async fn handle_linkedin_page(action: LinkedinPageAction) -> anyhow::Result<()> 
                 Err(e) => Err(e.to_string()),
                 Ok((token, _)) => {
                     let provider = crate::social::linkedin_page::LinkedInPageProvider::new(&state.config);
-                    provider.get_page_posts(&token, &page_id, 10).await
+                    provider.analytics(&token, &page_id, 30).await
                         .map(|d| serde_json::json!({"data": d}))
                         .map_err(|e| e.to_string())
                 }
@@ -786,12 +1639,12 @@ async fn handle_facebook(action: FacebookAction) -> anyhow::Result<()> {
                 }
             }
         }
-        FacebookAction::Insights { page_id } => {
+        FacebookAction::Insights { page_id, metric } => {
             match find_facebook_page_token(&state, user_id, &page_id).await {
                 Err(e) => Err(e.to_string()),
                 Ok(token) => {
                     let provider = crate::social::facebook::FacebookProvider::new(&state.config);
-                    provider.get_page_insights(&token, &page_id, "page_impressions,page_engaged_users", "day", None, None).await
+                    provider.get_page_insights(&token, &page_id, &metric, "day", None, None).await
                         .map_err(|e| e.to_string())
                 }
             }
@@ -910,13 +1763,35 @@ async fn handle_instagram(action: InstagramAction) -> anyhow::Result<()> {
                 }
             }
         }
-        InstagramAction::Insights { account_id } => {
+        InstagramAction::Insights { account_id, metric } => {
             match find_instagram_token(&state, user_id, &account_id).await {
                 Err(e) => Err(e.to_string()),
                 Ok(token) => {
                     let provider = crate::social::instagram::InstagramProvider::new(&state.config);
-                    provider.get_ig_insights(&token, &account_id, "impressions,reach,profile_views", "day").await
-                        .map_err(|e| e.to_string())
+                    // Separate metrics that need day period vs total_value period
+                    let day_metrics: Vec<&str> = metric.split(',').map(|s| s.trim()).filter(|m| {
+                        matches!(*m, "reach" | "follower_count" | "online_followers")
+                    }).collect();
+                    let lifetime_metrics: Vec<&str> = metric.split(',').map(|s| s.trim()).filter(|m| {
+                        !matches!(*m, "reach" | "follower_count" | "online_followers")
+                    }).collect();
+                    let mut all_results = serde_json::Map::new();
+                    if !day_metrics.is_empty() {
+                        let result = provider.get_ig_insights(&token, &account_id, &day_metrics.join(","), "day").await;
+                        match result {
+                            Ok(v) => { all_results.insert("day".to_string(), v); }
+                            Err(e) => anyhow::bail!("Instagram insights (day) failed: {e}"),
+                        }
+                    }
+                    if !lifetime_metrics.is_empty() {
+                        // Instagram API: ALL metrics use period=day (including total_interactions, comments, likes, etc.)
+                        let result = provider.get_ig_insights(&token, &account_id, &lifetime_metrics.join(","), "day").await;
+                        match result {
+                            Ok(v) => { all_results.insert("engagement".to_string(), v); }
+                            Err(e) => anyhow::bail!("Instagram insights (engagement) failed: {e}"),
+                        }
+                    }
+                    Ok(serde_json::json!({"data": all_results}))
                 }
             }
         }

@@ -247,7 +247,17 @@ fn extract_chrome() -> Option<ExtractedRedditCookies> {
 
 fn extract_brave() -> Option<ExtractedRedditCookies> {
     let home = home_dir();
-    extract_chrome_impl(&chrome_default_profile(&home, "BraveSoftware/Brave-Browser"), "brave")
+    // Try standard Brave profile first, then Origin Beta
+    let profiles = [
+        chrome_default_profile(&home, "BraveSoftware/Brave-Browser"),
+        chrome_default_profile(&home, "BraveSoftware/Brave-Origin-Beta"),
+    ];
+    for profile in &profiles {
+        if let Some(result) = extract_chrome_impl(profile, "brave") {
+            return Some(result);
+        }
+    }
+    None
 }
 
 fn extract_firefox() -> Option<ExtractedRedditCookies> {

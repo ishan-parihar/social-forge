@@ -10,9 +10,9 @@ use rmcp::{
     handler::server::wrapper::Parameters,
     schemars::JsonSchema,
     tool, tool_router,
-    transport::stdio,
     Json,
 };
+use crate::mcp::schema_optimizer::lean_stdio;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -21,6 +21,8 @@ use crate::auth::jwt;
 use crate::db::queries;
 
 
+pub mod schema_optimizer;
+mod tools_setup;
 mod tools_analytics;
 mod tools_bluesky;
 mod tools_calendar;
@@ -141,7 +143,7 @@ impl SocialForgeMcpServer {
 
     // ── Auth Tools ──────────────────────────────────────────
 
-    #[tool(description = "Register a new account. Returns JWT token for authentication.")]
+    #[tool(description = "Register a new account. Returns JWT")]
     async fn auth_register(
         &self,
         params: Parameters<RegisterInput>,
@@ -180,7 +182,7 @@ impl SocialForgeMcpServer {
         }))
     }
 
-    #[tool(description = "Login with email and password. Returns JWT token.")]
+    #[tool(description = "Login with email and password.")]
     async fn auth_login(
         &self,
         params: Parameters<LoginInput>,
@@ -235,7 +237,7 @@ impl SocialForgeMcpServer {
 
     // ── Calendar Tools ──────────────────────────────────────
 
-    #[tool(description = "Get posts for a date range (for content calendar)")]
+    #[tool(description = "Get posts for a date range (for")]
     async fn calendar_get(
         &self,
         params: Parameters<tools_calendar::CalendarInput>,
@@ -245,7 +247,7 @@ impl SocialForgeMcpServer {
 
     // ── Integration Tools ────────────────────────────────────
 
-    #[tool(description = "List all available social media providers with their configuration status")]
+    #[tool(description = "List all available social media")]
     async fn integrations_list_providers(
         &self,
         params: Parameters<tools_integrations::ListProvidersInput>,
@@ -253,7 +255,7 @@ impl SocialForgeMcpServer {
         tools_integrations::list_providers(&self.state, &params.0).await
     }
 
-    #[tool(description = "List all connected social media channels")]
+    #[tool(description = "List all connected social media")]
     async fn integrations_list(
         &self,
         params: Parameters<tools_integrations::ListIntegrationsInput>,
@@ -261,7 +263,7 @@ impl SocialForgeMcpServer {
         tools_integrations::list_integrations(&self.state, &params.0).await
     }
 
-    #[tool(description = "Get OAuth URL to connect a social media channel")]
+    #[tool(description = "Get OAuth URL to connect a social")]
     async fn integrations_connect(
         &self,
         params: Parameters<tools_integrations::ConnectInput>,
@@ -269,7 +271,7 @@ impl SocialForgeMcpServer {
         tools_integrations::connect_integration(&self.state, &params.0).await
     }
 
-    #[tool(description = "Complete OAuth connection after authorizing in browser. Pass code and state from the callback URL.")]
+    #[tool(description = "Complete OAuth connection after")]
     async fn integrations_connect_complete(
         &self,
         params: Parameters<tools_integrations::ConnectCompleteInput>,
@@ -277,7 +279,7 @@ impl SocialForgeMcpServer {
         tools_integrations::complete_connect_integration(&self.state, &params.0).await
     }
 
-    #[tool(description = "Disconnect/remove a social media channel")]
+    #[tool(description = "Disconnect/remove a social media")]
     async fn integrations_disconnect(
         &self,
         params: Parameters<tools_integrations::DisconnectInput>,
@@ -285,7 +287,7 @@ impl SocialForgeMcpServer {
         tools_integrations::disconnect_integration(&self.state, &params.0).await
     }
 
-    #[tool(description = "List discoverable posting targets (channels, groups, subreddits, peers) for a connected integration")]
+    #[tool(description = "List discoverable posting targets")]
     async fn integrations_list_targets(
         &self,
         params: Parameters<tools_integrations::ListTargetsInput>,
@@ -293,9 +295,59 @@ impl SocialForgeMcpServer {
         tools_integrations::list_targets(&self.state, &params.0).await
     }
 
+    // ── Setup/Onboarding Tools ─────────────────────────────────
+
+    #[tool(description = "Check overall setup status: database, user, connected providers, and next actions for AI agent guided setup")]
+    async fn setup_status(
+        &self,
+        _params: Parameters<tools_setup::SetupStatusInput>,
+    ) -> Result<Json<tools_setup::SetupStatusOutput>, String> {
+        tools_setup::setup_status(&self.state, &tools_setup::SetupStatusInput {}).await
+    }
+
+    #[tool(description = "Import browser cookies for X/Twitter and/or Reddit. Auto-detects Chrome, Brave, Firefox, Zen. Use provider='all' to import both.")]
+    async fn setup_import_cookies(
+        &self,
+        params: Parameters<tools_setup::ImportCookiesInput>,
+    ) -> Result<Json<tools_setup::ImportCookiesOutput>, String> {
+        tools_setup::import_cookies(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get setup guidance for connecting social media providers. Returns what credentials are needed, where to get them, and how to configure them. Call without provider to see all providers.")]
+    async fn setup_guide(
+        &self,
+        params: Parameters<tools_setup::SetupGuideInput>,
+    ) -> Result<Json<tools_setup::SetupGuideOutput>, String> {
+        tools_setup::setup_guide(&self.state, &params.0)
+    }
+
+    #[tool(description = "Set a configuration value in ~/.social-forge/.env. Creates file if needed. Restart social-forge after setting.")]
+    async fn setup_config_set(
+        &self,
+        params: Parameters<tools_setup::ConfigSetInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_setup::config_set(&self.state, &params.0)
+    }
+
+    #[tool(description = "Get a configuration value (redacts secrets)")]
+    async fn setup_config_get(
+        &self,
+        params: Parameters<tools_setup::ConfigGetInput>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        tools_setup::config_get(&self.state, &params.0)
+    }
+
+    #[tool(description = "List all configuration entries in ~/.social-forge/.env")]
+    async fn setup_config_list(
+        &self,
+        _params: Parameters<()>,
+    ) -> Result<Json<tools_setup::ConfigListOutput>, String> {
+        tools_setup::config_list(&self.state)
+    }
+
     // ── Post Tools ───────────────────────────────────────────
 
-    #[tool(description = "Create a new post. Set scheduled_at to auto-schedule. Returns post ID and state.")]
+    #[tool(description = "Create a new post. Set scheduled_at")]
     async fn posts_create(
         &self,
         params: Parameters<tools_posts::CreatePostInput>,
@@ -303,7 +355,7 @@ impl SocialForgeMcpServer {
         tools_posts::create_post(&self.state, &params.0).await
     }
 
-    #[tool(description = "List posts with optional state filter (draft|queued|published|error)")]
+    #[tool(description = "List posts with optional state filter")]
     async fn posts_list(
         &self,
         params: Parameters<tools_posts::ListPostsInput>,
@@ -319,7 +371,7 @@ impl SocialForgeMcpServer {
         tools_posts::get_post(&self.state, &params.0).await
     }
 
-    #[tool(description = "Schedule a post for publishing at a specific time")]
+    #[tool(description = "Schedule a post for publishing at a")]
     async fn posts_schedule(
         &self,
         params: Parameters<tools_posts::SchedulePostInput>,
@@ -327,7 +379,7 @@ impl SocialForgeMcpServer {
         tools_posts::schedule_post(&self.state, &params.0).await
     }
 
-    #[tool(description = "Publish a post immediately. Accepts queued or errored posts.")]
+    #[tool(description = "Publish a post immediately. Accepts")]
     async fn posts_publish(
         &self,
         params: Parameters<tools_posts::GetPostInput>,
@@ -343,7 +395,7 @@ impl SocialForgeMcpServer {
         tools_posts::delete_post(&self.state, &params.0).await
     }
 
-    #[tool(description = "Find the next available free time slot for scheduling")]
+    #[tool(description = "Find the next available free time")]
     async fn posts_find_slot(
         &self,
         params: Parameters<tools_posts::FindSlotInput>,
@@ -351,7 +403,7 @@ impl SocialForgeMcpServer {
         tools_posts::find_slot(&self.state, &params.0).await
     }
 
-    #[tool(description = "Update a post's content, title, media, or settings by ID")]
+    #[tool(description = "Update a post's content or title")]
     async fn posts_update(
         &self,
         params: Parameters<tools_posts::UpdatePostInput>,
@@ -361,7 +413,7 @@ impl SocialForgeMcpServer {
 
     // ── Reddit Read/Query Tools ──────────────────────────────────
 
-    #[tool(description = "Browse a subreddit and list posts. Sort options: hot, new, top, rising, controversial. For top/controversial, set time to: hour, day, week, month, year, all.")]
+    #[tool(description = "Browse a subreddit and list posts.")]
     async fn reddit_browse(
         &self,
         params: Parameters<tools_reddit::RedditBrowseInput>,
@@ -369,7 +421,7 @@ impl SocialForgeMcpServer {
         tools_reddit::reddit_browse(&self.state, &params.0).await
     }
 
-    #[tool(description = "Search Reddit. Optionally restrict to a subreddit. Sort: relevance, hot, top, new, comments. Time: hour, day, week, month, year, all.")]
+    #[tool(description = "Search Reddit. Optionally restrict to")]
     async fn reddit_search(
         &self,
         params: Parameters<tools_reddit::RedditSearchInput>,
@@ -377,7 +429,7 @@ impl SocialForgeMcpServer {
         tools_reddit::reddit_search(&self.state, &params.0).await
     }
 
-    #[tool(description = "Get a Reddit post's full content with nested comments. Pass post_id as the base36 ID or full URL.")]
+    #[tool(description = "Get a Reddit post's full content with")]
     async fn reddit_post_detail(
         &self,
         params: Parameters<tools_reddit::RedditPostDetailInput>,
@@ -385,7 +437,7 @@ impl SocialForgeMcpServer {
         tools_reddit::reddit_post_detail(&self.state, &params.0).await
     }
 
-    #[tool(description = "Get Reddit user info with optional posts and comments.")]
+    #[tool(description = "Get Reddit user info with optional")]
     async fn reddit_user_info(
         &self,
         params: Parameters<tools_reddit::RedditUserInfoInput>,
@@ -393,7 +445,7 @@ impl SocialForgeMcpServer {
         tools_reddit::reddit_user_info(&self.state, &params.0).await
     }
 
-    #[tool(description = "Send a direct message to a Reddit user.")]
+    #[tool(description = "Send a direct message to a Reddit")]
     async fn reddit_send_dm(
         &self,
         params: Parameters<tools_reddit::RedditSendDmInput>,
@@ -401,7 +453,7 @@ impl SocialForgeMcpServer {
         tools_reddit::reddit_send_dm(&self.state, &params.0).await
     }
 
-    #[tool(description = "Read Reddit inbox. Folders: inbox, unread, sent, messages, mentions, comments, selfreply.")]
+    #[tool(description = "Read Reddit inbox messages")]
     async fn reddit_inbox(
         &self,
         params: Parameters<tools_reddit::RedditInboxInput>,
@@ -409,7 +461,7 @@ impl SocialForgeMcpServer {
         tools_reddit::reddit_inbox(&self.state, &params.0).await
     }
 
-    #[tool(description = "Get comments for a Reddit post with sort option. Sort: confidence (default), top, new, controversial, old, qa.")]
+    #[tool(description = "Get comments for a Reddit post with")]
     async fn reddit_get_comments(
         &self,
         params: Parameters<tools_reddit::RedditGetCommentsInput>,
@@ -417,7 +469,7 @@ impl SocialForgeMcpServer {
         tools_reddit::reddit_get_comments(&self.state, &params.0).await
     }
 
-    #[tool(description = "Create a new Reddit post (text or link) in a subreddit.")]
+    #[tool(description = "Create a new Reddit post (text or")]
     pub async fn reddit_create_post(
         &self,
         params: Parameters<tools_reddit::RedditCreatePostInput>,
@@ -425,7 +477,7 @@ impl SocialForgeMcpServer {
         tools_reddit::handle_reddit_create_post(&self.state, &params.0).await
     }
 
-    #[tool(description = "Create a comment or reply on Reddit. thing_id: t3_<post_id> for post, t1_<comment_id> for reply.")]
+    #[tool(description = "Create a comment or reply on Reddit.")]
     pub async fn reddit_create_comment(
         &self,
         params: Parameters<tools_reddit::RedditCreateCommentInput>,
@@ -433,14 +485,14 @@ impl SocialForgeMcpServer {
         tools_reddit::handle_reddit_create_comment(&self.state, &params.0).await
     }
 
-    #[tool(description = "Get karma breakdown by subreddit for the connected Reddit account.")]
+    #[tool(description = "Get karma breakdown by subreddit for")]
     pub async fn reddit_get_karma(
         &self,
     ) -> Result<Json<tools_reddit::RedditGetKarmaOutput>, String> {
         tools_reddit::handle_reddit_get_karma(&self.state).await
     }
 
-    #[tool(description = "Vote on a Reddit post or comment. direction: 1=upvote, 0=unvote, -1=downvote. Requires cookie auth.")]
+    #[tool(description = "Vote on a Reddit post or comment.")]
     pub async fn reddit_vote(
         &self,
         params: Parameters<tools_reddit::RedditVoteInput>,
@@ -448,7 +500,7 @@ impl SocialForgeMcpServer {
         tools_reddit::handle_reddit_vote(&self.state, &params.0).await
     }
 
-    #[tool(description = "Save a Reddit post or comment. Requires cookie auth.")]
+    #[tool(description = "Save a Reddit post or comment.")]
     pub async fn reddit_save(
         &self,
         params: Parameters<tools_reddit::RedditThingInput>,
@@ -456,7 +508,7 @@ impl SocialForgeMcpServer {
         tools_reddit::handle_reddit_save(&self.state, &params.0).await
     }
 
-    #[tool(description = "Unsave a Reddit post or comment. Requires cookie auth.")]
+    #[tool(description = "Unsave a Reddit post or comment.")]
     pub async fn reddit_unsave(
         &self,
         params: Parameters<tools_reddit::RedditThingInput>,
@@ -464,7 +516,7 @@ impl SocialForgeMcpServer {
         tools_reddit::handle_reddit_unsave(&self.state, &params.0).await
     }
 
-    #[tool(description = "Hide a Reddit post from your feed. Requires cookie auth.")]
+    #[tool(description = "Hide a Reddit post from your feed.")]
     pub async fn reddit_hide(
         &self,
         params: Parameters<tools_reddit::RedditThingInput>,
@@ -472,7 +524,7 @@ impl SocialForgeMcpServer {
         tools_reddit::handle_reddit_hide(&self.state, &params.0).await
     }
 
-    #[tool(description = "Subscribe or unsubscribe to a subreddit. action: 'sub' or 'unsub'. Requires cookie auth.")]
+    #[tool(description = "Subscribe or unsubscribe to a")]
     pub async fn reddit_subscribe(
         &self,
         params: Parameters<tools_reddit::RedditSubscribeInput>,
@@ -480,7 +532,7 @@ impl SocialForgeMcpServer {
         tools_reddit::handle_reddit_subscribe(&self.state, &params.0).await
     }
 
-    #[tool(description = "Edit a Reddit post or comment text. Requires cookie auth.")]
+    #[tool(description = "Edit a Reddit post or comment text.")]
     pub async fn reddit_edit(
         &self,
         params: Parameters<tools_reddit::RedditEditInput>,
@@ -488,7 +540,7 @@ impl SocialForgeMcpServer {
         tools_reddit::handle_reddit_edit(&self.state, &params.0).await
     }
 
-    #[tool(description = "Delete a Reddit post or comment. Requires cookie auth.")]
+    #[tool(description = "Delete a Reddit post or comment.")]
     pub async fn reddit_delete(
         &self,
         params: Parameters<tools_reddit::RedditThingInput>,
@@ -496,7 +548,7 @@ impl SocialForgeMcpServer {
         tools_reddit::handle_reddit_delete(&self.state, &params.0).await
     }
 
-    #[tool(description = "Moderation: remove a post/comment. Set spam=true to mark as spam. Requires mod cookie auth.")]
+    #[tool(description = "Moderation: remove a post/comment.")]
     pub async fn reddit_mod_remove(
         &self,
         params: Parameters<tools_reddit::RedditModRemoveInput>,
@@ -504,7 +556,7 @@ impl SocialForgeMcpServer {
         tools_reddit::handle_reddit_mod_remove(&self.state, &params.0).await
     }
 
-    #[tool(description = "Moderation: approve a post/comment. Requires mod cookie auth.")]
+    #[tool(description = "Moderation: approve a post/comment.")]
     pub async fn reddit_mod_approve(
         &self,
         params: Parameters<tools_reddit::RedditThingInput>,
@@ -512,7 +564,7 @@ impl SocialForgeMcpServer {
         tools_reddit::handle_reddit_mod_approve(&self.state, &params.0).await
     }
 
-    #[tool(description = "Moderation: distinguish a comment (how: 'yes', 'no', 'admin', 'special'). Requires mod cookie auth.")]
+    #[tool(description = "Moderation: distinguish a comment")]
     pub async fn reddit_mod_distinguish(
         &self,
         params: Parameters<tools_reddit::RedditModDistinguishInput>,
@@ -520,7 +572,7 @@ impl SocialForgeMcpServer {
         tools_reddit::handle_reddit_mod_distinguish(&self.state, &params.0).await
     }
 
-    #[tool(description = "Moderation: sticky or unsticky a post. Requires mod cookie auth.")]
+    #[tool(description = "Moderation: sticky or unsticky a")]
     pub async fn reddit_mod_sticky(
         &self,
         params: Parameters<tools_reddit::RedditModStickyInput>,
@@ -528,7 +580,7 @@ impl SocialForgeMcpServer {
         tools_reddit::handle_reddit_mod_sticky(&self.state, &params.0).await
     }
 
-    #[tool(description = "Moderation: lock a post/comment thread. Requires mod cookie auth.")]
+    #[tool(description = "Moderation: lock a post/comment")]
     pub async fn reddit_mod_lock(
         &self,
         params: Parameters<tools_reddit::RedditThingInput>,
@@ -536,7 +588,7 @@ impl SocialForgeMcpServer {
         tools_reddit::handle_reddit_mod_lock(&self.state, &params.0).await
     }
 
-    #[tool(description = "Moderation: unlock a post/comment thread. Requires mod cookie auth.")]
+    #[tool(description = "Moderation: unlock a post/comment")]
     pub async fn reddit_mod_unlock(
         &self,
         params: Parameters<tools_reddit::RedditThingInput>,
@@ -546,7 +598,7 @@ impl SocialForgeMcpServer {
 
     // ── X/Twitter Read Tools ─────────────────────────────────────
 
-    #[tool(description = "Get the authenticated X/Twitter user's profile")]
+    #[tool(description = "Get the authenticated X/Twitter")]
     async fn x_get_me(
         &self,
         _params: Parameters<()>,
@@ -554,7 +606,7 @@ impl SocialForgeMcpServer {
         tools_x::x_get_me(&self.state).await
     }
 
-    #[tool(description = "Get X/Twitter home timeline (reverse chronological). Shows recent tweets from people you follow.")]
+    #[tool(description = "Get X/Twitter home timeline (reverse")]
     async fn x_home_timeline(
         &self,
         params: Parameters<tools_x::XHomeTimelineInput>,
@@ -562,7 +614,7 @@ impl SocialForgeMcpServer {
         tools_x::x_home_timeline(&self.state, &params.0).await
     }
 
-    #[tool(description = "Lookup an X/Twitter user by their numeric user ID")]
+    #[tool(description = "Lookup an X/Twitter user by their")]
     async fn x_user_lookup(
         &self,
         params: Parameters<tools_x::XUserLookupInput>,
@@ -570,7 +622,7 @@ impl SocialForgeMcpServer {
         tools_x::x_user_lookup(&self.state, &params.0).await
     }
 
-    #[tool(description = "Lookup an X/Twitter user by their @username")]
+    #[tool(description = "Lookup an X/Twitter user by their")]
     async fn x_user_lookup_by_username(
         &self,
         params: Parameters<tools_x::XUserLookupByUsernameInput>,
@@ -578,7 +630,7 @@ impl SocialForgeMcpServer {
         tools_x::x_user_lookup_by_username(&self.state, &params.0).await
     }
 
-    #[tool(description = "Get tweets from a specific X/Twitter user by their user ID")]
+    #[tool(description = "Get tweets from a specific X/Twitter")]
     async fn x_user_tweets(
         &self,
         params: Parameters<tools_x::XUserTweetsInput>,
@@ -586,7 +638,7 @@ impl SocialForgeMcpServer {
         tools_x::x_user_tweets(&self.state, &params.0).await
     }
 
-    #[tool(description = "Get a single X/Twitter tweet with full details, author info, and media")]
+    #[tool(description = "Get a single X/Twitter tweet with")]
     async fn x_tweet_detail(
         &self,
         params: Parameters<tools_x::XTweetDetailInput>,
@@ -594,7 +646,7 @@ impl SocialForgeMcpServer {
         tools_x::x_tweet_detail(&self.state, &params.0).await
     }
 
-    #[tool(description = "Search recent X/Twitter tweets. Query supports standard Twitter search syntax (from:user, #hashtag, etc.).")]
+    #[tool(description = "Search recent X/Twitter tweets. Query")]
     async fn x_search_tweets(
         &self,
         params: Parameters<tools_x::XSearchTweetsInput>,
@@ -660,7 +712,7 @@ impl SocialForgeMcpServer {
         tools_x::x_retweet(&self.state, &params.0).await
     }
 
-    #[tool(description = "Unretweet (remove retweet of) a tweet on X/Twitter")]
+    #[tool(description = "Unretweet (remove retweet of) a tweet")]
     async fn x_unretweet(
         &self,
         params: Parameters<tools_x::XUnretweetInput>,
@@ -676,7 +728,7 @@ impl SocialForgeMcpServer {
         tools_x::x_bookmark_tweet(&self.state, &params.0).await
     }
 
-    #[tool(description = "Remove a bookmark from a tweet on X/Twitter")]
+    #[tool(description = "Remove a bookmark from a tweet on")]
     async fn x_unbookmark_tweet(
         &self,
         params: Parameters<tools_x::XUnbookmarkTweetInput>,
@@ -684,7 +736,7 @@ impl SocialForgeMcpServer {
         tools_x::x_unbookmark_tweet(&self.state, &params.0).await
     }
 
-    #[tool(description = "Follow a user on X/Twitter by their user ID")]
+    #[tool(description = "Follow a user on X/Twitter by their")]
     async fn x_follow_user(
         &self,
         params: Parameters<tools_x::XFollowUserInput>,
@@ -692,7 +744,7 @@ impl SocialForgeMcpServer {
         tools_x::x_follow_user(&self.state, &params.0).await
     }
 
-    #[tool(description = "Unfollow a user on X/Twitter by their user ID")]
+    #[tool(description = "Unfollow a user on X/Twitter by their")]
     async fn x_unfollow_user(
         &self,
         params: Parameters<tools_x::XUnfollowUserInput>,
@@ -700,7 +752,7 @@ impl SocialForgeMcpServer {
         tools_x::x_unfollow_user(&self.state, &params.0).await
     }
 
-    #[tool(description = "Get tweets from an X/Twitter List by list ID")]
+    #[tool(description = "Get tweets from an X/Twitter List by")]
     async fn x_list_timeline(
         &self,
         params: Parameters<tools_x::XListTimelineInput>,
@@ -710,7 +762,7 @@ impl SocialForgeMcpServer {
 
     // ── Facebook Tools ──────────────────────────────────────────────
 
-    #[tool(description = "Get a Facebook page's feed (recent posts)")]
+    #[tool(description = "Get a Facebook page's feed (recent")]
     pub async fn fb_get_feed(
         &self,
         params: Parameters<tools_facebook::FbGetFeedInput>,
@@ -734,7 +786,7 @@ impl SocialForgeMcpServer {
         tools_facebook::handle_fb_get_comments(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Create a text/link post on a Facebook page")]
+    #[tool(description = "Create a text/link post on a Facebook")]
     pub async fn fb_create_post(
         &self,
         params: Parameters<tools_facebook::FbCreatePostInput>,
@@ -774,7 +826,7 @@ impl SocialForgeMcpServer {
         tools_facebook::handle_fb_comment(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "React to a Facebook post (LIKE, LOVE, WOW, HAHA, SAD, ANGRY)")]
+    #[tool(description = "React to a Facebook post")]
     pub async fn fb_react(
         &self,
         params: Parameters<tools_facebook::FbReactInput>,
@@ -782,7 +834,7 @@ impl SocialForgeMcpServer {
         tools_facebook::handle_fb_react(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Get insights/analytics for a Facebook page")]
+    #[tool(description = "Get insights/analytics for a Facebook")]
     pub async fn fb_page_insights(
         &self,
         params: Parameters<tools_facebook::FbPageInsightsInput>,
@@ -790,7 +842,7 @@ impl SocialForgeMcpServer {
         tools_facebook::handle_fb_page_insights(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Get conversations (inbox) for a Facebook page")]
+    #[tool(description = "Get conversations (inbox) for a")]
     pub async fn fb_conversations(
         &self,
         params: Parameters<tools_facebook::FbConversationsInput>,
@@ -798,7 +850,7 @@ impl SocialForgeMcpServer {
         tools_facebook::handle_fb_conversations(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Get messages in a Facebook conversation")]
+    #[tool(description = "Get messages in a Facebook")]
     pub async fn fb_conversation_messages(
         &self,
         params: Parameters<tools_facebook::FbConversationMsgsInput>,
@@ -806,7 +858,7 @@ impl SocialForgeMcpServer {
         tools_facebook::handle_fb_conversation_msgs(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Send a message to a Facebook conversation")]
+    #[tool(description = "Send a message to a Facebook")]
     pub async fn fb_send_message(
         &self,
         params: Parameters<tools_facebook::FbSendMessageInput>,
@@ -814,7 +866,7 @@ impl SocialForgeMcpServer {
         tools_facebook::handle_fb_send_message(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Search for public Facebook pages by name")]
+    #[tool(description = "Search for public Facebook pages by")]
     pub async fn fb_search_pages(
         &self,
         params: Parameters<tools_facebook::FbSearchPagesInput>,
@@ -832,7 +884,7 @@ impl SocialForgeMcpServer {
 
     // ── Instagram Tools ─────────────────────────────────────────────
 
-    #[tool(description = "Get Instagram media (posts/reels) for a business account")]
+    #[tool(description = "Get Instagram media (posts/reels) for")]
     pub async fn ig_get_media(
         &self,
         params: Parameters<tools_instagram::IgGetMediaInput>,
@@ -840,7 +892,7 @@ impl SocialForgeMcpServer {
         tools_instagram::handle_ig_get_media(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Get details of a specific Instagram media item")]
+    #[tool(description = "Get details of a specific Instagram")]
     pub async fn ig_get_media_detail(
         &self,
         params: Parameters<tools_instagram::IgGetMediaDetailInput>,
@@ -848,7 +900,7 @@ impl SocialForgeMcpServer {
         tools_instagram::handle_ig_get_media_detail(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Get comments on an Instagram media item")]
+    #[tool(description = "Get comments on an Instagram media")]
     pub async fn ig_get_comments(
         &self,
         params: Parameters<tools_instagram::IgGetCommentsInput>,
@@ -864,7 +916,7 @@ impl SocialForgeMcpServer {
         tools_instagram::handle_ig_search_hashtag(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Get recent media for an Instagram hashtag")]
+    #[tool(description = "Get recent media for an Instagram")]
     pub async fn ig_get_hashtag_media(
         &self,
         params: Parameters<tools_instagram::IgGetHashtagMediaInput>,
@@ -872,7 +924,7 @@ impl SocialForgeMcpServer {
         tools_instagram::handle_ig_get_hashtag_media(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Get insights for an Instagram business account")]
+    #[tool(description = "Get insights for an Instagram")]
     pub async fn ig_get_insights(
         &self,
         params: Parameters<tools_instagram::IgGetInsightsInput>,
@@ -880,7 +932,7 @@ impl SocialForgeMcpServer {
         tools_instagram::handle_ig_get_insights(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Get media where the Instagram account is tagged")]
+    #[tool(description = "Get media where the Instagram account")]
     pub async fn ig_get_tagged(
         &self,
         params: Parameters<tools_instagram::IgGetTaggedInput>,
@@ -888,7 +940,7 @@ impl SocialForgeMcpServer {
         tools_instagram::handle_ig_get_tagged(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Create an Instagram media container (step 1 of publish)")]
+    #[tool(description = "Create an Instagram media container")]
     pub async fn ig_create_container(
         &self,
         params: Parameters<tools_instagram::IgCreateContainerInput>,
@@ -896,7 +948,7 @@ impl SocialForgeMcpServer {
         tools_instagram::handle_ig_create_container(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Publish an Instagram media container (step 2 of publish)")]
+    #[tool(description = "Publish an Instagram media container")]
     pub async fn ig_publish_container(
         &self,
         params: Parameters<tools_instagram::IgPublishContainerInput>,
@@ -912,7 +964,7 @@ impl SocialForgeMcpServer {
         tools_instagram::handle_ig_reply_to_comment(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Get Instagram reels for a business account")]
+    #[tool(description = "Get Instagram reels for a business")]
     pub async fn ig_get_reels(
         &self,
         params: Parameters<tools_instagram::IgGetReelsInput>,
@@ -920,7 +972,7 @@ impl SocialForgeMcpServer {
         tools_instagram::handle_ig_get_reels(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Get Instagram stories for a business account")]
+    #[tool(description = "Get Instagram stories for a business")]
     pub async fn ig_get_stories(
         &self,
         params: Parameters<tools_instagram::IgGetStoriesInput>,
@@ -928,7 +980,7 @@ impl SocialForgeMcpServer {
         tools_instagram::handle_ig_get_stories(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Get followers of an Instagram business account")]
+    #[tool(description = "Get followers of an Instagram")]
     pub async fn ig_get_followers(
         &self,
         params: Parameters<tools_instagram::IgGetFollowersInput>,
@@ -936,7 +988,7 @@ impl SocialForgeMcpServer {
         tools_instagram::handle_ig_get_followers(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Discover an Instagram business account by username")]
+    #[tool(description = "Discover an Instagram business")]
     pub async fn ig_business_discovery(
         &self,
         params: Parameters<tools_instagram::IgBusinessDiscoveryInput>,
@@ -945,7 +997,7 @@ impl SocialForgeMcpServer {
     }
 
 
-    #[tool(description = "Get recent mentions of an Instagram business account")]
+    #[tool(description = "Get recent mentions of an Instagram")]
     pub async fn ig_get_mentions(
         &self,
         params: Parameters<tools_instagram::IgGetMentionsInput>,
@@ -953,7 +1005,7 @@ impl SocialForgeMcpServer {
         tools_instagram::handle_ig_get_mentions(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Poll the status of an Instagram container (before publishing)")]
+    #[tool(description = "Poll the status of an Instagram")]
     pub async fn ig_poll_container(
         &self,
         params: Parameters<tools_instagram::IgPollContainerInput>,
@@ -961,7 +1013,7 @@ impl SocialForgeMcpServer {
         tools_instagram::handle_ig_poll_container(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Get audience insights for an Instagram business account")]
+    #[tool(description = "Get audience insights for an")]
     pub async fn ig_get_insights_audience(
         &self,
         params: Parameters<tools_instagram::IgGetInsightsAudienceInput>,
@@ -971,7 +1023,7 @@ impl SocialForgeMcpServer {
 
     // ── Instagram Standalone (Basic Display API) Tools ─────────────────
 
-    #[tool(description = "Get Instagram media feed for a personal (Basic Display API) account")]
+    #[tool(description = "Get Instagram media feed for a")]
     pub async fn ias_get_media(
         &self,
         params: Parameters<tools_instagram_standalone::IasGetMediaInput>,
@@ -979,7 +1031,7 @@ impl SocialForgeMcpServer {
         tools_instagram_standalone::handle_ias_get_media(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Get details of a specific Instagram media item (Basic Display API)")]
+    #[tool(description = "Get details of a specific Instagram")]
     pub async fn ias_get_media_detail(
         &self,
         params: Parameters<tools_instagram_standalone::IasGetMediaDetailInput>,
@@ -987,7 +1039,7 @@ impl SocialForgeMcpServer {
         tools_instagram_standalone::handle_ias_get_media_detail(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Get comments on an Instagram media item (Basic Display API)")]
+    #[tool(description = "Get comments on an Instagram media")]
     pub async fn ias_get_comments(
         &self,
         params: Parameters<tools_instagram_standalone::IasGetCommentsInput>,
@@ -995,7 +1047,7 @@ impl SocialForgeMcpServer {
         tools_instagram_standalone::handle_ias_get_comments(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Reply to an Instagram comment (Basic Display API)")]
+    #[tool(description = "Reply to an Instagram comment (Basic")]
     pub async fn ias_reply_to_comment(
         &self,
         params: Parameters<tools_instagram_standalone::IasReplyToCommentInput>,
@@ -1003,7 +1055,7 @@ impl SocialForgeMcpServer {
         tools_instagram_standalone::handle_ias_reply_to_comment(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Create an Instagram media container (step 1 of publish, Basic Display API)")]
+    #[tool(description = "Create an Instagram media container")]
     pub async fn ias_create_container(
         &self,
         params: Parameters<tools_instagram_standalone::IasCreateContainerInput>,
@@ -1011,7 +1063,7 @@ impl SocialForgeMcpServer {
         tools_instagram_standalone::handle_ias_create_container(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Publish an Instagram media container (step 2 of publish, Basic Display API)")]
+    #[tool(description = "Publish an Instagram media container")]
     pub async fn ias_publish_container(
         &self,
         params: Parameters<tools_instagram_standalone::IasPublishContainerInput>,
@@ -1019,7 +1071,7 @@ impl SocialForgeMcpServer {
         tools_instagram_standalone::handle_ias_publish_container(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Poll Instagram container publish status (Basic Display API)")]
+    #[tool(description = "Poll Instagram container publish")]
     pub async fn ias_poll_container(
         &self,
         params: Parameters<tools_instagram_standalone::IasPollContainerInput>,
@@ -1038,7 +1090,7 @@ impl SocialForgeMcpServer {
         tools_google::handle_goog_search_videos(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Get details of a specific YouTube video by video ID")]
+    #[tool(description = "Get details of a specific YouTube")]
     pub async fn goog_get_video(
         &self,
         params: Parameters<tools_google::YtGetVideoInput>,
@@ -1070,7 +1122,7 @@ impl SocialForgeMcpServer {
         tools_google::handle_goog_get_comments(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Get statistics for a YouTube channel (subscribers, views, videos)")]
+    #[tool(description = "Get statistics for a YouTube channel")]
     pub async fn goog_get_channel_stats(
         &self,
         params: Parameters<tools_google::YtGetChannelStatsInput>,
@@ -1078,7 +1130,7 @@ impl SocialForgeMcpServer {
         tools_google::handle_goog_get_channel_stats(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Get YouTube Analytics reports for a channel (views, watch time, etc.)")]
+    #[tool(description = "Get YouTube Analytics reports for a")]
     pub async fn goog_get_analytics(
         &self,
         params: Parameters<tools_google::YtGetAnalyticsInput>,
@@ -1086,7 +1138,7 @@ impl SocialForgeMcpServer {
         tools_google::handle_goog_get_analytics(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Get subscriptions for a YouTube channel")]
+    #[tool(description = "Get subscriptions for a YouTube")]
     pub async fn goog_get_subscriptions(
         &self,
         params: Parameters<tools_google::YtGetSubscriptionsInput>,
@@ -1109,7 +1161,7 @@ impl SocialForgeMcpServer {
         tools_google::handle_goog_get_profile(&self.state, &()).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "List Gmail messages with optional search query")]
+    #[tool(description = "List Gmail messages with optional")]
     pub async fn goog_list_messages(
         &self,
         params: Parameters<tools_google::GmListMessagesInput>,
@@ -1244,7 +1296,7 @@ impl SocialForgeMcpServer {
         tools_google::handle_goog_get_file_metadata(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Export a Google Drive file to a target format")]
+    #[tool(description = "Export a Google Drive file to a")]
     pub async fn goog_export_file(
         &self,
         params: Parameters<tools_google::DrExportFileInput>,
@@ -1294,7 +1346,7 @@ impl SocialForgeMcpServer {
         tools_pinterest::handle_pi_get_board_analytics(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Get analytics for a Pinterest pin within a board")]
+    #[tool(description = "Get analytics for a Pinterest pin")]
     pub async fn pi_get_pin_analytics(
         &self,
         params: Parameters<tools_pinterest::PiGetPinAnalyticsInput>,
@@ -1302,7 +1354,7 @@ impl SocialForgeMcpServer {
         tools_pinterest::handle_pi_get_pin_analytics(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Search Pinterest pins by keyword using Pinterest API v5")]
+    #[tool(description = "Search Pinterest pins by keyword")]
     pub async fn pi_search_pins(
         &self,
         params: Parameters<tools_pinterest::PiSearchPinsInput>,
@@ -1336,7 +1388,7 @@ impl SocialForgeMcpServer {
         tools_discord::handle_di_get_guild(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Get thread members in a Discord channel")]
+    #[tool(description = "Get thread members in a Discord")]
     pub async fn di_get_thread_members(
         &self,
         params: Parameters<tools_discord::DiGetThreadMembersInput>,
@@ -1352,7 +1404,7 @@ impl SocialForgeMcpServer {
         tools_discord::handle_di_send_message(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Delete a message from a Discord channel")]
+    #[tool(description = "Delete a message from a Discord")]
     pub async fn di_delete_message(
         &self,
         params: Parameters<tools_discord::DiDeleteMessageInput>,
@@ -1360,7 +1412,7 @@ impl SocialForgeMcpServer {
         tools_discord::handle_di_delete_message(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Add a reaction (emoji) to a Discord message")]
+    #[tool(description = "Add a reaction (emoji) to a Discord")]
     pub async fn di_add_reaction(
         &self,
         params: Parameters<tools_discord::DiAddReactionInput>,
@@ -1368,7 +1420,7 @@ impl SocialForgeMcpServer {
         tools_discord::handle_di_add_reaction(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "List all channels in a Discord guild/server")]
+    #[tool(description = "List all channels in a Discord")]
     pub async fn di_get_guild_channels(
         &self,
         params: Parameters<tools_discord::DiGetGuildChannelsInput>,
@@ -1376,7 +1428,7 @@ impl SocialForgeMcpServer {
         tools_discord::handle_di_get_guild_channels(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Get detailed info about a Discord guild/server including member counts")]
+    #[tool(description = "Get detailed info about a Discord")]
     pub async fn di_get_server_info(
         &self,
         params: Parameters<tools_discord::DiGetServerInfoInput>,
@@ -1384,7 +1436,7 @@ impl SocialForgeMcpServer {
         tools_discord::handle_di_get_server_info(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Create a forum post in a Discord forum channel")]
+    #[tool(description = "Create a forum post in a Discord")]
     pub async fn di_create_forum_post(
         &self,
         params: Parameters<tools_discord::DiCreateForumPostInput>,
@@ -1426,7 +1478,7 @@ impl SocialForgeMcpServer {
         tools_whatsapp::handle_wa_contacts(&self.state, &params.0).await
     }
 
-    #[tool(description = "Edit a previously sent WhatsApp message (within 48h)")]
+    #[tool(description = "Edit a previously sent WhatsApp")]
     pub async fn wa_edit_message(
         &self,
         params: Parameters<tools_whatsapp::WaEditMessageInput>,
@@ -1434,7 +1486,7 @@ impl SocialForgeMcpServer {
         tools_whatsapp::handle_wa_edit_message(&self.state, &params.0).await
     }
 
-    #[tool(description = "Delete/revoke a WhatsApp message for everyone")]
+    #[tool(description = "Delete/revoke a WhatsApp message for")]
     pub async fn wa_revoke_message(
         &self,
         params: Parameters<tools_whatsapp::WaRevokeMessageInput>,
@@ -1442,14 +1494,14 @@ impl SocialForgeMcpServer {
         tools_whatsapp::handle_wa_revoke_message(&self.state, &params.0).await
     }
 
-    #[tool(description = "List all WhatsApp groups the user participates in")]
+    #[tool(description = "List all WhatsApp groups the user")]
     pub async fn wa_list_groups(
         &self,
     ) -> Result<Json<tools_whatsapp::WaListGroupsOutput>, String> {
         tools_whatsapp::handle_wa_list_groups(&self.state).await
     }
 
-    #[tool(description = "Create a new WhatsApp group with given subject and participant phone numbers")]
+    #[tool(description = "Create a new WhatsApp group with")]
     pub async fn wa_create_group(
         &self,
         params: Parameters<tools_whatsapp::WaCreateGroupInput>,
@@ -1457,7 +1509,7 @@ impl SocialForgeMcpServer {
         tools_whatsapp::handle_wa_create_group(&self.state, &params.0).await
     }
 
-    #[tool(description = "Get the invite link for a WhatsApp group")]
+    #[tool(description = "Get the invite link for a WhatsApp")]
     pub async fn wa_group_invite_link(
         &self,
         params: Parameters<tools_whatsapp::WaGroupInviteLinkInput>,
@@ -1467,7 +1519,7 @@ impl SocialForgeMcpServer {
 
     // ── WordPress Tools ───────────────────────────────────────────────
 
-    #[tool(description = "Create a new WordPress post. Requires a connected WordPress integration (site URL + Application Password).")]
+    #[tool(description = "Create a new WordPress post. Requires")]
     pub async fn wp_create_post(
         &self,
         params: Parameters<tools_wordpress::WpCreatePostInput>,
@@ -1475,7 +1527,7 @@ impl SocialForgeMcpServer {
         tools_wordpress::handle_wp_create_post(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "List WordPress posts with optional status filter and pagination")]
+    #[tool(description = "List WordPress posts with optional")]
     pub async fn wp_list_posts(
         &self,
         params: Parameters<tools_wordpress::WpListPostsInput>,
@@ -1509,7 +1561,7 @@ impl SocialForgeMcpServer {
         tools_threads::handle_th_get_profile(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "List Threads threads (posts) for your account")]
+    #[tool(description = "List Threads threads (posts) for your")]
     pub async fn th_get_threads(
         &self,
         params: Parameters<tools_threads::ThreadsGetThreadsInput>,
@@ -1517,7 +1569,7 @@ impl SocialForgeMcpServer {
         tools_threads::handle_th_get_threads(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Get details of a specific Threads thread (post)")]
+    #[tool(description = "Get details of a specific Threads")]
     pub async fn th_get_thread_detail(
         &self,
         params: Parameters<tools_threads::ThreadsGetThreadDetailInput>,
@@ -1541,7 +1593,7 @@ impl SocialForgeMcpServer {
         tools_threads::handle_th_reply_to_thread(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Create and publish a new Threads post (text, image, or video)")]
+    #[tool(description = "Create and publish a new Threads post")]
     pub async fn th_create_thread(
         &self,
         params: Parameters<tools_threads::ThreadsCreateThreadInput>,
@@ -1557,7 +1609,7 @@ impl SocialForgeMcpServer {
         tools_threads::handle_th_delete_thread(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Get insights/analytics for your Threads account")]
+    #[tool(description = "Get insights/analytics for your")]
     pub async fn th_get_insights(
         &self,
         params: Parameters<tools_threads::ThreadsGetInsightsInput>,
@@ -1565,7 +1617,7 @@ impl SocialForgeMcpServer {
         tools_threads::handle_th_get_insights(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Poll publish status of a Threads creation ID")]
+    #[tool(description = "Poll publish status of a Threads")]
     pub async fn th_poll_publish_status(
         &self,
         params: Parameters<tools_threads::ThreadsPollStatusInput>,
@@ -1575,7 +1627,7 @@ impl SocialForgeMcpServer {
 
     // ── LinkedIn Personal Tools ─────────────────────────────────
 
-    #[tool(description = "Get your LinkedIn profile information (name, headline, industry, etc.)")]
+    #[tool(description = "Get your LinkedIn profile information")]
     pub async fn li_get_profile(
         &self,
         params: Parameters<tools_linkedin::LiGetProfileInput>,
@@ -1583,7 +1635,7 @@ impl SocialForgeMcpServer {
         tools_linkedin::handle_li_get_profile(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "List LinkedIn posts for an author URN (e.g. urn:li:person:abc). Use this to fetch your recent posts.")]
+    #[tool(description = "List LinkedIn posts for an author URN")]
     pub async fn li_get_posts(
         &self,
         params: Parameters<tools_linkedin::LiGetPostsInput>,
@@ -1591,7 +1643,7 @@ impl SocialForgeMcpServer {
         tools_linkedin::handle_li_get_posts(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Get details of a specific LinkedIn post by its URN (e.g. urn:li:activity:xyz)")]
+    #[tool(description = "Get details of a specific LinkedIn")]
     pub async fn li_get_post_detail(
         &self,
         params: Parameters<tools_linkedin::LiGetPostDetailInput>,
@@ -1599,7 +1651,7 @@ impl SocialForgeMcpServer {
         tools_linkedin::handle_li_get_post_detail(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Get comments on a LinkedIn post by its URN")]
+    #[tool(description = "Get comments on a LinkedIn post by")]
     pub async fn li_get_comments(
         &self,
         params: Parameters<tools_linkedin::LiGetCommentsInput>,
@@ -1607,7 +1659,7 @@ impl SocialForgeMcpServer {
         tools_linkedin::handle_li_get_comments(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Create a comment on a LinkedIn post. Provide your actor URN (e.g. urn:li:person:abc) and the message text.")]
+    #[tool(description = "Create a comment on a LinkedIn post.")]
     pub async fn li_create_comment(
         &self,
         params: Parameters<tools_linkedin::LiCreateCommentInput>,
@@ -1615,7 +1667,7 @@ impl SocialForgeMcpServer {
         tools_linkedin::handle_li_create_comment(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Create a new LinkedIn post (text-only). Content will be published immediately to your LinkedIn profile.")]
+    #[tool(description = "Create a new LinkedIn post")]
     pub async fn li_create_post(
         &self,
         params: Parameters<tools_linkedin::LiCreatePostInput>,
@@ -1623,7 +1675,7 @@ impl SocialForgeMcpServer {
         tools_linkedin::handle_li_create_post(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Delete a LinkedIn post by its URN (e.g., urn:li:share:123456).")]
+    #[tool(description = "Delete a LinkedIn post by its URN")]
     pub async fn li_delete_post(
         &self,
         params: Parameters<tools_linkedin::LiDeletePostInput>,
@@ -1631,7 +1683,7 @@ impl SocialForgeMcpServer {
         tools_linkedin::handle_li_delete_post(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Get reactions (likes) on a LinkedIn post by its URN.")]
+    #[tool(description = "Get reactions (likes) on a LinkedIn")]
     pub async fn li_get_reactions(
         &self,
         params: Parameters<tools_linkedin::LiGetReactionsInput>,
@@ -1639,7 +1691,7 @@ impl SocialForgeMcpServer {
         tools_linkedin::handle_li_get_reactions(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Get shares (reposts) of a LinkedIn post by its URN.")]
+    #[tool(description = "Get shares (reposts) of a LinkedIn")]
     pub async fn li_get_shares(
         &self,
         params: Parameters<tools_linkedin::LiGetSharesInput>,
@@ -1647,7 +1699,7 @@ impl SocialForgeMcpServer {
         tools_linkedin::handle_li_get_shares(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Get analytics for your LinkedIn personal profile (connections count).")]
+    #[tool(description = "Get analytics for your LinkedIn")]
     pub async fn li_get_analytics(
         &self,
         params: Parameters<tools_linkedin::LiGetAnalyticsInput>,
@@ -1655,7 +1707,7 @@ impl SocialForgeMcpServer {
         tools_linkedin::handle_li_get_analytics(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Get analytics for a specific LinkedIn post (likes, comments, shares counts).")]
+    #[tool(description = "Get analytics for a specific LinkedIn")]
     pub async fn li_get_post_analytics(
         &self,
         params: Parameters<tools_linkedin::LiGetPostAnalyticsInput>,
@@ -1665,7 +1717,7 @@ impl SocialForgeMcpServer {
 
     // ── LinkedIn Page Tools ────────────────────────────────────
 
-    #[tool(description = "List LinkedIn company pages you administer. Returns page IDs and names needed for page operations.")]
+    #[tool(description = "List LinkedIn company pages you")]
     pub async fn lip_list_pages(
         &self,
         params: Parameters<tools_linkedin_page::LipListPagesInput>,
@@ -1673,7 +1725,7 @@ impl SocialForgeMcpServer {
         tools_linkedin_page::handle_lip_list_pages(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Get details of a LinkedIn company page by its page ID")]
+    #[tool(description = "Get details of a LinkedIn company")]
     pub async fn lip_get_page(
         &self,
         params: Parameters<tools_linkedin_page::LipGetPageInput>,
@@ -1681,7 +1733,7 @@ impl SocialForgeMcpServer {
         tools_linkedin_page::handle_lip_get_page(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Get posts from a LinkedIn company page by page ID")]
+    #[tool(description = "Get posts from a LinkedIn company")]
     pub async fn lip_get_page_posts(
         &self,
         params: Parameters<tools_linkedin_page::LipGetPagePostsInput>,
@@ -1689,7 +1741,7 @@ impl SocialForgeMcpServer {
         tools_linkedin_page::handle_lip_get_page_posts(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Create a comment on a LinkedIn post as a company page. Provide the page URN, post URN, and message.")]
+    #[tool(description = "Create a comment on a LinkedIn post")]
     pub async fn lip_create_comment(
         &self,
         params: Parameters<tools_linkedin_page::LipCreateCommentInput>,
@@ -1697,7 +1749,7 @@ impl SocialForgeMcpServer {
         tools_linkedin_page::handle_lip_create_comment(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Create a post as a LinkedIn Page (organization).")]
+    #[tool(description = "Create a post as a LinkedIn Page")]
     pub async fn lip_create_post(
         &self,
         params: Parameters<tools_linkedin_page::LipCreatePostInput>,
@@ -1705,7 +1757,7 @@ impl SocialForgeMcpServer {
         tools_linkedin_page::handle_lip_create_post(&self.state, &params.0).await
     }
 
-    #[tool(description = "Get analytics (impressions, clicks, likes, followers) for a LinkedIn Page.")]
+    #[tool(description = "Get LinkedIn Page analytics")]
     pub async fn lip_get_analytics(
         &self,
         params: Parameters<tools_linkedin_page::LipGetAnalyticsInput>,
@@ -1713,7 +1765,7 @@ impl SocialForgeMcpServer {
         tools_linkedin_page::handle_lip_get_analytics(&self.state, &params.0).await
     }
 
-    #[tool(description = "Get analytics for a specific LinkedIn Page post.")]
+    #[tool(description = "Get analytics for a specific LinkedIn")]
     pub async fn lip_get_post_analytics(
         &self,
         params: Parameters<tools_linkedin_page::LipGetPostAnalyticsInput>,
@@ -1721,7 +1773,7 @@ impl SocialForgeMcpServer {
         tools_linkedin_page::handle_lip_get_post_analytics(&self.state, &params.0).await
     }
 
-    #[tool(description = "Get follower count for a LinkedIn Page.")]
+    #[tool(description = "Get follower count for a LinkedIn")]
     pub async fn lip_get_followers(
         &self,
         params: Parameters<tools_linkedin_page::LipGetFollowersInput>,
@@ -1729,7 +1781,7 @@ impl SocialForgeMcpServer {
         tools_linkedin_page::handle_lip_get_followers(&self.state, &params.0).await
     }
 
-    #[tool(description = "Delete a LinkedIn Page post by its URN.")]
+    #[tool(description = "Delete a LinkedIn Page post by its")]
     pub async fn lip_delete_post(
         &self,
         params: Parameters<tools_linkedin_page::LipDeletePostInput>,
@@ -1737,7 +1789,7 @@ impl SocialForgeMcpServer {
         tools_linkedin_page::handle_lip_delete_post(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Get reactions (likes) on a LinkedIn Page post by its URN.")]
+    #[tool(description = "Get reactions (likes) on a LinkedIn")]
     pub async fn lip_get_reactions(
         &self,
         params: Parameters<tools_linkedin_page::LipGetReactionsInput>,
@@ -1745,7 +1797,7 @@ impl SocialForgeMcpServer {
         tools_linkedin_page::handle_lip_get_reactions(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Get shares (reposts) of a LinkedIn Page post by its URN.")]
+    #[tool(description = "Get shares (reposts) of a LinkedIn")]
     pub async fn lip_get_shares(
         &self,
         params: Parameters<tools_linkedin_page::LipGetSharesInput>,
@@ -1754,7 +1806,7 @@ impl SocialForgeMcpServer {
     }
 
     // ── Telegram Bot Tools ───────────────────────────────────────
-    #[tool(description = "Send a message via Telegram Bot API using a configured bot token.")]
+    #[tool(description = "Send a message via Telegram Bot API")]
     pub async fn tb_send_message(
         &self,
         params: Parameters<tools_telegram_bot::TbSendMessageInput>,
@@ -1762,7 +1814,7 @@ impl SocialForgeMcpServer {
         tools_telegram_bot::handle_tb_send_message(&self.state, &params.0).await
     }
 
-    #[tool(description = "Get updates from Telegram Bot API for a specific bot account by token_index.")]
+    #[tool(description = "Get updates from Telegram Bot API for")]
     pub async fn tb_get_updates(
         &self,
         params: Parameters<tools_telegram_bot::TbGetUpdatesInput>,
@@ -1770,7 +1822,7 @@ impl SocialForgeMcpServer {
         tools_telegram_bot::handle_tb_get_updates(&self.state, &params.0).await
     }
 
-    #[tool(description = "Get bot info (username, name, capabilities) for a Telegram bot by token_index.")]
+    #[tool(description = "Get Telegram bot info and username")]
     pub async fn tb_get_me(
         &self,
         params: Parameters<tools_telegram_bot::TbTokenInput>,
@@ -1778,7 +1830,7 @@ impl SocialForgeMcpServer {
         tools_telegram_bot::handle_tb_get_me(&self.state, &params.0).await
     }
 
-    #[tool(description = "Get chat details (title, type, member count) for a Telegram chat.")]
+    #[tool(description = "Get chat details (title, type, member")]
     pub async fn tb_get_chat(
         &self,
         params: Parameters<tools_telegram_bot::TbChatInput>,
@@ -1786,7 +1838,7 @@ impl SocialForgeMcpServer {
         tools_telegram_bot::handle_tb_get_chat(&self.state, &params.0).await
     }
 
-    #[tool(description = "Get member count of a Telegram chat/channel.")]
+    #[tool(description = "Get member count of a Telegram")]
     pub async fn tb_get_chat_member_count(
         &self,
         params: Parameters<tools_telegram_bot::TbChatInput>,
@@ -1794,7 +1846,7 @@ impl SocialForgeMcpServer {
         tools_telegram_bot::handle_tb_get_chat_member_count(&self.state, &params.0).await
     }
 
-    #[tool(description = "Send a photo via Telegram Bot to a chat.")]
+    #[tool(description = "Send a photo via Telegram Bot to a")]
     pub async fn tb_send_photo(
         &self,
         params: Parameters<tools_telegram_bot::TbSendPhotoInput>,
@@ -1802,7 +1854,7 @@ impl SocialForgeMcpServer {
         tools_telegram_bot::handle_tb_send_photo(&self.state, &params.0).await
     }
 
-    #[tool(description = "Send a document/file via Telegram Bot to a chat.")]
+    #[tool(description = "Send a document/file via Telegram Bot")]
     pub async fn tb_send_document(
         &self,
         params: Parameters<tools_telegram_bot::TbSendDocumentInput>,
@@ -1810,7 +1862,7 @@ impl SocialForgeMcpServer {
         tools_telegram_bot::handle_tb_send_document(&self.state, &params.0).await
     }
 
-    #[tool(description = "Forward a message from one Telegram chat to another.")]
+    #[tool(description = "Forward a message from one Telegram")]
     pub async fn tb_forward_message(
         &self,
         params: Parameters<tools_telegram_bot::TbForwardInput>,
@@ -1836,7 +1888,7 @@ impl SocialForgeMcpServer {
 
     // ── Telegram User Tools ──────────────────────────────────────
 
-    #[tool(description = "Check Telegram user client authentication status (via telegram-cli daemon)")]
+    #[tool(description = "Check Telegram user client")]
     pub async fn tu_auth_status(
         &self,
         _params: Parameters<()>,
@@ -1844,7 +1896,7 @@ impl SocialForgeMcpServer {
         tools_telegram_user::handle_tu_auth_status(&self.state).await
     }
 
-    #[tool(description = "Send a message via Telegram user client (telegram-cli daemon)")]
+    #[tool(description = "Send a message via Telegram user")]
     pub async fn tu_send_message(
         &self,
         params: Parameters<tools_telegram_user::TuSendMessageInput>,
@@ -1852,7 +1904,7 @@ impl SocialForgeMcpServer {
         tools_telegram_user::handle_tu_send_message(&self.state, &params.0).await
     }
 
-    #[tool(description = "List dialogs/conversations via Telegram user client")]
+    #[tool(description = "List dialogs/conversations via")]
     pub async fn tu_list_dialogs(
         &self,
         params: Parameters<tools_telegram_user::TuListDialogsInput>,
@@ -1868,7 +1920,7 @@ impl SocialForgeMcpServer {
         tools_telegram_user::handle_tu_list_contacts(&self.state, &params.0).await
     }
 
-    #[tool(description = "Search Telegram user client (contacts, dialogs, messages)")]
+    #[tool(description = "Search Telegram user client")]
     pub async fn tu_search(
         &self,
         params: Parameters<tools_telegram_user::TuSearchInput>,
@@ -1876,7 +1928,7 @@ impl SocialForgeMcpServer {
         tools_telegram_user::handle_tu_search(&self.state, &params.0).await
     }
 
-    #[tool(description = "Request a login code for Telegram user account (Grammers MTProto)")]
+    #[tool(description = "Request a login code for Telegram")]
     pub async fn tu_request_code(
         &self,
         params: Parameters<tools_telegram_user::TuRequestCodeInput>,
@@ -1884,7 +1936,7 @@ impl SocialForgeMcpServer {
         tools_telegram_user::handle_tu_request_code(&self.state, &params.0).await
     }
 
-    #[tool(description = "Sign in to Telegram user account with code from tu_request_code")]
+    #[tool(description = "Sign in to Telegram user account with")]
     pub async fn tu_sign_in(
         &self,
         params: Parameters<tools_telegram_user::TuSignInInput>,
@@ -1894,7 +1946,7 @@ impl SocialForgeMcpServer {
 
     // ── Skool Tools ─────────────────────────────────────────────────
 
-    #[tool(description = "Publish a post to a Skool group. Requires group_id, title, content. Optionally set a label.")]
+    #[tool(description = "Publish a post to a Skool group.")]
     pub async fn sk_publish(
         &self,
         params: Parameters<tools_skool::SkPublishInput>,
@@ -1902,7 +1954,7 @@ impl SocialForgeMcpServer {
         tools_skool::handle_sk_publish(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Get Skool community info (name, description, member count)")]
+    #[tool(description = "Get Skool community details")]
     pub async fn sk_get_info(
         &self,
         params: Parameters<tools_skool::SkGetInfoInput>,
@@ -1910,7 +1962,7 @@ impl SocialForgeMcpServer {
         tools_skool::handle_sk_get_info(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "List posts in a Skool community with optional pagination/sort/category")]
+    #[tool(description = "List posts in a Skool community with")]
     pub async fn sk_list_posts(
         &self,
         params: Parameters<tools_skool::SkListPostsInput>,
@@ -1918,7 +1970,7 @@ impl SocialForgeMcpServer {
         tools_skool::handle_sk_list_posts(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Get a single Skool post by community slug and post slug")]
+    #[tool(description = "Get a single Skool post by community")]
     pub async fn sk_get_post(
         &self,
         params: Parameters<tools_skool::SkGetPostInput>,
@@ -1936,7 +1988,7 @@ impl SocialForgeMcpServer {
 
     // ── Slack Tools ─────────────────────────────────────────────────
 
-    #[tool(description = "Send a message to a Slack channel. Provide channel ID (e.g. C01234ABCD) or channel name (e.g. #general).")]
+    #[tool(description = "Send a message to a Slack channel.")]
     pub async fn sl_send_message(
         &self,
         params: Parameters<tools_slack::SlSendMessageInput>,
@@ -1944,7 +1996,7 @@ impl SocialForgeMcpServer {
         tools_slack::handle_sl_send_message(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "List all public and private channels in the Slack workspace")]
+    #[tool(description = "List all public and private channels")]
     pub async fn sl_list_channels(
         &self,
         params: Parameters<tools_slack::SlListChannelsInput>,
@@ -1952,7 +2004,7 @@ impl SocialForgeMcpServer {
         tools_slack::handle_sl_list_channels(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Get message history for a Slack channel. Specify channel ID and optional limit.")]
+    #[tool(description = "Get message history for a Slack")]
     pub async fn sl_channel_history(
         &self,
         params: Parameters<tools_slack::SlChannelHistoryInput>,
@@ -1970,7 +2022,7 @@ impl SocialForgeMcpServer {
 
     // ── Bluesky Tools ─────────────────────────────────────────────────
 
-    #[tool(description = "Get a Bluesky user's profile by handle or DID")]
+    #[tool(description = "Get a Bluesky user's profile by")]
     pub async fn bs_profile(
         &self,
         params: Parameters<tools_bluesky::BsProfileInput>,
@@ -1986,7 +2038,7 @@ impl SocialForgeMcpServer {
         tools_bluesky::handle_bs_timeline(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Create a new Bluesky post (text with optional images)")]
+    #[tool(description = "Create a new Bluesky post (text with")]
     pub async fn bs_create_post(
         &self,
         params: Parameters<tools_bluesky::BsCreatePostInput>,
@@ -2002,7 +2054,7 @@ impl SocialForgeMcpServer {
         tools_bluesky::handle_bs_search(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Get the Bluesky feed (popular/recent posts)")]
+    #[tool(description = "Get the Bluesky feed (popular/recent")]
     pub async fn bs_feed(
         &self,
         params: Parameters<tools_bluesky::BsFeedInput>,
@@ -2028,7 +2080,7 @@ impl SocialForgeMcpServer {
         tools_tiktok::handle_tt_create_post(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "List TikTok videos for the authenticated user")]
+    #[tool(description = "List TikTok videos for the")]
     pub async fn tt_list_videos(
         &self,
         params: Parameters<tools_tiktok::TtListVideosInput>,
@@ -2038,7 +2090,7 @@ impl SocialForgeMcpServer {
 
     // ── Mastodon Tools ───────────────────────────────────────────────
 
-    #[tool(description = "Create a new Mastodon post (toot) with optional media, visibility settings, and content warnings")]
+    #[tool(description = "Create a new Mastodon post (toot)")]
     pub async fn ms_create_post(
         &self,
         params: Parameters<tools_mastodon::MsCreatePostInput>,
@@ -2046,7 +2098,7 @@ impl SocialForgeMcpServer {
         tools_mastodon::handle_ms_create_post(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Get Mastodon timeline (home, local, trending, or public)")]
+    #[tool(description = "Get Mastodon timeline feed")]
     pub async fn ms_get_timeline(
         &self,
         params: Parameters<tools_mastodon::MsGetTimelineInput>,
@@ -2054,7 +2106,7 @@ impl SocialForgeMcpServer {
         tools_mastodon::handle_ms_get_timeline(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Get a single Mastodon post/status by ID")]
+    #[tool(description = "Get a single Mastodon post/status by")]
     pub async fn ms_get_post(
         &self,
         params: Parameters<tools_mastodon::MsGetPostInput>,
@@ -2062,7 +2114,7 @@ impl SocialForgeMcpServer {
         tools_mastodon::handle_ms_get_post(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Search across Mastodon for accounts, statuses, and hashtags")]
+    #[tool(description = "Search Mastodon for posts/users")]
     pub async fn ms_search(
         &self,
         params: Parameters<tools_mastodon::MsSearchInput>,
@@ -2080,7 +2132,7 @@ impl SocialForgeMcpServer {
         tools_medium::handle_md_create_post(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "List Medium posts for the authenticated user")]
+    #[tool(description = "List Medium posts for the")]
     pub async fn md_list_posts(
         &self,
         params: Parameters<tools_medium::MdListPostsInput>,
@@ -2132,7 +2184,7 @@ impl SocialForgeMcpServer {
         tools_devto::handle_dv_create_post(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "List Dev.to articles for the authenticated user")]
+    #[tool(description = "List Dev.to articles for the")]
     pub async fn dv_list_posts(
         &self,
         params: Parameters<tools_devto::DvListPostsInput>,
@@ -2140,7 +2192,7 @@ impl SocialForgeMcpServer {
         tools_devto::handle_dv_list_posts(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Get a single Dev.to article by article ID")]
+    #[tool(description = "Get a single Dev.to article by")]
     pub async fn dv_get_post(
         &self,
         params: Parameters<tools_devto::DvGetPostInput>,
@@ -2150,7 +2202,7 @@ impl SocialForgeMcpServer {
 
     // ── Analytics Tools ──────────────────────────────────────────────
 
-    #[tool(description = "Get analytics data for a connected social provider")]
+    #[tool(description = "Get analytics data for a connected")]
     pub async fn analytics_get(
         &self,
         params: Parameters<tools_analytics::AnalyticsGetInput>,
@@ -2168,7 +2220,7 @@ impl SocialForgeMcpServer {
 
     // ── Feed Tools ──────────────────────────────────────
 
-    #[tool(description = "List imported external posts (unified feed). Cursor-paginated. Optionally filter by provider.")]
+    #[tool(description = "List imported external posts (unified")]
     async fn feed_list(
         &self,
         params: Parameters<tools_feed::FeedListInput>,
@@ -2176,7 +2228,7 @@ impl SocialForgeMcpServer {
         tools_feed::handle_feed_list(&self.state, &params.0).await
     }
 
-    #[tool(description = "Trigger immediate import of recent posts from all connected providers. Returns count of new posts imported.")]
+    #[tool(description = "Trigger immediate import of recent")]
     async fn feed_import(
         &self,
         _params: Parameters<()>,
@@ -2194,7 +2246,7 @@ impl SocialForgeMcpServer {
         tools_tags::handle_tag_create(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "List all tags for the authenticated user")]
+    #[tool(description = "List all tags for the authenticated")]
     pub async fn tag_list(
         &self,
         params: Parameters<tools_tags::TagListInput>,
@@ -2268,7 +2320,7 @@ impl SocialForgeMcpServer {
         tools_webhooks::handle_wh_delete(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Test a webhook by sending a sample event")]
+    #[tool(description = "Test a webhook by sending a sample")]
     pub async fn wh_test(
         &self,
         params: Parameters<tools_webhooks::WhTestInput>,
@@ -2278,7 +2330,7 @@ impl SocialForgeMcpServer {
 
     // ── Notification Tools ─────────────────────────────────────
 
-    #[tool(description = "List notifications with optional limit and offset")]
+    #[tool(description = "List notifications with optional")]
     async fn notif_list(
         &self,
         params: Parameters<tools_notifications::NotifListInput>,
@@ -2302,7 +2354,7 @@ impl SocialForgeMcpServer {
         tools_notifications::handle_notif_mark_all_read(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Create a notification (for testing or programmatic alerts)")]
+    #[tool(description = "Create a notification (for testing or")]
     async fn notif_create(
         &self,
         params: Parameters<tools_notifications::NotifCreateInput>,
@@ -2312,7 +2364,7 @@ impl SocialForgeMcpServer {
 
     // ── GitHub Tools ─────────────────────────────────────────────
 
-    #[tool(description = "Get the currently authenticated GitHub user")]
+    #[tool(description = "Get the currently authenticated")]
     pub async fn gh_get_authenticated_user(
         &self,
     ) -> Result<Json<McpJsonValue>, String> {
@@ -2327,7 +2379,7 @@ impl SocialForgeMcpServer {
         tools_github::handle_gh_get_user(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "List repositories for a GitHub user or organization")]
+    #[tool(description = "List repositories for a GitHub user")]
     pub async fn gh_list_repos(
         &self,
         params: Parameters<tools_github::GhListReposInput>,
@@ -2335,7 +2387,7 @@ impl SocialForgeMcpServer {
         tools_github::handle_gh_list_repos(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Get details of a specific GitHub repository")]
+    #[tool(description = "Get details of a specific GitHub")]
     pub async fn gh_get_repo(
         &self,
         params: Parameters<tools_github::GhGetRepoInput>,
@@ -2359,7 +2411,7 @@ impl SocialForgeMcpServer {
         tools_github::handle_gh_get_issue(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Create a new issue in a GitHub repository")]
+    #[tool(description = "Create a new issue in a GitHub")]
     pub async fn gh_create_issue(
         &self,
         params: Parameters<tools_github::GhCreateIssueInput>,
@@ -2367,7 +2419,7 @@ impl SocialForgeMcpServer {
         tools_github::handle_gh_create_issue(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "List pull requests for a GitHub repository")]
+    #[tool(description = "List pull requests for a GitHub")]
     pub async fn gh_list_pull_requests(
         &self,
         params: Parameters<tools_github::GhListPullRequestsInput>,
@@ -2423,7 +2475,7 @@ impl SocialForgeMcpServer {
         tools_github::handle_gh_search_code(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "List contributors for a GitHub repository")]
+    #[tool(description = "List contributors for a GitHub")]
     pub async fn gh_list_contributors(
         &self,
         params: Parameters<tools_github::GhListContributorsInput>,
@@ -2431,7 +2483,7 @@ impl SocialForgeMcpServer {
         tools_github::handle_gh_list_contributors(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Get file or directory contents from a GitHub repository")]
+    #[tool(description = "Get file or directory contents from a")]
     pub async fn gh_get_repo_content(
         &self,
         params: Parameters<tools_github::GhGetRepoContentInput>,
@@ -2447,7 +2499,7 @@ impl SocialForgeMcpServer {
         tools_github::handle_gh_close_issue(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "List repositories for the authenticated user")]
+    #[tool(description = "List repositories for the")]
     pub async fn gh_list_my_repos(
         &self,
         params: Parameters<tools_github::GhListMyReposInput>,
@@ -2465,8 +2517,8 @@ impl SocialForgeMcpServer {
 /// Start the MCP server on stdio (for AI clients that spawn the binary)
 pub async fn run_mcp_stdio(state: AppState) -> anyhow::Result<()> {
     let server = SocialForgeMcpServer::new(state);
-    let service = server.serve(stdio()).await?;
-    tracing::info!("MCP server started on stdio");
+    let service = server.serve(lean_stdio()).await?;
+    tracing::info!("MCP server started on stdio (schema-optimized)");
     service.waiting().await?;
     Ok(())
 }

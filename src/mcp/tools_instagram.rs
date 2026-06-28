@@ -266,20 +266,13 @@ pub async fn handle_ig_get_insights(
     }
     
     let basic_metrics = ["reach", "follower_count"];
-    let total_value_compatible = ["website_clicks", "profile_views", "online_followers", "accounts_engaged",
-        "total_interactions", "likes", "comments", "shares", "saves", "replies",
-        "follows_and_unfollows", "profile_links_taps"];
-    
     let basic: Vec<&str> = requested.iter().filter(|m| basic_metrics.contains(m)).copied().collect();
-    let total_value: Vec<&str> = requested.iter()
-        .filter(|m| total_value_compatible.contains(m))
-        .copied().collect();
-    let other: Vec<&str> = requested.iter()
-        .filter(|m| !basic_metrics.contains(m) && !total_value_compatible.contains(m))
-        .copied().collect();
+    let other: Vec<&str> = requested.iter().filter(|m| !basic_metrics.contains(m)).copied().collect();
     
     let mut all_results = serde_json::Map::new();
     
+    // All Instagram insight metrics use period=day (engagement metrics like total_interactions,
+    // comments, likes, etc. also require period=day on the current API)
     if !basic.is_empty() {
         let metrics_str = basic.join(",");
         let result = provider
@@ -289,28 +282,13 @@ pub async fn handle_ig_get_insights(
         all_results.insert("basic".to_string(), result);
     }
     
-    if !total_value.is_empty() {
-        let metrics_str = total_value.join(",");
+    if !other.is_empty() {
+        let metrics_str = other.join(",");
         let result = provider
-            .get_ig_insights(&token, &input.ig_id, &metrics_str, "total_value")
+            .get_ig_insights(&token, &input.ig_id, &metrics_str, "day")
             .await
-            .map_err(|e| format!("Instagram get insights failed for total_value metrics: {e}"))?;
-        all_results.insert("total_value".to_string(), result);
-    }
-    
-    for metric in other {
-        let period = if metric == "follower_count" {
-            "day"
-        } else {
-            input.period.as_deref().unwrap_or("day")
-        };
-        
-        let result = provider
-            .get_ig_insights(&token, &input.ig_id, metric, period)
-            .await
-            .map_err(|e| format!("Instagram get insights failed for metric {metric}: {e}"))?;
-        
-        all_results.insert(metric.to_string(), result);
+            .map_err(|e| format!("Instagram get insights failed for engagement metrics: {e}"))?;
+        all_results.insert("engagement".to_string(), result);
     }
     
     Ok(Json(serde_json::json!({ "data": all_results })))
