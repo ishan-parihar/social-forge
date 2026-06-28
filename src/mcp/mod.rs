@@ -1869,6 +1869,38 @@ impl SocialForgeMcpServer {
         tools_linkedin::handle_li_get_post_analytics(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
+    #[tool(description = "Reply to a LinkedIn comment")]
+    pub async fn li_reply_comment(
+        &self,
+        params: Parameters<tools_linkedin::LiReplyCommentInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_linkedin::handle_li_reply_comment(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Send a direct message on LinkedIn")]
+    pub async fn li_send_dm(
+        &self,
+        params: Parameters<tools_linkedin::LiSendDmInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_linkedin::handle_li_send_dm(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "List LinkedIn message conversations")]
+    pub async fn li_list_conversations(
+        &self,
+        params: Parameters<tools_linkedin::LiListConversationsInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_linkedin::handle_li_list_conversations(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Get messages in a LinkedIn conversation")]
+    pub async fn li_get_messages(
+        &self,
+        params: Parameters<tools_linkedin::LiGetMessagesInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_linkedin::handle_li_get_messages(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
     // ── LinkedIn Page Tools ────────────────────────────────────
 
     #[tool(description = "List LinkedIn company pages you")]

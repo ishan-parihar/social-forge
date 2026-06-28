@@ -296,3 +296,120 @@ pub async fn handle_li_get_post_analytics(
         .map_err(|e| format!("LinkedIn post analytics failed: {e}"))?;
     Ok(Json(serde_json::json!({ "data": data })))
 }
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct LiReplyCommentInput {
+    pub user_id: Uuid,
+    pub li_id: String,
+    pub comment_id: String,
+    pub content: String,
+}
+
+pub async fn handle_li_reply_comment(
+    state: &AppState,
+    input: &LiReplyCommentInput,
+) -> Result<Json<serde_json::Value>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let token = find_linkedin_token(state, user_id, &input.li_id).await?;
+    let provider = create_provider(state);
+    let post = crate::social::PostContent {
+        content: input.content.clone(),
+        media: vec![],
+        settings: serde_json::json!({}),
+    };
+    let result = provider.reply_to_comment(&token, &input.comment_id, &post).await
+        .map_err(|e| format!("LinkedIn reply comment failed: {e}"))?;
+    Ok(Json(serde_json::json!({
+        "data": {
+            "id": result.platform_post_id,
+            "status": result.status,
+        }
+    })))
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct LiSendDmInput {
+    pub user_id: Uuid,
+    pub li_id: String,
+    pub recipient_urn: String,
+    pub content: String,
+}
+
+pub async fn handle_li_send_dm(
+    state: &AppState,
+    input: &LiSendDmInput,
+) -> Result<Json<serde_json::Value>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let token = find_linkedin_token(state, user_id, &input.li_id).await?;
+    let provider = create_provider(state);
+    let post = crate::social::PostContent {
+        content: input.content.clone(),
+        media: vec![],
+        settings: serde_json::json!({}),
+    };
+    let result = provider.send_dm(&token, &input.recipient_urn, &post).await
+        .map_err(|e| format!("LinkedIn send DM failed: {e}"))?;
+    Ok(Json(serde_json::json!({
+        "data": {
+            "id": result.platform_post_id,
+            "status": result.status,
+        }
+    })))
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct LiListConversationsInput {
+    pub user_id: Uuid,
+    pub li_id: String,
+    pub limit: Option<u32>,
+}
+
+pub async fn handle_li_list_conversations(
+    state: &AppState,
+    input: &LiListConversationsInput,
+) -> Result<Json<serde_json::Value>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let token = find_linkedin_token(state, user_id, &input.li_id).await?;
+    let provider = create_provider(state);
+    let limit = input.limit.unwrap_or(20);
+    let conversations = provider.get_dm_conversations(&token, limit).await
+        .map_err(|e| format!("LinkedIn list conversations failed: {e}"))?;
+    let conv_values: Vec<serde_json::Value> = conversations.into_iter().map(|c| {
+        serde_json::json!({
+            "id": c.id,
+            "participant": c.participant,
+            "last_message": c.last_message,
+            "last_message_at": c.last_message_at.map(|dt| dt.to_rfc3339()),
+        })
+    }).collect();
+    Ok(Json(serde_json::json!({ "data": conv_values })))
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct LiGetMessagesInput {
+    pub user_id: Uuid,
+    pub li_id: String,
+    pub conversation_id: String,
+    pub limit: Option<u32>,
+}
+
+pub async fn handle_li_get_messages(
+    state: &AppState,
+    input: &LiGetMessagesInput,
+) -> Result<Json<serde_json::Value>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let token = find_linkedin_token(state, user_id, &input.li_id).await?;
+    let provider = create_provider(state);
+    let limit = input.limit.unwrap_or(20);
+    let messages = provider.get_dm_messages(&token, &input.conversation_id, limit).await
+        .map_err(|e| format!("LinkedIn get messages failed: {e}"))?;
+    let msg_values: Vec<serde_json::Value> = messages.into_iter().map(|m| {
+        serde_json::json!({
+            "id": m.id,
+            "sender": m.sender,
+            "content": m.content,
+            "created_at": m.created_at.to_rfc3339(),
+        })
+    }).collect();
+    Ok(Json(serde_json::json!({ "data": msg_values })))
+}
