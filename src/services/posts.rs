@@ -259,10 +259,12 @@ impl PostService {
         // Resolve token, refreshing if needed
         let access_token = Self::resolve_token(db, provider.as_ref(), &post).await?;
 
-        // Build publish content
+        // Build publish content (load media from post — matches scheduler behavior)
+        let media: Vec<crate::social::MediaAttachment> =
+            serde_json::from_value(post.media.clone()).unwrap_or_default();
         let content = PostContent {
             content: Self::sanitize_content(&post.content, 2000),
-            media: vec![],
+            media,
             settings: post.settings.clone(),
         };
 
@@ -288,6 +290,28 @@ impl PostService {
         )
         .await
         .map_err(|e| format!("Database error: {e}"))?;
+
+        // Publish first_comment if present (matches scheduler behavior)
+        if let Some(ref comment_text) = post.first_comment {
+            if !comment_text.is_empty() {
+                let comment_content = PostContent {
+                    content: comment_text.clone(),
+                    media: vec![],
+                    settings: serde_json::json!({}),
+                };
+                if let Err(e) = provider
+                    .comment(
+                        &access_token,
+                        &result.platform_post_id,
+                        None,
+                        &comment_content,
+                    )
+                    .await
+                {
+                    tracing::warn!("Failed to post first_comment for {}: {e}", post_id);
+                }
+            }
+        }
 
         let platform_url = result.platform_post_url.unwrap_or_default();
 
