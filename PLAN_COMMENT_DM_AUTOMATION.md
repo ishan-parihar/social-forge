@@ -9,6 +9,47 @@ Add comprehensive comment and DM management across all 21+ social media platform
 
 ---
 
+## Current Status (as of 2026-06-28)
+
+### ✅ Implemented
+
+| Feature | Status | Commit |
+|---------|--------|--------|
+| SocialProvider trait DM methods | ✅ Done | `f7885fa` |
+| DmConversation/DmMessage types | ✅ Done | `f7885fa` |
+| Automation DB schema (017_automation.sql) | ✅ Done | `f7885fa` |
+| Generic comment tools (get/reply/delete) | ✅ Done | `510df98` |
+| Generic DM tools (send/list/get) | ✅ Done | `510df98` |
+| Automation engine (rules, cooldowns, AI) | ✅ Done | `510df98` |
+| Automation MCP tools (CRUD + logs) | ✅ Done | `510df98` |
+| MCP media upload tool | ✅ Done | `0e742b5` |
+| Multi-platform staging tool | ✅ Done | `0e742b5` |
+| Content splitter (character limits) | ✅ Done | `0e742b5` |
+
+### ⏳ Pending (Platform-Specific Implementations)
+
+| Platform | Comment Tools | DM Tools | Priority |
+|----------|:---:|:---:|:---:|
+| X/Twitter | ❌ Not implemented | ❌ Not implemented | High |
+| LinkedIn | ❌ Not implemented | ❌ Not implemented | High |
+| Instagram | ❌ Not implemented | ❌ Not implemented | High |
+| Bluesky | ❌ Not implemented | ❌ N/A (no API) | Medium |
+| Mastodon | ❌ Not implemented | ❌ N/A (no API) | Medium |
+| YouTube | ❌ Not implemented | ❌ N/A (no API) | Medium |
+
+### 📊 Coverage Summary
+
+| Category | Before | After | Change |
+|----------|:---:|:---:|:---:|
+| Platforms with comment support | 9 | 9 | +0 (generic tools added) |
+| Platforms with DM support | 8 | 8 | +0 (generic tools added) |
+| MCP comment tools | 0 | 3 | +3 |
+| MCP DM tools | 0 | 3 | +3 |
+| MCP automation tools | 0 | 5 | +5 |
+| Automation features | 0 | 6 | +6 |
+
+---
+
 ## Phase 1: Trait Extension & Foundation (Days 1-3)
 
 ### 1.1 Extend SocialProvider Trait
@@ -607,3 +648,128 @@ pub async fn get_automation_logs(
 5. **Phase 5** (Frontend) - Can parallel with Phase 4
 
 **Estimated Total**: 21 working days
+
+---
+
+## Full-Scope Upgrade: Next Steps
+
+### Priority 1: X/Twitter Comment & DM Tools
+
+**Files to modify**:
+- `src/social/x.rs` — Implement `reply_to_comment()`, `send_dm()`, `get_dm_conversations()`, `get_dm_messages()`
+- `src/mcp/tools_x.rs` — Add `x_reply_tweet`, `x_send_dm`, `x_list_dms`, `x_get_dm_conversation`
+
+**API Endpoints**:
+- Reply: POST `https://api.x.com/2/tweets` with `reply.in_reply_to_tweet_id`
+- DMs: POST `https://api.x.com/2/dm_conversations/with/{participant_id}/messages`
+- List DMs: GET `https://api.x.com/2/dm_conversations`
+- Get DM messages: GET `https://api.x.com/2/dm_conversations/{id}/messages`
+
+### Priority 2: LinkedIn Comment & DM Tools
+
+**Files to modify**:
+- `src/social/linkedin.rs` — Implement `reply_to_comment()`, `send_dm()`, `get_dm_conversations()`, `get_dm_messages()`
+- `src/mcp/tools_linkedin.rs` — Add `li_reply_comment`, `li_send_message`, `li_list_conversations`, `li_get_messages`
+
+**API Endpoints**:
+- Reply: POST `https://api.linkedin.com/v2/ugcPosts` with `verb=SHARE` and `parentComment=urn:li:comment:xxx`
+- Messages: POST `https://api.linkedin.com/v2/messages` with `recipient=urn:li:person:xxx`
+
+### Priority 3: Instagram Comment & DM Tools
+
+**Files to modify**:
+- `src/social/instagram.rs` — Implement `reply_to_comment()`, `send_dm()`, `get_dm_conversations()`, `get_dm_messages()`
+- `src/mcp/tools_instagram.rs` — Add `ig_reply_comment`, `ig_send_dm`, `ig_list_conversations`, `ig_get_messages`
+
+**API Endpoints**:
+- Reply: POST `https://graph.facebook.com/v18.0/{comment_id}/replies` with `message`
+- DMs: POST `https://graph.facebook.com/v18.0/me/messages` with `recipient` and `message`
+
+### Priority 4: Bluesky Comment Tools
+
+**Files to modify**:
+- `src/social/bluesky.rs` — Implement `reply_to_comment()`
+- `src/mcp/tools_bluesky.rs` — Add `bs_reply`
+
+**API Endpoints**:
+- Reply: POST `https://bsky.social/xrpc/app.bsky.feed.post.create` with `reply` field
+
+### Priority 5: Mastodon Comment Tools
+
+**Files to modify**:
+- `src/social/mastodon.rs` — Implement `reply_to_comment()`
+- `src/mcp/tools_mastodon.rs` — Add `ms_reply`
+
+**API Endpoints**:
+- Reply: POST `/api/v1/statuses` with `in_reply_to_id`
+
+### Priority 6: YouTube Comment Reply
+
+**Files to modify**:
+- `src/social/youtube.rs` — Implement `reply_to_comment()`
+- `src/mcp/tools_youtube.rs` — Add `yt_reply_comment`
+
+**API Endpoints**:
+- Reply: POST `https://www.googleapis.com/youtube/v3/comments` with `parentId`
+
+---
+
+## Testing Plan
+
+### Unit Tests
+
+1. **Content Splitter Tests**:
+   - Test splitting for each platform
+   - Test thread numbering
+   - Test edge cases (empty content, exact limit)
+
+2. **Automation Engine Tests**:
+   - Test keyword matching
+   - Test cooldown logic
+   - Test rate limiting
+   - Test AI response generation
+
+3. **MCP Tool Tests**:
+   - Test tool registration
+   - Test input validation
+   - Test error handling
+
+### Integration Tests
+
+1. **Comment Flow**:
+   - Create post → Get comments → Reply to comment → Verify reply
+
+2. **DM Flow**:
+   - List conversations → Get messages → Send DM → Verify message
+
+3. **Automation Flow**:
+   - Create rule → Trigger comment → Verify auto-reply → Check logs
+
+### Manual Testing
+
+1. **X/Twitter**:
+   - Reply to a tweet
+   - Send a DM
+   - Verify automation triggers
+
+2. **LinkedIn**:
+   - Reply to a comment
+   - Send a message
+   - Verify automation triggers
+
+3. **Instagram**:
+   - Reply to a comment
+   - Send a DM
+   - Verify automation triggers
+
+---
+
+## Deployment Checklist
+
+- [ ] All unit tests pass
+- [ ] All integration tests pass
+- [ ] Manual testing complete for each platform
+- [ ] Documentation updated
+- [ ] Migration applied to production database
+- [ ] Service restarted
+- [ ] MCP tools verified in Claude Desktop
