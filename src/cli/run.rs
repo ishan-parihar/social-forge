@@ -2171,78 +2171,36 @@ async fn handle_instagram(action: InstagramAction) -> anyhow::Result<()> {
 
 async fn handle_comment(action: CommentAction) -> anyhow::Result<()> {
     let state = init_state().await?;
-    let user_id = resolve_user(&state).await?;
-
-    let result: anyhow::Result<serde_json::Value> = match action {
+    match action {
         CommentAction::Get { integration_id, post_id, limit } => {
-            let integration_id = Uuid::parse_str(&integration_id)
-                .map_err(|e| anyhow::anyhow!("Invalid integration_id: {e}"))?;
-            let integration = crate::db::queries::get_integration(&state.db, integration_id, user_id)
-                .await
-                .map_err(|e| anyhow::anyhow!("Integration not found: {e}"))?
-                .ok_or_else(|| anyhow::anyhow!(""))?;
-            let provider = state.providers.get(&integration.provider_identifier)
-                .ok_or_else(|| anyhow::anyhow!("Provider {} not found", integration.provider_identifier))?;
-            let token = state.token_key.as_ref()
-                .and_then(|key| crypto::decrypt_string(&integration.access_token, key).ok())
-                .unwrap_or_else(|| integration.access_token.clone());
-            provider.get_post_comments(&token, &post_id).await
-                .map(|comments| {
-                    let list: Vec<serde_json::Value> = comments.into_iter().take(limit as usize).map(|c| {
-                        serde_json::json!({
-                            "id": c.id,
-                            "author_name": c.author_name,
-                            "text": c.text,
-                            "created_at": c.created_at.to_rfc3339(),
-                            "like_count": c.like_count,
-                        })
-                    }).collect();
-                    serde_json::json!({"comments": list, "total": list.len()})
-                })
-                .map_err(|e| anyhow::anyhow!(e))
+            let input = crate::mcp::tools_comments::GetCommentsInput {
+                integration_id,
+                post_id,
+                limit: Some(limit),
+            };
+            let result = crate::mcp::tools_comments::get_comments(&state, &input).await
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
+            output_json(&serde_json::to_value(result.0).unwrap_or_default());
         }
         CommentAction::Reply { integration_id, comment_id, content } => {
-            let integration_id = Uuid::parse_str(&integration_id)
-                .map_err(|e| anyhow::anyhow!("Invalid integration_id: {e}"))?;
-            let integration = crate::db::queries::get_integration(&state.db, integration_id, user_id)
-                .await
-                .map_err(|e| anyhow::anyhow!("Integration not found: {e}"))?
-                .ok_or_else(|| anyhow::anyhow!(""))?;
-            let provider = state.providers.get(&integration.provider_identifier)
-                .ok_or_else(|| anyhow::anyhow!("Provider {} not found", integration.provider_identifier))?;
-            let token = state.token_key.as_ref()
-                .and_then(|key| crypto::decrypt_string(&integration.access_token, key).ok())
-                .unwrap_or_else(|| integration.access_token.clone());
-            let post = crate::social::PostContent {
+            let input = crate::mcp::tools_comments::ReplyToCommentInput {
+                integration_id,
+                comment_id,
                 content,
-                media: vec![],
-                settings: serde_json::Value::Object(serde_json::Map::new()),
             };
-            provider.reply_to_comment(&token, &comment_id, &post).await
-                .map(|r| serde_json::json!({"id": r.platform_post_id, "status": r.status}))
-                .map_err(|e| anyhow::anyhow!(e))
+            let result = crate::mcp::tools_comments::reply_to_comment(&state, &input).await
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
+            output_json(&serde_json::to_value(result.0).unwrap_or_default());
         }
         CommentAction::Delete { integration_id, comment_id } => {
-            let integration_id = Uuid::parse_str(&integration_id)
-                .map_err(|e| anyhow::anyhow!("Invalid integration_id: {e}"))?;
-            let integration = crate::db::queries::get_integration(&state.db, integration_id, user_id)
-                .await
-                .map_err(|e| anyhow::anyhow!("Integration not found: {e}"))?
-                .ok_or_else(|| anyhow::anyhow!(""))?;
-            let provider = state.providers.get(&integration.provider_identifier)
-                .ok_or_else(|| anyhow::anyhow!("Provider {} not found", integration.provider_identifier))?;
-            let token = state.token_key.as_ref()
-                .and_then(|key| crypto::decrypt_string(&integration.access_token, key).ok())
-                .unwrap_or_else(|| integration.access_token.clone());
-            provider.delete_comment(&token, &comment_id).await
-                .map(|_| serde_json::json!({"deleted": true}))
-                .map_err(|e| anyhow::anyhow!(e))
+            let input = crate::mcp::tools_comments::DeleteCommentInput {
+                integration_id,
+                comment_id,
+            };
+            let result = crate::mcp::tools_comments::delete_comment(&state, &input).await
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
+            output_json(&serde_json::to_value(result.0).unwrap_or_default());
         }
-    };
-
-    match result {
-        Ok(v) => output_json(&v),
-        Err(e) => return output_error(&e.to_string()),
     }
     Ok(())
 }
@@ -2251,87 +2209,36 @@ async fn handle_comment(action: CommentAction) -> anyhow::Result<()> {
 
 async fn handle_dm(action: DmAction) -> anyhow::Result<()> {
     let state = init_state().await?;
-    let user_id = resolve_user(&state).await?;
-
-    let result: anyhow::Result<serde_json::Value> = match action {
+    match action {
         DmAction::Send { integration_id, recipient, content } => {
-            let integration_id = Uuid::parse_str(&integration_id)
-                .map_err(|e| anyhow::anyhow!("Invalid integration_id: {e}"))?;
-            let integration = crate::db::queries::get_integration(&state.db, integration_id, user_id)
-                .await
-                .map_err(|e| anyhow::anyhow!("Integration not found: {e}"))?
-                .ok_or_else(|| anyhow::anyhow!(""))?;
-            let provider = state.providers.get(&integration.provider_identifier)
-                .ok_or_else(|| anyhow::anyhow!("Provider {} not found", integration.provider_identifier))?;
-            let token = state.token_key.as_ref()
-                .and_then(|key| crypto::decrypt_string(&integration.access_token, key).ok())
-                .unwrap_or_else(|| integration.access_token.clone());
-            let post = crate::social::PostContent {
+            let input = crate::mcp::tools_dm::SendDmInput {
+                integration_id,
+                recipient,
                 content,
-                media: vec![],
-                settings: serde_json::Value::Object(serde_json::Map::new()),
             };
-            provider.send_dm(&token, &recipient, &post).await
-                .map(|r| serde_json::json!({"id": r.platform_post_id, "status": r.status}))
-                .map_err(|e| anyhow::anyhow!(e))
+            let result = crate::mcp::tools_dm::send_dm(&state, &input).await
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
+            output_json(&serde_json::to_value(result.0).unwrap_or_default());
         }
         DmAction::List { integration_id, limit } => {
-            let integration_id = Uuid::parse_str(&integration_id)
-                .map_err(|e| anyhow::anyhow!("Invalid integration_id: {e}"))?;
-            let integration = crate::db::queries::get_integration(&state.db, integration_id, user_id)
-                .await
-                .map_err(|e| anyhow::anyhow!("Integration not found: {e}"))?
-                .ok_or_else(|| anyhow::anyhow!(""))?;
-            let provider = state.providers.get(&integration.provider_identifier)
-                .ok_or_else(|| anyhow::anyhow!("Provider {} not found", integration.provider_identifier))?;
-            let token = state.token_key.as_ref()
-                .and_then(|key| crypto::decrypt_string(&integration.access_token, key).ok())
-                .unwrap_or_else(|| integration.access_token.clone());
-            provider.get_dm_conversations(&token, limit).await
-                .map(|convs| {
-                    let list: Vec<serde_json::Value> = convs.into_iter().map(|c| {
-                        serde_json::json!({
-                            "id": c.id,
-                            "participant": c.participant,
-                            "last_message": c.last_message,
-                            "last_message_at": c.last_message_at.map(|dt| dt.to_rfc3339()),
-                        })
-                    }).collect();
-                    serde_json::json!({"conversations": list, "total": list.len()})
-                })
-                .map_err(|e| anyhow::anyhow!(e))
+            let input = crate::mcp::tools_dm::ListDmInput {
+                integration_id,
+                limit: Some(limit),
+            };
+            let result = crate::mcp::tools_dm::list_dm_conversations(&state, &input).await
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
+            output_json(&serde_json::to_value(result.0).unwrap_or_default());
         }
         DmAction::Messages { integration_id, conversation_id, limit } => {
-            let integration_id = Uuid::parse_str(&integration_id)
-                .map_err(|e| anyhow::anyhow!("Invalid integration_id: {e}"))?;
-            let integration = crate::db::queries::get_integration(&state.db, integration_id, user_id)
-                .await
-                .map_err(|e| anyhow::anyhow!("Integration not found: {e}"))?
-                .ok_or_else(|| anyhow::anyhow!(""))?;
-            let provider = state.providers.get(&integration.provider_identifier)
-                .ok_or_else(|| anyhow::anyhow!("Provider {} not found", integration.provider_identifier))?;
-            let token = state.token_key.as_ref()
-                .and_then(|key| crypto::decrypt_string(&integration.access_token, key).ok())
-                .unwrap_or_else(|| integration.access_token.clone());
-            provider.get_dm_messages(&token, &conversation_id, limit).await
-                .map(|msgs| {
-                    let list: Vec<serde_json::Value> = msgs.into_iter().map(|m| {
-                        serde_json::json!({
-                            "id": m.id,
-                            "sender": m.sender,
-                            "content": m.content,
-                            "created_at": m.created_at.to_rfc3339(),
-                        })
-                    }).collect();
-                    serde_json::json!({"messages": list, "total": list.len()})
-                })
-                .map_err(|e| anyhow::anyhow!(e))
+            let input = crate::mcp::tools_dm::GetDmInput {
+                integration_id,
+                conversation_id,
+                limit: Some(limit),
+            };
+            let result = crate::mcp::tools_dm::get_dm_messages(&state, &input).await
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
+            output_json(&serde_json::to_value(result.0).unwrap_or_default());
         }
-    };
-
-    match result {
-        Ok(v) => output_json(&v),
-        Err(e) => return output_error(&e.to_string()),
     }
     Ok(())
 }
@@ -2340,149 +2247,64 @@ async fn handle_dm(action: DmAction) -> anyhow::Result<()> {
 
 async fn handle_automation(action: AutomationAction) -> anyhow::Result<()> {
     let state = init_state().await?;
-    let user_id = resolve_user(&state).await?;
-
-    let result: anyhow::Result<serde_json::Value> = match action {
+    match action {
         AutomationAction::Create { integration_id, name, trigger_type, response_template, response_type } => {
-            let integration_id = Uuid::parse_str(&integration_id)
-                .map_err(|e| anyhow::anyhow!("Invalid integration_id: {e}"))?;
-            let rule = sqlx::query!(
-                r#"INSERT INTO automation_rules
-                   (user_id, integration_id, name, trigger_type, trigger_filter,
-                    response_template, response_type)
-                   VALUES ($1, $2, $3, $4, '{}', $5, $6)
-                   RETURNING id, name, is_active"#,
-                user_id,
+            let input = crate::mcp::tools_automation::CreateRuleInput {
                 integration_id,
                 name,
                 trigger_type,
+                trigger_filter: serde_json::json!({}),
                 response_template,
                 response_type,
-            )
-            .fetch_one(&state.db)
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to create rule: {e}"))?;
-            Ok(serde_json::json!({
-                "id": rule.id,
-                "name": rule.name,
-                "is_active": rule.is_active.unwrap_or(true),
-            }))
+                ai_model: None,
+                cooldown_minutes: None,
+                max_responses_per_hour: None,
+            };
+            let result = crate::mcp::tools_automation::create_rule(&state, &input).await
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
+            output_json(&serde_json::to_value(result.0).unwrap_or_default());
         }
         AutomationAction::List { integration_id } => {
-            let list: Vec<serde_json::Value> = if let Some(ref iid) = integration_id {
-                let iid = Uuid::parse_str(iid)
-                    .map_err(|e| anyhow::anyhow!("Invalid integration_id: {e}"))?;
-                let rules = sqlx::query!(
-                    r#"SELECT id, name, trigger_type, response_type, is_active, created_at
-                       FROM automation_rules
-                       WHERE user_id = $1 AND integration_id = $2
-                       ORDER BY created_at DESC"#,
-                    user_id,
-                    iid,
-                )
-                .fetch_all(&state.db)
-                .await
-                .map_err(|e| anyhow::anyhow!("Failed to list rules: {e}"))?;
-                rules.into_iter().map(|r| {
-                    serde_json::json!({
-                        "id": r.id,
-                        "name": r.name,
-                        "trigger_type": r.trigger_type,
-                        "response_type": r.response_type,
-                        "is_active": r.is_active.unwrap_or(true),
-                        "created_at": r.created_at.map(|dt| dt.to_rfc3339()),
-                    })
-                }).collect()
-            } else {
-                let rules = sqlx::query!(
-                    r#"SELECT id, name, trigger_type, response_type, is_active, created_at
-                       FROM automation_rules
-                       WHERE user_id = $1
-                       ORDER BY created_at DESC"#,
-                    user_id,
-                )
-                .fetch_all(&state.db)
-                .await
-                .map_err(|e| anyhow::anyhow!("Failed to list rules: {e}"))?;
-                rules.into_iter().map(|r| {
-                    serde_json::json!({
-                        "id": r.id,
-                        "name": r.name,
-                        "trigger_type": r.trigger_type,
-                        "response_type": r.response_type,
-                        "is_active": r.is_active.unwrap_or(true),
-                        "created_at": r.created_at.map(|dt| dt.to_rfc3339()),
-                    })
-                }).collect()
+            let input = crate::mcp::tools_automation::ListRulesInput {
+                integration_id,
             };
-            let total = list.len();
-            Ok(serde_json::json!({"rules": list, "total": total}))
+            let result = crate::mcp::tools_automation::list_rules(&state, &input).await
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
+            output_json(&serde_json::to_value(result.0).unwrap_or_default());
         }
         AutomationAction::Update { rule_id, name, response_template, is_active } => {
-            let rule_id = Uuid::parse_str(&rule_id)
-                .map_err(|e| anyhow::anyhow!("Invalid rule_id: {e}"))?;
-            sqlx::query!(
-                r#"UPDATE automation_rules
-                   SET name = COALESCE($2, name),
-                       response_template = COALESCE($3, response_template),
-                       is_active = COALESCE($4, is_active),
-                       updated_at = NOW()
-                   WHERE id = $1"#,
+            let input = crate::mcp::tools_automation::UpdateRuleInput {
                 rule_id,
                 name,
+                trigger_filter: None,
                 response_template,
+                response_type: None,
+                ai_model: None,
                 is_active,
-            )
-            .execute(&state.db)
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to update rule: {e}"))?;
-            Ok(serde_json::json!({"updated": true}))
+                cooldown_minutes: None,
+                max_responses_per_hour: None,
+            };
+            let result = crate::mcp::tools_automation::update_rule(&state, &input).await
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
+            output_json(&serde_json::to_value(result.0).unwrap_or_default());
         }
         AutomationAction::Delete { rule_id } => {
-            let rule_id = Uuid::parse_str(&rule_id)
-                .map_err(|e| anyhow::anyhow!("Invalid rule_id: {e}"))?;
-            sqlx::query!(
-                r#"DELETE FROM automation_rules WHERE id = $1"#,
+            let input = crate::mcp::tools_automation::DeleteRuleInput {
                 rule_id,
-            )
-            .execute(&state.db)
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to delete rule: {e}"))?;
-            Ok(serde_json::json!({"deleted": true}))
+            };
+            let result = crate::mcp::tools_automation::delete_rule(&state, &input).await
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
+            output_json(&serde_json::to_value(result.0).unwrap_or_default());
         }
         AutomationAction::Logs { rule_id, limit } => {
-            let rule_id = Uuid::parse_str(&rule_id)
-                .map_err(|e| anyhow::anyhow!("Invalid rule_id: {e}"))?;
-            let logs = sqlx::query!(
-                r#"SELECT id, trigger_id, trigger_type, response, status, error_message, created_at
-                   FROM automation_logs
-                   WHERE rule_id = $1
-                   ORDER BY created_at DESC
-                   LIMIT $2"#,
+            let input = crate::mcp::tools_automation::GetLogsInput {
                 rule_id,
-                limit as i64,
-            )
-            .fetch_all(&state.db)
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to get logs: {e}"))?;
-            let list: Vec<serde_json::Value> = logs.into_iter().map(|l| {
-                serde_json::json!({
-                    "id": l.id,
-                    "trigger_id": l.trigger_id,
-                    "trigger_type": l.trigger_type,
-                    "response": l.response,
-                    "status": l.status,
-                    "error_message": l.error_message,
-                    "created_at": l.created_at.map(|dt| dt.to_rfc3339()),
-                })
-            }).collect();
-            Ok(serde_json::json!({"logs": list, "total": list.len()}))
+                limit: Some(limit as i64),
+            };
+            let result = crate::mcp::tools_automation::get_logs(&state, &input).await
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
+            output_json(&serde_json::to_value(result.0).unwrap_or_default());
         }
-    };
-
-    match result {
-        Ok(v) => output_json(&v),
-        Err(e) => return output_error(&e.to_string()),
     }
     Ok(())
 }
@@ -2500,38 +2322,39 @@ async fn handle_post(
     let state = init_state().await?;
     let user_id = resolve_user(&state).await?;
     let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
-    let target_integrations: Vec<_> = if let Some(platforms_str) = platforms {
+
+    let integration_ids: Vec<String> = if let Some(platforms_str) = platforms {
         let requested: Vec<&str> = platforms_str.split(',').map(|s| s.trim()).collect();
-        integrations.iter().filter(|i| requested.iter().any(|p| i.provider_identifier == *p)).collect()
+        integrations.iter()
+            .filter(|i| requested.iter().any(|p| i.provider_identifier == *p))
+            .map(|i| i.id.to_string())
+            .collect()
     } else {
-        integrations.iter().collect()
+        integrations.iter().map(|i| i.id.to_string()).collect()
     };
-    if target_integrations.is_empty() {
-        return Err(anyhow::anyhow!("No matching integrations found. Use 'social-forge providers' to see connected accounts."));
+
+    if integration_ids.is_empty() {
+        return Err(anyhow::anyhow!(
+            "No matching integrations found. Use 'social-forge providers' to see connected accounts."
+        ));
     }
-    let media_json = match media {
-        Some(m) => serde_json::json!(m.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()).map(|u| serde_json::json!({"url": u})).collect::<Vec<_>>()),
-        None => serde_json::json!([]),
+
+    let input = crate::mcp::tools_posts::StagePostInput {
+        content: text.to_string(),
+        media: media.map(|m| {
+            serde_json::json!(m.split(',').map(|s| s.trim()).filter(|s| !s.is_empty())
+                .map(|u| serde_json::json!({"url": u})).collect::<Vec<_>>())
+        }),
+        integration_ids,
+        settings: Some(serde_json::json!({})),
+        scheduled_at: schedule.map(String::from),
+        first_comment: first_comment.map(String::from),
     };
-    let scheduled_at = match schedule {
-        Some(s) => Some(chrono::DateTime::parse_from_rfc3339(s).map_err(|_| anyhow::anyhow!("Invalid date format, use ISO8601"))?.with_timezone(&chrono::Utc)),
-        None => None,
-    };
-    let mut results: Vec<serde_json::Value> = Vec::new();
-    for integration in &target_integrations {
-        let provider_name = &integration.provider_identifier;
-        let segments = crate::services::content_splitter::split_content(text, provider_name, 4);
-        for segment in &segments {
-            let segment_media = if segment.sequence == 1 { media_json.clone() } else { serde_json::json!([]) };
-            let state_str = if scheduled_at.is_some() { "queued" } else { "draft" };
-            let post = crate::services::posts::PostService::create(&state.db, &state.broadcast, crate::services::posts::CreatePostInput { user_id, integration_id: integration.id, content: segment.content.clone(), title: None, media_urls: segment_media.clone(), scheduled_at, settings: serde_json::json!({}) }).await.map_err(|e| anyhow::anyhow!("Failed to create post for {}: {e}", provider_name))?;
-            if let Some(sat) = scheduled_at {
-                crate::db::queries::schedule_post(&state.db, post.id, user_id, sat).await.map_err(|e| anyhow::anyhow!("Failed to schedule: {e}"))?;
-            }
-            results.push(serde_json::json!({"integration_id": integration.id.to_string(), "provider": provider_name, "post_id": post.id.to_string(), "sequence": segment.sequence, "total_segments": segment.total, "state": state_str, "content_preview": segment.content.chars().take(80).collect::<String>()}));
-        }
-    }
-    output_json(&serde_json::json!({"status": "created", "total": results.len(), "scheduled_at": scheduled_at.map(|d| d.to_rfc3339()), "posts": results}));
+
+    let result = crate::mcp::tools_posts::stage_post(&state, &input).await
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+    output_json(&serde_json::to_value(result.0).unwrap_or_default());
     Ok(())
 }
 
@@ -2605,14 +2428,21 @@ async fn handle_stage(
 // Media Handler
 async fn handle_media(action: MediaAction) -> anyhow::Result<()> {
     let state = init_state().await?;
-    let user_id = resolve_user(&state).await?;
     match action {
         MediaAction::Upload { path, alt } => {
             let file_path = std::path::Path::new(&path);
-            if !file_path.exists() { return Err(anyhow::anyhow!("File not found: {path}")); }
-            let data = std::fs::read(file_path).map_err(|e| anyhow::anyhow!("Failed to read file: {e}"))?;
-            if data.len() > 50 * 1024 * 1024 { return Err(anyhow::anyhow!("File too large (max 50 MB)")); }
-            let filename = file_path.file_name().and_then(|f| f.to_str()).unwrap_or("upload.bin").to_string();
+            if !file_path.exists() {
+                return Err(anyhow::anyhow!("File not found: {path}"));
+            }
+            let data = std::fs::read(file_path)
+                .map_err(|e| anyhow::anyhow!("Failed to read file: {e}"))?;
+            if data.len() > 50 * 1024 * 1024 {
+                return Err(anyhow::anyhow!("File too large (max 50 MB)"));
+            }
+            let filename = file_path.file_name()
+                .and_then(|f| f.to_str())
+                .unwrap_or("upload.bin")
+                .to_string();
             let mime = match file_path.extension().and_then(|e| e.to_str()) {
                 Some("jpg") | Some("jpeg") => "image/jpeg",
                 Some("png") => "image/png",
@@ -2622,37 +2452,63 @@ async fn handle_media(action: MediaAction) -> anyhow::Result<()> {
                 Some("mov") => "video/quicktime",
                 _ => "application/octet-stream",
             };
-            let file_id = uuid::Uuid::new_v4();
-            let ext = file_path.extension().and_then(|e| e.to_str()).unwrap_or("bin");
-            let stored_name = format!("{file_id}.{ext}");
-            let upload_dir = std::path::Path::new(&state.config.media_dir);
-            tokio::fs::create_dir_all(upload_dir).await.map_err(|e| anyhow::anyhow!("Failed to create upload dir: {e}"))?;
-            let filepath = upload_dir.join(&stored_name);
-            tokio::fs::write(&filepath, &data).await.map_err(|e| anyhow::anyhow!("Failed to write file: {e}"))?;
-            let entry = crate::db::queries::create_media(&state.db, user_id, &filename, &stored_name, mime, data.len() as i64, None, None).await.map_err(|e| anyhow::anyhow!("DB error: {e}"))?;
-            output_json(&serde_json::json!({"id": entry.id.to_string(), "url": format!("/api/media/{}", entry.id), "mime_type": mime, "filename": filename, "size": data.len() as i64}));
+            let encoded = base64::Engine::encode(
+                &base64::engine::general_purpose::STANDARD,
+                &data,
+            );
+            let input = crate::mcp::tools_media::MediaUploadInput {
+                filename,
+                mime_type: mime.to_string(),
+                data: encoded,
+                alt,
+            };
+            let result = crate::mcp::tools_media::upload_media(&state, &input).await
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
+            output_json(&serde_json::to_value(result.0).unwrap_or_default());
         }
         MediaAction::List { limit, search } => {
-            let entries = crate::db::queries::list_media(&state.db, user_id, limit.min(200) as i64, 0, search.as_deref()).await.map_err(|e| anyhow::anyhow!("DB error: {e}"))?;
-            let media: Vec<serde_json::Value> = entries.into_iter().map(|e| {
-                serde_json::json!({"id": e.id.to_string(), "url": format!("/api/media/{}", e.id), "filename": e.original_name, "mime_type": e.mime_type, "size": e.file_size, "created_at": e.created_at.to_rfc3339()})
-            }).collect();
-            output_json(&serde_json::json!({"count": media.len(), "media": media}));
+            let input = crate::mcp::tools_media::MediaListInput {
+                limit: Some(limit.min(200) as i64),
+                search,
+            };
+            let result = crate::mcp::tools_media::list_media(&state, &input).await
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
+            output_json(&serde_json::to_value(result.0).unwrap_or_default());
         }
         MediaAction::Download { url, output } => {
-            let resp = reqwest::Client::new().get(&url).send().await.map_err(|e| anyhow::anyhow!("Failed to download: {e}"))?;
+            // Download is CLI-only (no MCP equivalent — it's a local filesystem operation)
+            let resp = reqwest::Client::new().get(&url).send().await
+                .map_err(|e| anyhow::anyhow!("Failed to download: {e}"))?;
             let status = resp.status();
-            if !status.is_success() { return Err(anyhow::anyhow!("Download failed with HTTP {}", status)); }
-            let content_type = resp.headers().get("content-type").and_then(|v| v.to_str().ok()).unwrap_or("application/octet-stream").to_string();
-            let bytes = resp.bytes().await.map_err(|e| anyhow::anyhow!("Failed to read response: {e}"))?;
+            if !status.is_success() {
+                return Err(anyhow::anyhow!("Download failed with HTTP {}", status));
+            }
+            let content_type = resp.headers().get("content-type")
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or("application/octet-stream")
+                .to_string();
+            let bytes = resp.bytes().await
+                .map_err(|e| anyhow::anyhow!("Failed to read response: {e}"))?;
             let out_path = if std::path::Path::new(&output).is_dir() {
                 let filename = url.rsplit('/').next().unwrap_or("download");
                 let filename = filename.split('?').next().unwrap_or(filename);
                 std::path::Path::new(&output).join(filename)
-            } else { std::path::PathBuf::from(&output) };
-            if let Some(parent) = out_path.parent() { std::fs::create_dir_all(parent).map_err(|e| anyhow::anyhow!("Failed to create directory: {e}"))?; }
-            std::fs::write(&out_path, &bytes).map_err(|e| anyhow::anyhow!("Failed to write file: {e}"))?;
-            output_json(&serde_json::json!({"status": "downloaded", "url": url, "path": out_path.display().to_string(), "size": bytes.len() as i64, "content_type": content_type}));
+            } else {
+                std::path::PathBuf::from(&output)
+            };
+            if let Some(parent) = out_path.parent() {
+                std::fs::create_dir_all(parent)
+                    .map_err(|e| anyhow::anyhow!("Failed to create directory: {e}"))?;
+            }
+            std::fs::write(&out_path, &bytes)
+                .map_err(|e| anyhow::anyhow!("Failed to write file: {e}"))?;
+            output_json(&serde_json::json!({
+                "status": "downloaded",
+                "url": url,
+                "path": out_path.display().to_string(),
+                "size": bytes.len() as i64,
+                "content_type": content_type,
+            }));
         }
     }
     Ok(())
