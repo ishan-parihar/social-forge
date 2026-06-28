@@ -198,6 +198,31 @@ pub struct CommentData {
     pub replies: Vec<CommentData>,
 }
 
+/// A DM conversation
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct DmConversation {
+    pub id: String,
+    pub participant: String,
+    pub participant_name: Option<String>,
+    pub participant_avatar: Option<String>,
+    pub last_message: Option<String>,
+    pub last_message_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub unread_count: u32,
+}
+
+/// A single DM message
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct DmMessage {
+    pub id: String,
+    pub conversation_id: String,
+    pub sender: String,
+    pub sender_name: Option<String>,
+    pub content: String,
+    pub media: Vec<MediaAttachment>,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub read: bool,
+}
+
 /// External post data for import (CLI command)
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct ExternalPostData {
@@ -451,6 +476,67 @@ pub trait SocialProvider: Send + Sync {
             ));
         }
         Ok(())
+    }
+
+    // ── DM Methods ───────────────────────────────────────────
+
+    /// Send a direct message to a user
+    async fn send_dm(
+        &self,
+        _access_token: &str,
+        _recipient: &str,
+        _content: &PostContent,
+    ) -> Result<PublishResult, ProviderError> {
+        Err(ProviderError::Api("DMs not supported by this provider".into()))
+    }
+
+    /// Get list of DM conversations
+    async fn get_dm_conversations(
+        &self,
+        _access_token: &str,
+        _limit: u32,
+    ) -> Result<Vec<DmConversation>, ProviderError> {
+        Ok(vec![])
+    }
+
+    /// Get messages in a DM conversation
+    async fn get_dm_messages(
+        &self,
+        _access_token: &str,
+        _conversation_id: &str,
+        _limit: u32,
+    ) -> Result<Vec<DmMessage>, ProviderError> {
+        Ok(vec![])
+    }
+
+    // ── Comment Enhancement Methods ──────────────────────────
+
+    /// Reply to a specific comment
+    async fn reply_to_comment(
+        &self,
+        _access_token: &str,
+        _comment_id: &str,
+        _content: &PostContent,
+    ) -> Result<PublishResult, ProviderError> {
+        Err(ProviderError::Api("Comment replies not supported by this provider".into()))
+    }
+
+    /// Get a specific comment by ID
+    async fn get_comment(
+        &self,
+        _access_token: &str,
+        _comment_id: &str,
+    ) -> Result<Option<CommentData>, ProviderError> {
+        Ok(None)
+    }
+
+    /// Delete a comment
+    async fn delete_comment(
+        &self,
+        _access_token: &str,
+        _comment_id: &str,
+    ) -> Result<(), ProviderError> {
+        Err(ProviderError::Api("Comment deletion not supported by this provider".into()))
     }
 }
 
