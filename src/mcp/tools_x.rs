@@ -567,3 +567,138 @@ pub async fn x_list_timeline(
         .map_err(|e| format!("X list timeline failed: {e}"))?;
     Ok(Json(XListTimelineOutput { data: result }))
 }
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct XReplyTweetInput {
+    pub tweet_id: String,
+    pub content: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct XReplyTweetOutput {
+    pub tweet_id: String,
+    pub url: Option<String>,
+}
+
+pub async fn x_reply_tweet(
+    state: &AppState,
+    input: &XReplyTweetInput,
+) -> Result<Json<XReplyTweetOutput>, String> {
+    let user_id = resolve_first_user(state).await?;
+    let (token, _) = find_x_token(state, user_id).await?;
+    let provider = create_provider(state, &token);
+    let post_content = crate::social::PostContent {
+        content: input.content.clone(),
+        media: vec![],
+        settings: serde_json::json!({}),
+    };
+    let result = provider
+        .reply_to_comment(&token, &input.tweet_id, &post_content)
+        .await
+        .map_err(|e| format!("X reply failed: {e}"))?;
+    Ok(Json(XReplyTweetOutput {
+        tweet_id: result.platform_post_id,
+        url: result.platform_post_url,
+    }))
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct XSendDmInput {
+    pub recipient_id: String,
+    pub content: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct XSendDmOutput {
+    pub message_id: String,
+    pub status: String,
+}
+
+pub async fn x_send_dm(
+    state: &AppState,
+    input: &XSendDmInput,
+) -> Result<Json<XSendDmOutput>, String> {
+    let user_id = resolve_first_user(state).await?;
+    let (token, _) = find_x_token(state, user_id).await?;
+    let provider = create_provider(state, &token);
+    let post_content = crate::social::PostContent {
+        content: input.content.clone(),
+        media: vec![],
+        settings: serde_json::json!({}),
+    };
+    let result = provider
+        .send_dm(&token, &input.recipient_id, &post_content)
+        .await
+        .map_err(|e| format!("X send DM failed: {e}"))?;
+    Ok(Json(XSendDmOutput {
+        message_id: result.platform_post_id,
+        status: result.status,
+    }))
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct XListDmsInput {
+    pub max_results: Option<u32>,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct XListDmsOutput {
+    pub conversations: Vec<serde_json::Value>,
+}
+
+pub async fn x_list_dms(
+    state: &AppState,
+    input: &XListDmsInput,
+) -> Result<Json<XListDmsOutput>, String> {
+    let user_id = resolve_first_user(state).await?;
+    let (token, _) = find_x_token(state, user_id).await?;
+    let provider = create_provider(state, &token);
+    let limit = input.max_results.unwrap_or(20).min(50);
+    let conversations = provider
+        .get_dm_conversations(&token, limit)
+        .await
+        .map_err(|e| format!("X list DMs failed: {e}"))?;
+    let conv_values: Vec<serde_json::Value> = conversations.into_iter().map(|c| {
+        serde_json::json!({
+            "id": c.id,
+            "participant": c.participant,
+            "last_message": c.last_message,
+            "last_message_at": c.last_message_at.map(|dt| dt.to_rfc3339()),
+        })
+    }).collect();
+    Ok(Json(XListDmsOutput { conversations: conv_values }))
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct XGetDmConversationInput {
+    pub conversation_id: String,
+    pub max_results: Option<u32>,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct XGetDmConversationOutput {
+    pub messages: Vec<serde_json::Value>,
+}
+
+pub async fn x_get_dm_conversation(
+    state: &AppState,
+    input: &XGetDmConversationInput,
+) -> Result<Json<XGetDmConversationOutput>, String> {
+    let user_id = resolve_first_user(state).await?;
+    let (token, _) = find_x_token(state, user_id).await?;
+    let provider = create_provider(state, &token);
+    let limit = input.max_results.unwrap_or(20).min(50);
+    let messages = provider
+        .get_dm_messages(&token, &input.conversation_id, limit)
+        .await
+        .map_err(|e| format!("X get DM conversation failed: {e}"))?;
+    let msg_values: Vec<serde_json::Value> = messages.into_iter().map(|m| {
+        serde_json::json!({
+            "id": m.id,
+            "sender": m.sender,
+            "content": m.content,
+            "created_at": m.created_at.to_rfc3339(),
+        })
+    }).collect();
+    Ok(Json(XGetDmConversationOutput { messages: msg_values }))
+}

@@ -2021,4 +2021,188 @@ impl XProvider {
         }
         self.v2_get(&url, access_token).await
     }
+
+    pub async fn reply_to_comment(
+        &self,
+        access_token: &str,
+        comment_id: &str,
+        post: &PostContent,
+    ) -> Result<PublishResult, ProviderError> {
+        if let Some((_auth_token, ct0)) = Self::parse_cookie_token(access_token) {
+            let mut variables = serde_json::json!({
+                "tweet_text": post.content,
+                "media": {
+                    "media_entities": [],
+                    "possibly_sensitive": false
+                },
+                "semantic_annotation_ids": [],
+                "dark_request": false,
+                "reply": {
+                    "in_reply_to_tweet_id": comment_id,
+                    "exclude_reply_user_ids": []
+                },
+            });
+
+            if !post.media.is_empty() {
+                let media_ids = self.upload_media(access_token, &post.media).await?;
+                let entities: Vec<serde_json::Value> = media_ids
+                    .iter()
+                    .map(|id| serde_json::json!({"media_id": id, "tagged_users": []}))
+                    .collect();
+                variables["media"] = serde_json::json!({
+                    "media_entities": entities,
+                    "possibly_sensitive": false,
+                });
+            }
+
+            Self::write_delay();
+
+            let query_id = FALLBACK_QUERY_IDS
+                .get("CreateTweet")
+                .ok_or_else(|| ProviderError::Api("Missing CreateTweet queryId".into()))?;
+            let json = self.graphql_post(query_id, "CreateTweet", &variables, access_token).await?;
+
+            let tweet_id = json["data"]["create_tweet"]["tweet_results"]["result"]["rest_id"]
+                .as_str()
+                .unwrap_or("");
+
+            return Ok(PublishResult {
+                platform_post_url: if tweet_id.is_empty() {
+                    None
+                } else {
+                    Some(format!("https://x.com/i/status/{tweet_id}"))
+                },
+                platform_post_id: tweet_id.to_string(),
+                status: "published".into(),
+            });
+        }
+
+        let mut body = serde_json::json!({
+            "text": post.content,
+            "reply": { "in_reply_to_tweet_id": comment_id }
+        });
+        if !post.media.is_empty() {
+            let media_ids = self.upload_media(access_token, &post.media).await?;
+            if !media_ids.is_empty() {
+                body["media"] = serde_json::json!({ "media_ids": media_ids });
+            }
+        }
+        let json = self.v2_post("https://api.twitter.com/2/tweets", access_token, &body).await?;
+        let post_id = json["data"]["id"].as_str().unwrap_or("").to_string();
+        Ok(PublishResult {
+            platform_post_url: Some(format!("https://twitter.com/user/status/{post_id}")),
+            platform_post_id: post_id,
+            status: "published".into(),
+        })
+    }
+
+    pub async fn send_dm(
+        &self,
+        access_token: &str,
+        recipient: &str,
+        post: &PostContent,
+    ) -> Result<PublishResult, ProviderError> {
+        let body = serde_json::json!({
+            "event": {
+                "type": "message_create",
+                "message_create": {
+                    "target": {
+                        "recipient_id": recipient
+                    },
+                    "message_data": {
+                        "text": post.content
+                    }
+                }
+            }
+        });
+        let json = self.v2_post("https://api.twitter.com/2/dm_conversations/with/{recipient_id}/messages", access_token, &body).await?;
+        let message_id = json["data"]["dm_event_id"].as_str().unwrap_or("").to_string();
+        Ok(PublishResult {
+            platform_post_id: message_id,
+            platform_post_url: None,
+            status: "sent".into(),
+        })
+    }
+
+    pub async fn get_dm_conversations(
+        &self,
+        access_token: &str,
+        limit: u32,
+    ) -> Result<Vec<super::DmConversation>, ProviderError> {
+        let url = format!(
+            "https://api.twitter.com/2/dm_conversations?max_results={}&dm_event.fields=created_at,message_create,text",
+            limit.min(50)
+        );
+        let json = self.v2_get(&url, access_token).await?;
+        let mut conversations = Vec::new();
+        if let Some(data) = json["data"].as_array() {
+            for conv in data {
+                let id = conv["dm_conversation_id"].as_str().unwrap_or("").to_string();
+                let participant = conv["participants"]
+                    .as_array()
+                    .and_then(|p| p.first())
+                    .and_then(|p| p["user_id"].as_str())
+                    .unwrap_or("")
+                    .to_string();
+                let last_message = conv["dm_events"]
+                    .as_array()
+                    .and_then(|e| e.last())
+                    .and_then(|e| e["text"].as_str())
+                    .map(|s| s.to_string());
+                let last_message_at = conv["dm_events"]
+                    .as_array()
+                    .and_then(|e| e.last())
+                    .and_then(|e| e["created_at"].as_str())
+                    .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                    .map(|dt| dt.with_timezone(&chrono::Utc));
+                conversations.push(super::DmConversation {
+                    id,
+                    participant,
+                    participant_name: None,
+                    participant_avatar: None,
+                    last_message,
+                    last_message_at,
+                    unread_count: 0,
+                });
+            }
+        }
+        Ok(conversations)
+    }
+
+    pub async fn get_dm_messages(
+        &self,
+        access_token: &str,
+        conversation_id: &str,
+        limit: u32,
+    ) -> Result<Vec<super::DmMessage>, ProviderError> {
+        let url = format!(
+            "https://api.twitter.com/2/dm_conversations/{}/messages?max_results={}&dm_event.fields=created_at,message_create,text,sender_id",
+            conversation_id,
+            limit.min(50)
+        );
+        let json = self.v2_get(&url, access_token).await?;
+        let mut messages = Vec::new();
+        if let Some(data) = json["data"].as_array() {
+            for msg in data {
+                let id = msg["dm_event_id"].as_str().unwrap_or("").to_string();
+                let sender = msg["sender_id"].as_str().unwrap_or("").to_string();
+                let content = msg["text"].as_str().unwrap_or("").to_string();
+                let created_at = msg["created_at"].as_str()
+                    .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                    .map(|dt| dt.with_timezone(&chrono::Utc))
+                    .unwrap_or_else(chrono::Utc::now);
+                messages.push(super::DmMessage {
+                    id,
+                    conversation_id: conversation_id.to_string(),
+                    sender,
+                    sender_name: None,
+                    content,
+                    media: vec![],
+                    created_at,
+                    read: true,
+                });
+            }
+        }
+        Ok(messages)
+    }
 }
