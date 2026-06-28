@@ -1,6 +1,6 @@
 <script lang="ts">
   let { items, align = "left", children }: {
-    items: Array<{ label: string; onclick: () => void; variant?: "default" | "danger" }>;
+    items: Array<{ label: string; onclick: () => void; variant?: "default" | "danger"; disabled?: boolean }>;
     align?: "left" | "right";
     children?: import("svelte").Snippet;
   } = $props();
@@ -34,7 +34,8 @@
         <button
           role="menuitem"
           onclick={() => handleClick(item.onclick)}
-          class="dropdown-item {item.variant === 'danger' ? 'text-red-400' : ''}"
+          disabled={item.disabled}
+          class="dropdown-item {item.variant === 'danger' ? 'text-red-400' : ''} {item.disabled ? 'opacity-50 cursor-not-allowed' : ''}"
         >
           {item.label}
         </button>

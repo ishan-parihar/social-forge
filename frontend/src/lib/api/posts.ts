@@ -52,7 +52,6 @@ export const postsApi = {
     api.put<PostDetail>(`/api/posts/${id}`, d),
   schedule: (id: string, at: string) => api.post<PostDetail>(`/api/posts/${id}/schedule`, { scheduled_at: at }),
   delete: (id: string) => api.del<{ deleted: boolean }>(`/api/posts/${id}`),
-  setTags: (id: string, tag_ids: string[]) => api.put<PostDetail>(`/api/posts/${id}/tags`, { tag_ids }),
   findSlot: (integrationId?: string) => {
     const q = integrationId ? `?integration_id=${integrationId}` : "";
     return api.get<{ date: string }>(`/api/posts/find-slot${q}`);

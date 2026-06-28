@@ -537,53 +537,39 @@ async fn handle_connect(provider: &str) -> anyhow::Result<()> {
             let connected: Vec<_> = integrations.iter()
                 .filter(|i| i.provider_identifier == "linkedin" || i.provider_identifier == "linkedin-page")
                 .collect();
-            if !connected.is_empty() {
-                output_json(&serde_json::json!({
-                    "status": "already_connected",
-                    "provider": provider,
-                    "count": connected.len(),
-                    "accounts": connected.iter().map(|i| serde_json::json!({
-                        "name": i.profile_name,
-                        "internal_id": i.internal_id,
-                        "type": i.provider_identifier,
-                    })).collect::<Vec<_>>(),
-                }));
-            } else {
-                let app_url = &state.config.app_url;
-                output_json(&serde_json::json!({
-                    "status": "not_connected",
-                    "provider": provider,
-                    "method": "oauth",
-                    "auth_url": format!("{}/api/public/connect/{}", app_url, provider),
-                    "hint": "Open the auth_url in a browser to complete OAuth authorization.",
-                }));
-            }
+            let app_url = &state.config.app_url;
+            output_json(&serde_json::json!({
+                "status": if connected.is_empty() { "not_connected" } else { "already_connected" },
+                "provider": provider,
+                "count": connected.len(),
+                "accounts": connected.iter().map(|i| serde_json::json!({
+                    "name": i.profile_name,
+                    "internal_id": i.internal_id,
+                    "type": i.provider_identifier,
+                })).collect::<Vec<_>>(),
+                "method": "oauth",
+                "auth_url": format!("{}/api/public/connect/{}", app_url, provider),
+                "hint": "Open the auth_url in a browser to complete OAuth authorization.",
+            }));
         }
         "facebook" | "instagram" | "instagram-standalone" => {
             let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
             let connected: Vec<_> = integrations.iter()
                 .filter(|i| i.provider_identifier == provider)
                 .collect();
-            if !connected.is_empty() {
-                output_json(&serde_json::json!({
-                    "status": "already_connected",
-                    "provider": provider,
-                    "count": connected.len(),
-                    "accounts": connected.iter().map(|i| serde_json::json!({
-                        "name": i.profile_name,
-                        "internal_id": i.internal_id,
-                    })).collect::<Vec<_>>(),
-                }));
-            } else {
-                let app_url = &state.config.app_url;
-                output_json(&serde_json::json!({
-                    "status": "not_connected",
-                    "provider": provider,
-                    "method": "oauth",
-                    "auth_url": format!("{}/api/public/connect/{}", app_url, provider),
-                    "hint": "Open the auth_url in a browser to complete OAuth authorization.",
-                }));
-            }
+            let app_url = &state.config.app_url;
+            output_json(&serde_json::json!({
+                "status": if connected.is_empty() { "not_connected" } else { "already_connected" },
+                "provider": provider,
+                "count": connected.len(),
+                "accounts": connected.iter().map(|i| serde_json::json!({
+                    "name": i.profile_name,
+                    "internal_id": i.internal_id,
+                })).collect::<Vec<_>>(),
+                "method": "oauth",
+                "auth_url": format!("{}/api/public/connect/{}", app_url, provider),
+                "hint": "Open the auth_url in a browser to complete OAuth authorization.",
+            }));
         }
 
         // ── Direct-connect providers ──────────────────────────
@@ -732,13 +718,6 @@ async fn handle_connect(provider: &str) -> anyhow::Result<()> {
                 output_json(&serde_json::json!({"status": "configured", "provider": "threads", "method": "oauth"}));
             } else {
                 output_json(&serde_json::json!({"status": "not_configured", "provider": "threads", "requires": ["THREADS_APP_ID", "THREADS_APP_SECRET"], "hint": "Threads uses Meta credentials. Set THREADS_APP_ID and THREADS_APP_SECRET in ~/.social-forge/.env"}));
-            }
-        }
-        "instagram-standalone" => {
-            if state.config.instagram_app_id.is_some() && state.config.instagram_app_secret.is_some() {
-                output_json(&serde_json::json!({"status": "configured", "provider": "instagram-standalone", "method": "env_vars"}));
-            } else {
-                output_json(&serde_json::json!({"status": "not_configured", "provider": "instagram-standalone", "requires": ["INSTAGRAM_APP_ID", "INSTAGRAM_APP_SECRET"], "hint": "Set these for the Instagram Basic Display API"}));
             }
         }
 

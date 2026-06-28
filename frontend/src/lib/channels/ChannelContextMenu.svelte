@@ -8,7 +8,9 @@
         integrationName = "",
         currentTimeslots = [] as TimeslotEntry[],
         disabled = false,
+        isRefreshing = false,
         onRefreshToken,
+        onReconnect,
         onRename,
         onToggleDisable,
         onCopyId,
@@ -18,7 +20,9 @@
         integrationName?: string;
         currentTimeslots?: TimeslotEntry[];
         disabled?: boolean;
+        isRefreshing?: boolean;
         onRefreshToken?: () => void;
+        onReconnect?: () => void;
         onRename?: () => void;
         onToggleDisable?: () => void;
         onCopyId?: () => void;
@@ -32,8 +36,14 @@
             onclick: () => { showTimeSlots = true; }
         },
         ...(onRefreshToken ? [{
-            label: "Refresh token",
-            onclick: onRefreshToken
+            label: isRefreshing ? "Refreshing…" : "Refresh token",
+            onclick: onRefreshToken,
+            disabled: isRefreshing
+        }] : []),
+        ...(onReconnect ? [{
+            label: isRefreshing ? "Reconnecting…" : "Reconnect",
+            onclick: onReconnect,
+            disabled: isRefreshing
         }] : []),
         ...(onRename ? [{
             label: "Rename",

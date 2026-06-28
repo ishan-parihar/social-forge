@@ -4,12 +4,14 @@
   import { integrationsApi, type Integration, type TimeslotEntry } from "$lib/api/integrations";
   import { getAuthType } from "./auth-types";
 
-  let { integration, timeslots, onDisconnect, onRefresh, onToggleDisable }: {
+  let { integration, timeslots, onDisconnect, onRefresh, onReconnect, onToggleDisable, isRefreshing }: {
     integration: Integration;
     timeslots?: TimeslotEntry[];
     onDisconnect?: (id: string) => void;
     onRefresh?: (id: string) => void;
+    onReconnect?: (id: string) => void;
     onToggleDisable?: (id: string, disabled: boolean) => void;
+    isRefreshing?: boolean;
   } = $props();
 
   let currentTimeslots = $derived(
@@ -116,7 +118,9 @@
       integrationName={integration.profile_name || integration.provider_name}
       currentTimeslots={currentTimeslots}
       disabled={integration.disabled}
+      isRefreshing={isRefreshing}
       onRefreshToken={integration.refresh_needed || authType === "oauth" ? () => onRefresh?.(integration.id) : undefined}
+      onReconnect={onReconnect ? () => onReconnect(integration.id) : undefined}
       onRename={handleRename}
       onToggleDisable={handleToggleDisable}
       onCopyId={handleCopyId}

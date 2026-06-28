@@ -52,18 +52,6 @@ export interface FeedResponse {
   has_more: boolean;
 }
 
-export interface AnalyticsResponse {
-  total_likes: number;
-  total_comments: number;
-  total_shares: number;
-  total_views: number;
-  total_reposts: number;
-  total_replies: number;
-  total_upvotes: number;
-  total_awards: number;
-  posts_with_engagement: number;
-}
-
 /**
  * Proxy an external media URL through the backend to bypass CDN CORS/referrer restrictions.
  * Only proxies known CDN domains (video.twimg.com, pbs.twimg.com, etc.).
@@ -100,11 +88,6 @@ export const feedApi = {
   },
   import: () => {
     return api.post<{ imported: number; status: string }>('/api/feed/import');
-  },
-  analytics: (provider?: string) => {
-    const params = new URLSearchParams();
-    if (provider) params.set('provider', provider);
-    return api.get<AnalyticsResponse>(`/api/feed/analytics?${params.toString()}`);
   },
   accounts: () => {
     return api.get<FeedAccount[]>('/api/feed/accounts');

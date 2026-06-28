@@ -30,8 +30,6 @@ export const notificationsApi = {
         api.put<{ data: Notification }>(`/api/notifications/${id}/read`),
     markAllRead: () =>
         api.put<{ updated: number }>('/api/notifications/read-all'),
-    delete: (id: string) =>
-        api.del<{ deleted: boolean }>(`/api/notifications/${id}`),
     getPrefs: () =>
         api.get<NotificationPrefs>('/api/notifications/prefs'),
     updatePrefs: (prefs: Partial<NotificationPrefs>) =>
