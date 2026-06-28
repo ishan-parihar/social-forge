@@ -130,6 +130,137 @@ pub enum Command {
         #[arg(long, default_value_t = 20)]
         limit: u32,
     },
+
+    /// Comment operations
+    Comment {
+        #[command(subcommand)]
+        action: CommentAction,
+    },
+
+    /// Direct message operations
+    Dm {
+        #[command(subcommand)]
+        action: DmAction,
+    },
+
+    /// Automation rules management
+    Automation {
+        #[command(subcommand)]
+        action: AutomationAction,
+    },
+}
+
+// ─── Comment Actions ────────────────────────────────────────────────────────
+
+#[derive(Subcommand, Debug)]
+pub enum CommentAction {
+    /// Get comments for a post
+    Get {
+        /// Integration ID
+        integration_id: String,
+        /// Post ID
+        post_id: String,
+        /// Number of comments to fetch
+        #[arg(long, default_value_t = 50)]
+        limit: u32,
+    },
+    /// Reply to a comment
+    Reply {
+        /// Integration ID
+        integration_id: String,
+        /// Comment ID
+        comment_id: String,
+        /// Reply content
+        content: String,
+    },
+    /// Delete a comment
+    Delete {
+        /// Integration ID
+        integration_id: String,
+        /// Comment ID
+        comment_id: String,
+    },
+}
+
+// ─── DM Actions ─────────────────────────────────────────────────────────────
+
+#[derive(Subcommand, Debug)]
+pub enum DmAction {
+    /// Send a direct message
+    Send {
+        /// Integration ID
+        integration_id: String,
+        /// Recipient ID
+        recipient: String,
+        /// Message content
+        content: String,
+    },
+    /// List DM conversations
+    List {
+        /// Integration ID
+        integration_id: String,
+        /// Number of conversations to fetch
+        #[arg(long, default_value_t = 20)]
+        limit: u32,
+    },
+    /// Get messages in a conversation
+    Messages {
+        /// Integration ID
+        integration_id: String,
+        /// Conversation ID
+        conversation_id: String,
+        /// Number of messages to fetch
+        #[arg(long, default_value_t = 20)]
+        limit: u32,
+    },
+}
+
+// ─── Automation Actions ─────────────────────────────────────────────────────
+
+#[derive(Subcommand, Debug)]
+pub enum AutomationAction {
+    /// Create an automation rule
+    Create {
+        /// Integration ID
+        integration_id: String,
+        /// Rule name
+        name: String,
+        /// Trigger type (comment, dm, mention, follow)
+        trigger_type: String,
+        /// Response template
+        response_template: String,
+        /// Response type (fixed, template, ai_generated)
+        response_type: String,
+    },
+    /// List automation rules
+    List {
+        /// Integration ID (optional)
+        integration_id: Option<String>,
+    },
+    /// Update an automation rule
+    Update {
+        /// Rule ID
+        rule_id: String,
+        /// Rule name (optional)
+        name: Option<String>,
+        /// Response template (optional)
+        response_template: Option<String>,
+        /// Is active (optional)
+        is_active: Option<bool>,
+    },
+    /// Delete an automation rule
+    Delete {
+        /// Rule ID
+        rule_id: String,
+    },
+    /// Get execution logs
+    Logs {
+        /// Rule ID
+        rule_id: String,
+        /// Number of logs to fetch
+        #[arg(long, default_value_t = 50)]
+        limit: u32,
+    },
 }
 
 // ─── Config Management ─────────────────────────────────────────────────────
