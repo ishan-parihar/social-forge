@@ -32,50 +32,6 @@ pub fn generate_state() -> String {
     bytes.iter().map(|b| format!("{:02x}", b)).collect()
 }
 
-/// Perform OAuth2 token exchange (authorization_code grant)
-pub async fn exchange_code_for_token(
-    client: &reqwest::Client,
-    token_url: &str,
-    client_id: &str,
-    client_secret: &str,
-    code: &str,
-    code_verifier: &str,
-    redirect_uri: &str,
-) -> Result<serde_json::Value, reqwest::Error> {
-    let params = [
-        ("grant_type", "authorization_code"),
-        ("code", code),
-        ("code_verifier", code_verifier),
-        ("redirect_uri", redirect_uri),
-        ("client_id", client_id),
-        ("client_secret", client_secret),
-    ];
-
-    let resp = client.post(token_url).form(&params).send().await?;
-    let json: serde_json::Value = resp.json().await?;
-    Ok(json)
-}
-
-/// Refresh an OAuth2 access token
-pub async fn refresh_access_token(
-    client: &reqwest::Client,
-    token_url: &str,
-    client_id: &str,
-    client_secret: &str,
-    refresh_token: &str,
-) -> Result<serde_json::Value, reqwest::Error> {
-    let params = [
-        ("grant_type", "refresh_token"),
-        ("refresh_token", refresh_token),
-        ("client_id", client_id),
-        ("client_secret", client_secret),
-    ];
-
-    let resp = client.post(token_url).form(&params).send().await?;
-    let json: serde_json::Value = resp.json().await?;
-    Ok(json)
-}
-
 /// Parse a timestamp string to DateTime<Utc>.
 /// Handles RFC3339 and common non-standard formats like `+0000` (missing colon).
 /// Returns `Utc::now()` as fallback on parse failure.

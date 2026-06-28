@@ -472,16 +472,6 @@ pub enum ProviderError {
     Auth(String),
 }
 
-impl ProviderError {
-    pub fn is_token_expired(&self) -> bool {
-        matches!(self, ProviderError::TokenExpired)
-    }
-
-    pub fn is_rate_limited(&self) -> bool {
-        matches!(self, ProviderError::RateLimited(_))
-    }
-}
-
 // ── Engagement Data Parser ────────────────────────────────────
 
 /// Parse a provider's raw engagement JSON into a normalized EngagementData struct.

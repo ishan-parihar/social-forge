@@ -49,7 +49,7 @@
   function handleRename() {
     const newName = prompt("Rename channel:", integration.profile_name || integration.provider_name || "");
     if (newName && newName !== (integration.profile_name || integration.provider_name)) {
-      console.log("Rename not yet implemented — would rename to:", newName);
+      // Rename not yet implemented
     }
   }
 
