@@ -1309,4 +1309,157 @@ impl InstagramProvider {
             .unwrap_or("IN_PROGRESS");
         Ok(status_code.to_string())
     }
+
+    pub async fn reply_to_comment(
+        &self,
+        access_token: &str,
+        comment_id: &str,
+        post: &PostContent,
+    ) -> Result<PublishResult, ProviderError> {
+        let url = format!("{}/{comment_id}/replies", self.graph_url());
+        let body = serde_json::json!({
+            "message": post.content,
+        });
+        let resp = self
+            .http
+            .post(&url)
+            .header("Authorization", format!("Bearer {access_token}"))
+            .header("Content-Type", "application/json")
+            .json(&body)
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            let comment_id = json["id"].as_str().unwrap_or("").to_string();
+            Ok(PublishResult {
+                platform_post_id: comment_id,
+                platform_post_url: None,
+                status: "published".into(),
+            })
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let detail = json["error"]["message"].as_str().unwrap_or("Instagram reply failed").to_string();
+            Err(ProviderError::Api(detail))
+        }
+    }
+
+    pub async fn send_dm(
+        &self,
+        access_token: &str,
+        recipient: &str,
+        post: &PostContent,
+    ) -> Result<PublishResult, ProviderError> {
+        let url = format!("{}/me/messages", self.graph_url());
+        let body = serde_json::json!({
+            "recipient": { "id": recipient },
+            "message": { "text": post.content },
+        });
+        let resp = self
+            .http
+            .post(&url)
+            .header("Authorization", format!("Bearer {access_token}"))
+            .header("Content-Type", "application/json")
+            .json(&body)
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            let message_id = json["message_id"].as_str().unwrap_or("").to_string();
+            Ok(PublishResult {
+                platform_post_id: message_id,
+                platform_post_url: None,
+                status: "sent".into(),
+            })
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let detail = json["error"]["message"].as_str().unwrap_or("Instagram send DM failed").to_string();
+            Err(ProviderError::Api(detail))
+        }
+    }
+
+    pub async fn get_dm_conversations(
+        &self,
+        access_token: &str,
+        limit: u32,
+    ) -> Result<Vec<super::DmConversation>, ProviderError> {
+        let url = format!("{}/me/conversations", self.graph_url());
+        let resp = self
+            .http
+            .get(&url)
+            .query(&[("fields", "id,snippet,updated_time,unread"), ("limit", &limit.min(50).to_string())])
+            .header("Authorization", format!("Bearer {access_token}"))
+            .send()
+            .await?;
+        let json: serde_json::Value = resp.json().await.unwrap_or_default();
+        let mut conversations = Vec::new();
+        if let Some(data) = json["data"].as_array() {
+            for conv in data {
+                let id = conv["id"].as_str().unwrap_or("").to_string();
+                let last_message = conv["snippet"].as_str().map(|s| s.to_string());
+                let last_message_at = conv["updated_time"].as_str()
+                    .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                    .map(|dt| dt.with_timezone(&chrono::Utc));
+                let unread = conv["unread"].as_bool().unwrap_or(false);
+                conversations.push(super::DmConversation {
+                    id,
+                    participant: String::new(),
+                    participant_name: None,
+                    participant_avatar: None,
+                    last_message,
+                    last_message_at,
+                    unread_count: if unread { 1 } else { 0 },
+                });
+            }
+        }
+        Ok(conversations)
+    }
+
+    pub async fn get_dm_messages(
+        &self,
+        access_token: &str,
+        conversation_id: &str,
+        limit: u32,
+    ) -> Result<Vec<super::DmMessage>, ProviderError> {
+        let url = format!("{}/{}/messages", self.graph_url(), conversation_id);
+        let resp = self
+            .http
+            .get(&url)
+            .query(&[("fields", "id,from,message,created_time"), ("limit", &limit.min(50).to_string())])
+            .header("Authorization", format!("Bearer {access_token}"))
+            .send()
+            .await?;
+        let json: serde_json::Value = resp.json().await.unwrap_or_default();
+        let mut messages = Vec::new();
+        if let Some(data) = json["data"].as_array() {
+            for msg in data {
+                let id = msg["id"].as_str().unwrap_or("").to_string();
+                let sender = msg["from"]
+                    .as_object()
+                    .and_then(|f| f.get("id"))
+                    .and_then(|id| id.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                let content = msg["message"].as_str().unwrap_or("").to_string();
+                let created_at = msg["created_time"].as_str()
+                    .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                    .map(|dt| dt.with_timezone(&chrono::Utc))
+                    .unwrap_or_else(chrono::Utc::now);
+                messages.push(super::DmMessage {
+                    id,
+                    conversation_id: conversation_id.to_string(),
+                    sender,
+                    sender_name: None,
+                    content,
+                    media: vec![],
+                    created_at,
+                    read: true,
+                });
+            }
+        }
+        Ok(messages)
+    }
 }

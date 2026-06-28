@@ -225,3 +225,55 @@ pub async fn handle_bs_feed(
 
     Ok(Json(json!({ "data": result })))
 }
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct BsReplyInput {
+    pub token: String,
+    pub post_uri: String,
+    pub content: String,
+}
+
+pub async fn handle_bs_reply(
+    state: &AppState,
+    input: &BsReplyInput,
+) -> Result<Json<Value>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let token = find_bs_token(state, user_id).await?;
+    let client = reqwest::Client::new();
+
+    let body = json!({
+        "collection": "app.bsky.feed.post",
+        "repo": input.token,
+        "record": {
+            "$type": "app.bsky.feed.post",
+            "text": input.content,
+            "createdAt": chrono::Utc::now().to_rfc3339(),
+            "reply": {
+                "root": {
+                    "uri": input.post_uri,
+                    "cid": ""
+                },
+                "parent": {
+                    "uri": input.post_uri,
+                    "cid": ""
+                }
+            }
+        }
+    });
+
+    let resp = client
+        .post("https://bsky.social/xrpc/com.atproto.repo.createRecord")
+        .header("Authorization", format!("Bearer {token}"))
+        .header("Content-Type", "application/json")
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| format!("Bluesky reply request failed: {e}"))?;
+
+    let result: Value = resp
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse Bluesky reply response: {e}"))?;
+
+    Ok(Json(json!({ "data": result })))
+}

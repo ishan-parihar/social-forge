@@ -395,4 +395,56 @@ impl BlueskyProvider {
         }
         Ok(serde_json::Value::Null)
     }
+
+    pub async fn reply_to_comment(
+        &self,
+        access_token: &str,
+        comment_id: &str,
+        post: &PostContent,
+    ) -> Result<PublishResult, ProviderError> {
+        let body = serde_json::json!({
+            "collection": "app.bsky.feed.post",
+            "repo": self.resolve_handle().await?,
+            "record": {
+                "$type": "app.bsky.feed.post",
+                "text": post.content,
+                "createdAt": chrono::Utc::now().to_rfc3339(),
+                "reply": {
+                    "root": {
+                        "uri": comment_id,
+                        "cid": ""
+                    },
+                    "parent": {
+                        "uri": comment_id,
+                        "cid": ""
+                    }
+                }
+            }
+        });
+        let resp = self
+            .http
+            .post("https://bsky.social/xrpc/com.atproto.repo.createRecord")
+            .header("Authorization", format!("Bearer {access_token}"))
+            .header("Content-Type", "application/json")
+            .json(&body)
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status == 200 {
+            let uri = json["uri"].as_str().unwrap_or("").to_string();
+            let post_id = uri.rsplit('/').next().unwrap_or("").to_string();
+            Ok(PublishResult {
+                platform_post_id: post_id.clone(),
+                platform_post_url: Some(format!("https://bsky.app/profile/{}/post/{}", self.handle, post_id)),
+                status: "published".into(),
+            })
+        } else {
+            let msg = json["message"]
+                .as_str()
+                .unwrap_or("Bluesky reply failed")
+                .to_string();
+            Err(ProviderError::Api(msg))
+        }
+    }
 }

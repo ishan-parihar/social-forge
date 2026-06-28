@@ -721,3 +721,44 @@ impl SocialProvider for MastodonProvider {
         None
     }
 }
+
+impl MastodonProvider {
+    pub async fn reply_to_comment(
+        &self,
+        access_token: &str,
+        comment_id: &str,
+        post: &PostContent,
+    ) -> Result<PublishResult, ProviderError> {
+        let body = serde_json::json!({
+            "status": post.content,
+            "in_reply_to_id": comment_id,
+        });
+        let resp = self
+            .http
+            .post(self.api_url("/api/v1/statuses"))
+            .header("Authorization", format!("Bearer {access_token}"))
+            .header("Content-Type", "application/json")
+            .json(&body)
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            let post_id = json["id"].as_str().unwrap_or("").to_string();
+            let post_url = json["url"].as_str().map(|s| s.to_string());
+            Ok(PublishResult {
+                platform_post_id: post_id,
+                platform_post_url: post_url,
+                status: "published".into(),
+            })
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let msg = json["error"]
+                .as_str()
+                .unwrap_or("Mastodon reply failed")
+                .to_string();
+            Err(ProviderError::Api(msg))
+        }
+    }
+}

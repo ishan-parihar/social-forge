@@ -823,3 +823,46 @@ impl SocialProvider for YoutubeProvider {
         })
     }
 }
+
+impl YoutubeProvider {
+    pub async fn reply_to_comment(
+        &self,
+        access_token: &str,
+        comment_id: &str,
+        post: &PostContent,
+    ) -> Result<PublishResult, ProviderError> {
+        let body = serde_json::json!({
+            "snippet": {
+                "parentId": comment_id,
+                "textOriginal": post.content,
+            }
+        });
+        let resp = self
+            .http
+            .post("https://youtube.googleapis.com/youtube/v3/comments")
+            .query(&[("part", "snippet")])
+            .header("Authorization", format!("Bearer {access_token}"))
+            .header("Content-Type", "application/json")
+            .json(&body)
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            let reply_id = json["id"].as_str().unwrap_or("").to_string();
+            Ok(PublishResult {
+                platform_post_id: reply_id,
+                platform_post_url: None,
+                status: "published".into(),
+            })
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let msg = json["error"]["message"]
+                .as_str()
+                .unwrap_or("YouTube reply failed")
+                .to_string();
+            Err(ProviderError::Api(msg))
+        }
+    }
+}

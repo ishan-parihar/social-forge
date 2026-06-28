@@ -220,3 +220,38 @@ pub async fn handle_ms_search(
 
     Ok(Json(serde_json::json!({ "data": result })))
 }
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct MsReplyInput {
+    pub token: String,
+    pub status_id: String,
+    pub content: String,
+}
+
+pub async fn handle_ms_reply(
+    state: &AppState,
+    input: &MsReplyInput,
+) -> Result<Json<serde_json::Value>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let stored_token = find_mastodon_integration(state, user_id).await?;
+    let token = resolve_token(&input.token, &stored_token);
+
+    let provider = create_mastodon_provider(state);
+    let post = crate::social::PostContent {
+        content: input.content.clone(),
+        media: vec![],
+        settings: serde_json::json!({}),
+    };
+    let result = provider
+        .reply_to_comment(&token, &input.status_id, &post)
+        .await
+        .map_err(|e| format!("Mastodon reply failed: {e}"))?;
+
+    Ok(Json(serde_json::json!({
+        "data": {
+            "id": result.platform_post_id,
+            "url": result.platform_post_url,
+            "status": result.status,
+        }
+    })))
+}
