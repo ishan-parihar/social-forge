@@ -432,6 +432,30 @@ impl SocialForgeMcpServer {
         tools_media::list_media(&self.state, &params.0).await
     }
 
+    #[tool(description = "Upload media from a local file path. More efficient than base64 for large files. Returns the media URL for use in posts.")]
+    async fn posts_media_upload_from_path(
+        &self,
+        params: Parameters<tools_media::MediaUploadFromPathInput>,
+    ) -> Result<Json<tools_media::MediaUploadOutput>, String> {
+        tools_media::upload_from_path_mcp(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Batch upload multiple media files from local file paths in a single call. Optimized for carousel workflows. Returns all uploaded media URLs.")]
+    async fn posts_media_upload_batch(
+        &self,
+        params: Parameters<tools_media::MediaUploadBatchInput>,
+    ) -> Result<Json<tools_media::MediaUploadBatchOutput>, String> {
+        tools_media::upload_batch(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Download media from an external URL and store it locally. Useful when you have image URLs but need them in the local media library for posting.")]
+    async fn posts_media_upload_from_url(
+        &self,
+        params: Parameters<tools_media::MediaUploadFromUrlInput>,
+    ) -> Result<Json<tools_media::MediaUploadOutput>, String> {
+        tools_media::upload_from_url(&self.state, &params.0).await
+    }
+
     #[tool(description = "Stage a post across multiple platforms. Auto-splits content per platform character limits. Creates draft posts for each integration.")]
     async fn posts_stage(
         &self,
