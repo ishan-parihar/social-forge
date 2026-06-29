@@ -9,6 +9,7 @@ use uuid::Uuid;
 use crate::api::AppState;
 use crate::crypto;
 use crate::social::x::XProvider;
+use super::auth::resolve_first_user;
 
 // ── Input/Output Types ──────────────────────────────────────
 
@@ -279,9 +280,7 @@ fn create_provider(state: &AppState, token: &str) -> XProvider {
     provider
 }
 
-async fn resolve_first_user(state: &AppState) -> Result<Uuid, String> {
-    super::tools_posts::resolve_first_user(state).await
-}
+
 
 // ── Tool Implementations ─────────────────────────────────────
 
