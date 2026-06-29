@@ -2,7 +2,6 @@
 // Splits post content based on platform character limits.
 // Handles thread creation for X/Twitter, Bluesky, etc.
 
-use crate::social::PostContent;
 
 /// Character limits per platform (from provider max_content_length())
 pub fn platform_limit(provider: &str) -> usize {

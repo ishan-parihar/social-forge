@@ -1,7 +1,7 @@
 // ─── Automation Engine ──────────────────────────────────────────
 // Handles auto-reply to comments and DMs based on configurable rules.
 
-use chrono::{DateTime, Utc, Duration};
+use chrono::{Utc, Duration};
 use sqlx::PgPool;
 use uuid::Uuid;
 

@@ -102,6 +102,77 @@ pub async fn upload_media(
     }))
 }
 
+/// Upload media directly from a file path (avoids base64 round-trip for CLI callers)
+pub async fn upload_from_path(
+    state: &AppState,
+    file_path: &str,
+) -> Result<Json<MediaUploadOutput>, String> {
+    let user_id = resolve_first_user(state).await?;
+
+    let path = std::path::Path::new(file_path);
+    if !path.exists() {
+        return Err(format!("File not found: {file_path}"));
+    }
+
+    let metadata = tokio::fs::metadata(path).await
+        .map_err(|e| format!("Failed to read file metadata: {e}"))?;
+    let file_size = metadata.len();
+
+    if file_size > 50 * 1024 * 1024 {
+        return Err("File too large (max 50 MB)".into());
+    }
+
+    let original_name = path.file_name()
+        .and_then(|f| f.to_str())
+        .unwrap_or("upload.bin")
+        .to_string();
+
+    let mime = match path.extension().and_then(|e| e.to_str()) {
+        Some("jpg") | Some("jpeg") => "image/jpeg",
+        Some("png") => "image/png",
+        Some("gif") => "image/gif",
+        Some("webp") => "image/webp",
+        Some("mp4") => "video/mp4",
+        Some("mov") => "video/quicktime",
+        _ => "application/octet-stream",
+    };
+
+    let file_id = Uuid::new_v4();
+    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("bin");
+    let stored_name = format!("{file_id}.{ext}");
+
+    let upload_dir = std::path::Path::new(&state.config.media_dir);
+    tokio::fs::create_dir_all(upload_dir)
+        .await
+        .map_err(|e| format!("Failed to create upload dir: {e}"))?;
+
+    let dest = upload_dir.join(&stored_name);
+    tokio::fs::copy(path, &dest)
+        .await
+        .map_err(|e| format!("Failed to copy file: {e}"))?;
+
+    let entry = crate::db::queries::create_media(
+        &state.db,
+        user_id,
+        &original_name,
+        &stored_name,
+        mime,
+        file_size as i64,
+        None,
+        None,
+    )
+    .await
+    .map_err(|e| format!("DB error: {e}"))?;
+
+    Ok(Json(MediaUploadOutput {
+        id: entry.id.to_string(),
+        url: format!("/api/media/{}", entry.id),
+        mime_type: mime.to_string(),
+        filename: original_name,
+        size: file_size as i64,
+    }))
+}
+
 pub async fn list_media(
     state: &AppState,
     input: &MediaListInput,
