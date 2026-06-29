@@ -203,23 +203,4 @@ pub async fn list_media(
     Ok(Json(MediaListOutput { media, total }))
 }
 
-async fn resolve_first_user(state: &AppState) -> Result<Uuid, String> {
-    let user = sqlx::query_scalar::<_, Uuid>(
-        "SELECT u.id FROM users u \
-         WHERE EXISTS (SELECT 1 FROM integrations i WHERE i.user_id = u.id) \
-         LIMIT 1"
-    )
-    .fetch_optional(&state.db)
-    .await
-    .map_err(|e| e.to_string())?;
-
-    if let Some(id) = user {
-        return Ok(id);
-    }
-
-    sqlx::query_scalar::<_, Uuid>("SELECT id FROM users LIMIT 1")
-        .fetch_optional(&state.db)
-        .await
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| "No user registered".to_string())
-}
+use super::auth::resolve_first_user;

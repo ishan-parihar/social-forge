@@ -21,6 +21,7 @@ use crate::auth::jwt;
 use crate::db::queries;
 
 
+pub(crate) mod auth;
 pub mod schema_optimizer;
 pub mod tools_setup;
 mod tools_analytics;

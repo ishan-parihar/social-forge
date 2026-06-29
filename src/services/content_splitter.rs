@@ -22,7 +22,6 @@ pub fn platform_limit(provider: &str) -> usize {
         "telegram_bot" | "telegram_user" => 4096,
         "whatsapp" => 65536,
         "vk" => 21000,
-        "reddit" => 10000,
         "github" => 65536,
         "medium" => 100000,
         "devto" => 100000,
@@ -68,8 +67,12 @@ pub fn split_content(content: &str, provider: &str, _max_media_per_post: usize) 
         }];
     }
     
-    // Split by paragraphs first, then by sentences if needed
-    let chunks = smart_split(content, limit);
+    // Account for thread numbering overhead when splitting
+    // Format: "(N/M)\n" adds ~7 chars for single-digit, ~9 for double-digit
+    let overhead = if supports_threads(provider) { 10 } else { 0 };
+    let effective_limit = if overhead > 0 { limit.saturating_sub(overhead) } else { limit };
+    
+    let chunks = smart_split(content, effective_limit);
     let total = chunks.len();
     
     chunks.into_iter().enumerate().map(|(i, chunk)| {
