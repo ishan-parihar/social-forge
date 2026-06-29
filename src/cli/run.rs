@@ -2477,6 +2477,18 @@ async fn handle_media(action: MediaAction) -> anyhow::Result<()> {
                 "content_type": content_type,
             }));
         }
+        MediaAction::UploadBatch { paths } => {
+            if paths.is_empty() {
+                return Err(anyhow::anyhow!("At least one file path is required"));
+            }
+            let input = crate::mcp::tools_media::MediaUploadBatchInput {
+                paths,
+                alt: None,
+            };
+            let result = crate::mcp::tools_media::upload_batch(&state, &input).await
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
+            output_json(&serde_json::to_value(result.0).unwrap_or_default());
+        }
     }
     Ok(())
 }

@@ -344,6 +344,11 @@ pub enum MediaAction {
         #[arg(long)]
         alt: Option<String>,
     },
+    /// Batch upload multiple media files from local paths
+    UploadBatch {
+        /// File paths to upload (space-separated)
+        paths: Vec<String>,
+    },
     /// List uploaded media files
     List {
         /// Number of items to show

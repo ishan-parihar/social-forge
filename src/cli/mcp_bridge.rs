@@ -90,6 +90,24 @@ pub async fn call_tool(
             let out = crate::mcp::tools_media::upload_media(state, &input).await?;
             Ok(serde_json::to_value(out.0).unwrap_or_default())
         }
+        "posts_media_upload_from_path" => {
+            let input: crate::mcp::tools_media::MediaUploadFromPathInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_media::upload_from_path_mcp(state, &input).await?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "posts_media_upload_batch" => {
+            let input: crate::mcp::tools_media::MediaUploadBatchInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_media::upload_batch(state, &input).await?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "posts_media_upload_from_url" => {
+            let input: crate::mcp::tools_media::MediaUploadFromUrlInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_media::upload_from_url(state, &input).await?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
         "posts_media_list" => {
             let input: crate::mcp::tools_media::MediaListInput = serde_json::from_value(args)
                 .map_err(|e| format!("Invalid args: {e}"))?;
@@ -244,6 +262,9 @@ pub fn list_tools() -> Vec<(&'static str, &'static str)> {
         ("posts_find_slot", "Find the next available free time slot"),
         // Media
         ("posts_media_upload", "Upload media (image/video) for post attachments"),
+        ("posts_media_upload_from_path", "Upload media from a local file path"),
+        ("posts_media_upload_batch", "Batch upload multiple media files from local paths"),
+        ("posts_media_upload_from_url", "Download and store media from an external URL"),
         ("posts_media_list", "List uploaded media files"),
         // Comments
         ("get_comments", "Get comments for a post on any platform"),
@@ -285,7 +306,7 @@ mod tests {
         // Update this number when adding new tools to the bridge.
         // This catches tools added to list_tools but not the match (or vice versa)
         // as long as you remember to bump the count.
-        assert_eq!(tools.len(), 31, "Expected 31 tools in bridge, got {}. If you added a tool, update this count.", tools.len());
+        assert_eq!(tools.len(), 34, "Expected 34 tools in bridge, got {}. If you added a tool, update this count.", tools.len());
     }
 
     /// Ensures all listed tools are well-formed.
