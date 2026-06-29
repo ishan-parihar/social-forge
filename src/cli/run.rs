@@ -2430,39 +2430,7 @@ async fn handle_media(action: MediaAction) -> anyhow::Result<()> {
     let state = init_state().await?;
     match action {
         MediaAction::Upload { path, alt } => {
-            let file_path = std::path::Path::new(&path);
-            if !file_path.exists() {
-                return Err(anyhow::anyhow!("File not found: {path}"));
-            }
-            let data = std::fs::read(file_path)
-                .map_err(|e| anyhow::anyhow!("Failed to read file: {e}"))?;
-            if data.len() > 50 * 1024 * 1024 {
-                return Err(anyhow::anyhow!("File too large (max 50 MB)"));
-            }
-            let filename = file_path.file_name()
-                .and_then(|f| f.to_str())
-                .unwrap_or("upload.bin")
-                .to_string();
-            let mime = match file_path.extension().and_then(|e| e.to_str()) {
-                Some("jpg") | Some("jpeg") => "image/jpeg",
-                Some("png") => "image/png",
-                Some("gif") => "image/gif",
-                Some("webp") => "image/webp",
-                Some("mp4") => "video/mp4",
-                Some("mov") => "video/quicktime",
-                _ => "application/octet-stream",
-            };
-            let encoded = base64::Engine::encode(
-                &base64::engine::general_purpose::STANDARD,
-                &data,
-            );
-            let input = crate::mcp::tools_media::MediaUploadInput {
-                filename,
-                mime_type: mime.to_string(),
-                data: encoded,
-                alt,
-            };
-            let result = crate::mcp::tools_media::upload_media(&state, &input).await
+            let result = crate::mcp::tools_media::upload_from_path(&state, &path).await
                 .map_err(|e| anyhow::anyhow!("{}", e))?;
             output_json(&serde_json::to_value(result.0).unwrap_or_default());
         }
@@ -2476,7 +2444,6 @@ async fn handle_media(action: MediaAction) -> anyhow::Result<()> {
             output_json(&serde_json::to_value(result.0).unwrap_or_default());
         }
         MediaAction::Download { url, output } => {
-            // Download is CLI-only (no MCP equivalent — it's a local filesystem operation)
             let resp = reqwest::Client::new().get(&url).send().await
                 .map_err(|e| anyhow::anyhow!("Failed to download: {e}"))?;
             let status = resp.status();
