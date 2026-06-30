@@ -464,6 +464,14 @@ impl SocialForgeMcpServer {
         tools_posts::stage_post(&self.state, &params.0).await
     }
 
+    #[tool(description = "Create a carousel post with multiple images. Requires at least 2 media URLs. Supported by Instagram, LinkedIn, and Facebook.")]
+    async fn posts_create_carousel(
+        &self,
+        params: Parameters<tools_posts::CreateCarouselInput>,
+    ) -> Result<Json<tools_posts::CreateCarouselOutput>, String> {
+        tools_posts::create_carousel(&self.state, &params.0).await
+    }
+
     // ── Comment Tools ───────────────────────────────────────
 
     #[tool(description = "Get comments for a post on any platform")]

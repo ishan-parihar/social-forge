@@ -935,6 +935,10 @@ impl SocialProvider for XProvider {
         4000
     }
 
+    fn validate_media(&self, post: &PostContent) -> Result<(), String> {
+        super::validate_media_limits(self.identifier(), post)
+    }
+
     async fn generate_auth_url(
         &self,
         state: &str,

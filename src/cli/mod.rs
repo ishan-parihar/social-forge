@@ -150,6 +150,12 @@ pub enum Command {
         action: AutomationAction,
     },
 
+    /// Posts management
+    Posts {
+        #[command(subcommand)]
+        action: PostsAction,
+    },
+
     // ── Unified Commands (mirror MCP tools) ──────────────────
 
     /// Unified post command — post to any platform with auto content-splitting
@@ -189,6 +195,24 @@ pub enum Command {
         /// First comment (for platforms that support it, e.g. Instagram)
         #[arg(long)]
         first_comment: Option<String>,
+    },
+
+    /// Create a carousel post with multiple images
+    Carousel {
+        /// Post text content
+        text: String,
+        /// Target integration ID (UUID)
+        #[arg(long)]
+        integration: String,
+        /// Media URLs (comma-separated, minimum 2)
+        #[arg(long)]
+        media: String,
+        /// Optional post title
+        #[arg(long)]
+        title: Option<String>,
+        /// Schedule for later (ISO8601 datetime)
+        #[arg(long)]
+        schedule: Option<String>,
     },
 
     /// Media management — upload, list, download
@@ -330,6 +354,49 @@ pub enum AutomationAction {
         #[arg(long, default_value_t = 50)]
         limit: u32,
     },
+}
+
+// ─── Posts Actions ────────────────────────────────────────────────────────
+
+#[derive(Subcommand, Debug)]
+pub enum PostsAction {
+    /// List posts (draft, scheduled, published, failed)
+    List {
+        /// Filter by state (draft, scheduled, published, failed)
+        #[arg(long)]
+        state: Option<String>,
+        /// Max results
+        #[arg(long, default_value_t = 20)]
+        limit: u32,
+    },
+    /// Get a single post by ID
+    Get {
+        /// Post ID
+        id: String,
+    },
+    /// Create a new post
+    Create {
+        /// Post content
+        content: String,
+        /// Integration IDs (comma-separated)
+        #[arg(long)]
+        integrations: String,
+        /// Schedule time (RFC 3339, optional)
+        #[arg(long)]
+        schedule: Option<String>,
+    },
+    /// Publish a scheduled/draft post immediately
+    Publish {
+        /// Post ID
+        id: String,
+    },
+    /// Delete a post
+    Delete {
+        /// Post ID
+        id: String,
+    },
+    /// Find the next available posting slot
+    FindSlot,
 }
 
 // ─── Media Actions ──────────────────────────────────────────────────────

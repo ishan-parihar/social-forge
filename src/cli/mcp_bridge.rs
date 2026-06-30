@@ -76,6 +76,12 @@ pub async fn call_tool(
             let out = crate::mcp::tools_posts::stage_post(state, &input).await?;
             Ok(serde_json::to_value(out.0).unwrap_or_default())
         }
+        "posts_create_carousel" => {
+            let input: crate::mcp::tools_posts::CreateCarouselInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_posts::create_carousel(state, &input).await?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
         "posts_find_slot" => {
             let input: crate::mcp::tools_posts::FindSlotInput = serde_json::from_value(args)
                 .map_err(|e| format!("Invalid args: {e}"))?;
@@ -259,6 +265,7 @@ pub fn list_tools() -> Vec<(&'static str, &'static str)> {
         ("posts_schedule", "Schedule a post for publishing"),
         ("posts_publish", "Publish a post immediately"),
         ("posts_stage", "Stage a post across multiple platforms with auto-splitting"),
+        ("posts_create_carousel", "Create a carousel post with multiple images"),
         ("posts_find_slot", "Find the next available free time slot"),
         // Media
         ("posts_media_upload", "Upload media (image/video) for post attachments"),
@@ -306,7 +313,7 @@ mod tests {
         // Update this number when adding new tools to the bridge.
         // This catches tools added to list_tools but not the match (or vice versa)
         // as long as you remember to bump the count.
-        assert_eq!(tools.len(), 34, "Expected 34 tools in bridge, got {}. If you added a tool, update this count.", tools.len());
+        assert_eq!(tools.len(), 35, "Expected 35 tools in bridge, got {}. If you added a tool, update this count.", tools.len());
     }
 
     /// Ensures all listed tools are well-formed.

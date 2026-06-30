@@ -49,6 +49,10 @@ impl SocialProvider for InstagramStandaloneProvider {
         2200
     }
 
+    fn validate_media(&self, post: &PostContent) -> Result<(), String> {
+        super::validate_media_limits(self.identifier(), post)
+    }
+
     fn needs_cron_refresh(&self) -> bool {
         true
     }

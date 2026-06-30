@@ -23,6 +23,45 @@
   let refreshing = $state(false);
   let fetchError = $state<string | null>(null);
 
+  // Bulk selection
+  let selected = $state<Set<string>>(new Set());
+  let bulkScheduleDate = $state("");
+  let bulkScheduleTime = $state("09:00");
+  let showBulkSchedule = $state(false);
+  let bulkProcessing = $state(false);
+
+  function toggleSelect(id: string, e: Event) {
+    e.stopPropagation();
+    const s = new Set(selected);
+    if (s.has(id)) s.delete(id); else s.add(id);
+    selected = s;
+  }
+
+  function toggleAll() {
+    if (selected.size === events.length) selected = new Set();
+    else selected = new Set(events.map(e => e.id));
+  }
+
+  async function bulkDelete() {
+    if (!confirm(`Delete ${selected.size} post(s)?`)) return;
+    bulkProcessing = true;
+    for (const id of selected) { await postsApi.delete(id); }
+    selected = new Set();
+    bulkProcessing = false;
+    refresh();
+  }
+
+  async function bulkReschedule() {
+    if (!bulkScheduleDate) return;
+    bulkProcessing = true;
+    const iso = `${bulkScheduleDate}T${bulkScheduleTime}:00.000Z`;
+    for (const id of selected) { await postsApi.schedule(id, iso); }
+    selected = new Set();
+    showBulkSchedule = false;
+    bulkProcessing = false;
+    refresh();
+  }
+
   async function fetchEvents(start: string, end: string) {
     loading = true;
     fetchError = null;
@@ -159,6 +198,22 @@
     onViewChange={handleViewChange}
   />
 
+  {#if selected.size > 0}
+    <div class="flex items-center gap-3 bg-indigo-600/10 border border-indigo-500/30 rounded-lg px-4 py-2">
+      <span class="text-sm text-indigo-300">{selected.size} selected</span>
+      <button onclick={() => showBulkSchedule = !showBulkSchedule} disabled={bulkProcessing} class="px-3 py-1 text-xs bg-indigo-600 hover:bg-indigo-500 rounded disabled:opacity-50">Reschedule</button>
+      <button onclick={bulkDelete} disabled={bulkProcessing} class="px-3 py-1 text-xs bg-red-600 hover:bg-red-500 rounded disabled:opacity-50">Delete</button>
+      <button onclick={() => selected = new Set()} class="ml-auto text-xs text-[#6b7280] hover:text-white">Clear</button>
+    </div>
+    {#if showBulkSchedule}
+      <div class="flex items-center gap-2 bg-[#0d1117] border border-[#2a3045] rounded-lg p-3">
+        <input type="date" bind:value={bulkScheduleDate} class="px-2 py-1 bg-[#131720] border border-[#1e2435] rounded text-sm text-[#d1d5db]" />
+        <input type="time" bind:value={bulkScheduleTime} class="px-2 py-1 bg-[#131720] border border-[#1e2435] rounded text-sm text-[#d1d5db]" />
+        <button onclick={bulkReschedule} disabled={bulkProcessing || !bulkScheduleDate} class="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 rounded text-xs disabled:opacity-50">Apply</button>
+      </div>
+    {/if}
+  {/if}
+
   {#if fetchError}
     <div class="text-center py-4 text-sm text-red-400">{fetchError}</div>
   {:else if loading}
@@ -172,39 +227,49 @@
       year={calendarState.state.currentDate.getFullYear()}
       month={calendarState.state.currentDate.getMonth()}
       {events}
+      {selected}
       onEventClick={(id) => selectedEvent = events.find(e => e.id === id) || null}
       onDateClick={(date) => goto(`/posts/new?date=${date}`)}
       onDrop={handleDrop}
       onDuplicate={handleDuplicate}
       onStats={handleStats}
       onDelete={handleDelete}
+      onToggleSelect={toggleSelect}
     />
   {:else if calendarState.state.view === "week"}
     <WeekView
       referenceDate={calendarState.state.currentDate}
       {events}
+      {selected}
       onEventClick={(id) => selectedEvent = events.find(e => e.id === id) || null}
+      onDateClick={(date) => goto(`/posts/new?date=${date}`)}
       onDrop={handleDrop}
       onDuplicate={handleDuplicate}
       onStats={handleStats}
       onDelete={handleDelete}
+      onToggleSelect={toggleSelect}
     />
   {:else if calendarState.state.view === "day"}
     <DayView
       date={calendarState.state.currentDate}
       {events}
+      {selected}
       onEventClick={(id) => selectedEvent = events.find(e => e.id === id) || null}
+      onDateClick={(date) => goto(`/posts/new?date=${date}`)}
       onDuplicate={handleDuplicate}
       onStats={handleStats}
       onDelete={handleDelete}
+      onToggleSelect={toggleSelect}
     />
   {:else if calendarState.state.view === "list"}
     <ListView
       {events}
+      {selected}
       onEventClick={(id) => selectedEvent = events.find(e => e.id === id) || null}
       onDuplicate={handleDuplicate}
       onStats={handleStats}
       onDelete={handleDelete}
+      onToggleSelect={toggleSelect}
     />
   {/if}
 

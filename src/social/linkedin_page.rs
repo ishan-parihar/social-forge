@@ -89,6 +89,10 @@ impl SocialProvider for LinkedInPageProvider {
         3000
     }
 
+    fn validate_media(&self, post: &PostContent) -> Result<(), String> {
+        super::validate_media_limits(self.identifier(), post)
+    }
+
     fn is_between_steps(&self) -> bool { true }
 
     fn tooltip(&self) -> Option<&'static str> {

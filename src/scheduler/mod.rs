@@ -350,17 +350,26 @@ async fn publish_post(
     // Resolve access token, potentially refreshed
     let mut access_token = resolve_token(db, provider, post).await?;
 
-    // Build post content
+    // Build post content - resolve media URLs to absolute paths
     let media: Vec<crate::social::MediaAttachment> = serde_json::from_value(post.media.clone()).unwrap_or_default();
+    let app_url = std::env::var("APP_URL").unwrap_or_else(|_| "https://localhost:6543".into());
+    let resolved_media: Vec<crate::social::MediaAttachment> = media.into_iter().map(|m| {
+        // Resolve relative media URLs to absolute URLs for providers that need them
+        // (Instagram, Facebook, Threads, Reddit require absolute URLs)
+        provider.resolve_media_url(&m, &app_url)
+    }).collect();
     let content = PostContent {
         content: post.content.clone(),
-        media,
+        media: resolved_media,
         settings: post.settings.clone(),
     };
 
     // Validate content against provider limits before publishing
     provider.validate_post(&content)
         .map_err(|e| format!("Content validation failed: {e}"))?;
+
+    provider.validate_media(&content)
+        .map_err(|e| format!("Media validation failed: {e}"))?;
 
     // Publish with retry
     let mut last_error: Option<String> = None;

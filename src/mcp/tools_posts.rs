@@ -355,6 +355,24 @@ pub async fn publish_post(
 pub(crate) use super::auth::resolve_first_user;
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct CreateCarouselInput {
+    pub integration_id: String,
+    pub content: String,
+    pub media_urls: Vec<String>,
+    pub title: Option<String>,
+    pub scheduled_at: Option<String>,
+    pub settings: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct CreateCarouselOutput {
+    pub id: String,
+    pub state: String,
+    pub scheduled_at: Option<String>,
+    pub created_at: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct StagePostInput {
     pub content: String,
     pub media: Option<serde_json::Value>,
@@ -424,5 +442,48 @@ pub async fn stage_post(
         staged,
         total_posts: result.total_posts,
         warnings: result.warnings,
+    }))
+}
+
+pub async fn create_carousel(
+    state: &AppState,
+    input: &CreateCarouselInput,
+) -> Result<Json<CreateCarouselOutput>, String> {
+    if input.media_urls.len() < 2 {
+        return Err("Carousel requires at least 2 media URLs".to_string());
+    }
+
+    let user_id = resolve_first_user(state).await?;
+    let integration_id = Uuid::parse_str(&input.integration_id)
+        .map_err(|_| "Invalid integration_id format".to_string())?;
+
+    let scheduled_at = match &input.scheduled_at {
+        Some(s) => {
+            let dt = DateTime::parse_from_rfc3339(s)
+                .map_err(|_| "Invalid date format, use ISO8601".to_string())?;
+            Some(dt.with_timezone(&Utc))
+        }
+        None => None,
+    };
+
+    let post = PostService::create(
+        &state.db,
+        &state.broadcast,
+        crate::services::posts::CreatePostInput {
+            user_id,
+            integration_id,
+            content: input.content.clone(),
+            title: input.title.clone(),
+            media_urls: serde_json::json!(input.media_urls),
+            scheduled_at,
+            settings: input.settings.clone().unwrap_or(serde_json::json!({})),
+        },
+    ).await?;
+
+    Ok(Json(CreateCarouselOutput {
+        id: post.id.to_string(),
+        state: post.state.to_string(),
+        scheduled_at: post.scheduled_at.map(|d| d.to_rfc3339()),
+        created_at: post.created_at.to_rfc3339(),
     }))
 }

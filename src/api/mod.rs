@@ -22,6 +22,7 @@ mod analytics;
 mod auth;
 mod billing;
 mod calendar;
+mod comments;
 mod feed;
 mod integrations;
 mod media;
@@ -36,6 +37,8 @@ mod tags;
 mod teams;
 mod developer;
 mod webhooks;
+mod dms;
+mod automation;
 
 /// Shared application state available to all handlers
 #[derive(Clone)]
@@ -137,6 +140,9 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/feed/accounts", axum::routing::get(feed::accounts))
         .route("/api/feed/analytics", axum::routing::get(feed::analytics))
         .route("/api/feed/{post_id}/comments", axum::routing::get(feed::get_comments))
+        .route("/api/comments", axum::routing::get(comments::list))
+        .route("/api/comments/{id}/resolve", axum::routing::post(comments::resolve))
+        .route("/api/comments/{id}/reply", axum::routing::post(comments::reply))
         .route("/api/media", axum::routing::get(media::list).post(media::upload))
         .route("/api/media/{id}", axum::routing::delete(media::delete))
         .route("/api/analytics", axum::routing::get(analytics::get))
@@ -177,6 +183,14 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/rss/feeds/{id}/poll", axum::routing::post(rss::poll_feed))
         .route("/api/rss/feeds/{id}/items", axum::routing::get(rss::list_feed_items))
         .route("/api/rss/feeds/{id}/items/{guid}/import", axum::routing::post(rss::import_item))
+        // DMs
+        .route("/api/dms/conversations", axum::routing::get(dms::list_conversations))
+        .route("/api/dms/send", axum::routing::post(dms::send_dm))
+        .route("/api/dms/{conversation_id}/messages", axum::routing::get(dms::get_messages))
+        // Automation
+        .route("/api/automation/rules", axum::routing::get(automation::list_rules).post(automation::create_rule))
+        .route("/api/automation/rules/{id}", axum::routing::put(automation::update_rule).delete(automation::delete_rule))
+        .route("/api/automation/rules/{id}/logs", axum::routing::get(automation::get_logs))
         // Auth middleware: injects DEFAULT_USER_ID for single-user mode
         .layer(middleware::from_fn(auth_middleware));
 

@@ -262,9 +262,15 @@ impl PostService {
         // Build publish content (load media from post — matches scheduler behavior)
         let media: Vec<crate::social::MediaAttachment> =
             serde_json::from_value(post.media.clone()).unwrap_or_default();
+        // Resolve relative media URLs to absolute URLs for providers that need them
+        // (Instagram, Facebook, Threads, Reddit require absolute URLs)
+        let app_url = std::env::var("APP_URL").unwrap_or_else(|_| "https://localhost:6543".into());
+        let resolved_media: Vec<crate::social::MediaAttachment> = media.into_iter().map(|m| {
+            provider.resolve_media_url(&m, &app_url)
+        }).collect();
         let content = PostContent {
             content: Self::sanitize_content(&post.content, 2000),
-            media,
+            media: resolved_media,
             settings: post.settings.clone(),
         };
 
@@ -272,6 +278,10 @@ impl PostService {
         provider
             .validate_post(&content)
             .map_err(|e| format!("Content validation failed: {e}"))?;
+
+        provider
+            .validate_media(&content)
+            .map_err(|e| format!("Media validation failed: {e}"))?;
 
         // Publish
         let result = provider

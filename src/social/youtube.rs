@@ -395,6 +395,10 @@ impl SocialProvider for YoutubeProvider {
         5000
     }
 
+    fn validate_media(&self, post: &PostContent) -> Result<(), String> {
+        super::validate_media_limits(self.identifier(), post)
+    }
+
     fn is_between_steps(&self) -> bool {
         true
     }
