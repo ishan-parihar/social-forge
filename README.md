@@ -12,15 +12,32 @@
 
 Social Forge is a single Rust binary that manages **21 social platforms** through three interfaces:
 
-1. **CLI** — AI agents run `social-forge x post "hello"` directly from the terminal
+1. **CLI** — 100+ commands for AI agents and terminal power users
 2. **REST API** — SvelteKit dashboard for human operators
-3. **MCP Server** — 130+ tools for Claude/Cursor-style AI integrations
-
-One binary. One codebase. Zero runtime dependencies beyond PostgreSQL.
+3. **MCP Server** — 311 tools for Claude/Cursor-style AI integrations
 
 ---
 
-## Quick Start
+## Quick Install (VPS / non-Rust users)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ishan-parihar/social-forge/main/scripts/install.sh | bash
+```
+
+The script auto-detects your OS/arch, downloads the latest musl binary from GitHub Releases, sets up the directory structure, creates a `.env` from template, and optionally installs the systemd service.
+
+**Environment variables:**
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `INSTALL_DIR` | `$HOME/social-forge` | Installation directory |
+| `BIN_DIR` | `/usr/local/bin` | Binary directory |
+| `SKIP_SERVICE` | `false` | Skip systemd service setup |
+| `SKIP_SKILL` | `false` | Skip AI Agent skill installation |
+| `VERSION` | `latest` | Specific version tag to install |
+
+---
+
+## Quick Start (from source)
 
 > **Requirements**: [Rust](https://rustup.rs/) 1.85+, Node.js 20+, Docker (for Postgres)
 
@@ -55,6 +72,34 @@ cd frontend && npm install && npm run build && cd ..
 ```
 
 Open **https://localhost:6543** for the dashboard. Visit **https://localhost:6543/setup** to connect social accounts.
+
+### Quick CLI Usage
+
+```bash
+# List connected social accounts
+social-forge providers
+
+# Post to multiple platforms
+social-forge post "Shipping new features 🚀" --platforms x,linkedin,bluesky
+
+# Schedule a post for later
+social-forge post "Morning update" --schedule 2026-07-01T09:00:00Z
+
+# Stage long content for review before publishing
+social-forge stage "Long content that will be split..." --platforms x,linkedin
+
+# Upload media and attach to post
+social-forge media upload ./photo.jpg --alt "Description"
+social-forge post "Check this out" --media ./photo.jpg
+
+# Browse social feeds
+social-forge x timeline --count 5
+social-forge reddit browse rust
+social-forge linkedin profile
+
+# View scheduled/queued posts
+social-forge posts list
+```
 
 ---
 
@@ -187,7 +232,7 @@ social-forge linkedin profile            # View LinkedIn profile
 │                        Social Forge Binary                        │
 ├──────────────┬──────────────────┬───────────────────────────────┤
 │   CLI Mode   │   REST API Mode  │        MCP Stdio Mode         │
-│  (clap)      │  (axum :6543)    │   (rmcp, 130+ tools)          │
+│  (clap)      │  (axum :6543)    │   (rmcp, 311 tools)           │
 ├──────────────┴──────────────────┴───────────────────────────────┤
 │                    Shared Business Logic                          │
 │  ┌──────────────────────────────────────────────────────────┐   │
@@ -281,7 +326,7 @@ For AI agents that speak MCP (Claude Desktop, Cursor, etc.):
 }
 ```
 
-This exposes 130+ tools with full JSON Schema descriptions.
+This exposes 311 tools with full JSON Schema descriptions.
 
 ---
 
@@ -409,7 +454,7 @@ For example:
 - **Language**: Rust (Edition 2021)
 - **Web Framework**: Axum 0.8
 - **Database**: PostgreSQL via sqlx (compile-time checked queries)
-- **MCP**: rmcp 1.6 with 130+ tools
+- **MCP**: rmcp 1.6 with 311 tools
 - **CLI**: clap 4 with derive macros
 - **TLS Fingerprinting**: wreq (Chrome 131 emulation for X/Twitter)
 - **Scheduler**: Custom tokio::spawn loop with exponential-backoff retry
@@ -437,7 +482,7 @@ social-forge/
 │   │   ├── mod.rs           # Router + AppState
 │   │   ├── onboard.rs       # OAuth flows + cookie forms
 │   │   └── integrations.rs  # CRUD for connected accounts
-│   ├── mcp/                 # MCP server (130+ tools)
+│   ├── mcp/                 # MCP server (311 tools)
 │   │   ├── mod.rs           # Tool registry
 │   │   ├── tools_x.rs       # X/Twitter tools
 │   │   ├── tools_reddit.rs  # Reddit tools
