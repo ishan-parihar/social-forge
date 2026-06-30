@@ -56,6 +56,10 @@ impl SocialProvider for ThreadsProvider {
         500
     }
 
+    fn validate_media(&self, post: &PostContent) -> Result<(), String> {
+        super::validate_media_limits(self.identifier(), post)
+    }
+
     fn needs_cron_refresh(&self) -> bool {
         true
     }
@@ -459,6 +463,17 @@ impl SocialProvider for ThreadsProvider {
         }
 
         Ok(result)
+    }
+
+    fn resolve_media_url(&self, attachment: &MediaAttachment, app_url: &str) -> MediaAttachment {
+        if attachment.url.starts_with("/api/media/") || attachment.url.starts_with("/media/") {
+            MediaAttachment {
+                url: format!("{}{}", app_url.trim_end_matches('/'), attachment.url),
+                ..attachment.clone()
+            }
+        } else {
+            attachment.clone()
+        }
     }
 }
 

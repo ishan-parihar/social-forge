@@ -3,12 +3,14 @@
   import { engagementIcon, engagementLabel, formatMetricCount } from "./engagement";
   import type { CalendarEvent as CEvent } from "./types";
 
-  let { events = [], onEventClick, onDuplicate, onStats, onDelete, page = 1, totalPages = 1, totalItems = 0, onPageChange, pageSize = 20, showActions = false }: {
+  let { events = [], selected = new Set(), onEventClick, onDuplicate, onStats, onDelete, onToggleSelect, page = 1, totalPages = 1, totalItems = 0, onPageChange, pageSize = 20, showActions = false }: {
     events?: CEvent[];
+    selected?: Set<string>;
     onEventClick?: (id: string) => void;
     onDuplicate?: (id: string) => void;
     onStats?: (id: string) => void;
     onDelete?: (id: string) => void;
+    onToggleSelect?: (id: string, e: Event) => void;
     page?: number;
     totalPages?: number;
     totalItems?: number;
@@ -32,6 +34,9 @@
   {:else}
     {#each sorted as event (event.id)}
       <div class="group relative w-full flex items-center gap-4 px-4 py-3 border-b border-[#1e2435] hover:bg-[#1a1f2e] transition-colors">
+        {#if onToggleSelect}
+          <input type="checkbox" checked={selected.has(event.id)} onclick={(e) => onToggleSelect?.(event.id, e)} class="rounded shrink-0" />
+        {/if}
         <button onclick={() => onEventClick?.(event.id)} class="flex-1 flex items-center gap-4 text-left min-w-0">
           <div class="text-xs text-[#6b7280] w-24 shrink-0">
             {#if event.date}

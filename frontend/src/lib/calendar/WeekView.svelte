@@ -3,13 +3,16 @@
   import CalendarEvent from "./CalendarEvent.svelte";
   import type { CalendarEvent as CEvent } from "./types";
 
-  let { referenceDate, events = [], onEventClick, onDrop, onDuplicate, onStats, onDelete }: {
+  let { referenceDate, events = [], selected = new Set(), onEventClick, onDateClick, onDrop, onDuplicate, onStats, onDelete, onToggleSelect }: {
     referenceDate: Date; events?: CEvent[];
+    selected?: Set<string>;
     onEventClick?: (id: string) => void;
+    onDateClick?: (date: string) => void;
     onDrop?: (eventId: string, newDate: string) => void;
     onDuplicate?: (id: string) => void;
     onStats?: (id: string) => void;
     onDelete?: (id: string) => void;
+    onToggleSelect?: (id: string, e: Event) => void;
   } = $props();
 
   let weekDays = $derived(buildWeekDays(referenceDate, events));
@@ -59,15 +62,19 @@
         {#each weekDays as wd (wd.dateStr)}
           <!-- svelte-ignore a11y_no_static_element_interactions -->
           <div
-            class="relative px-1 py-1 border-r border-[#1e2435] min-h-[48px]"
+            class="relative px-1 py-1 border-r border-[#1e2435] min-h-[48px] cursor-pointer hover:bg-[#1a1f2e]"
             ondragover={(e) => e.preventDefault()}
             ondrop={(e) => handleDrop(e, wd.dateStr)}
+            onclick={() => onDateClick?.(wd.dateStr)}
             role="gridcell"
             tabindex="-1"
             onkeydown={(e) => handleKeyDown(e, wd.dateStr)}
           >
             {#each (eventsByDayHour.get(`${wd.dateStr}-${hour.slice(0, 2)}`) || []) as event (event.id)}
-              <div onclick={() => onEventClick?.(event.id)} onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') onEventClick?.(event.id); }} role="button" tabindex="-1">
+              <div class="flex items-center gap-1" onclick={() => onEventClick?.(event.id)} onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') onEventClick?.(event.id); }} role="button" tabindex="-1">
+                {#if onToggleSelect}
+                  <input type="checkbox" checked={selected.has(event.id)} onclick={(e) => onToggleSelect?.(event.id, e)} class="rounded shrink-0 w-3 h-3" />
+                {/if}
                 <CalendarEvent {event} {onDuplicate} {onStats} {onDelete} />
               </div>
             {/each}

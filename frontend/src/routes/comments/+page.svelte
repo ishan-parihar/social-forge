@@ -1,0 +1,152 @@
+<script lang="ts">
+  import { onMount } from "svelte";
+  import { api } from "$lib/api";
+
+  interface Comment {
+    id: string;
+    platform: string;
+    post_content: string;
+    content: string;
+    author: string;
+    created_at: string;
+    status: "new" | "resolved";
+  }
+
+  let comments = $state<Comment[]>([]);
+  let filterPlatform = $state("all");
+  let filterStatus = $state("all");
+  let loading = $state(true);
+  let error = $state<string | null>(null);
+  let replyModal = $state<{ comment: Comment; text: string } | null>(null);
+  let sending = $state(false);
+
+  const platforms = ["all", "x", "reddit", "linkedin", "facebook", "instagram"];
+  const statuses = ["all", "new", "resolved"];
+
+  async function load() {
+    loading = true;
+    error = null;
+    const params = new URLSearchParams();
+    if (filterPlatform !== "all") params.set("platform", filterPlatform);
+    if (filterStatus !== "all") params.set("status", filterStatus);
+    const r = await api.get<{ comments: Comment[] }>(`/api/comments?${params}`);
+    if (r.data) {
+      comments = r.data.comments;
+    } else {
+      error = r.error || "Failed to load comments";
+    }
+    loading = false;
+  }
+
+  async function resolveComment(id: string) {
+    const r = await api.post(`/api/comments/${id}/resolve`);
+    if (r.error) {
+      error = r.error;
+    } else {
+      comments = comments.map(c => c.id === id ? { ...c, status: "resolved" as const } : c);
+    }
+  }
+
+  async function sendReply() {
+    if (!replyModal || !replyModal.text.trim()) return;
+    sending = true;
+    const r = await api.post(`/api/comments/${replyModal.comment.id}/reply`, {
+      text: replyModal.text,
+    });
+    if (r.error) {
+      error = r.error;
+    } else {
+      replyModal = null;
+    }
+    sending = false;
+  }
+
+  function platformIcon(p: string): string {
+    const icons: Record<string, string> = { x: "𝕏", reddit: "𝗥", linkedin: "in", facebook: "f", instagram: "📷" };
+    return icons[p] || "•";
+  }
+
+  onMount(load);
+</script>
+
+<div class="space-y-4">
+  <div class="flex items-center justify-between">
+    <h2 class="text-xl font-semibold">Comments</h2>
+    <button onclick={load} class="px-3 py-1.5 text-sm text-[#6b7280] hover:text-white border border-[#1e2435] rounded-lg transition-colors">↻ Refresh</button>
+  </div>
+
+  <!-- Filters -->
+  <div class="flex gap-4">
+    <div class="flex gap-1 bg-[#131720] border border-[#1e2435] rounded-lg p-1">
+      {#each platforms as p}
+        <button
+          onclick={() => { filterPlatform = p; load(); }}
+          class="px-3 py-1.5 text-xs capitalize rounded-md transition-colors {filterPlatform === p ? 'bg-indigo-600 text-white' : 'text-[#6b7280] hover:bg-[#1a1f2e]'}"
+        >{p}</button>
+      {/each}
+    </div>
+    <div class="flex gap-1 bg-[#131720] border border-[#1e2435] rounded-lg p-1">
+      {#each statuses as s}
+        <button
+          onclick={() => { filterStatus = s; load(); }}
+          class="px-3 py-1.5 text-xs capitalize rounded-md transition-colors {filterStatus === s ? 'bg-indigo-600 text-white' : 'text-[#6b7280] hover:bg-[#1a1f2e]'}"
+        >{s}</button>
+      {/each}
+    </div>
+  </div>
+
+  <!-- Content -->
+  {#if error}
+    <div class="text-center py-12 text-sm text-red-400">{error}</div>
+  {:else if loading}
+    <div class="text-center py-12 text-sm text-[#6b7280]">Loading...</div>
+  {:else if comments.length === 0}
+    <div class="text-center py-12 text-sm text-[#6b7280]">No comments found</div>
+  {:else}
+    <div class="bg-[#131720] border border-[#1e2435] rounded-xl overflow-hidden">
+      <div class="grid grid-cols-[40px_1fr_1.5fr_100px_100px_90px] gap-3 px-4 py-2 border-b border-[#1e2435] bg-[#0d1117] text-xs text-[#6b7280]">
+        <span></span><span>Post</span><span>Comment</span><span>Author</span><span>Date</span><span>Status</span>
+      </div>
+      {#each comments as c (c.id)}
+        <div class="grid grid-cols-[40px_1fr_1.5fr_100px_100px_90px] gap-3 px-4 py-3 border-b border-[#1e2435] last:border-0 hover:bg-[#1a1f2e] transition-colors items-center">
+          <span class="text-sm text-indigo-400">{platformIcon(c.platform)}</span>
+          <span class="text-sm truncate">{c.post_content}</span>
+          <span class="text-sm text-[#d1d5db] truncate">{c.content}</span>
+          <span class="text-xs text-[#6b7280] truncate">{c.author}</span>
+          <span class="text-xs text-[#6b7280]">{new Date(c.created_at).toLocaleDateString()}</span>
+          <div class="flex items-center gap-2">
+            {#if c.status === "new"}
+              <span class="px-2 py-0.5 text-xs rounded bg-yellow-500/20 text-yellow-400">New</span>
+              <button onclick={() => resolveComment(c.id)} class="text-xs text-[#6b7280] hover:text-green-400">✓</button>
+              <button onclick={() => replyModal = { comment: c, text: "" }} class="text-xs text-[#6b7280] hover:text-indigo-400">↩</button>
+            {:else}
+              <span class="px-2 py-0.5 text-xs rounded bg-green-500/20 text-green-400">Resolved</span>
+            {/if}
+          </div>
+        </div>
+      {/each}
+    </div>
+  {/if}
+</div>
+
+<!-- Reply Modal -->
+{#if replyModal}
+  <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50" role="dialog">
+    <div class="bg-[#0d1117] border border-[#1e2435] rounded-xl p-6 w-full max-w-md">
+      <h3 class="text-lg font-semibold mb-2">Reply to {replyModal.comment.author}</h3>
+      <p class="text-sm text-[#6b7280] mb-4 truncate">{replyModal.comment.content}</p>
+      <textarea
+        bind:value={replyModal.text}
+        placeholder="Write your reply..."
+        rows="4"
+        class="w-full px-3 py-2 bg-[#161b22] border border-[#30363d] rounded text-sm mb-4"
+      ></textarea>
+      <div class="flex gap-3 justify-end">
+        <button onclick={() => replyModal = null} class="px-4 py-2 text-sm text-[#6b7280] hover:text-white">Cancel</button>
+        <button onclick={sendReply} disabled={sending || !replyModal.text.trim()} class="px-4 py-2 text-sm bg-indigo-600 hover:bg-indigo-500 rounded disabled:opacity-50">
+          {sending ? "Sending..." : "Reply"}
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}

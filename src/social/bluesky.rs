@@ -87,6 +87,10 @@ impl SocialProvider for BlueskyProvider {
         300
     }
 
+    fn validate_media(&self, post: &PostContent) -> Result<(), String> {
+        super::validate_media_limits(self.identifier(), post)
+    }
+
     /// Bluesky doesn't use OAuth; this returns an error instructing the user
     fn uses_oauth(&self) -> bool {
         false // Bluesky uses app passwords instead of OAuth

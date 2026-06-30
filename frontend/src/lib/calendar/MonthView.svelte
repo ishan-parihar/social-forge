@@ -3,15 +3,17 @@
   import CalendarEvent from "./CalendarEvent.svelte";
   import type { CalendarEvent as CEvent } from "./types";
 
-  let { year, month, events = [], onEventClick, onDateClick, onDrop, onDuplicate, onStats, onDelete }: {
+  let { year, month, events = [], selected = new Set(), onEventClick, onDateClick, onDrop, onDuplicate, onStats, onDelete, onToggleSelect }: {
     year: number; month: number;
     events?: CEvent[];
+    selected?: Set<string>;
     onEventClick?: (id: string) => void;
     onDateClick?: (date: string) => void;
     onDrop?: (eventId: string, newDate: string) => void;
     onDuplicate?: (id: string) => void;
     onStats?: (id: string) => void;
     onDelete?: (id: string) => void;
+    onToggleSelect?: (id: string, e: Event) => void;
   } = $props();
 
   let eventsByDate = $derived.by(() => {
@@ -75,7 +77,11 @@
               onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onEventClick?.(event.id); } }}
               role="button"
               tabindex="-1"
+              class="flex items-center gap-1"
             >
+              {#if onToggleSelect}
+                <input type="checkbox" checked={selected.has(event.id)} onclick={(e) => onToggleSelect?.(event.id, e)} class="rounded shrink-0 w-3 h-3" />
+              {/if}
               <CalendarEvent {event} compact {onDuplicate} {onStats} {onDelete} />
             </div>
           {/each}

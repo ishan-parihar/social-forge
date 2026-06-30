@@ -298,6 +298,10 @@ impl SocialProvider for MastodonProvider {
         500
     }
 
+    fn validate_media(&self, post: &PostContent) -> Result<(), String> {
+        super::validate_media_limits(self.identifier(), post)
+    }
+
     fn uses_oauth(&self) -> bool {
         true
     }

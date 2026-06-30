@@ -479,6 +479,21 @@ pub trait SocialProvider: Send + Sync {
         Ok(())
     }
 
+    /// Validate media attachments against platform-specific limits.
+    /// Checks image/video counts, file sizes, and dimensions where applicable.
+    /// Default implementation accepts all media (no restrictions).
+    fn validate_media(&self, _post: &PostContent) -> Result<(), String> {
+        Ok(())
+    }
+
+    /// Resolve a media attachment URL to a publicly accessible URL.
+    /// Platforms like Instagram, Facebook, and Threads require publicly accessible URLs
+    /// because they fetch media server-side. By default, returns the URL unchanged.
+    /// Override in providers that need URL resolution (e.g., Meta Graph API providers).
+    fn resolve_media_url(&self, attachment: &MediaAttachment, _app_url: &str) -> MediaAttachment {
+        attachment.clone()
+    }
+
     // ── DM Methods ───────────────────────────────────────────
 
     /// Send a direct message to a user
@@ -539,6 +554,86 @@ pub trait SocialProvider: Send + Sync {
     ) -> Result<(), ProviderError> {
         Err(ProviderError::Api("Comment deletion not supported by this provider".into()))
     }
+}
+
+/// Platform-specific media validation limits.
+pub fn validate_media_limits(identifier: &str, post: &PostContent) -> Result<(), String> {
+    let images: Vec<_> = post.media.iter().filter(|m| m.mime_type.starts_with("image/")).collect();
+    let videos: Vec<_> = post.media.iter().filter(|m| m.mime_type.starts_with("video/")).collect();
+
+    match identifier {
+        "instagram" | "instagram_standalone" | "instagram-standalone" => {
+            if images.len() > 10 {
+                return Err(format!("Instagram allows max 10 images, got {}", images.len()));
+            }
+            if post.media.len() > 10 {
+                return Err(format!("Instagram allows max 10 media items, got {}", post.media.len()));
+            }
+        }
+        "x" => {
+            if images.len() > 4 {
+                return Err(format!("X/Twitter allows max 4 images, got {}", images.len()));
+            }
+            if post.media.len() > 4 {
+                return Err(format!("X/Twitter allows max 4 media items, got {}", post.media.len()));
+            }
+        }
+        "linkedin" | "linkedin_page" | "linkedin-page" => {
+            if images.len() > 20 {
+                return Err(format!("LinkedIn allows max 20 images, got {}", images.len()));
+            }
+            if post.media.len() > 20 {
+                return Err(format!("LinkedIn allows max 20 media items, got {}", post.media.len()));
+            }
+        }
+        "reddit" => {
+            if images.len() > 20 {
+                return Err(format!("Reddit allows max 20 images, got {}", images.len()));
+            }
+            if !videos.is_empty() {
+                return Err("Reddit posts do not support video. Use a video link instead.".into());
+            }
+        }
+        "facebook" => {
+            if images.len() > 10 {
+                return Err(format!("Facebook allows max 10 images, got {}", images.len()));
+            }
+            if post.media.len() > 10 {
+                return Err(format!("Facebook allows max 10 media items, got {}", post.media.len()));
+            }
+        }
+        "youtube" => {
+            if !images.is_empty() && !videos.is_empty() {
+                return Err("YouTube posts require video only, not images.".into());
+            }
+            if videos.is_empty() && images.is_empty() {
+                return Err("YouTube posts require a video attachment.".into());
+            }
+        }
+        "threads" => {
+            if images.len() > 10 {
+                return Err(format!("Threads allows max 10 images, got {}", images.len()));
+            }
+            if post.media.len() > 10 {
+                return Err(format!("Threads allows max 10 media items, got {}", post.media.len()));
+            }
+        }
+        "bluesky" => {
+            if images.len() > 4 {
+                return Err(format!("Bluesky allows max 4 images, got {}", images.len()));
+            }
+            if post.media.len() > 4 {
+                return Err(format!("Bluesky allows max 4 media items, got {}", post.media.len()));
+            }
+        }
+        "mastodon" => {
+            if post.media.len() > 4 {
+                return Err(format!("Mastodon allows max 4 media items, got {}", post.media.len()));
+            }
+        }
+        _ => {}
+    }
+    Ok(())
 }
 
 // ── Error Types ─────────────────────────────────────────────
@@ -607,7 +702,7 @@ pub fn parse_engagement_data(provider: &str, raw: serde_json::Value) -> Engageme
         }
 
         // Instagram: { "like_count": 42, "comments_count": 12 } (from Graph API)
-        "instagram" | "instagram_standalone" => {
+        "instagram" | "instagram_standalone" | "instagram-standalone" => {
             e.likes = raw.get("like_count").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
             e.comments = raw.get("comments_count").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
             e.saves = raw.get("saved_count").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
@@ -615,7 +710,7 @@ pub fn parse_engagement_data(provider: &str, raw: serde_json::Value) -> Engageme
         }
 
         // LinkedIn: { "likeCount": 42, "commentCount": 12, "shareCount": 5 }
-        "linkedin" | "linkedin_page" => {
+        "linkedin" | "linkedin_page" | "linkedin-page" => {
             e.likes = raw.get("likeCount").or_else(|| raw.get("likes")).and_then(|v| v.as_i64()).unwrap_or(0) as i32;
             e.comments = raw.get("commentCount").or_else(|| raw.get("comments")).and_then(|v| v.as_i64()).unwrap_or(0) as i32;
             e.shares = raw.get("shareCount").or_else(|| raw.get("shares")).and_then(|v| v.as_i64()).unwrap_or(0) as i32;

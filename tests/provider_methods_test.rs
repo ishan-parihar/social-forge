@@ -1048,3 +1048,97 @@ async fn test_wordpress_get_post() {
         Ok(v) => println!("⚠️  wordpress_get_post: Unexpected success: {v:?}"),
     }
 }
+
+// ── Media URL Resolution Tests ──────────────────────────────────
+// Verifies that providers correctly resolve relative media URLs to absolute URLs
+
+use social_forge::social::facebook::FacebookProvider;
+use social_forge::social::MediaAttachment;
+
+fn create_facebook_provider(config: &Config) -> FacebookProvider {
+    FacebookProvider::new(config)
+}
+
+#[test]
+fn test_facebook_resolve_media_url_relative() {
+    let config = get_config();
+    let provider = create_facebook_provider(&config);
+    let attachment = MediaAttachment {
+        url: "/api/media/123".into(),
+        mime_type: "image/jpeg".into(),
+        alt: None,
+        poster_url: None,
+    };
+    let resolved = provider.resolve_media_url(&attachment, "https://app.example.com");
+    assert_eq!(resolved.url, "https://app.example.com/api/media/123");
+}
+
+#[test]
+fn test_facebook_resolve_media_url_absolute() {
+    let config = get_config();
+    let provider = create_facebook_provider(&config);
+    let attachment = MediaAttachment {
+        url: "https://cdn.example.com/image.jpg".into(),
+        mime_type: "image/jpeg".into(),
+        alt: None,
+        poster_url: None,
+    };
+    let resolved = provider.resolve_media_url(&attachment, "https://app.example.com");
+    assert_eq!(resolved.url, "https://cdn.example.com/image.jpg");
+}
+
+#[test]
+fn test_threads_resolve_media_url_relative() {
+    let config = get_config();
+    let provider = create_threads_provider(&config);
+    let attachment = MediaAttachment {
+        url: "/media/456".into(),
+        mime_type: "video/mp4".into(),
+        alt: None,
+        poster_url: None,
+    };
+    let resolved = provider.resolve_media_url(&attachment, "https://app.example.com");
+    assert_eq!(resolved.url, "https://app.example.com/media/456");
+}
+
+#[test]
+fn test_reddit_resolve_media_url_relative() {
+    let config = get_config();
+    let provider = RedditProvider::new(&config);
+    let attachment = MediaAttachment {
+        url: "/api/media/789".into(),
+        mime_type: "image/png".into(),
+        alt: None,
+        poster_url: None,
+    };
+    let resolved = provider.resolve_media_url(&attachment, "https://app.example.com");
+    assert_eq!(resolved.url, "https://app.example.com/api/media/789");
+}
+
+#[test]
+fn test_scheduler_resolve_media_urls() {
+    // Simulates the scheduler's media URL resolution logic
+    let media = vec![
+        MediaAttachment {
+            url: "/api/media/1".into(),
+            mime_type: "image/jpeg".into(),
+            alt: None,
+            poster_url: None,
+        },
+        MediaAttachment {
+            url: "https://cdn.example.com/existing.jpg".into(),
+            mime_type: "image/jpeg".into(),
+            alt: None,
+            poster_url: None,
+        },
+    ];
+    let app_url = "https://app.example.com";
+    let config = get_config();
+    let provider = create_facebook_provider(&config);
+    let resolved: Vec<MediaAttachment> = media
+        .into_iter()
+        .map(|m| provider.resolve_media_url(&m, app_url))
+        .collect();
+    assert_eq!(resolved[0].url, "https://app.example.com/api/media/1");
+    assert_eq!(resolved[1].url, "https://cdn.example.com/existing.jpg");
+}

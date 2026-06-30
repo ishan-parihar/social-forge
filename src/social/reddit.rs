@@ -853,6 +853,10 @@ impl SocialProvider for RedditProvider {
         10000
     }
 
+    fn validate_media(&self, post: &PostContent) -> Result<(), String> {
+        super::validate_media_limits(self.identifier(), post)
+    }
+
     fn uses_oauth(&self) -> bool {
         !self.client_id.is_empty() && !self.client_secret.is_empty()
     }
@@ -1504,5 +1508,16 @@ impl SocialProvider for RedditProvider {
             "downs": child["downs"],
             "ups": child["ups"],
         })))
+    }
+
+    fn resolve_media_url(&self, attachment: &MediaAttachment, app_url: &str) -> MediaAttachment {
+        if attachment.url.starts_with("/api/media/") || attachment.url.starts_with("/media/") {
+            MediaAttachment {
+                url: format!("{}{}", app_url.trim_end_matches('/'), attachment.url),
+                ..attachment.clone()
+            }
+        } else {
+            attachment.clone()
+        }
     }
 }

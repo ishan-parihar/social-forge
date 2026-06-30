@@ -403,6 +403,10 @@ impl SocialProvider for LinkedInProvider {
         3000
     }
 
+    fn validate_media(&self, post: &PostContent) -> Result<(), String> {
+        super::validate_media_limits(self.identifier(), post)
+    }
+
     /// LinkedIn uses rotating refresh tokens that expire after ~60 days.
     /// Proactive refresh ensures tokens don't silently expire between API calls.
     fn needs_cron_refresh(&self) -> bool {

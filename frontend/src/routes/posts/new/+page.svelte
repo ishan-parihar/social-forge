@@ -36,6 +36,11 @@
   let firstComment = $state("");
   let showAi = $state(false);
 
+  // Draft auto-save state
+  let draftSaved = $state(false);
+  let draftTimer: ReturnType<typeof setTimeout>;
+  let showRestorePrompt = $state(false);
+
   // Target selection state
   let integrationTargets = $state<Map<string, TargetInfo[]>>(new Map());
   let selectedTargets = $state<Map<string, string[]>>(new Map());
@@ -54,16 +59,14 @@
     if (dateParam) {
       scheduledAt = `${dateParam}T09:00:00.000Z`;
     } else {
-      // Restore draft from localStorage
+      // Check for saved draft and prompt to restore
       const saved = localStorage.getItem(DRAFT_KEY);
       if (saved) {
         try {
           const d = JSON.parse(saved);
-          if (d.content) content = d.content;
-          if (d.title) title = d.title;
-          if (d.selectedIntegrations) selectedIntegrations = d.selectedIntegrations;
-          if (d.scheduledAt) scheduledAt = d.scheduledAt;
-          if (d.firstComment) firstComment = d.firstComment;
+          if (d.content || d.selectedIntegrations?.length) {
+            showRestorePrompt = true;
+          }
         } catch {}
       }
     }
@@ -71,15 +74,39 @@
     if (r.data) allIntegrations = r.data.integrations.filter(i => !i.disabled);
   });
 
-  // Auto-save draft to localStorage
+  function restoreDraft() {
+    const saved = localStorage.getItem(DRAFT_KEY);
+    if (saved) {
+      try {
+        const d = JSON.parse(saved);
+        if (d.content) content = d.content;
+        if (d.title) title = d.title;
+        if (d.selectedIntegrations) selectedIntegrations = d.selectedIntegrations;
+        if (d.scheduledAt) scheduledAt = d.scheduledAt;
+        if (d.firstComment) firstComment = d.firstComment;
+      } catch {}
+    }
+    showRestorePrompt = false;
+  }
+
+  function dismissDraft() {
+    localStorage.removeItem(DRAFT_KEY);
+    showRestorePrompt = false;
+  }
+
+  // Auto-save draft to localStorage with visual feedback
   $effect(() => {
     const _ = [content, title, selectedIntegrations, scheduledAt, firstComment];
     clearTimeout(autoSaveTimer);
+    clearTimeout(draftTimer);
+    draftSaved = false;
     autoSaveTimer = setTimeout(() => {
       if (content || title) {
         localStorage.setItem(DRAFT_KEY, JSON.stringify({
           content, title, selectedIntegrations, scheduledAt, firstComment
         }));
+        draftSaved = true;
+        draftTimer = setTimeout(() => { draftSaved = false; }, 2000);
       }
     }, 1500);
   });
@@ -222,6 +249,13 @@
     submitting = true;
     error = null;
     try {
+      // Build overrides (only includes content that differs from main)
+      const overridesObj: Record<string, { content: string }> = {};
+      for (const [id, html] of providerOverride) {
+        if (html && html !== content) {
+          overridesObj[id] = { content: html };
+        }
+      }
       // Build settings with target info
       const settings: Record<string, unknown> = {};
       for (const [intId, targets] of selectedTargets) {
@@ -236,6 +270,7 @@
         tag_ids: selectedTagIds,
         first_comment: firstComment || undefined,
         media: mediaItems.length > 0 ? mediaItems.map(m => ({ id: m.id, url: m.url, mime_type: m.mime_type, alt: undefined })) : undefined,
+        overrides: Object.keys(overridesObj).length > 0 ? overridesObj : undefined,
         settings: Object.keys(settings).length > 0 ? settings : undefined,
       });
       if (r.error) { error = r.error; return; }
@@ -262,9 +297,23 @@
 </script>
 
 <div class="max-w-4xl mx-auto space-y-6">
+  {#if showRestorePrompt}
+    <div class="bg-indigo-500/10 border border-indigo-500/30 rounded-lg p-3 flex items-center justify-between">
+      <span class="text-sm text-indigo-300">You have an unsaved draft. Restore it?</span>
+      <div class="flex gap-2">
+        <button onclick={restoreDraft} class="px-3 py-1 text-xs bg-indigo-600 hover:bg-indigo-500 rounded transition-colors">Restore</button>
+        <button onclick={dismissDraft} class="px-3 py-1 text-xs text-[#6b7280] hover:text-white transition-colors">Dismiss</button>
+      </div>
+    </div>
+  {/if}
+
   <div class="flex items-center justify-between">
     <h2 class="text-xl font-semibold">Create Post</h2>
-    <div class="flex gap-2">
+    <div class="flex items-center gap-3">
+      {#if draftSaved}
+        <span class="text-xs text-emerald-400 animate-pulse">✓ Draft saved</span>
+      {/if}
+      <div class="flex gap-2">
       <button onclick={() => (showPostSets = true)} aria-label="Post Sets" class="px-3 py-1.5 text-sm text-[#6b7280] hover:text-white border border-[#1e2435] rounded-lg transition-colors">Post Sets</button>
       <button onclick={() => showAi = !showAi} aria-label="AI Assistant"
         class="px-3 py-1.5 text-sm border border-[#1e2435] rounded-lg transition-colors
@@ -278,6 +327,7 @@
       <button onclick={submit} disabled={submitting} class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 rounded-lg text-sm transition-colors">
         {submitting ? "Scheduling..." : "Schedule"}
       </button>
+    </div>
     </div>
   </div>
 

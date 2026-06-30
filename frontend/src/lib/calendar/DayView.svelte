@@ -3,12 +3,15 @@
   import CalendarEvent from "./CalendarEvent.svelte";
   import type { CalendarEvent as CEvent } from "./types";
 
-  let { date, events = [], onEventClick, onDuplicate, onStats, onDelete }: {
+  let { date, events = [], selected = new Set(), onEventClick, onDateClick, onDuplicate, onStats, onDelete, onToggleSelect }: {
     date: Date; events?: CEvent[];
+    selected?: Set<string>;
     onEventClick?: (id: string) => void;
+    onDateClick?: (date: string) => void;
     onDuplicate?: (id: string) => void;
     onStats?: (id: string) => void;
     onDelete?: (id: string) => void;
+    onToggleSelect?: (id: string, e: Event) => void;
   } = $props();
 
   let key = $derived(formatDateKey(date));
@@ -38,9 +41,13 @@
     {#each hours as hour (hour)}
       <div class="flex border-b border-[#1e2435] min-h-[56px]">
         <div class="w-16 text-xs text-[#6b7280] px-2 py-1 border-r border-[#1e2435] shrink-0">{hour}</div>
-        <div class="flex-1 px-2 py-1 space-y-0.5">
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div class="flex-1 px-2 py-1 space-y-0.5 cursor-pointer hover:bg-[#1a1f2e]" onclick={() => onDateClick?.(key)}>
           {#each (eventsByHour.get(hour.slice(0, 2)) || []) as event (event.id)}
-            <div onclick={() => onEventClick?.(event.id)} onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') onEventClick?.(event.id); }} role="button" tabindex="-1">
+            <div class="flex items-center gap-1" onclick={() => onEventClick?.(event.id)} onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') onEventClick?.(event.id); }} role="button" tabindex="-1">
+              {#if onToggleSelect}
+                <input type="checkbox" checked={selected.has(event.id)} onclick={(e) => onToggleSelect?.(event.id, e)} class="rounded shrink-0 w-3 h-3" />
+              {/if}
               <CalendarEvent {event} {onDuplicate} {onStats} {onDelete} />
             </div>
           {/each}
