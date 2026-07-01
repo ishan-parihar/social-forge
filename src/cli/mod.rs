@@ -228,7 +228,7 @@ pub enum Command {
         tool: String,
         /// JSON arguments for the tool
         #[arg(long, default_value = "{}")]
-        json: String,
+        args: String,
     },
 
     /// List all available MCP tools that can be called via mcp-call

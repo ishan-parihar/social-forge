@@ -132,19 +132,19 @@ Instagram requires a container → poll → publish flow. No single CLI command 
 
 **Step 1: Create container**
 ```bash
-social-forge mcp-call ig_create_container '{"ig_id":"<IG_ACCOUNT_ID>","image_url":"https://example.com/photo.jpg","caption":"Your caption here"}'
+social-forge mcp-call ig_create_container --args '{"ig_id":"<IG_ACCOUNT_ID>","image_url":"https://example.com/photo.jpg","caption":"Your caption here"}'
 # Returns: {"id":"CONTAINER_ID","status_code":"FINISHED"}
 ```
 
 **Step 2: Poll container** (if status_code is not FINISHED)
 ```bash
-social-forge mcp-call ig_poll_container '{"ig_id":"<IG_ACCOUNT_ID>","container_id":"CONTAINER_ID"}'
+social-forge mcp-call ig_poll_container --args '{"ig_id":"<IG_ACCOUNT_ID>","container_id":"CONTAINER_ID"}'
 # Returns: {"id":"CONTAINER_ID","status_code":"FINISHED"} when ready
 ```
 
 **Step 3: Publish**
 ```bash
-social-forge mcp-call ig_publish_container '{"ig_id":"<IG_ACCOUNT_ID>","container_id":"CONTAINER_ID"}'
+social-forge mcp-call ig_publish_container --args '{"ig_id":"<IG_ACCOUNT_ID>","container_id":"CONTAINER_ID"}'
 # Returns: {"id":"MEDIA_ID"} on success
 ```
 
@@ -156,9 +156,9 @@ social-forge mcp-call ig_publish_container '{"ig_id":"<IG_ACCOUNT_ID>","containe
 
 **For Reels**:
 ```bash
-social-forge mcp-call ig_create_container '{"ig_id":"<IG_ACCOUNT_ID>","video_url":"https://example.com/video.mp4","caption":"Reel caption","media_type":"REELS"}'
-social-forge mcp-call ig_poll_container '{"ig_id":"<IG_ACCOUNT_ID>","container_id":"CONTAINER_ID"}'
-social-forge mcp-call ig_publish_container '{"ig_id":"<IG_ACCOUNT_ID>","container_id":"CONTAINER_ID","media_type":"REELS"}'
+social-forge mcp-call ig_create_container --args '{"ig_id":"<IG_ACCOUNT_ID>","video_url":"https://example.com/video.mp4","caption":"Reel caption","media_type":"REELS"}'
+social-forge mcp-call ig_poll_container --args '{"ig_id":"<IG_ACCOUNT_ID>","container_id":"CONTAINER_ID"}'
+social-forge mcp-call ig_publish_container --args '{"ig_id":"<IG_ACCOUNT_ID>","container_id":"CONTAINER_ID","media_type":"REELS"}'
 ```
 
 ---
@@ -242,7 +242,7 @@ When CLI doesn't have a command for what you need, use `mcp-call`:
 
 ```bash
 social-forge mcp-tools --pretty                    # List all 311 tools
-social-forge mcp-call <tool_name> '{"key":"value"}' # Call any tool
+social-forge mcp-call <tool_name> --args '{"key":"value"}' # Call any tool
 ```
 
 | Category | Key MCP Tools |

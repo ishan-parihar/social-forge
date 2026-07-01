@@ -56,22 +56,22 @@ social-forge post "Content" --platforms x,linkedin,bluesky     # Cross-platform
 
 **Platform-specific posting via MCP** (no native CLI yet):
 ```bash
-social-forge mcp-call fb_create_post '{"page_id":"<ID>","message":"Post"}'       # Facebook
-social-forge mcp-call tt_create_post '{"text":"Post"}'                           # TikTok
-social-forge mcp-call th_create_thread '{"text":"Thread post"}'                  # Threads
-social-forge mcp-call bs_create_post '{"text":"Post"}'                          # Bluesky
-social-forge mcp-call ms_create_post '{"status":"Post"}'                         # Mastodon
-social-forge mcp-call wp_create_post '{"title":"T","content":"C"}'              # WordPress
-social-forge mcp-call hn_create_post '{"title":"T","content_markdown":"C"}'     # Hashnode
-social-forge mcp-call dv_create_post '{"title":"T","body_markdown":"C"}'        # Dev.to
-social-forge mcp-call md_create_post '{"title":"T","content":"C","contentFormat":"markdown"}' # Medium
+social-forge mcp-call fb_create_post --args '{"page_id":"<ID>","message":"Post"}'       # Facebook
+social-forge mcp-call tt_create_post --args '{"text":"Post"}'                           # TikTok
+social-forge mcp-call th_create_thread --args '{"text":"Thread post"}'                  # Threads
+social-forge mcp-call bs_create_post --args '{"text":"Post"}'                          # Bluesky
+social-forge mcp-call ms_create_post --args '{"status":"Post"}'                         # Mastodon
+social-forge mcp-call wp_create_post --args '{"title":"T","content":"C"}'              # WordPress
+social-forge mcp-call hn_create_post --args '{"title":"T","content_markdown":"C"}'     # Hashnode
+social-forge mcp-call dv_create_post --args '{"title":"T","body_markdown":"C"}'        # Dev.to
+social-forge mcp-call md_create_post --args '{"title":"T","content":"C","contentFormat":"markdown"}' # Medium
 ```
 
 **Instagram** (3-step container flow):
 ```bash
-social-forge mcp-call ig_create_container '{"ig_id":"<ID>","image_url":"<URL>","caption":"Text"}'
-social-forge mcp-call ig_poll_container '{"ig_id":"<ID>","container_id":"<CID>"}'
-social-forge mcp-call ig_publish_container '{"ig_id":"<ID>","container_id":"<CID>"}'
+social-forge mcp-call ig_create_container --args '{"ig_id":"<ID>","image_url":"<URL>","caption":"Text"}'
+social-forge mcp-call ig_poll_container --args '{"ig_id":"<ID>","container_id":"<CID>"}'
+social-forge mcp-call ig_publish_container --args '{"ig_id":"<ID>","container_id":"<CID>"}'
 ```
 
 ---
@@ -110,18 +110,18 @@ social-forge feed --pretty                            # Unified feed
 
 **Platform-specific reads via MCP**:
 ```bash
-social-forge mcp-call tt_profile '{}'                                       # TikTok profile
-social-forge mcp-call tt_list_videos '{}'                                   # TikTok videos
-social-forge mcp-call th_list_threads '{}'                                  # Threads
-social-forge mcp-call bs_timeline '{}'                                      # Bluesky timeline
-social-forge mcp-call ms_get_timeline '{}'                                  # Mastodon timeline
-social-forge mcp-call di_get_messages '{"channel_id":"<ID>"}'              # Discord messages
-social-forge mcp-call sl_channel_history '{"channel_id":"<ID>"}'           # Slack history
-social-forge mcp-call tb_get_updates '{}'                                  # Telegram Bot updates
-social-forge mcp-call tu_list_dialogs '{}'                                  # Telegram User dialogs
-social-forge mcp-call wa_chats '{}'                                         # WhatsApp chats
-social-forge mcp-call gh_list_my_repos '{}'                                 # GitHub repos
-social-forge mcp-call gh_list_issues '{"owner":"<O>","repo":"<R>"}'         # GitHub issues
+social-forge mcp-call tt_profile --args '{}'                                       # TikTok profile
+social-forge mcp-call tt_list_videos --args '{}'                                   # TikTok videos
+social-forge mcp-call th_list_threads --args '{}'                                  # Threads
+social-forge mcp-call bs_timeline --args '{}'                                      # Bluesky timeline
+social-forge mcp-call ms_get_timeline --args '{}'                                  # Mastodon timeline
+social-forge mcp-call di_get_messages --args '{"channel_id":"<ID>"}'              # Discord messages
+social-forge mcp-call sl_channel_history --args '{"channel_id":"<ID>"}'           # Slack history
+social-forge mcp-call tb_get_updates --args '{}'                                  # Telegram Bot updates
+social-forge mcp-call tu_list_dialogs --args '{}'                                  # Telegram User dialogs
+social-forge mcp-call wa_chats --args '{}'                                         # WhatsApp chats
+social-forge mcp-call gh_list_my_repos --args '{}'                                 # GitHub repos
+social-forge mcp-call gh_list_issues --args '{"owner":"<O>","repo":"<R>"}'         # GitHub issues
 ```
 
 ---
@@ -159,9 +159,9 @@ social-forge instagram comment <MEDIA_ID> "Reply"                   # Instagram 
 
 **Platform-specific comment replies via MCP**:
 ```bash
-social-forge mcp-call ig_reply_to_comment '{"ig_id":"<ID>","comment_id":"<CID>","text":"Reply"}'  # Instagram
-social-forge mcp-call li_create_comment '{"post_urn":"<URN>","message":"Reply","parent_id":"<PID>"}'  # LinkedIn
-social-forge mcp-call di_send_message '{"channel_id":"<ID>","content":"Reply"}'   # Discord
+social-forge mcp-call ig_reply_to_comment --args '{"ig_id":"<ID>","comment_id":"<CID>","text":"Reply"}'  # Instagram
+social-forge mcp-call li_create_comment --args '{"post_urn":"<URN>","message":"Reply","parent_id":"<PID>"}'  # LinkedIn
+social-forge mcp-call di_send_message --args '{"channel_id":"<ID>","content":"Reply"}'   # Discord
 ```
 
 ---
@@ -176,13 +176,13 @@ social-forge dm messages <INTEGRATION_ID> <CONVERSATION_ID>      # Read messages
 
 **Platform-specific DMs via MCP**:
 ```bash
-social-forge mcp-call reddit_send_dm '{"username":"<USER>","message":"Hello"}'   # Reddit
-social-forge mcp-call fb_send_message '{"recipient_id":"<ID>","message":"Hello"}'  # Facebook
-social-forge mcp-call di_send_message '{"channel_id":"<ID>","content":"Hello"}'  # Discord
-social-forge mcp-call tb_send_message '{"chat_id":"<ID>","text":"Hello"}'       # Telegram Bot
-social-forge mcp-call tu_send_message '{"dialog_id":"<ID>","message":"Hello"}'  # Telegram User
-social-forge mcp-call wa_send_text '{"number":"<PHONE>","message":"Hello"}'     # WhatsApp
-social-forge mcp-call sl_send_message '{"channel":"<ID>","message":"Hello"}'    # Slack
+social-forge mcp-call reddit_send_dm --args '{"username":"<USER>","message":"Hello"}'   # Reddit
+social-forge mcp-call fb_send_message --args '{"recipient_id":"<ID>","message":"Hello"}'  # Facebook
+social-forge mcp-call di_send_message --args '{"channel_id":"<ID>","content":"Hello"}'  # Discord
+social-forge mcp-call tb_send_message --args '{"chat_id":"<ID>","text":"Hello"}'       # Telegram Bot
+social-forge mcp-call tu_send_message --args '{"dialog_id":"<ID>","message":"Hello"}'  # Telegram User
+social-forge mcp-call wa_send_text --args '{"number":"<PHONE>","message":"Hello"}'     # WhatsApp
+social-forge mcp-call sl_send_message --args '{"channel":"<ID>","message":"Hello"}'    # Slack
 ```
 
 ---
@@ -199,15 +199,15 @@ social-forge facebook insights <PAGE_ID> --metric <metrics>
 
 **Platform-specific analytics via MCP**:
 ```bash
-social-forge mcp-call ig_get_insights '{"ig_id":"<ID>","metrics":["reach","follower_count"]}'  # Instagram
-social-forge mcp-call ig_get_insights_audience '{"ig_id":"<ID>"}'                              # Instagram audience
-social-forge mcp-call lip_get_analytics '{"page_id":"<ID>"}'                                  # LinkedIn Page
-social-forge mcp-call lip_get_post_analytics '{"post_urn":"<URN>"}'                           # LinkedIn post
-social-forge mcp-call pi_get_board_analytics '{"board_id":"<ID>"}'                            # Pinterest board
-social-forge mcp-call pi_get_pin_analytics '{"pin_id":"<ID>"}'                                # Pinterest pin
-social-forge mcp-call yt_get_channel_stats '{"channel_id":"<ID>"}'                            # YouTube channel
-social-forge mcp-call yt_get_analytics '{"channel_id":"<ID>"}'                                # YouTube analytics
-social-forge mcp-call th_get_insights '{"thread_id":"<ID>"}'                                  # Threads
+social-forge mcp-call ig_get_insights --args '{"ig_id":"<ID>","metrics":["reach","follower_count"]}'  # Instagram
+social-forge mcp-call ig_get_insights_audience --args '{"ig_id":"<ID>"}'                              # Instagram audience
+social-forge mcp-call lip_get_analytics --args '{"page_id":"<ID>"}'                                  # LinkedIn Page
+social-forge mcp-call lip_get_post_analytics --args '{"post_urn":"<URN>"}'                           # LinkedIn post
+social-forge mcp-call pi_get_board_analytics --args '{"board_id":"<ID>"}'                            # Pinterest board
+social-forge mcp-call pi_get_pin_analytics --args '{"pin_id":"<ID>"}'                                # Pinterest pin
+social-forge mcp-call yt_get_channel_stats --args '{"channel_id":"<ID>"}'                            # YouTube channel
+social-forge mcp-call yt_get_analytics --args '{"channel_id":"<ID>"}'                                # YouTube analytics
+social-forge mcp-call th_get_insights --args '{"thread_id":"<ID>"}'                                  # Threads
 ```
 
 ---
@@ -224,9 +224,9 @@ social-forge reddit save <THING_ID>
 
 **Platform-specific engagement via MCP**:
 ```bash
-social-forge mcp-call fb_react '{"post_id":"<ID>","reaction":"LIKE"}'      # Facebook reaction
-social-forge mcp-call di_add_reaction '{"channel_id":"<C>","message_id":"<M>","emoji":"👍"}'  # Discord reaction
-social-forge mcp-call x_follow_user '{"user_id":"<ID>"}'                   # X follow
+social-forge mcp-call fb_react --args '{"post_id":"<ID>","reaction":"LIKE"}'      # Facebook reaction
+social-forge mcp-call di_add_reaction --args '{"channel_id":"<C>","message_id":"<M>","emoji":"👍"}'  # Discord reaction
+social-forge mcp-call x_follow_user --args '{"user_id":"<ID>"}'                   # X follow
 ```
 
 ---
@@ -255,12 +255,12 @@ social-forge automation logs <RULE_ID> --limit 50
 ## Webhooks
 
 ```bash
-social-forge mcp-call wh_create '{"url":"https://example.com/hook","events":["post.published"]}'
-social-forge mcp-call wh_list '{}'
-social-forge mcp-call wh_get '{"webhook_id":"<ID>"}'
-social-forge mcp-call wh_update '{"webhook_id":"<ID>","events":["post.scheduled"]}'
-social-forge mcp-call wh_delete '{"webhook_id":"<ID>"}'
-social-forge mcp-call wh_test '{"webhook_id":"<ID>"}'
+social-forge mcp-call wh_create --args '{"url":"https://example.com/hook","events":["post.published"]}'
+social-forge mcp-call wh_list --args '{}'
+social-forge mcp-call wh_get --args '{"webhook_id":"<ID>"}'
+social-forge mcp-call wh_update --args '{"webhook_id":"<ID>","events":["post.scheduled"]}'
+social-forge mcp-call wh_delete --args '{"webhook_id":"<ID>"}'
+social-forge mcp-call wh_test --args '{"webhook_id":"<ID>"}'
 ```
 
 ---
@@ -268,10 +268,10 @@ social-forge mcp-call wh_test '{"webhook_id":"<ID>"}'
 ## Notifications
 
 ```bash
-social-forge mcp-call notif_list '{}'
-social-forge mcp-call notif_mark_read '{"notification_id":"<ID>"}'
-social-forge mcp-call notif_mark_all_read '{}'
-social-forge mcp-call notif_create '{"title":"Title","body":"Body"}'
+social-forge mcp-call notif_list --args '{}'
+social-forge mcp-call notif_mark_read --args '{"notification_id":"<ID>"}'
+social-forge mcp-call notif_mark_all_read --args '{}'
+social-forge mcp-call notif_create --args '{"title":"Title","body":"Body"}'
 ```
 
 ---
@@ -279,11 +279,11 @@ social-forge mcp-call notif_create '{"title":"Title","body":"Body"}'
 ## Tags
 
 ```bash
-social-forge mcp-call tag_create '{"name":"work"}'
-social-forge mcp-call tag_list '{}'
-social-forge mcp-call tag_get '{"tag_id":"<ID>"}'
-social-forge mcp-call tag_update '{"tag_id":"<ID>","name":"updated"}'
-social-forge mcp-call tag_delete '{"tag_id":"<ID>"}'
+social-forge mcp-call tag_create --args '{"name":"work"}'
+social-forge mcp-call tag_list --args '{}'
+social-forge mcp-call tag_get --args '{"tag_id":"<ID>"}'
+social-forge mcp-call tag_update --args '{"tag_id":"<ID>","name":"updated"}'
+social-forge mcp-call tag_delete --args '{"tag_id":"<ID>"}'
 ```
 
 ---
@@ -292,30 +292,30 @@ social-forge mcp-call tag_delete '{"tag_id":"<ID>"}'
 
 ```bash
 # YouTube
-social-forge mcp-call goog_search_videos '{"query":"rust tutorial"}'
-social-forge mcp-call goog_get_video '{"video_id":"<ID>"}'
-social-forge mcp-call yt_get_channel_stats '{"channel_id":"<ID>"}'
+social-forge mcp-call goog_search_videos --args '{"query":"rust tutorial"}'
+social-forge mcp-call goog_get_video --args '{"video_id":"<ID>"}'
+social-forge mcp-call yt_get_channel_stats --args '{"channel_id":"<ID>"}'
 
 # Gmail
-social-forge mcp-call goog_list_messages '{}'
-social-forge mcp-call goog_get_message '{"message_id":"<ID>"}'
-social-forge mcp-call goog_send_message '{"to":"user@example.com","subject":"Hi","body":"Hello!"}'
-social-forge mcp-call goog_list_labels '{}'
-social-forge mcp-call goog_get_thread '{"thread_id":"<ID>"}'
-social-forge mcp-call goog_search_messages '{"query":"from:me"}'
+social-forge mcp-call goog_list_messages --args '{}'
+social-forge mcp-call goog_get_message --args '{"message_id":"<ID>"}'
+social-forge mcp-call goog_send_message --args '{"to":"user@example.com","subject":"Hi","body":"Hello!"}'
+social-forge mcp-call goog_list_labels --args '{}'
+social-forge mcp-call goog_get_thread --args '{"thread_id":"<ID>"}'
+social-forge mcp-call goog_search_messages --args '{"query":"from:me"}'
 
 # Google Calendar
-social-forge mcp-call goog_list_calendars '{}'
-social-forge mcp-call goog_list_events '{"calendar_id":"primary"}'
-social-forge mcp-call goog_create_event '{"calendar_id":"primary","summary":"Meeting","start":"2026-07-01T09:00:00Z","end":"2026-07-01T10:00:00Z"}'
-social-forge mcp-call goog_update_event '{"calendar_id":"primary","event_id":"<ID>","summary":"Updated"}'
-social-forge mcp-call goog_delete_event '{"calendar_id":"primary","event_id":"<ID>"}'
+social-forge mcp-call goog_list_calendars --args '{}'
+social-forge mcp-call goog_list_events --args '{"calendar_id":"primary"}'
+social-forge mcp-call goog_create_event --args '{"calendar_id":"primary","summary":"Meeting","start":"2026-07-01T09:00:00Z","end":"2026-07-01T10:00:00Z"}'
+social-forge mcp-call goog_update_event --args '{"calendar_id":"primary","event_id":"<ID>","summary":"Updated"}'
+social-forge mcp-call goog_delete_event --args '{"calendar_id":"primary","event_id":"<ID>"}'
 
 # Google Drive
-social-forge mcp-call goog_list_files '{}'
-social-forge mcp-call goog_get_file '{"file_id":"<ID>"}'
-social-forge mcp-call goog_search_files '{"query":"name contains 'report''}'
-social-forge mcp-call goog_export_file '{"file_id":"<ID>","mime_type":"application/pdf"}'
+social-forge mcp-call goog_list_files --args '{}'
+social-forge mcp-call goog_get_file --args '{"file_id":"<ID>"}'
+social-forge mcp-call goog_search_files --args '{"query":"name contains 'report''}'
+social-forge mcp-call goog_export_file --args '{"file_id":"<ID>","mime_type":"application/pdf"}'
 ```
 
 ---
@@ -323,19 +323,19 @@ social-forge mcp-call goog_export_file '{"file_id":"<ID>","mime_type":"applicati
 ## GitHub
 
 ```bash
-social-forge mcp-call gh_get_authenticated_user '{}'                # My profile
-social-forge mcp-call gh_list_my_repos '{}'                         # My repos
-social-forge mcp-call gh_list_repos '{"owner":"<ORG>"}'             # Org repos
-social-forge mcp-call gh_get_repo '{"owner":"<O>","repo":"<R>"}'    # Repo details
-social-forge mcp-call gh_list_issues '{"owner":"<O>","repo":"<R>"}' # Issues
-social-forge mcp-call gh_create_issue '{"owner":"<O>","repo":"<R>","title":"Bug","body":"Details"}'
-social-forge mcp-call gh_close_issue '{"owner":"<O>","repo":"<R>","issue_number":42}'
-social-forge mcp-call gh_list_pull_requests '{"owner":"<O>","repo":"<R>"}'  # PRs
-social-forge mcp-call gh_list_branches '{"owner":"<O>","repo":"<R>"}'      # Branches
-social-forge mcp-call gh_list_commits '{"owner":"<O>","repo":"<R>"}'       # Commits
-social-forge mcp-call gh_list_releases '{"owner":"<O>","repo":"<R>"}'      # Releases
-social-forge mcp-call gh_search_repos '{"query":"language:rust stars:>100"}'  # Search
-social-forge mcp-call gh_search_code '{"query":"filename:Cargo.toml org:<O>"}'  # Code search
+social-forge mcp-call gh_get_authenticated_user --args '{}'                # My profile
+social-forge mcp-call gh_list_my_repos --args '{}'                         # My repos
+social-forge mcp-call gh_list_repos --args '{"owner":"<ORG>"}'             # Org repos
+social-forge mcp-call gh_get_repo --args '{"owner":"<O>","repo":"<R>"}'    # Repo details
+social-forge mcp-call gh_list_issues --args '{"owner":"<O>","repo":"<R>"}' # Issues
+social-forge mcp-call gh_create_issue --args '{"owner":"<O>","repo":"<R>","title":"Bug","body":"Details"}'
+social-forge mcp-call gh_close_issue --args '{"owner":"<O>","repo":"<R>","issue_number":42}'
+social-forge mcp-call gh_list_pull_requests --args '{"owner":"<O>","repo":"<R>"}'  # PRs
+social-forge mcp-call gh_list_branches --args '{"owner":"<O>","repo":"<R>"}'      # Branches
+social-forge mcp-call gh_list_commits --args '{"owner":"<O>","repo":"<R>"}'       # Commits
+social-forge mcp-call gh_list_releases --args '{"owner":"<O>","repo":"<R>"}'      # Releases
+social-forge mcp-call gh_search_repos --args '{"query":"language:rust stars:>100"}'  # Search
+social-forge mcp-call gh_search_code --args '{"query":"filename:Cargo.toml org:<O>"}'  # Code search
 ```
 
 ---
@@ -343,13 +343,13 @@ social-forge mcp-call gh_search_code '{"query":"filename:Cargo.toml org:<O>"}'  
 ## WhatsApp
 
 ```bash
-social-forge mcp-call wa_auth_status '{}'                                  # Check status
-social-forge mcp-call wa_chats '{}'                                        # List chats
-social-forge mcp-call wa_contacts '{}'                                     # Contacts
-social-forge mcp-call wa_send_text '{"number":"+1234567890","message":"Hi"}' # Send text
-social-forge mcp-call wa_list_groups '{}'                                  # Groups
-social-forge mcp-call wa_create_group '{"name":"Team","participants":["<PHONE>"]}'
-social-forge mcp-call wa_group_invite_link '{"group_id":"<ID>"}'           # Invite link
+social-forge mcp-call wa_auth_status --args '{}'                                  # Check status
+social-forge mcp-call wa_chats --args '{}'                                        # List chats
+social-forge mcp-call wa_contacts --args '{}'                                     # Contacts
+social-forge mcp-call wa_send_text --args '{"number":"+1234567890","message":"Hi"}' # Send text
+social-forge mcp-call wa_list_groups --args '{}'                                  # Groups
+social-forge mcp-call wa_create_group --args '{"name":"Team","participants":["<PHONE>"]}'
+social-forge mcp-call wa_group_invite_link --args '{"group_id":"<ID>"}'           # Invite link
 ```
 
 ---
@@ -358,16 +358,16 @@ social-forge mcp-call wa_group_invite_link '{"group_id":"<ID>"}'           # Inv
 
 ```bash
 # Bot
-social-forge mcp-call tb_send_message '{"chat_id":"<ID>","text":"Hello"}'
-social-forge mcp-call tb_send_photo '{"chat_id":"<ID>","photo":"<URL>"}'
-social-forge mcp-call tb_get_chat '{"chat_id":"<ID>"}'
-social-forge mcp-call tb_get_updates '{}'
+social-forge mcp-call tb_send_message --args '{"chat_id":"<ID>","text":"Hello"}'
+social-forge mcp-call tb_send_photo --args '{"chat_id":"<ID>","photo":"<URL>"}'
+social-forge mcp-call tb_get_chat --args '{"chat_id":"<ID>"}'
+social-forge mcp-call tb_get_updates --args '{}'
 
 # User
-social-forge mcp-call tu_send_message '{"dialog_id":"<ID>","message":"Hello"}'
-social-forge mcp-call tu_list_dialogs '{}'
-social-forge mcp-call tu_list_contacts '{}'
-social-forge mcp-call tu_search '{"query":"John"}'
+social-forge mcp-call tu_send_message --args '{"dialog_id":"<ID>","message":"Hello"}'
+social-forge mcp-call tu_list_dialogs --args '{}'
+social-forge mcp-call tu_list_contacts --args '{}'
+social-forge mcp-call tu_search --args '{"query":"John"}'
 ```
 
 ---
@@ -375,11 +375,11 @@ social-forge mcp-call tu_search '{"query":"John"}'
 ## Discord
 
 ```bash
-social-forge mcp-call di_get_server_info '{}'
-social-forge mcp-call di_get_guild_channels '{"guild_id":"<ID>"}'
-social-forge mcp-call di_send_message '{"channel_id":"<ID>","content":"Hello"}'
-social-forge mcp-call di_get_messages '{"channel_id":"<ID>","limit":10}'
-social-forge mcp-call di_create_forum_post '{"channel_id":"<ID>","name":"Topic","content":"Post body"}'
+social-forge mcp-call di_get_server_info --args '{}'
+social-forge mcp-call di_get_guild_channels --args '{"guild_id":"<ID>"}'
+social-forge mcp-call di_send_message --args '{"channel_id":"<ID>","content":"Hello"}'
+social-forge mcp-call di_get_messages --args '{"channel_id":"<ID>","limit":10}'
+social-forge mcp-call di_create_forum_post --args '{"channel_id":"<ID>","name":"Topic","content":"Post body"}'
 ```
 
 ---
@@ -387,10 +387,10 @@ social-forge mcp-call di_create_forum_post '{"channel_id":"<ID>","name":"Topic",
 ## Slack
 
 ```bash
-social-forge mcp-call sl_list_channels '{}'
-social-forge mcp-call sl_channel_history '{"channel_id":"<ID>","limit":10}'
-social-forge mcp-call sl_send_message '{"channel":"<ID>","message":"Hello"}'
-social-forge mcp-call sl_list_users '{}'
+social-forge mcp-call sl_list_channels --args '{}'
+social-forge mcp-call sl_channel_history --args '{"channel_id":"<ID>","limit":10}'
+social-forge mcp-call sl_send_message --args '{"channel":"<ID>","message":"Hello"}'
+social-forge mcp-call sl_list_users --args '{}'
 ```
 
 

@@ -98,7 +98,7 @@ social-forge posts create "Update" --integrations "$UUID" --pretty
 ```
 Does `social-forge <provider> <action>` exist in the recipes below?
   → YES: Use CLI (faster, simpler)
-  → NO:  Use `social-forge mcp-call <tool_name> '<json>'`
+  → NO:  Use `social-forge mcp-call <tool_name> --args '<json>'`
 ```
 
 **Platforms with native CLI posting**:
@@ -324,9 +324,9 @@ If a CLI command doesn't exist for what you need, use `mcp-call`:
 social-forge mcp-tools --pretty
 
 # Call any tool by name
-social-forge mcp-call fb_create_post '{"page_id":"123","message":"Hello"}'
-social-forge mcp-call x_home_timeline '{"count":5}'
-social-forge mcp-call posts_create '{"content":"test","platforms":["x"]}'
+social-forge mcp-call fb_create_post --args '{"page_id":"123","message":"Hello"}'
+social-forge mcp-call x_home_timeline --args '{"count":5}'
+social-forge mcp-call posts_create --args '{"content":"test","platforms":["x"]}'
 ```
 
 ### Read from any platform
