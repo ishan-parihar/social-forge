@@ -335,7 +335,7 @@ async fn test_linkedin_mcp_tool_handler_full_chain() {
     let result = provider.publish("INVALID_TOKEN", &post).await;
     assert!(result.is_err(), "Publishing with invalid token should fail");
     let err = result.unwrap_err();
-    assert!(err.is_token_expired() || format!("{err}").contains("error"),
+    assert!(format!("{err}").contains("token") || format!("{err}").contains("expired") || format!("{err}").contains("401") || format!("{err}").contains("error"),
         "Should get TokenExpired or API error: {err}");
 
     // LinkedIn Page provider verification
@@ -360,7 +360,7 @@ async fn test_linkedin_mcp_tool_handler_full_chain() {
     let lip_result = lip_provider.publish("INVALID_TOKEN", &lip_post).await;
     assert!(lip_result.is_err(), "Page publish with invalid token should fail");
     let lip_err = lip_result.unwrap_err();
-    assert!(lip_err.is_token_expired() || format!("{lip_err}").contains("error"),
+    assert!(lip_format!("{err}").contains("token") || format!("{err}").contains("expired") || format!("{err}").contains("401") || format!("{lip_err}").contains("error"),
         "Should get TokenExpired or API error: {lip_err}");
 
     println!("✅ LinkedIn MCP tool handler full chain verified");

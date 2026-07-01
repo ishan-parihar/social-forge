@@ -3098,7 +3098,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
             handle_carousel(&text, &integration, &media, title.as_deref(), schedule.as_deref()).await
         }
         Command::Media { action } => handle_media(action).await,
-        Command::McpCall { tool, json } => handle_mcp_call(&tool, &json).await,
+        Command::McpCall { tool, args } => handle_mcp_call(&tool, &args).await,
         Command::McpTools => handle_mcp_tools(),
         Command::SplitPreview { text, platforms } => {
             handle_split_preview(&text, platforms.as_deref())
