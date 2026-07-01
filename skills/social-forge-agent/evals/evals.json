@@ -87,7 +87,7 @@
       "prompt": "Upload photo.jpg and photo2.jpg, then create a carousel post called 'My Gallery' on X and LinkedIn",
       "expected_commands": [
         "social-forge media upload-batch ./photo.jpg ./photo2.jpg --json",
-        "social-forge carousel create 'My Gallery' --media ./photo.jpg,./photo2.jpg --platforms x,linkedin --json"
+        "social-forge carousel create 'My Gallery' --images ./photo.jpg ./photo2.jpg --platforms x,linkedin --json"
       ],
       "expected_output": "upload-batch returns {\"uploaded\":[...]}. carousel create returns {\"results\":[...]}",
       "files": []

@@ -320,7 +320,6 @@ social-forge automation logs <RULE_ID> --limit 50 --pretty
 If a CLI command doesn't exist for what you need, use `mcp-call`:
 
 ```bash
-# List all 311 MCP tools
 social-forge mcp-tools --pretty
 
 # Call any tool by name
