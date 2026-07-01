@@ -182,8 +182,11 @@ pub enum Command {
         /// Post text content
         text: String,
         /// Target integration IDs (comma-separated UUIDs). Uses all connected if omitted.
-        #[arg(long)]
+        #[arg(long, conflicts_with = "platforms")]
         integrations: Option<String>,
+        /// Target platforms (comma-separated: x,linkedin,bluesky,...). Filters by provider name.
+        #[arg(long, conflicts_with = "integrations")]
+        platforms: Option<String>,
         /// Media URLs to attach (comma-separated)
         #[arg(long)]
         media: Option<String>,

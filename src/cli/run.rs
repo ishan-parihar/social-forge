@@ -2557,6 +2557,7 @@ async fn handle_post(
 async fn handle_stage(
     text: &str,
     integrations_str: Option<&str>,
+    platforms_str: Option<&str>,
     media: Option<&str>,
     schedule: Option<&str>,
     preview_only: bool,
@@ -2569,6 +2570,14 @@ async fn handle_stage(
         iids.split(',').map(|s| s.trim()).filter(|s| !s.is_empty())
             .map(|s| Uuid::parse_str(s).map_err(|_| anyhow::anyhow!("Invalid integration_id: {s}")))
             .collect::<Result<_, _>>()?
+    } else if let Some(plats) = platforms_str {
+        let platform_names: Vec<&str> = plats.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
+        all_integrations.iter()
+            .filter(|i| platform_names.iter().any(|p| {
+                i.provider_identifier == *p || i.provider_identifier.starts_with(&format!("{p}-"))
+            }))
+            .map(|i| i.id)
+            .collect()
     } else {
         all_integrations.iter().map(|i| i.id).collect()
     };
@@ -3091,8 +3100,8 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
         Command::Post { text, platforms, media, schedule, first_comment } => {
             handle_post(&text, platforms.as_deref(), media.as_deref(), schedule.as_deref(), first_comment.as_deref()).await
         }
-        Command::Stage { text, integrations, media, schedule, preview, first_comment } => {
-            handle_stage(&text, integrations.as_deref(), media.as_deref(), schedule.as_deref(), preview, first_comment.as_deref()).await
+        Command::Stage { text, integrations, platforms, media, schedule, preview, first_comment } => {
+            handle_stage(&text, integrations.as_deref(), platforms.as_deref(), media.as_deref(), schedule.as_deref(), preview, first_comment.as_deref()).await
         }
         Command::Carousel { text, integration, media, title, schedule } => {
             handle_carousel(&text, &integration, &media, title.as_deref(), schedule.as_deref()).await
