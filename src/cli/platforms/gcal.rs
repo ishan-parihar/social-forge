@@ -23,6 +23,17 @@ pub async fn handle(action: GcalAction, state: &AppState) -> anyhow::Result<()> 
             };
             crate::mcp::tools_google::handle_goog_create_event(state, &input).await.map(|v| v.0)
         }
+        GcalAction::Update { calendar_id, event_id, title, description, start, end } => {
+            let input = crate::mcp::tools_google::GcalUpdateEventInput {
+                calendar_id,
+                event_id,
+                summary: title,
+                description,
+                start_time: start,
+                end_time: end,
+            };
+            crate::mcp::tools_google::handle_goog_update_event(state, &input).await.map(|v| v.0)
+        }
         GcalAction::Delete { calendar_id, event_id } => {
             let input = crate::mcp::tools_google::GcalDeleteEventInput { calendar_id, event_id };
             crate::mcp::tools_google::handle_goog_delete_event(state, &input).await.map(|v| v.0)
