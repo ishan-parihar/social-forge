@@ -241,7 +241,7 @@ social-forge mcp-call ig_publish_container --args '{"ig_id":"<IG_ACCOUNT_ID>","c
 When CLI doesn't have a command for what you need, use `mcp-call`:
 
 ```bash
-social-forge mcp-tools --pretty                    # List all 311 tools
+social-forge mcp-tools --pretty                    # List all 302 tools (bridge-accessible)
 social-forge mcp-call <tool_name> --args '{"key":"value"}' # Call any tool
 ```
 
