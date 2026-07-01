@@ -1922,6 +1922,20 @@ pub enum GcalAction {
         #[arg(long)]
         description: Option<String>,
     },
+    /// Update an event
+    Update {
+        #[arg(long)]
+        calendar_id: Option<String>,
+        event_id: String,
+        #[arg(long)]
+        title: Option<String>,
+        #[arg(long)]
+        description: Option<String>,
+        #[arg(long)]
+        start: Option<String>,
+        #[arg(long)]
+        end: Option<String>,
+    },
     /// Delete an event
     Delete {
         #[arg(long)]
