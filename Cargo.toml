@@ -1,6 +1,6 @@
 [package]
 name = "social-forge"
-version = "0.2.20"
+version = "0.2.21"
 edition = "2021"
 description = "Social media scheduling platform — Rust backend with axum REST API + rmcp MCP server, JWT auth, SSE realtime, and in-process scheduler"
 authors = ["Ishan Parihar"]
