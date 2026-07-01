@@ -582,6 +582,14 @@ async fn refresh_cache_cycle(db: &PgPool, providers: &ProviderRegistry) {
         };
 
         for integration in &integrations {
+            if integration.refresh_needed {
+                tracing::debug!(
+                    "Skipping analytics refresh for user {} provider {}: refresh_needed flag set",
+                    user.id, integration.provider_identifier
+                );
+                continue;
+            }
+
             let provider = match providers.get(&integration.provider_identifier) {
                 Some(p) => p,
                 None => continue,

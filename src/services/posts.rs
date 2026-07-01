@@ -25,6 +25,9 @@ pub struct CreatePostInput {
     pub media_urls: Value,
     pub scheduled_at: Option<DateTime<Utc>>,
     pub settings: Value,
+    pub first_comment: Option<String>,
+    /// Optional state hint. If `None`, defaults to `Draft`. Pass `Some(Queued)` after `--schedule` to arm the post.
+    pub state: Option<PostState>,
 }
 
 /// Input for updating a post
@@ -64,7 +67,7 @@ impl PostService {
         }
     }
 
-    /// Create a new post (draft)
+    /// Create a new post
     pub async fn create(
         db: &PgPool,
         broadcaster: &Broadcaster,
@@ -74,6 +77,11 @@ impl PostService {
         if content.trim().is_empty() {
             return Err("Content cannot be empty".into());
         }
+        if content.len() > 2000 {
+            return Err(format!("Content exceeds 2000 chars (got {})", content.len()));
+        }
+
+        let state = input.state.unwrap_or(PostState::Draft);
 
         let post = queries::create_post(
             db,
@@ -84,8 +92,8 @@ impl PostService {
             &input.media_urls,
             &input.settings,
             input.scheduled_at,
-            Some(PostState::Draft),
-            None,
+            Some(state),
+            input.first_comment.as_deref(),
             0,
         )
         .await
