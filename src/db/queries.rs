@@ -674,11 +674,17 @@ pub async fn get_post_with_integration(
     .await
 }
 
-/// Get posts due for publishing
+/// Get posts due for publishing.
+///
+/// Uses `FOR UPDATE SKIP LOCKED` to claim rows atomically so multiple
+/// `social-forge serve` instances running in parallel do not double-publish
+/// the same post. Rows are still returned in `state = 'queued'`; the caller
+/// is expected to commit/rollback to release the lock.
 pub async fn get_due_posts(
     pool: &PgPool,
     limit: i64,
 ) -> Result<Vec<PostWithIntegration>, sqlx::Error> {
+    let mut tx = pool.begin().await?;
     sqlx::query_as!(
         PostWithIntegration,
          r#"SELECT p.id, p.user_id, p.integration_id,
@@ -699,11 +705,16 @@ pub async fn get_due_posts(
              AND p.scheduled_at <= NOW()
              AND i.disabled = false
            ORDER BY p.scheduled_at ASC
-           LIMIT $1"#,
+           LIMIT $1
+           FOR UPDATE SKIP LOCKED"#,
         limit,
     )
-    .fetch_all(pool)
+    .fetch_all(&mut *tx)
     .await
+    .map(|rows| {
+        let _ = tx.commit();
+        rows
+    })
 }
 
 // ══════════════════════════════════════════════════════════════

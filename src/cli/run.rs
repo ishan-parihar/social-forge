@@ -2470,6 +2470,8 @@ async fn handle_carousel(
             media_urls: media_json,
             scheduled_at,
             settings: serde_json::json!({}),
+            first_comment: None,
+            state: None,
         },
     ).await.map_err(|e| anyhow::anyhow!("Failed to create carousel: {e}"))?;
 
@@ -2570,26 +2572,175 @@ fn handle_mcp_tools() -> anyhow::Result<()> {
 
 // ── Posts Handler ─────────────────────────────────────────────
 
+#[allow(clippy::too_many_arguments)]
+async fn handle_posts_create_helper(
+    state: &crate::api::AppState,
+    user_id: uuid::Uuid,
+    content: &str,
+    integrations: &str,
+    schedule: Option<&str>,
+    title: Option<&str>,
+    media: Option<&str>,
+    first_comment: Option<&str>,
+    settings: Option<&str>,
+    state_override: Option<&str>,
+) -> anyhow::Result<serde_json::Value> {
+    let integration_ids: Vec<uuid::Uuid> = integrations
+        .split(',')
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .filter_map(|s| s.parse::<uuid::Uuid>().ok())
+        .collect();
+    if integration_ids.is_empty() {
+        return Err(anyhow::anyhow!("At least one valid integration UUID required"));
+    }
+
+    let scheduled_at = match schedule {
+        Some(s) => Some(
+            chrono::DateTime::parse_from_rfc3339(s)
+                .map_err(|_| anyhow::anyhow!("Invalid schedule date, use ISO 8601 / RFC 3339"))?
+                .with_timezone(&chrono::Utc)
+        ),
+        None => None,
+    };
+
+    let media_json: serde_json::Value = match media {
+        Some(m) => {
+            if m.trim_start().starts_with('[') {
+                serde_json::from_str(m).unwrap_or_else(|_| serde_json::json!([]))
+            } else {
+                let urls: Vec<String> = m.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+                serde_json::json!(urls)
+            }
+        },
+        None => serde_json::json!([]),
+    };
+
+    let settings_json: serde_json::Value = match settings {
+        Some(s) => serde_json::from_str::<serde_json::Value>(s)
+            .map_err(|e| anyhow::anyhow!("Invalid settings JSON: {e}"))?,
+        None => serde_json::json!({}),
+    };
+
+    let target_state = match state_override {
+        Some("draft") => Some(crate::db::models::PostState::Draft),
+        Some("queued") => Some(crate::db::models::PostState::Queued),
+        Some("published") => Some(crate::db::models::PostState::Published),
+        Some("error") => Some(crate::db::models::PostState::Error),
+        Some(other) => return Err(anyhow::anyhow!("Invalid --state '{other}'. Use draft|queued|published|error.")),
+        None if scheduled_at.is_some() => Some(crate::db::models::PostState::Queued),
+        None => None,
+    };
+
+    let first_comment_owned = first_comment.and_then(|s| if s.is_empty() { None } else { Some(s.to_string()) });
+    let title_owned = title.map(String::from);
+
+    fn build(
+        iid: uuid::Uuid,
+        user_id: uuid::Uuid,
+        content: &str,
+        title_owned: Option<String>,
+        media_json: serde_json::Value,
+        scheduled_at: Option<chrono::DateTime<chrono::Utc>>,
+        settings_json: serde_json::Value,
+        first_comment_owned: Option<String>,
+        target_state: Option<crate::db::models::PostState>,
+    ) -> crate::services::posts::CreatePostInput {
+        crate::services::posts::CreatePostInput {
+            user_id,
+            integration_id: iid,
+            content: content.to_string(),
+            title: title_owned,
+            media_urls: media_json,
+            scheduled_at,
+            settings: settings_json,
+            first_comment: first_comment_owned,
+            state: target_state,
+        }
+    }
+
+    let mut created: Vec<serde_json::Value> = Vec::new();
+    let count = integration_ids.len();
+    for &iid in &integration_ids {
+        let input = build(
+            iid, user_id, content,
+            title_owned.clone(),
+            media_json.clone(),
+            scheduled_at,
+            settings_json.clone(),
+            first_comment_owned.clone(),
+            target_state.clone(),
+        );
+        match crate::services::posts::PostService::create(
+            &state.db, &state.broadcast, input
+        ).await {
+            Ok(post) => created.push(serde_json::json!({
+                "id": post.id.to_string(),
+                "integration_id": iid.to_string(),
+                "state": post.state.to_string(),
+                "scheduled_at": post.scheduled_at.map(|d| d.to_rfc3339()),
+                "created_at": post.created_at.to_rfc3339(),
+            })),
+            Err(e) => {
+                if count == 1 {
+                    return Err(anyhow::anyhow!("Create failed: {e}"));
+                }
+                tracing::warn!("Best-effort create for integration {iid} failed: {e}");
+                created.push(serde_json::json!({
+                    "integration_id": iid.to_string(),
+                    "error": e,
+                }));
+            }
+        }
+    }
+    Ok(serde_json::json!({
+        "ok": true,
+        "count": created.len(),
+        "posts": created,
+    }))
+}
+
 async fn handle_posts(action: PostsAction) -> anyhow::Result<()> {
     let state = init_state().await?;
     let user_id = resolve_user(&state).await?;
 
-    let result: Result<serde_json::Value, String> = match action {
-        PostsAction::List { state: post_state, limit } => {
-            let limit = limit.min(100) as i64;
-            match crate::db::queries::list_posts(&state.db, user_id, post_state.as_deref(), limit, 0).await {
-                Ok(posts) => Ok(serde_json::json!({
-                    "count": posts.len(),
-                    "posts": posts.iter().map(|p| serde_json::json!({
-                        "id": p.id,
-                        "content": p.content,
-                        "state": p.state,
-                        "integration_id": p.integration_id,
-                        "scheduled_at": p.scheduled_at.map(|dt| dt.to_rfc3339()),
-                        "published_at": p.published_at.map(|dt| dt.to_rfc3339()),
-                    })).collect::<Vec<_>>(),
-                })),
-                Err(e) => Err(format!("DB error: {e}")),
+    let result: anyhow::Result<serde_json::Value> = match action {
+        PostsAction::List { state: post_state, limit, offset } => {
+            let limit = limit.min(200) as i64;
+            let offset = offset as i64;
+            match crate::services::posts::PostService::list(
+                &state.db, user_id, post_state.as_deref(),
+                limit, offset, true
+            ).await {
+                Ok((posts, total)) => {
+                    let summaries: Vec<_> = posts.iter().map(|p| {
+                        serde_json::json!({
+                            "id": p.id,
+                            "content": p.content,
+                            "state": p.state,
+                            "title": p.title,
+                            "integration_id": p.integration_id,
+                            "scheduled_at": p.scheduled_at.map(|dt| dt.to_rfc3339()),
+                            "published_at": p.published_at.map(|dt| dt.to_rfc3339()),
+                            "platform_post_id": p.platform_post_id,
+                            "platform_post_url": p.platform_post_url,
+                            "error_message": p.error_message,
+                            "first_comment": p.first_comment,
+                            "media": p.media,
+                            "settings": p.settings,
+                            "created_at": p.created_at.to_rfc3339(),
+                            "updated_at": p.updated_at.to_rfc3339(),
+                        })
+                    }).collect();
+                    Ok(serde_json::json!({
+                        "total": total.unwrap_or(0),
+                        "limit": limit,
+                        "offset": offset,
+                        "count": summaries.len(),
+                        "posts": summaries,
+                    }))
+                },
+                Err(e) => Err(anyhow::anyhow!("DB error: {e}")),
             }
         }
         PostsAction::Get { id } => {
@@ -2599,104 +2750,98 @@ async fn handle_posts(action: PostsAction) -> anyhow::Result<()> {
                         "id": p.id,
                         "content": p.content,
                         "state": p.state,
+                        "title": p.title,
                         "integration_id": p.integration_id,
                         "scheduled_at": p.scheduled_at.map(|dt| dt.to_rfc3339()),
                         "published_at": p.published_at.map(|dt| dt.to_rfc3339()),
-                        "media": p.media,
+                        "platform_post_id": p.platform_post_id,
+                        "platform_post_url": p.platform_post_url,
+                        "error_message": p.error_message,
                         "first_comment": p.first_comment,
+                        "media": p.media,
+                        "settings": p.settings,
+                        "created_at": p.created_at.to_rfc3339(),
+                        "updated_at": p.updated_at.to_rfc3339(),
                     })),
-                    Ok(None) => Err(format!("Post {id} not found")),
-                    Err(e) => Err(format!("DB error: {e}")),
+                    Ok(None) => Err(anyhow::anyhow!("Post {id} not found")),
+                    Err(e) => Err(anyhow::anyhow!("DB error: {e}")),
                 },
-                Err(_) => Err(format!("Invalid post ID: {id}")),
+                Err(_) => Err(anyhow::anyhow!("Invalid post ID: {id}")),
             }
         }
-        PostsAction::FindSlot => {
-            match crate::db::queries::list_integrations(&state.db, user_id).await {
-                Ok(integrations) => {
-                    let now = chrono::Utc::now();
-                    let mut all_slots: Vec<chrono::NaiveTime> = Vec::new();
-                    for integration in &integrations {
-                        if let Some(times) = integration.posting_times.as_array() {
-                            for t in times {
-                                if let Some(s) = t.as_str() {
-                                    if let Ok(time) = chrono::NaiveTime::parse_from_str(s, "%H:%M") {
-                                        all_slots.push(time);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    if all_slots.is_empty() {
-                        all_slots = vec![
-                            chrono::NaiveTime::from_hms_opt(9, 0, 0).unwrap(),
-                            chrono::NaiveTime::from_hms_opt(12, 0, 0).unwrap(),
-                            chrono::NaiveTime::from_hms_opt(17, 0, 0).unwrap(),
-                        ];
-                    }
-                    all_slots.sort();
-                    all_slots.dedup();
-                    let today = now.date_naive();
-                    let current_time = now.time();
-                    let next_slot = all_slots.iter().find(|&&t| t > current_time).copied()
-                        .or_else(|| all_slots.first().copied());
-                    let next_slot = next_slot.unwrap_or(chrono::NaiveTime::from_hms_opt(9, 0, 0).unwrap());
-                    let next_date = if next_slot <= current_time { today + chrono::Days::new(1) } else { today };
-                    let next_datetime: chrono::DateTime<chrono::Utc> = chrono::DateTime::from_naive_utc_and_offset(
-                        next_date.and_time(next_slot), chrono::Utc,
-                    );
-                    Ok(serde_json::json!({
-                        "next_slot": next_datetime.to_rfc3339(),
-                        "configured_times": all_slots.iter().map(|t| t.format("%H:%M").to_string()).collect::<Vec<_>>(),
-                    }))
-                }
-                Err(e) => Err(format!("DB error: {e}")),
-            }
+        PostsAction::Create {
+            content, integrations, schedule, title, media, first_comment, settings, state: state_override
+        } => {
+            handle_posts_create_helper(
+                &state, user_id, &content, &integrations,
+                schedule.as_deref(), title.as_deref(),
+                media.as_deref(), first_comment.as_deref(),
+                settings.as_deref(), state_override.as_deref(),
+            ).await
         }
-        PostsAction::Create { content, integrations, schedule } => {
-            let integration_ids: Vec<&str> = integrations.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
-            if integration_ids.is_empty() {
-                return output_error("At least one integration ID required");
-            }
-            let scheduled_at = schedule.map(|s| chrono::DateTime::parse_from_rfc3339(&s).map(|dt| dt.with_timezone(&chrono::Utc))).transpose()?;
-            let mut created = Vec::new();
-            for iid_str in &integration_ids {
-                let iid = match iid_str.parse::<uuid::Uuid>() {
-                    Ok(id) => id,
-                    Err(_) => return output_error(&format!("Invalid integration ID: {iid_str}")),
-                };
-                match crate::db::queries::create_post(&state.db, user_id, iid, content.as_str(), None, &serde_json::json!([]), &serde_json::json!({}), scheduled_at, None, None, 0).await {
-                    Ok(p) => created.push(serde_json::json!({"id": p.id, "integration_id": iid_str})),
-                    Err(e) => return output_error(&format!("Create failed for {iid_str}: {e}")),
-                }
-            }
-            Ok(serde_json::json!({"ok": true, "created": created.len(), "posts": created}))
+        PostsAction::Schedule { id, scheduled_at } => {
+            let post_id = match id.parse::<uuid::Uuid>() {
+                Ok(id) => id,
+                Err(_) => return output_error("Invalid post ID"),
+            };
+            let dt = chrono::DateTime::parse_from_rfc3339(&scheduled_at)
+                .map_err(|e: chrono::ParseError| anyhow::anyhow!("Invalid scheduled_at: {}", e))?
+                .with_timezone(&chrono::Utc);
+            crate::services::posts::PostService::schedule(
+                &state.db, &state.broadcast, user_id, post_id, dt
+            ).await
+                .map(|post| serde_json::json!({
+                    "ok": true,
+                    "id": post.id.to_string(),
+                    "state": post.state.to_string(),
+                    "scheduled_at": post.scheduled_at.map(|d| d.to_rfc3339()),
+                }))
+                .map_err(|e| anyhow::anyhow!("Schedule failed: {e}"))
         }
         PostsAction::Publish { id } => {
             let post_id = match id.parse::<uuid::Uuid>() {
                 Ok(id) => id,
                 Err(_) => return output_error("Invalid post ID"),
             };
-            match crate::db::queries::update_post_state(&state.db, post_id, crate::db::models::PostState::Published, None, None, None).await {
-                Ok(()) => Ok(serde_json::json!({"ok": true, "id": id, "state": "published"})),
-                Err(e) => Err(format!("Publish failed: {e}")),
-            }
+            crate::services::posts::PostService::publish(
+                &state.db, &state.providers, &state.broadcast, user_id, post_id
+            ).await
+                .map(|platform_url| serde_json::json!({
+                    "ok": true,
+                    "id": id,
+                    "state": "published",
+                    "platform_post_url": platform_url,
+                }))
+                .map_err(|e| anyhow::anyhow!("Publish failed: {e}"))
         }
         PostsAction::Delete { id } => {
             let post_id = match id.parse::<uuid::Uuid>() {
                 Ok(id) => id,
                 Err(_) => return output_error("Invalid post ID"),
             };
-            match crate::db::queries::delete_post(&state.db, post_id, user_id).await {
-                Ok(deleted) => Ok(serde_json::json!({"ok": deleted, "id": id})),
-                Err(e) => Err(format!("Delete failed: {e}")),
-            }
+            crate::services::posts::PostService::delete(
+                &state.db, &state.broadcast, user_id, post_id
+            ).await
+                .map(|deleted| serde_json::json!({"ok": deleted, "id": id}))
+                .map_err(|e| anyhow::anyhow!("Delete failed: {e}"))
+        }
+        PostsAction::FindSlot { integration } => {
+            let integration_id = integration.as_deref().and_then(|s| uuid::Uuid::parse_str(s).ok());
+            crate::services::posts::PostService::find_slot(
+                &state.db, user_id, integration_id
+            ).await
+                .map(|slot| serde_json::json!({
+                    "ok": true,
+                    "scheduled_at": slot.to_rfc3339(),
+                    "integration_id": integration,
+                }))
+                .map_err(|e| anyhow::anyhow!("Find-slot failed: {e}"))
         }
     };
 
     match result {
         Ok(v) => output_json(&v),
-        Err(e) => return output_error(&e),
+        Err(e) => return output_error(&e.to_string()),
     }
     Ok(())
 }

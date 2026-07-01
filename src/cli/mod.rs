@@ -360,43 +360,55 @@ pub enum AutomationAction {
 
 #[derive(Subcommand, Debug)]
 pub enum PostsAction {
-    /// List posts (draft, scheduled, published, failed)
+    /// List posts (draft, queued, published, errored)
     List {
-        /// Filter by state (draft, scheduled, published, failed)
         #[arg(long)]
         state: Option<String>,
-        /// Max results
-        #[arg(long, default_value_t = 20)]
+        #[arg(long, default_value_t = 50)]
         limit: u32,
+        #[arg(long, default_value_t = 0)]
+        offset: u32,
     },
     /// Get a single post by ID
     Get {
-        /// Post ID
         id: String,
     },
     /// Create a new post
     Create {
-        /// Post content
         content: String,
-        /// Integration IDs (comma-separated)
         #[arg(long)]
         integrations: String,
-        /// Schedule time (RFC 3339, optional)
         #[arg(long)]
         schedule: Option<String>,
+        #[arg(long)]
+        title: Option<String>,
+        #[arg(long)]
+        media: Option<String>,
+        #[arg(long)]
+        first_comment: Option<String>,
+        #[arg(long)]
+        settings: Option<String>,
+        #[arg(long)]
+        state: Option<String>,
     },
-    /// Publish a scheduled/draft post immediately
+    /// Re-schedule an existing post
+    Schedule {
+        id: String,
+        scheduled_at: String,
+    },
+    /// Publish a queued or errored post immediately via the provider
     Publish {
-        /// Post ID
         id: String,
     },
     /// Delete a post
     Delete {
-        /// Post ID
         id: String,
     },
-    /// Find the next available posting slot
-    FindSlot,
+    /// Find the next available posting slot (optionally for one integration)
+    FindSlot {
+        #[arg(long)]
+        integration: Option<String>,
+    },
 }
 
 // ─── Media Actions ──────────────────────────────────────────────────────

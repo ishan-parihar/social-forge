@@ -143,6 +143,8 @@ pub async fn create_post(
             media_urls: input.media.clone().unwrap_or(serde_json::json!([])),
             scheduled_at,
             settings: input.settings.clone().unwrap_or(serde_json::json!({})),
+            first_comment: None,
+            state: None,
         },
     ).await?;
 
@@ -477,6 +479,8 @@ pub async fn create_carousel(
             media_urls: serde_json::json!(input.media_urls),
             scheduled_at,
             settings: input.settings.clone().unwrap_or(serde_json::json!({})),
+            first_comment: None,
+            state: None,
         },
     ).await?;
 
