@@ -3,32 +3,406 @@
   "evals": [
     {
       "id": 1,
-      "prompt": "Post a tweet saying 'Just shipped the new social media CLI tool! Check it out at social-forge.dev 🚀' and then check my X timeline to see what's happening",
-      "expected_output": "Agent should use social-forge x post to tweet, then social-forge x timeline to read the feed",
+      "prompt": "Post a tweet saying 'Just shipped the new social media CLI tool! Check it out at social-forge.dev \ud83d\ude80' and then check my X timeline to see what's happening",
+      "expected_commands": [
+        "social-forge x post 'Just shipped the new social media CLI tool! Check it out at social-forge.dev \ud83d\ude80' --json",
+        "social-forge x timeline --count 5 --json"
+      ],
+      "expected_output": "First command returns {\"status\":\"published\",\"post_id\":\"...\"}. Second returns {\"tweets\":[...]}",
       "files": []
     },
     {
       "id": 2,
       "prompt": "I need to post the same announcement to all my Facebook pages. Can you check what pages I have connected and post to each one?",
-      "expected_output": "Agent should first run social-forge providers to find Facebook pages, then post to each using social-forge facebook comment or the MCP fb_create_post tool with each page ID",
+      "expected_commands": [
+        "social-forge providers --pretty",
+        "social-forge mcp-call fb_create_post '{\"page_id\":\"<PAGE_ID>\",\"message\":\"...\"}'"
+      ],
+      "expected_output": "Providers shows Facebook page integration IDs. Then mcp-call fb_create_post returns {\"id\":\"POST_ID\"} for each page",
       "files": []
     },
     {
       "id": 3,
       "prompt": "Browse the r/rust subreddit for the latest posts about async Rust, search for 'tokio runtime' on Reddit, and save any interesting posts I find",
-      "expected_output": "Agent should use social-forge reddit browse rust and social-forge reddit search to find content, then social-forge reddit save to bookmark interesting posts",
+      "expected_commands": [
+        "social-forge reddit browse rust --limit 10 --json",
+        "social-forge reddit search 'tokio runtime' --json",
+        "social-forge reddit save <THING_ID>"
+      ],
+      "expected_output": "Browse returns {\"posts\":[...]}. Search returns matching posts. Save returns {\"status\":\"saved\"}",
       "files": []
     },
     {
       "id": 4,
-      "prompt": "Get the Instagram insights for my designaesthetics.co.in account — I want to see reach and follower count for the last week, and also get the LinkedIn page analytics for Design Aesthetics",
-      "expected_output": "Agent should use social-forge instagram insights with --metric reach,follower_count, and social-forge linkedin-page analytics for the Design Aesthetics page",
+      "prompt": "Get the Instagram insights for my designaesthetics.co.in account \u2014 I want to see reach and follower count for the last week, and also get the LinkedIn page analytics for Design Aesthetics",
+      "expected_commands": [
+        "social-forge providers --pretty",
+        "social-forge mcp-call ig_get_insights '{\"ig_id\":\"<IG_ID>\",\"metrics\":[\"reach\",\"follower_count\"],\"period\":\"day\",\"since\":\"...\",\"until\":\"...\"}'",
+        "social-forge linkedin-page analytics <PAGE_ID> --json"
+      ],
+      "expected_output": "Instagram returns {\"data\":[{\"name\":\"reach\",\"values\":[...]}]}. LinkedIn returns analytics object",
       "files": []
     },
     {
       "id": 5,
       "prompt": "I want to schedule a LinkedIn post for tomorrow at 9am. The post should say 'Excited to announce our new architecture consultation service. DM me for details!' First check if I have any LinkedIn pages connected.",
-      "expected_output": "Agent should check providers, create a post via MCP or CLI, then schedule it for the specified time using posts_schedule or the linkedin-page post command",
+      "expected_commands": [
+        "social-forge providers --pretty",
+        "social-forge posts create 'Excited to announce our new architecture consultation service. DM me for details!' --integrations <UUID> --schedule <TOMORROW_9AM_ISO> --json"
+      ],
+      "expected_output": "Providers shows LinkedIn page UUIDs. posts create returns {\"status\":\"queued\",\"scheduled_at\":\"...\"}",
+      "files": []
+    },
+    {
+      "id": 6,
+      "prompt": "I'm new to social-forge. What commands are available? Show me how to discover what I can do.",
+      "expected_commands": [
+        "social-forge --help",
+        "social-forge providers --pretty"
+      ],
+      "expected_output": "--help shows command list. providers shows connected accounts with status",
+      "files": []
+    },
+    {
+      "id": 7,
+      "prompt": "I tried to post to X but got 'No X/Twitter integration found'. How do I fix this?",
+      "expected_commands": [
+        "social-forge providers --pretty",
+        "social-forge connect x --pretty"
+      ],
+      "expected_output": "providers confirms no X integration. connect x returns {\"method\":\"browser-import\",\"hint\":\"...\"}",
+      "files": []
+    },
+    {
+      "id": 8,
+      "prompt": "Post 'Hello from Social Forge!' to X, LinkedIn, and Bluesky at the same time",
+      "expected_commands": [
+        "social-forge post 'Hello from Social Forge!' --platforms x,linkedin,bluesky --json"
+      ],
+      "expected_output": "Returns {\"results\":[{\"platform\":\"x\",\"status\":\"published\"},{\"platform\":\"linkedin\",...},{\"platform\":\"bluesky\",...}]}",
+      "files": []
+    },
+    {
+      "id": 9,
+      "prompt": "Upload photo.jpg and photo2.jpg, then create a carousel post called 'My Gallery' on X and LinkedIn",
+      "expected_commands": [
+        "social-forge media upload-batch ./photo.jpg ./photo2.jpg --json",
+        "social-forge carousel create 'My Gallery' --media ./photo.jpg,./photo2.jpg --platforms x,linkedin --json"
+      ],
+      "expected_output": "upload-batch returns {\"uploaded\":[...]}. carousel create returns {\"results\":[...]}",
+      "files": []
+    },
+    {
+      "id": 10,
+      "prompt": "Show me the last 5 comments on my LinkedIn page post and reply 'Thank you!' to the first one",
+      "expected_commands": [
+        "social-forge comment get <INTEGRATION_ID> <POST_ID> --limit 5 --json",
+        "social-forge comment reply <INTEGRATION_ID> <COMMENT_ID> 'Thank you!' --json"
+      ],
+      "expected_output": "comment get returns {\"comments\":[...]}. comment reply returns {\"status\":\"replied\"}",
+      "files": []
+    },
+    {
+      "id": 11,
+      "prompt": "Send a DM to user 12345 on Reddit saying 'Thanks for the feedback on my post!'",
+      "expected_commands": [
+        "social-forge dm send <REDDIT_INTEGRATION_ID> '12345' 'Thanks for the feedback on my post!' --json"
+      ],
+      "expected_output": "Returns {\"status\":\"sent\",\"recipient\":\"12345\"}",
+      "files": []
+    },
+    {
+      "id": 12,
+      "prompt": "I want to schedule a post but I don't know when the best time is. Find me the next available slot for my LinkedIn page and schedule a post there.",
+      "expected_commands": [
+        "social-forge posts find-slot --integration <LINKEDIN_PAGE_UUID> --json",
+        "social-forge posts create '<CONTENT>' --integrations <LINKEDIN_PAGE_UUID> --schedule <SLOT_TIME> --json"
+      ],
+      "expected_output": "find-slot returns {\"slot\":\"2026-07-01T09:00:00Z\",\"integration\":\"...\"}. posts create returns {\"status\":\"queued\"}",
+      "files": []
+    },
+    {
+      "id": 13,
+      "prompt": "There's no CLI command for creating Facebook posts. How do I create one anyway?",
+      "expected_commands": [
+        "social-forge mcp-tools --pretty",
+        "social-forge mcp-call fb_create_post '{\"page_id\":\"<PAGE_ID>\",\"message\":\"Your post\"}'"
+      ],
+      "expected_output": "mcp-tools shows fb_create_post is available. mcp-call returns {\"id\":\"POST_ID\"}",
+      "files": []
+    },
+    {
+      "id": 14,
+      "prompt": "Stage a post across X and LinkedIn, preview how it will be split, then publish it",
+      "expected_commands": [
+        "social-forge stage 'Your long content here...' --platforms x,linkedin --preview --json",
+        "social-forge stage 'Your long content here...' --integrations <X_UUID>,<LINKEDIN_UUID> --json",
+        "social-forge posts publish <POST_ID> --json"
+      ],
+      "expected_output": "preview returns {\"splits\":[{\"platform\":\"x\",\"content\":\"...\"},{\"platform\":\"linkedin\",\"content\":\"...\"}]}. stage returns {\"status\":\"staged\"}. publish returns {\"status\":\"published\"}",
+      "files": []
+    },
+    {
+      "id": 15,
+      "prompt": "Set up an auto-reply rule on my X account that says 'Thanks for reaching out!' whenever someone replies to my posts",
+      "expected_commands": [
+        "social-forge automation create <X_INTEGRATION_ID> 'Auto-thanks' --trigger comment --response 'Thanks for reaching out!' --type fixed --json"
+      ],
+      "expected_output": "Returns {\"status\":\"created\",\"rule_id\":\"...\",\"name\":\"Auto-thanks\"}",
+      "files": []
+    },
+    {
+      "id": 16,
+      "prompt": "Post a photo to Instagram with caption 'New collection dropping soon' and then check if it got any likes",
+      "expected_commands": [
+        "social-forge media upload ./photo.jpg --json",
+        "social-forge mcp-call ig_create_container '{\"ig_id\":\"<IG_ID>\",\"image_url\":\"<UPLOADED_URL>\",\"caption\":\"New collection dropping soon\"}'",
+        "social-forge mcp-call ig_poll_container '{\"ig_id\":\"<IG_ID>\",\"container_id\":\"<ID>\"}'",
+        "social-forge mcp-call ig_publish_container '{\"ig_id\":\"<IG_ID>\",\"container_id\":\"<ID>\"}'"
+      ],
+      "expected_output": "Upload returns URL. Container returns {\"id\":\"...\",\"status_code\":\"FINISHED\"}. Publish returns {\"id\":\"MEDIA_ID\"}",
+      "files": []
+    },
+    {
+      "id": 17,
+      "prompt": "What's my GitHub profile look like? Show me my recent repos and any open issues",
+      "expected_commands": [
+        "social-forge github me --json",
+        "social-forge github my-repos --json",
+        "social-forge github issues '<OWNER>' '<REPO>' --json"
+      ],
+      "expected_output": "User returns profile. Repos returns {\"repositories\":[...]}. Issues returns {\"issues\":[...]}",
+      "files": []
+    },
+    {
+      "id": 18,
+      "prompt": "I need to reply to a comment on my LinkedIn post. The comment ID is abc123 and I want to say 'Great insight! Thanks for sharing.'",
+      "expected_commands": [
+        "social-forge linkedin reply <COMMENT_ID> 'Great insight! Thanks for sharing.' --json"
+      ],
+      "expected_output": "Returns {\"status\":\"created\",\"comment_id\":\"...\"}",
+      "files": []
+    },
+    {
+      "id": 19,
+      "prompt": "Check if all my social media providers are healthy and working",
+      "expected_commands": [
+        "social-forge doctor --json",
+        "social-forge providers --pretty"
+      ],
+      "expected_output": "doctor returns {\"providers\":[{\"name\":\"x\",\"status\":\"healthy\"},...]}. providers shows connection status",
+      "files": []
+    },
+    {
+      "id": 20,
+      "prompt": "I want to schedule 5 posts this week. Find me 5 available slots and create posts for each",
+      "expected_commands": [
+        "social-forge posts find-slot --integration <UUID> --json",
+        "social-forge posts create 'Post 1 content' --integrations <UUID> --schedule <SLOT1> --json",
+        "social-forge posts create 'Post 2 content' --integrations <UUID> --schedule <SLOT2> --json",
+        "social-forge posts create 'Post 3 content' --integrations <UUID> --schedule <SLOT3> --json",
+        "social-forge posts create 'Post 4 content' --integrations <UUID> --schedule <SLOT4> --json",
+        "social-forge posts create 'Post 5 content' --integrations <UUID> --schedule <SLOT5> --json"
+      ],
+      "expected_output": "Each find-slot returns a time. Each create returns {\"status\":\"queued\"}",
+      "files": []
+    },
+    {
+      "id": 21,
+      "prompt": "Post a TikTok video saying 'Check out my new content!' and then check my TikTok profile",
+      "expected_commands": [
+        "social-forge tiktok post 'Check out my new content!' --json",
+        "social-forge tiktok profile --json"
+      ],
+      "expected_output": "post returns {\"status\":\"published\"}. profile returns {\"user\":{...}}",
+      "files": []
+    },
+    {
+      "id": 22,
+      "prompt": "List my Threads posts and then create a new thread saying 'Hello from Social Forge!'",
+      "expected_commands": [
+        "social-forge threads list <ACCOUNT_ID> --json",
+        "social-forge threads post <ACCOUNT_ID> 'Hello from Social Forge!' --json"
+      ],
+      "expected_output": "list returns {\"posts\":[...]}. post returns {\"status\":\"published\"}",
+      "files": []
+    },
+    {
+      "id": 23,
+      "prompt": "Send a message to Discord channel 123456 saying 'Hello from Social Forge!'",
+      "expected_commands": [
+        "social-forge discord send 123456 'Hello from Social Forge!' --json"
+      ],
+      "expected_output": "Returns {\"status\":\"sent\",\"channel_id\":\"123456\"}",
+      "files": []
+    },
+    {
+      "id": 24,
+      "prompt": "List Slack channels and send a message to #general saying 'Team update!'",
+      "expected_commands": [
+        "social-forge slack channels --json",
+        "social-forge slack send <CHANNEL_ID> 'Team update!' --json"
+      ],
+      "expected_output": "channels returns {\"channels\":[...]}. send returns {\"status\":\"sent\"}",
+      "files": []
+    },
+    {
+      "id": 25,
+      "prompt": "Send a Telegram Bot message to chat -100123456 saying 'Automated update'",
+      "expected_commands": [
+        "social-forge telegram-bot send --chat-id -100123456 'Automated update' --json"
+      ],
+      "expected_output": "Returns {\"status\":\"sent\",\"chat_id\":\"-100123456\"}",
+      "files": []
+    },
+    {
+      "id": 26,
+      "prompt": "List WhatsApp chats and send a message to +1234567890 saying 'Hello!'",
+      "expected_commands": [
+        "social-forge whatsapp chats --json",
+        "social-forge whatsapp send +1234567890 'Hello!' --json"
+      ],
+      "expected_output": "chats returns {\"chats\":[...]}. send returns {\"status\":\"sent\"}",
+      "files": []
+    },
+    {
+      "id": 27,
+      "prompt": "Get my GitHub profile and list my recent repos",
+      "expected_commands": [
+        "social-forge github me --json",
+        "social-forge github my-repos --limit 5 --json"
+      ],
+      "expected_output": "me returns {\"login\":\"...\",\"name\":\"...\"}. my-repos returns {\"repositories\":[...]}",
+      "files": []
+    },
+    {
+      "id": 28,
+      "prompt": "Create a WordPress post titled 'My New Article' with content 'This is the body'",
+      "expected_commands": [
+        "social-forge wordpress post 'My New Article' 'This is the body' --json"
+      ],
+      "expected_output": "Returns {\"status\":\"published\",\"post_id\":\"...\"}",
+      "files": []
+    },
+    {
+      "id": 29,
+      "prompt": "List Google Calendar events and create a meeting for tomorrow at 2pm",
+      "expected_commands": [
+        "social-forge gcal events --json",
+        "social-forge gcal create --title 'Team Meeting' --start '2026-07-03T14:00:00Z' --end '2026-07-03T15:00:00Z' --json"
+      ],
+      "expected_output": "events returns {\"events\":[...]}. create returns {\"status\":\"created\",\"event_id\":\"...\"}",
+      "files": []
+    },
+    {
+      "id": 30,
+      "prompt": "Search Gmail for emails from me and list labels",
+      "expected_commands": [
+        "social-forge gmail-ops search 'from:me' --json",
+        "social-forge gmail-ops labels --json"
+      ],
+      "expected_output": "search returns {\"messages\":[...]}. labels returns {\"labels\":[...]}",
+      "files": []
+    },
+    {
+      "id": 31,
+      "prompt": "List webhooks, create a new one, and test it",
+      "expected_commands": [
+        "social-forge webhooks list --json",
+        "social-forge webhooks create 'https://example.com/hook' --name 'test-hook' --json",
+        "social-forge webhooks test <WEBHOOK_ID> --json"
+      ],
+      "expected_output": "list returns {\"webhooks\":[...]}. create returns {\"status\":\"created\"}. test returns {\"status\":\"sent\"}",
+      "files": []
+    },
+    {
+      "id": 32,
+      "prompt": "Create a tag called 'important' with color red, then list all tags",
+      "expected_commands": [
+        "social-forge tags create 'important' --color '#ff0000' --json",
+        "social-forge tags list --json"
+      ],
+      "expected_output": "create returns {\"status\":\"created\",\"tag_id\":\"...\"}. list returns {\"tags\":[...]}",
+      "files": []
+    },
+    {
+      "id": 33,
+      "prompt": "Check Instagram analytics for the last 7 days and get analytics for a specific post",
+      "expected_commands": [
+        "social-forge analytics get instagram --days 7 --json",
+        "social-forge analytics post <POST_ID> --json"
+      ],
+      "expected_output": "get returns analytics data. post returns post-specific analytics",
+      "files": []
+    },
+    {
+      "id": 34,
+      "prompt": "Browse Pinterest boards and search for 'design inspiration'",
+      "expected_commands": [
+        "social-forge pinterest profile <BOARD_ID> --json",
+        "social-forge pinterest search 'design inspiration' --json"
+      ],
+      "expected_output": "profile returns board info. search returns {\"pins\":[...]}",
+      "files": []
+    },
+    {
+      "id": 35,
+      "prompt": "List Google Drive files and search for documents",
+      "expected_commands": [
+        "social-forge gdrive files --limit 10 --json",
+        "social-forge gdrive search 'report' --json"
+      ],
+      "expected_output": "files returns {\"files\":[...]}. search returns matching files",
+      "files": []
+    },
+    {
+      "id": 36,
+      "prompt": "List Dev.to articles and create a new one",
+      "expected_commands": [
+        "social-forge devto list --json",
+        "social-forge devto post 'Article content here' --title 'My Article' --json"
+      ],
+      "expected_output": "list returns {\"articles\":[...]}. post returns {\"status\":\"published\",\"article_id\":\"...\"}",
+      "files": []
+    },
+    {
+      "id": 37,
+      "prompt": "List Hashnode posts and create a new one",
+      "expected_commands": [
+        "social-forge hashnode list <PUB_ID> --json",
+        "social-forge hashnode post <PUB_ID> 'Content' --title 'Title' --json"
+      ],
+      "expected_output": "list returns {\"posts\":[...]}. post returns {\"status\":\"published\"}",
+      "files": []
+    },
+    {
+      "id": 38,
+      "prompt": "List Medium posts and create a new one",
+      "expected_commands": [
+        "social-forge medium-blog list --json",
+        "social-forge medium-blog post 'Post content here' --title 'My Post' --json"
+      ],
+      "expected_output": "list returns {\"posts\":[...]}. post returns {\"status\":\"published\",\"post_id\":\"...\"}",
+      "files": []
+    },
+    {
+      "id": 39,
+      "prompt": "List Skool community posts and create a new one",
+      "expected_commands": [
+        "social-forge skool posts <SLUG> --json",
+        "social-forge skool post <GROUP_ID> 'Title' 'Content' --json"
+      ],
+      "expected_output": "posts returns {\"posts\":[...]}. post returns {\"status\":\"published\"}",
+      "files": []
+    },
+    {
+      "id": 40,
+      "prompt": "Search GitHub repos for 'social media' and list issues for a repo",
+      "expected_commands": [
+        "social-forge github search 'social media' --limit 5 --json",
+        "social-forge github issues <OWNER> <REPO> --json"
+      ],
+      "expected_output": "search returns {\"repositories\":[...]}. issues returns {\"issues\":[...]}",
       "files": []
     }
   ]
