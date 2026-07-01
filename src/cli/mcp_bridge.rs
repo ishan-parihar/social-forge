@@ -220,11 +220,6 @@ pub async fn call_tool(
             let out = crate::mcp::tools_setup::setup_status(state, &crate::mcp::tools_setup::SetupStatusInput {}).await?;
             Ok(serde_json::to_value(out.0).unwrap_or_default())
         }
-        "setup_config_list" => {
-            let out = crate::mcp::tools_setup::config_list(state)?;
-            Ok(serde_json::to_value(out.0).unwrap_or_default())
-        }
-
         // ── Tags ──────────────────────────────────────────────
         "tag_create" => {
             let input: crate::mcp::tools_tags::TagCreateInput = serde_json::from_value(args)
@@ -241,13 +236,1923 @@ pub async fn call_tool(
             Ok(serde_json::to_value(out.0).unwrap_or_default())
         }
 
-        // ── Unknown tool ──────────────────────────────────────
-        _ => {
+        // ── tools_facebook (manual mappings) ──────────────────────────────────────
+        "fb_conversation_messages" => {
+            let input: crate::mcp::tools_facebook::FbConversationMsgsInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_facebook::handle_fb_conversation_msgs(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "gh_get_authenticated_user" => {
+            let out = crate::mcp::tools_github::handle_gh_get_authenticated_user(state, &()).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "goog_get_profile" => {
+            let out = crate::mcp::tools_google::handle_goog_get_profile(state, &()).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "goog_list_labels" => {
+            let out = crate::mcp::tools_google::handle_goog_list_labels(state, &()).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "integrations_list_providers" => {
+            let input: crate::mcp::tools_integrations::ListProvidersInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_integrations::list_providers(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "setup_config_get" => {
+            let input: crate::mcp::tools_setup::ConfigGetInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_setup::config_get(state, &input)
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "setup_config_set" => {
+            let input: crate::mcp::tools_setup::ConfigSetInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_setup::config_set(state, &input)
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "setup_import_cookies" => {
+            let input: crate::mcp::tools_setup::ImportCookiesInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_setup::import_cookies(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+
+        // ── tools_analytics ──────────────────────────────────────
+        "analytics_get" => {
+            let input: crate::mcp::tools_analytics::AnalyticsGetInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_analytics::handle_analytics_get(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "analytics_get_post" => {
+            let input: crate::mcp::tools_analytics::AnalyticsPostInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_analytics::handle_analytics_get_post(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+
+        // ── tools_bluesky ──────────────────────────────────────
+        "bs_create_post" => {
+            let input: crate::mcp::tools_bluesky::BsCreatePostInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_bluesky::handle_bs_create_post(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "bs_feed" => {
+            let input: crate::mcp::tools_bluesky::BsFeedInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_bluesky::handle_bs_feed(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "bs_profile" => {
+            let input: crate::mcp::tools_bluesky::BsProfileInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_bluesky::handle_bs_profile(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "bs_reply" => {
+            let input: crate::mcp::tools_bluesky::BsReplyInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_bluesky::handle_bs_reply(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "bs_search" => {
+            let input: crate::mcp::tools_bluesky::BsSearchInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_bluesky::handle_bs_search(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "bs_timeline" => {
+            let input: crate::mcp::tools_bluesky::BsTimelineInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_bluesky::handle_bs_timeline(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+
+        // ── tools_devto ──────────────────────────────────────
+        "dv_create_post" => {
+            let input: crate::mcp::tools_devto::DvCreatePostInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_devto::handle_dv_create_post(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "dv_get_post" => {
+            let input: crate::mcp::tools_devto::DvGetPostInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_devto::handle_dv_get_post(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "dv_list_posts" => {
+            let input: crate::mcp::tools_devto::DvListPostsInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_devto::handle_dv_list_posts(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+
+        // ── tools_discord ──────────────────────────────────────
+        "di_add_reaction" => {
+            let input: crate::mcp::tools_discord::DiAddReactionInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_discord::handle_di_add_reaction(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "di_create_forum_post" => {
+            let input: crate::mcp::tools_discord::DiCreateForumPostInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_discord::handle_di_create_forum_post(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "di_delete_message" => {
+            let input: crate::mcp::tools_discord::DiDeleteMessageInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_discord::handle_di_delete_message(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "di_get_channel" => {
+            let input: crate::mcp::tools_discord::DiGetChannelInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_discord::handle_di_get_channel(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "di_get_guild" => {
+            let input: crate::mcp::tools_discord::DiGetGuildInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_discord::handle_di_get_guild(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "di_get_guild_channels" => {
+            let input: crate::mcp::tools_discord::DiGetGuildChannelsInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_discord::handle_di_get_guild_channels(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "di_get_messages" => {
+            let input: crate::mcp::tools_discord::DiGetMessagesInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_discord::handle_di_get_messages(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "di_get_server_info" => {
+            let input: crate::mcp::tools_discord::DiGetServerInfoInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_discord::handle_di_get_server_info(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "di_get_thread_members" => {
+            let input: crate::mcp::tools_discord::DiGetThreadMembersInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_discord::handle_di_get_thread_members(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "di_send_message" => {
+            let input: crate::mcp::tools_discord::DiSendMessageInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_discord::handle_di_send_message(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+
+        // ── tools_facebook ──────────────────────────────────────
+        "fb_albums" => {
+            let input: crate::mcp::tools_facebook::FbAlbumsInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_facebook::handle_fb_albums(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "fb_comment" => {
+            let input: crate::mcp::tools_facebook::FbCommentInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_facebook::handle_fb_comment(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "fb_conversations" => {
+            let input: crate::mcp::tools_facebook::FbConversationsInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_facebook::handle_fb_conversations(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "fb_create_photo" => {
+            let input: crate::mcp::tools_facebook::FbCreatePhotoInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_facebook::handle_fb_create_photo(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "fb_create_post" => {
+            let input: crate::mcp::tools_facebook::FbCreatePostInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_facebook::handle_fb_create_post(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "fb_create_video" => {
+            let input: crate::mcp::tools_facebook::FbCreateVideoInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_facebook::handle_fb_create_video(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "fb_delete_post" => {
+            let input: crate::mcp::tools_facebook::FbDeletePostInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_facebook::handle_fb_delete_post(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "fb_get_comments" => {
+            let input: crate::mcp::tools_facebook::FbGetCommentsInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_facebook::handle_fb_get_comments(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "fb_get_feed" => {
+            let input: crate::mcp::tools_facebook::FbGetFeedInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_facebook::handle_fb_get_feed(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "fb_get_post" => {
+            let input: crate::mcp::tools_facebook::FbGetPostInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_facebook::handle_fb_get_post(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "fb_page_insights" => {
+            let input: crate::mcp::tools_facebook::FbPageInsightsInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_facebook::handle_fb_page_insights(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "fb_react" => {
+            let input: crate::mcp::tools_facebook::FbReactInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_facebook::handle_fb_react(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "fb_search_pages" => {
+            let input: crate::mcp::tools_facebook::FbSearchPagesInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_facebook::handle_fb_search_pages(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "fb_send_message" => {
+            let input: crate::mcp::tools_facebook::FbSendMessageInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_facebook::handle_fb_send_message(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+
+        // ── tools_feed ──────────────────────────────────────
+        "feed_import" => {
+            let out = crate::mcp::tools_feed::handle_feed_import(state).await?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+
+        // ── tools_github ──────────────────────────────────────
+        "gh_close_issue" => {
+            let input: crate::mcp::tools_github::GhCloseIssueInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_github::handle_gh_close_issue(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "gh_create_issue" => {
+            let input: crate::mcp::tools_github::GhCreateIssueInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_github::handle_gh_create_issue(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "gh_get_issue" => {
+            let input: crate::mcp::tools_github::GhGetIssueInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_github::handle_gh_get_issue(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "gh_get_pull_request" => {
+            let input: crate::mcp::tools_github::GhGetPullRequestInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_github::handle_gh_get_pull_request(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "gh_get_repo" => {
+            let input: crate::mcp::tools_github::GhGetRepoInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_github::handle_gh_get_repo(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "gh_get_repo_content" => {
+            let input: crate::mcp::tools_github::GhGetRepoContentInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_github::handle_gh_get_repo_content(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "gh_get_user" => {
+            let input: crate::mcp::tools_github::GhGetUserInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_github::handle_gh_get_user(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "gh_list_branches" => {
+            let input: crate::mcp::tools_github::GhListBranchesInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_github::handle_gh_list_branches(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "gh_list_commits" => {
+            let input: crate::mcp::tools_github::GhListCommitsInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_github::handle_gh_list_commits(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "gh_list_contributors" => {
+            let input: crate::mcp::tools_github::GhListContributorsInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_github::handle_gh_list_contributors(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "gh_list_issues" => {
+            let input: crate::mcp::tools_github::GhListIssuesInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_github::handle_gh_list_issues(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "gh_list_my_repos" => {
+            let input: crate::mcp::tools_github::GhListMyReposInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_github::handle_gh_list_my_repos(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "gh_list_pull_requests" => {
+            let input: crate::mcp::tools_github::GhListPullRequestsInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_github::handle_gh_list_pull_requests(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "gh_list_releases" => {
+            let input: crate::mcp::tools_github::GhListReleasesInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_github::handle_gh_list_releases(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "gh_list_repos" => {
+            let input: crate::mcp::tools_github::GhListReposInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_github::handle_gh_list_repos(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "gh_search_code" => {
+            let input: crate::mcp::tools_github::GhSearchCodeInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_github::handle_gh_search_code(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "gh_search_repos" => {
+            let input: crate::mcp::tools_github::GhSearchReposInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_github::handle_gh_search_repos(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+
+        // ── tools_google ──────────────────────────────────────
+        "goog_create_event" => {
+            let input: crate::mcp::tools_google::GcalCreateEventInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_google::handle_goog_create_event(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "goog_delete_event" => {
+            let input: crate::mcp::tools_google::GcalDeleteEventInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_google::handle_goog_delete_event(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "goog_export_file" => {
+            let input: crate::mcp::tools_google::DrExportFileInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_google::handle_goog_export_file(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "goog_find_creators" => {
+            let input: crate::mcp::tools_google::YtFindCreatorsInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_google::handle_goog_find_creators(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "goog_get_analytics" => {
+            let input: crate::mcp::tools_google::YtGetAnalyticsInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_google::handle_goog_get_analytics(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "goog_get_channel_stats" => {
+            let input: crate::mcp::tools_google::YtGetChannelStatsInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_google::handle_goog_get_channel_stats(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "goog_get_comments" => {
+            let input: crate::mcp::tools_google::YtGetCommentsInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_google::handle_goog_get_comments(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "goog_get_event" => {
+            let input: crate::mcp::tools_google::GcalGetEventInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_google::handle_goog_get_event(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "goog_get_file" => {
+            let input: crate::mcp::tools_google::DrGetFileInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_google::handle_goog_get_file(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "goog_get_file_metadata" => {
+            let input: crate::mcp::tools_google::DrGetFileMetadataInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_google::handle_goog_get_file_metadata(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "goog_get_message" => {
+            let input: crate::mcp::tools_google::GmGetMessageInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_google::handle_goog_get_message(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "goog_get_playlist_items" => {
+            let input: crate::mcp::tools_google::YtGetPlaylistItemsInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_google::handle_goog_get_playlist_items(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "goog_get_playlists" => {
+            let input: crate::mcp::tools_google::YtListPlaylistsInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_google::handle_goog_get_playlists(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "goog_get_subscriptions" => {
+            let input: crate::mcp::tools_google::YtGetSubscriptionsInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_google::handle_goog_get_subscriptions(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "goog_get_thread" => {
+            let input: crate::mcp::tools_google::GmGetThreadInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_google::handle_goog_get_thread(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "goog_get_video" => {
+            let input: crate::mcp::tools_google::YtGetVideoInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_google::handle_goog_get_video(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "goog_list_calendars" => {
+            let input: crate::mcp::tools_google::GcalListCalendarsInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_google::handle_goog_list_calendars(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "goog_list_events" => {
+            let input: crate::mcp::tools_google::GcalListEventsInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_google::handle_goog_list_events(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "goog_list_files" => {
+            let input: crate::mcp::tools_google::DrListFilesInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_google::handle_goog_list_files(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "goog_list_folders" => {
+            let input: crate::mcp::tools_google::DrListFoldersInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_google::handle_goog_list_folders(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "goog_list_messages" => {
+            let input: crate::mcp::tools_google::GmListMessagesInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_google::handle_goog_list_messages(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "goog_search_files" => {
+            let input: crate::mcp::tools_google::DrSearchFilesInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_google::handle_goog_search_files(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "goog_search_messages" => {
+            let input: crate::mcp::tools_google::GmSearchMessagesInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_google::handle_goog_search_messages(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "goog_search_videos" => {
+            let input: crate::mcp::tools_google::YtSearchVideosInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_google::handle_goog_search_videos(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "goog_send_message" => {
+            let input: crate::mcp::tools_google::GmSendMessageInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_google::handle_goog_send_message(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "goog_update_event" => {
+            let input: crate::mcp::tools_google::GcalUpdateEventInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_google::handle_goog_update_event(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+
+        // ── tools_hashnode ──────────────────────────────────────
+        "hn_create_post" => {
+            let input: crate::mcp::tools_hashnode::HnCreatePostInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_hashnode::handle_hn_create_post(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "hn_get_post" => {
+            let input: crate::mcp::tools_hashnode::HnGetPostInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_hashnode::handle_hn_get_post(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "hn_list_posts" => {
+            let input: crate::mcp::tools_hashnode::HnListPostsInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_hashnode::handle_hn_list_posts(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+
+        // ── tools_instagram ──────────────────────────────────────
+        "ig_business_discovery" => {
+            let input: crate::mcp::tools_instagram::IgBusinessDiscoveryInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_instagram::handle_ig_business_discovery(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "ig_create_container" => {
+            let input: crate::mcp::tools_instagram::IgCreateContainerInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_instagram::handle_ig_create_container(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "ig_get_comments" => {
+            let input: crate::mcp::tools_instagram::IgGetCommentsInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_instagram::handle_ig_get_comments(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "ig_get_followers" => {
+            let input: crate::mcp::tools_instagram::IgGetFollowersInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_instagram::handle_ig_get_followers(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "ig_get_hashtag_media" => {
+            let input: crate::mcp::tools_instagram::IgGetHashtagMediaInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_instagram::handle_ig_get_hashtag_media(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "ig_get_insights" => {
+            let input: crate::mcp::tools_instagram::IgGetInsightsInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_instagram::handle_ig_get_insights(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "ig_get_insights_audience" => {
+            let input: crate::mcp::tools_instagram::IgGetInsightsAudienceInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_instagram::handle_ig_get_insights_audience(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "ig_get_media" => {
+            let input: crate::mcp::tools_instagram::IgGetMediaInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_instagram::handle_ig_get_media(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "ig_get_media_detail" => {
+            let input: crate::mcp::tools_instagram::IgGetMediaDetailInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_instagram::handle_ig_get_media_detail(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "ig_get_mentions" => {
+            let input: crate::mcp::tools_instagram::IgGetMentionsInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_instagram::handle_ig_get_mentions(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "ig_get_messages" => {
+            let input: crate::mcp::tools_instagram::IgGetMessagesInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_instagram::handle_ig_get_messages(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "ig_get_reels" => {
+            let input: crate::mcp::tools_instagram::IgGetReelsInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_instagram::handle_ig_get_reels(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "ig_get_stories" => {
+            let input: crate::mcp::tools_instagram::IgGetStoriesInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_instagram::handle_ig_get_stories(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "ig_get_tagged" => {
+            let input: crate::mcp::tools_instagram::IgGetTaggedInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_instagram::handle_ig_get_tagged(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "ig_list_conversations" => {
+            let input: crate::mcp::tools_instagram::IgListConversationsInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_instagram::handle_ig_list_conversations(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "ig_poll_container" => {
+            let input: crate::mcp::tools_instagram::IgPollContainerInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_instagram::handle_ig_poll_container(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "ig_publish_container" => {
+            let input: crate::mcp::tools_instagram::IgPublishContainerInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_instagram::handle_ig_publish_container(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "ig_reply_to_comment" => {
+            let input: crate::mcp::tools_instagram::IgReplyToCommentInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_instagram::handle_ig_reply_to_comment(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "ig_search_hashtag" => {
+            let input: crate::mcp::tools_instagram::IgSearchHashtagInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_instagram::handle_ig_search_hashtag(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "ig_send_dm" => {
+            let input: crate::mcp::tools_instagram::IgSendDmInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_instagram::handle_ig_send_dm(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+
+        // ── tools_instagram_standalone ──────────────────────────────────────
+        "ias_create_container" => {
+            let input: crate::mcp::tools_instagram_standalone::IasCreateContainerInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_instagram_standalone::handle_ias_create_container(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "ias_get_comments" => {
+            let input: crate::mcp::tools_instagram_standalone::IasGetCommentsInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_instagram_standalone::handle_ias_get_comments(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "ias_get_media" => {
+            let input: crate::mcp::tools_instagram_standalone::IasGetMediaInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_instagram_standalone::handle_ias_get_media(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "ias_get_media_detail" => {
+            let input: crate::mcp::tools_instagram_standalone::IasGetMediaDetailInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_instagram_standalone::handle_ias_get_media_detail(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "ias_poll_container" => {
+            let input: crate::mcp::tools_instagram_standalone::IasPollContainerInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_instagram_standalone::handle_ias_poll_container(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "ias_publish_container" => {
+            let input: crate::mcp::tools_instagram_standalone::IasPublishContainerInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_instagram_standalone::handle_ias_publish_container(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "ias_reply_to_comment" => {
+            let input: crate::mcp::tools_instagram_standalone::IasReplyToCommentInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_instagram_standalone::handle_ias_reply_to_comment(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+
+        // ── tools_linkedin ──────────────────────────────────────
+        "li_create_comment" => {
+            let input: crate::mcp::tools_linkedin::LiCreateCommentInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_linkedin::handle_li_create_comment(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "li_create_post" => {
+            let input: crate::mcp::tools_linkedin::LiCreatePostInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_linkedin::handle_li_create_post(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "li_delete_post" => {
+            let input: crate::mcp::tools_linkedin::LiDeletePostInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_linkedin::handle_li_delete_post(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "li_get_analytics" => {
+            let input: crate::mcp::tools_linkedin::LiGetAnalyticsInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_linkedin::handle_li_get_analytics(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "li_get_comments" => {
+            let input: crate::mcp::tools_linkedin::LiGetCommentsInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_linkedin::handle_li_get_comments(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "li_get_messages" => {
+            let input: crate::mcp::tools_linkedin::LiGetMessagesInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_linkedin::handle_li_get_messages(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "li_get_post_analytics" => {
+            let input: crate::mcp::tools_linkedin::LiGetPostAnalyticsInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_linkedin::handle_li_get_post_analytics(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "li_get_post_detail" => {
+            let input: crate::mcp::tools_linkedin::LiGetPostDetailInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_linkedin::handle_li_get_post_detail(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "li_get_posts" => {
+            let input: crate::mcp::tools_linkedin::LiGetPostsInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_linkedin::handle_li_get_posts(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "li_get_profile" => {
+            let input: crate::mcp::tools_linkedin::LiGetProfileInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_linkedin::handle_li_get_profile(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "li_get_reactions" => {
+            let input: crate::mcp::tools_linkedin::LiGetReactionsInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_linkedin::handle_li_get_reactions(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "li_get_shares" => {
+            let input: crate::mcp::tools_linkedin::LiGetSharesInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_linkedin::handle_li_get_shares(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "li_list_conversations" => {
+            let input: crate::mcp::tools_linkedin::LiListConversationsInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_linkedin::handle_li_list_conversations(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "li_reply_comment" => {
+            let input: crate::mcp::tools_linkedin::LiReplyCommentInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_linkedin::handle_li_reply_comment(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "li_send_dm" => {
+            let input: crate::mcp::tools_linkedin::LiSendDmInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_linkedin::handle_li_send_dm(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+
+        // ── tools_linkedin_page ──────────────────────────────────────
+        "lip_create_comment" => {
+            let input: crate::mcp::tools_linkedin_page::LipCreateCommentInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_linkedin_page::handle_lip_create_comment(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "lip_create_post" => {
+            let input: crate::mcp::tools_linkedin_page::LipCreatePostInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_linkedin_page::handle_lip_create_post(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "lip_delete_post" => {
+            let input: crate::mcp::tools_linkedin_page::LipDeletePostInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_linkedin_page::handle_lip_delete_post(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "lip_get_analytics" => {
+            let input: crate::mcp::tools_linkedin_page::LipGetAnalyticsInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_linkedin_page::handle_lip_get_analytics(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "lip_get_followers" => {
+            let input: crate::mcp::tools_linkedin_page::LipGetFollowersInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_linkedin_page::handle_lip_get_followers(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "lip_get_page" => {
+            let input: crate::mcp::tools_linkedin_page::LipGetPageInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_linkedin_page::handle_lip_get_page(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "lip_get_page_posts" => {
+            let input: crate::mcp::tools_linkedin_page::LipGetPagePostsInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_linkedin_page::handle_lip_get_page_posts(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "lip_get_post_analytics" => {
+            let input: crate::mcp::tools_linkedin_page::LipGetPostAnalyticsInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_linkedin_page::handle_lip_get_post_analytics(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "lip_get_reactions" => {
+            let input: crate::mcp::tools_linkedin_page::LipGetReactionsInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_linkedin_page::handle_lip_get_reactions(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "lip_get_shares" => {
+            let input: crate::mcp::tools_linkedin_page::LipGetSharesInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_linkedin_page::handle_lip_get_shares(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "lip_list_pages" => {
+            let input: crate::mcp::tools_linkedin_page::LipListPagesInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_linkedin_page::handle_lip_list_pages(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+
+        // ── tools_mastodon ──────────────────────────────────────
+        "ms_create_post" => {
+            let input: crate::mcp::tools_mastodon::MsCreatePostInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_mastodon::handle_ms_create_post(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "ms_get_post" => {
+            let input: crate::mcp::tools_mastodon::MsGetPostInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_mastodon::handle_ms_get_post(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "ms_get_timeline" => {
+            let input: crate::mcp::tools_mastodon::MsGetTimelineInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_mastodon::handle_ms_get_timeline(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "ms_reply" => {
+            let input: crate::mcp::tools_mastodon::MsReplyInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_mastodon::handle_ms_reply(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "ms_search" => {
+            let input: crate::mcp::tools_mastodon::MsSearchInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_mastodon::handle_ms_search(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+
+        // ── tools_medium ──────────────────────────────────────
+        "md_create_post" => {
+            let input: crate::mcp::tools_medium::MdCreatePostInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_medium::handle_md_create_post(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "md_get_post" => {
+            let input: crate::mcp::tools_medium::MdGetPostInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_medium::handle_md_get_post(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "md_list_posts" => {
+            let input: crate::mcp::tools_medium::MdListPostsInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_medium::handle_md_list_posts(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+
+        // ── tools_notifications ──────────────────────────────────────
+        "notif_create" => {
+            let input: crate::mcp::tools_notifications::NotifCreateInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_notifications::handle_notif_create(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "notif_list" => {
+            let input: crate::mcp::tools_notifications::NotifListInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_notifications::handle_notif_list(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "notif_mark_all_read" => {
+            let input: crate::mcp::tools_notifications::NotifMarkAllReadInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_notifications::handle_notif_mark_all_read(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "notif_mark_read" => {
+            let input: crate::mcp::tools_notifications::NotifMarkReadInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_notifications::handle_notif_mark_read(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+
+        // ── tools_pinterest ──────────────────────────────────────
+        "pi_get_board" => {
+            let input: crate::mcp::tools_pinterest::PiGetBoardInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_pinterest::handle_pi_get_board(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "pi_get_board_analytics" => {
+            let input: crate::mcp::tools_pinterest::PiGetBoardAnalyticsInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_pinterest::handle_pi_get_board_analytics(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "pi_get_board_pins" => {
+            let input: crate::mcp::tools_pinterest::PiGetBoardPinsInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_pinterest::handle_pi_get_board_pins(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "pi_get_pin" => {
+            let input: crate::mcp::tools_pinterest::PiGetPinInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_pinterest::handle_pi_get_pin(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "pi_get_pin_analytics" => {
+            let input: crate::mcp::tools_pinterest::PiGetPinAnalyticsInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_pinterest::handle_pi_get_pin_analytics(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "pi_get_user_account" => {
+            let input: crate::mcp::tools_pinterest::PiGetUserAccountInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_pinterest::handle_pi_get_user_account(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "pi_search_pins" => {
+            let input: crate::mcp::tools_pinterest::PiSearchPinsInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_pinterest::handle_pi_search_pins(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+
+        // ── tools_reddit ──────────────────────────────────────
+        "reddit_browse" => {
+            let input: crate::mcp::tools_reddit::RedditBrowseInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_reddit::reddit_browse(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "reddit_create_comment" => {
+            let input: crate::mcp::tools_reddit::RedditCreateCommentInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_reddit::handle_reddit_create_comment(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "reddit_create_post" => {
+            let input: crate::mcp::tools_reddit::RedditCreatePostInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_reddit::handle_reddit_create_post(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "reddit_delete" => {
+            let input: crate::mcp::tools_reddit::RedditThingInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_reddit::handle_reddit_delete(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "reddit_edit" => {
+            let input: crate::mcp::tools_reddit::RedditEditInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_reddit::handle_reddit_edit(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "reddit_get_comments" => {
+            let input: crate::mcp::tools_reddit::RedditGetCommentsInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_reddit::reddit_get_comments(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "reddit_get_karma" => {
+            let out = crate::mcp::tools_reddit::handle_reddit_get_karma(state).await?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "reddit_hide" => {
+            let input: crate::mcp::tools_reddit::RedditThingInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_reddit::handle_reddit_hide(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "reddit_inbox" => {
+            let input: crate::mcp::tools_reddit::RedditInboxInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_reddit::reddit_inbox(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "reddit_mod_approve" => {
+            let input: crate::mcp::tools_reddit::RedditThingInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_reddit::handle_reddit_mod_approve(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "reddit_mod_distinguish" => {
+            let input: crate::mcp::tools_reddit::RedditModDistinguishInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_reddit::handle_reddit_mod_distinguish(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "reddit_mod_lock" => {
+            let input: crate::mcp::tools_reddit::RedditThingInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_reddit::handle_reddit_mod_lock(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "reddit_mod_remove" => {
+            let input: crate::mcp::tools_reddit::RedditModRemoveInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_reddit::handle_reddit_mod_remove(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "reddit_mod_sticky" => {
+            let input: crate::mcp::tools_reddit::RedditModStickyInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_reddit::handle_reddit_mod_sticky(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "reddit_mod_unlock" => {
+            let input: crate::mcp::tools_reddit::RedditThingInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_reddit::handle_reddit_mod_unlock(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "reddit_post_detail" => {
+            let input: crate::mcp::tools_reddit::RedditPostDetailInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_reddit::reddit_post_detail(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "reddit_save" => {
+            let input: crate::mcp::tools_reddit::RedditThingInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_reddit::handle_reddit_save(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "reddit_search" => {
+            let input: crate::mcp::tools_reddit::RedditSearchInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_reddit::reddit_search(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "reddit_send_dm" => {
+            let input: crate::mcp::tools_reddit::RedditSendDmInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_reddit::reddit_send_dm(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "reddit_subscribe" => {
+            let input: crate::mcp::tools_reddit::RedditSubscribeInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_reddit::handle_reddit_subscribe(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "reddit_unsave" => {
+            let input: crate::mcp::tools_reddit::RedditThingInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_reddit::handle_reddit_unsave(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "reddit_user_info" => {
+            let input: crate::mcp::tools_reddit::RedditUserInfoInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_reddit::reddit_user_info(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "reddit_vote" => {
+            let input: crate::mcp::tools_reddit::RedditVoteInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_reddit::handle_reddit_vote(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+
+        // ── tools_setup ──────────────────────────────────────
+        "setup_guide" => {
+            let input: crate::mcp::tools_setup::SetupGuideInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_setup::setup_guide(state, &input)
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+
+        // ── tools_skool ──────────────────────────────────────
+        "sk_create_comment" => {
+            let input: crate::mcp::tools_skool::SkCreateCommentInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_skool::handle_sk_create_comment(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "sk_get_info" => {
+            let input: crate::mcp::tools_skool::SkGetInfoInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_skool::handle_sk_get_info(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "sk_get_post" => {
+            let input: crate::mcp::tools_skool::SkGetPostInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_skool::handle_sk_get_post(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "sk_list_posts" => {
+            let input: crate::mcp::tools_skool::SkListPostsInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_skool::handle_sk_list_posts(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "sk_publish" => {
+            let input: crate::mcp::tools_skool::SkPublishInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_skool::handle_sk_publish(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+
+        // ── tools_slack ──────────────────────────────────────
+        "sl_channel_history" => {
+            let input: crate::mcp::tools_slack::SlChannelHistoryInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_slack::handle_sl_channel_history(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "sl_list_channels" => {
+            let input: crate::mcp::tools_slack::SlListChannelsInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_slack::handle_sl_list_channels(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "sl_list_users" => {
+            let input: crate::mcp::tools_slack::SlListUsersInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_slack::handle_sl_list_users(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "sl_send_message" => {
+            let input: crate::mcp::tools_slack::SlSendMessageInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_slack::handle_sl_send_message(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+
+        // ── tools_tags ──────────────────────────────────────
+        "tag_delete" => {
+            let input: crate::mcp::tools_tags::TagDeleteInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_tags::handle_tag_delete(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "tag_get" => {
+            let input: crate::mcp::tools_tags::TagGetInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_tags::handle_tag_get(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "tag_update" => {
+            let input: crate::mcp::tools_tags::TagUpdateInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_tags::handle_tag_update(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+
+        // ── tools_telegram_bot ──────────────────────────────────────
+        "tb_forward_message" => {
+            let input: crate::mcp::tools_telegram_bot::TbForwardInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_telegram_bot::handle_tb_forward_message(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "tb_get_chat" => {
+            let input: crate::mcp::tools_telegram_bot::TbChatInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_telegram_bot::handle_tb_get_chat(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "tb_get_chat_member_count" => {
+            let input: crate::mcp::tools_telegram_bot::TbChatInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_telegram_bot::handle_tb_get_chat_member_count(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "tb_get_me" => {
+            let input: crate::mcp::tools_telegram_bot::TbTokenInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_telegram_bot::handle_tb_get_me(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "tb_get_updates" => {
+            let input: crate::mcp::tools_telegram_bot::TbGetUpdatesInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_telegram_bot::handle_tb_get_updates(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "tb_pin_message" => {
+            let input: crate::mcp::tools_telegram_bot::TbPinInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_telegram_bot::handle_tb_pin_message(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "tb_send_document" => {
+            let input: crate::mcp::tools_telegram_bot::TbSendDocumentInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_telegram_bot::handle_tb_send_document(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "tb_send_message" => {
+            let input: crate::mcp::tools_telegram_bot::TbSendMessageInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_telegram_bot::handle_tb_send_message(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "tb_send_photo" => {
+            let input: crate::mcp::tools_telegram_bot::TbSendPhotoInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_telegram_bot::handle_tb_send_photo(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "tb_unpin_message" => {
+            let input: crate::mcp::tools_telegram_bot::TbPinInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_telegram_bot::handle_tb_unpin_message(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+
+        // ── tools_telegram_user ──────────────────────────────────────
+        "tu_auth_status" => {
+            let out = crate::mcp::tools_telegram_user::handle_tu_auth_status(state).await?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "tu_list_contacts" => {
+            let input: crate::mcp::tools_telegram_user::TuListContactsInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_telegram_user::handle_tu_list_contacts(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "tu_list_dialogs" => {
+            let input: crate::mcp::tools_telegram_user::TuListDialogsInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_telegram_user::handle_tu_list_dialogs(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "tu_request_code" => {
+            let input: crate::mcp::tools_telegram_user::TuRequestCodeInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_telegram_user::handle_tu_request_code(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "tu_search" => {
+            let input: crate::mcp::tools_telegram_user::TuSearchInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_telegram_user::handle_tu_search(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "tu_send_message" => {
+            let input: crate::mcp::tools_telegram_user::TuSendMessageInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_telegram_user::handle_tu_send_message(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "tu_sign_in" => {
+            let input: crate::mcp::tools_telegram_user::TuSignInInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_telegram_user::handle_tu_sign_in(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+
+        // ── tools_threads ──────────────────────────────────────
+        "th_create_thread" => {
+            let input: crate::mcp::tools_threads::ThreadsCreateThreadInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_threads::handle_th_create_thread(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "th_delete_thread" => {
+            let input: crate::mcp::tools_threads::ThreadsDeleteThreadInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_threads::handle_th_delete_thread(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "th_get_insights" => {
+            let input: crate::mcp::tools_threads::ThreadsGetInsightsInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_threads::handle_th_get_insights(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "th_get_profile" => {
+            let input: crate::mcp::tools_threads::ThreadsGetProfileInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_threads::handle_th_get_profile(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "th_get_replies" => {
+            let input: crate::mcp::tools_threads::ThreadsGetRepliesInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_threads::handle_th_get_replies(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "th_get_thread_detail" => {
+            let input: crate::mcp::tools_threads::ThreadsGetThreadDetailInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_threads::handle_th_get_thread_detail(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "th_get_threads" => {
+            let input: crate::mcp::tools_threads::ThreadsGetThreadsInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_threads::handle_th_get_threads(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "th_poll_publish_status" => {
+            let input: crate::mcp::tools_threads::ThreadsPollStatusInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_threads::handle_th_poll_publish_status(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "th_reply_to_thread" => {
+            let input: crate::mcp::tools_threads::ThreadsReplyToThreadInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_threads::handle_th_reply_to_thread(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+
+        // ── tools_tiktok ──────────────────────────────────────
+        "tt_create_post" => {
+            let input: crate::mcp::tools_tiktok::TtCreatePostInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_tiktok::handle_tt_create_post(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "tt_list_videos" => {
+            let input: crate::mcp::tools_tiktok::TtListVideosInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_tiktok::handle_tt_list_videos(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "tt_profile" => {
+            let input: crate::mcp::tools_tiktok::TtProfileInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_tiktok::handle_tt_profile(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+
+        // ── tools_webhooks ──────────────────────────────────────
+        "wh_create" => {
+            let input: crate::mcp::tools_webhooks::WhCreateInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_webhooks::handle_wh_create(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "wh_delete" => {
+            let input: crate::mcp::tools_webhooks::WhDeleteInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_webhooks::handle_wh_delete(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "wh_get" => {
+            let input: crate::mcp::tools_webhooks::WhGetInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_webhooks::handle_wh_get(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "wh_list" => {
+            let input: crate::mcp::tools_webhooks::WhListInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_webhooks::handle_wh_list(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "wh_test" => {
+            let input: crate::mcp::tools_webhooks::WhTestInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_webhooks::handle_wh_test(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "wh_update" => {
+            let input: crate::mcp::tools_webhooks::WhUpdateInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_webhooks::handle_wh_update(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+
+        // ── tools_whatsapp ──────────────────────────────────────
+        "wa_auth_status" => {
+            let out = crate::mcp::tools_whatsapp::handle_wa_auth_status(state).await?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "wa_chats" => {
+            let input: crate::mcp::tools_whatsapp::WaChatsInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_whatsapp::handle_wa_chats(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "wa_contacts" => {
+            let input: crate::mcp::tools_whatsapp::WaContactsInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_whatsapp::handle_wa_contacts(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "wa_create_group" => {
+            let input: crate::mcp::tools_whatsapp::WaCreateGroupInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_whatsapp::handle_wa_create_group(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "wa_edit_message" => {
+            let input: crate::mcp::tools_whatsapp::WaEditMessageInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_whatsapp::handle_wa_edit_message(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "wa_group_invite_link" => {
+            let input: crate::mcp::tools_whatsapp::WaGroupInviteLinkInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_whatsapp::handle_wa_group_invite_link(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "wa_list_groups" => {
+            let out = crate::mcp::tools_whatsapp::handle_wa_list_groups(state).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "wa_revoke_message" => {
+            let input: crate::mcp::tools_whatsapp::WaRevokeMessageInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_whatsapp::handle_wa_revoke_message(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "wa_send_text" => {
+            let input: crate::mcp::tools_whatsapp::WaSendTextInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_whatsapp::handle_wa_send_text(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+
+        // ── tools_wordpress ──────────────────────────────────────
+        "wp_create_post" => {
+            let input: crate::mcp::tools_wordpress::WpCreatePostInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_wordpress::handle_wp_create_post(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "wp_get_post" => {
+            let input: crate::mcp::tools_wordpress::WpGetPostInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_wordpress::handle_wp_get_post(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "wp_list_categories" => {
+            let input: crate::mcp::tools_wordpress::WpListCategoriesInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_wordpress::handle_wp_list_categories(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "wp_list_posts" => {
+            let input: crate::mcp::tools_wordpress::WpListPostsInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_wordpress::handle_wp_list_posts(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+
+        // ── tools_x ──────────────────────────────────────
+        "x_bookmark_tweet" => {
+            let input: crate::mcp::tools_x::XBookmarkTweetInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_x::x_bookmark_tweet(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "x_bookmarks" => {
+            let input: crate::mcp::tools_x::XBookmarksInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_x::x_bookmarks(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "x_delete_tweet" => {
+            let input: crate::mcp::tools_x::XDeleteTweetInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_x::x_delete_tweet(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "x_follow_user" => {
+            let input: crate::mcp::tools_x::XFollowUserInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_x::x_follow_user(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "x_followers" => {
+            let input: crate::mcp::tools_x::XFollowersInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_x::x_followers(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "x_following" => {
+            let input: crate::mcp::tools_x::XFollowingInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_x::x_following(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "x_get_me" => {
+            let out = crate::mcp::tools_x::x_get_me(state).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "x_home_timeline" => {
+            let input: crate::mcp::tools_x::XHomeTimelineInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_x::x_home_timeline(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "x_like_tweet" => {
+            let input: crate::mcp::tools_x::XLikeTweetInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_x::x_like_tweet(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "x_list_timeline" => {
+            let input: crate::mcp::tools_x::XListTimelineInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_x::x_list_timeline(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "x_retweet" => {
+            let input: crate::mcp::tools_x::XRetweetInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_x::x_retweet(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "x_search_tweets" => {
+            let input: crate::mcp::tools_x::XSearchTweetsInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_x::x_search_tweets(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "x_tweet_detail" => {
+            let input: crate::mcp::tools_x::XTweetDetailInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_x::x_tweet_detail(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "x_unbookmark_tweet" => {
+            let input: crate::mcp::tools_x::XUnbookmarkTweetInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_x::x_unbookmark_tweet(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "x_unfollow_user" => {
+            let input: crate::mcp::tools_x::XUnfollowUserInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_x::x_unfollow_user(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "x_unlike_tweet" => {
+            let input: crate::mcp::tools_x::XUnlikeTweetInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_x::x_unlike_tweet(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "x_unretweet" => {
+            let input: crate::mcp::tools_x::XUnretweetInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_x::x_unretweet(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "x_user_lookup" => {
+            let input: crate::mcp::tools_x::XUserLookupInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_x::x_user_lookup(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "x_user_lookup_by_username" => {
+            let input: crate::mcp::tools_x::XUserLookupByUsernameInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_x::x_user_lookup_by_username(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+        "x_user_tweets" => {
+            let input: crate::mcp::tools_x::XUserTweetsInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_x::x_user_tweets(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+
+        // ── tools_youtube ──────────────────────────────────────
+        "yt_reply_comment" => {
+            let input: crate::mcp::tools_youtube::YtReplyCommentInput = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid args: {e}"))?;
+            let out = crate::mcp::tools_youtube::handle_yt_reply_comment(state, &input).await
+                .map_err(|e| e.to_string())?;
+            Ok(serde_json::to_value(out.0).unwrap_or_default())
+        }
+
+_ => {
             // Tool is listed in list_tools() but not registered in call_tool().
             // Use the MCP server directly for full tool access.
             if list_tools().iter().any(|(name, _)| *name == tool_name) {
                 Err(format!(
-                    "Tool '{tool_name}' is available via MCP but not yet registered in the CLI bridge.                      Use 'social-forge mcp' to start the MCP server, or request this tool be added to the bridge."
+                    "Tool '{tool_name}' is available via MCP but not registered in the CLI bridge. Use 'social-forge mcp' for full access."
                 ))
             } else {
                 Err(format!(
