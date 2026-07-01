@@ -231,67 +231,6 @@ async fn find_facebook_page_token(state: &AppState, user_id: Uuid, page_id: &str
     Ok(token)
 }
 
-async fn find_instagram_token(state: &AppState, user_id: Uuid, ig_id: &str) -> anyhow::Result<String> {
-    let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
-    let ig = integrations.iter()
-        .find(|i| (i.provider_identifier == "instagram" || i.provider_identifier == "instagram-standalone") && i.internal_id == ig_id)
-        .ok_or_else(|| anyhow::anyhow!("Instagram account '{}' not connected", ig_id))?;
-    let token = ig.access_token.clone();
-    let token = state.token_key.as_ref()
-        .and_then(|key| crypto::decrypt_string(&token, key).ok())
-        .unwrap_or(token);
-    Ok(token)
-}
-
-// ── Main Dispatcher ──────────────────────────────────────────
-
-pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
-    match cli.command {
-        Command::Serve { .. } | Command::Mcp => {
-            unreachable!("Serve/Mcp handled in main.rs before calling run_cli");
-        }
-        Command::Init => handle_init(),
-        Command::Providers => handle_providers().await,
-        Command::Connect { provider } => handle_connect(&provider).await,
-        Command::Doctor => handle_doctor().await,
-        Command::Setup => handle_setup().await,
-        Command::ConnectAll => handle_connect_all().await,
-        Command::Config { action } => handle_config(action),
-        Command::X { action } => handle_x(action).await,
-        Command::Reddit { action } => handle_reddit(action).await,
-        Command::Linkedin { action } => handle_linkedin(action).await,
-        Command::LinkedinPage { action } => handle_linkedin_page(action).await,
-        Command::Facebook { action } => handle_facebook(action).await,
-        Command::Instagram { action } => handle_instagram(action).await,
-        Command::Youtube { action } => handle_youtube(action).await,
-        Command::Bluesky { action } => handle_bluesky(action).await,
-        Command::Mastodon { action } => handle_mastodon(action).await,
-        Command::Comment { action } => handle_comment(action).await,
-        Command::Dm { action } => handle_dm(action).await,
-        Command::Automation { action } => handle_automation(action).await,
-        Command::Import { provider, count } => handle_import(&provider, count).await,
-        Command::Feed { provider, limit } => handle_feed(provider.as_deref(), limit).await,
-        Command::Post { text, platforms, media, schedule, first_comment } => {
-            handle_post(&text, platforms.as_deref(), media.as_deref(), schedule.as_deref(), first_comment.as_deref()).await
-        }
-        Command::Stage { text, integrations, media, schedule, preview, first_comment } => {
-            handle_stage(&text, integrations.as_deref(), media.as_deref(), schedule.as_deref(), preview, first_comment.as_deref()).await
-        }
-        Command::Carousel { text, integration, media, title, schedule } => {
-            handle_carousel(&text, &integration, &media, title.as_deref(), schedule.as_deref()).await
-        }
-        Command::Media { action } => handle_media(action).await,
-        Command::Posts { action } => handle_posts(action).await,
-        Command::McpCall { tool, json } => handle_mcp_call(&tool, &json).await,
-        Command::McpTools => handle_mcp_tools(),
-        Command::SplitPreview { text, platforms } => {
-            handle_split_preview(&text, platforms.as_deref())
-        }
-    }
-}
-
-// ── YouTube Handler ──────────────────────────────────────────
-
 async fn handle_youtube(action: YoutubeAction) -> anyhow::Result<()> {
     let state = init_state().await?;
     let user_id = resolve_user(&state).await?;
@@ -325,6 +264,46 @@ async fn handle_youtube(action: YoutubeAction) -> anyhow::Result<()> {
         YoutubeAction::Video { video_id } => {
             provider.get_video(&token, &video_id).await
                 .map_err(|e| e.to_string())
+        }
+        YoutubeAction::Playlists { channel_id, limit } => {
+            let client = reqwest::Client::new();
+            let url = format!("https://www.googleapis.com/youtube/v3/playlists?part=snippet&channelId={channel_id}&maxResults={limit}");
+            match client.get(&url).bearer_auth(&token).send().await {
+                Ok(r) => r.json::<serde_json::Value>().await.map_err(|e| format!("Parse error: {e}")),
+                Err(e) => Err(format!("YouTube playlists failed: {e}")),
+            }
+        }
+        YoutubeAction::Stats { channel_id } => {
+            let client = reqwest::Client::new();
+            let url = format!("https://www.googleapis.com/youtube/v3/channels?part=statistics&id={channel_id}");
+            match client.get(&url).bearer_auth(&token).send().await {
+                Ok(r) => r.json::<serde_json::Value>().await.map_err(|e| format!("Parse error: {e}")),
+                Err(e) => Err(format!("YouTube stats failed: {e}")),
+            }
+        }
+        YoutubeAction::Analytics { channel_id, metrics, start_date, end_date } => {
+            let client = reqwest::Client::new();
+            let url = format!("https://youtubeanalytics.googleapis.com/v2/reports?ids=channel=={channel_id}&startDate={start_date}&endDate={end_date}&metrics={metrics}");
+            match client.get(&url).bearer_auth(&token).send().await {
+                Ok(r) => r.json::<serde_json::Value>().await.map_err(|e| format!("Parse error: {e}")),
+                Err(e) => Err(format!("YouTube analytics failed: {e}")),
+            }
+        }
+        YoutubeAction::Subscriptions { channel_id, limit } => {
+            let client = reqwest::Client::new();
+            let url = format!("https://www.googleapis.com/youtube/v3/subscriptions?part=snippet&channelId={channel_id}&maxResults={limit}");
+            match client.get(&url).bearer_auth(&token).send().await {
+                Ok(r) => r.json::<serde_json::Value>().await.map_err(|e| format!("Parse error: {e}")),
+                Err(e) => Err(format!("YouTube subscriptions failed: {e}")),
+            }
+        }
+        YoutubeAction::Creators { query, limit } => {
+            let client = reqwest::Client::new();
+            let url = format!("https://www.googleapis.com/youtube/v3/search?part=snippet&type=channel&q={query}&maxResults={limit}");
+            match client.get(&url).bearer_auth(&token).send().await {
+                Ok(r) => r.json::<serde_json::Value>().await.map_err(|e| format!("Parse error: {e}")),
+                Err(e) => Err(format!("YouTube creators search failed: {e}")),
+            }
         }
     };
 
@@ -399,6 +378,28 @@ async fn handle_bluesky(action: BlueskyAction) -> anyhow::Result<()> {
                 Err(e) => Err(format!("Bluesky search request failed: {e}")),
             }
         }
+        BlueskyAction::Post { text, images: _ } => {
+            let post = crate::social::PostContent {
+                content: text,
+                media: vec![],
+                settings: serde_json::Value::Object(serde_json::Map::new()),
+            };
+            provider.publish(&token, &post).await
+                .map(|r| serde_json::json!({"id": r.platform_post_id, "url": r.platform_post_url, "status": r.status}))
+                .map_err(|e| e.to_string())
+        }
+        BlueskyAction::Feed { feed_type: _, limit } => {
+            match reqwest::Client::new()
+                .get("https://bsky.social/xrpc/app.bsky.feed.getTimeline")
+                .query(&[("limit", &limit.to_string())])
+                .header("Authorization", format!("Bearer {token}"))
+                .send().await
+            {
+                Ok(resp) => resp.json::<serde_json::Value>().await
+                    .map_err(|e| format!("Parse error: {e}")),
+                Err(e) => Err(format!("Bluesky feed request failed: {e}")),
+            }
+        }
     };
 
     match result {
@@ -466,6 +467,29 @@ async fn handle_mastodon(action: MastodonAction) -> anyhow::Result<()> {
                 Ok(resp) => resp.json::<serde_json::Value>().await
                     .map_err(|e| format!("Parse error: {e}")),
                 Err(e) => Err(format!("Mastodon search request failed: {e}")),
+            }
+        }
+        MastodonAction::Post { text, visibility } => {
+            let body = serde_json::json!({"status": text, "visibility": visibility});
+            match reqwest::Client::new()
+                .post(provider.api_url("/api/v1/statuses"))
+                .header("Authorization", format!("Bearer {token}"))
+                .header("Content-Type", "application/json")
+                .json(&body)
+                .send().await
+            {
+                Ok(r) => r.json::<serde_json::Value>().await.map_err(|e| format!("Parse error: {e}")),
+                Err(e) => Err(format!("Mastodon post failed: {e}")),
+            }
+        }
+        MastodonAction::Get { status_id } => {
+            match reqwest::Client::new()
+                .get(provider.api_url(&format!("/api/v1/statuses/{status_id}")))
+                .header("Authorization", format!("Bearer {token}"))
+                .send().await
+            {
+                Ok(r) => r.json::<serde_json::Value>().await.map_err(|e| format!("Parse error: {e}")),
+                Err(e) => Err(format!("Mastodon get status failed: {e}")),
             }
         }
     };
@@ -1901,6 +1925,115 @@ async fn handle_linkedin_page(action: LinkedinPageAction) -> anyhow::Result<()> 
                 }
             }
         }
+        LinkedinPageAction::Page { page_id } => {
+            match find_linkedin_page_token(&state, user_id, &page_id).await {
+                Err(e) => Err(e.to_string()),
+                Ok((_token, lip_id)) => {
+                    let input = crate::mcp::tools_linkedin_page::LipGetPageInput {
+                        user_id, lip_id, page_id,
+                    };
+                    crate::mcp::tools_linkedin_page::handle_lip_get_page(&state, &input).await
+                        .map(|v| v.0).map_err(|e| e.to_string())
+                }
+            }
+        }
+        LinkedinPageAction::Feed { page_id, limit } => {
+            match find_linkedin_page_token(&state, user_id, &page_id).await {
+                Err(e) => Err(e.to_string()),
+                Ok((_token, lip_id)) => {
+                    let input = crate::mcp::tools_linkedin_page::LipGetPagePostsInput {
+                        user_id, lip_id, page_id, limit,
+                    };
+                    crate::mcp::tools_linkedin_page::handle_lip_get_page_posts(&state, &input).await
+                        .map(|v| v.0).map_err(|e| e.to_string())
+                }
+            }
+        }
+        LinkedinPageAction::CreateComment { post_urn, page_urn, text } => {
+            match find_linkedin_page_token(&state, user_id, &page_urn).await {
+                Err(e) => Err(e.to_string()),
+                Ok((_token, lip_id)) => {
+                    let input = crate::mcp::tools_linkedin_page::LipCreateCommentInput {
+                        user_id, lip_id, post_urn, page_urn, message: text,
+                    };
+                    crate::mcp::tools_linkedin_page::handle_lip_create_comment(&state, &input).await
+                        .map(|v| v.0).map_err(|e| e.to_string())
+                }
+            }
+        }
+        LinkedinPageAction::Delete { post_urn } => {
+            // Find any linkedin-page integration for this user
+            match crate::db::queries::list_integrations(&state.db, user_id).await {
+                Err(e) => Err(format!("DB error: {e}")),
+                Ok(integrations) => {
+                    let li = integrations.iter().find(|i| i.provider_identifier == "linkedin-page");
+                    match li {
+                        None => Err("No LinkedIn Page connected".to_string()),
+                        Some(li) => {
+                            let input = crate::mcp::tools_linkedin_page::LipDeletePostInput {
+                                user_id, lip_id: li.internal_id.clone(), post_urn,
+                            };
+                            crate::mcp::tools_linkedin_page::handle_lip_delete_post(&state, &input).await
+                                .map(|v| v.0).map_err(|e| e.to_string())
+                        }
+                    }
+                }
+            }
+        }
+        LinkedinPageAction::Reactions { post_urn } => {
+            match crate::db::queries::list_integrations(&state.db, user_id).await {
+                Err(e) => Err(format!("DB error: {e}")),
+                Ok(integrations) => {
+                    let li = integrations.iter().find(|i| i.provider_identifier == "linkedin-page");
+                    match li {
+                        None => Err("No LinkedIn Page connected".to_string()),
+                        Some(li) => {
+                            let input = crate::mcp::tools_linkedin_page::LipGetReactionsInput {
+                                user_id, lip_id: li.internal_id.clone(), post_urn,
+                            };
+                            crate::mcp::tools_linkedin_page::handle_lip_get_reactions(&state, &input).await
+                                .map(|v| v.0).map_err(|e| e.to_string())
+                        }
+                    }
+                }
+            }
+        }
+        LinkedinPageAction::Shares { post_urn } => {
+            match crate::db::queries::list_integrations(&state.db, user_id).await {
+                Err(e) => Err(format!("DB error: {e}")),
+                Ok(integrations) => {
+                    let li = integrations.iter().find(|i| i.provider_identifier == "linkedin-page");
+                    match li {
+                        None => Err("No LinkedIn Page connected".to_string()),
+                        Some(li) => {
+                            let input = crate::mcp::tools_linkedin_page::LipGetSharesInput {
+                                user_id, lip_id: li.internal_id.clone(), post_urn,
+                            };
+                            crate::mcp::tools_linkedin_page::handle_lip_get_shares(&state, &input).await
+                                .map(|v| v.0).map_err(|e| e.to_string())
+                        }
+                    }
+                }
+            }
+        }
+        LinkedinPageAction::PostAnalytics { post_urn } => {
+            match crate::db::queries::list_integrations(&state.db, user_id).await {
+                Err(e) => Err(format!("DB error: {e}")),
+                Ok(integrations) => {
+                    let li = integrations.iter().find(|i| i.provider_identifier == "linkedin-page");
+                    match li {
+                        None => Err("No LinkedIn Page connected".to_string()),
+                        Some(li) => {
+                            let input = crate::mcp::tools_linkedin_page::LipGetPostAnalyticsInput {
+                                user_id, lip_id: li.internal_id.clone(), post_urn,
+                            };
+                            crate::mcp::tools_linkedin_page::handle_lip_get_post_analytics(&state, &input).await
+                                .map(|v| serde_json::to_value(v.0).unwrap_or_default()).map_err(|e| e.to_string())
+                        }
+                    }
+                }
+            }
+        }
     };
 
     match result {
@@ -1918,35 +2051,100 @@ async fn handle_facebook(action: FacebookAction) -> anyhow::Result<()> {
 
     let result: Result<serde_json::Value, String> = match action {
         FacebookAction::Posts { page_id } => {
-            match find_facebook_page_token(&state, user_id, &page_id).await {
-                Err(e) => Err(e.to_string()),
-                Ok(token) => {
-                    let provider = crate::social::facebook::FacebookProvider::new(&state.config);
-                    provider.get_page_feed(&token, &page_id, 20, None, None).await
-                        .map_err(|e| e.to_string())
-                }
-            }
+            let input = crate::mcp::tools_facebook::FbGetFeedInput { page_id, limit: Some(20), since: None, until: None };
+            crate::mcp::tools_facebook::handle_fb_get_feed(&state, &input).await
+                .map(|v| v.0).map_err(|e| e.to_string())
         }
         FacebookAction::Insights { page_id, metric } => {
-            match find_facebook_page_token(&state, user_id, &page_id).await {
-                Err(e) => Err(e.to_string()),
-                Ok(token) => {
-                    let provider = crate::social::facebook::FacebookProvider::new(&state.config);
-                    provider.get_page_insights(&token, &page_id, &metric, "day", None, None).await
-                        .map_err(|e| e.to_string())
-                }
-            }
+            let input = crate::mcp::tools_facebook::FbPageInsightsInput {
+                page_id, metric, period: Some("day".to_string()), since: None, until: None,
+            };
+            crate::mcp::tools_facebook::handle_fb_page_insights(&state, &input).await
+                .map(|v| v.0).map_err(|e| e.to_string())
         }
         FacebookAction::Comment { post_id, text } => {
+            let page_id = post_id.split('_').next().unwrap_or(&post_id).to_string();
+            let input = crate::mcp::tools_facebook::FbCommentInput {
+                page_id, post_id, message: text,
+            };
+            crate::mcp::tools_facebook::handle_fb_comment(&state, &input).await
+                .map(|v| v.0).map_err(|e| e.to_string())
+        }
+        FacebookAction::Create { page_id, message } => {
+            let input = crate::mcp::tools_facebook::FbCreatePostInput {
+                        page_id, message, link: None,
+                    };
+                    crate::mcp::tools_facebook::handle_fb_create_post(&state, &input).await
+                        .map(|v| v.0).map_err(|e| e.to_string())
+        }
+        FacebookAction::Photo { page_id, url, caption } => {
+            let input = crate::mcp::tools_facebook::FbCreatePhotoInput {
+                        page_id, url, caption,
+                    };
+                    crate::mcp::tools_facebook::handle_fb_create_photo(&state, &input).await
+                        .map(|v| v.0).map_err(|e| e.to_string())
+        }
+        FacebookAction::Video { page_id, url, title } => {
+            let input = crate::mcp::tools_facebook::FbCreateVideoInput {
+                        page_id, file_url: url, title, description: None,
+                    };
+                    crate::mcp::tools_facebook::handle_fb_create_video(&state, &input).await
+                        .map(|v| v.0).map_err(|e| e.to_string())
+        }
+        FacebookAction::Delete { post_id } => {
             let page_id = post_id.split('_').next().unwrap_or(&post_id);
             match find_facebook_page_token(&state, user_id, page_id).await {
                 Err(e) => Err(e.to_string()),
-                Ok(token) => {
-                    let provider = crate::social::facebook::FacebookProvider::new(&state.config);
-                    provider.comment_on_post(&token, &post_id, &text).await
-                        .map_err(|e| e.to_string())
+                Ok(_) => {
+                    let input = crate::mcp::tools_facebook::FbDeletePostInput {
+                        page_id: page_id.to_string(), post_id,
+                    };
+                    crate::mcp::tools_facebook::handle_fb_delete_post(&state, &input).await
+                        .map(|v| v.0).map_err(|e| e.to_string())
                 }
             }
+        }
+        FacebookAction::React { post_id, reaction_type } => {
+            let page_id = post_id.split('_').next().unwrap_or(&post_id);
+            match find_facebook_page_token(&state, user_id, page_id).await {
+                Err(e) => Err(e.to_string()),
+                Ok(_) => {
+                    let input = crate::mcp::tools_facebook::FbReactInput {
+                        page_id: page_id.to_string(), post_id, reaction_type,
+                    };
+                    crate::mcp::tools_facebook::handle_fb_react(&state, &input).await
+                        .map(|v| v.0).map_err(|e| e.to_string())
+                }
+            }
+        }
+        FacebookAction::Conversations { page_id } => {
+            let input = crate::mcp::tools_facebook::FbConversationsInput { page_id };
+                    crate::mcp::tools_facebook::handle_fb_conversations(&state, &input).await
+                        .map(|v| v.0).map_err(|e| e.to_string())
+        }
+        FacebookAction::Send { page_id, conversation_id, text } => {
+            let input = crate::mcp::tools_facebook::FbSendMessageInput {
+                        page_id, conversation_id, message: text,
+                    };
+                    crate::mcp::tools_facebook::handle_fb_send_message(&state, &input).await
+                        .map(|v| v.0).map_err(|e| e.to_string())
+        }
+        FacebookAction::Pages { query } => {
+            let input = crate::mcp::tools_facebook::FbSearchPagesInput { query };
+            crate::mcp::tools_facebook::handle_fb_search_pages(&state, &input).await
+                .map(|v| v.0).map_err(|e| e.to_string())
+        }
+        FacebookAction::PageInsights { page_id, metric } => {
+            let input = crate::mcp::tools_facebook::FbPageInsightsInput {
+                        page_id, metric, period: None, since: None, until: None,
+                    };
+                    crate::mcp::tools_facebook::handle_fb_page_insights(&state, &input).await
+                        .map(|v| v.0).map_err(|e| e.to_string())
+        }
+        FacebookAction::Albums { page_id } => {
+            let input = crate::mcp::tools_facebook::FbAlbumsInput { page_id };
+                    crate::mcp::tools_facebook::handle_fb_albums(&state, &input).await
+                        .map(|v| v.0).map_err(|e| e.to_string())
         }
     };
 
@@ -2042,48 +2240,21 @@ async fn handle_instagram(action: InstagramAction) -> anyhow::Result<()> {
 
     let result: Result<serde_json::Value, String> = match action {
         InstagramAction::Posts { account_id } => {
-            match find_instagram_token(&state, user_id, &account_id).await {
-                Err(e) => Err(e.to_string()),
-                Ok(token) => {
-                    let provider = crate::social::instagram::InstagramProvider::new(&state.config);
-                    provider.get_ig_media(&token, &account_id, 20).await
-                        .map_err(|e| e.to_string())
-                }
-            }
+            let input = crate::mcp::tools_instagram::IgGetMediaInput {
+                ig_id: account_id, limit: Some(20),
+            };
+            crate::mcp::tools_instagram::handle_ig_get_media(&state, &input).await
+                .map(|v| v.0).map_err(|e| e.to_string())
         }
         InstagramAction::Insights { account_id, metric } => {
-            match find_instagram_token(&state, user_id, &account_id).await {
-                Err(e) => Err(e.to_string()),
-                Ok(token) => {
-                    let provider = crate::social::instagram::InstagramProvider::new(&state.config);
-                    // Separate metrics that need day period vs total_value period
-                    let day_metrics: Vec<&str> = metric.split(',').map(|s| s.trim()).filter(|m| {
-                        matches!(*m, "reach" | "follower_count" | "online_followers")
-                    }).collect();
-                    let lifetime_metrics: Vec<&str> = metric.split(',').map(|s| s.trim()).filter(|m| {
-                        !matches!(*m, "reach" | "follower_count" | "online_followers")
-                    }).collect();
-                    let mut all_results = serde_json::Map::new();
-                    if !day_metrics.is_empty() {
-                        let result = provider.get_ig_insights(&token, &account_id, &day_metrics.join(","), "day").await;
-                        match result {
-                            Ok(v) => { all_results.insert("day".to_string(), v); }
-                            Err(e) => anyhow::bail!("Instagram insights (day) failed: {e}"),
-                        }
-                    }
-                    if !lifetime_metrics.is_empty() {
-                        // Instagram API: ALL metrics use period=day (including total_interactions, comments, likes, etc.)
-                        let result = provider.get_ig_insights(&token, &account_id, &lifetime_metrics.join(","), "day").await;
-                        match result {
-                            Ok(v) => { all_results.insert("engagement".to_string(), v); }
-                            Err(e) => anyhow::bail!("Instagram insights (engagement) failed: {e}"),
-                        }
-                    }
-                    Ok(serde_json::json!({"data": all_results}))
-                }
-            }
+            let input = crate::mcp::tools_instagram::IgGetInsightsInput {
+                ig_id: account_id, metric, period: Some("day".to_string()),
+            };
+            crate::mcp::tools_instagram::handle_ig_get_insights(&state, &input).await
+                .map(|v| v.0).map_err(|e| e.to_string())
         }
         InstagramAction::Comment { media_id, text } => {
+
             match crate::db::queries::list_integrations(&state.db, user_id).await {
                 Err(e) => Err(format!("DB error: {e}")),
                 Ok(integrations) => {
@@ -2105,62 +2276,81 @@ async fn handle_instagram(action: InstagramAction) -> anyhow::Result<()> {
             }
         }
         InstagramAction::Dm { account_id, recipient, content } => {
-            match find_instagram_token(&state, user_id, &account_id).await {
-                Err(e) => Err(e.to_string()),
-                Ok(token) => {
-                    let provider = crate::social::instagram::InstagramProvider::new(&state.config);
-                    let post = crate::social::PostContent {
-                        content,
-                        media: vec![],
-                        settings: serde_json::Value::Object(serde_json::Map::new()),
-                    };
-                    provider.send_dm(&token, &recipient, &post).await
-                        .map(|r| serde_json::json!({"id": r.platform_post_id, "status": r.status}))
-                        .map_err(|e| e.to_string())
-                }
-            }
+            let input = crate::mcp::tools_instagram::IgSendDmInput {
+                ig_id: account_id, recipient_id: recipient, content,
+            };
+            crate::mcp::tools_instagram::handle_ig_send_dm(&state, &input).await
+                .map(|v| v.0).map_err(|e| e.to_string())
         }
         InstagramAction::DmList { account_id, count } => {
-            match find_instagram_token(&state, user_id, &account_id).await {
-                Err(e) => Err(e.to_string()),
-                Ok(token) => {
-                    let provider = crate::social::instagram::InstagramProvider::new(&state.config);
-                    provider.get_dm_conversations(&token, count).await
-                        .map(|convs| {
-                            let list: Vec<serde_json::Value> = convs.into_iter().map(|c| {
-                                serde_json::json!({
-                                    "id": c.id,
-                                    "last_message": c.last_message,
-                                    "last_message_at": c.last_message_at.map(|dt| dt.to_rfc3339()),
-                                    "unread_count": c.unread_count,
-                                })
-                            }).collect();
-                            serde_json::json!({"conversations": list, "total": list.len()})
-                        })
-                        .map_err(|e| e.to_string())
-                }
-            }
+            let input = crate::mcp::tools_instagram::IgListConversationsInput {
+                ig_id: account_id, limit: Some(count),
+            };
+            crate::mcp::tools_instagram::handle_ig_list_conversations(&state, &input).await
+                .map(|v| v.0).map_err(|e| e.to_string())
         }
         InstagramAction::DmMessages { account_id, conversation_id, count } => {
-            match find_instagram_token(&state, user_id, &account_id).await {
-                Err(e) => Err(e.to_string()),
-                Ok(token) => {
-                    let provider = crate::social::instagram::InstagramProvider::new(&state.config);
-                    provider.get_dm_messages(&token, &conversation_id, count).await
-                        .map(|msgs| {
-                            let list: Vec<serde_json::Value> = msgs.into_iter().map(|m| {
-                                serde_json::json!({
-                                    "id": m.id,
-                                    "sender": m.sender,
-                                    "content": m.content,
-                                    "created_at": m.created_at.to_rfc3339(),
-                                })
-                            }).collect();
-                            serde_json::json!({"messages": list, "total": list.len()})
-                        })
-                        .map_err(|e| e.to_string())
-                }
-            }
+            let input = crate::mcp::tools_instagram::IgGetMessagesInput {
+                ig_id: account_id, conversation_id, limit: Some(count),
+            };
+            crate::mcp::tools_instagram::handle_ig_get_messages(&state, &input).await
+                .map(|v| v.0).map_err(|e| e.to_string())
+        }
+        InstagramAction::MediaDetail { account_id, media_id } => {
+            let input = crate::mcp::tools_instagram::IgGetMediaDetailInput {
+                ig_id: account_id, media_id,
+            };
+            crate::mcp::tools_instagram::handle_ig_get_media_detail(&state, &input).await
+                .map(|v| v.0).map_err(|e| e.to_string())
+        }
+        InstagramAction::Hashtag { account_id, query } => {
+            let input = crate::mcp::tools_instagram::IgSearchHashtagInput {
+                ig_id: account_id, query,
+            };
+            crate::mcp::tools_instagram::handle_ig_search_hashtag(&state, &input).await
+                .map(|v| v.0).map_err(|e| e.to_string())
+        }
+        InstagramAction::Reels { account_id } => {
+            let input = crate::mcp::tools_instagram::IgGetReelsInput {
+                ig_id: account_id,
+            };
+            crate::mcp::tools_instagram::handle_ig_get_reels(&state, &input).await
+                .map(|v| v.0).map_err(|e| e.to_string())
+        }
+        InstagramAction::Stories { account_id } => {
+            let input = crate::mcp::tools_instagram::IgGetStoriesInput {
+                ig_id: account_id,
+            };
+            crate::mcp::tools_instagram::handle_ig_get_stories(&state, &input).await
+                .map(|v| v.0).map_err(|e| e.to_string())
+        }
+        InstagramAction::Followers { account_id } => {
+            let input = crate::mcp::tools_instagram::IgGetFollowersInput {
+                ig_id: account_id,
+            };
+            crate::mcp::tools_instagram::handle_ig_get_followers(&state, &input).await
+                .map(|v| v.0).map_err(|e| e.to_string())
+        }
+        InstagramAction::InsightsAudience { account_id } => {
+            let input = crate::mcp::tools_instagram::IgGetInsightsAudienceInput {
+                ig_id: account_id,
+            };
+            crate::mcp::tools_instagram::handle_ig_get_insights_audience(&state, &input).await
+                .map(|v| v.0).map_err(|e| e.to_string())
+        }
+        InstagramAction::Mentions { account_id } => {
+            let input = crate::mcp::tools_instagram::IgGetMentionsInput {
+                ig_id: account_id,
+            };
+            crate::mcp::tools_instagram::handle_ig_get_mentions(&state, &input).await
+                .map(|v| v.0).map_err(|e| e.to_string())
+        }
+        InstagramAction::PollContainer { account_id, creation_id } => {
+            let input = crate::mcp::tools_instagram::IgPollContainerInput {
+                ig_id: account_id, creation_id,
+            };
+            crate::mcp::tools_instagram::handle_ig_poll_container(&state, &input).await
+                .map(|v| v.0).map_err(|e| e.to_string())
         }
     };
 
@@ -2488,7 +2678,7 @@ async fn handle_carousel(
 async fn handle_media(action: MediaAction) -> anyhow::Result<()> {
     let state = init_state().await?;
     match action {
-        MediaAction::Upload { path, alt } => {
+        MediaAction::Upload { path, alt: _ } => {
             let result = crate::mcp::tools_media::upload_from_path(&state, &path).await
                 .map_err(|e| anyhow::anyhow!("{}", e))?;
             output_json(&serde_json::to_value(result.0).unwrap_or_default());
@@ -2863,4 +3053,145 @@ fn handle_split_preview(text: &str, platforms: Option<&str>) -> anyhow::Result<(
     }).collect();
     output_json(&serde_json::json!({"content_length": text.len(), "platforms": preview}));
     Ok(())
+}
+
+// ── Main CLI Dispatcher ──────────────────────────────────────
+
+pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
+    match cli.command {
+        Command::Serve { .. } | Command::Mcp => {
+            unreachable!("Serve/Mcp handled in main.rs before calling run_cli");
+        }
+        Command::Init => handle_init(),
+        Command::Providers => handle_providers().await,
+        Command::Connect { provider } => handle_connect(&provider).await,
+        Command::Doctor => handle_doctor().await,
+        Command::Setup => handle_setup().await,
+        Command::ConnectAll => handle_connect_all().await,
+        Command::Config { action } => handle_config(action),
+
+        // ── Core Platform Handlers ──────────────────────────
+        Command::X { action } => handle_x(action).await,
+        Command::Reddit { action } => handle_reddit(action).await,
+        Command::Linkedin { action } => handle_linkedin(action).await,
+        Command::LinkedinPage { action } => handle_linkedin_page(action).await,
+        Command::Facebook { action } => handle_facebook(action).await,
+        Command::Instagram { action } => handle_instagram(action).await,
+        Command::Youtube { action } => handle_youtube(action).await,
+        Command::Bluesky { action } => handle_bluesky(action).await,
+        Command::Mastodon { action } => handle_mastodon(action).await,
+
+        // ── Unified Commands ────────────────────────────────
+        Command::Import { provider, count } => handle_import(&provider, count).await,
+        Command::Feed { provider, limit } => handle_feed(provider.as_deref(), limit).await,
+        Command::Comment { action } => handle_comment(action).await,
+        Command::Dm { action } => handle_dm(action).await,
+        Command::Automation { action } => handle_automation(action).await,
+        Command::Posts { action } => handle_posts(action).await,
+        Command::Post { text, platforms, media, schedule, first_comment } => {
+            handle_post(&text, platforms.as_deref(), media.as_deref(), schedule.as_deref(), first_comment.as_deref()).await
+        }
+        Command::Stage { text, integrations, media, schedule, preview, first_comment } => {
+            handle_stage(&text, integrations.as_deref(), media.as_deref(), schedule.as_deref(), preview, first_comment.as_deref()).await
+        }
+        Command::Carousel { text, integration, media, title, schedule } => {
+            handle_carousel(&text, &integration, &media, title.as_deref(), schedule.as_deref()).await
+        }
+        Command::Media { action } => handle_media(action).await,
+        Command::McpCall { tool, json } => handle_mcp_call(&tool, &json).await,
+        Command::McpTools => handle_mcp_tools(),
+        Command::SplitPreview { text, platforms } => {
+            handle_split_preview(&text, platforms.as_deref())
+        }
+
+        // ── New Platform Handlers (delegate to platform modules) ──
+        Command::Tiktok { action } => {
+            let state = init_state().await?;
+            crate::cli::platforms::tiktok::handle(action, &state).await
+        }
+        Command::Threads { action } => {
+            let state = init_state().await?;
+            crate::cli::platforms::threads::handle(action, &state).await
+        }
+        Command::Discord { action } => {
+            let state = init_state().await?;
+            crate::cli::platforms::discord::handle(action, &state).await
+        }
+        Command::Slack { action } => {
+            let state = init_state().await?;
+            crate::cli::platforms::slack::handle(action, &state).await
+        }
+        Command::TelegramBot { action } => {
+            let state = init_state().await?;
+            crate::cli::platforms::telegram_bot::handle(action, &state).await
+        }
+        Command::TelegramUser { action } => {
+            let state = init_state().await?;
+            crate::cli::platforms::telegram_user::handle(action, &state).await
+        }
+        Command::Whatsapp { action } => {
+            let state = init_state().await?;
+            crate::cli::platforms::whatsapp::handle(action, &state).await
+        }
+        Command::Pinterest { action } => {
+            let state = init_state().await?;
+            crate::cli::platforms::pinterest::handle(action, &state).await
+        }
+        Command::Github { action } => {
+            let state = init_state().await?;
+            crate::cli::platforms::github::handle(action, &state).await
+        }
+        Command::Wordpress { action } => {
+            let state = init_state().await?;
+            crate::cli::platforms::wordpress::handle(action, &state).await
+        }
+        Command::Hashnode { action } => {
+            let state = init_state().await?;
+            crate::cli::platforms::hashnode::handle(action, &state).await
+        }
+        Command::MediumBlog { action } => {
+            let state = init_state().await?;
+            crate::cli::platforms::medium_blog::handle(action, &state).await
+        }
+        Command::Devto { action } => {
+            let state = init_state().await?;
+            crate::cli::platforms::devto::handle(action, &state).await
+        }
+        Command::Skool { action } => {
+            let state = init_state().await?;
+            crate::cli::platforms::skool::handle(action, &state).await
+        }
+        Command::Google { action } => {
+            let state = init_state().await?;
+            crate::cli::platforms::google::handle(action, &state).await
+        }
+        Command::Gdrive { action } => {
+            let state = init_state().await?;
+            crate::cli::platforms::drive::handle(action, &state).await
+        }
+        Command::Gcal { action } => {
+            let state = init_state().await?;
+            crate::cli::platforms::gcal::handle(action, &state).await
+        }
+        Command::GmailOps { action } => {
+            let state = init_state().await?;
+            crate::cli::platforms::gmail::handle(action, &state).await
+        }
+        Command::Webhooks { action } => {
+            let state = init_state().await?;
+            crate::cli::platforms::webhooks::handle(action, &state).await
+        }
+        Command::Notifications { action } => {
+            let state = init_state().await?;
+            crate::cli::platforms::notifications::handle(action, &state).await
+        }
+        Command::Tags { action } => {
+            let state = init_state().await?;
+            crate::cli::platforms::tags::handle(action, &state).await
+        }
+        Command::Analytics { action } => {
+            let state = init_state().await?;
+            crate::cli::platforms::analytics::handle(action, &state).await
+        }
+    }
 }
