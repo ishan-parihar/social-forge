@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT p.id, p.user_id, p.integration_id,\n             p.state as \"state: PostState\",\n             p.content, p.title, p.media, p.settings,\n             p.scheduled_at, p.published_at,\n             p.platform_post_id, p.platform_post_url, p.error_message,\n             p.created_at, p.updated_at,\n             p.repeat_interval_days, p.repeat_end_date, p.group_id,\n             p.first_comment, p.sequence,\n             i.provider_identifier, i.access_token,\n             i.refresh_token, i.token_expires_at,\n             i.disabled as \"integration_disabled\",\n             i.refresh_needed as \"integration_refresh_needed\"\n           FROM posts p\n           JOIN integrations i ON p.integration_id = i.id\n           WHERE p.state = 'queued'\n             AND p.scheduled_at <= NOW()\n             AND i.disabled = false\n           ORDER BY p.scheduled_at ASC\n           LIMIT $1",
+  "query": "SELECT p.id, p.user_id, p.integration_id,\n             p.state as \"state: PostState\",\n             p.content, p.title, p.media, p.settings,\n             p.scheduled_at, p.published_at,\n             p.platform_post_id, p.platform_post_url, p.error_message,\n             p.created_at, p.updated_at,\n             p.repeat_interval_days, p.repeat_end_date, p.group_id,\n             p.first_comment, p.sequence,\n             i.provider_identifier, i.access_token,\n             i.refresh_token, i.token_expires_at,\n             i.disabled as \"integration_disabled\",\n             i.refresh_needed as \"integration_refresh_needed\"\n           FROM posts p\n           JOIN integrations i ON p.integration_id = i.id\n           WHERE p.state = 'queued'\n             AND p.scheduled_at <= NOW()\n             AND i.disabled = false\n           ORDER BY p.scheduled_at ASC\n           LIMIT $1\n           FOR UPDATE SKIP LOCKED",
   "describe": {
     "columns": [
       {
@@ -180,5 +180,5 @@
       false
     ]
   },
-  "hash": "e25e95a3358c0ba1a60e1c65e8668e139251da9d5912b5e4e625cf94fbf01fd2"
+  "hash": "c5c87114e7778d61e36758556b163646137e5f0c10cb236e8a2fe5a7c88e1852"
 }

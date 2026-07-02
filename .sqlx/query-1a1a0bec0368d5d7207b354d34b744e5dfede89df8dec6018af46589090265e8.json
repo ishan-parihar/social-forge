@@ -1,0 +1,89 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, user_id, integration_id, name, trigger_type,\n                      trigger_filter, response_template, response_type,\n                      ai_model, is_active, cooldown_minutes, max_responses_per_hour\n               FROM automation_rules\n               WHERE integration_id = $1\n                 AND trigger_type = $2\n                 AND is_active = true",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "integration_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "trigger_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "trigger_filter",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 6,
+        "name": "response_template",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "response_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "ai_model",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "is_active",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 10,
+        "name": "cooldown_minutes",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 11,
+        "name": "max_responses_per_hour",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "1a1a0bec0368d5d7207b354d34b744e5dfede89df8dec6018af46589090265e8"
+}

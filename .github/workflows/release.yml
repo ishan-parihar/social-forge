@@ -1,9 +1,9 @@
 name: Release
 
 on:
-  push:
-    tags: ['v*']
-  # Manual trigger for re-releases or testing
+  # Manual trigger only — binary is built locally with cargo-zigbuild and uploaded
+  # via `gh release create`. Do not re-enable push/tags without fixing the
+  # pnpm/boringssl/svelte CI issues first.
   workflow_dispatch:
 
 # Only one release per tag — cancel any duplicate runs

@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE tags SET name = $3, color = $4, updated_at = NOW() WHERE id = $1 AND user_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "03b52a2ef361581c7f85b96093bbbbb8c89a6a8ad68b9cc3103c17e8ee9b4b10"
+}
