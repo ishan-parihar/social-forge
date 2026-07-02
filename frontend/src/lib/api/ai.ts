@@ -1,6 +1,9 @@
-import { PUBLIC_AI_PROXY_URL } from "$env/static/public";
-
-const AI_PROXY_URL = PUBLIC_AI_PROXY_URL || "http://localhost:4488";
+// PUBLIC_AI_PROXY_URL can be set at build time (VITE_PUBLIC_AI_PROXY_URL) or
+// falls back to a local proxy default. Using import.meta.env avoids requiring
+// a .env file at build time (SvelteKit's $env/static/public would fail in CI).
+const AI_PROXY_URL: string =
+  (import.meta.env?.VITE_PUBLIC_AI_PROXY_URL as string | undefined) ||
+  "http://localhost:4488";
 
 interface AiResponse {
   choices: Array<{
