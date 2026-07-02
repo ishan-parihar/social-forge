@@ -2,11 +2,20 @@
 // axum HTTP router combining all route modules.
 // Protected routes use the auth middleware chain.
 
-use axum::{middleware, Router};
+use axum::{body::Body, http::{Request, Response, StatusCode}, middleware, Router};
+use rust_embed::RustEmbed;
 use tower_http::cors::CorsLayer;
 use tower_http::limit::RequestBodyLimitLayer;
 use tower_http::services::{ServeDir, ServeFile};
 use tower_http::trace::TraceLayer;
+
+/// Embedded SvelteKit static build, compiled into the binary at build time.
+/// If `frontend/build/` doesn't exist at compile time, the set is empty.
+/// Disable serving at runtime by setting `SERVE_FRONTEND=false`.
+#[derive(RustEmbed)]
+#[folder = "frontend/build"]
+#[include = "*"]
+struct FrontendAssets;
 
 use crate::auth::middleware::auth_middleware;
 use crate::config::Config;
@@ -205,20 +214,95 @@ pub fn build_router(state: AppState) -> Router {
         ))
         .with_state(state);
 
-    // Serve SvelteKit static build as fallback (SPA routing)
-    let frontend_dir = std::env::var("FRONTEND_DIR")
-        .unwrap_or_else(|_| "./frontend/build".into());
-    let frontend_path = std::path::Path::new(&frontend_dir);
-    if frontend_path.join("index.html").exists() {
-        let index = frontend_path.join("index.html");
-        app.fallback_service(
-            ServeDir::new(frontend_path)
-                .not_found_service(ServeFile::new(index))
-        )
+    // ── Frontend serving ──────────────────────────────────────────────────
+    // Priority order:
+    //   1. SERVE_FRONTEND=false  → disabled entirely (API-only mode)
+    //   2. FRONTEND_DIR env var  → serve from filesystem path (dev mode / custom path)
+    //   3. Embedded assets       → serve from binary-embedded frontend/build (default)
+    //
+    // In all disabled/missing cases, /api/* routes still function normally.
+
+    let serve_frontend = std::env::var("SERVE_FRONTEND")
+        .map(|v| v.to_lowercase() != "false" && v != "0")
+        .unwrap_or(true);
+
+    if !serve_frontend {
+        return app;
+    }
+
+    // Check for explicit filesystem override first (dev mode)
+    let fs_override = std::env::var("FRONTEND_DIR").ok()
+        .filter(|d| !d.is_empty());
+
+    if let Some(dir) = fs_override {
+        let frontend_path = std::path::Path::new(&dir);
+        if frontend_path.join("index.html").exists() {
+            let index = frontend_path.join("index.html");
+            return app.fallback_service(
+                ServeDir::new(frontend_path)
+                    .not_found_service(ServeFile::new(index)),
+            );
+        }
+        tracing::warn!("FRONTEND_DIR={dir} has no index.html — falling back to embedded assets");
+    }
+
+    // Use embedded assets (compiled into the binary)
+    if FrontendAssets::get("index.html").is_some() {
+        app.fallback(embedded_frontend_handler)
     } else {
+        tracing::info!("No frontend assets embedded or found — running in API-only mode");
         app
     }
 }
+
+/// Serve embedded frontend assets via rust-embed.
+/// Falls back to `index.html` for unknown paths (SPA client-side routing).
+async fn embedded_frontend_handler(req: Request<Body>) -> Response<Body> {
+    let path = req.uri().path().trim_start_matches('/');
+
+    // Try exact path first, then with index.html appended (for directory routes)
+    let asset = FrontendAssets::get(path)
+        .or_else(|| {
+            if path.is_empty() || path.ends_with('/') {
+                FrontendAssets::get(&format!("{path}index.html"))
+            } else {
+                None
+            }
+        });
+
+    match asset {
+        Some(file) => {
+            let mime = mime_guess::from_path(path).first_or_octet_stream();
+            Response::builder()
+                .status(StatusCode::OK)
+                .header("content-type", mime.as_ref())
+                // Cache immutable hashed assets aggressively; HTML never
+                .header("cache-control", if path.contains("/_app/immutable/") {
+                    "public, max-age=31536000, immutable"
+                } else {
+                    "no-cache"
+                })
+                .body(Body::from(file.data.into_owned()))
+                .unwrap_or_else(|_| not_found())
+        }
+        // SPA fallback — serve index.html for any unknown path (client-side routing)
+        None => match FrontendAssets::get("index.html") {
+            Some(index) => Response::builder()
+                .status(StatusCode::OK)
+                .header("content-type", "text/html; charset=utf-8")
+                .header("cache-control", "no-cache")
+                .body(Body::from(index.data.into_owned()))
+                .unwrap_or_else(|_| not_found()),
+            None => not_found(),
+        },
+    }
+}
+
+fn not_found() -> Response<Body> {
+    Response::builder()
+        .status(StatusCode::NOT_FOUND)
+        .body(Body::from("Not found"))
+        .unwrap()
 
 /// Health check endpoint
 async fn health_check() -> axum::Json<serde_json::Value> {
