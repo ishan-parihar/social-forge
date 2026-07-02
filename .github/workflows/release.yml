@@ -30,17 +30,6 @@ jobs:
         with:
           version: latest
 
-      - name: Get pnpm store directory
-        id: pnpm-cache
-        run: echo "store=$(pnpm store path)" >> $GITHUB_OUTPUT
-
-      - name: Cache pnpm store
-        uses: actions/cache@v4
-        with:
-          path: ${{ steps.pnpm-cache.outputs.store }}
-          key: pnpm-${{ hashFiles('frontend/pnpm-lock.yaml') }}
-          restore-keys: pnpm-
-
       - name: Install frontend dependencies
         working-directory: frontend
         run: pnpm install --frozen-lockfile
