@@ -39,7 +39,9 @@ jobs:
 
       - name: Install frontend dependencies
         working-directory: frontend
-        run: pnpm install --frozen-lockfile
+        # pnpm 11 requires explicit allowlist for build scripts.
+        # Pass it as a CLI config flag so CI doesn't need an .npmrc change.
+        run: pnpm install --frozen-lockfile --config.only-built-dependencies=esbuild
 
       - name: Build frontend (SvelteKit static)
         working-directory: frontend
