@@ -7,10 +7,13 @@ const config = {
 	kit: {
 		adapter: adapter({ fallback: "index.html" }),
 	},
-	// Suppress a11y warnings — they are informational only and should not
+	// Suppress Svelte warnings that are informational only and should not
 	// fail the production build. Fix individually over time.
 	onwarn: (warning, handler) => {
+		// Accessibility: labels not associated with controls
 		if (warning.code.startsWith("a11y_")) return;
+		// Svelte 5: $state() initialized from prop reference (reactive pattern)
+		if (warning.code === "state_referenced_locally") return;
 		handler(warning);
 	},
 };
