@@ -1,251 +1,403 @@
 #!/usr/bin/env bash
-# ─── Social Forge Installer ────────────────────────────────────────────
-# Usage: curl -fsSL https://raw.githubusercontent.com/ishan-parihar/social-forge/main/scripts/install.sh | bash
+# ─── Social Forge Installer ────────────────────────────────────────────────────
+# Usage:
+#   curl -fsSL https://raw.githubusercontent.com/ishan-parihar/social-forge/main/scripts/install.sh | bash
+#   # or with options:
+#   INSTALL_DIR=~/my-dir SKIP_SERVICE=true bash install.sh
 #
-# Detects your OS/arch, downloads the latest musl binary from GitHub
-# Releases, sets up the directory structure, creates a .env from the
-# template, and optionally installs the systemd service + AI Agent skill.
-# ────────────────────────────────────────────────────────────────────────
+# What this script does:
+#   1. Detects OS/arch, downloads the pre-built musl binary from GitHub Releases
+#   2. Creates the install directory structure
+#   3. Creates a .env from the embedded template (DATABASE_URL uses correct port 5433)
+#   4. Downloads docker-compose.yml and migrations
+#   5. Installs the systemd service (Linux only, unless SKIP_SERVICE=true)
+#   6. Installs the AI agent skill (unless SKIP_SKILL=true)
+#   7. Installs postgresql-client for pg_isready (unless SKIP_PG_CLIENT=true)
+#
+# Environment variables:
+#   INSTALL_DIR      Installation directory (default: $HOME/social-forge)
+#   BIN_DIR          Binary install path   (default: /usr/local/bin)
+#   SKIP_SERVICE     Skip systemd service  (default: false)
+#   SKIP_SKILL       Skip AI agent skill   (default: false)
+#   SKIP_PG_CLIENT   Skip postgresql-client install (default: false)
+#   SERVE_FRONTEND   Set to false to disable the embedded web UI (default: true)
+#   VERSION          Specific tag to install (default: latest)
+# ───────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
 REPO="ishan-parihar/social-forge"
 APP_NAME="social-forge"
+SCRIPTS_RAW="https://raw.githubusercontent.com/${REPO}/main/scripts"
+REPO_RAW="https://raw.githubusercontent.com/${REPO}/main"
 
-# ── Colors ────────────────────────────────────────────────────────────
+# ── Colors ──────────────────────────────────────────────────────────────────
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
-CYAN='\033[0;36m'; NC='\033[0m'
+CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
 log()  { echo -e "  ${GREEN}✓${NC} $1"; }
-warn() { echo -e "  ${YELLOW}⚠${NC} $1"; }
-err()  { echo -e "  ${RED}✗${NC} $1"; exit 1; }
+warn() { echo -e "  ${YELLOW}⚠${NC}  $1"; }
+err()  { echo -e "  ${RED}✗${NC}  $1" >&2; exit 1; }
 info() { echo -e "  ${CYAN}→${NC} $1"; }
+head() { echo -e "\n  ${BOLD}$1${NC}"; }
 
-# ── Help flag ─────────────────────────────────────────────────────────
-if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
-  echo "Social Forge Installer"
-  echo ""
-  echo "Usage: curl -fsSL https://raw.githubusercontent.com/$REPO/main/scripts/install.sh | bash"
-  echo ""
-  echo "Environment variables:"
-  echo "  INSTALL_DIR    Installation directory (default: $HOME/social-forge)"
-  echo "  BIN_DIR        Binary directory (default: /usr/local/bin)"
-  echo "  SKIP_SERVICE   Skip systemd service setup (default: false)"
-  echo "  SKIP_SKILL     Skip AI Agent skill installation (default: false)"
-  echo "  VERSION        Specific version tag to install (default: latest)"
-  echo ""
+# ── Help ─────────────────────────────────────────────────────────────────────
+if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+  cat <<HELP
+Social Forge Installer
+
+Usage:
+  curl -fsSL https://raw.githubusercontent.com/${REPO}/main/scripts/install.sh | bash
+
+Environment variables:
+  INSTALL_DIR     Installation directory     (default: \$HOME/social-forge)
+  BIN_DIR         Binary directory           (default: /usr/local/bin)
+  SKIP_SERVICE    Skip systemd service       (default: false)
+  SKIP_SKILL      Skip AI agent skill        (default: false)
+  SKIP_PG_CLIENT  Skip postgresql-client     (default: false)
+  SERVE_FRONTEND  Disable embedded web UI    (default: true)
+  VERSION         Specific version to install (default: latest)
+
+Examples:
+  # Install with custom directory
+  INSTALL_DIR=/opt/social-forge bash install.sh
+
+  # Install without systemd service (useful for testing)
+  SKIP_SERVICE=true bash install.sh
+
+  # Install API-only (no web dashboard)
+  SERVE_FRONTEND=false bash install.sh
+
+  # Install specific version
+  VERSION=v0.2.21 bash install.sh
+HELP
   exit 0
 fi
 
-# ── Platform detection ────────────────────────────────────────────────
+# ── Platform detection ───────────────────────────────────────────────────────
 ARCH=$(uname -m)
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 
 case "$ARCH" in
-  x86_64|amd64)  ARCH="x64"   ;;
-  aarch64|arm64) ARCH="arm64"  ;;
+  x86_64|amd64)  ARCH_TAG="x64"   ;;
+  aarch64|arm64) ARCH_TAG="arm64"  ;;
   *) err "Unsupported architecture: $ARCH. Expected x86_64 or aarch64." ;;
 esac
 
 case "$OS" in
-  linux)  ARTIFACT="social-forge-linux-${ARCH}"  ;;
-  darwin) ARTIFACT="social-forge-macos-${ARCH}"  ;;
+  linux)  ARTIFACT="${APP_NAME}-linux-${ARCH_TAG}"  ;;
+  darwin) ARTIFACT="${APP_NAME}-macos-${ARCH_TAG}"  ;;
   *) err "Unsupported OS: $OS. Expected linux or darwin." ;;
 esac
 
-# ── Configurable paths ────────────────────────────────────────────────
-INSTALL_DIR="${INSTALL_DIR:-$HOME/social-forge}"
+# ── Configuration ────────────────────────────────────────────────────────────
+CURRENT_USER="$(id -un)"
+INSTALL_DIR="${INSTALL_DIR:-${HOME}/social-forge}"
 BIN_DIR="${BIN_DIR:-/usr/local/bin}"
 SKIP_SERVICE="${SKIP_SERVICE:-false}"
 SKIP_SKILL="${SKIP_SKILL:-false}"
+SKIP_PG_CLIENT="${SKIP_PG_CLIENT:-false}"
+SERVE_FRONTEND="${SERVE_FRONTEND:-true}"
 VERSION="${VERSION:-latest}"
 
-# ── Pre-flight checks ────────────────────────────────────────────────
-info "Platform: $OS/$ARCH"
-info "Target:   $INSTALL_DIR"
+echo ""
+echo -e "  ${BOLD}Social Forge Installer${NC}"
+echo -e "  ${CYAN}──────────────────────────────────────${NC}"
+info "Platform:         ${OS}/${ARCH_TAG}"
+info "Install dir:      ${INSTALL_DIR}"
+info "Binary dir:       ${BIN_DIR}"
+info "User:             ${CURRENT_USER}"
+info "Serve frontend:   ${SERVE_FRONTEND}"
 
-# Check for curl
-if ! command -v curl &>/dev/null; then
-  err "curl is required. Install it first: apt install curl / brew install curl"
-fi
+# ── Pre-flight ───────────────────────────────────────────────────────────────
+command -v curl &>/dev/null || err "curl is required. Install: apt install curl / brew install curl"
 
-# Check for sudo when needed
+# Check if we need sudo for BIN_DIR
 SUDO=""
-for dir in "$BIN_DIR" /etc/systemd/system; do
-  if [ ! -w "$dir" ] && [ -d "$dir" ] 2>/dev/null || [ "$dir" = "$BIN_DIR" ]; then
+if [ ! -w "${BIN_DIR}" ] 2>/dev/null || [ ! -d "${BIN_DIR}" ]; then
     if command -v sudo &>/dev/null; then
-      SUDO="sudo"
+        SUDO="sudo"
     fi
-    break
-  fi
-done
+fi
 
-# ── Resolve latest version ────────────────────────────────────────────
+# ── Resolve version ──────────────────────────────────────────────────────────
+head "Resolving version..."
 if [ "$VERSION" = "latest" ]; then
-  info "Resolving latest release..."
-  VERSION=$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" \
-    | grep '"tag_name":' | sed 's/.*"tag_name": "\(.*\)",/\1/')
-  if [ -z "$VERSION" ]; then
-    err "Failed to resolve latest release tag. Check your network or set VERSION=v0.x.y"
-  fi
-  log "Latest release: $VERSION"
-else
-  info "Installing version: $VERSION"
+    VERSION=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" \
+        | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')
+    if [ -z "$VERSION" ]; then
+        err "Could not resolve latest release tag. Check network or set VERSION=v0.x.y"
+    fi
 fi
+log "Version: ${VERSION}"
 
-DOWNLOAD_URL="https://github.com/$REPO/releases/download/$VERSION/$ARTIFACT"
+DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${VERSION}/${ARTIFACT}"
 
-# ── Create directories ────────────────────────────────────────────────
-mkdir -p "$INSTALL_DIR"/{data/media,data/telegram,data/whatsapp,migrations}
-log "Created directory structure at $INSTALL_DIR"
+# ── Create directory structure ───────────────────────────────────────────────
+head "Creating directories..."
+mkdir -p \
+    "${INSTALL_DIR}" \
+    "${INSTALL_DIR}/data/media" \
+    "${INSTALL_DIR}/data/telegram" \
+    "${INSTALL_DIR}/data/whatsapp" \
+    "${INSTALL_DIR}/migrations"
+log "Created: ${INSTALL_DIR}"
 
-# ── Download binary ───────────────────────────────────────────────────
-info "Downloading $ARTIFACT..."
-TMP_BIN=$(mktemp)
-trap 'rm -f "$TMP_BIN"' EXIT
+# ── Download binary ───────────────────────────────────────────────────────────
+head "Downloading binary..."
+info "URL: ${DOWNLOAD_URL}"
+TMP_BIN="$(mktemp)"
+trap 'rm -f "${TMP_BIN}"' EXIT
 
-HTTP_CODE=$(curl -fsSL -w '%{http_code}' -o "$TMP_BIN" "$DOWNLOAD_URL" 2>/dev/null || echo "000")
+HTTP_CODE=$(curl -fsSL -w '%{http_code}' -o "${TMP_BIN}" "${DOWNLOAD_URL}" 2>/dev/null || echo "000")
 if [ "$HTTP_CODE" != "200" ]; then
-  err "Download failed (HTTP $HTTP_CODE). URL: $DOWNLOAD_URL"
+    rm -f "${TMP_BIN}"
+    err "Download failed (HTTP ${HTTP_CODE}). Check that release ${VERSION} exists: https://github.com/${REPO}/releases"
 fi
-chmod +x "$TMP_BIN"
-log "Downloaded $ARTIFACT ($(du -h "$TMP_BIN" | cut -f1))"
+chmod +x "${TMP_BIN}"
+log "Downloaded ${ARTIFACT} ($(du -sh "${TMP_BIN}" | cut -f1))"
 
-# ── Install binary ─────────────────────────────────────────────────────
-if [ -w "$BIN_DIR" ]; then
-  mv "$TMP_BIN" "$BIN_DIR/$APP_NAME"
-else
-  $SUDO mv "$TMP_BIN" "$BIN_DIR/$APP_NAME"
+# ── Install binary ────────────────────────────────────────────────────────────
+$SUDO mkdir -p "${BIN_DIR}"
+$SUDO install -m 755 "${TMP_BIN}" "${BIN_DIR}/${APP_NAME}"
+log "Installed: ${BIN_DIR}/${APP_NAME}"
+
+# Quick sanity check
+if ! "${BIN_DIR}/${APP_NAME}" --version &>/dev/null && \
+   ! "${BIN_DIR}/${APP_NAME}" --help &>/dev/null; then
+    warn "Binary installed but couldn't run --version (may be a cross-arch issue or expected)"
 fi
-log "Installed binary to $BIN_DIR/$APP_NAME"
 
-# Verify
-"$BIN_DIR/$APP_NAME" --version &>/dev/null || \
-  "$BIN_DIR/$APP_NAME" --help &>/dev/null || \
-  warn "Binary installed but --version check produced no output (may be expected)"
+# ── Install postgresql-client (for pg_isready in start script) ───────────────
+if [ "$OS" = "linux" ] && [ "$SKIP_PG_CLIENT" != "true" ]; then
+    if ! command -v pg_isready &>/dev/null; then
+        head "Installing postgresql-client (for pg_isready)..."
+        if command -v apt-get &>/dev/null; then
+            $SUDO apt-get update -qq && $SUDO apt-get install -y -qq postgresql-client 2>/dev/null && \
+                log "postgresql-client installed" || \
+                warn "Could not install postgresql-client — TCP fallback will be used"
+        elif command -v yum &>/dev/null; then
+            $SUDO yum install -y -q postgresql &>/dev/null && \
+                log "postgresql installed" || \
+                warn "Could not install postgresql — TCP fallback will be used"
+        else
+            warn "Could not detect package manager — install postgresql-client manually for pg_isready"
+        fi
+    else
+        log "pg_isready already available"
+    fi
+fi
 
-# ── Create .env from template ─────────────────────────────────────────
-if [ ! -f "$INSTALL_DIR/.env" ]; then
-  cat > "$INSTALL_DIR/.env" <<- 'ENVEOF'
-# ─── Social Forge Configuration ─────────────────────────────────
-# Generated by install.sh — update with your platform credentials.
-DATABASE_URL=postgres://social_forge:social_forge@localhost:5432/social_forge
+# ── Create .env from template ─────────────────────────────────────────────────
+head "Configuration..."
+if [ ! -f "${INSTALL_DIR}/.env" ]; then
+    # Note: DATABASE_URL uses port 5433 — the host-mapped port from docker-compose.yml
+    # (Docker maps host:5433 → container:5432)
+    SERVE_FRONTEND_LINE=""
+    if [ "$SERVE_FRONTEND" = "false" ]; then
+        SERVE_FRONTEND_LINE="SERVE_FRONTEND=false"
+    fi
 
-# APP_URL is your public-facing URL (used for OAuth redirects).
-# Meta platforms (Instagram, Threads) REQUIRE HTTPS.
+    cat > "${INSTALL_DIR}/.env" <<ENVEOF
+# ─── Social Forge Configuration ────────────────────────────────────────────
+# Generated by install.sh on $(date -u +"%Y-%m-%dT%H:%M:%SZ")
+# Edit this file to add your platform API credentials.
+
+# ── Database ─────────────────────────────────────────────────────────────────
+# Port 5433 = host-side Docker port mapping (container runs on 5432 internally)
+DATABASE_URL=postgres://social_forge:social_forge@localhost:5433/social_forge
+
+# ── Server ───────────────────────────────────────────────────────────────────
+# Your public-facing URL. Used for OAuth callback URIs.
+# Meta platforms (Instagram, Threads) REQUIRE https://.
+# The server auto-generates a self-signed TLS cert on first start.
 APP_URL=https://localhost:6543
 
-# JWT secret — change this to a random 64-hex string
+# Optionally set a strong secret (auto-generated in dev if missing)
 # JWT_SECRET=
 
-# Security: 64 hex chars — encrypts OAuth tokens at rest
+# 64 hex chars — encrypts OAuth tokens at rest (optional but recommended)
 # TOKEN_ENCRYPTION_KEY=
 
-# ── PostgreSQL (Docker) ────────────────────────────────────────
-# If you use the provided docker-compose.yml, these are the defaults:
-# POSTGRES_USER=social_forge
-# POSTGRES_PASSWORD=social_forge
-# POSTGRES_DB=social_forge
+# ── Frontend (embedded web UI) ────────────────────────────────────────────────
+# Set to false to run in API-only mode (no web dashboard). Saves ~5 MB memory.
+${SERVE_FRONTEND_LINE:-# SERVE_FRONTEND=true}
 
-# ── Platform Credentials ────────────────────────────────────────
-# Uncomment and add your API keys / tokens as needed.
-# See https://github.com/ishan-parihar/social-forge for full docs.
+# ── Platform Credentials ─────────────────────────────────────────────────────
+# Uncomment and fill in as needed. See README for full docs.
+
+# X / Twitter (cookie auth recommended — enables full GraphQL API)
+# X_CT0=
+# X_CLIENT_ID=
+
+# Reddit (cookie auth recommended — enables voting, moderation)
+# REDDIT_CLIENT_ID=
+# REDDIT_USERNAME=
+
+# LinkedIn
+# LINKEDIN_CLIENT_ID=
+
+# Facebook / Instagram / Threads (Meta)
+# FACEBOOK_CLIENT_ID=
+# INSTAGRAM_APP_ID=
+# THREADS_APP_ID=
+
+# YouTube / Google
+# YOUTUBE_CLIENT_ID=
+
+# TikTok
+# TIKTOK_CLIENT_ID=
+
+# Pinterest
+# PINTEREST_CLIENT_ID=
+
+# Discord
+# DISCORD_CLIENT_ID=
+
+# Slack
+# SLACK_CLIENT_ID=
+
+# Telegram (Bot — comma-separated tokens for multi-bot)
+# TELEGRAM_BOT_TOKENS=
+
+# Telegram (User client — Grammers MTProto)
+# TELEGRAM_API_ID=
+# TELEGRAM_API_HASH=
+# TELEGRAM_SESSION_DIR=./data/telegram
+
+# WhatsApp Web
+# WHATSAPP_STORE_DIR=./data/whatsapp
+
+# Bluesky
+# BLUESKY_HANDLE=
+# BLUESKY_APP_PASSWORD=
+
+# Mastodon
+# MASTODON_CLIENT_ID=
+# MASTODON_INSTANCE_URL=
+
+# Medium / Dev.to / Hashnode / GitHub (API key providers)
+# MEDIUM_ACCESS_TOKEN=
+# DEVTO_API_KEY=
+# HASHNODE_API_KEY=
+# GITHUB_TOKEN=
 ENVEOF
-  log "Created .env at $INSTALL_DIR/.env (edit with your credentials)"
+    log "Created: ${INSTALL_DIR}/.env"
+    warn "Edit ${INSTALL_DIR}/.env with your platform credentials before starting"
 else
-  warn ".env already exists at $INSTALL_DIR/.env — skipping"
+    warn "Skipped .env — already exists at ${INSTALL_DIR}/.env"
 fi
 
-# ── Download docker-compose.yml and migrations ────────────────────────
-info "Fetching supporting files..."
-BASE="https://raw.githubusercontent.com/$REPO/main"
-
-# docker-compose
-if [ ! -f "$INSTALL_DIR/docker-compose.yml" ]; then
-  curl -fsSL -o "$INSTALL_DIR/docker-compose.yml" "$BASE/docker-compose.yml" 2>/dev/null && \
-    log "Downloaded docker-compose.yml" || warn "Failed to download docker-compose.yml"
+# ── Download docker-compose.yml ───────────────────────────────────────────────
+if [ ! -f "${INSTALL_DIR}/docker-compose.yml" ]; then
+    curl -fsSL -o "${INSTALL_DIR}/docker-compose.yml" \
+        "${REPO_RAW}/docker-compose.yml" 2>/dev/null && \
+        log "Downloaded docker-compose.yml" || \
+        warn "Failed to download docker-compose.yml — download it manually from https://github.com/${REPO}"
 fi
 
-# Migrations
-MIGRATIONS=$(curl -fsSL "$BASE/migrations/" 2>/dev/null | grep -oP 'href="\K\d+[^"]*\.sql' | head -20 || echo "")
-if [ -n "$MIGRATIONS" ]; then
-  for m in $MIGRATIONS; do
-    curl -fsSL -o "$INSTALL_DIR/migrations/$m" "$BASE/migrations/$m" 2>/dev/null || true
-  done
-  log "Downloaded migration files"
-fi
-
-# Startup script (Linux)
+# ── Download startup script ───────────────────────────────────────────────────
 if [ "$OS" = "linux" ]; then
-  curl -fsSL -o "$INSTALL_DIR/social-forge-start.sh" "$BASE/scripts/social-forge-start.sh" 2>/dev/null && \
-    chmod +x "$INSTALL_DIR/social-forge-start.sh" && \
-    log "Downloaded social-forge-start.sh" || warn "Failed to download startup script"
+    curl -fsSL -o "${INSTALL_DIR}/social-forge-start.sh" \
+        "${SCRIPTS_RAW}/social-forge-start.sh" 2>/dev/null && \
+        chmod +x "${INSTALL_DIR}/social-forge-start.sh" && \
+        log "Downloaded social-forge-start.sh" || \
+        warn "Failed to download start script"
 fi
 
-# ── Install AI Agent Skill ────────────────────────────────────────────
-if [ "$SKIP_SKILL" != "true" ]; then
-  SKILL_DIR="$HOME/.agents/skills/social-forge-agent"
-  mkdir -p "$SKILL_DIR/references"
-
-  curl -fsSL -o "$SKILL_DIR/SKILL.md" "$BASE/skills/social-forge-agent/SKILL.md" 2>/dev/null && \
-    log "Installed AI Agent skill to $SKILL_DIR" || \
-    warn "Failed to download skill SKILL.md"
-
-  for ref in references/providers.md; do
-    curl -fsSL -o "$SKILL_DIR/$ref" "$BASE/skills/social-forge-agent/$ref" 2>/dev/null || true
-  done
-fi
-
-# ── Install systemd service (Linux) ───────────────────────────────────
+# ── Install systemd service (Linux only) ──────────────────────────────────────
 if [ "$OS" = "linux" ] && [ "$SKIP_SERVICE" != "true" ]; then
-  SERVICE_FILE="/etc/systemd/system/social-forge.service"
+    head "Installing systemd service..."
 
-  if [ -f "$SERVICE_FILE" ]; then
-    warn "systemd service already exists at $SERVICE_FILE — skipping"
-  else
-    # Download and install service file + startup script
-    $SUDO curl -fsSL -o "$SERVICE_FILE" "$BASE/scripts/social-forge.service" 2>/dev/null && {
-      # Fix paths in startup script to point to INSTALL_DIR
-      $SUDO sed -i "s|APP_DIR=\"/home/ishanp/Documents/GitHub/MY-PROJECTS/MCP-AND-CLIS/social-forge\"|APP_DIR=\"$INSTALL_DIR\"|" \
-        "$INSTALL_DIR/social-forge-start.sh" 2>/dev/null || true
-      $SUDO sed -i "s|User=ishanp|User=$(whoami)|" "$SERVICE_FILE" 2>/dev/null || true
-      $SUDO sed -i "s|Group=ishanp|Group=$(whoami)|" "$SERVICE_FILE" 2>/dev/null || true
+    SERVICE_SRC="${SCRIPTS_RAW}/social-forge.service"
+    SERVICE_DST="/etc/systemd/system/${APP_NAME}.service"
+    START_DST="/usr/local/bin/social-forge-start.sh"
 
-      # Fix ExecStart path
-      $SUDO sed -i "s|ExecStart=/usr/local/bin/social-forge-start.sh|ExecStart=$INSTALL_DIR/social-forge-start.sh|" \
-        "$SERVICE_FILE" 2>/dev/null || true
+    # Install the startup script to /usr/local/bin
+    if [ -f "${INSTALL_DIR}/social-forge-start.sh" ]; then
+        $SUDO install -m 755 "${INSTALL_DIR}/social-forge-start.sh" "$START_DST" && \
+            log "Installed start script to ${START_DST}"
+    fi
 
-      $SUDO systemctl daemon-reload 2>/dev/null || true
+    # Download the service template
+    TMP_SVC="$(mktemp)"
+    trap 'rm -f "${TMP_BIN}" "${TMP_SVC}"' EXIT
+    curl -fsSL -o "$TMP_SVC" "$SERVICE_SRC" 2>/dev/null || {
+        warn "Failed to download service template — skipping systemd setup"
+        TMP_SVC=""
+    }
 
-      log "systemd service installed at $SERVICE_FILE"
-      echo ""
-      echo "  To enable and start:"
-      echo "    sudo systemctl enable social-forge --now"
-      echo ""
-      echo "  To view logs:"
-      echo "    sudo journalctl -u social-forge -f"
-    } || warn "Failed to install systemd service"
-  fi
+    if [ -n "$TMP_SVC" ] && [ -s "$TMP_SVC" ]; then
+        # Fill in template placeholders
+        sed -i \
+            -e "s|%%USER%%|${CURRENT_USER}|g" \
+            -e "s|%%GROUP%%|${CURRENT_USER}|g" \
+            -e "s|%%INSTALL_DIR%%|${INSTALL_DIR}|g" \
+            "$TMP_SVC"
+
+        if [ -f "$SERVICE_DST" ]; then
+            warn "Service already exists at ${SERVICE_DST} — backing up and replacing"
+            $SUDO cp "$SERVICE_DST" "${SERVICE_DST}.bak.$(date +%s)"
+        fi
+
+        $SUDO install -m 644 "$TMP_SVC" "$SERVICE_DST"
+        $SUDO systemctl daemon-reload 2>/dev/null || true
+        log "Service installed: ${SERVICE_DST}"
+
+        echo ""
+        echo -e "  ${CYAN}To enable and start the service:${NC}"
+        echo "    sudo systemctl enable ${APP_NAME} --now"
+        echo ""
+        echo -e "  ${CYAN}To view logs:${NC}"
+        echo "    sudo journalctl -u ${APP_NAME} -f"
+    fi
 fi
 
-# ── Done ──────────────────────────────────────────────────────────────
+# ── Install AI Agent skill ─────────────────────────────────────────────────────
+if [ "$SKIP_SKILL" != "true" ]; then
+    head "Installing AI Agent skill..."
+    SKILL_DIR="${HOME}/.agents/skills/social-forge-agent"
+    mkdir -p "${SKILL_DIR}/references"
+
+    SKILL_OK=false
+    curl -fsSL -o "${SKILL_DIR}/SKILL.md" \
+        "${REPO_RAW}/skills/social-forge-agent/SKILL.md" 2>/dev/null && SKILL_OK=true
+    curl -fsSL -o "${SKILL_DIR}/references/providers.md" \
+        "${REPO_RAW}/skills/social-forge-agent/references/providers.md" 2>/dev/null || true
+
+    $SKILL_OK && log "AI skill installed: ${SKILL_DIR}" || \
+        warn "Failed to download AI agent skill (non-critical)"
+fi
+
+# ── Done ──────────────────────────────────────────────────────────────────────
 echo ""
-echo -e "  ${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "  ${GREEN}  Social Forge installed successfully!${NC}"
-echo -e "  ${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "  ${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "  ${GREEN}  ✓  Social Forge ${VERSION} installed!${NC}"
+echo -e "  ${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
-echo "  Binary:       $BIN_DIR/$APP_NAME"
-echo "  Config:       $INSTALL_DIR/.env"
-echo "  Data dir:     $INSTALL_DIR/data/"
-echo "  Version:      $VERSION"
+echo "  Binary:     ${BIN_DIR}/${APP_NAME}"
+echo "  Config:     ${INSTALL_DIR}/.env"
+echo "  Data dir:   ${INSTALL_DIR}/data/"
 echo ""
-echo "  Quick start:"
+echo -e "  ${BOLD}Next steps:${NC}"
 echo ""
-echo "  1. Edit $INSTALL_DIR/.env with your platform credentials"
-echo "  2. Start PostgreSQL: cd $INSTALL_DIR && docker compose up -d postgres"
-echo "  3. Run the server:  $BIN_DIR/$APP_NAME serve"
+echo "  1. Edit your config:"
+echo "       nano ${INSTALL_DIR}/.env"
 echo ""
-echo "  The server auto-applies migrations on startup, generates a"
-echo "  self-signed TLS cert (when APP_URL uses https://), and"
-echo "  listens on the port configured in APP_URL."
+echo "  2. Start PostgreSQL (Docker):"
+echo "       cd ${INSTALL_DIR} && docker compose up -d postgres"
 echo ""
-echo "  Need help?  $BIN_DIR/$APP_NAME --help"
-echo "  Docs:       https://github.com/$REPO"
+if [ "$OS" = "linux" ] && [ "$SKIP_SERVICE" != "true" ]; then
+  echo "  3. Start the service:"
+  echo "       sudo systemctl enable ${APP_NAME} --now"
+  echo ""
+  echo "  4. Open the dashboard:"
+  echo "       https://localhost:6543"
+else
+  echo "  3. Start the server:"
+  echo "       ${BIN_DIR}/${APP_NAME} serve"
+  echo ""
+  echo "  4. Open the dashboard:"
+  echo "       https://localhost:6543"
+fi
+echo ""
+echo "  Docs: https://github.com/${REPO}"
+echo ""

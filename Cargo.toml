@@ -131,3 +131,7 @@ urlencoding = "2"
 
 # RSS feed parsing
 feed-rs = "2.1"
+
+# Embed frontend/build directory into the binary at compile time
+# When frontend/build/ doesn't exist, rust-embed produces an empty set (no panic).
+rust-embed = { version = "8", features = ["include-exclude"] }

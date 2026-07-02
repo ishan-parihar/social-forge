@@ -13,9 +13,54 @@ env:
   SQLX_OFFLINE: "true"
 
 jobs:
+  # ── Step 1: Build frontend once (all targets share the same JS build) ──────
+  build-frontend:
+    name: Build frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        run: echo "store=$(pnpm store path)" >> $GITHUB_OUTPUT
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.store }}
+          key: pnpm-${{ hashFiles('frontend/pnpm-lock.yaml') }}
+          restore-keys: pnpm-
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Build frontend (SvelteKit static)
+        working-directory: frontend
+        run: pnpm build
+
+      - name: Upload frontend build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build
+          path: frontend/build/
+          retention-days: 1
+
+  # ── Step 2: Build Rust binary per target (frontend embedded via rust-embed) ─
   build:
     name: build-${{ matrix.target }}
     runs-on: ${{ matrix.os }}
+    needs: build-frontend
     strategy:
       fail-fast: false
       matrix:
@@ -36,6 +81,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Restore the frontend build so rust-embed picks it up at compile time
+      - name: Download frontend build
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-build
+          path: frontend/build/
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
@@ -44,27 +96,35 @@ jobs:
         with:
           key: ${{ matrix.target }}
 
-      - name: Install musl tools (Linux)
-        if: contains(matrix.target, 'musl')
+      - name: Install musl tools (Linux x64)
+        if: matrix.target == 'x86_64-unknown-linux-musl'
         run: |
-          sudo apt-get update
+          sudo apt-get update -qq
           sudo apt-get install -y musl-tools
-          if [[ "${{ matrix.target }}" == "aarch64"* ]]; then
-            sudo apt-get install -y gcc-aarch64-linux-gnu
-            echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
-          fi
+
+      - name: Install musl tools (Linux arm64)
+        if: matrix.target == 'aarch64-unknown-linux-musl'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y musl-tools gcc-aarch64-linux-gnu
+          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
 
       - name: Build
         run: cargo build --release --target ${{ matrix.target }}
 
-      - name: Strip binary
+      - name: Strip binary (Linux)
+        if: contains(matrix.target, 'linux')
         run: |
           BIN="target/${{ matrix.target }}/release/social-forge"
-          if [[ "${{ matrix.target }}" == "aarch64-unknown-linux-musl" ]]; then
+          if [[ "${{ matrix.target }}" == "aarch64"* ]]; then
             aarch64-linux-gnu-strip "$BIN" || true
           else
             strip "$BIN" || true
           fi
+
+      - name: Strip binary (macOS)
+        if: contains(matrix.target, 'darwin')
+        run: strip "target/${{ matrix.target }}/release/social-forge" || true
 
       - name: Package
         run: |

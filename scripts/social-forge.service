@@ -1,19 +1,25 @@
 [Unit]
 Description=Social-Forge API Server
 Documentation=https://github.com/ishan-parihar/social-forge
-Requires=docker.service
+# Require Docker if installed; soft-dep so it still works without Docker
+Wants=docker.service network-online.target
 After=docker.service network-online.target
-Wants=network-online.target
 
 [Service]
 Type=simple
-User=ishanp
-Group=ishanp
+# User/Group/Environment are written dynamically by install.sh — do not edit here
+User=%%USER%%
+Group=%%GROUP%%
+Environment=SOCIAL_FORGE_DIR=%%INSTALL_DIR%%
 ExecStart=/usr/local/bin/social-forge-start.sh
+WorkingDirectory=%%INSTALL_DIR%%
 Restart=on-failure
 RestartSec=10s
-TimeoutStartSec=300
+TimeoutStartSec=120
+# Allow enough file descriptors for many concurrent connections
 LimitNOFILE=65536
+# Prevent core dumps leaking secrets
+LimitCORE=0
 
 [Install]
 WantedBy=multi-user.target
