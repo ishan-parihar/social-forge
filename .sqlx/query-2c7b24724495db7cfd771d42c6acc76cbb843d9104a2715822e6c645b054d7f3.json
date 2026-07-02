@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE automation_rules\n           SET name = COALESCE($3, name),\n               trigger_filter = COALESCE($4, trigger_filter),\n               response_template = COALESCE($5, response_template),\n               response_type = COALESCE($6, response_type),\n               ai_model = COALESCE($7, ai_model),\n               is_active = COALESCE($8, is_active),\n               cooldown_minutes = COALESCE($9, cooldown_minutes),\n               max_responses_per_hour = COALESCE($10, max_responses_per_hour),\n               updated_at = NOW()\n           WHERE id = $1 AND user_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Jsonb",
+        "Text",
+        "Text",
+        "Text",
+        "Bool",
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2c7b24724495db7cfd771d42c6acc76cbb843d9104a2715822e6c645b054d7f3"
+}
