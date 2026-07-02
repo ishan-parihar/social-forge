@@ -303,6 +303,7 @@ fn not_found() -> Response<Body> {
         .status(StatusCode::NOT_FOUND)
         .body(Body::from("Not found"))
         .unwrap()
+}
 
 /// Health check endpoint
 async fn health_check() -> axum::Json<serde_json::Value> {
