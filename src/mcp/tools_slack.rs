@@ -63,10 +63,7 @@ async fn find_slack_token(
             "Slack not connected. Connect Slack first via integrations_connect.".to_string()
         })?;
 
-    let __tok = integration.access_token.clone();
-    let __tok = state.token_key.as_ref()
-        .and_then(|k| crate::crypto::decrypt_string(&__tok, k).ok())
-        .unwrap_or(__tok);
+    let __tok = crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
     Ok(__tok)
 }
 

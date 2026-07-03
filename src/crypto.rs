@@ -66,6 +66,22 @@ pub fn decrypt_string(encrypted_hex: &str, key: &[u8; 32]) -> Result<String, Str
     String::from_utf8(plaintext).map_err(|e| format!("Decrypted data is not valid UTF-8: {e}"))
 }
 
+/// Maybe-decrypt an integration access token. If `key` is `Some`,
+/// attempts decryption and falls back to the raw value on failure
+/// (which usually means the token was stored before encryption was
+/// enabled). If `key` is `None`, returns the raw value unchanged.
+///
+/// This is the single source of truth for the "decrypt-if-encrypted"
+/// pattern used by ~30 MCP tools, the REST API analytics handlers,
+/// and the scheduler. Use this instead of inlining the
+/// `state.token_key.as_ref().and_then(...).unwrap_or(...)` chain.
+pub fn maybe_decrypt_token(token: &str, key: Option<&[u8; 32]>) -> String {
+    match key {
+        Some(k) => decrypt_string(token, k).unwrap_or_else(|_| token.to_string()),
+        None => token.to_string(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

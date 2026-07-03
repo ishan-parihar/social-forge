@@ -8,7 +8,6 @@ use sqlx::FromRow;
 use uuid::Uuid;
 
 use crate::api::AppState;
-use crate::auth::jwt;
 
 // ── Input Types ─────────────────────────────────────────────
 
@@ -86,10 +85,11 @@ struct WebhookDeliveryRow {
 
 // ── Helpers ──────────────────────────────────────────────────
 
-fn resolve_user(token: &str, state: &AppState) -> Result<Uuid, String> {
-    let claims = jwt::validate_token(token, &state.config.jwt_secret)
-        .map_err(|e| format!("Invalid token: {e}"))?;
-    Uuid::parse_str(&claims.sub).map_err(|_| "Invalid user ID in token".to_string())
+/// Single-user mode — every webhook operation is owned by
+/// `DEFAULT_USER_ID`. The `token` field on input structs is now
+/// vestigial (kept for schema compatibility) and ignored.
+fn resolve_user(_token: &str, _state: &AppState) -> Result<Uuid, String> {
+    Ok(crate::auth::middleware::DEFAULT_USER_ID)
 }
 
 fn webhook_to_json(w: WebhookRow) -> serde_json::Value {

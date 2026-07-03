@@ -26,7 +26,12 @@ pub fn load_dotenv() {
 #[derive(Debug, Clone, Deserialize)]
 pub struct Config {
     pub database_url: String,
+    /// HMAC secret for signing session cookies AND OAuth state tokens.
+    /// If unset, derived from `app_password` at startup (see `Config::from_env`).
     pub jwt_secret: String,
+    /// Single password gate for the WebUI. If unset, a random one is
+    /// generated and persisted to `~/.social-forge/.env` on first run.
+    pub app_password: String,
     pub app_url: String,
     pub frontend_url: String,
 
@@ -91,7 +96,7 @@ pub struct Config {
     // GitHub (PAT-based)
     pub github_token: Option<String>,
 
-    // Twitch
+    // Twitch (provider deleted — field kept for Config-struct compat)
     pub twitch_client_id: Option<String>,
     pub twitch_client_secret: Option<String>,
 
@@ -103,11 +108,11 @@ pub struct Config {
     pub whop_client_id: Option<String>,
     pub whop_client_secret: Option<String>,
 
-    // MeWe
+    // MeWe (provider deleted — field kept for Config-struct compat)
     pub mewe_client_id: Option<String>,
     pub mewe_client_secret: Option<String>,
 
-    // Moltbook
+    // Moltbook (provider deleted — field kept for Config-struct compat)
     pub moltbook_client_id: Option<String>,
     pub moltbook_client_secret: Option<String>,
 
@@ -118,7 +123,7 @@ pub struct Config {
     // Neynar (Farcaster) API key
     pub neynar_api_key: Option<String>,
 
-    // Nostr private key for event signing
+    // Nostr (provider deleted — field kept for Config-struct compat)
     pub nostr_private_key: Option<String>,
 
     // Token encryption at rest
@@ -141,9 +146,61 @@ impl Config {
     pub fn from_env() -> anyhow::Result<Self> {
         let app_url = opt("APP_URL").unwrap_or_else(|| "https://localhost:6543".into());
         let frontend_url = opt("FRONTEND_URL").unwrap_or_else(|| app_url.clone());
+
+        // ── Single-user password gate ────────────────────────────
+        // Priority: APP_PASSWORD env var > persisted ~/.social-forge/.env
+        // > generate-and-persist a fresh random one (first run).
+        let app_password = match opt("APP_PASSWORD") {
+            Some(p) if !p.is_empty() => p,
+            _ => {
+                // Try to load a previously-persisted password.
+                let user_env = config_dir().join(".env");
+                let persisted = if user_env.exists() {
+                    std::fs::read_to_string(&user_env)
+                        .ok()
+                        .and_then(|s| {
+                            s.lines().find_map(|l| {
+                                l.strip_prefix("APP_PASSWORD=").map(|v| v.trim().to_string())
+                            })
+                        })
+                        .filter(|s| !s.is_empty())
+                } else {
+                    None
+                };
+
+                if let Some(p) = persisted {
+                    p
+                } else {
+                    let generated = generate_random_password(32);
+                    persist_app_password(&generated);
+                    tracing::warn!(
+                        "┌──────────────────────────────────────────────────────────┐"
+                    );
+                    tracing::warn!("│ No APP_PASSWORD set. Generated a random one and persisted │");
+                    tracing::warn!("│ it to ~/.social-forge/.env. To change it, edit that file  │");
+                    tracing::warn!("│ or set APP_PASSWORD in your environment.                  │");
+                    tracing::warn!("│                                                           │");
+                    tracing::warn!("│ Generated password: {:<37}│", generated);
+                    tracing::warn!(
+                        "└──────────────────────────────────────────────────────────┘"
+                    );
+                    generated
+                }
+            }
+        };
+
+        // Derive the session/JWT secret from the password if not explicitly set.
+        // This way one env var (`APP_PASSWORD`) is sufficient to secure both
+        // the cookie signing and the OAuth state tokens.
+        let jwt_secret = match opt("JWT_SECRET") {
+            Some(s) if !s.is_empty() => s,
+            _ => format!("sf-session-{}", app_password),
+        };
+
         Ok(Self {
             database_url: env("DATABASE_URL")?,
-            jwt_secret: opt("JWT_SECRET").unwrap_or_else(|| "dev-secret-change-in-production".into()),
+            jwt_secret,
+            app_password,
             app_url,
             frontend_url,
             x_client_id: opt("X_CLIENT_ID"),
@@ -319,4 +376,41 @@ fn env(key: &str) -> anyhow::Result<String> {
 
 fn opt(key: &str) -> Option<String> {
     std::env::var(key).ok().filter(|s| !s.is_empty())
+}
+
+/// Generate a random URL-safe password of the given length.
+fn generate_random_password(len: usize) -> String {
+    use rand::Rng;
+    const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ\
+                             abcdefghijklmnopqrstuvwxyz\
+                             0123456789";
+    let mut rng = rand::thread_rng();
+    (0..len)
+        .map(|_| {
+            let idx = rng.gen_range(0..CHARSET.len());
+            CHARSET[idx] as char
+        })
+        .collect()
+}
+
+/// Persist `APP_PASSWORD=<pw>` to `~/.social-forge/.env`, creating
+/// the directory if needed. Idempotent — replaces any existing line.
+fn persist_app_password(password: &str) {
+    let dir = config_dir();
+    if let Err(e) = std::fs::create_dir_all(&dir) {
+        tracing::warn!("Failed to create {}: {e}", dir.display());
+        return;
+    }
+    let env_path = dir.join(".env");
+    let existing = std::fs::read_to_string(&env_path).unwrap_or_default();
+    let mut lines: Vec<String> = existing
+        .lines()
+        .filter(|l| !l.starts_with("APP_PASSWORD="))
+        .map(|l| l.to_string())
+        .collect();
+    lines.push(format!("APP_PASSWORD={password}"));
+    let body = lines.join("\n") + "\n";
+    if let Err(e) = std::fs::write(&env_path, body) {
+        tracing::warn!("Failed to write {}: {e}", env_path.display());
+    }
 }

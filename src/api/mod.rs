@@ -17,7 +17,7 @@ use tower_http::trace::TraceLayer;
 #[include = "*"]
 struct FrontendAssets;
 
-use crate::auth::middleware::auth_middleware;
+use crate::auth::middleware::{auth_middleware, AuthState};
 use crate::config::Config;
 use crate::db::PgPool;
 use crate::realtime::Broadcaster;
@@ -87,7 +87,6 @@ pub fn build_router(state: AppState) -> Router {
     // Public routes — no auth required
     let public_routes = Router::new()
         .route("/health", axum::routing::get(health_check))
-        .route("/api/auth/register", axum::routing::post(auth::register))
         .route("/api/auth/login", axum::routing::post(auth::login))
         .route("/api/auth/callback", axum::routing::get(integrations::oauth_callback))
         .route("/api/auth/callback/{provider}", axum::routing::get(integrations::oauth_callback))
@@ -109,6 +108,7 @@ pub fn build_router(state: AppState) -> Router {
     // Protected routes — auth required
     let protected_routes = Router::new()
         .route("/api/auth/me", axum::routing::get(auth::me))
+        .route("/api/auth/logout", axum::routing::post(auth::logout))
         .route("/api/posts", axum::routing::get(posts::list).post(posts::create))
         .route("/api/posts/thread", axum::routing::post(posts::create_thread))
         .route("/api/providers", axum::routing::get(integrations::list_providers))
@@ -200,8 +200,13 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/automation/rules", axum::routing::get(automation::list_rules).post(automation::create_rule))
         .route("/api/automation/rules/{id}", axum::routing::put(automation::update_rule).delete(automation::delete_rule))
         .route("/api/automation/rules/{id}/logs", axum::routing::get(automation::get_logs))
-        // Auth middleware: injects DEFAULT_USER_ID for single-user mode
-        .layer(middleware::from_fn(auth_middleware));
+        // Auth middleware: validates `sf_session` cookie against the
+        // JWT secret derived from `APP_PASSWORD`. Injects
+        // `AuthenticatedUser { user_id: DEFAULT_USER_ID }` on success.
+        .layer(middleware::from_fn_with_state(
+            AuthState { session_secret: state.config.jwt_secret.clone() },
+            auth_middleware,
+        ));
 
     // Global middleware stack
     let app = Router::new()

@@ -10,19 +10,15 @@ use rmcp::{
     handler::server::wrapper::Parameters,
     schemars::JsonSchema,
     tool, tool_router,
+    transport::stdio,
     Json,
 };
-use crate::mcp::schema_optimizer::lean_stdio;
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
 use crate::api::AppState;
-use crate::auth::jwt;
-use crate::db::queries;
 
 
 pub(crate) mod auth;
-pub mod schema_optimizer;
 pub mod tools_setup;
 pub mod tools_analytics;
 pub mod tools_bluesky;
@@ -61,37 +57,6 @@ pub mod tools_youtube;
 pub mod tools_x;
 pub mod tools_github;
 pub mod tools_google;
-
-// ══════════════════════════════════════════════════════════════
-// AUTH TOOLS
-// ══════════════════════════════════════════════════════════════
-
-#[derive(Debug, Serialize, Deserialize, JsonSchema)]
-pub struct LoginInput {
-    pub email: String,
-    pub password: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, JsonSchema)]
-pub struct LoginOutput {
-    pub token: String,
-    pub user_id: String,
-    pub name: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, JsonSchema)]
-pub struct RegisterInput {
-    pub email: String,
-    pub password: String,
-    pub name: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, JsonSchema)]
-pub struct RegisterOutput {
-    pub token: String,
-    pub user_id: String,
-    pub name: String,
-}
 
 // ══════════════════════════════════════════════════════════════
 // SHARED TYPES
@@ -147,97 +112,21 @@ impl SocialForgeMcpServer {
     }
 
     // ── Auth Tools ──────────────────────────────────────────
+    //
+    // Social Forge is a single-user local-deployment app — there is
+    // no register/login flow exposed over MCP. The WebUI is gated by
+    // a single password (`APP_PASSWORD` env var); MCP stdio is local
+    // (shell access already implies trust) and bypasses the gate.
+    // This single tool lets an AI agent confirm the server is up
+    // and identify the local user.
 
-    #[tool(description = "Register a new account. Returns JWT")]
-    async fn auth_register(
-        &self,
-        params: Parameters<RegisterInput>,
-    ) -> Result<Json<RegisterOutput>, String> {
-        let input = params.0;
-        // Rate limit by email
-        self.state.rate_limiter.check(&input.email).await.map_err(|e| format!("Rate limited: {e}"))?;
-
-        if input.email.is_empty() || !input.email.contains('@') {
-            return Err("Invalid email".into());
-        }
-        if input.password.len() < 6 {
-            return Err("Password must be at least 6 characters".into());
-        }
-
-        if queries::get_user_by_email(&self.state.db, &input.email)
-            .await
-            .map_err(|e| e.to_string())?
-            .is_some()
-        {
-            return Err("Email already registered".into());
-        }
-
-        let hash = jwt::hash_password(&input.password).map_err(|e| e.to_string())?;
-        let user = queries::create_user(&self.state.db, &input.email, &hash, &input.name)
-            .await
-            .map_err(|e| e.to_string())?;
-
-        let token = jwt::create_token(user.id, &self.state.config.jwt_secret)
-            .map_err(|e| e.to_string())?;
-
-        Ok(Json(RegisterOutput {
-            token,
-            user_id: user.id.to_string(),
-            name: user.name,
-        }))
-    }
-
-    #[tool(description = "Login with email and password.")]
-    async fn auth_login(
-        &self,
-        params: Parameters<LoginInput>,
-    ) -> Result<Json<LoginOutput>, String> {
-        let input = params.0;
-        // Rate limit by email
-        self.state.rate_limiter.check(&input.email).await.map_err(|e| format!("Rate limited: {e}"))?;
-
-        let user = queries::get_user_by_email(&self.state.db, &input.email)
-            .await
-            .map_err(|e| e.to_string())?
-            .ok_or_else(|| "Invalid email or password".to_string())?;
-
-        let valid = jwt::verify_password(&input.password, &user.password)
-            .map_err(|e| e.to_string())?;
-        if !valid {
-            return Err("Invalid email or password".into());
-        }
-
-        let token = jwt::create_token(user.id, &self.state.config.jwt_secret)
-            .map_err(|e| e.to_string())?;
-
-        Ok(Json(LoginOutput {
-            token,
-            user_id: user.id.to_string(),
-            name: user.name,
-        }))
-    }
-
-    #[tool(description = "Get user info from a JWT token")]
-    async fn auth_me(
-        &self,
-        params: Parameters<MeInput>,
-    ) -> Result<Json<MeOutput>, String> {
-        let claims = jwt::validate_token(&params.0.token, &self.state.config.jwt_secret)
-            .map_err(|e| format!("Invalid token: {e}"))?;
-
-        let user_id = Uuid::parse_str(&claims.sub)
-            .map_err(|_| "Invalid user ID in token".to_string())?;
-
-        let user = queries::get_user_by_id(&self.state.db, user_id)
-            .await
-            .map_err(|e| e.to_string())?
-            .ok_or_else(|| "User not found".to_string())?;
-
-        Ok(Json(MeOutput {
-            user_id: user.id.to_string(),
-            email: user.email,
-            name: user.name,
-        }))
+    #[tool(description = "Return the local user id. Single-user mode — no login required over MCP.")]
+    async fn auth_status(&self) -> Result<Json<serde_json::Value>, String> {
+        Ok(Json(serde_json::json!({
+            "user_id": crate::auth::middleware::DEFAULT_USER_ID.to_string(),
+            "mode": "single_user",
+            "note": "MCP runs locally over stdio; the WebUI is gated by APP_PASSWORD."
+        })))
     }
 
     // ── Calendar Tools ──────────────────────────────────────
@@ -2784,22 +2673,9 @@ impl SocialForgeMcpServer {
 /// Start the MCP server on stdio (for AI clients that spawn the binary)
 pub async fn run_mcp_stdio(state: AppState) -> anyhow::Result<()> {
     let server = SocialForgeMcpServer::new(state);
-    let service = server.serve(lean_stdio()).await?;
-    tracing::info!("MCP server started on stdio (schema-optimized)");
+    let service = server.serve(stdio()).await?;
+    tracing::info!("MCP server started on stdio");
     service.waiting().await?;
     Ok(())
 }
 
-// ── Helper Input Types ──────────────────────────────────────
-
-#[derive(Debug, Serialize, Deserialize, JsonSchema)]
-pub struct MeInput {
-    pub token: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, JsonSchema)]
-pub struct MeOutput {
-    pub user_id: String,
-    pub email: String,
-    pub name: String,
-}

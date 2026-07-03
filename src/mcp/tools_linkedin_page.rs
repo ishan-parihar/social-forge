@@ -4,30 +4,30 @@
 
 use rmcp::{Json, schemars::JsonSchema};
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
 use crate::api::AppState;
 use crate::social::linkedin_page::LinkedInPageProvider;
 use crate::social::SocialProvider;
 
 // ── Input Types ──────────────────────────────────────────────
+//
+// Note: no `user_id` field on any input. Single-user mode means
+// `resolve_first_user` returns `DEFAULT_USER_ID` for every call.
+// Letting callers supply a UUID was an auth-bypass bug.
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct LipListPagesInput {
-    pub user_id: Uuid,
     pub lip_id: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct LipGetPageInput {
-    pub user_id: Uuid,
     pub lip_id: String,
     pub page_id: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct LipGetPagePostsInput {
-    pub user_id: Uuid,
     pub lip_id: String,
     pub page_id: String,
     #[serde(default = "default_limit")]
@@ -40,7 +40,6 @@ fn default_limit() -> u32 {
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct LipCreateCommentInput {
-    pub user_id: Uuid,
     pub lip_id: String,
     pub post_urn: String,
     pub page_urn: String,
@@ -51,9 +50,9 @@ pub struct LipCreateCommentInput {
 
 async fn find_linkedin_page_token(
     state: &AppState,
-    user_id: Uuid,
     lip_id: &str,
 ) -> Result<String, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
     let integrations = crate::db::queries::list_integrations(&state.db, user_id)
         .await
         .map_err(|e| format!("DB error: {e}"))?;
@@ -68,16 +67,18 @@ async fn find_linkedin_page_token(
             )
         })?;
 
-    let __tok = integration.access_token.clone();
-    let __tok = state.token_key.as_ref()
-        .and_then(|k| crate::crypto::decrypt_string(&__tok, k).ok())
-        .unwrap_or(__tok);
-    Ok(__tok)
+    let tok = crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
+    Ok(tok)
 }
 
 fn create_provider(state: &AppState) -> LinkedInPageProvider {
     LinkedInPageProvider::new(&state.config)
 }
+
+/// LinkedIn REST API version header — keep this pinned to a real
+/// released version (NOT a future-dated one). LinkedIn rejects
+/// versions newer than the current month.
+const LINKEDIN_VERSION: &str = "202401";
 
 // ── Tool Implementations ─────────────────────────────────────
 
@@ -85,8 +86,7 @@ pub async fn handle_lip_list_pages(
     state: &AppState,
     input: &LipListPagesInput,
 ) -> Result<Json<serde_json::Value>, String> {
-    let user_id = super::tools_posts::resolve_first_user(state).await?;
-    let token = find_linkedin_page_token(state, user_id, &input.lip_id).await?;
+    let token = find_linkedin_page_token(state, &input.lip_id).await?;
     let provider = create_provider(state);
     let result = provider
         .pages(&token)
@@ -99,8 +99,7 @@ pub async fn handle_lip_get_page(
     state: &AppState,
     input: &LipGetPageInput,
 ) -> Result<Json<serde_json::Value>, String> {
-    let user_id = super::tools_posts::resolve_first_user(state).await?;
-    let token = find_linkedin_page_token(state, user_id, &input.lip_id).await?;
+    let token = find_linkedin_page_token(state, &input.lip_id).await?;
     let provider = create_provider(state);
     let result = provider
         .fetch_page_info(&token, &input.page_id)
@@ -113,8 +112,7 @@ pub async fn handle_lip_get_page_posts(
     state: &AppState,
     input: &LipGetPagePostsInput,
 ) -> Result<Json<serde_json::Value>, String> {
-    let user_id = super::tools_posts::resolve_first_user(state).await?;
-    let token = find_linkedin_page_token(state, user_id, &input.lip_id).await?;
+    let token = find_linkedin_page_token(state, &input.lip_id).await?;
     let provider = create_provider(state);
     let result = provider
         .get_page_posts(&token, &input.page_id, input.limit)
@@ -127,8 +125,7 @@ pub async fn handle_lip_create_comment(
     state: &AppState,
     input: &LipCreateCommentInput,
 ) -> Result<Json<serde_json::Value>, String> {
-    let user_id = super::tools_posts::resolve_first_user(state).await?;
-    let token = find_linkedin_page_token(state, user_id, &input.lip_id).await?;
+    let token = find_linkedin_page_token(state, &input.lip_id).await?;
     let provider = create_provider(state);
     let result = provider
         .create_comment(&token, &input.post_urn, &input.page_urn, &input.message)
@@ -141,7 +138,6 @@ pub async fn handle_lip_create_comment(
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct LipCreatePostInput {
-    pub user_id: Uuid,
     pub lip_id: String,
     pub text: String,
 }
@@ -153,7 +149,6 @@ pub struct LipCreatePostOutput {
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct LipGetAnalyticsInput {
-    pub user_id: Uuid,
     pub lip_id: String,
 }
 
@@ -164,14 +159,12 @@ pub struct LipGetAnalyticsOutput {
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct LipGetPostAnalyticsInput {
-    pub user_id: Uuid,
     pub lip_id: String,
     pub post_urn: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct LipGetFollowersInput {
-    pub user_id: Uuid,
     pub lip_id: String,
 }
 
@@ -182,21 +175,18 @@ pub struct LipGetFollowersOutput {
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct LipDeletePostInput {
-    pub user_id: Uuid,
     pub lip_id: String,
     pub post_urn: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct LipGetReactionsInput {
-    pub user_id: Uuid,
     pub lip_id: String,
     pub post_urn: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct LipGetSharesInput {
-    pub user_id: Uuid,
     pub lip_id: String,
     pub post_urn: String,
 }
@@ -205,7 +195,7 @@ pub async fn handle_lip_create_post(
     state: &AppState,
     input: &LipCreatePostInput,
 ) -> Result<Json<LipCreatePostOutput>, String> {
-    let token = find_linkedin_page_token(state, input.user_id, &input.lip_id).await?;
+    let token = find_linkedin_page_token(state, &input.lip_id).await?;
 
     let body = serde_json::json!({
         "author": format!("urn:li:organization:{}", input.lip_id),
@@ -219,7 +209,7 @@ pub async fn handle_lip_create_post(
         .post("https://api.linkedin.com/v2/rest/posts")
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Restli-Protocol-Version", "2.0.0")
-        .header("LinkedIn-Version", "202601")
+        .header("LinkedIn-Version", LINKEDIN_VERSION)
         .header("Content-Type", "application/json")
         .json(&body).send().await
         .map_err(|e| format!("LinkedIn post failed: {e}"))?;
@@ -239,7 +229,7 @@ pub async fn handle_lip_get_analytics(
     state: &AppState,
     input: &LipGetAnalyticsInput,
 ) -> Result<Json<LipGetAnalyticsOutput>, String> {
-    let token = find_linkedin_page_token(state, input.user_id, &input.lip_id).await?;
+    let token = find_linkedin_page_token(state, &input.lip_id).await?;
     let provider = create_provider(state);
     let data = provider.analytics(&token, &input.lip_id, 30).await
         .map_err(|e| format!("LinkedIn analytics failed: {e}"))?;
@@ -250,7 +240,7 @@ pub async fn handle_lip_get_post_analytics(
     state: &AppState,
     input: &LipGetPostAnalyticsInput,
 ) -> Result<Json<LipGetAnalyticsOutput>, String> {
-    let token = find_linkedin_page_token(state, input.user_id, &input.lip_id).await?;
+    let token = find_linkedin_page_token(state, &input.lip_id).await?;
     let provider = create_provider(state);
     let data = provider.post_analytics(&token, &input.post_urn).await
         .map_err(|e| format!("LinkedIn post analytics failed: {e}"))?;
@@ -261,7 +251,7 @@ pub async fn handle_lip_get_followers(
     state: &AppState,
     input: &LipGetFollowersInput,
 ) -> Result<Json<LipGetFollowersOutput>, String> {
-    let token = find_linkedin_page_token(state, input.user_id, &input.lip_id).await?;
+    let token = find_linkedin_page_token(state, &input.lip_id).await?;
     let org_urn = format!("urn:li:organization:{}", input.lip_id);
     let url = format!(
         "https://api.linkedin.com/rest/networkSizes/{org_urn}?edgeType=CompanyFollowedByMember"
@@ -269,7 +259,7 @@ pub async fn handle_lip_get_followers(
     let resp = reqwest::Client::new()
         .get(&url)
         .header("Authorization", format!("Bearer {token}"))
-        .header("LinkedIn-Version", "202601")
+        .header("LinkedIn-Version", LINKEDIN_VERSION)
         .header("X-Restli-Protocol-Version", "2.0.0")
         .send().await
         .map_err(|e| format!("LinkedIn followers failed: {e}"))?;
@@ -286,7 +276,7 @@ pub async fn handle_lip_delete_post(
     state: &AppState,
     input: &LipDeletePostInput,
 ) -> Result<Json<serde_json::Value>, String> {
-    let token = find_linkedin_page_token(state, input.user_id, &input.lip_id).await?;
+    let token = find_linkedin_page_token(state, &input.lip_id).await?;
     let url = format!(
         "https://api.linkedin.com/v2/rest/posts/{}",
         urlencoding::encode(&input.post_urn)
@@ -295,7 +285,7 @@ pub async fn handle_lip_delete_post(
         .delete(&url)
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Restli-Protocol-Version", "2.0.0")
-        .header("LinkedIn-Version", "202601")
+        .header("LinkedIn-Version", LINKEDIN_VERSION)
         .send().await
         .map_err(|e| format!("LinkedIn delete failed: {e}"))?;
 
@@ -312,7 +302,7 @@ pub async fn handle_lip_get_reactions(
     state: &AppState,
     input: &LipGetReactionsInput,
 ) -> Result<Json<serde_json::Value>, String> {
-    let token = find_linkedin_page_token(state, input.user_id, &input.lip_id).await?;
+    let token = find_linkedin_page_token(state, &input.lip_id).await?;
     let url = format!(
         "https://api.linkedin.com/v2/rest/socialActions/{}/likes",
         input.post_urn
@@ -321,7 +311,7 @@ pub async fn handle_lip_get_reactions(
         .get(&url)
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Restli-Protocol-Version", "2.0.0")
-        .header("LinkedIn-Version", "202601")
+        .header("LinkedIn-Version", LINKEDIN_VERSION)
         .send().await
         .map_err(|e| format!("LinkedIn get reactions failed: {e}"))?;
 
@@ -336,7 +326,7 @@ pub async fn handle_lip_get_shares(
     state: &AppState,
     input: &LipGetSharesInput,
 ) -> Result<Json<serde_json::Value>, String> {
-    let token = find_linkedin_page_token(state, input.user_id, &input.lip_id).await?;
+    let token = find_linkedin_page_token(state, &input.lip_id).await?;
     let url = format!(
         "https://api.linkedin.com/v2/rest/socialActions/{}/shares",
         input.post_urn
@@ -345,7 +335,7 @@ pub async fn handle_lip_get_shares(
         .get(&url)
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Restli-Protocol-Version", "2.0.0")
-        .header("LinkedIn-Version", "202601")
+        .header("LinkedIn-Version", LINKEDIN_VERSION)
         .send().await
         .map_err(|e| format!("LinkedIn get shares failed: {e}"))?;
 

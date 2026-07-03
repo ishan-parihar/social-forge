@@ -720,7 +720,7 @@ pub async fn import_cookies(
                                 let avatar = data
                                     .and_then(|d| d.get("profile_image_url"))
                                     .and_then(|s| s.as_str());
-                                let _ = crate::db::queries::create_integration(
+                                match crate::db::queries::create_integration(
                                     &state.db,
                                     user_id,
                                     "x",
@@ -735,15 +735,25 @@ pub async fn import_cookies(
                                     None,
                                     None,
                                 )
-                                .await;
-                                results.push(ImportResult {
-                                    provider: "x".into(),
-                                    status: "connected".into(),
-                                    name: Some(name),
-                                    source: Some(cookies.source),
-                                    error: None,
-                                    hint: None,
-                                });
+                                .await
+                                {
+                                    Ok(_) => results.push(ImportResult {
+                                        provider: "x".into(),
+                                        status: "connected".into(),
+                                        name: Some(name),
+                                        source: Some(cookies.source),
+                                        error: None,
+                                        hint: None,
+                                    }),
+                                    Err(e) => results.push(ImportResult {
+                                        provider: "x".into(),
+                                        status: "error".into(),
+                                        name: None,
+                                        source: Some(cookies.source),
+                                        error: Some(format!("Cookie import succeeded but DB write failed: {e}")),
+                                        hint: Some("Check database connectivity and try again.".into()),
+                                    }),
+                                }
                             }
                             Err(e) => {
                                 results.push(ImportResult {
@@ -807,7 +817,7 @@ pub async fn import_cookies(
                                     .as_str()
                                     .and_then(|s| s.split('?').next())
                                     .map(String::from);
-                                let _ = crate::db::queries::create_integration(
+                                match crate::db::queries::create_integration(
                                     &state.db,
                                     user_id,
                                     "reddit",
@@ -822,15 +832,25 @@ pub async fn import_cookies(
                                     None,
                                     None,
                                 )
-                                .await;
-                                results.push(ImportResult {
-                                    provider: "reddit".into(),
-                                    status: "connected".into(),
-                                    name: Some(name),
-                                    source: Some(cookies.source),
-                                    error: None,
-                                    hint: None,
-                                });
+                                .await
+                                {
+                                    Ok(_) => results.push(ImportResult {
+                                        provider: "reddit".into(),
+                                        status: "connected".into(),
+                                        name: Some(name),
+                                        source: Some(cookies.source),
+                                        error: None,
+                                        hint: None,
+                                    }),
+                                    Err(e) => results.push(ImportResult {
+                                        provider: "reddit".into(),
+                                        status: "error".into(),
+                                        name: None,
+                                        source: Some(cookies.source),
+                                        error: Some(format!("Cookie import succeeded but DB write failed: {e}")),
+                                        hint: Some("Check database connectivity and try again.".into()),
+                                    }),
+                                }
                             }
                             Err(e) => {
                                 results.push(ImportResult {

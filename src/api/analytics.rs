@@ -69,8 +69,11 @@ pub async fn get(
         .get(&query.provider)
         .ok_or_else(|| AppError::NotFound(format!("Provider '{}' not found", query.provider)))?;
 
+    // Decrypt token if encryption is enabled.
+    let tok = crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
+
     let analytics = provider
-        .analytics(&integration.access_token, &integration.internal_id, days)
+        .analytics(&tok, &integration.internal_id, days)
         .await
         .map_err(AppError::from)?;
 
@@ -144,8 +147,11 @@ pub async fn get_post(
             ))
         })?;
 
+    // Decrypt token if encryption is enabled.
+    let tok = crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
+
     let analytics = provider
-        .post_analytics(&integration.access_token, &platform_post_id)
+        .post_analytics(&tok, &platform_post_id)
         .await
         .map_err(AppError::from)?;
 

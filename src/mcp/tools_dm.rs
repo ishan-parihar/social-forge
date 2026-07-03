@@ -81,7 +81,7 @@ pub async fn send_dm(
     let provider = state.providers.get(&integration.provider_identifier)
         .ok_or_else(|| format!("Provider {} not found", integration.provider_identifier))?;
 
-    let token = decrypt_token(&integration.access_token);
+    let token = crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
 
     let post_content = crate::social::PostContent {
         content: input.content.clone(),
@@ -115,7 +115,7 @@ pub async fn list_dm_conversations(
     let provider = state.providers.get(&integration.provider_identifier)
         .ok_or_else(|| format!("Provider {} not found", integration.provider_identifier))?;
 
-    let token = decrypt_token(&integration.access_token);
+    let token = crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
     let limit = input.limit.unwrap_or(50);
 
     let conversations = provider.get_dm_conversations(&token, limit)
@@ -152,7 +152,7 @@ pub async fn get_dm_messages(
     let provider = state.providers.get(&integration.provider_identifier)
         .ok_or_else(|| format!("Provider {} not found", integration.provider_identifier))?;
 
-    let token = decrypt_token(&integration.access_token);
+    let token = crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
     let limit = input.limit.unwrap_or(50);
 
     let messages = provider.get_dm_messages(&token, &input.conversation_id, limit)
@@ -173,4 +173,4 @@ pub async fn get_dm_messages(
     Ok(Json(GetDmOutput { messages: msg_infos, total }))
 }
 
-use super::auth::{resolve_first_user, decrypt_token};
+use super::auth::resolve_first_user;

@@ -59,10 +59,7 @@ async fn find_bs_token(state: &AppState, user_id: Uuid) -> Result<String, String
             "Bluesky account not connected. Connect it via the onboarding page first.".to_string()
         })?;
 
-    let __tok = bs.access_token.clone();
-    let __tok = state.token_key.as_ref()
-        .and_then(|k| crate::crypto::decrypt_string(&__tok, k).ok())
-        .unwrap_or(__tok);
+    let __tok = crate::crypto::maybe_decrypt_token(&bs.access_token, state.token_key.as_ref());
     Ok(__tok)
 }
 

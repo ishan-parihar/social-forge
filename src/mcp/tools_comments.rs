@@ -65,7 +65,7 @@ pub async fn get_comments(
     let provider = state.providers.get(&integration.provider_identifier)
         .ok_or_else(|| format!("Provider {} not found", integration.provider_identifier))?;
 
-    let token = decrypt_token(&integration.access_token);
+    let token = crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
     let limit = input.limit.unwrap_or(50);
 
     let comments = provider.get_post_comments(&token, &input.post_id)
@@ -102,7 +102,7 @@ pub async fn reply_to_comment(
     let provider = state.providers.get(&integration.provider_identifier)
         .ok_or_else(|| format!("Provider {} not found", integration.provider_identifier))?;
 
-    let token = decrypt_token(&integration.access_token);
+    let token = crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
 
     let post_content = crate::social::PostContent {
         content: input.content.clone(),
@@ -136,7 +136,7 @@ pub async fn delete_comment(
     let provider = state.providers.get(&integration.provider_identifier)
         .ok_or_else(|| format!("Provider {} not found", integration.provider_identifier))?;
 
-    let token = decrypt_token(&integration.access_token);
+    let token = crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
 
     provider.delete_comment(&token, &input.comment_id)
         .await
@@ -148,4 +148,4 @@ pub async fn delete_comment(
     }))
 }
 
-use super::auth::{resolve_first_user, decrypt_token};
+use super::auth::resolve_first_user;

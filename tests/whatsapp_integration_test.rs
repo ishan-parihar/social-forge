@@ -2,7 +2,6 @@ use std::path::PathBuf;
 use std::fs;
 
 use social_forge::config::Config;
-use social_forge::services::whatsapp_daemon::WhatsAppDaemon;
 use social_forge::social::registry::ProviderRegistry;
 use social_forge::social::whatsapp::WhatsAppProvider;
 use social_forge::social::SocialProvider;
@@ -228,23 +227,14 @@ fn test_wa_meta_db_upsert() {
 }
 
 #[test]
-fn test_whatsapp_daemon_not_found() {
-    let result = WhatsAppDaemon::start_with_binary(
-        PathBuf::from("/usr/bin/nonexistent-binary-12345"),
-        PathBuf::from("/tmp"),
-    );
-    assert!(
-        result.is_err(),
-        "Starting with non-existent binary should fail"
-    );
-    let err = result.err().unwrap();
-    assert!(
-        err.contains("Failed to spawn") || err.contains("No such file"),
-        "Error should mention spawn failure. Got: {}",
-        err
-    );
-    println!("PASS: WhatsAppDaemon binary-not-found error correctly propagated");
-    println!("   Error: {}", err);
+fn test_whatsapp_provider_without_wa_client() {
+    // After the Go-wacli sidecar was deleted, WhatsAppProvider with no
+    // wa_client should still construct (inert) and identify as "whatsapp".
+    let config = get_config();
+    let provider = WhatsAppProvider::new(&config, None);
+    assert_eq!(provider.identifier(), "whatsapp");
+    assert_eq!(provider.name(), "WhatsApp");
+    println!("PASS: WhatsAppProvider constructs without wa_client");
 }
 
 #[test]

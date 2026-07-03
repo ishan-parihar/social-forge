@@ -73,10 +73,7 @@ async fn find_ias_token(state: &AppState, user_id: Uuid, ig_id: &str) -> Result<
             )
         })?;
 
-    let __tok = ig.access_token.clone();
-    let __tok = state.token_key.as_ref()
-        .and_then(|k| crate::crypto::decrypt_string(&__tok, k).ok())
-        .unwrap_or(__tok);
+    let __tok = crate::crypto::maybe_decrypt_token(&ig.access_token, state.token_key.as_ref());
     Ok(__tok)
 }
 

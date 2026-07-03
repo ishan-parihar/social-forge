@@ -55,8 +55,9 @@ pub async fn handle_analytics_get(
         .get(&input.provider)
         .ok_or_else(|| format!("Provider '{}' not found", input.provider))?;
 
+    let tok = crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
     let analytics = provider
-        .analytics(&integration.access_token, &integration.internal_id, days)
+        .analytics(&tok, &integration.internal_id, days)
         .await
         .map_err(|e| format!("Analytics request failed: {e}"))?;
 
@@ -95,8 +96,9 @@ pub async fn handle_analytics_get_post(
         .get(&integration.provider_identifier)
         .ok_or_else(|| format!("Provider '{}' not found", integration.provider_identifier))?;
 
+    let tok = crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
     let analytics = provider
-        .post_analytics(&integration.access_token, &platform_post_id)
+        .post_analytics(&tok, &platform_post_id)
         .await
         .map_err(|e| format!("Post analytics request failed: {e}"))?;
 

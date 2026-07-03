@@ -8,7 +8,6 @@ pub mod posts;
 pub mod integrations;
 pub mod telegram_client;
 pub mod webhook_dispatcher;
-pub mod whatsapp_daemon;
 pub mod content_splitter;
 pub mod staging;
 pub mod automation;

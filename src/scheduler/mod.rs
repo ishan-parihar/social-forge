@@ -533,6 +533,7 @@ const ANALYTICS_REFRESH_INTERVAL_SECS: u64 = 1800; // 30 minutes
 pub async fn run_analytics_cache_refresh(
     db: PgPool,
     providers: Arc<ProviderRegistry>,
+    token_key: Option<[u8; 32]>,
     mut shutdown: tokio::sync::watch::Receiver<bool>,
 ) {
     tracing::info!(
@@ -595,8 +596,16 @@ async fn refresh_cache_cycle(db: &PgPool, providers: &ProviderRegistry) {
                 None => continue,
             };
 
+            // Decrypt token if encryption is enabled — without this,
+            // every analytics call 401s when TOKEN_ENCRYPTION_KEY is set.
+            let tok = integration.access_token.clone();
+            let tok = token_key
+                .as_ref()
+                .and_then(|k| crate::crypto::decrypt_string(&tok, k).ok())
+                .unwrap_or(tok);
+
             match provider
-                .analytics(&integration.access_token, &integration.internal_id, 7)
+                .analytics(&tok, &integration.internal_id, 7)
                 .await
             {
                 Ok(analytics) => {

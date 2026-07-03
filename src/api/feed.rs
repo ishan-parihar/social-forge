@@ -277,9 +277,7 @@ pub async fn get_comments(
         .find(|i| i.provider_identifier == post.provider)
         .ok_or_else(|| AppError::NotFound("Integration not found for provider".into()))?;
 
-    let access_token = state.token_key.as_ref()
-        .and_then(|key| crate::crypto::decrypt_string(&integration.access_token, key).ok())
-        .unwrap_or(integration.access_token);
+    let access_token = crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
 
     // Fetch comments from the provider
     let comments = provider

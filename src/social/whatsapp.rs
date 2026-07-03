@@ -6,13 +6,16 @@ use tokio::sync::Mutex;
 
 use super::*;
 use crate::config::Config;
-use crate::services::whatsapp_daemon::WhatsAppDaemon;
 use crate::wa::WhaClient;
 use crate::wa::chats::{list_contacts, list_chats};
 
-#[allow(dead_code)]
+/// WhatsApp Web provider, backed by the native `wa-rs` client.
+///
+/// The legacy Go `wacli` sidecar (formerly `services/whatsapp_daemon`)
+/// has been removed — `wa-rs` is the sole implementation. If
+/// `WHATSAPP_STORE_DIR` is unset, the provider is inert (returns
+/// errors on publish/auth).
 pub struct WhatsAppProvider {
-    daemon: Arc<WhatsAppDaemon>,
     store_dir: PathBuf,
     wa_client: Option<Arc<Mutex<WhaClient>>>,
 }
@@ -27,21 +30,12 @@ impl WhatsAppProvider {
             .clone()
             .unwrap_or_else(|| "./data/whatsapp".into());
         let store_dir = PathBuf::from(&store_dir);
+        Self { store_dir, wa_client }
+    }
 
-        // Only start daemon if binary is configured/found
-        let daemon = match WhatsAppDaemon::start(store_dir.clone()) {
-            Ok(d) => d,
-            Err(_) => {
-                // Create a dummy daemon
-                let dummy = WhatsAppDaemon::new(
-                    PathBuf::from("/usr/bin/true"),
-                    store_dir.clone(),
-                );
-                Arc::new(dummy)
-            }
-        };
-
-        Self { daemon, store_dir, wa_client }
+    /// Returns the configured on-disk store directory for diagnostics.
+    pub fn store_dir(&self) -> &std::path::Path {
+        &self.store_dir
     }
 }
 
@@ -92,51 +86,29 @@ impl SocialProvider for WhatsAppProvider {
         _code_verifier: &str,
         _redirect_uri: &str,
     ) -> Result<AuthToken, ProviderError> {
-        // Try native WhaClient first
-        if let Some(ref wa_client) = self.wa_client {
-            let locked = wa_client.lock().await;
-            if locked.is_authenticated() {
-                let jid = locked.inner().get_pn().await
-                    .map(|j| j.to_string())
-                    .unwrap_or_else(|| "unknown".into());
-                return Ok(AuthToken {
-                    access_token: jid.clone(),
-                    refresh_token: None,
-                    expires_in: Some(999_999_999),
-                    provider_user_id: jid.clone(),
-                    name: format!("WhatsApp ({jid})"),
-                    username: jid,
-                    picture: None,
-                });
-            }
+        let Some(ref wa_client) = self.wa_client else {
             return Err(ProviderError::Auth(
-                "WhatsApp not authenticated. Use wa_auth_status / wa_pair_code tools to link your device.".into(),
+                "WhatsApp client not initialized. Set WHATSAPP_STORE_DIR and pair via wa_pair_code.".into(),
             ));
+        };
+        let locked = wa_client.lock().await;
+        if locked.is_authenticated() {
+            let jid = locked.inner().get_pn().await
+                .map(|j| j.to_string())
+                .unwrap_or_else(|| "unknown".into());
+            return Ok(AuthToken {
+                access_token: jid.clone(),
+                refresh_token: None,
+                expires_in: Some(999_999_999),
+                provider_user_id: jid.clone(),
+                name: format!("WhatsApp ({jid})"),
+                username: jid,
+                picture: None,
+            });
         }
-
-        // Fallback: legacy daemon (wacli Go sidecar)
-        let status = self
-            .daemon
-            .auth_status()
-            .map_err(|e| ProviderError::Api(format!("WhatsApp auth check failed: {e}")))?;
-
-        let authenticated = status["authenticated"].as_bool().unwrap_or(false);
-        if !authenticated {
-            return Err(ProviderError::Auth(
-                "WhatsApp not authenticated. Use wa_auth_status / wa_pair_code tools to link your device.".into(),
-            ));
-        }
-
-        let jid = status["jid"].as_str().unwrap_or("unknown");
-        Ok(AuthToken {
-            access_token: jid.to_string(),
-            refresh_token: None,
-            expires_in: Some(999_999_999),
-            provider_user_id: jid.to_string(),
-            name: format!("WhatsApp ({jid})"),
-            username: jid.to_string(),
-            picture: None,
-        })
+        Err(ProviderError::Auth(
+            "WhatsApp not authenticated. Use wa_auth_status / wa_pair_code tools to link your device.".into(),
+        ))
     }
 
     async fn refresh_token(&self, _refresh_token: &str) -> Result<AuthToken, ProviderError> {
@@ -158,30 +130,16 @@ impl SocialProvider for WhatsAppProvider {
             ));
         }
 
-        // Try native WhaClient first
-        if let Some(ref wa_client) = self.wa_client {
-            let jid = wa_rs::Jid::pn(to);
-            let msg_id = crate::wa::messages::send_text(wa_client, &jid, &post.content)
-                .await
-                .map_err(|e| ProviderError::Api(format!("WhatsApp send failed: {e}")))?;
+        let Some(ref wa_client) = self.wa_client else {
+            return Err(ProviderError::Api(
+                "WhatsApp client not initialized. Set WHATSAPP_STORE_DIR and pair via wa_pair_code.".into(),
+            ));
+        };
 
-            return Ok(PublishResult {
-                platform_post_id: msg_id,
-                platform_post_url: None,
-                status: "published".into(),
-            });
-        }
-
-        // Fallback: legacy daemon (wacli Go sidecar)
-        let result = self
-            .daemon
-            .send_text(to, &post.content)
+        let jid = wa_rs::Jid::pn(to);
+        let msg_id = crate::wa::messages::send_text(wa_client, &jid, &post.content)
+            .await
             .map_err(|e| ProviderError::Api(format!("WhatsApp send failed: {e}")))?;
-
-        let msg_id = result["message_id"]
-            .as_str()
-            .unwrap_or("unknown")
-            .to_string();
 
         Ok(PublishResult {
             platform_post_id: msg_id,

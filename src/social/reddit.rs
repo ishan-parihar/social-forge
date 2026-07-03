@@ -993,7 +993,7 @@ impl SocialProvider for RedditProvider {
                 let json: serde_json::Value = match serde_json::from_str(&body) {
                     Ok(v) => v,
                     Err(e) => {
-                        tracing::warn!("Reddit refresh token JSON parse error: {e}: {body}");
+                        tracing::warn!("Reddit refresh token JSON parse error: {e}");
                         return Err(ProviderError::Api(format!(
                             "Reddit refresh token parse error: {e}"
                         )));
@@ -1003,12 +1003,13 @@ impl SocialProvider for RedditProvider {
                     tracing::debug!("Reddit refreshed access token OK, calling /api/v1/me");
                     return self.fetch_me(new_token).await;
                 } else {
-                    tracing::warn!("Reddit refresh token response missing access_token: {body}");
+                    tracing::warn!("Reddit refresh token response missing access_token (status 200)");
                 }
             } else {
                 let status = resp.status();
-                let body = resp.text().await.unwrap_or_default();
-                tracing::warn!("Reddit refresh token request failed ({status}): {body}");
+                // Don't log body — may contain access_token / refresh_token.
+                tracing::warn!("Reddit refresh token request failed ({status})");
+                let _ = resp; // drop
             }
         }
 

@@ -76,9 +76,9 @@ async fn main() -> anyhow::Result<()> {
         .context("Failed to create database pool")?;
     tracing::info!("Database connected");
 
-    // Ensure the default dev user exists (survives volume wipes)
-    if let Err(e) = db::ensure_default_user(&db).await {
-        tracing::warn!("Failed to ensure default user: {e} — some auth paths may fail");
+    // Ensure the single local user row exists (needed for FK constraints)
+    if let Err(e) = db::ensure_local_user(&db).await {
+        tracing::warn!("Failed to ensure local user row: {e} — DB inserts may fail");
     }
 
     // ── Realtime broadcaster ──────────────────────────────────
@@ -204,10 +204,12 @@ async fn main() -> anyhow::Result<()> {
     let cache_db = db.clone();
     let cache_providers = providers_arc.clone();
     let cache_shutdown = shutdown_tx.subscribe();
+    let cache_token_key = token_key;
     tokio::spawn(async move {
         scheduler::run_analytics_cache_refresh(
             cache_db,
             cache_providers,
+            cache_token_key,
             cache_shutdown,
         )
         .await;

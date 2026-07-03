@@ -80,10 +80,7 @@ async fn find_mastodon_integration(
             "Mastodon not connected. Connect it via the integrations page first.".to_string()
         })?;
 
-    let __tok = integration.access_token.clone();
-    let __tok = state.token_key.as_ref()
-        .and_then(|k| crate::crypto::decrypt_string(&__tok, k).ok())
-        .unwrap_or(__tok);
+    let __tok = crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
     Ok(__tok)
 }
 

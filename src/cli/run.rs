@@ -1249,11 +1249,13 @@ async fn handle_connect_all() -> anyhow::Result<()> {
                             let name = data.and_then(|d| d.get("name")).and_then(|s| s.as_str()).unwrap_or("X User");
                             let id = data.and_then(|d| d.get("id")).and_then(|s| s.as_str()).unwrap_or("").to_string();
                             let avatar = data.and_then(|d| d.get("profile_image_url")).and_then(|s| s.as_str());
-                            let _ = crate::db::queries::create_integration(
+                            match crate::db::queries::create_integration(
                                 &state.db, user_id, "x", "X (Twitter)", &id, &token_str,
                                 None, None, Some(name), None, avatar, None, None,
-                            ).await;
-                            serde_json::json!({"provider": "x", "status": "connected", "name": name, "source": cookies.source})
+                            ).await {
+                                Ok(_) => serde_json::json!({"provider": "x", "status": "connected", "name": name, "source": cookies.source}),
+                                Err(e) => serde_json::json!({"provider": "x", "status": "error", "error": format!("DB write failed: {e}")}),
+                            }
                         }
                         Err(e) => serde_json::json!({"provider": "x", "status": "error", "error": format!("{e}")}),
                     }
@@ -1282,11 +1284,13 @@ async fn handle_connect_all() -> anyhow::Result<()> {
                             let name = json["data"]["name"].as_str().unwrap_or("Reddit User").to_string();
                             let id = json["data"]["id"].as_str().unwrap_or("").to_string();
                             let icon = json["data"]["icon_img"].as_str().and_then(|s| s.split('?').next()).map(String::from);
-                            let _ = crate::db::queries::create_integration(
+                            match crate::db::queries::create_integration(
                                 &state.db, user_id, "reddit", "Reddit", &id, &token_str,
                                 None, None, Some(&name), None, icon.as_deref(), None, None,
-                            ).await;
-                            serde_json::json!({"provider": "reddit", "status": "connected", "name": name, "source": cookies.source})
+                            ).await {
+                                Ok(_) => serde_json::json!({"provider": "reddit", "status": "connected", "name": name, "source": cookies.source}),
+                                Err(e) => serde_json::json!({"provider": "reddit", "status": "error", "error": format!("DB write failed: {e}")}),
+                            }
                         }
                         Err(e) => serde_json::json!({"provider": "reddit", "status": "error", "error": format!("{e}")}),
                     }
@@ -1616,7 +1620,7 @@ async fn handle_reddit(action: RedditAction) -> anyhow::Result<()> {
                 let resp = reqwest::Client::new()
                     .post("https://oauth.reddit.com/api/submit")
                     .header("Authorization", format!("Bearer {token}"))
-                    .header("User-Agent", "social-forge:v0.1.0 (by /u/social_forge)")
+                    .header("User-Agent", concat!("social-forge:v", env!("CARGO_PKG_VERSION"), " (by /u/social_forge)"))
                     .form(&form).send().await
                     .map_err(|e| format!("Reddit submit failed: {e}"));
                 let result = match resp {
@@ -1648,7 +1652,7 @@ async fn handle_reddit(action: RedditAction) -> anyhow::Result<()> {
             let resp = reqwest::Client::new()
                 .post("https://oauth.reddit.com/api/comment")
                 .header("Authorization", format!("Bearer {token}"))
-                .header("User-Agent", "social-forge:v0.1.0 (by /u/social_forge)")
+                .header("User-Agent", concat!("social-forge:v", env!("CARGO_PKG_VERSION"), " (by /u/social_forge)"))
                 .form(&[("api_type", "json"), ("thing_id", &*tid), ("text", &*text)])
                 .send().await
                 .map_err(|e| format!("Reddit comment failed: {e}"));
@@ -1744,7 +1748,7 @@ async fn handle_linkedin(action: LinkedinAction) -> anyhow::Result<()> {
                 .delete(&url)
                 .header("Authorization", format!("Bearer {token}"))
                 .header("X-Restli-Protocol-Version", "2.0.0")
-                .header("LinkedIn-Version", "202601")
+                .header("LinkedIn-Version", "202401")
                 .send().await
                 .map_err(|e| format!("LinkedIn delete failed: {e}"));
             match resp {
@@ -1762,7 +1766,7 @@ async fn handle_linkedin(action: LinkedinAction) -> anyhow::Result<()> {
                 .get(&url)
                 .header("Authorization", format!("Bearer {token}"))
                 .header("X-Restli-Protocol-Version", "2.0.0")
-                .header("LinkedIn-Version", "202601")
+                .header("LinkedIn-Version", "202401")
                 .send().await
                 .map_err(|e| format!("LinkedIn reactions failed: {e}"));
             match resp {
@@ -1869,7 +1873,7 @@ async fn handle_linkedin_page(action: LinkedinPageAction) -> anyhow::Result<()> 
                         .post("https://api.linkedin.com/v2/rest/posts")
                         .header("Authorization", format!("Bearer {token}"))
                         .header("X-Restli-Protocol-Version", "2.0.0")
-                        .header("LinkedIn-Version", "202601")
+                        .header("LinkedIn-Version", "202401")
                         .header("Content-Type", "application/json")
                         .json(&body).send().await
                     {
@@ -1909,7 +1913,7 @@ async fn handle_linkedin_page(action: LinkedinPageAction) -> anyhow::Result<()> 
                     match reqwest::Client::new()
                         .get(&url)
                         .header("Authorization", format!("Bearer {token}"))
-                        .header("LinkedIn-Version", "202601")
+                        .header("LinkedIn-Version", "202401")
                         .header("X-Restli-Protocol-Version", "2.0.0")
                         .send().await
                     {
@@ -1930,7 +1934,7 @@ async fn handle_linkedin_page(action: LinkedinPageAction) -> anyhow::Result<()> 
                 Err(e) => Err(e.to_string()),
                 Ok((_token, lip_id)) => {
                     let input = crate::mcp::tools_linkedin_page::LipGetPageInput {
-                        user_id, lip_id, page_id,
+                        lip_id, page_id,
                     };
                     crate::mcp::tools_linkedin_page::handle_lip_get_page(&state, &input).await
                         .map(|v| v.0).map_err(|e| e.to_string())
@@ -1942,7 +1946,7 @@ async fn handle_linkedin_page(action: LinkedinPageAction) -> anyhow::Result<()> 
                 Err(e) => Err(e.to_string()),
                 Ok((_token, lip_id)) => {
                     let input = crate::mcp::tools_linkedin_page::LipGetPagePostsInput {
-                        user_id, lip_id, page_id, limit,
+                        lip_id, page_id, limit,
                     };
                     crate::mcp::tools_linkedin_page::handle_lip_get_page_posts(&state, &input).await
                         .map(|v| v.0).map_err(|e| e.to_string())
@@ -1954,7 +1958,7 @@ async fn handle_linkedin_page(action: LinkedinPageAction) -> anyhow::Result<()> 
                 Err(e) => Err(e.to_string()),
                 Ok((_token, lip_id)) => {
                     let input = crate::mcp::tools_linkedin_page::LipCreateCommentInput {
-                        user_id, lip_id, post_urn, page_urn, message: text,
+                        lip_id, post_urn, page_urn, message: text,
                     };
                     crate::mcp::tools_linkedin_page::handle_lip_create_comment(&state, &input).await
                         .map(|v| v.0).map_err(|e| e.to_string())
@@ -1971,7 +1975,7 @@ async fn handle_linkedin_page(action: LinkedinPageAction) -> anyhow::Result<()> 
                         None => Err("No LinkedIn Page connected".to_string()),
                         Some(li) => {
                             let input = crate::mcp::tools_linkedin_page::LipDeletePostInput {
-                                user_id, lip_id: li.internal_id.clone(), post_urn,
+                                lip_id: li.internal_id.clone(), post_urn,
                             };
                             crate::mcp::tools_linkedin_page::handle_lip_delete_post(&state, &input).await
                                 .map(|v| v.0).map_err(|e| e.to_string())
@@ -1989,7 +1993,7 @@ async fn handle_linkedin_page(action: LinkedinPageAction) -> anyhow::Result<()> 
                         None => Err("No LinkedIn Page connected".to_string()),
                         Some(li) => {
                             let input = crate::mcp::tools_linkedin_page::LipGetReactionsInput {
-                                user_id, lip_id: li.internal_id.clone(), post_urn,
+                                lip_id: li.internal_id.clone(), post_urn,
                             };
                             crate::mcp::tools_linkedin_page::handle_lip_get_reactions(&state, &input).await
                                 .map(|v| v.0).map_err(|e| e.to_string())
@@ -2007,7 +2011,7 @@ async fn handle_linkedin_page(action: LinkedinPageAction) -> anyhow::Result<()> 
                         None => Err("No LinkedIn Page connected".to_string()),
                         Some(li) => {
                             let input = crate::mcp::tools_linkedin_page::LipGetSharesInput {
-                                user_id, lip_id: li.internal_id.clone(), post_urn,
+                                lip_id: li.internal_id.clone(), post_urn,
                             };
                             crate::mcp::tools_linkedin_page::handle_lip_get_shares(&state, &input).await
                                 .map(|v| v.0).map_err(|e| e.to_string())
@@ -2025,7 +2029,7 @@ async fn handle_linkedin_page(action: LinkedinPageAction) -> anyhow::Result<()> 
                         None => Err("No LinkedIn Page connected".to_string()),
                         Some(li) => {
                             let input = crate::mcp::tools_linkedin_page::LipGetPostAnalyticsInput {
-                                user_id, lip_id: li.internal_id.clone(), post_urn,
+                                lip_id: li.internal_id.clone(), post_urn,
                             };
                             crate::mcp::tools_linkedin_page::handle_lip_get_post_analytics(&state, &input).await
                                 .map(|v| serde_json::to_value(v.0).unwrap_or_default()).map_err(|e| e.to_string())
@@ -2751,17 +2755,22 @@ async fn handle_media(action: MediaAction) -> anyhow::Result<()> {
     Ok(())
 }
 
-// MCP Call Handler
+// MCP Call Handler — delegates to the rmcp server's in-process call_tool.
 async fn handle_mcp_call(tool_name: &str, args_json: &str) -> anyhow::Result<()> {
     let state = init_state().await?;
-    let result = crate::cli::mcp_bridge::call_tool(&state, tool_name, args_json).await.map_err(|e| anyhow::anyhow!("{}", e))?;
+    let result = crate::cli::mcp_bridge::call_tool(state, tool_name, args_json)
+        .await
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
     output_json(&result);
     Ok(())
 }
 
-// MCP Tools List Handler
-fn handle_mcp_tools() -> anyhow::Result<()> {
-    let tools = crate::cli::mcp_bridge::list_tools();
+// MCP Tools List Handler — delegates to the rmcp server's in-process list_tools.
+async fn handle_mcp_tools() -> anyhow::Result<()> {
+    let state = init_state().await?;
+    let tools = crate::cli::mcp_bridge::list_tools(state)
+        .await
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
     let list: Vec<serde_json::Value> = tools.into_iter().map(|(name, desc)| {
         serde_json::json!({"name": name, "description": desc})
     }).collect();
@@ -3069,7 +3078,9 @@ fn handle_split_preview(text: &str, platforms: Option<&str>) -> anyhow::Result<(
 pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
     match cli.command {
         Command::Serve { .. } | Command::Mcp => {
-            unreachable!("Serve/Mcp handled in main.rs before calling run_cli");
+            return Err(anyhow::anyhow!(
+                "Serve/Mcp are handled in main.rs before calling run_cli — this is a bug"
+            ));
         }
         Command::Init => handle_init(),
         Command::Providers => handle_providers().await,
@@ -3108,7 +3119,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
         }
         Command::Media { action } => handle_media(action).await,
         Command::McpCall { tool, args } => handle_mcp_call(&tool, &args).await,
-        Command::McpTools => handle_mcp_tools(),
+        Command::McpTools => handle_mcp_tools().await,
         Command::SplitPreview { text, platforms } => {
             handle_split_preview(&text, platforms.as_deref())
         }

@@ -28,6 +28,10 @@ class ApiClient {
       method,
       headers,
       body: reqBody,
+      // Always send the sf_session cookie — the backend validates it
+      // via auth_middleware. Without this, fetch() omits cookies on
+      // cross-origin requests and we'd get 401 on every call.
+      credentials: "include",
     };
 
     for (const interceptor of this.reqInterceptors) {
@@ -44,6 +48,16 @@ class ApiClient {
       let processedRes = res;
       for (const interceptor of this.resInterceptors) {
         processedRes = await interceptor(processedRes);
+      }
+
+      // 401 → bounce to /login. The session either never existed,
+      // expired, or the cookie was cleared. Don't try to parse the
+      // body — just redirect.
+      if (processedRes.status === 401 && !path.startsWith("/api/auth/")) {
+        if (typeof window !== "undefined") {
+          window.location.href = "/login";
+        }
+        return { error: "Not authenticated", status: 401 };
       }
 
       const text = await processedRes.text();
