@@ -1,48 +1,65 @@
-# ─── Local Build Dockerfile ──────────────────────────────────
-# Use this if you want to compile from source instead of fetching releases.
-# Build: docker build -f Dockerfile.build -t social-forge .
+# ─── Local Build Dockerfile (source build) ────────────────────────────────────
+# Use this to compile from source inside Docker for reproducible builds.
+# NOTE: For release binaries, prefer cargo-zigbuild locally (see Makefile).
+#
+#   docker build -f Dockerfile.build -t social-forge-bin .
+#   docker run --rm social-forge-bin cat /usr/local/bin/social-forge > social-forge-linux-x64
+# ──────────────────────────────────────────────────────────────────────────────
 
-FROM rust:1.94-slim-bookworm AS builder
+FROM rust:1.85-slim-bookworm AS builder
 
+# Install zig + cargo-zigbuild + build deps
+# Using zigbuild instead of musl because boring-sys2 (wreq) requires a full C++ toolchain
 RUN apt-get update && \
-    apt-get install -y pkg-config libssl-dev musl-tools cmake perl g++ && \
-    rustup target add x86_64-unknown-linux-musl && \
+    apt-get install -y --no-install-recommends \
+        pkg-config libssl-dev cmake perl g++ git curl xz-utils ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
-ENV CC_x86_64_unknown_linux_musl=musl-gcc
-ENV CC=musl-gcc
-ENV CXX=musl-g++
+# Install zig (needed by cargo-zigbuild)
+RUN curl -fsSL https://ziglang.org/download/0.14.0/zig-linux-x86_64-0.14.0.tar.xz \
+    | tar -xJ -C /opt && \
+    ln -s /opt/zig-linux-x86_64-0.14.0/zig /usr/local/bin/zig
+
+RUN cargo install cargo-zigbuild
+
+# glibc 2.35 — runs on Debian 11+ / Ubuntu 20.04+
+ARG GLIBC_VERSION=2.35
+ARG TARGET=x86_64-unknown-linux-gnu.${GLIBC_VERSION}
+RUN rustup target add x86_64-unknown-linux-gnu
 
 WORKDIR /app
+
+# Layer cache: resolve deps before copying full source
 COPY Cargo.toml Cargo.lock* ./
 RUN mkdir -p src && echo "fn main() {}" > src/main.rs && echo "" > src/lib.rs && \
-    cargo build --release --target x86_64-unknown-linux-musl 2>/dev/null || true && \
+    SQLX_OFFLINE=true cargo zigbuild --release --target x86_64-unknown-linux-gnu 2>/dev/null || true && \
     rm -rf src
 
 COPY src/ ./src/
 COPY migrations/ ./migrations/
 COPY .sqlx/ ./.sqlx/
+# Frontend build must exist before compiling (rust-embed embeds frontend/build/)
+COPY frontend/build/ ./frontend/build/
 
 ENV SQLX_OFFLINE=true
-RUN cargo build --release --target x86_64-unknown-linux-musl && \
-    strip target/x86_64-unknown-linux-musl/release/social-forge
+RUN cargo zigbuild --release --target ${TARGET} && \
+    strip target/x86_64-unknown-linux-gnu/release/social-forge
 
-FROM node:20-slim AS frontend
-WORKDIR /app/frontend
-COPY frontend/package.json frontend/pnpm-lock.yaml* ./
-RUN npm install -g pnpm && pnpm install --frozen-lockfile 2>/dev/null || pnpm install
-COPY frontend/ ./
-RUN pnpm build
+# ── Minimal runtime image ─────────────────────────────────────────────────────
+FROM debian:bookworm-slim
 
-FROM alpine:3.20
-RUN apk add --no-cache ca-certificates curl
-COPY --from=builder /app/target/x86_64-unknown-linux-musl/release/social-forge /usr/local/bin/social-forge
-COPY --from=frontend /app/frontend/build /app/frontend/build
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ca-certificates curl && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /app/target/x86_64-unknown-linux-gnu/release/social-forge /usr/local/bin/social-forge
 COPY migrations/ /app/migrations/
 
 WORKDIR /app
-RUN mkdir -p /app/uploads
-EXPOSE 3444
-HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
-    CMD curl -sf http://localhost:3444/health || exit 1
+RUN mkdir -p /app/uploads /app/data
+EXPOSE 6543
+
+HEALTHCHECK --interval=15s --timeout=5s --start-period=15s --retries=3 \
+    CMD curl -sf https://localhost:6543/health -k || exit 1
+
 CMD ["social-forge", "serve"]
