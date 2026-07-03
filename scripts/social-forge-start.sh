@@ -128,8 +128,23 @@ if [ -d "$SKILL_SRC" ]; then
 fi
 
 # ── 8. Launch binary ─────────────────────────────────────────────────────────
-# The binary is pre-installed at /usr/local/bin/social-forge.
+# Resolve binary location — checks common install locations in order.
 # Change to INSTALL_DIR so relative paths (migrations/, data/, etc.) resolve correctly.
 echo "$TAG Starting social-forge serve..."
 cd "$INSTALL_DIR"
-exec /usr/local/bin/social-forge serve
+
+# Priority: ~/.local/bin → /usr/local/bin → PATH
+if [ -x "$HOME/.local/bin/social-forge" ]; then
+    BINARY="$HOME/.local/bin/social-forge"
+elif [ -x "/usr/local/bin/social-forge" ]; then
+    BINARY="/usr/local/bin/social-forge"
+else
+    BINARY=$(command -v social-forge 2>/dev/null || true)
+fi
+
+if [ -z "$BINARY" ] || [ ! -x "$BINARY" ]; then
+    echo "$TAG ERROR: social-forge binary not found. Install it to ~/.local/bin or /usr/local/bin."
+    exit 1
+fi
+
+exec "$BINARY" serve
