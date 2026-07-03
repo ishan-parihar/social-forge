@@ -74,11 +74,12 @@ pub async fn auth_middleware(
 }
 
 /// Parse `name=value` out of a `Cookie:` header value.
-pub fn extract_cookie(header: &str, name: &str) -> Option<&str> {
+pub fn extract_cookie<'a>(header: &'a str, name: &str) -> Option<&'a str> {
+    let prefix = format!("{name}=");
     header
         .split(';')
         .map(|p| p.trim())
-        .find_map(|p| p.strip_prefix(&format!("{name}=")))
+        .find_map(|p| p.strip_prefix(&prefix))
 }
 
 impl<S> FromRequestParts<S> for AuthenticatedUser

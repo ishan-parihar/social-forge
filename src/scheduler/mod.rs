@@ -551,13 +551,13 @@ pub async fn run_analytics_cache_refresh(
                 }
             }
             _ = interval.tick() => {
-                refresh_cache_cycle(&db, &providers).await;
+                refresh_cache_cycle(&db, &providers, token_key).await;
             }
         }
     }
 }
 
-async fn refresh_cache_cycle(db: &PgPool, providers: &ProviderRegistry) {
+async fn refresh_cache_cycle(db: &PgPool, providers: &ProviderRegistry, token_key: Option<[u8; 32]>) {
     // Clean up expired entries first
     if let Ok(count) = queries::delete_expired_analytics_cache(db).await {
         if count > 0 {
@@ -598,11 +598,7 @@ async fn refresh_cache_cycle(db: &PgPool, providers: &ProviderRegistry) {
 
             // Decrypt token if encryption is enabled — without this,
             // every analytics call 401s when TOKEN_ENCRYPTION_KEY is set.
-            let tok = integration.access_token.clone();
-            let tok = token_key
-                .as_ref()
-                .and_then(|k| crate::crypto::decrypt_string(&tok, k).ok())
-                .unwrap_or(tok);
+            let tok = crate::crypto::maybe_decrypt_token(&integration.access_token, token_key.as_ref());
 
             match provider
                 .analytics(&tok, &integration.internal_id, 7)

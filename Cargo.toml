@@ -71,13 +71,13 @@ reqwest = { version = "0.12", default-features = false, features = [
 ] }
 
 # wreq — reqwest fork with JA3/JA4/TLS fingerprinting for X/Twitter GraphQL API
-wreq = { version = "6.0.0-rc.23", default-features = false, features = [
+wreq = { version = "=6.0.0-rc.23", default-features = false, features = [
   "json",
   "cookies",
   "gzip",
   "brotli",
 ] }
-wreq-util = "3.0.0-rc.10"
+wreq-util = "=3.0.0-rc.10"
 
 # Time + UUID
 chrono = { version = "0.4", features = ["serde"] }
@@ -135,3 +135,12 @@ feed-rs = "2.1"
 # Embed frontend/build directory into the binary at compile time
 # When frontend/build/ doesn't exist, rust-embed produces an empty set (no panic).
 rust-embed = { version = "8", features = ["include-exclude"] }
+
+[patch.crates-io]
+# core2 0.4.0 was yanked from crates.io, but glass_pumpkin 1.6 (transitive
+# dep of grammers-crypto 0.7) still requires it. The real core2 is a
+# no_std reimplementation of std::io; glass_pumpkin only uses core2::error,
+# which in std contexts is identical to std::error::Error. This local stub
+# re-exports the std types so the build unblocks.
+core2 = { path = "vendor/core2" }
+

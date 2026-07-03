@@ -1255,6 +1255,7 @@ mod tests {
         Config {
             database_url: "sqlite:test".into(),
             jwt_secret: "test".into(),
+            app_password: "test".into(),
             app_url: "http://localhost:3000".into(),
             frontend_url: "http://localhost:4200".into(),
             x_client_id: None,
