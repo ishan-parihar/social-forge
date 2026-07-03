@@ -45,3 +45,6 @@ feature-parity-gap.md
 PROJECT_PROGRESS.md
 PROVIDER_AUDIT.md
 .bak
+
+# Release artifacts (built locally, uploaded via gh release)
+dist/
