@@ -330,16 +330,16 @@ impl SocialForgeMcpServer {
     async fn setup_config_set(
         &self,
         params: Parameters<tools_setup::ConfigSetInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_setup::config_set(&self.state, &params.0)
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_setup::config_set(&self.state, &params.0).map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get a configuration value (redacts secrets)")]
     async fn setup_config_get(
         &self,
         params: Parameters<tools_setup::ConfigGetInput>,
-    ) -> Result<Json<serde_json::Value>, String> {
-        tools_setup::config_get(&self.state, &params.0)
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_setup::config_get(&self.state, &params.0).map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "List all configuration entries in ~/.social-forge/.env")]
