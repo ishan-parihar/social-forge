@@ -62,12 +62,6 @@ pub mod tools_google;
 // SHARED TYPES
 // ══════════════════════════════════════════════════════════════
 
-#[derive(Debug, Serialize, Deserialize, JsonSchema)]
-pub struct SuccessOutput {
-    pub success: bool,
-    pub message: String,
-}
-
 /// MCP-compatible wrapper around serde_json::Value for tool output.
 /// The MCP spec requires outputSchema to have root type \"object\",
 /// but schemars generates `true` (any-value schema) for serde_json::Value.
@@ -122,12 +116,12 @@ impl SocialForgeMcpServer {
     // and identify the local user.
 
     #[tool(description = "Return the local user id. Single-user mode — no login required over MCP.")]
-    async fn auth_status(&self) -> Result<Json<serde_json::Value>, String> {
-        Ok(Json(serde_json::json!({
+    async fn auth_status(&self) -> Result<Json<McpJsonValue>, String> {
+        Ok(Json(McpJsonValue(serde_json::json!({
             "user_id": crate::auth::middleware::DEFAULT_USER_ID.to_string(),
             "mode": "single_user",
             "note": "MCP runs locally over stdio; the WebUI is gated by APP_PASSWORD."
-        })))
+        }))))
     }
 
     // ── Calendar Tools ──────────────────────────────────────
@@ -170,7 +164,7 @@ impl SocialForgeMcpServer {
     async fn integrations_connect_complete(
         &self,
         params: Parameters<tools_integrations::ConnectCompleteInput>,
-    ) -> Result<Json<SuccessOutput>, String> {
+    ) -> Result<Json<McpJsonValue>, String> {
         tools_integrations::complete_connect_integration(&self.state, &params.0).await
     }
 
@@ -178,7 +172,7 @@ impl SocialForgeMcpServer {
     async fn integrations_disconnect(
         &self,
         params: Parameters<tools_integrations::DisconnectInput>,
-    ) -> Result<Json<SuccessOutput>, String> {
+    ) -> Result<Json<McpJsonValue>, String> {
         tools_integrations::disconnect_integration(&self.state, &params.0).await
     }
 
@@ -286,7 +280,7 @@ impl SocialForgeMcpServer {
     async fn posts_delete(
         &self,
         params: Parameters<tools_posts::DeletePostInput>,
-    ) -> Result<Json<SuccessOutput>, String> {
+    ) -> Result<Json<McpJsonValue>, String> {
         tools_posts::delete_post(&self.state, &params.0).await
     }
 
@@ -384,7 +378,7 @@ impl SocialForgeMcpServer {
     async fn delete_comment(
         &self,
         params: Parameters<tools_comments::DeleteCommentInput>,
-    ) -> Result<Json<SuccessOutput>, String> {
+    ) -> Result<Json<McpJsonValue>, String> {
         tools_comments::delete_comment(&self.state, &params.0).await
     }
 
@@ -436,7 +430,7 @@ impl SocialForgeMcpServer {
     async fn update_automation_rule(
         &self,
         params: Parameters<tools_automation::UpdateRuleInput>,
-    ) -> Result<Json<SuccessOutput>, String> {
+    ) -> Result<Json<McpJsonValue>, String> {
         tools_automation::update_rule(&self.state, &params.0).await
     }
 
@@ -444,7 +438,7 @@ impl SocialForgeMcpServer {
     async fn delete_automation_rule(
         &self,
         params: Parameters<tools_automation::DeleteRuleInput>,
-    ) -> Result<Json<SuccessOutput>, String> {
+    ) -> Result<Json<McpJsonValue>, String> {
         tools_automation::delete_rule(&self.state, &params.0).await
     }
 

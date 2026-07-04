@@ -223,7 +223,7 @@ pub async fn connect_integration(
 pub async fn complete_connect_integration(
     state: &AppState,
     input: &ConnectCompleteInput,
-) -> Result<Json<super::SuccessOutput>, String> {
+) -> Result<Json<crate::mcp::McpJsonValue>, String> {
     let _integration = IntegrationService::complete_connect(
         &state.db,
         &state.providers,
@@ -234,16 +234,13 @@ pub async fn complete_connect_integration(
     )
     .await?;
 
-    Ok(Json(super::SuccessOutput {
-        success: true,
-        message: "Integration connected successfully".into(),
-    }))
+    Ok(Json(crate::mcp::McpJsonValue(serde_json::json!({"success": true, "message": "Integration connected successfully",}))))
 }
 
 pub async fn disconnect_integration(
     state: &AppState,
     input: &DisconnectInput,
-) -> Result<Json<super::SuccessOutput>, String> {
+) -> Result<Json<crate::mcp::McpJsonValue>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let integration_id =
         uuid::Uuid::parse_str(&input.id).map_err(|_| "Invalid integration ID".to_string())?;
@@ -259,10 +256,7 @@ pub async fn disconnect_integration(
         return Err("Integration not found".into());
     }
 
-    Ok(Json(super::SuccessOutput {
-        success: true,
-        message: "Integration disconnected".into(),
-    }))
+    Ok(Json(crate::mcp::McpJsonValue(serde_json::json!({"success": true, "message": "Integration disconnected",}))))
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]

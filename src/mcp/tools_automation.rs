@@ -190,7 +190,7 @@ pub async fn list_rules(
 pub async fn update_rule(
     state: &AppState,
     input: &UpdateRuleInput,
-) -> Result<Json<crate::mcp::SuccessOutput>, String> {
+) -> Result<Json<crate::mcp::McpJsonValue>, String> {
     let rule_id = Uuid::parse_str(&input.rule_id)
         .map_err(|_| "Invalid rule_id format")?;
 
@@ -220,16 +220,13 @@ pub async fn update_rule(
     .await
     .map_err(|e| format!("Failed to update rule: {e}"))?;
 
-    Ok(Json(crate::mcp::SuccessOutput {
-        success: true,
-        message: "Rule updated".into(),
-    }))
+    Ok(Json(crate::mcp::McpJsonValue(serde_json::json!({"success": true, "message": "Rule updated",}))))
 }
 
 pub async fn delete_rule(
     state: &AppState,
     input: &DeleteRuleInput,
-) -> Result<Json<crate::mcp::SuccessOutput>, String> {
+) -> Result<Json<crate::mcp::McpJsonValue>, String> {
     let rule_id = Uuid::parse_str(&input.rule_id)
         .map_err(|_| "Invalid rule_id format")?;
 
@@ -241,10 +238,7 @@ pub async fn delete_rule(
     .await
     .map_err(|e| format!("Failed to delete rule: {e}"))?;
 
-    Ok(Json(crate::mcp::SuccessOutput {
-        success: true,
-        message: "Rule deleted".into(),
-    }))
+    Ok(Json(crate::mcp::McpJsonValue(serde_json::json!({"success": true, "message": "Rule deleted",}))))
 }
 
 pub async fn get_logs(

@@ -269,7 +269,7 @@ pub async fn schedule_post(
 pub async fn delete_post(
     state: &AppState,
     input: &DeletePostInput,
-) -> Result<Json<super::SuccessOutput>, String> {
+) -> Result<Json<crate::mcp::McpJsonValue>, String> {
     let user_id = resolve_first_user(state).await?;
     let post_id = Uuid::parse_str(&input.id).map_err(|_| "Invalid post ID".to_string())?;
 
@@ -280,10 +280,7 @@ pub async fn delete_post(
         post_id,
     ).await?;
 
-    Ok(Json(super::SuccessOutput {
-        success: true,
-        message: "Post deleted".into(),
-    }))
+    Ok(Json(crate::mcp::McpJsonValue(serde_json::json!({"success": true, "message": "Post deleted",}))))
 }
 
 pub async fn find_slot(

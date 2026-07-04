@@ -123,7 +123,7 @@ pub async fn reply_to_comment(
 pub async fn delete_comment(
     state: &AppState,
     input: &DeleteCommentInput,
-) -> Result<Json<crate::mcp::SuccessOutput>, String> {
+) -> Result<Json<crate::mcp::McpJsonValue>, String> {
     let user_id = resolve_first_user(state).await?;
     let integration_id = Uuid::parse_str(&input.integration_id)
         .map_err(|_| "Invalid integration_id format")?;
@@ -142,10 +142,7 @@ pub async fn delete_comment(
         .await
         .map_err(|e| format!("Failed to delete comment: {e}"))?;
 
-    Ok(Json(crate::mcp::SuccessOutput {
-        success: true,
-        message: "Comment deleted".into(),
-    }))
+    Ok(Json(crate::mcp::McpJsonValue(serde_json::json!({"success": true, "message": "Comment deleted",}))))
 }
 
 use super::auth::resolve_first_user;
