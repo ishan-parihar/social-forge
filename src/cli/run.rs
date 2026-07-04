@@ -4,7 +4,6 @@
 
 use uuid::Uuid;
 
-use crate::api::rate_limiter::AuthRateLimiter;
 use crate::api::AppState;
 use crate::config::Config;
 use crate::crypto;
@@ -91,13 +90,11 @@ async fn init_state() -> anyhow::Result<AppState> {
     let token_key = config.token_encryption_key.as_ref()
         .and_then(|k| crypto::decode_hex_key(k).ok());
     let providers = ProviderRegistry::new(&config, None, None);
-    let rate_limiter = AuthRateLimiter::new(5, 60);
     Ok(AppState {
         db,
         config,
         broadcast: broadcaster,
         providers,
-        rate_limiter,
         token_key,
         telegram_client_manager: None,
         wa_client: None,
@@ -926,18 +923,11 @@ async fn handle_connect(provider: &str) -> anyhow::Result<()> {
         "skool" => {
             output_json(&serde_json::json!({"status": "chrome_extension", "provider": "skool", "hint": "Skool uses Chrome extension cookie extraction. Install the Skool Chrome extension, log into skool.com, and cookies are auto-extracted."}));
         }
-        "farcaster" | "nostr" | "lemmy" => {
+        "farcaster" | "lemmy" => {
             output_json(&serde_json::json!({"status": "per_user", "provider": provider, "hint": format!("{provider} uses per-user credentials stored in the integration record. Connect via the web UI.")}));
         }
         "whatsapp" => {
             output_json(&serde_json::json!({"status": "native_client", "provider": "whatsapp", "hint": "WhatsApp uses a native client. Connect via the web UI to scan the QR code."}));
-        }
-        "twitch" => {
-            if state.config.twitch_client_id.is_some() && state.config.twitch_client_secret.is_some() {
-                output_json(&serde_json::json!({"status": "configured", "provider": "twitch", "method": "oauth"}));
-            } else {
-                output_json(&serde_json::json!({"status": "not_configured", "provider": "twitch", "requires": ["TWITCH_CLIENT_ID", "TWITCH_CLIENT_SECRET"], "hint": "Create an app at https://dev.twitch.tv/console/apps and set credentials in ~/.social-forge/.env"}));
-            }
         }
         "vk" => {
             if state.config.vk_client_id.is_some() && state.config.vk_client_secret.is_some() {
@@ -959,7 +949,7 @@ async fn handle_connect(provider: &str) -> anyhow::Result<()> {
                 "status": "unknown",
                 "provider": provider,
                 "error": format!("Unknown provider '{provider}'. Use 'social-forge connect --help' for supported providers."),
-                "hint": "Try: x, reddit, linkedin, facebook, instagram, bluesky, github, telegram, discord, slack, pinterest, tiktok, mastodon, youtube, medium, devto, hashnode, wordpress, threads, twitch, vk, skool",
+                "hint": "Try: x, reddit, linkedin, facebook, instagram, bluesky, github, telegram, discord, slack, pinterest, tiktok, mastodon, youtube, medium, devto, hashnode, wordpress, threads, vk, skool",
             }));
         }
     }

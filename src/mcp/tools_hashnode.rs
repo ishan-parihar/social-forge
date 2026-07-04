@@ -14,8 +14,6 @@ use crate::social::{PostContent, SocialProvider};
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct HnCreatePostInput {
-    /// JWT auth token from login
-    pub token: String,
     /// Hashnode publication ID
     pub publication_id: String,
     /// Post title
@@ -30,8 +28,6 @@ pub struct HnCreatePostInput {
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct HnListPostsInput {
-    /// JWT auth token from login
-    pub token: String,
     /// Hashnode publication ID
     pub publication_id: String,
     /// Page number (default: 0)
@@ -40,8 +36,6 @@ pub struct HnListPostsInput {
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct HnGetPostInput {
-    /// JWT auth token from login
-    pub token: String,
     /// Hashnode post ID
     pub post_id: String,
 }

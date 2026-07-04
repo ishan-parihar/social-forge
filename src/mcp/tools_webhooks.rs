@@ -13,7 +13,6 @@ use crate::api::AppState;
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct WhCreateInput {
-    pub token: String,
     pub name: String,
     pub url: String,
     pub secret: Option<String>,
@@ -22,18 +21,15 @@ pub struct WhCreateInput {
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct WhListInput {
-    pub token: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct WhGetInput {
-    pub token: String,
     pub webhook_id: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct WhUpdateInput {
-    pub token: String,
     pub webhook_id: String,
     pub name: Option<String>,
     pub url: Option<String>,
@@ -44,13 +40,11 @@ pub struct WhUpdateInput {
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct WhDeleteInput {
-    pub token: String,
     pub webhook_id: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct WhTestInput {
-    pub token: String,
     pub webhook_id: String,
 }
 
@@ -113,7 +107,7 @@ pub async fn handle_wh_create(
     state: &AppState,
     input: &WhCreateInput,
 ) -> Result<Json<serde_json::Value>, String> {
-    let user_id = resolve_user(&input.token, state)?;
+    let user_id = resolve_user("", state)?;
 
     if input.name.trim().is_empty() {
         return Err("Webhook name is required".into());
@@ -146,7 +140,7 @@ pub async fn handle_wh_list(
     state: &AppState,
     input: &WhListInput,
 ) -> Result<Json<serde_json::Value>, String> {
-    let user_id = resolve_user(&input.token, state)?;
+    let user_id = resolve_user("", state)?;
 
     let rows: Vec<WebhookRow> = sqlx::query_as(
         r#"
@@ -170,7 +164,7 @@ pub async fn handle_wh_get(
     state: &AppState,
     input: &WhGetInput,
 ) -> Result<Json<serde_json::Value>, String> {
-    let user_id = resolve_user(&input.token, state)?;
+    let user_id = resolve_user("", state)?;
     let webhook_id = Uuid::parse_str(&input.webhook_id)
         .map_err(|_| "Invalid webhook ID format".to_string())?;
 
@@ -196,7 +190,7 @@ pub async fn handle_wh_update(
     state: &AppState,
     input: &WhUpdateInput,
 ) -> Result<Json<serde_json::Value>, String> {
-    let user_id = resolve_user(&input.token, state)?;
+    let user_id = resolve_user("", state)?;
     let webhook_id = Uuid::parse_str(&input.webhook_id)
         .map_err(|_| "Invalid webhook ID format".to_string())?;
 
@@ -249,7 +243,7 @@ pub async fn handle_wh_delete(
     state: &AppState,
     input: &WhDeleteInput,
 ) -> Result<Json<serde_json::Value>, String> {
-    let user_id = resolve_user(&input.token, state)?;
+    let user_id = resolve_user("", state)?;
     let webhook_id = Uuid::parse_str(&input.webhook_id)
         .map_err(|_| "Invalid webhook ID format".to_string())?;
 
@@ -271,7 +265,7 @@ pub async fn handle_wh_test(
     state: &AppState,
     input: &WhTestInput,
 ) -> Result<Json<serde_json::Value>, String> {
-    let user_id = resolve_user(&input.token, state)?;
+    let user_id = resolve_user("", state)?;
     let webhook_id = Uuid::parse_str(&input.webhook_id)
         .map_err(|_| "Invalid webhook ID format".to_string())?;
 

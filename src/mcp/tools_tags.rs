@@ -11,8 +11,6 @@ use crate::api::AppState;
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct TagCreateInput {
-    /// JWT auth token
-    pub token: String,
     /// Tag name (required)
     pub name: String,
     /// Hex color code (e.g. "#6366f1", defaults to indigo)
@@ -21,22 +19,16 @@ pub struct TagCreateInput {
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct TagListInput {
-    /// JWT auth token
-    pub token: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct TagGetInput {
-    /// JWT auth token
-    pub token: String,
     /// Tag ID (UUID)
     pub tag_id: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct TagUpdateInput {
-    /// JWT auth token
-    pub token: String,
     /// Tag ID (UUID)
     pub tag_id: String,
     /// New tag name (optional)
@@ -47,8 +39,6 @@ pub struct TagUpdateInput {
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct TagDeleteInput {
-    /// JWT auth token
-    pub token: String,
     /// Tag ID (UUID)
     pub tag_id: String,
 }

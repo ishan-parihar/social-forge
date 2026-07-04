@@ -14,8 +14,6 @@ use crate::social::{PostContent, SocialProvider};
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct DvCreatePostInput {
-    /// JWT auth token from login
-    pub token: String,
     /// Article title (optional; derived from content first line if absent)
     pub title: Option<String>,
     /// Article body (markdown)
@@ -28,14 +26,10 @@ pub struct DvCreatePostInput {
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct DvListPostsInput {
-    /// JWT auth token from login
-    pub token: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct DvGetPostInput {
-    /// JWT auth token from login
-    pub token: String,
     /// Dev.to article ID
     pub article_id: String,
 }

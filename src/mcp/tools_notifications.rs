@@ -10,8 +10,6 @@ use crate::db::queries;
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct NotifListInput {
-    /// JWT auth token
-    pub token: String,
     /// Max notifications to return (default 50, max 200)
     pub limit: Option<i32>,
     /// Number of notifications to skip
@@ -20,22 +18,16 @@ pub struct NotifListInput {
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct NotifMarkReadInput {
-    /// JWT auth token
-    pub token: String,
     /// Notification ID (UUID)
     pub notification_id: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct NotifMarkAllReadInput {
-    /// JWT auth token
-    pub token: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct NotifCreateInput {
-    /// JWT auth token
-    pub token: String,
     /// Notification title
     pub title: String,
     /// Notification body

@@ -25,8 +25,6 @@ use crate::services::telegram_client::OptionalTelegramClient;
 use crate::social::registry::ProviderRegistry;
 use crate::wa::OptionalWhaClient;
 
-use self::rate_limiter::AuthRateLimiter;
-
 mod analytics;
 mod auth;
 mod billing;
@@ -38,7 +36,6 @@ mod media;
 mod notifications;
 mod onboard;
 mod posts;
-pub mod rate_limiter;
 mod rss;
 mod sse;
 mod signatures;
@@ -56,7 +53,6 @@ pub struct AppState {
     pub config: Config,
     pub broadcast: Broadcaster,
     pub providers: ProviderRegistry,
-    pub rate_limiter: AuthRateLimiter,
     /// Optional AES-256 key for token encryption at rest (32 bytes)
     pub token_key: Option<[u8; 32]>,
     /// Shared Telegram user client (Grammers-based, lazy init)

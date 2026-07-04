@@ -14,8 +14,6 @@ use crate::social::{PostContent, SocialProvider};
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct MdCreatePostInput {
-    /// JWT auth token from login
-    pub token: String,
     /// Post title (optional; derived from content first line if absent)
     pub title: Option<String>,
     /// Post body content (markdown)
@@ -28,14 +26,10 @@ pub struct MdCreatePostInput {
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct MdListPostsInput {
-    /// JWT auth token from login
-    pub token: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct MdGetPostInput {
-    /// JWT auth token from login
-    pub token: String,
     /// Medium post ID
     pub post_id: String,
 }

@@ -13,41 +13,38 @@ use crate::api::AppState;
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct BsProfileInput {
-    pub token: String,
     pub handle_or_did: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct BsTimelineInput {
-    pub token: String,
     pub limit: Option<u32>,
     pub cursor: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct BsCreatePostInput {
-    pub token: String,
     pub text: String,
     pub image_urls: Option<Vec<String>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct BsSearchInput {
-    pub token: String,
     pub query: String,
     pub limit: Option<u32>,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct BsFeedInput {
-    pub token: String,
     pub feed_type: Option<String>,
     pub limit: Option<u32>,
 }
 
 // ── Helpers ──────────────────────────────────────────────────
 
-async fn find_bs_token(state: &AppState, user_id: Uuid) -> Result<String, String> {
+/// Find the Bluesky access token and DID (stored as `internal_id`).
+/// Returns `(access_token, did)`.
+async fn find_bs_token_and_did(state: &AppState, user_id: Uuid) -> Result<(String, String), String> {
     let integrations = crate::db::queries::list_integrations(&state.db, user_id)
         .await
         .map_err(|e| format!("DB error: {e}"))?;
@@ -59,8 +56,14 @@ async fn find_bs_token(state: &AppState, user_id: Uuid) -> Result<String, String
             "Bluesky account not connected. Connect it via the onboarding page first.".to_string()
         })?;
 
-    let __tok = crate::crypto::maybe_decrypt_token(&bs.access_token, state.token_key.as_ref());
-    Ok(__tok)
+    let tok = crate::crypto::maybe_decrypt_token(&bs.access_token, state.token_key.as_ref());
+    let did = bs.internal_id.clone();
+    Ok((tok, did))
+}
+
+/// Backward-compat wrapper that returns only the token.
+async fn find_bs_token(state: &AppState, user_id: Uuid) -> Result<String, String> {
+    Ok(find_bs_token_and_did(state, user_id).await?.0)
 }
 
 // ── Tool Implementations ─────────────────────────────────────
@@ -225,7 +228,6 @@ pub async fn handle_bs_feed(
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct BsReplyInput {
-    pub token: String,
     pub post_uri: String,
     pub content: String,
 }
@@ -235,12 +237,12 @@ pub async fn handle_bs_reply(
     input: &BsReplyInput,
 ) -> Result<Json<Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
-    let token = find_bs_token(state, user_id).await?;
+    let (token, did) = find_bs_token_and_did(state, user_id).await?;
     let client = reqwest::Client::new();
 
     let body = json!({
         "collection": "app.bsky.feed.post",
-        "repo": input.token,
+        "repo": did,
         "record": {
             "$type": "app.bsky.feed.post",
             "text": input.content,

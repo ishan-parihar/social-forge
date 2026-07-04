@@ -14,14 +14,10 @@ use crate::social::SocialProvider;
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct TtProfileInput {
-    /// TikTok access token (optional — will use stored integration token if empty)
-    pub token: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct TtCreatePostInput {
-    /// TikTok access token (optional — will use stored integration token if empty)
-    pub token: String,
     /// Caption / description for the video (max 150 chars)
     pub text: String,
     /// Base64-encoded video data (alternative to video_url)
@@ -32,8 +28,6 @@ pub struct TtCreatePostInput {
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct TtListVideosInput {
-    /// TikTok access token (optional — will use stored integration token if empty)
-    pub token: String,
     /// Maximum number of videos to return (1-100, default 20)
     pub max_count: Option<u32>,
 }
@@ -66,19 +60,6 @@ fn create_tiktok_provider(state: &AppState) -> TikTokProvider {
     TikTokProvider::new(&state.config)
 }
 
-/// Resolve the effective access token: prefer the user-provided token if non-empty,
-/// otherwise fall back to the stored integration token.
-fn resolve_token(
-    provided: &str,
-    stored_token: &str,
-) -> String {
-    if provided.is_empty() {
-        stored_token.to_string()
-    } else {
-        provided.to_string()
-    }
-}
-
 // ── Tool Handlers ───────────────────────────────────────────
 
 pub async fn handle_tt_profile(
@@ -87,7 +68,7 @@ pub async fn handle_tt_profile(
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let (stored_token, _) = find_tiktok_integration(state, user_id).await?;
-    let token = resolve_token(&input.token, &stored_token);
+    let token = stored_token;
 
     let provider = create_tiktok_provider(state);
     let result = provider
@@ -104,7 +85,7 @@ pub async fn handle_tt_create_post(
 ) -> Result<Json<serde_json::value::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let (stored_token, _) = find_tiktok_integration(state, user_id).await?;
-    let token = resolve_token(&input.token, &stored_token);
+    let token = stored_token;
 
     // Build media from video_url or video_data
     let mut media = Vec::new();
@@ -140,7 +121,7 @@ pub async fn handle_tt_list_videos(
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let (stored_token, _) = find_tiktok_integration(state, user_id).await?;
-    let token = resolve_token(&input.token, &stored_token);
+    let token = stored_token;
 
     let provider = create_tiktok_provider(state);
     let max_count = input.max_count.unwrap_or(20);

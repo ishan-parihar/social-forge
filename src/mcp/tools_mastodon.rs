@@ -14,8 +14,6 @@ use crate::social::SocialProvider;
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct MsCreatePostInput {
-    /// Mastodon access token (optional — will use stored integration token if empty)
-    pub token: String,
     /// Content of the toot/post (max 500 characters)
     pub content: String,
     /// Visibility: "public", "unlisted", "private", "direct" (default: "public")
@@ -36,8 +34,6 @@ pub struct MsCreatePostInput {
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct MsGetTimelineInput {
-    /// Mastodon access token (optional — will use stored integration token if empty)
-    pub token: String,
     /// Timeline type: "home", "local", "trending", "public" (default: "home")
     pub timeline_type: Option<String>,
     /// Maximum number of posts to return (default: 20)
@@ -46,16 +42,12 @@ pub struct MsGetTimelineInput {
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct MsGetPostInput {
-    /// Mastodon access token (optional — will use stored integration token if empty)
-    pub token: String,
     /// ID of the post/status to retrieve
     pub post_id: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct MsSearchInput {
-    /// Mastodon access token (optional — will use stored integration token if empty)
-    pub token: String,
     /// Search query
     pub query: String,
     /// Maximum number of results to return (default: 20)
@@ -88,16 +80,6 @@ fn create_mastodon_provider(state: &AppState) -> MastodonProvider {
     MastodonProvider::new(&state.config)
 }
 
-/// Resolve the effective access token: prefer the user-provided token if non-empty,
-/// otherwise fall back to the stored integration token.
-fn resolve_token(provided: &str, stored_token: &str) -> String {
-    if provided.is_empty() {
-        stored_token.to_string()
-    } else {
-        provided.to_string()
-    }
-}
-
 // ── Tool Handlers ───────────────────────────────────────────
 
 pub async fn handle_ms_create_post(
@@ -106,7 +88,7 @@ pub async fn handle_ms_create_post(
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let stored_token = find_mastodon_integration(state, user_id).await?;
-    let token = resolve_token(&input.token, &stored_token);
+    let token = stored_token;
 
     // Build media attachments from media_urls if provided
     let mut media = Vec::new();
@@ -165,7 +147,7 @@ pub async fn handle_ms_get_timeline(
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let stored_token = find_mastodon_integration(state, user_id).await?;
-    let token = resolve_token(&input.token, &stored_token);
+    let token = stored_token;
 
     let tl_type = input
         .timeline_type
@@ -188,7 +170,7 @@ pub async fn handle_ms_get_post(
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let stored_token = find_mastodon_integration(state, user_id).await?;
-    let token = resolve_token(&input.token, &stored_token);
+    let token = stored_token;
 
     let provider = create_mastodon_provider(state);
     let result = provider
@@ -205,7 +187,7 @@ pub async fn handle_ms_search(
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let stored_token = find_mastodon_integration(state, user_id).await?;
-    let token = resolve_token(&input.token, &stored_token);
+    let token = stored_token;
 
     let limit = input.limit.unwrap_or(20);
 
@@ -220,7 +202,6 @@ pub async fn handle_ms_search(
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct MsReplyInput {
-    pub token: String,
     pub status_id: String,
     pub content: String,
 }
@@ -231,7 +212,7 @@ pub async fn handle_ms_reply(
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let stored_token = find_mastodon_integration(state, user_id).await?;
-    let token = resolve_token(&input.token, &stored_token);
+    let token = stored_token;
 
     let provider = create_mastodon_provider(state);
     let post = crate::social::PostContent {

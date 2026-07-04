@@ -10,8 +10,6 @@ use crate::api::AppState;
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct AnalyticsGetInput {
-    /// JWT auth token
-    pub token: String,
     /// Provider identifier (e.g. "instagram", "facebook", "threads")
     pub provider: String,
     /// Number of days of analytics (default 7)
@@ -20,8 +18,6 @@ pub struct AnalyticsGetInput {
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct AnalyticsPostInput {
-    /// JWT auth token
-    pub token: String,
     /// Post ID (UUID from our system, not platform)
     pub post_id: String,
 }

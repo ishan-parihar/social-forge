@@ -135,8 +135,6 @@ async fn main() -> anyhow::Result<()> {
     let providers_arc = Arc::new(providers);
 
     // ── Shared app state ─────────────────────────────────────
-    let rate_limiter = api::rate_limiter::AuthRateLimiter::new(5, 60); // 5 attempts per 60 seconds
-
     // Parse optional token encryption key (64 hex chars = 32 bytes)
     let token_key = config
         .token_encryption_key
@@ -171,7 +169,6 @@ async fn main() -> anyhow::Result<()> {
         config: config.clone(),
         broadcast: broadcaster.clone(),
         providers: (*providers_arc).clone(),
-        rate_limiter,
         token_key,
         telegram_client_manager: telegram_client_manager.clone(),
         wa_client,

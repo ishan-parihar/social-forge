@@ -1,17 +1,9 @@
-type Interceptor = (req: RequestInit & { url: string }) => RequestInit & { url: string };
-type ResponseInterceptor = (res: Response) => Response | Promise<Response>;
-
 class ApiClient {
   private base: string;
-  private reqInterceptors: Interceptor[] = [];
-  private resInterceptors: ResponseInterceptor[] = [];
 
   constructor(base = "") {
     this.base = base;
   }
-
-  addRequestInterceptor(fn: Interceptor) { this.reqInterceptors.push(fn); }
-  addResponseInterceptor(fn: ResponseInterceptor) { this.resInterceptors.push(fn); }
 
   async request<T>(method: string, path: string, body?: unknown, timeoutMs = 30000, signal?: AbortSignal): Promise<{ data?: T; error?: string; status: number }> {
     let headers: Record<string, string> = {};
@@ -23,8 +15,7 @@ class ApiClient {
       reqBody = body;
     }
 
-    let reqInit: RequestInit & { url: string } = {
-      url: `${this.base}${path}`,
+    const reqInit: RequestInit = {
       method,
       headers,
       body: reqBody,
@@ -34,36 +25,32 @@ class ApiClient {
       credentials: "include",
     };
 
-    for (const interceptor of this.reqInterceptors) {
-      reqInit = interceptor(reqInit);
-    }
-
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), timeoutMs);
       const combinedSignal = signal ? AbortSignal.any([controller.signal, signal]) : controller.signal;
-      const res = await fetch(reqInit.url, { ...reqInit, signal: combinedSignal });
+      const res = await fetch(`${this.base}${path}`, { ...reqInit, signal: combinedSignal });
       clearTimeout(timeout);
-
-      let processedRes = res;
-      for (const interceptor of this.resInterceptors) {
-        processedRes = await interceptor(processedRes);
-      }
 
       // 401 → bounce to /login. The session either never existed,
       // expired, or the cookie was cleared. Don't try to parse the
       // body — just redirect.
-      if (processedRes.status === 401 && !path.startsWith("/api/auth/")) {
+      if (res.status === 401 && !path.startsWith("/api/auth/")) {
         if (typeof window !== "undefined") {
           window.location.href = "/login";
         }
         return { error: "Not authenticated", status: 401 };
       }
 
-      const text = await processedRes.text();
-      const data = text ? JSON.parse(text) : {};
-      if (!processedRes.ok) return { error: data.error || `HTTP ${processedRes.status}`, status: processedRes.status };
-      return { data, status: processedRes.status };
+      const text = await res.text();
+      let data: any;
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch {
+        return { error: `Invalid JSON response from ${path}`, status: res.status };
+      }
+      if (!res.ok) return { error: data.error || `HTTP ${res.status}`, status: res.status };
+      return { data, status: res.status };
     } catch (e: any) {
       if (e.name === "AbortError") return { error: "Request timed out", status: 0 };
       return { error: e.message, status: 0 };

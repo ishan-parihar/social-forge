@@ -15,8 +15,6 @@ use crate::social::SocialProvider;
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct SlSendMessageInput {
-    /// Slack access token (optional — will use stored integration token if empty)
-    pub token: String,
     /// Channel ID (e.g. "C01234ABCD") or channel name (e.g. "#general")
     pub channel: String,
     /// Message text content (up to 40,000 characters, supports mrkdwn)
@@ -25,14 +23,10 @@ pub struct SlSendMessageInput {
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct SlListChannelsInput {
-    /// Slack access token (optional — will use stored integration token if empty)
-    pub token: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct SlChannelHistoryInput {
-    /// Slack access token (optional — will use stored integration token if empty)
-    pub token: String,
     /// Channel ID (e.g. "C01234ABCD")
     pub channel: String,
     /// Maximum number of messages to return (1-200, default 50)
@@ -41,8 +35,6 @@ pub struct SlChannelHistoryInput {
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct SlListUsersInput {
-    /// Slack access token (optional — will use stored integration token if empty)
-    pub token: String,
 }
 
 // ── Helpers ──────────────────────────────────────────────────
@@ -71,19 +63,6 @@ fn create_slack_provider(state: &AppState) -> SlackProvider {
     SlackProvider::new(&state.config)
 }
 
-/// Resolve the effective access token: prefer the user-provided token if non-empty,
-/// otherwise fall back to the stored integration token.
-fn resolve_token(
-    provided: &str,
-    stored_token: &str,
-) -> String {
-    if provided.is_empty() {
-        stored_token.to_string()
-    } else {
-        provided.to_string()
-    }
-}
-
 // ── Tool Implementations ─────────────────────────────────────
 
 pub async fn handle_sl_send_message(
@@ -92,7 +71,7 @@ pub async fn handle_sl_send_message(
 ) -> Result<Json<Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let stored_token = find_slack_token(state, user_id).await?;
-    let token = resolve_token(&input.token, &stored_token);
+    let token = stored_token;
 
     let provider = create_slack_provider(state);
 
@@ -118,7 +97,7 @@ pub async fn handle_sl_list_channels(
 ) -> Result<Json<Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let stored_token = find_slack_token(state, user_id).await?;
-    let token = resolve_token(&input.token, &stored_token);
+    let token = stored_token;
 
     let provider = create_slack_provider(state);
     let result = provider
@@ -135,7 +114,7 @@ pub async fn handle_sl_channel_history(
 ) -> Result<Json<Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let stored_token = find_slack_token(state, user_id).await?;
-    let token = resolve_token(&input.token, &stored_token);
+    let token = stored_token;
 
     let provider = create_slack_provider(state);
     let limit = input.limit.unwrap_or(50);
@@ -153,7 +132,7 @@ pub async fn handle_sl_list_users(
 ) -> Result<Json<Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let stored_token = find_slack_token(state, user_id).await?;
-    let token = resolve_token(&input.token, &stored_token);
+    let token = stored_token;
 
     let provider = create_slack_provider(state);
     let result = provider

@@ -14,8 +14,6 @@ use crate::social::{PostContent, SocialProvider};
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct WpCreatePostInput {
-    /// JWT auth token from login
-    pub token: String,
     /// Post title
     pub title: String,
     /// Post body content (HTML or blocks)
@@ -30,8 +28,6 @@ pub struct WpCreatePostInput {
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct WpListPostsInput {
-    /// JWT auth token from login
-    pub token: String,
     /// Filter by status: "publish", "draft", "pending", etc.
     pub status: Option<String>,
     /// Number of posts per page (default: 10)
@@ -40,16 +36,12 @@ pub struct WpListPostsInput {
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct WpGetPostInput {
-    /// JWT auth token from login
-    pub token: String,
     /// WordPress post ID
     pub post_id: i32,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct WpListCategoriesInput {
-    /// JWT auth token from login
-    pub token: String,
 }
 
 // ── Helpers ──────────────────────────────────────────────────

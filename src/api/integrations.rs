@@ -1098,10 +1098,10 @@ pub async fn connect_web3(
         ));
     }
 
-    // Verify provider is Web3-capable (farcaster or nostr only)
-    if body.provider != "farcaster" && body.provider != "nostr" {
+    // Verify provider is Web3-capable (farcaster only — nostr was deleted)
+    if body.provider != "farcaster" {
         return Err(AppError::BadRequest(
-            format!("Web3 auth is not supported for provider '{}'. Only 'farcaster' and 'nostr' support this auth method.", body.provider)
+            format!("Web3 auth is not supported for provider '{}'. Only 'farcaster' supports this auth method.", body.provider)
         ));
     }
 
