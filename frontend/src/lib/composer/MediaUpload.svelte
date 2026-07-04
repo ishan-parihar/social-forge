@@ -59,7 +59,7 @@
 <div
   ondragover={(e) => e.preventDefault()}
   ondrop={handleDrop}
-  class="border-2 border-dashed border-[#1e2435] rounded-lg p-4 text-center hover:border-indigo-500/50 transition-colors"
+  class="border-2 border-dashed border-line rounded-lg p-4 text-center hover:border-indigo-500/50 transition-colors"
 >
   {#if items.length > 0}
     <div class="grid grid-cols-4 gap-2 mb-3">
@@ -68,7 +68,7 @@
           {#if item.mime_type.startsWith("image/")}
             <img src={item.url} alt={item.original_name} class="w-full h-20 object-cover rounded-lg" />
           {:else}
-            <div class="w-full h-20 bg-[#1e2435] rounded-lg flex items-center justify-center text-xs text-[#6b7280]">
+            <div class="w-full h-20 bg-[#1e2435] rounded-lg flex items-center justify-center text-xs text-muted">
               {item.original_name}
             </div>
           {/if}
@@ -83,7 +83,7 @@
   {/if}
 
   {#if uploading}
-    <div class="text-sm text-[#6b7280]">Uploading...</div>
+    <div class="text-sm text-muted">Uploading...</div>
   {:else}
     <div class="flex items-center justify-center gap-4">
       <label class="cursor-pointer text-sm text-indigo-400 hover:text-indigo-300">

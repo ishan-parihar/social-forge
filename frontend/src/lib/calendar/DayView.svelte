@@ -30,19 +30,19 @@
   });
 </script>
 
-<div class="bg-[#131720] border border-[#1e2435] rounded-xl overflow-hidden">
-  <div class="text-center py-3 border-b border-[#1e2435]">
+<div class="bg-surface border border-line rounded-xl overflow-hidden">
+  <div class="text-center py-3 border-b border-line">
     <div class="text-lg font-semibold">
       {date.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
     </div>
-    <div class="text-xs text-[#6b7280]">{dayEvents.length} posts scheduled</div>
+    <div class="text-xs text-muted">{dayEvents.length} posts scheduled</div>
   </div>
   <div class="overflow-y-auto max-h-[700px]">
     {#each hours as hour (hour)}
-      <div class="flex border-b border-[#1e2435] min-h-[56px]">
-        <div class="w-16 text-xs text-[#6b7280] px-2 py-1 border-r border-[#1e2435] shrink-0">{hour}</div>
+      <div class="flex border-b border-line min-h-[56px]">
+        <div class="w-16 text-xs text-muted px-2 py-1 border-r border-line shrink-0">{hour}</div>
         <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <div class="flex-1 px-2 py-1 space-y-0.5 cursor-pointer hover:bg-[#1a1f2e]" onclick={() => onDateClick?.(key)}>
+        <div class="flex-1 px-2 py-1 space-y-0.5 cursor-pointer hover:bg-surface-hover" onclick={() => onDateClick?.(key)}>
           {#each (eventsByHour.get(hour.slice(0, 2)) || []) as event (event.id)}
             <div class="flex items-center gap-1" onclick={() => onEventClick?.(event.id)} onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') onEventClick?.(event.id); }} role="button" tabindex="-1">
               {#if onToggleSelect}

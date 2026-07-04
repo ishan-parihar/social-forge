@@ -5,5 +5,5 @@
     onContentChange?: (html: string) => void;
   } = $props();
 </script>
-<div class="text-xs text-[#6b7280] mb-1">Content</div>
+<div class="text-xs text-muted mb-1">Content</div>
 <RichTextEditor {content} onUpdate={onContentChange} placeholder="Write your post..." />

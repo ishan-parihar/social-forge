@@ -68,18 +68,18 @@
 <Modal open={show} title="Connect via API Key" onclose={handleClose}>
   <form onsubmit={handleSubmit} class="space-y-4">
     <div>
-      <label for="connect-provider" class="block text-xs font-medium text-[#6b7280] mb-1">Provider</label>
+      <label for="connect-provider" class="block text-xs font-medium text-muted mb-1">Provider</label>
       <input
         id="connect-provider"
         type="text"
         value={provider}
         disabled
-        class="w-full px-3 py-2 bg-[#0d1117] border border-[#1e2435] rounded-lg text-sm text-[#6b7280] cursor-not-allowed"
+        class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-muted cursor-not-allowed"
       />
     </div>
 
     <div>
-      <label for="api-key" class="block text-xs font-medium text-[#6b7280] mb-1">
+      <label for="api-key" class="block text-xs font-medium text-muted mb-1">
         API Key <span class="text-red-400">*</span>
       </label>
       <input
@@ -87,12 +87,12 @@
         type="password"
         bind:value={apiKey}
         placeholder="Enter your API key"
-        class="w-full px-3 py-2 bg-[#0d1117] border border-[#1e2435] rounded-lg text-sm text-white placeholder-[#4a5070] focus:outline-none focus:border-indigo-500 transition-colors"
+        class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-white placeholder-[#4a5070] focus:outline-none focus:border-indigo-500 transition-colors"
       />
     </div>
 
     <div>
-      <label for="instance-url" class="block text-xs font-medium text-[#6b7280] mb-1">
+      <label for="instance-url" class="block text-xs font-medium text-muted mb-1">
         Instance URL <span class="text-[#4a5070]">(optional)</span>
       </label>
       <input
@@ -100,12 +100,12 @@
         type="text"
         bind:value={instanceUrl}
         placeholder="https://lemmy.world"
-        class="w-full px-3 py-2 bg-[#0d1117] border border-[#1e2435] rounded-lg text-sm text-white placeholder-[#4a5070] focus:outline-none focus:border-indigo-500 transition-colors"
+        class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-white placeholder-[#4a5070] focus:outline-none focus:border-indigo-500 transition-colors"
       />
     </div>
 
     <div>
-      <label for="label" class="block text-xs font-medium text-[#6b7280] mb-1">
+      <label for="label" class="block text-xs font-medium text-muted mb-1">
         Label <span class="text-[#4a5070]">(optional)</span>
       </label>
       <input
@@ -113,7 +113,7 @@
         type="text"
         bind:value={label}
         placeholder="e.g. My Lemmy Account"
-        class="w-full px-3 py-2 bg-[#0d1117] border border-[#1e2435] rounded-lg text-sm text-white placeholder-[#4a5070] focus:outline-none focus:border-indigo-500 transition-colors"
+        class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-white placeholder-[#4a5070] focus:outline-none focus:border-indigo-500 transition-colors"
       />
     </div>
 

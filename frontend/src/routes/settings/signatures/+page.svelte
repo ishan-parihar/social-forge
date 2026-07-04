@@ -131,11 +131,11 @@
 <div class="page-enter space-y-6">
   <div>
     <h2 class="text-xl font-semibold">Signatures</h2>
-    <p class="text-sm text-[#6b7280] mt-1">Create reusable signature blocks that you can insert into posts.</p>
+    <p class="text-sm text-muted mt-1">Create reusable signature blocks that you can insert into posts.</p>
   </div>
 
   {#if error}
-    <div class="bg-[#131720] border border-red-500/30 rounded-xl p-4 text-sm text-red-400">
+    <div class="bg-surface border border-red-500/30 rounded-xl p-4 text-sm text-red-400">
       {error}
       <button onclick={load} class="ml-2 underline">Retry</button>
     </div>
@@ -153,35 +153,35 @@
   </div>
 
   {#if showForm}
-    <div class="bg-[#131720] border border-[#1e2435] rounded-xl p-5 space-y-4">
+    <div class="bg-surface border border-line rounded-xl p-5 space-y-4">
       <div>
-        <label for="sig-name" class="text-xs text-[#6b7280] block mb-1">Name</label>
+        <label for="sig-name" class="text-xs text-muted block mb-1">Name</label>
         <input
           id="sig-name"
           type="text"
           bind:value={newName}
           placeholder="e.g. Standard CTA"
-          class="w-full px-3 py-2 bg-[#0d1117] border border-[#1e2435] rounded-lg text-sm focus:border-indigo-500 outline-none"
+          class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-indigo-500 outline-none"
         />
       </div>
       <div>
-        <label for="sig-content" class="text-xs text-[#6b7280] block mb-1">Content</label>
+        <label for="sig-content" class="text-xs text-muted block mb-1">Content</label>
         <textarea
           id="sig-content"
           bind:value={newContent}
           placeholder="Signature text (HTML supported)..."
           rows="4"
-          class="w-full px-3 py-2 bg-[#0d1117] border border-[#1e2435] rounded-lg text-sm focus:border-indigo-500 outline-none resize-y"
+          class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-indigo-500 outline-none resize-y"
         ></textarea>
       </div>
       <div>
-        <label for="sig-provider" class="text-xs text-[#6b7280] block mb-1">Provider (optional — leave empty for global)</label>
+        <label for="sig-provider" class="text-xs text-muted block mb-1">Provider (optional — leave empty for global)</label>
         <input
           id="sig-provider"
           type="text"
           bind:value={newProvider}
           placeholder="e.g. x, linkedin, bluesky"
-          class="w-full px-3 py-2 bg-[#0d1117] border border-[#1e2435] rounded-lg text-sm focus:border-indigo-500 outline-none"
+          class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-indigo-500 outline-none"
         />
       </div>
       <Button onclick={handleCreate} disabled={creating}>
@@ -196,42 +196,42 @@
       <Spinner size="lg" />
     </div>
   {:else if signatures.length === 0 && !showForm}
-    <div class="bg-[#131720] border border-[#1e2435] rounded-xl p-8 text-center">
-      <p class="text-[#6b7280] text-sm">No signatures yet. Create one to quickly insert reusable content into your posts.</p>
+    <div class="bg-surface border border-line rounded-xl p-8 text-center">
+      <p class="text-muted text-sm">No signatures yet. Create one to quickly insert reusable content into your posts.</p>
     </div>
   {:else}
     <div class="page-enter space-y-3">
       {#each signatures as sig (sig.id)}
-        <div class="bg-[#131720] border border-[#1e2435] rounded-xl p-4">
+        <div class="bg-surface border border-line rounded-xl p-4">
           {#if editing === sig.id}
             <!-- Inline edit -->
             <div class="page-enter space-y-3">
               <div>
-                <label for="edit-name-{sig.id}" class="text-xs text-[#6b7280] block mb-1">Name</label>
+                <label for="edit-name-{sig.id}" class="text-xs text-muted block mb-1">Name</label>
                 <input
                   id="edit-name-{sig.id}"
                   type="text"
                   bind:value={editName}
-                  class="w-full px-3 py-2 bg-[#0d1117] border border-[#1e2435] rounded-lg text-sm focus:border-indigo-500 outline-none"
+                  class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-indigo-500 outline-none"
                 />
               </div>
               <div>
-                <label for="edit-content-{sig.id}" class="text-xs text-[#6b7280] block mb-1">Content</label>
+                <label for="edit-content-{sig.id}" class="text-xs text-muted block mb-1">Content</label>
                 <textarea
                   id="edit-content-{sig.id}"
                   bind:value={editContent}
                   rows="3"
-                  class="w-full px-3 py-2 bg-[#0d1117] border border-[#1e2435] rounded-lg text-sm focus:border-indigo-500 outline-none resize-y"
+                  class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-indigo-500 outline-none resize-y"
                 ></textarea>
               </div>
               <div>
-                <label for="edit-provider-{sig.id}" class="text-xs text-[#6b7280] block mb-1">Provider</label>
+                <label for="edit-provider-{sig.id}" class="text-xs text-muted block mb-1">Provider</label>
                 <input
                   id="edit-provider-{sig.id}"
                   type="text"
                   bind:value={editProvider}
                   placeholder="Global"
-                  class="w-full px-3 py-2 bg-[#0d1117] border border-[#1e2435] rounded-lg text-sm focus:border-indigo-500 outline-none"
+                  class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-indigo-500 outline-none"
                 />
               </div>
               <div class="flex gap-2">
@@ -250,10 +250,10 @@
                   {#if sig.provider}
                     <span class="text-xs px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">{sig.provider}</span>
                   {:else}
-                    <span class="text-xs px-2 py-0.5 rounded-full bg-[#1e2435] text-[#6b7280]">Global</span>
+                    <span class="text-xs px-2 py-0.5 rounded-full bg-[#1e2435] text-muted">Global</span>
                   {/if}
                 </div>
-                <p class="text-xs text-[#6b7280] mt-1">{preview(sig.content)}</p>
+                <p class="text-xs text-muted mt-1">{preview(sig.content)}</p>
               </div>
               <div class="flex gap-1 flex-shrink-0">
                 <Button size="sm" variant="ghost" onclick={() => startEdit(sig)} aria-label="Edit signature">Edit</Button>

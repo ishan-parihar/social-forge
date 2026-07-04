@@ -64,7 +64,7 @@
   <div class="text-center space-y-4">
     {#if status === 'loading'}
       <div class="animate-spin h-8 w-8 border-2 border-indigo-500 border-t-transparent rounded-full mx-auto"></div>
-      <p class="text-sm text-[#6b7280]">Processing OAuth callback...</p>
+      <p class="text-sm text-muted">Processing OAuth callback...</p>
     {:else if status === 'pending'}
       <PagePicker
         provider={pendingProvider}
@@ -76,12 +76,12 @@
     {:else if status === 'success'}
       <div class="text-4xl">✅</div>
       <p class="text-sm text-green-400">Connected as {message}</p>
-      <p class="text-xs text-[#6b7280]">This window will close automatically.</p>
+      <p class="text-xs text-muted">This window will close automatically.</p>
     {:else}
       <div class="text-4xl">❌</div>
       <p class="text-sm text-red-400">Connection failed</p>
-      <p class="text-xs text-[#6b7280]">{message}</p>
-      <p class="text-xs text-[#6b7280]">This window will close automatically.</p>
+      <p class="text-xs text-muted">{message}</p>
+      <p class="text-xs text-muted">This window will close automatically.</p>
     {/if}
   </div>
 </div>

@@ -59,47 +59,47 @@
   }
 </script>
 
-<div class="bg-[#131720] border border-[#1e2435] rounded-xl p-5 space-y-4">
+<div class="bg-surface border border-line rounded-xl p-5 space-y-4">
   {#if error}
     <div class="text-sm text-red-400">{error}</div>
   {/if}
 
   <div>
-    <label for="wh-name" class="text-xs text-[#6b7280] block mb-1">Name</label>
+    <label for="wh-name" class="text-xs text-muted block mb-1">Name</label>
     <input
       id="wh-name"
       type="text"
       bind:value={name}
       placeholder="e.g. Production Hook"
-      class="w-full px-3 py-2 bg-[#0d1117] border border-[#1e2435] rounded-lg text-sm focus:border-indigo-500 outline-none"
+      class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-indigo-500 outline-none"
     />
   </div>
 
   <div>
-    <label for="wh-url" class="text-xs text-[#6b7280] block mb-1">URL</label>
+    <label for="wh-url" class="text-xs text-muted block mb-1">URL</label>
     <input
       id="wh-url"
       type="url"
       bind:value={url}
       placeholder="https://example.com/webhook"
-      class="w-full px-3 py-2 bg-[#0d1117] border border-[#1e2435] rounded-lg text-sm focus:border-indigo-500 outline-none"
+      class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-indigo-500 outline-none"
     />
   </div>
 
   <div>
-    <label for="wh-secret" class="text-xs text-[#6b7280] block mb-1">Secret (optional — used for HMAC signing)</label>
+    <label for="wh-secret" class="text-xs text-muted block mb-1">Secret (optional — used for HMAC signing)</label>
     <div class="relative">
       <input
         id="wh-secret"
         type={showSecret ? 'text' : 'password'}
         bind:value={secret}
         placeholder="Leave empty for no signing"
-        class="w-full px-3 py-2 bg-[#0d1117] border border-[#1e2435] rounded-lg text-sm focus:border-indigo-500 outline-none pr-10"
+        class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-indigo-500 outline-none pr-10"
       />
       <button
         type="button"
         onclick={() => (showSecret = !showSecret)}
-        class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-[#6b7280] hover:text-white"
+        class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted hover:text-white"
         aria-label={showSecret ? 'Hide secret' : 'Show secret'}
       >
         {showSecret ? 'Hide' : 'Show'}
@@ -108,7 +108,7 @@
   </div>
 
   <div>
-    <span class="text-xs text-[#6b7280] block mb-1">Event Types</span>
+    <span class="text-xs text-muted block mb-1">Event Types</span>
     <div class="flex flex-wrap gap-2">
       {#each allEventTypes as et (et.value)}
         <label class="flex items-center gap-1.5 text-sm cursor-pointer">
@@ -118,7 +118,7 @@
             onchange={() => toggleEventType(et.value)}
             class="accent-indigo-500"
           />
-          <span class="text-[#d1d5db]">{et.label}</span>
+          <span class="text-content-secondary">{et.label}</span>
         </label>
       {/each}
     </div>
@@ -128,7 +128,7 @@
     <div>
       <label class="flex items-center gap-2 text-sm cursor-pointer">
         <input type="checkbox" bind:checked={is_active} class="accent-indigo-500" />
-        <span class="text-[#d1d5db]">Active</span>
+        <span class="text-content-secondary">Active</span>
       </label>
     </div>
   {/if}

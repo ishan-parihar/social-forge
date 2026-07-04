@@ -85,12 +85,12 @@
 </script>
 
 <Modal {open} title="Post Sets" {onclose}>
-  <div class="flex gap-4 border-b border-[#1e2435] mb-4">
+  <div class="flex gap-4 border-b border-line mb-4">
     <button
       onclick={() => (tab = 'save')}
       class="pb-2 text-sm font-medium transition-colors"
       class:text-indigo-400={tab === 'save'}
-      class:text-[#6b7280]={tab !== 'save'}
+      class:text-muted={tab !== 'save'}
       class:border-b-2={tab === 'save'}
       class:border-indigo-500={tab === 'save'}
       class:border-transparent={tab !== 'save'}
@@ -101,7 +101,7 @@
       onclick={() => (tab = 'load')}
       class="pb-2 text-sm font-medium transition-colors"
       class:text-indigo-400={tab === 'load'}
-      class:text-[#6b7280]={tab !== 'load'}
+      class:text-muted={tab !== 'load'}
       class:border-b-2={tab === 'load'}
       class:border-indigo-500={tab === 'load'}
       class:border-transparent={tab !== 'load'}
@@ -116,26 +116,26 @@
         <div class="text-sm text-red-400">{saveError}</div>
       {/if}
       <div>
-        <label for="ps-name" class="text-xs text-[#6b7280] block mb-1">Name</label>
+        <label for="ps-name" class="text-xs text-muted block mb-1">Name</label>
         <input
           id="ps-name"
           type="text"
           bind:value={saveName}
           placeholder="e.g. Weekly promotion"
-          class="w-full px-3 py-2 bg-[#0d1117] border border-[#1e2435] rounded-lg text-sm focus:border-indigo-500 outline-none"
+          class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-indigo-500 outline-none"
         />
       </div>
       <div>
-        <label for="ps-desc" class="text-xs text-[#6b7280] block mb-1">Description (optional)</label>
+        <label for="ps-desc" class="text-xs text-muted block mb-1">Description (optional)</label>
         <textarea
           id="ps-desc"
           bind:value={saveDescription}
           placeholder="Describe this post set..."
           rows="2"
-          class="w-full px-3 py-2 bg-[#0d1117] border border-[#1e2435] rounded-lg text-sm focus:border-indigo-500 outline-none resize-y"
+          class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-indigo-500 outline-none resize-y"
         ></textarea>
       </div>
-      <div class="text-xs text-[#6b7280]">
+      <div class="text-xs text-muted">
         Saves current content, selected channels, and schedule.
       </div>
       <Button onclick={handleSave}>
@@ -145,7 +145,7 @@
   {:else}
     <div class="space-y-2 max-h-60 overflow-y-auto">
       {#if savedSets.length === 0}
-        <div class="text-sm text-[#6b7280] text-center py-6">
+        <div class="text-sm text-muted text-center py-6">
           No saved post sets. Save a set on the "Save" tab to reuse it later.
         </div>
       {:else}
@@ -155,16 +155,16 @@
             tabindex="0"
             onclick={() => handleLoad(set)}
             onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleLoad(set); } }}
-            class="w-full text-left bg-[#0b0e14] border border-[#1e2435] rounded-lg p-3 hover:bg-[#1a1f2e] transition-colors cursor-pointer"
+            class="w-full text-left bg-[#0b0e14] border border-line rounded-lg p-3 hover:bg-surface-hover transition-colors cursor-pointer"
             aria-label={'Load set: ' + set.name}
           >
             <div class="flex items-start justify-between gap-2">
               <div class="min-w-0 flex-1">
                 <p class="text-sm font-medium truncate">{set.name}</p>
                 {#if set.description}
-                  <p class="text-xs text-[#6b7280] mt-0.5 truncate">{set.description}</p>
+                  <p class="text-xs text-muted mt-0.5 truncate">{set.description}</p>
                 {/if}
-                <p class="text-xs text-[#6b7280] mt-1">
+                <p class="text-xs text-muted mt-1">
                   {set.channelIds.length} channel(s) &middot;
                   {new Date(set.createdAt).toLocaleDateString()}
                 </p>
@@ -172,7 +172,7 @@
               <button
                 onclick={(e) => handleDelete(e, set.id)}
                 aria-label="Delete set"
-                class="text-[#6b7280] hover:text-red-400 transition-colors text-sm flex-shrink-0"
+                class="text-muted hover:text-red-400 transition-colors text-sm flex-shrink-0"
               >
                 &times;
               </button>

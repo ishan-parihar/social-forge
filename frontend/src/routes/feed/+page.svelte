@@ -254,9 +254,9 @@
   <!-- Header -->
   <div class="flex items-center justify-between">
     <div class="flex items-center gap-3">
-      <h2 class="text-xl font-bold text-[#e8edf5] tracking-tight">Feed</h2>
+      <h2 class="text-xl font-bold text-content tracking-tight">Feed</h2>
       {#if !loading && posts.length > 0}
-        <span class="text-xs text-[#6b7280] font-mono bg-[#161b28] px-2 py-0.5 rounded-full border border-[#1e2435]">
+        <span class="text-xs text-muted font-mono bg-[#161b28] px-2 py-0.5 rounded-full border border-line">
           {filteredPosts.length}{#if filteredPosts.length !== posts.length} / {posts.length}{/if}
         </span>
       {/if}
@@ -268,8 +268,8 @@
         onclick={triggerImport}
         disabled={importing}
         class="flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-lg transition-all duration-200
-          bg-[#161b28] text-[#9ca3af] border border-[#1e2435]
-          hover:border-[#1e2435] hover:text-[#e8edf5]
+          bg-[#161b28] text-[#9ca3af] border border-line
+          hover:border-line hover:text-content
           disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <svg
@@ -310,7 +310,7 @@
             class="flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-lg transition-all duration-200
               {showFilter || activeFilterLabel
                 ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 shadow-[0_0_12px_rgba(99,102,241,0.1)]'
-                : 'bg-[#161b28] text-[#9ca3af] border border-[#1e2435] hover:border-[#1e2435] hover:text-[#e8edf5]'}"
+                : 'bg-[#161b28] text-[#9ca3af] border border-line hover:border-line hover:text-content'}"
           >
             <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
               <path d="M2 4h12M4 8h8M6 12h4" stroke-linecap="round" />
@@ -321,12 +321,12 @@
           <!-- Filter dropdown -->
           {#if showFilter}
             <div class="absolute right-0 top-full mt-2 w-72 z-50
-              bg-[#111622] border border-[#1e2435] rounded-xl shadow-2xl shadow-black/40
+              bg-[#111622] border border-line rounded-xl shadow-2xl shadow-black/40
               overflow-hidden motion-safe:animate-in duration-200">
               <!-- Header -->
-              <div class="px-4 py-3 border-b border-[#1e2435]">
-                <p class="text-xs font-semibold text-[#e8edf5]">Filter by channel</p>
-                <p class="text-[10px] text-[#6b7280] mt-0.5">
+              <div class="px-4 py-3 border-b border-line">
+                <p class="text-xs font-semibold text-content">Filter by channel</p>
+                <p class="text-[10px] text-muted mt-0.5">
                   {allAccounts.length} account{allAccounts.length !== 1 ? 's' : ''} connected
                 </p>
               </div>
@@ -334,10 +334,10 @@
               <!-- "All channels" option -->
               <button
                 onclick={() => clearFilter()}
-                class="w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors duration-150 border-b border-[#1e2435]
+                class="w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors duration-150 border-b border-line
                   {!selectedAccountHandle && !selectedProvider
-                    ? 'bg-indigo-500/10 text-[#e8edf5]'
-                    : 'text-[#6b7280] hover:text-[#9ca3af] hover:bg-[#0d121e]'}"
+                    ? 'bg-indigo-500/10 text-content'
+                    : 'text-muted hover:text-[#9ca3af] hover:bg-[#0d121e]'}"
               >
                 <svg class="w-4 h-4 flex-shrink-0" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
                   <path d="M2 4h12M4 8h8M6 12h4" stroke-linecap="round" />
@@ -364,8 +364,8 @@
                       onclick={() => selectAccount(acct.author_handle, acct.provider)}
                       class="w-full flex items-center gap-3 px-4 py-2 text-left transition-colors duration-150
                         {selectedAccountHandle === acct.author_handle
-                          ? 'bg-indigo-500/10 text-[#e8edf5]'
-                          : 'text-[#9ca3af] hover:text-[#e8edf5] hover:bg-[#0d121e]'}"
+                          ? 'bg-indigo-500/10 text-content'
+                          : 'text-[#9ca3af] hover:text-content hover:bg-[#0d121e]'}"
                     >
                       {#if acct.author_avatar}
                         <img
@@ -411,7 +411,7 @@
       </div>
       <button
         onclick={load}
-        class="mt-4 px-4 py-2 text-xs font-medium rounded-lg bg-[#1a1f2e] text-[#9ca3af] hover:text-[#e8edf5] hover:bg-[#1e2435] border border-[#1e2435] transition-colors">
+        class="mt-4 px-4 py-2 text-xs font-medium rounded-lg bg-[#1a1f2e] text-[#9ca3af] hover:text-content hover:bg-[#1e2435] border border-line transition-colors">
         Try again
       </button>
     </div>
@@ -420,7 +420,7 @@
   {:else if loading}
     <div class="page-enter space-y-3    motion-safe:animate-in duration-300">
       {#each Array(5) as _, i (i)}
-        <div class="bg-[#131825] rounded-xl p-5 border border-[#1e2435] space-y-3">
+        <div class="bg-[#131825] rounded-xl p-5 border border-line space-y-3">
           <div class="flex items-center gap-2.5">
             <div class="w-6 h-6 rounded-full bg-[#1e2435]" />
             <div class="h-3 bg-[#1e2435] rounded w-20" />
@@ -439,13 +439,13 @@
   <!-- Empty state: importing for the first time -->
   {:else if importing}
     <div class="text-center py-20">
-      <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-[#131825] border border-[#1e2435] flex items-center justify-center">
+      <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-[#131825] border border-line flex items-center justify-center">
         <svg class="w-7 h-7 text-indigo-400 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" stroke-linecap="round" />
         </svg>
       </div>
-      <p class="text-sm font-medium text-[#e8edf5]">Importing your posts…</p>
-      <p class="text-xs text-[#6b7280] mt-1">Fetching recent posts from all your connected providers</p>
+      <p class="text-sm font-medium text-content">Importing your posts…</p>
+      <p class="text-xs text-muted mt-1">Fetching recent posts from all your connected providers</p>
       <div class="mt-6 w-48 h-1 mx-auto bg-[#1e2435] rounded-full overflow-hidden">
         <div class="h-full bg-indigo-500/50 rounded-full animate-pulse" style="width: 60%" />
       </div>
@@ -454,18 +454,18 @@
   <!-- Empty state (already attempted) -->
   {:else if !initialLoad && posts.length === 0 && attemptedImport}
     <div class="text-center py-20">
-      <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-[#131825] border border-[#1e2435] flex items-center justify-center">
-        <svg class="w-7 h-7 text-[#6b7280]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-[#131825] border border-line flex items-center justify-center">
+        <svg class="w-7 h-7 text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <path d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
       </div>
       <p class="text-sm font-medium text-[#9ca3af] mb-1">No posts found</p>
-      <p class="text-xs text-[#6b7280] mb-6">Connect a social media account to see your feed here</p>
+      <p class="text-xs text-muted mb-6">Connect a social media account to see your feed here</p>
       <button
         onclick={triggerImport}
         class="inline-flex items-center gap-2 px-4 py-2 text-xs font-medium rounded-lg
-          bg-[#1a1f2e] text-[#9ca3af] hover:text-[#e8edf5] hover:bg-[#1e2435]
-          border border-[#1e2435] transition-colors"
+          bg-[#1a1f2e] text-[#9ca3af] hover:text-content hover:bg-[#1e2435]
+          border border-line transition-colors"
       >
         <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
           <path d="M2 8a6 6 0 0111.3-3M14 8a6 6 0 01-11.3 3" stroke-linecap="round" />
@@ -478,8 +478,8 @@
   <!-- Filtered-empty state -->
   {:else if filteredPosts.length === 0 && posts.length > 0}
     <div class="text-center py-20">
-      <div class="w-14 h-14 mx-auto mb-4 rounded-2xl bg-[#131825] border border-[#1e2435] flex items-center justify-center">
-        <svg class="w-6 h-6 text-[#6b7280]" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+      <div class="w-14 h-14 mx-auto mb-4 rounded-2xl bg-[#131825] border border-line flex items-center justify-center">
+        <svg class="w-6 h-6 text-muted" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
           <path d="M2 4h12M4 8h8M6 12h4" stroke-linecap="round" />
         </svg>
       </div>
@@ -495,7 +495,7 @@
       {#each filteredPosts as post (post.id)}
         {@const meta = providerMeta(post.provider)}
         <article
-          class="group relative bg-[#131825] rounded-xl border border-[#1e2435] transition-all duration-200
+          class="group relative bg-[#131825] rounded-xl border border-line transition-all duration-200
             hover:border-[#222a45] hover:bg-[#151b2a]"
         >
           <!-- Subtle top accent line -->
@@ -526,7 +526,7 @@
 
               <!-- Author -->
               {#if post.author_name}
-                <span class="text-sm font-medium text-[#e8edf5]">{post.author_name}</span>
+                <span class="text-sm font-medium text-content">{post.author_name}</span>
               {/if}
               {#if post.author_handle}
                 <span class="text-xs text-[#5a6070]">@{post.author_handle}</span>
@@ -655,7 +655,7 @@
 
             <!-- Footer: link -->
             {#if post.url}
-              <div class="mt-3 pt-3 border-t border-[#1e2435]">
+              <div class="mt-3 pt-3 border-t border-line">
                 <a
                   href={post.url}
                   target="_blank"
@@ -681,7 +681,7 @@
         {#if loadingMore}
           <div class="flex items-center justify-center gap-2.5 py-4">
             <div class="w-5 h-5 rounded-full border-2 border-indigo-400/30 border-t-indigo-400 animate-spin" />
-            <span class="text-xs text-[#6b7280] font-mono">Loading more…</span>
+            <span class="text-xs text-muted font-mono">Loading more…</span>
           </div>
         {:else if nearBottom}
           <div class="flex justify-center            motion-safe:animate-in duration-300">
@@ -689,7 +689,7 @@
               onclick={loadMore}
               class="group flex items-center gap-2.5 px-6 py-3 text-sm font-medium rounded-xl
                 bg-[#1a2035] border border-[#222a45] text-[#cdd2dc]
-                hover:bg-[#1e2440] hover:border-indigo-500/30 hover:text-[#e8edf5]
+                hover:bg-[#1e2440] hover:border-indigo-500/30 hover:text-content
                 transition-all duration-200 shadow-sm hover:shadow-[0_0_20px_rgba(99,102,241,0.08)]"
             >
               <svg class="w-4 h-4 transition-transform group-hover:rotate-180 duration-300" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">

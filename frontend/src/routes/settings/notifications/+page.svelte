@@ -64,8 +64,8 @@
 
 <div class="page-enter space-y-6">
   <div>
-    <h2 class="text-xl font-semibold text-[#e8edf5]">Notification Settings</h2>
-    <p class="text-sm text-[#6b7280] mt-1">Configure how and when you receive notifications.</p>
+    <h2 class="text-xl font-semibold text-content">Notification Settings</h2>
+    <p class="text-sm text-muted mt-1">Configure how and when you receive notifications.</p>
   </div>
 
   {#if loading}
@@ -76,9 +76,9 @@
       </svg>
     </div>
   {:else if error}
-    <div class="bg-[#131720] border border-red-500/30 rounded-xl p-5 text-center space-y-3">
+    <div class="bg-surface border border-red-500/30 rounded-xl p-5 text-center space-y-3">
       <p class="text-sm text-red-400">Failed to load notification preferences</p>
-      <p class="text-xs text-[#6b7280]">{error}</p>
+      <p class="text-xs text-muted">{error}</p>
       <button
         onclick={handleRetry}
         class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm rounded-lg transition-colors"
@@ -87,18 +87,18 @@
       </button>
     </div>
   {:else}
-    <div class="bg-[#131720] border border-[#1e2435] rounded-xl p-5 space-y-4">
-      <h3 class="text-sm font-medium text-[#e8edf5]">Notification Types</h3>
+    <div class="bg-surface border border-line rounded-xl p-5 space-y-4">
+      <h3 class="text-sm font-medium text-content">Notification Types</h3>
       <div class="page-enter space-y-3">
         {#each notificationTypes as nt (nt.key)}
           <div class="flex items-center justify-between py-2">
             <div>
-              <p class="text-sm text-[#d1d5db]">{nt.label}</p>
-              <p class="text-xs text-[#6b7280]">{nt.description}</p>
+              <p class="text-sm text-content-secondary">{nt.label}</p>
+              <p class="text-xs text-muted">{nt.description}</p>
             </div>
             <select
               bind:value={prefs[nt.key]}
-              class="bg-[#1e2435] text-[#d1d5db] border border-[#1e2435] rounded px-3 py-1.5 text-sm focus:outline-none focus:border-indigo-500/50 transition-colors"
+              class="bg-[#1e2435] text-content-secondary border border-line rounded px-3 py-1.5 text-sm focus:outline-none focus:border-indigo-500/50 transition-colors"
             >
               <option value="push">Push</option>
               <option value="email">Email</option>
@@ -109,9 +109,9 @@
       </div>
     </div>
 
-    <div class="bg-[#131720] border border-[#1e2435] rounded-xl p-5 space-y-4">
+    <div class="bg-surface border border-line rounded-xl p-5 space-y-4">
       <div class="flex items-center justify-between">
-        <h3 class="text-sm font-medium text-[#e8edf5]">Quiet Hours</h3>
+        <h3 class="text-sm font-medium text-content">Quiet Hours</h3>
         <label class="relative inline-flex items-center cursor-pointer">
           <input type="checkbox" bind:checked={quietHoursEnabled} class="sr-only peer" />
           <div class="w-9 h-5 bg-[#1e2435] rounded-full peer peer-checked:bg-indigo-600 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
@@ -120,21 +120,21 @@
       {#if quietHoursEnabled}
         <div class="grid grid-cols-2 gap-4">
           <div>
-            <label for="quiet-start" class="text-xs text-[#6b7280] block mb-1">Start Time</label>
+            <label for="quiet-start" class="text-xs text-muted block mb-1">Start Time</label>
             <input
               id="quiet-start"
               type="time"
               bind:value={prefs.quiet_hours_start}
-              class="w-full bg-[#1e2435] text-[#d1d5db] border border-[#1e2435] rounded px-3 py-1.5 text-sm focus:outline-none focus:border-indigo-500/50 transition-colors"
+              class="w-full bg-[#1e2435] text-content-secondary border border-line rounded px-3 py-1.5 text-sm focus:outline-none focus:border-indigo-500/50 transition-colors"
             />
           </div>
           <div>
-            <label for="quiet-end" class="text-xs text-[#6b7280] block mb-1">End Time</label>
+            <label for="quiet-end" class="text-xs text-muted block mb-1">End Time</label>
             <input
               id="quiet-end"
               type="time"
               bind:value={prefs.quiet_hours_end}
-              class="w-full bg-[#1e2435] text-[#d1d5db] border border-[#1e2435] rounded px-3 py-1.5 text-sm focus:outline-none focus:border-indigo-500/50 transition-colors"
+              class="w-full bg-[#1e2435] text-content-secondary border border-line rounded px-3 py-1.5 text-sm focus:outline-none focus:border-indigo-500/50 transition-colors"
             />
           </div>
         </div>
@@ -145,7 +145,7 @@
       <button
         onclick={handleSave}
         disabled={saving}
-        class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-800 disabled:text-[#6b7280] text-white text-sm rounded-lg transition-colors duration-150"
+        class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-800 disabled:text-muted text-white text-sm rounded-lg transition-colors duration-150"
       >
         {saving ? 'Saving...' : 'Save Preferences'}
       </button>

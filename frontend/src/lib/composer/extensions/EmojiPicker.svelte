@@ -79,7 +79,7 @@
   >
     {#each categories as cat (cat.name)}
       <div class="mb-2 last:mb-0">
-        <p class="text-xs text-[#6b7280] mb-1 px-0.5">{cat.name}</p>
+        <p class="text-xs text-muted mb-1 px-0.5">{cat.name}</p>
         <div class="grid grid-cols-8 gap-0.5">
           {#each cat.emojis as emoji (emoji)}
             <button

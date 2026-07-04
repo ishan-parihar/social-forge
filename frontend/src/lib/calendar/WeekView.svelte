@@ -45,11 +45,11 @@
   }
 </script>
 
-<div class="week-calendar bg-[#131720] border border-[#1e2435] rounded-xl overflow-hidden">
-  <div class="grid grid-cols-8 text-center border-b border-[#1e2435]">
-    <div class="py-2 text-xs text-[#6b7280] border-r border-[#1e2435]">GMT</div>
+<div class="week-calendar bg-surface border border-line rounded-xl overflow-hidden">
+  <div class="grid grid-cols-8 text-center border-b border-line">
+    <div class="py-2 text-xs text-muted border-r border-line">GMT</div>
     {#each weekDays as wd (wd.dateStr)}
-      <div class="py-2 text-xs {wd.isToday ? 'text-indigo-400' : 'text-[#6b7280]'}">
+      <div class="py-2 text-xs {wd.isToday ? 'text-indigo-400' : 'text-muted'}">
         <div>{wd.date.toLocaleDateString("en-US", { weekday: "short" })}</div>
         <div class="font-semibold">{wd.date.getDate()}</div>
       </div>
@@ -57,12 +57,12 @@
   </div>
   <div class="overflow-y-auto max-h-[600px]">
     {#each hours as hour (hour)}
-      <div class="grid grid-cols-8 border-b border-[#1e2435] min-h-[48px]">
-        <div class="text-xs text-[#6b7280] px-2 py-1 border-r border-[#1e2435]">{hour}</div>
+      <div class="grid grid-cols-8 border-b border-line min-h-[48px]">
+        <div class="text-xs text-muted px-2 py-1 border-r border-line">{hour}</div>
         {#each weekDays as wd (wd.dateStr)}
           <!-- svelte-ignore a11y_no_static_element_interactions -->
           <div
-            class="relative px-1 py-1 border-r border-[#1e2435] min-h-[48px] cursor-pointer hover:bg-[#1a1f2e]"
+            class="relative px-1 py-1 border-r border-line min-h-[48px] cursor-pointer hover:bg-surface-hover"
             ondragover={(e) => e.preventDefault()}
             ondrop={(e) => handleDrop(e, wd.dateStr)}
             onclick={() => onDateClick?.(wd.dateStr)}

@@ -39,11 +39,11 @@
     onkeydown={handleKeydown}
   >
     <div class="absolute inset-0 bg-black/60" aria-hidden="true" onclick={onclose}></div>
-    <div class="relative bg-[#131720] border border-[#1e2435] rounded-xl p-6 max-w-lg w-full mx-4 shadow-2xl">
+    <div class="relative bg-surface border border-line rounded-xl p-6 max-w-lg w-full mx-4 shadow-2xl">
       {#if title}
         <div class="flex items-center justify-between mb-4">
           <h3 class="text-lg font-semibold">{title}</h3>
-          <button onclick={onclose} aria-label="Close dialog" class="text-[#6b7280] hover:text-white">&times;</button>
+          <button onclick={onclose} aria-label="Close dialog" class="text-muted hover:text-white">&times;</button>
         </div>
       {/if}
       {#if children}{@render children()}{/if}

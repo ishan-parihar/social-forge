@@ -303,7 +303,7 @@
       <span class="text-sm text-indigo-300">You have an unsaved draft. Restore it?</span>
       <div class="flex gap-2">
         <button onclick={restoreDraft} class="px-3 py-1 text-xs bg-indigo-600 hover:bg-indigo-500 rounded transition-colors">Restore</button>
-        <button onclick={dismissDraft} class="px-3 py-1 text-xs text-[#6b7280] hover:text-white transition-colors">Dismiss</button>
+        <button onclick={dismissDraft} class="px-3 py-1 text-xs text-muted hover:text-white transition-colors">Dismiss</button>
       </div>
     </div>
   {/if}
@@ -315,13 +315,13 @@
         <span class="text-xs text-emerald-400 animate-pulse">✓ Draft saved</span>
       {/if}
       <div class="flex gap-2">
-      <button onclick={() => (showPostSets = true)} aria-label="Post Sets" class="px-3 py-1.5 text-sm text-[#6b7280] hover:text-white border border-[#1e2435] rounded-lg transition-colors">Post Sets</button>
+      <button onclick={() => (showPostSets = true)} aria-label="Post Sets" class="px-3 py-1.5 text-sm text-muted hover:text-white border border-line rounded-lg transition-colors">Post Sets</button>
       <button onclick={() => showAi = !showAi} aria-label="AI Assistant"
-        class="px-3 py-1.5 text-sm border border-[#1e2435] rounded-lg transition-colors
-          {showAi ? 'bg-indigo-600/20 text-indigo-400 border-indigo-500/30' : 'text-[#6b7280] hover:text-white'}">
+        class="px-3 py-1.5 text-sm border border-line rounded-lg transition-colors
+          {showAi ? 'bg-indigo-600/20 text-indigo-400 border-indigo-500/30' : 'text-muted hover:text-white'}">
         ✨ AI
       </button>
-      <button onclick={() => goto("/calendar")} class="px-3 py-1.5 text-sm text-[#6b7280] hover:text-white border border-[#1e2435] rounded-lg">Cancel</button>
+      <button onclick={() => goto("/calendar")} class="px-3 py-1.5 text-sm text-muted hover:text-white border border-line rounded-lg">Cancel</button>
       <button onclick={postNow} disabled={submitting} class="px-4 py-1.5 bg-green-600 hover:bg-green-500 disabled:opacity-50 rounded-lg text-sm transition-colors">
         {submitting ? "Posting..." : "Post Now"}
       </button>
@@ -338,13 +338,13 @@
 
   <!-- Title -->
   <div>
-    <label class="text-sm text-[#6b7280] block mb-1">Title (optional)</label>
+    <label class="text-sm text-muted block mb-1">Title (optional)</label>
     <input type="text" bind:value={title} placeholder="Post title..."
-      class="w-full px-3 py-2 bg-[#0d1117] border border-[#1e2435] rounded-lg text-sm focus:border-indigo-500 outline-none" />
+      class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-indigo-500 outline-none" />
   </div>
 
   <!-- Channel Selection -->
-  <div class="bg-[#131720] border border-[#1e2435] rounded-xl p-4">
+  <div class="bg-surface border border-line rounded-xl p-4">
     <h3 class="text-sm font-semibold mb-3">Post to</h3>
     <ChannelSelector
       selected={selectedIntegrations}
@@ -361,11 +361,11 @@
   <!-- Posting Targets (shown when selected integrations have discoverable targets) -->
   {#each selectedIntegrations as intId}
     {#if integrationTargets.has(intId)}
-      <div class="bg-[#131720] border border-[#1e2435] rounded-xl p-4">
+      <div class="bg-surface border border-line rounded-xl p-4">
         <h3 class="text-sm font-semibold mb-3">
           Posting Targets for {integrationNames.get(intId)}
           {#if targetsLoading.has(intId)}
-            <span class="ml-2 text-xs text-[#6b7280]">Loading...</span>
+            <span class="ml-2 text-xs text-muted">Loading...</span>
           {/if}
         </h3>
         <TargetPicker
@@ -378,7 +378,7 @@
   {/each}
 
   <!-- Tags -->
-  <div class="bg-[#131720] border border-[#1e2435] rounded-xl p-4">
+  <div class="bg-surface border border-line rounded-xl p-4">
     <h3 class="text-sm font-semibold mb-3">Tags</h3>
     <TagPicker
       selected={selectedTagIds}
@@ -393,7 +393,7 @@
   </div>
 
   <!-- Main content -->
-  <div class="bg-[#131720] border border-[#1e2435] rounded-xl p-4">
+  <div class="bg-surface border border-line rounded-xl p-4">
     <h3 class="text-sm font-semibold mb-3">Content</h3>
     <RichTextEditor {content} onUpdate={(html) => content = html} />
   </div>
@@ -408,18 +408,18 @@
 
   <!-- Per-provider content overrides -->
   {#if selectedIntegrations.length > 1}
-    <div class="bg-[#131720] border border-[#1e2435] rounded-xl p-4">
+    <div class="bg-surface border border-line rounded-xl p-4">
       <h3 class="text-sm font-semibold mb-3">Platform-Specific Content</h3>
-      <p class="text-xs text-[#6b7280] mb-3">Customize content for each platform.</p>
+      <p class="text-xs text-muted mb-3">Customize content for each platform.</p>
       <div class="page-enter space-y-2">
         {#each selectedIntegrations as intId, i}
-          <div class="border border-[#1e2435] rounded-lg">
+          <div class="border border-line rounded-lg">
             <button
               onclick={() => activeProvider = activeProvider === intId ? null : intId}
-              class="w-full flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-[#1a1f2e] transition-colors"
+              class="w-full flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface-hover transition-colors"
             >
               <span class="flex-1">{integrationNames.get(intId) || `Platform ${i + 1}`}</span>
-              <span class="text-[#6b7280] text-xs">{activeProvider === intId ? "▾" : "▸"}</span>
+              <span class="text-muted text-xs">{activeProvider === intId ? "▾" : "▸"}</span>
             </button>
             {#if activeProvider === intId}
               <div class="px-3 pb-3">
@@ -438,7 +438,7 @@
   {/if}
 
   <!-- Media -->
-  <div class="bg-[#131720] border border-[#1e2435] rounded-xl p-4">
+  <div class="bg-surface border border-line rounded-xl p-4">
     <h3 class="text-sm font-semibold mb-3">Media</h3>
     <MediaUpload items={mediaItems}
       onAdd={(item) => mediaItems = [...mediaItems, item]}
@@ -447,7 +447,7 @@
   </div>
 
   <!-- Scheduling -->
-  <div class="bg-[#131720] border border-[#1e2435] rounded-xl p-4">
+  <div class="bg-surface border border-line rounded-xl p-4">
     <h3 class="text-sm font-semibold mb-3">Schedule</h3>
     <SchedulePicker {scheduledAt} onChange={(iso: string | null) => scheduledAt = iso} {recurring} onRecurringChange={(r: { intervalDays: number; endDate: string } | null) => recurring = r} integrationId={selectedIntegrations[0]} />
   </div>

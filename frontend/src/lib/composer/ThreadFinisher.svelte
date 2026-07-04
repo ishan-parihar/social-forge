@@ -42,7 +42,7 @@
   }
 </script>
 
-<div class="bg-[#131720] border border-[#1e2435] rounded-xl p-4 space-y-3">
+<div class="bg-surface border border-line rounded-xl p-4 space-y-3">
   <button
     onclick={toggle}
     class="flex items-center justify-between w-full text-left"
@@ -50,12 +50,12 @@
     <h3 class="text-sm font-semibold flex items-center gap-2">
       Thread Finisher
     </h3>
-    <span class="text-xs text-[#6b7280]">{expanded ? '▾' : '▸'}</span>
+    <span class="text-xs text-muted">{expanded ? '▾' : '▸'}</span>
   </button>
 
   {#if expanded}
     {#if tweetCount === 0}
-      <p class="text-xs text-[#6b7280]">Add content with paragraph breaks to create a thread.</p>
+      <p class="text-xs text-muted">Add content with paragraph breaks to create a thread.</p>
     {:else if exceedsMax}
       <p class="text-xs text-amber-400">Thread exceeds max of {maxTweets} tweets ({tweetCount} parts). Only first {maxTweets} will be posted.</p>
     {/if}
@@ -63,14 +63,14 @@
     {#if tweetCount > 0}
       <div class="space-y-2 max-h-64 overflow-y-auto pr-1">
         {#each tweets as tweet, i}
-          <div class="border border-[#1e2435] rounded-lg p-3 text-sm space-y-1">
+          <div class="border border-line rounded-lg p-3 text-sm space-y-1">
             <div class="flex items-center justify-between">
               <span class="text-xs font-medium text-indigo-400">Tweet {i + 1}</span>
-              <span class="text-xs {tweet.length > 280 ? 'text-red-400' : 'text-[#6b7280]'}">
+              <span class="text-xs {tweet.length > 280 ? 'text-red-400' : 'text-muted'}">
                 {tweet.length} / 280
               </span>
             </div>
-            <p class="text-[#d1d5db] text-sm leading-relaxed">{tweet}</p>
+            <p class="text-content-secondary text-sm leading-relaxed">{tweet}</p>
           </div>
         {/each}
       </div>

@@ -126,22 +126,22 @@
 <div class="page-enter space-y-6">
   <div>
     <h2 class="text-xl font-semibold">Developer Portal</h2>
-    <p class="text-sm text-[#6b7280] mt-1">Manage API keys for programmatic access and configure outgoing webhooks.</p>
+    <p class="text-sm text-muted mt-1">Manage API keys for programmatic access and configure outgoing webhooks.</p>
   </div>
 
   <!-- Tabs -->
-  <div class="flex gap-1 border-b border-[#1e2435]">
+  <div class="flex gap-1 border-b border-line">
     <button
       onclick={() => (activeTab = 'keys')}
       class="px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px
-        {activeTab === 'keys' ? 'text-indigo-400 border-indigo-500' : 'text-[#6b7280] border-transparent hover:text-[#d1d5db]'}"
+        {activeTab === 'keys' ? 'text-indigo-400 border-indigo-500' : 'text-muted border-transparent hover:text-content-secondary'}"
     >
       API Keys
     </button>
     <a
       href="/settings/webhooks"
       class="px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px
-        text-[#6b7280] border-transparent hover:text-[#d1d5db]"
+        text-muted border-transparent hover:text-content-secondary"
     >
       Webhooks →
     </a>
@@ -151,7 +151,7 @@
     <!-- ═══════ API KEYS TAB ═══════ -->
     <div class="page-enter space-y-6">
       {#if keysError}
-        <div class="bg-[#131720] border border-red-500/30 rounded-xl p-4 text-sm text-red-400">
+        <div class="bg-surface border border-red-500/30 rounded-xl p-4 text-sm text-red-400">
           {keysError}
           <button onclick={loadKeys} class="ml-2 underline">Retry</button>
         </div>
@@ -162,12 +162,12 @@
           <div class="flex items-start justify-between">
             <div>
               <p class="text-sm font-medium text-indigo-400">API Key Created</p>
-              <p class="text-xs text-[#6b7280] mt-1">Copy this key now — you won't be able to see it again.</p>
+              <p class="text-xs text-muted mt-1">Copy this key now — you won't be able to see it again.</p>
             </div>
-            <button onclick={dismissKeyAlert} aria-label="Dismiss" class="text-[#6b7280] hover:text-white text-sm">&times;</button>
+            <button onclick={dismissKeyAlert} aria-label="Dismiss" class="text-muted hover:text-white text-sm">&times;</button>
           </div>
           <div class="flex items-center gap-2">
-            <code class="flex-1 px-3 py-2 bg-[#0d1117] border border-[#1e2435] rounded-lg text-sm font-mono text-indigo-300 break-all">
+            <code class="flex-1 px-3 py-2 bg-background-input border border-line rounded-lg text-sm font-mono text-indigo-300 break-all">
               {justCreatedKey.full_key}
             </code>
             <Button size="sm" onclick={() => copyToClipboard(justCreatedKey.full_key)}>
@@ -188,25 +188,25 @@
         {#if keyFormError}
           <div class="text-sm text-red-400 mb-2">{keyFormError}</div>
         {/if}
-        <div class="bg-[#131720] border border-[#1e2435] rounded-xl p-5 space-y-4">
+        <div class="bg-surface border border-line rounded-xl p-5 space-y-4">
           <div>
-            <label for="key-name" class="text-xs text-[#6b7280] block mb-1">Key Name</label>
+            <label for="key-name" class="text-xs text-muted block mb-1">Key Name</label>
             <input
               id="key-name"
               type="text"
               bind:value={newKeyName}
               placeholder="e.g. CI/CD Pipeline"
-              class="w-full px-3 py-2 bg-[#0d1117] border border-[#1e2435] rounded-lg text-sm focus:border-indigo-500 outline-none"
+              class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-indigo-500 outline-none"
             />
           </div>
           <div>
-            <label for="key-expiry" class="text-xs text-[#6b7280] block mb-1">Expiry (optional — RFC 3339 format)</label>
+            <label for="key-expiry" class="text-xs text-muted block mb-1">Expiry (optional — RFC 3339 format)</label>
             <input
               id="key-expiry"
               type="text"
               bind:value={newKeyExpiry}
               placeholder="e.g. 2027-01-01T00:00:00Z"
-              class="w-full px-3 py-2 bg-[#0d1117] border border-[#1e2435] rounded-lg text-sm focus:border-indigo-500 outline-none"
+              class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-indigo-500 outline-none"
             />
           </div>
           <Button onclick={handleCreateKey} disabled={creatingKey}>
@@ -221,14 +221,14 @@
           <Spinner size="lg" />
         </div>
       {:else if keys.length === 0 && !showKeyForm}
-        <div class="bg-[#131720] border border-[#1e2435] rounded-xl p-8 text-center">
-          <p class="text-[#6b7280] text-sm">No API keys yet. Create one to use the Social Forge API.</p>
+        <div class="bg-surface border border-line rounded-xl p-8 text-center">
+          <p class="text-muted text-sm">No API keys yet. Create one to use the Social Forge API.</p>
         </div>
       {:else}
-        <div class="bg-[#131720] border border-[#1e2435] rounded-xl overflow-hidden">
+        <div class="bg-surface border border-line rounded-xl overflow-hidden">
           <table class="w-full text-sm">
             <thead>
-              <tr class="border-b border-[#1e2435] text-left text-xs text-[#6b7280] uppercase tracking-wider">
+              <tr class="border-b border-line text-left text-xs text-muted uppercase tracking-wider">
                 <th class="px-4 py-3 font-medium">Name</th>
                 <th class="px-4 py-3 font-medium">Key</th>
                 <th class="px-4 py-3 font-medium">Created</th>
@@ -239,13 +239,13 @@
             </thead>
             <tbody class="divide-y divide-[#1e2435]">
               {#each keys as key (key.id)}
-                <tr class="hover:bg-[#1a1f2e] transition-colors">
-                  <td class="px-4 py-3 text-[#d1d5db]">{key.name}</td>
-                  <td class="px-4 py-3 font-mono text-xs text-[#6b7280]">
+                <tr class="hover:bg-surface-hover transition-colors">
+                  <td class="px-4 py-3 text-content-secondary">{key.name}</td>
+                  <td class="px-4 py-3 font-mono text-xs text-muted">
                     sf_key_{key.key_prefix}...
                   </td>
-                  <td class="px-4 py-3 text-[#6b7280] text-xs">{formatDate(key.created_at)}</td>
-                  <td class="px-4 py-3 text-[#6b7280] text-xs">{key.last_used_at ? formatDate(key.last_used_at) : 'Never'}</td>
+                  <td class="px-4 py-3 text-muted text-xs">{formatDate(key.created_at)}</td>
+                  <td class="px-4 py-3 text-muted text-xs">{key.last_used_at ? formatDate(key.last_used_at) : 'Never'}</td>
                   <td class="px-4 py-3">
                     {#if key.is_active}
                       <span class="px-2 py-0.5 rounded text-xs font-medium bg-green-500/20 text-green-400">Active</span>

@@ -30,28 +30,28 @@
     <div
       bind:this={panelEl}
       tabindex="-1"
-      class="relative w-96 bg-[#131720] border-l border-[#1e2435] p-6 overflow-y-auto outline-none"
+      class="relative w-96 bg-surface border-l border-line p-6 overflow-y-auto outline-none"
     >
       <div class="flex items-center justify-between mb-6">
         <h3 class="font-semibold">Post Details</h3>
-        <button onclick={onclose} aria-label="Close" class="text-[#6b7280] hover:text-white text-xl">&times;</button>
+        <button onclick={onclose} aria-label="Close" class="text-muted hover:text-white text-xl">&times;</button>
       </div>
       <div class="space-y-4">
         <div>
-          <div class="text-xs text-[#6b7280] mb-1">Platform</div>
+          <div class="text-xs text-muted mb-1">Platform</div>
           <div class="text-sm">{event.integrationName}</div>
         </div>
         <div>
-          <div class="text-xs text-[#6b7280] mb-1">Status</div>
+          <div class="text-xs text-muted mb-1">Status</div>
           <Badge state={event.state} />
         </div>
         <div>
-          <div class="text-xs text-[#6b7280] mb-1">{event.state === 'published' ? 'Posted' : 'Scheduled'}</div>
-          <div class="text-sm">{#if event.date}{event.date} {event.time || ""}{:else}<span class="text-[#6b7280]">Not scheduled (draft)</span>{/if}</div>
+          <div class="text-xs text-muted mb-1">{event.state === 'published' ? 'Posted' : 'Scheduled'}</div>
+          <div class="text-sm">{#if event.date}{event.date} {event.time || ""}{:else}<span class="text-muted">Not scheduled (draft)</span>{/if}</div>
         </div>
         <div>
-          <div class="text-xs text-[#6b7280] mb-1">Content</div>
-          <div class="text-sm bg-[#0d1117] rounded-lg p-3 whitespace-pre-wrap">{event.content}</div>
+          <div class="text-xs text-muted mb-1">Content</div>
+          <div class="text-sm bg-background-input rounded-lg p-3 whitespace-pre-wrap">{event.content}</div>
         </div>
         {#if event.error}
           <div>
@@ -61,38 +61,38 @@
         {/if}
         {#if event.likes != null || event.comments != null || event.shares != null || event.impressions != null}
           <div>
-            <div class="text-xs text-[#6b7280] mb-2">Engagement</div>
+            <div class="text-xs text-muted mb-2">Engagement</div>
             <div class="grid grid-cols-2 gap-2">
               <!-- Positive feedback: likes/upvotes/reactions unified -->
               {#if event.likes != null}
-                <div class="bg-[#0d1117] border border-[#1e2435] rounded-lg p-2 text-center" title="{engagementLabel('likes', event.platform)}">
+                <div class="bg-background-input border border-line rounded-lg p-2 text-center" title="{engagementLabel('likes', event.platform)}">
                   <div class="text-xs text-pink-400">{engagementIcon('likes', event.platform)}</div>
                   <div class="text-sm font-semibold">{event.likes.toLocaleString()}</div>
-                  <div class="text-[10px] text-[#6b7280]">{engagementLabel('likes', event.platform)}</div>
+                  <div class="text-[10px] text-muted">{engagementLabel('likes', event.platform)}</div>
                 </div>
               {/if}
               <!-- Comments/replies unified -->
               {#if event.comments != null}
-                <div class="bg-[#0d1117] border border-[#1e2435] rounded-lg p-2 text-center" title="{engagementLabel('comments', event.platform)}">
+                <div class="bg-background-input border border-line rounded-lg p-2 text-center" title="{engagementLabel('comments', event.platform)}">
                   <div class="text-xs text-yellow-400">{engagementIcon('comments', event.platform)}</div>
                   <div class="text-sm font-semibold">{event.comments.toLocaleString()}</div>
-                  <div class="text-[10px] text-[#6b7280]">{engagementLabel('comments', event.platform)}</div>
+                  <div class="text-[10px] text-muted">{engagementLabel('comments', event.platform)}</div>
                 </div>
               {/if}
               <!-- Shares/reposts/quotes unified -->
               {#if event.shares != null}
-                <div class="bg-[#0d1117] border border-[#1e2435] rounded-lg p-2 text-center" title="{engagementLabel('shares', event.platform)}">
+                <div class="bg-background-input border border-line rounded-lg p-2 text-center" title="{engagementLabel('shares', event.platform)}">
                   <div class="text-xs text-green-400">{engagementIcon('shares', event.platform)}</div>
                   <div class="text-sm font-semibold">{event.shares.toLocaleString()}</div>
-                  <div class="text-[10px] text-[#6b7280]">{engagementLabel('shares', event.platform)}</div>
+                  <div class="text-[10px] text-muted">{engagementLabel('shares', event.platform)}</div>
                 </div>
               {/if}
               <!-- Views/impressions unified -->
               {#if event.impressions != null}
-                <div class="bg-[#0d1117] border border-[#1e2435] rounded-lg p-2 text-center" title="{engagementLabel('impressions', event.platform)}">
+                <div class="bg-background-input border border-line rounded-lg p-2 text-center" title="{engagementLabel('impressions', event.platform)}">
                   <div class="text-xs text-indigo-400">{engagementIcon('impressions', event.platform)}</div>
                   <div class="text-sm font-semibold">{event.impressions.toLocaleString()}</div>
-                  <div class="text-[10px] text-[#6b7280]">{engagementLabel('impressions', event.platform)}</div>
+                  <div class="text-[10px] text-muted">{engagementLabel('impressions', event.platform)}</div>
                 </div>
               {/if}
             </div>
@@ -106,14 +106,14 @@
             View original post &rarr;
           </a>
         {/if}
-        <button onclick={() => onDuplicate?.(event.id)} disabled={duplicating} class="w-full px-3 py-2 bg-[#1a1f2e] hover:bg-[#242b3d] border border-[#1e2435] rounded-lg text-sm text-indigo-400 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+        <button onclick={() => onDuplicate?.(event.id)} disabled={duplicating} class="w-full px-3 py-2 bg-[#1a1f2e] hover:bg-[#242b3d] border border-line rounded-lg text-sm text-indigo-400 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
           {#if duplicating}
             <span class="animate-spin">⏳</span> Duplicating...
           {:else}
             📋 Duplicate
           {/if}
         </button>
-        <button onclick={() => goto(`/posts/${event.id}`)} class="w-full px-3 py-2 bg-[#1a1f2e] hover:bg-[#242b3d] border border-[#1e2435] rounded-lg text-sm text-indigo-400 transition-colors flex items-center justify-center gap-2">
+        <button onclick={() => goto(`/posts/${event.id}`)} class="w-full px-3 py-2 bg-[#1a1f2e] hover:bg-[#242b3d] border border-line rounded-lg text-sm text-indigo-400 transition-colors flex items-center justify-center gap-2">
           ✏️ Edit
         </button>
       </div>

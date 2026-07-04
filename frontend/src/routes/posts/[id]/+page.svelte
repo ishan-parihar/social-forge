@@ -58,7 +58,7 @@
 </script>
 
 <div class="page-enter page-enter max-w-2xl mx-auto space-y-6">
-  <button onclick={() => goto("/posts")} class="text-sm text-[#6b7280] hover:text-white">&larr; Back to posts</button>
+  <button onclick={() => goto("/posts")} class="text-sm text-muted hover:text-white">&larr; Back to posts</button>
 
   {#if error}
     <div class="bg-red-500/10 border border-red-500/30 text-red-400 text-sm rounded-lg p-3 flex items-center justify-between">
@@ -68,13 +68,13 @@
   {/if}
 
   {#if loading}
-    <div class="text-center py-12 text-sm text-[#6b7280]">Loading...</div>
+    <div class="text-center py-12 text-sm text-muted">Loading...</div>
   {:else if post}
-    <div class="bg-[#131720] border border-[#1e2435] rounded-xl p-6 space-y-4">
+    <div class="bg-surface border border-line rounded-xl p-6 space-y-4">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-2">
           <Badge state={post.state as "draft" | "queued" | "published" | "error"} />
-          <span class="text-sm text-[#6b7280]">{post.integration_id}</span>
+          <span class="text-sm text-muted">{post.integration_id}</span>
         </div>
         <div class="flex gap-2">
           {#if !editing}
@@ -85,7 +85,7 @@
             <button onclick={deletePost} class="text-xs text-red-400 hover:underline">Delete</button>
           {:else}
             <button onclick={save} class="text-xs text-green-400 hover:underline">Save</button>
-            <button onclick={() => editing = false} class="text-xs text-[#6b7280] hover:underline">Cancel</button>
+            <button onclick={() => editing = false} class="text-xs text-muted hover:underline">Cancel</button>
           {/if}
         </div>
       </div>
@@ -105,17 +105,17 @@
       {/if}
 
       {#if post.scheduled_at}
-        <div class="text-sm text-[#6b7280]">
+        <div class="text-sm text-muted">
           Scheduled: {new Date(post.scheduled_at).toLocaleString()}
         </div>
       {/if}
 
       {#if showScheduleForm}
-        <div class="flex items-center gap-2 bg-[#0d1117] border border-[#1e2435] rounded-lg p-3">
-          <input type="date" bind:value={schedDate} class="px-2 py-1 bg-[#131720] border border-[#1e2435] rounded text-sm text-[#d1d5db]" />
-          <input type="time" bind:value={schedTime} class="px-2 py-1 bg-[#131720] border border-[#1e2435] rounded text-sm text-[#d1d5db]" />
+        <div class="flex items-center gap-2 bg-background-input border border-line rounded-lg p-3">
+          <input type="date" bind:value={schedDate} class="px-2 py-1 bg-surface border border-line rounded text-sm text-content-secondary" />
+          <input type="time" bind:value={schedTime} class="px-2 py-1 bg-surface border border-line rounded text-sm text-content-secondary" />
           <button onclick={confirmSchedule} class="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 rounded text-xs">Confirm</button>
-          <button onclick={() => showScheduleForm = false} class="px-3 py-1 text-[#6b7280] hover:text-white text-xs">Cancel</button>
+          <button onclick={() => showScheduleForm = false} class="px-3 py-1 text-muted hover:text-white text-xs">Cancel</button>
         </div>
       {/if}
 
@@ -126,14 +126,14 @@
       {/if}
 
       {#if post.first_comment}
-        <div class="border-t border-[#1e2435] pt-3 mt-3">
-          <div class="text-xs text-[#6b7280] mb-1">First Comment</div>
-          <div class="text-sm text-[#d1d5db]">{post.first_comment}</div>
+        <div class="border-t border-line pt-3 mt-3">
+          <div class="text-xs text-muted mb-1">First Comment</div>
+          <div class="text-sm text-content-secondary">{post.first_comment}</div>
         </div>
       {/if}
 
       {#if post.group_id}
-        <div class="border-t border-[#1e2435] pt-3 mt-3">
+        <div class="border-t border-line pt-3 mt-3">
           <div class="text-xs text-indigo-400 mb-1">Thread post (sequence {post.sequence ?? 0})</div>
           <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-indigo-500/20 text-indigo-400">
             Group: {post.group_id.slice(0, 8)}...
@@ -154,6 +154,6 @@
       {/if}
     </div>
   {:else}
-    <div class="text-center py-12 text-sm text-[#6b7280]">Post not found</div>
+    <div class="text-center py-12 text-sm text-muted">Post not found</div>
   {/if}
 </div>

@@ -77,7 +77,7 @@
   }
 </script>
 
-<div class="flex items-center gap-3 px-3 py-2.5 hover:bg-[#1a1f2e] rounded-lg transition-colors group">
+<div class="flex items-center gap-3 px-3 py-2.5 hover:bg-surface-hover rounded-lg transition-colors group">
   {#if integration.profile_picture}
     <img src={integration.profile_picture} alt="" class="w-8 h-8 rounded-full object-cover flex-shrink-0" />
   {:else}
@@ -93,7 +93,7 @@
         <span class="text-[10px] px-1.5 py-0.5 rounded border {authTypeColor}">{authTypeLabel}</span>
       {/if}
     </div>
-    <div class="text-xs text-[#6b7280] truncate">
+    <div class="text-xs text-muted truncate">
       {#if integration.profile_url}
         {integration.profile_url}
       {:else if integration.internal_id}

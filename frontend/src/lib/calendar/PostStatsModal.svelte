@@ -108,35 +108,35 @@
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="absolute inset-0 bg-black/40" onclick={onclose}></div>
-  <div bind:this={panelEl} tabindex="-1" class="relative w-96 bg-[#131720] border-l border-[#1e2435] p-6 overflow-y-auto outline-none">
+  <div bind:this={panelEl} tabindex="-1" class="relative w-96 bg-surface border-l border-line p-6 overflow-y-auto outline-none">
     <div class="flex items-center justify-between mb-6">
       <h3 id="stats-modal-title" class="font-semibold text-sm truncate pr-2" title={postTitle}>{postTitle}</h3>
-      <button onclick={onclose} aria-label="Close" class="text-[#6b7280] hover:text-white text-xl shrink-0">&times;</button>
+      <button onclick={onclose} aria-label="Close" class="text-muted hover:text-white text-xl shrink-0">&times;</button>
     </div>
 
-    <div class="flex bg-[#0d1117] rounded-lg border border-[#1e2435] overflow-hidden mb-6">
+    <div class="flex bg-background-input rounded-lg border border-line overflow-hidden mb-6">
       {#each [7, 30, 90] as d (d)}
         <button
           onclick={() => days = d as 7 | 30 | 90}
           class="flex-1 px-3 py-1.5 text-xs font-medium transition-colors
-            {days === d ? 'bg-indigo-600 text-white' : 'text-[#6b7280] hover:text-white hover:bg-[#1a1f2e]'}"
+            {days === d ? 'bg-indigo-600 text-white' : 'text-muted hover:text-white hover:bg-surface-hover'}"
         >{d}d</button>
       {/each}
     </div>
 
     {#if loading}
       <div class="flex items-center justify-center py-12">
-        <span class="animate-spin text-[#6b7280] text-2xl">&#x23F3;</span>
+        <span class="animate-spin text-muted text-2xl">&#x23F3;</span>
       </div>
     {:else if error && !analyticsData}
       <div class="text-center py-8 text-sm text-red-400">{error}</div>
     {:else if analyticsData && analyticsData.length === 0}
-      <div class="text-center py-8 text-sm text-[#6b7280]">No analytics data available yet.</div>
+      <div class="text-center py-8 text-sm text-muted">No analytics data available yet.</div>
     {:else if analyticsData}
       <div class="grid grid-cols-2 gap-3 mb-6">
         {#each metricCards as card (card.label)}
-          <div class="bg-[#0d1117] border border-[#1e2435] rounded-lg p-3">
-            <div class="text-xs text-[#6b7280] mb-1">{card.icon} {card.label}</div>
+          <div class="bg-background-input border border-line rounded-lg p-3">
+            <div class="text-xs text-muted mb-1">{card.icon} {card.label}</div>
             <div class="text-lg font-semibold text-white">{card.value.toLocaleString()}</div>
             {#if analyticsData.length >= 2}
               {@const first = analyticsData[0][card.key] as number}
@@ -152,7 +152,7 @@
       <div class="space-y-5">
         {#each metricCards as card (card.label)}
           <div>
-            <div class="text-xs text-[#6b7280] mb-2">{card.icon} {card.label}</div>
+            <div class="text-xs text-muted mb-2">{card.icon} {card.label}</div>
             <div class="flex items-end gap-1 h-24">
               {#each chartData as point, i (i)}
                 <div class="flex-1 flex flex-col items-center justify-end h-full">
@@ -161,7 +161,7 @@
                     style="height: {((point[card.key] as number) / (card.key === 'impressions' ? maxImpressions : card.key === 'likes' ? maxLikes : card.key === 'shares' ? maxShares : maxComments)) * 100}%; background: {card.color}; min-height: {(point[card.key] as number) > 0 ? '4px' : '0'}"
                   ></div>
                   {#if chartData.length <= 7 || (chartData.length <= 10 && i % 2 === 0) || i % 3 === 0}
-                    <span class="text-[8px] text-[#6b7280] mt-1 truncate w-full text-center">{shortDate(point.date)}</span>
+                    <span class="text-[8px] text-muted mt-1 truncate w-full text-center">{shortDate(point.date)}</span>
                   {/if}
                 </div>
               {/each}

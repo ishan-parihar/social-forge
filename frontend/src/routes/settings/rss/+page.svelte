@@ -97,7 +97,7 @@
   <div class="flex items-center justify-between">
     <div>
       <h2 class="text-xl font-semibold">RSS Autopost</h2>
-      <p class="text-sm text-[#6b7280] mb-6">Automatically fetch and publish content from RSS feeds to your connected channels.</p>
+      <p class="text-sm text-muted mb-6">Automatically fetch and publish content from RSS feeds to your connected channels.</p>
     </div>
     <Button onclick={() => (showForm = !showForm)}>
       {showForm ? 'Cancel' : 'Add Feed'}
@@ -113,13 +113,13 @@
       <Spinner size="lg" />
     </div>
   {:else if error}
-    <div class="bg-[#131720] border border-red-500/30 rounded-xl p-5 text-sm text-red-400">
+    <div class="bg-surface border border-red-500/30 rounded-xl p-5 text-sm text-red-400">
       {error}
       <button onclick={loadFeeds} class="ml-2 underline">Retry</button>
     </div>
   {:else if feeds.length === 0}
-    <div class="bg-[#131720] border border-[#1e2435] rounded-xl p-8 text-center">
-      <p class="text-[#6b7280] text-sm">No RSS feeds configured. Add a feed to automatically post new content.</p>
+    <div class="bg-surface border border-line rounded-xl p-8 text-center">
+      <p class="text-muted text-sm">No RSS feeds configured. Add a feed to automatically post new content.</p>
     </div>
   {:else}
     <div class="page-enter space-y-3">
@@ -145,16 +145,16 @@
   {:else if itemsError}
     <div class="text-sm text-red-400">{itemsError}</div>
   {:else if items.length === 0}
-    <p class="text-sm text-[#6b7280]">No items found for this feed.</p>
+    <p class="text-sm text-muted">No items found for this feed.</p>
   {:else}
     <div class="page-enter space-y-2 max-h-96 overflow-y-auto">
       {#each items as item (item.guid)}
-        <div class="bg-[#0b0e14] border border-[#1e2435] rounded-lg p-3 space-y-1">
+        <div class="bg-[#0b0e14] border border-line rounded-lg p-3 space-y-1">
           <div class="flex items-start justify-between gap-2">
             <div class="min-w-0">
               <p class="text-sm font-medium truncate">{item.title}</p>
-              <p class="text-xs text-[#6b7280] truncate" title={item.url}>{item.url}</p>
-              <p class="text-xs text-[#6b7280]">Published: {formatDate(item.published_at)}</p>
+              <p class="text-xs text-muted truncate" title={item.url}>{item.url}</p>
+              <p class="text-xs text-muted">Published: {formatDate(item.published_at)}</p>
             </div>
             <div class="flex-shrink-0">
               {#if item.is_imported}

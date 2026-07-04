@@ -157,36 +157,36 @@
         <select
           bind:value={selectedIntegrationId}
           onchange={load}
-          class="px-3 py-1.5 text-sm bg-[#131720] border border-[#1e2435] rounded-lg text-[#e8edf5]"
+          class="px-3 py-1.5 text-sm bg-surface border border-line rounded-lg text-content"
         >
           {#each integrations as int (int.id)}
             <option value={int.id}>{int.provider_identifier} ({int.internal_id.slice(0, 8)})</option>
           {/each}
         </select>
       {/if}
-      <button onclick={load} class="px-3 py-1.5 text-sm text-[#6b7280] hover:text-white border border-[#1e2435] rounded-lg transition-colors">↻ Refresh</button>
+      <button onclick={load} class="px-3 py-1.5 text-sm text-muted hover:text-white border border-line rounded-lg transition-colors">↻ Refresh</button>
     </div>
   </div>
 
   {#if error}
     <div class="text-center py-12 text-sm text-red-400">{error}</div>
   {:else if loading}
-    <div class="text-center py-12 text-sm text-[#6b7280]">Loading...</div>
+    <div class="text-center py-12 text-sm text-muted">Loading...</div>
   {:else if conversations.length === 0}
-    <div class="text-center py-12 text-sm text-[#6b7280]">No conversations found</div>
+    <div class="text-center py-12 text-sm text-muted">No conversations found</div>
   {:else}
     <!-- Two-panel layout -->
     <div class="flex gap-4 h-[calc(100vh-200px)]">
       <!-- Conversation list -->
-      <div class="w-80 bg-[#131720] border border-[#1e2435] rounded-xl overflow-hidden flex flex-col shrink-0">
-        <div class="p-3 border-b border-[#1e2435]">
-          <span class="text-xs text-[#6b7280]">{conversations.length} conversations</span>
+      <div class="w-80 bg-surface border border-line rounded-xl overflow-hidden flex flex-col shrink-0">
+        <div class="p-3 border-b border-line">
+          <span class="text-xs text-muted">{conversations.length} conversations</span>
         </div>
         <div class="flex-1 overflow-y-auto">
           {#each conversations as conv (conv.id)}
             <button
               onclick={() => selectConversation(conv.id)}
-              class="w-full px-3 py-3 border-b border-[#1e2435] hover:bg-[#1a1f2e] transition-colors text-left {selectedId === conv.id ? 'bg-[#1a1f2e]' : ''}"
+              class="w-full px-3 py-3 border-b border-line hover:bg-surface-hover transition-colors text-left {selectedId === conv.id ? 'bg-[#1a1f2e]' : ''}"
             >
               <div class="flex items-center gap-2 mb-1">
                 <span class="text-xs text-indigo-400">{platformIcon(conv.platform)}</span>
@@ -196,8 +196,8 @@
                 {/if}
               </div>
               <div class="flex items-center gap-2">
-                <span class="text-xs text-[#6b7280] truncate flex-1">{conv.last_message}</span>
-                <span class="text-[10px] text-[#6b7280] shrink-0">{new Date(conv.updated_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                <span class="text-xs text-muted truncate flex-1">{conv.last_message}</span>
+                <span class="text-[10px] text-muted shrink-0">{new Date(conv.updated_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
               </div>
             </button>
           {/each}
@@ -205,10 +205,10 @@
       </div>
 
       <!-- Message thread -->
-      <div class="flex-1 bg-[#131720] border border-[#1e2435] rounded-xl flex flex-col">
+      <div class="flex-1 bg-surface border border-line rounded-xl flex flex-col">
         {#if selected}
           <!-- Header -->
-          <div class="px-4 py-3 border-b border-[#1e2435]">
+          <div class="px-4 py-3 border-b border-line">
             <div class="flex items-center gap-2">
               <span class="text-xs text-indigo-400">{platformIcon(selected.platform)}</span>
               <span class="text-sm font-medium">{selected.contact}</span>
@@ -221,20 +221,20 @@
               <div class="flex {msg.is_mine ? 'justify-end' : 'justify-start'}">
                 <div class="page-enter max-w-[70%] {msg.is_mine ? 'bg-indigo-600/30' : 'bg-[#1e2435]'} rounded-xl px-3 py-2">
                   <p class="text-sm">{msg.text}</p>
-                  <span class="text-[10px] text-[#6b7280]">{new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                  <span class="text-[10px] text-muted">{new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
                 </div>
               </div>
             {/each}
           </div>
 
           <!-- Input -->
-          <div class="p-3 border-t border-[#1e2435]">
+          <div class="p-3 border-t border-line">
             <div class="flex gap-2">
               <input
                 type="text"
                 bind:value={newMessage}
                 placeholder="Type a message..."
-                class="flex-1 px-3 py-2 bg-[#0d1117] border border-[#1e2435] rounded-lg text-sm"
+                class="flex-1 px-3 py-2 bg-background-input border border-line rounded-lg text-sm"
                 onkeydown={(e) => e.key === "Enter" && sendMessage()}
               />
               <button
@@ -247,7 +247,7 @@
             </div>
           </div>
         {:else}
-          <div class="flex-1 flex items-center justify-center text-sm text-[#6b7280]">
+          <div class="flex-1 flex items-center justify-center text-sm text-muted">
             Select a conversation
           </div>
         {/if}

@@ -27,28 +27,28 @@
   }));
 </script>
 
-<div class="bg-[#131720] border border-[#1e2435] rounded-xl overflow-hidden">
-  <div class="text-xs text-[#6b7280] px-4 py-2 border-b border-[#1e2435]">Upcoming posts</div>
+<div class="bg-surface border border-line rounded-xl overflow-hidden">
+  <div class="text-xs text-muted px-4 py-2 border-b border-line">Upcoming posts</div>
   {#if sorted.length === 0}
-    <div class="text-center py-12 text-sm text-[#6b7280]">No posts scheduled</div>
+    <div class="text-center py-12 text-sm text-muted">No posts scheduled</div>
   {:else}
     {#each sorted as event (event.id)}
-      <div class="group relative w-full flex items-center gap-4 px-4 py-3 border-b border-[#1e2435] hover:bg-[#1a1f2e] transition-colors">
+      <div class="group relative w-full flex items-center gap-4 px-4 py-3 border-b border-line hover:bg-surface-hover transition-colors">
         {#if onToggleSelect}
           <input type="checkbox" checked={selected.has(event.id)} onclick={(e) => onToggleSelect?.(event.id, e)} class="rounded shrink-0" />
         {/if}
         <button onclick={() => onEventClick?.(event.id)} class="flex-1 flex items-center gap-4 text-left min-w-0">
-          <div class="text-xs text-[#6b7280] w-24 shrink-0">
+          <div class="text-xs text-muted w-24 shrink-0">
             {#if event.date}
               {event.date}
               {#if event.time}<br><span class="text-indigo-400">{event.time}</span>{/if}
             {:else}
-              <span class="text-[#4b5563]">Draft</span>
+              <span class="text-muted-dark">Draft</span>
             {/if}
           </div>
           <div class="flex-1 min-w-0">
             <div class="text-sm truncate">{event.title}</div>
-            <div class="text-xs text-[#6b7280]">{event.integrationName}</div>
+            <div class="text-xs text-muted">{event.integrationName}</div>
             {#if event.likes != null || event.comments != null || event.impressions != null}
               <div class="flex gap-2 mt-0.5">
                 {#if event.likes != null}<span class="text-[10px] text-pink-400/60" title="{engagementLabel('likes', event.platform)}">{engagementIcon('likes', event.platform)} {formatMetricCount(event.likes)}</span>{/if}
@@ -77,20 +77,20 @@
   {/if}
 
   {#if totalPages > 1}
-    <div class="flex items-center justify-between px-4 py-3 border-t border-[#1e2435]">
-      <span class="text-sm text-[#6b7280]">
+    <div class="flex items-center justify-between px-4 py-3 border-t border-line">
+      <span class="text-sm text-muted">
         Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, totalItems)} of {totalItems}
       </span>
       <div class="flex gap-2">
         <button
           onclick={() => onPageChange?.(page - 1)}
           disabled={page <= 1}
-          class="px-3 py-1 text-sm rounded bg-[#1e2435] text-[#d1d5db] disabled:opacity-50 hover:bg-[#2a3045] transition-colors"
+          class="px-3 py-1 text-sm rounded bg-[#1e2435] text-content-secondary disabled:opacity-50 hover:bg-[#2a3045] transition-colors"
         >← Previous</button>
         <button
           onclick={() => onPageChange?.(page + 1)}
           disabled={page >= totalPages}
-          class="px-3 py-1 text-sm rounded bg-[#1e2435] text-[#d1d5db] disabled:opacity-50 hover:bg-[#2a3045] transition-colors"
+          class="px-3 py-1 text-sm rounded bg-[#1e2435] text-content-secondary disabled:opacity-50 hover:bg-[#2a3045] transition-colors"
         >Next →</button>
       </div>
     </div>

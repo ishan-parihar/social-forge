@@ -110,13 +110,13 @@
   <div class="flex items-center justify-between">
     <div>
       <h2 class="text-xl font-semibold">Dashboard</h2>
-      <p class="text-sm text-[#6b7280] mt-1">Your social media command center</p>
+      <p class="text-sm text-muted mt-1">Your social media command center</p>
     </div>
     <div class="flex gap-2">
       <button onclick={() => goto('/posts/new')} class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm font-medium transition-colors">
         + New Post
       </button>
-      <button onclick={() => goto('/analytics')} class="px-4 py-2 bg-[#1a1f2e] hover:bg-[#1e2435] border border-[#1e2435] rounded-lg text-sm transition-colors">
+      <button onclick={() => goto('/analytics')} class="px-4 py-2 bg-[#1a1f2e] hover:bg-[#1e2435] border border-line rounded-lg text-sm transition-colors">
         <Icon name="analytics" class="w-4 h-4 inline" /> Analytics
       </button>
     </div>
@@ -132,9 +132,9 @@
     <!-- Post Stats Row -->
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
       {#each [{ label: 'Drafts', value: stats.draft, color: 'text-blue-400', bg: 'bg-blue-500/10' }, { label: 'Queued', value: stats.queued, color: 'text-yellow-400', bg: 'bg-yellow-500/10' }, { label: 'Published', value: stats.published, color: 'text-green-400', bg: 'bg-green-500/10' }, { label: 'Errors', value: stats.error, color: 'text-red-400', bg: 'bg-red-500/10' }] as s}
-        <div class="stat-card bg-[#131720] border border-[#1e2435] rounded-xl p-5 {s.bg}">
+        <div class="stat-card bg-surface border border-line rounded-xl p-5 {s.bg}">
           <div class="text-3xl font-bold {s.color}">{s.value}</div>
-          <div class="text-xs text-[#6b7280] mt-1 uppercase tracking-wider">{s.label}</div>
+          <div class="text-xs text-muted mt-1 uppercase tracking-wider">{s.label}</div>
         </div>
       {/each}
     </div>
@@ -142,30 +142,30 @@
     <!-- Engagement Stats Row (only if there are published posts with engagement) -->
     {#if totalEngagement.likes > 0 || totalEngagement.comments > 0 || totalEngagement.shares > 0}
       <div class="grid grid-cols-3 gap-4">
-        <div class="stat-card bg-[#131720] border border-[#1e2435] rounded-xl p-4">
+        <div class="stat-card bg-surface border border-line rounded-xl p-4">
           <div class="flex items-center gap-2">
             <Icon name="heart" class="w-4 h-4 text-pink-400" />
             <div>
               <div class="text-xl font-bold text-pink-400">{totalEngagement.likes.toLocaleString()}</div>
-              <div class="text-[10px] text-[#6b7280] uppercase tracking-wider">Likes (7d)</div>
+              <div class="text-[10px] text-muted uppercase tracking-wider">Likes (7d)</div>
             </div>
           </div>
         </div>
-        <div class="stat-card bg-[#131720] border border-[#1e2435] rounded-xl p-4">
+        <div class="stat-card bg-surface border border-line rounded-xl p-4">
           <div class="flex items-center gap-2">
             <Icon name="comment-bubble" class="w-4 h-4 text-blue-400" />
             <div>
               <div class="text-xl font-bold text-blue-400">{totalEngagement.comments.toLocaleString()}</div>
-              <div class="text-[10px] text-[#6b7280] uppercase tracking-wider">Comments (7d)</div>
+              <div class="text-[10px] text-muted uppercase tracking-wider">Comments (7d)</div>
             </div>
           </div>
         </div>
-        <div class="stat-card bg-[#131720] border border-[#1e2435] rounded-xl p-4">
+        <div class="stat-card bg-surface border border-line rounded-xl p-4">
           <div class="flex items-center gap-2">
             <Icon name="share" class="w-4 h-4 text-green-400" />
             <div>
               <div class="text-xl font-bold text-green-400">{totalEngagement.shares.toLocaleString()}</div>
-              <div class="text-[10px] text-[#6b7280] uppercase tracking-wider">Shares (7d)</div>
+              <div class="text-[10px] text-muted uppercase tracking-wider">Shares (7d)</div>
             </div>
           </div>
         </div>
@@ -175,17 +175,17 @@
     <!-- Two-column: Channel Performance + Alerts -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
       <!-- Channel Performance -->
-      <div class="lg:col-span-2 bg-[#131720] border border-[#1e2435] rounded-xl p-5">
+      <div class="lg:col-span-2 bg-surface border border-line rounded-xl p-5">
         <div class="flex items-center justify-between mb-4">
           <h3 class="font-medium text-sm">Channel Performance (30d)</h3>
-          <span class="text-xs text-[#6b7280]">{integrations.length} connected</span>
+          <span class="text-xs text-muted">{integrations.length} connected</span>
         </div>
         {#if analyticsSummary && analyticsSummary.posts_by_provider.length > 0}
           <div class="space-y-2">
             {#each analyticsSummary.posts_by_provider.slice(0, 8) as prov}
               <div class="flex items-center gap-3">
-                <span class="text-xs text-[#6b7280] w-24 truncate">{prov.provider}</span>
-                <div class="flex-1 bg-[#0d1117] rounded-full h-6 overflow-hidden">
+                <span class="text-xs text-muted w-24 truncate">{prov.provider}</span>
+                <div class="flex-1 bg-background-input rounded-full h-6 overflow-hidden">
                   <div
                     class="h-full bg-indigo-500/60 rounded-full transition-all duration-500 flex items-center justify-end px-2"
                     style="width: {(prov.count / maxProviderCount) * 100}%"
@@ -197,34 +197,34 @@
             {/each}
           </div>
         {:else}
-          <p class="text-sm text-[#6b7280] py-4 text-center">No posts published yet</p>
+          <p class="text-sm text-muted py-4 text-center">No posts published yet</p>
         {/if}
       </div>
 
       <!-- Alerts -->
-      <div class="bg-[#131720] border border-[#1e2435] rounded-xl p-5">
+      <div class="bg-surface border border-line rounded-xl p-5">
         <h3 class="font-medium text-sm mb-3">Alerts</h3>
         {#if alertCount === 0 && stats.draft === 0}
           <div class="text-center py-6">
             <span class="text-2xl">✅</span>
-            <p class="text-xs text-[#6b7280] mt-2">All clear — no issues detected</p>
+            <p class="text-xs text-muted mt-2">All clear — no issues detected</p>
           </div>
         {:else}
           <div class="space-y-2">
             {#if stats.error > 0}
-              <a href="/posts" class="flex items-center gap-2 p-2 rounded-lg hover:bg-[#1a1f2e] transition-colors">
+              <a href="/posts" class="flex items-center gap-2 p-2 rounded-lg hover:bg-surface-hover transition-colors">
                 <span class="w-2 h-2 rounded-full bg-red-400"></span>
                 <span class="text-xs text-red-400">{stats.error} failed post{stats.error > 1 ? 's' : ''}</span>
               </a>
             {/if}
             {#if stats.draft > 0}
-              <a href="/posts" class="flex items-center gap-2 p-2 rounded-lg hover:bg-[#1a1f2e] transition-colors">
+              <a href="/posts" class="flex items-center gap-2 p-2 rounded-lg hover:bg-surface-hover transition-colors">
                 <span class="w-2 h-2 rounded-full bg-blue-400"></span>
                 <span class="text-xs text-blue-400">{stats.draft} draft{stats.draft > 1 ? 's' : ''} waiting</span>
               </a>
             {/if}
             {#if upcoming.length > 0}
-              <a href="/calendar" class="flex items-center gap-2 p-2 rounded-lg hover:bg-[#1a1f2e] transition-colors">
+              <a href="/calendar" class="flex items-center gap-2 p-2 rounded-lg hover:bg-surface-hover transition-colors">
                 <span class="w-2 h-2 rounded-full bg-yellow-400"></span>
                 <span class="text-xs text-yellow-400">{upcoming.length} scheduled post{upcoming.length > 1 ? 's' : ''} upcoming</span>
               </a>
@@ -237,16 +237,16 @@
     <!-- Two-column: Today's Schedule + Recent Activity -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <!-- Today's Schedule -->
-      <div class="bg-[#131720] border border-[#1e2435] rounded-xl p-5">
+      <div class="bg-surface border border-line rounded-xl p-5">
         <h3 class="font-medium text-sm mb-3">Today's Schedule</h3>
         {#if todayPosts.length === 0}
-          <p class="text-sm text-[#6b7280] py-4 text-center">No posts scheduled for today</p>
+          <p class="text-sm text-muted py-4 text-center">No posts scheduled for today</p>
         {:else}
           <div class="space-y-1">
             {#each todayPosts as post}
-              <div class="flex items-center gap-3 py-2 border-b border-[#1e2435] last:border-0">
-                <span class="text-xs text-[#6b7280] w-12 font-mono">{post.scheduled_at ? formatDateTime(post.scheduled_at).slice(-5) : ''}</span>
-                <span class="flex-1 text-sm truncate text-[#d1d5db]">{post.content || post.title || '(no content)'}</span>
+              <div class="flex items-center gap-3 py-2 border-b border-line last:border-0">
+                <span class="text-xs text-muted w-12 font-mono">{post.scheduled_at ? formatDateTime(post.scheduled_at).slice(-5) : ''}</span>
+                <span class="flex-1 text-sm truncate text-content-secondary">{post.content || post.title || '(no content)'}</span>
                 <span class="text-xs px-2 py-0.5 rounded badge-{post.state}">{post.integration_name}</span>
               </div>
             {/each}
@@ -255,17 +255,17 @@
       </div>
 
       <!-- Recent Activity -->
-      <div class="bg-[#131720] border border-[#1e2435] rounded-xl p-5">
+      <div class="bg-surface border border-line rounded-xl p-5">
         <h3 class="font-medium text-sm mb-3">Recent Activity</h3>
         {#if recentPublished.length === 0}
-          <p class="text-sm text-[#6b7280] py-4 text-center">No posts published yet</p>
+          <p class="text-sm text-muted py-4 text-center">No posts published yet</p>
         {:else}
           <div class="space-y-1">
             {#each recentPublished as post}
-              <div class="flex items-center gap-3 py-2 border-b border-[#1e2435] last:border-0">
+              <div class="flex items-center gap-3 py-2 border-b border-line last:border-0">
                 <span class="text-xs {providerColor(post.integration_name?.toLowerCase() || '')}">{providerIcon(post.integration_name?.toLowerCase() || '')}</span>
-                <span class="flex-1 text-sm truncate text-[#d1d5db]">{post.content || post.title || '(no content)'}</span>
-                <div class="flex gap-2 text-[10px] text-[#6b7280]">
+                <span class="flex-1 text-sm truncate text-content-secondary">{post.content || post.title || '(no content)'}</span>
+                <div class="flex gap-2 text-[10px] text-muted">
                   {#if post.likes != null && post.likes > 0}
                     <span class="flex items-center gap-0.5"><Icon name="heart" class="w-3 h-3 text-pink-400" /> {post.likes}</span>
                   {/if}
@@ -288,13 +288,13 @@
       <button onclick={() => goto('/posts/new')} class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm font-medium transition-colors">
         <Icon name="post" class="w-4 h-4 inline" /> Compose Post
       </button>
-      <button onclick={() => goto('/feed')} class="px-4 py-2 bg-[#1a1f2e] hover:bg-[#1e2435] border border-[#1e2435] rounded-lg text-sm transition-colors">
+      <button onclick={() => goto('/feed')} class="px-4 py-2 bg-[#1a1f2e] hover:bg-[#1e2435] border border-line rounded-lg text-sm transition-colors">
         <Icon name="feed" class="w-4 h-4 inline" /> View Feed
       </button>
-      <button onclick={() => goto('/channels')} class="px-4 py-2 bg-[#1a1f2e] hover:bg-[#1e2435] border border-[#1e2435] rounded-lg text-sm transition-colors">
+      <button onclick={() => goto('/channels')} class="px-4 py-2 bg-[#1a1f2e] hover:bg-[#1e2435] border border-line rounded-lg text-sm transition-colors">
         <Icon name="channel" class="w-4 h-4 inline" /> Manage Channels
       </button>
-      <button onclick={() => goto('/analytics')} class="px-4 py-2 bg-[#1a1f2e] hover:bg-[#1e2435] border border-[#1e2435] rounded-lg text-sm transition-colors">
+      <button onclick={() => goto('/analytics')} class="px-4 py-2 bg-[#1a1f2e] hover:bg-[#1e2435] border border-line rounded-lg text-sm transition-colors">
         <Icon name="analytics" class="w-4 h-4 inline" /> View Analytics
       </button>
     </div>

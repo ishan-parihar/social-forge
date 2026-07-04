@@ -124,8 +124,8 @@
   });
 </script>
 
-<div class="rich-editor border border-[#1e2435] rounded-lg overflow-hidden bg-[#0d1117] relative">
-  <div class="flex items-center gap-1 p-2 border-b border-[#1e2435] flex-wrap">
+<div class="rich-editor border border-line rounded-lg overflow-hidden bg-background-input relative">
+  <div class="flex items-center gap-1 p-2 border-b border-line flex-wrap">
     <button aria-label="Bold" onmousedown={(e) => { e.preventDefault(); editor?.chain().focus().toggleBold().run(); }} class="toolbar-btn" class:active={editor?.isActive("bold")}>B</button>
     <button aria-label="Italic" onmousedown={(e) => { e.preventDefault(); editor?.chain().focus().toggleItalic().run(); }} class="toolbar-btn italic" class:active={editor?.isActive("italic")}>I</button>
     <button aria-label="Heading 2" onmousedown={(e) => { e.preventDefault(); editor?.chain().focus().toggleHeading({ level: 2 }).run(); }} class="toolbar-btn" class:active={editor?.isActive("heading", { level: 2 })}>H2</button>
@@ -138,7 +138,7 @@
     <span class="text-[#2a3045] mx-1">|</span>
     <SignatureEditor onInsert={(content) => editor?.chain().focus().insertContent(content).run()} />
 
-    <span class="text-xs text-[#6b7280] ml-auto">{charCount} chars</span>
+    <span class="text-xs text-muted ml-auto">{charCount} chars</span>
   </div>
 
   {#if showImageInput}
@@ -159,7 +159,7 @@
             placeholder="https://example.com/image.png"
             bind:value={imageUrl}
             onkeydown={handleImageKeydown}
-            class="flex-1 px-3 py-2 rounded text-sm bg-[#0d1117] border border-[#1e2435] text-[#d1d5db] placeholder:text-[#4a5568] outline-none focus:border-[#6366f1] transition-colors"
+            class="flex-1 px-3 py-2 rounded text-sm bg-background-input border border-line text-content-secondary placeholder:text-[#4a5568] outline-none focus:border-[#6366f1] transition-colors"
           />
           <button
             onclick={insertImage}

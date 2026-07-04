@@ -89,7 +89,7 @@
 
 <div class="page-enter space-y-6">
   <div class="flex items-center justify-between">
-    <h2 class="text-xl font-semibold text-[#e8edf5]">Media Library</h2>
+    <h2 class="text-xl font-semibold text-content">Media Library</h2>
     <label class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm cursor-pointer transition-colors disabled:opacity-50" class:opacity-50={uploading}>
       {uploading ? "Uploading..." : "+ Upload"}
       <input type="file" multiple accept="image/*,video/*,audio/*,.pdf" onchange={handleUpload} class="hidden" disabled={uploading} />
@@ -101,9 +101,9 @@
       type="text"
       placeholder="Search media by name..."
       bind:value={search}
-      class="w-full px-3 py-2 pl-9 bg-[#0d1117] border border-[#1e2435] rounded-lg text-sm text-[#d1d5db] placeholder-[#6b7280] focus:border-indigo-500 outline-none transition-colors"
+      class="w-full px-3 py-2 pl-9 bg-background-input border border-line rounded-lg text-sm text-content-secondary placeholder-[#6b7280] focus:border-indigo-500 outline-none transition-colors"
     />
-    <span class="absolute left-3 top-1/2 -translate-y-1/2 text-[#6b7280]"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></span>
+    <span class="absolute left-3 top-1/2 -translate-y-1/2 text-muted"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></span>
   </div>
 
   {#if error && !loading}
@@ -119,15 +119,15 @@
         <button
           onclick={prevPage}
           disabled={offset === 0}
-          class="px-3 py-1.5 text-sm border border-[#1e2435] rounded-lg disabled:opacity-30 disabled:cursor-not-allowed hover:bg-[#1a1f2e] transition-colors text-[#d1d5db]"
+          class="px-3 py-1.5 text-sm border border-line rounded-lg disabled:opacity-30 disabled:cursor-not-allowed hover:bg-surface-hover transition-colors text-content-secondary"
         >
           Previous
         </button>
-        <span class="text-xs text-[#6b7280]">Page {Math.floor(offset / limit) + 1}</span>
+        <span class="text-xs text-muted">Page {Math.floor(offset / limit) + 1}</span>
         <button
           onclick={nextPage}
           disabled={!hasMore}
-          class="px-3 py-1.5 text-sm border border-[#1e2435] rounded-lg disabled:opacity-30 disabled:cursor-not-allowed hover:bg-[#1a1f2e] transition-colors text-[#d1d5db]"
+          class="px-3 py-1.5 text-sm border border-line rounded-lg disabled:opacity-30 disabled:cursor-not-allowed hover:bg-surface-hover transition-colors text-content-secondary"
         >
           Next
         </button>

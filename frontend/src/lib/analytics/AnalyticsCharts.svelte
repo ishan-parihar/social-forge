@@ -4,10 +4,10 @@
   let maxCount = $derived(Math.max(...postsByDay.map(d => d.count), 1));
 </script>
 
-<div class="bg-[#131720] border border-[#1e2435] rounded-lg p-4">
-  <h3 class="text-sm font-medium text-[#e8edf5] mb-4">Posts Over Time</h3>
+<div class="bg-surface border border-line rounded-lg p-4">
+  <h3 class="text-sm font-medium text-content mb-4">Posts Over Time</h3>
   {#if postsByDay.length === 0}
-    <p class="text-[#d1d5db] text-sm py-8 text-center">No data for this period</p>
+    <p class="text-content-secondary text-sm py-8 text-center">No data for this period</p>
   {:else}
     <div class="flex items-end gap-1 h-40">
       {#each postsByDay as day (day.date)}
@@ -23,7 +23,7 @@
     <div class="flex gap-1 mt-2">
       {#each postsByDay as day (day.date)}
         <div class="flex-1 text-center">
-          <span class="text-[10px] text-[#6b7280]">{day.date.slice(5)}</span>
+          <span class="text-[10px] text-muted">{day.date.slice(5)}</span>
         </div>
       {/each}
     </div>

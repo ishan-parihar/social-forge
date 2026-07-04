@@ -66,11 +66,11 @@
   </div>
 
   <!-- Filter tabs -->
-  <div class="flex gap-1 bg-[#131720] border border-[#1e2435] rounded-lg p-1 overflow-x-auto">
+  <div class="flex gap-1 bg-surface border border-line rounded-lg p-1 overflow-x-auto">
     {#each filters as f}
       <button
         onclick={() => toggleFilter(f)}
-        class="px-3 py-1.5 text-xs capitalize rounded-md transition-colors {filter === f ? 'bg-indigo-600 text-white' : 'text-[#6b7280] hover:bg-[#1a1f2e]'}"
+        class="px-3 py-1.5 text-xs capitalize rounded-md transition-colors {filter === f ? 'bg-indigo-600 text-white' : 'text-muted hover:bg-surface-hover'}"
       >{f}</button>
     {/each}
   </div>
@@ -79,22 +79,22 @@
   {#if error}
     <div class="text-center py-12 text-sm text-red-400">{error}</div>
   {:else if loading}
-    <div class="text-center py-12 text-sm text-[#6b7280]">Loading...</div>
+    <div class="text-center py-12 text-sm text-muted">Loading...</div>
   {:else if posts.length === 0}
-    <div class="text-center py-12 text-sm text-[#6b7280]">No posts found</div>
+    <div class="text-center py-12 text-sm text-muted">No posts found</div>
   {:else}
-    <div class="bg-[#131720] border border-[#1e2435] rounded-xl overflow-hidden">
+    <div class="bg-surface border border-line rounded-xl overflow-hidden">
       {#each posts as post (post.id)}
-        <div class="flex items-center gap-3 px-4 py-3 border-b border-[#1e2435] last:border-0 hover:bg-[#1a1f2e] transition-colors">
+        <div class="flex items-center gap-3 px-4 py-3 border-b border-line last:border-0 hover:bg-surface-hover transition-colors">
           <button
             onclick={() => goto(`/posts/${post.id}`)}
             class="flex-1 flex items-center gap-4 text-left min-w-0"
           >
             <div class="flex-1 min-w-0">
               <div class="text-sm truncate">{post.content}</div>
-              <div class="text-xs text-[#6b7280] mt-0.5">{post.integration_name}</div>
+              <div class="text-xs text-muted mt-0.5">{post.integration_name}</div>
             </div>
-            <div class="text-xs text-[#6b7280] shrink-0">
+            <div class="text-xs text-muted shrink-0">
               {post.scheduled_at ? new Date(post.scheduled_at).toLocaleDateString() : ""}
             </div>
             <Badge state={post.state as "draft" | "queued" | "published" | "error"} />
@@ -107,20 +107,20 @@
     </div>
 
     {#if totalPages > 1}
-      <div class="flex items-center justify-between px-4 py-3 bg-[#131720] border border-[#1e2435] rounded-xl">
-        <span class="text-sm text-[#6b7280]">
+      <div class="flex items-center justify-between px-4 py-3 bg-surface border border-line rounded-xl">
+        <span class="text-sm text-muted">
           Showing {(page - 1) * limit + 1}–{Math.min(page * limit, totalItems)} of {totalItems}
         </span>
         <div class="flex gap-2">
           <button
             onclick={() => handlePageChange(page - 1)}
             disabled={page <= 1}
-            class="px-3 py-1 text-sm rounded bg-[#1e2435] text-[#d1d5db] disabled:opacity-50 hover:bg-[#2a3045] transition-colors"
+            class="px-3 py-1 text-sm rounded bg-[#1e2435] text-content-secondary disabled:opacity-50 hover:bg-[#2a3045] transition-colors"
           >← Previous</button>
           <button
             onclick={() => handlePageChange(page + 1)}
             disabled={page >= totalPages}
-            class="px-3 py-1 text-sm rounded bg-[#1e2435] text-[#d1d5db] disabled:opacity-50 hover:bg-[#2a3045] transition-colors"
+            class="px-3 py-1 text-sm rounded bg-[#1e2435] text-content-secondary disabled:opacity-50 hover:bg-[#2a3045] transition-colors"
           >Next →</button>
         </div>
       </div>

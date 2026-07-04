@@ -54,7 +54,7 @@
       case "peer": return "bg-green-500/20 text-green-400 border-green-500/30";
       case "blog": return "bg-yellow-500/20 text-yellow-400 border-yellow-500/30";
       case "community": return "bg-teal-500/20 text-teal-400 border-teal-500/30";
-      default: return "bg-[#1e2435] text-[#6b7280] border-[#1e2435]";
+      default: return "bg-[#1e2435] text-muted border-line";
     }
   }
 </script>
@@ -63,12 +63,12 @@
   <!-- Search + Selected Count Header -->
   <div class="flex items-center gap-2 mb-2">
     <div class="relative flex-1">
-      <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#6b7280] text-sm">&#128269;</span>
+      <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted text-sm">&#128269;</span>
       <input
         type="text"
         bind:value={searchQuery}
         placeholder={placeholder}
-        class="w-full pl-8 pr-3 py-1.5 bg-[#0d1117] border border-[#1e2435] rounded-lg text-sm focus:border-indigo-500 outline-none placeholder:text-[#4b5563]"
+        class="w-full pl-8 pr-3 py-1.5 bg-background-input border border-line rounded-lg text-sm focus:border-indigo-500 outline-none placeholder:text-muted-dark"
       />
     </div>
     {#if selectedCount > 0}
@@ -80,11 +80,11 @@
 
   <!-- Target List -->
   <div
-    class="overflow-y-auto rounded-lg border border-[#1e2435]"
+    class="overflow-y-auto rounded-lg border border-line"
     style="max-height: {maxHeight};"
   >
     {#if filteredTargets.length === 0}
-      <div class="text-sm text-[#6b7280] py-6 text-center">
+      <div class="text-sm text-muted py-6 text-center">
         {searchQuery ? "No targets match your search" : "No targets found"}
       </div>
     {:else}
@@ -93,7 +93,7 @@
           {@const isSelected = selectedTargets.includes(target.id)}
           <button
             onclick={() => toggleTarget(target.id)}
-            class="w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-[#1a1f2e] {isSelected ? 'bg-indigo-500/5' : ''}"
+            class="w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-surface-hover {isSelected ? 'bg-indigo-500/5' : ''}"
             aria-label="{isSelected ? 'Deselect' : 'Select'} {target.name}"
           >
             <!-- Checkbox -->

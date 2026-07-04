@@ -70,7 +70,7 @@
 {#if loading}
   <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
     {#each Array(10) as _, i (i)}
-      <div class="bg-[#131720] border border-[#1e2435] rounded-xl overflow-hidden animate-pulse">
+      <div class="bg-surface border border-line rounded-xl overflow-hidden animate-pulse">
         <div class="w-full aspect-square bg-[#1a1f2e]"></div>
         <div class="p-2 space-y-1.5">
           <div class="h-3 bg-[#1a1f2e] rounded w-3/4"></div>
@@ -80,7 +80,7 @@
     {/each}
   </div>
 {:else if items.length === 0}
-  <div class="text-center py-16 text-sm text-[#6b7280]">
+  <div class="text-center py-16 text-sm text-muted">
     <div class="text-3xl mb-3">📁</div>
     <p>No media uploaded yet</p>
   </div>
@@ -93,10 +93,10 @@
         tabindex={selectable ? 0 : undefined}
         onclick={selectable ? () => onSelect?.(item) : undefined}
         onkeydown={selectable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect?.(item); } } : undefined}
-        class="relative group bg-[#131720] border rounded-xl overflow-hidden transition-all duration-150"
+        class="relative group bg-surface border rounded-xl overflow-hidden transition-all duration-150"
         class:cursor-pointer={selectable}
         class:border-indigo-400={selectable && isSelected(item.id)}
-        class:border-[#1e2435]={!selectable || !isSelected(item.id)}
+        class:border-line={!selectable || !isSelected(item.id)}
         class:ring-1={selectable && isSelected(item.id)}
         class:ring-indigo-400={selectable && isSelected(item.id)}
       >
@@ -114,8 +114,8 @@
         {/if}
 
         <div class="p-2">
-          <p class="text-xs text-[#d1d5db] truncate" title={item.original_name}>{item.original_name}</p>
-          <p class="text-[10px] text-[#6b7280]">{formatSize(item.file_size)} &middot; {formatDate(item.created_at)}</p>
+          <p class="text-xs text-content-secondary truncate" title={item.original_name}>{item.original_name}</p>
+          <p class="text-[10px] text-muted">{formatSize(item.file_size)} &middot; {formatDate(item.created_at)}</p>
         </div>
 
         {#if onDelete}

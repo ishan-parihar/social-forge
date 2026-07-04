@@ -88,11 +88,11 @@
 
 {#if open}
   <div
-    class="w-80 bg-[#131720] border border-[#1e2435] rounded-xl shadow-2xl overflow-hidden"
+    class="w-80 bg-surface border border-line rounded-xl shadow-2xl overflow-hidden"
     style={panelStyle}
   >
-    <div class="flex items-center justify-between px-4 py-3 border-b border-[#1e2435]">
-      <span class="text-sm font-medium text-[#d1d5db]">Notifications</span>
+    <div class="flex items-center justify-between px-4 py-3 border-b border-line">
+      <span class="text-sm font-medium text-content-secondary">Notifications</span>
       <button
         onclick={handleMarkAllRead}
         disabled={markingAll}
@@ -113,12 +113,12 @@
       {:else if loadError}
         <div class="px-4 py-8 text-center text-sm text-red-400">Failed to load notifications</div>
       {:else if notifications.length === 0}
-        <div class="px-4 py-8 text-center text-sm text-[#6b7280]">No notifications yet</div>
+        <div class="px-4 py-8 text-center text-sm text-muted">No notifications yet</div>
       {:else}
         {#each notifications as n (n.id)}
           <button
             onclick={() => handleMarkRead(n.id)}
-            class="w-full text-left px-4 py-3 border-b border-[#1e2435] last:border-b-0 hover:bg-[#1a1f2e] transition-colors"
+            class="w-full text-left px-4 py-3 border-b border-line last:border-b-0 hover:bg-surface-hover transition-colors"
           >
             <div class="flex items-start gap-2">
               <div class="flex-1 min-w-0">
@@ -126,11 +126,11 @@
                   {#if !n.is_read}
                     <span class="w-2 h-2 rounded-full bg-indigo-500 flex-shrink-0"></span>
                   {/if}
-                  <span class="text-sm font-medium text-[#d1d5db] {n.is_read ? 'ml-4' : ''}">{n.title}</span>
+                  <span class="text-sm font-medium text-content-secondary {n.is_read ? 'ml-4' : ''}">{n.title}</span>
                 </div>
-                <p class="text-xs text-[#6b7280] mt-0.5">{truncate(n.body, 100)}</p>
+                <p class="text-xs text-muted mt-0.5">{truncate(n.body, 100)}</p>
               </div>
-              <span class="text-xs text-[#4b5563] flex-shrink-0 pt-0.5">{relativeTime(n.created_at)}</span>
+              <span class="text-xs text-muted-dark flex-shrink-0 pt-0.5">{relativeTime(n.created_at)}</span>
             </div>
           </button>
         {/each}

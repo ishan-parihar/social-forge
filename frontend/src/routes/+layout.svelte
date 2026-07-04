@@ -75,15 +75,15 @@
   {@render children()}
 {:else}
   <div class="flex h-screen overflow-hidden bg-[#0b0e14]">
-    <aside class="w-56 bg-[#0b0e14] border-r border-[#1e2435] flex flex-col flex-shrink-0 overflow-y-auto">
-      <div class="h-14 flex items-center justify-between px-5 border-b border-[#1e2435] sticky top-0 bg-[#0b0e14] z-10">
+    <aside class="w-56 bg-[#0b0e14] border-r border-line flex flex-col flex-shrink-0 overflow-y-auto">
+      <div class="h-14 flex items-center justify-between px-5 border-b border-line sticky top-0 bg-[#0b0e14] z-10">
         <span class="text-indigo-400 font-bold text-lg">Social Forge</span>
         <NotificationBell />
       </div>
       <nav class="flex-1 py-3 px-2">
         {#each navSections as section}
           {#if section.title}
-            <div class="px-3 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-wider text-[#4b5563]">
+            <div class="px-3 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-dark">
               {section.title}
             </div>
           {/if}
@@ -92,7 +92,7 @@
               class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors duration-200 cursor-pointer
                 {$page.url.pathname === item.href
                   ? 'bg-[#1a1f2e] text-indigo-400 font-medium'
-                  : 'text-[#6b7280] hover:text-[#e8edf5] hover:bg-[#1a1f2e]'}"
+                  : 'text-muted hover:text-content hover:bg-surface-hover'}"
             >
               <Icon name={item.icon} class="w-4 h-4 flex-shrink-0" />
               {item.label}

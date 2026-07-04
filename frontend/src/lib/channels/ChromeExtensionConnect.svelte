@@ -92,36 +92,36 @@
     </a>
 
     {#if verificationCode}
-      <div class="bg-[#0d1117] border border-[#1e2435] rounded-lg p-4 text-center space-y-2">
-        <p class="text-xs text-[#6b7280] uppercase tracking-wider font-medium">Your verification code</p>
+      <div class="bg-background-input border border-line rounded-lg p-4 text-center space-y-2">
+        <p class="text-xs text-muted uppercase tracking-wider font-medium">Your verification code</p>
         <p class="text-2xl font-mono font-bold tracking-[0.25em] text-indigo-400 select-all">{verificationCode}</p>
-        <p class="text-xs text-[#6b7280]">Enter this code below to verify the extension is installed.</p>
+        <p class="text-xs text-muted">Enter this code below to verify the extension is installed.</p>
       </div>
     {/if}
 
-    <div class="bg-[#0d1117] border border-[#1e2435] rounded-lg p-4 space-y-3">
+    <div class="bg-background-input border border-line rounded-lg p-4 space-y-3">
       <h4 class="text-sm font-medium text-white">Complete Connection</h4>
 
       <div>
-        <label for="ext-label" class="block text-xs text-[#6b7280] mb-1">Integration Label</label>
+        <label for="ext-label" class="block text-xs text-muted mb-1">Integration Label</label>
         <input
           id="ext-label"
           type="text"
           bind:value={label}
           placeholder="e.g. My Skool Community"
-          class="w-full bg-[#030712] border border-[#1e2435] rounded-lg px-3 py-2 text-sm text-white placeholder-[#4b5563] focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          class="w-full bg-[#030712] border border-line rounded-lg px-3 py-2 text-sm text-white placeholder-[#4b5563] focus:outline-none focus:ring-1 focus:ring-indigo-500"
         />
       </div>
 
       <div>
-        <label for="ext-code" class="block text-xs text-[#6b7280] mb-1">Verification Code</label>
+        <label for="ext-code" class="block text-xs text-muted mb-1">Verification Code</label>
         <input
           id="ext-code"
           type="text"
           bind:value={userCode}
           placeholder="Enter the 6-character code"
           maxlength="6"
-          class="w-full bg-[#030712] border border-[#1e2435] rounded-lg px-3 py-2 text-sm text-white placeholder-[#4b5563] font-mono tracking-widest text-center focus:outline-none focus:ring-1 focus:ring-indigo-500 uppercase"
+          class="w-full bg-[#030712] border border-line rounded-lg px-3 py-2 text-sm text-white placeholder-[#4b5563] font-mono tracking-widest text-center focus:outline-none focus:ring-1 focus:ring-indigo-500 uppercase"
           style="text-transform: uppercase;"
         />
       </div>

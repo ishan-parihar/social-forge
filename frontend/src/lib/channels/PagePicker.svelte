@@ -82,22 +82,22 @@
     {#if loading}
       <div class="flex items-center justify-center py-8">
         <Spinner size="md" />
-        <span class="ml-3 text-sm text-[#6b7280]">Loading pages...</span>
+        <span class="ml-3 text-sm text-muted">Loading pages...</span>
       </div>
     {:else if pages.length === 0}
-      <div class="text-center text-sm text-[#6b7280] py-8">
+      <div class="text-center text-sm text-muted py-8">
         No pages found. Make sure you have admin access to at least one page.
       </div>
     {:else}
-      <p class="text-xs text-[#6b7280]">Select the pages you want to connect. You can always add more later.</p>
+      <p class="text-xs text-muted">Select the pages you want to connect. You can always add more later.</p>
       <div class="space-y-2 max-h-64 overflow-y-auto">
         {#each pages as page (page.id)}
-          <label class="flex items-center gap-3 p-3 bg-[#0d1117] border border-[#1e2435] rounded-lg cursor-pointer hover:border-indigo-500/50 transition-colors">
+          <label class="flex items-center gap-3 p-3 bg-background-input border border-line rounded-lg cursor-pointer hover:border-indigo-500/50 transition-colors">
             <input
               type="checkbox"
               checked={selected.has(page.id)}
               onchange={() => togglePage(page.id)}
-              class="w-4 h-4 rounded border-[#1e2435] bg-[#1a1f2e] text-indigo-500 focus:ring-indigo-500 focus:ring-offset-0"
+              class="w-4 h-4 rounded border-line bg-[#1a1f2e] text-indigo-500 focus:ring-indigo-500 focus:ring-offset-0"
             />
             {#if page.picture}
               <img src={page.picture} alt="" class="w-8 h-8 rounded-full" />
@@ -107,7 +107,7 @@
             <div class="flex-1 min-w-0">
               <div class="text-sm text-white truncate">{page.name}</div>
               {#if page.username}
-                <div class="text-xs text-[#6b7280]">@{page.username}</div>
+                <div class="text-xs text-muted">@{page.username}</div>
               {/if}
             </div>
           </label>

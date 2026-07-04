@@ -25,11 +25,11 @@
     oninput={handleInput}
     placeholder={placeholder || `Write your ${platformLabel} post...`}
     aria-label="Post content"
-    class="w-full h-24 bg-[#0d1117] border border-[#1e2435] rounded-lg p-3 text-sm resize-none focus:border-indigo-500 outline-none"
+    class="w-full h-24 bg-background-input border border-line rounded-lg p-3 text-sm resize-none focus:border-indigo-500 outline-none"
   ></textarea>
   <div class="flex justify-between text-xs">
-    <span class="text-[#6b7280]">{platformLabel}</span>
-    <span class={isOverLimit ? 'text-red-400' : isWarning ? 'text-yellow-400' : 'text-[#6b7280]'}>
+    <span class="text-muted">{platformLabel}</span>
+    <span class={isOverLimit ? 'text-red-400' : isWarning ? 'text-yellow-400' : 'text-muted'}>
       {charCount}/{charLimit}
     </span>
   </div>

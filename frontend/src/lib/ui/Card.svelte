@@ -6,6 +6,6 @@
   } = $props();
 </script>
 
-<div class="bg-[#131720] border border-[#1e2435] rounded-xl {padding} {className}">
+<div class="bg-surface border border-line rounded-xl {padding} {className}">
   {@render children()}
 </div>

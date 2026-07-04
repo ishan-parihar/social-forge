@@ -93,11 +93,11 @@
                         type="time"
                         value={minToTime(slot.time)}
                         oninput={(e) => updateSlot(i, e.currentTarget.value)}
-                        class="bg-[#1a1f2e] border border-[#1e2435] rounded-md px-3 py-1.5 text-sm text-[#d1d5db] focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        class="bg-[#1a1f2e] border border-line rounded-md px-3 py-1.5 text-sm text-content-secondary focus:outline-none focus:ring-1 focus:ring-indigo-500"
                     />
                     <button
                         onclick={() => removeSlot(i)}
-                        class="text-[#6b7280] hover:text-red-400 transition-colors text-sm"
+                        class="text-muted hover:text-red-400 transition-colors text-sm"
                         aria-label="Remove time slot"
                     >✕</button>
                 </div>
@@ -110,10 +110,10 @@
                 class="text-sm text-indigo-400 hover:text-indigo-300 transition-colors"
             >+ Add slot</button>
         {:else}
-            <p class="text-xs text-[#6b7280]">Maximum 3 slots reached.</p>
+            <p class="text-xs text-muted">Maximum 3 slots reached.</p>
         {/if}
 
-        <div class="flex justify-end gap-2 pt-2 border-t border-[#1e2435]">
+        <div class="flex justify-end gap-2 pt-2 border-t border-line">
             <button
                 onclick={onclose}
                 class="px-3 py-1.5 text-sm text-[#9ca3af] hover:text-white transition-colors"

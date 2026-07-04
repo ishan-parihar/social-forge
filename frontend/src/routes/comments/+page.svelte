@@ -65,24 +65,24 @@
 <div class="page-enter space-y-6">
   <div class="flex items-center justify-between">
     <h2 class="text-xl font-semibold">Comments</h2>
-    <button onclick={load} class="px-3 py-1.5 text-sm text-[#6b7280] hover:text-white border border-[#1e2435] rounded-lg transition-colors">↻ Refresh</button>
+    <button onclick={load} class="px-3 py-1.5 text-sm text-muted hover:text-white border border-line rounded-lg transition-colors">↻ Refresh</button>
   </div>
 
   <!-- Filters -->
   <div class="flex gap-4">
-    <div class="flex gap-1 bg-[#131720] border border-[#1e2435] rounded-lg p-1">
+    <div class="flex gap-1 bg-surface border border-line rounded-lg p-1">
       {#each platforms as p}
         <button
           onclick={() => { filterPlatform = p; load(); }}
-          class="px-3 py-1.5 text-xs capitalize rounded-md transition-colors {filterPlatform === p ? 'bg-indigo-600 text-white' : 'text-[#6b7280] hover:bg-[#1a1f2e]'}"
+          class="px-3 py-1.5 text-xs capitalize rounded-md transition-colors {filterPlatform === p ? 'bg-indigo-600 text-white' : 'text-muted hover:bg-surface-hover'}"
         >{p}</button>
       {/each}
     </div>
-    <div class="flex gap-1 bg-[#131720] border border-[#1e2435] rounded-lg p-1">
+    <div class="flex gap-1 bg-surface border border-line rounded-lg p-1">
       {#each statuses as s}
         <button
           onclick={() => { filterStatus = s; load(); }}
-          class="px-3 py-1.5 text-xs capitalize rounded-md transition-colors {filterStatus === s ? 'bg-indigo-600 text-white' : 'text-[#6b7280] hover:bg-[#1a1f2e]'}"
+          class="px-3 py-1.5 text-xs capitalize rounded-md transition-colors {filterStatus === s ? 'bg-indigo-600 text-white' : 'text-muted hover:bg-surface-hover'}"
         >{s}</button>
       {/each}
     </div>
@@ -92,26 +92,26 @@
   {#if error}
     <div class="text-center py-12 text-sm text-red-400">{error}</div>
   {:else if loading}
-    <div class="text-center py-12 text-sm text-[#6b7280]">Loading...</div>
+    <div class="text-center py-12 text-sm text-muted">Loading...</div>
   {:else if comments.length === 0}
-    <div class="text-center py-12 text-sm text-[#6b7280]">No comments found</div>
+    <div class="text-center py-12 text-sm text-muted">No comments found</div>
   {:else}
-    <div class="bg-[#131720] border border-[#1e2435] rounded-xl overflow-hidden">
-      <div class="grid grid-cols-[40px_1fr_1.5fr_100px_100px_90px] gap-3 px-4 py-2 border-b border-[#1e2435] bg-[#0d1117] text-xs text-[#6b7280]">
+    <div class="bg-surface border border-line rounded-xl overflow-hidden">
+      <div class="grid grid-cols-[40px_1fr_1.5fr_100px_100px_90px] gap-3 px-4 py-2 border-b border-line bg-background-input text-xs text-muted">
         <span></span><span>Post</span><span>Comment</span><span>Author</span><span>Date</span><span>Status</span>
       </div>
       {#each comments as c (c.id)}
-        <div class="grid grid-cols-[40px_1fr_1.5fr_100px_100px_90px] gap-3 px-4 py-3 border-b border-[#1e2435] last:border-0 hover:bg-[#1a1f2e] transition-colors items-center">
+        <div class="grid grid-cols-[40px_1fr_1.5fr_100px_100px_90px] gap-3 px-4 py-3 border-b border-line last:border-0 hover:bg-surface-hover transition-colors items-center">
           <span class="text-sm text-indigo-400">{platformIcon(c.platform)}</span>
           <span class="text-sm truncate">{c.post_id}</span>
-          <span class="text-sm text-[#d1d5db] truncate">{c.text}</span>
-          <span class="text-xs text-[#6b7280] truncate">{c.author_name || 'Unknown'}</span>
-          <span class="text-xs text-[#6b7280]">{new Date(c.created_at).toLocaleDateString()}</span>
+          <span class="text-sm text-content-secondary truncate">{c.text}</span>
+          <span class="text-xs text-muted truncate">{c.author_name || 'Unknown'}</span>
+          <span class="text-xs text-muted">{new Date(c.created_at).toLocaleDateString()}</span>
           <div class="flex items-center gap-2">
             {#if !c.is_resolved}
               <span class="px-2 py-0.5 text-xs rounded bg-yellow-500/20 text-yellow-400">New</span>
-              <button onclick={() => resolveComment(c.id)} class="text-xs text-[#6b7280] hover:text-green-400">✓</button>
-              <button onclick={() => replyModal = { comment: c, text: "" }} class="text-xs text-[#6b7280] hover:text-indigo-400">↩</button>
+              <button onclick={() => resolveComment(c.id)} class="text-xs text-muted hover:text-green-400">✓</button>
+              <button onclick={() => replyModal = { comment: c, text: "" }} class="text-xs text-muted hover:text-indigo-400">↩</button>
             {:else}
               <span class="px-2 py-0.5 text-xs rounded bg-green-500/20 text-green-400">Resolved</span>
             {/if}
@@ -125,9 +125,9 @@
 <!-- Reply Modal -->
 {#if replyModal}
   <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50" role="dialog">
-    <div class="bg-[#0d1117] border border-[#1e2435] rounded-xl p-6 w-full max-w-md">
+    <div class="bg-background-input border border-line rounded-xl p-6 w-full max-w-md">
       <h3 class="text-lg font-semibold mb-2">Reply to {replyModal.comment.author_name || 'Unknown'}</h3>
-      <p class="text-sm text-[#6b7280] mb-4 truncate">{replyModal.comment.text}</p>
+      <p class="text-sm text-muted mb-4 truncate">{replyModal.comment.text}</p>
       <textarea
         bind:value={replyModal.text}
         placeholder="Write your reply..."
@@ -135,7 +135,7 @@
         class="w-full px-3 py-2 bg-[#161b22] border border-[#30363d] rounded text-sm mb-4"
       ></textarea>
       <div class="flex gap-3 justify-end">
-        <button onclick={() => replyModal = null} class="px-4 py-2 text-sm text-[#6b7280] hover:text-white">Cancel</button>
+        <button onclick={() => replyModal = null} class="px-4 py-2 text-sm text-muted hover:text-white">Cancel</button>
         <button onclick={sendReply} disabled={sending || !replyModal.text.trim()} class="px-4 py-2 text-sm bg-indigo-600 hover:bg-indigo-500 rounded disabled:opacity-50">
           {sending ? "Sending..." : "Reply"}
         </button>

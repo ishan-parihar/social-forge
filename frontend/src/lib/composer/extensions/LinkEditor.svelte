@@ -79,7 +79,7 @@
   >
     {#if linkText}
       <p class="text-xs text-[#9ca3af] mb-2 truncate">
-        Text: <span class="text-[#d1d5db]">{linkText}</span>
+        Text: <span class="text-content-secondary">{linkText}</span>
       </p>
     {/if}
 
@@ -90,7 +90,7 @@
       placeholder="https://example.com"
       bind:this={urlInput}
       bind:value={url}
-      class="w-full px-3 py-2 rounded text-sm bg-[#0d1117] border border-[#1e2435] text-[#d1d5db] placeholder:text-[#4a5568] outline-none focus:border-[#6366f1] transition-colors"
+      class="w-full px-3 py-2 rounded text-sm bg-background-input border border-line text-content-secondary placeholder:text-[#4a5568] outline-none focus:border-[#6366f1] transition-colors"
     />
 
     <label class="flex items-center gap-2 mt-2 cursor-pointer select-none">
@@ -112,7 +112,7 @@
       </button>
       <button
         onclick={removeLink}
-        class="px-3 py-1.5 rounded text-xs font-medium border border-[#1e2435] text-[#d1d5db] hover:bg-[#1a1f2e] transition-colors"
+        class="px-3 py-1.5 rounded text-xs font-medium border border-line text-content-secondary hover:bg-surface-hover transition-colors"
         aria-label="Remove link"
       >
         Remove

@@ -85,7 +85,7 @@
   }
 </script>
 
-<div class="bg-[#131720] border border-[#1e2435] rounded-xl p-5 space-y-3">
+<div class="bg-surface border border-line rounded-xl p-5 space-y-3">
   <div class="flex items-center justify-between">
     <div class="flex items-center gap-2 min-w-0">
       <h4 class="text-sm font-semibold truncate">{feed.title || 'Untitled Feed'}</h4>
@@ -107,7 +107,7 @@
     </div>
   </div>
 
-  <div class="text-xs text-[#6b7280] space-y-1">
+  <div class="text-xs text-muted space-y-1">
     <div class="truncate" title={feed.feed_url}>URL: {feed.feed_url}</div>
     <div>Interval: every {feed.poll_interval_min} min</div>
     <div>Last polled: {formatDate(feed.last_polled_at)}</div>

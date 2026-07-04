@@ -93,15 +93,15 @@
     <div
       bind:this={dialogEl}
       tabindex="-1"
-      class="bg-[#131720] border border-[#1e2435] rounded-xl w-full max-w-3xl max-h-[80vh] flex flex-col shadow-2xl"
+      class="bg-surface border border-line rounded-xl w-full max-w-3xl max-h-[80vh] flex flex-col shadow-2xl"
     >
-      <div class="flex items-center justify-between px-5 py-4 border-b border-[#1e2435]">
-        <h3 class="text-base font-semibold text-[#e8edf5]">Choose from Library</h3>
+      <div class="flex items-center justify-between px-5 py-4 border-b border-line">
+        <h3 class="text-base font-semibold text-content">Choose from Library</h3>
         <button
           bind:this={closeBtn}
           aria-label="Close"
           onclick={onClose}
-          class="w-7 h-7 rounded-lg flex items-center justify-center text-[#6b7280] hover:text-white hover:bg-[#1a1f2e] transition-colors text-sm"
+          class="w-7 h-7 rounded-lg flex items-center justify-center text-muted hover:text-white hover:bg-surface-hover transition-colors text-sm"
         >
           &times;
         </button>

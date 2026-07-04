@@ -136,15 +136,15 @@
   </div>
 
   {#if loading}
-    <div class="text-center py-12 text-sm text-[#6b7280]">Loading...</div>
+    <div class="text-center py-12 text-sm text-muted">Loading...</div>
   {:else if webhooks.length === 0}
-    <div class="text-center py-12 text-sm text-[#6b7280]">
+    <div class="text-center py-12 text-sm text-muted">
       No webhooks configured. Create one to receive real-time event notifications.
     </div>
   {:else}
     <div class="page-enter space-y-3">
       {#each webhooks as wh (wh.id)}
-        <div class="bg-[#131720] border border-[#1e2435] rounded-xl p-4">
+        <div class="bg-surface border border-line rounded-xl p-4">
           <div class="flex items-center justify-between mb-2">
             <div class="flex items-center gap-2">
               <span class="font-medium text-sm">{wh.name}</span>
@@ -155,20 +155,20 @@
               {/if}
             </div>
             <div class="flex gap-2">
-              <button onclick={() => testWebhook(wh.id)} class="text-xs px-2 py-1 text-[#6b7280] hover:text-indigo-400 border border-[#1e2435] rounded">Test</button>
-              <button onclick={() => viewDeliveries(wh.id)} class="text-xs px-2 py-1 text-[#6b7280] hover:text-indigo-400 border border-[#1e2435] rounded">Deliveries</button>
-              <button onclick={() => openEdit(wh)} class="text-xs px-2 py-1 text-[#6b7280] hover:text-indigo-400 border border-[#1e2435] rounded">Edit</button>
-              <button onclick={() => deleteWebhook(wh.id)} class="text-xs px-2 py-1 text-[#6b7280] hover:text-red-400 border border-[#1e2435] rounded">Delete</button>
+              <button onclick={() => testWebhook(wh.id)} class="text-xs px-2 py-1 text-muted hover:text-indigo-400 border border-line rounded">Test</button>
+              <button onclick={() => viewDeliveries(wh.id)} class="text-xs px-2 py-1 text-muted hover:text-indigo-400 border border-line rounded">Deliveries</button>
+              <button onclick={() => openEdit(wh)} class="text-xs px-2 py-1 text-muted hover:text-indigo-400 border border-line rounded">Edit</button>
+              <button onclick={() => deleteWebhook(wh.id)} class="text-xs px-2 py-1 text-muted hover:text-red-400 border border-line rounded">Delete</button>
             </div>
           </div>
-          <p class="text-xs text-[#6b7280] truncate mb-2">{wh.url}</p>
+          <p class="text-xs text-muted truncate mb-2">{wh.url}</p>
           <div class="flex gap-1 flex-wrap">
             {#each wh.event_types as et}
               <span class="px-2 py-0.5 text-[10px] rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">{et}</span>
             {/each}
           </div>
           {#if wh.last_triggered_at}
-            <p class="text-[10px] text-[#4b5563] mt-2">Last triggered: {new Date(wh.last_triggered_at).toLocaleString()}</p>
+            <p class="text-[10px] text-muted-dark mt-2">Last triggered: {new Date(wh.last_triggered_at).toLocaleString()}</p>
           {/if}
         </div>
       {/each}
@@ -179,23 +179,23 @@
 <!-- Create/Edit Modal -->
 {#if showModal}
   <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50" role="dialog">
-    <div class="bg-[#0d1117] border border-[#1e2435] rounded-xl p-6 w-full max-w-md">
+    <div class="bg-background-input border border-line rounded-xl p-6 w-full max-w-md">
       <h3 class="text-lg font-semibold mb-4">{editingWebhook ? "Edit Webhook" : "New Webhook"}</h3>
       <div class="page-enter space-y-6">
         <div>
-          <label class="text-xs text-[#6b7280] mb-1 block">Name</label>
+          <label class="text-xs text-muted mb-1 block">Name</label>
           <input bind:value={formName} placeholder="My Webhook" class="w-full px-3 py-2 bg-[#161b22] border border-[#30363d] rounded text-sm" />
         </div>
         <div>
-          <label class="text-xs text-[#6b7280] mb-1 block">URL</label>
+          <label class="text-xs text-muted mb-1 block">URL</label>
           <input bind:value={formUrl} placeholder="https://example.com/webhook" class="w-full px-3 py-2 bg-[#161b22] border border-[#30363d] rounded text-sm" />
         </div>
         <div>
-          <label class="text-xs text-[#6b7280] mb-1 block">Secret (optional)</label>
+          <label class="text-xs text-muted mb-1 block">Secret (optional)</label>
           <input bind:value={formSecret} type="password" placeholder="Webhook signing secret" class="w-full px-3 py-2 bg-[#161b22] border border-[#30363d] rounded text-sm" />
         </div>
         <div>
-          <label class="text-xs text-[#6b7280] mb-2 block">Event Types</label>
+          <label class="text-xs text-muted mb-2 block">Event Types</label>
           <div class="page-enter space-y-1">
             {#each availableEventTypes as et}
               <label class="flex items-center gap-2 text-sm cursor-pointer">
@@ -211,7 +211,7 @@
         </label>
       </div>
       <div class="flex gap-3 justify-end mt-6">
-        <button onclick={() => showModal = null} class="px-4 py-2 text-sm text-[#6b7280] hover:text-white">Cancel</button>
+        <button onclick={() => showModal = null} class="px-4 py-2 text-sm text-muted hover:text-white">Cancel</button>
         <button onclick={saveWebhook} disabled={saving || !formName.trim() || !formUrl.trim()} class="px-4 py-2 text-sm bg-indigo-600 hover:bg-indigo-500 rounded disabled:opacity-50">
           {saving ? "Saving..." : "Save"}
         </button>
@@ -223,26 +223,26 @@
 <!-- Deliveries Modal -->
 {#if showDeliveries}
   <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50" role="dialog">
-    <div class="bg-[#0d1117] border border-[#1e2435] rounded-xl p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
+    <div class="bg-background-input border border-line rounded-xl p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
       <div class="flex items-center justify-between mb-4">
         <h3 class="text-lg font-semibold">Delivery History</h3>
-        <button onclick={() => showDeliveries = null} class="text-[#6b7280] hover:text-white">✕</button>
+        <button onclick={() => showDeliveries = null} class="text-muted hover:text-white">✕</button>
       </div>
       {#if loadingDeliveries}
-        <div class="text-center py-8 text-sm text-[#6b7280]">Loading...</div>
+        <div class="text-center py-8 text-sm text-muted">Loading...</div>
       {:else if deliveries.length === 0}
-        <div class="text-center py-8 text-sm text-[#6b7280]">No deliveries yet</div>
+        <div class="text-center py-8 text-sm text-muted">No deliveries yet</div>
       {:else}
         <div class="page-enter space-y-2">
           {#each deliveries as d (d.id)}
-            <div class="bg-[#131720] border border-[#1e2435] rounded-lg p-3">
+            <div class="bg-surface border border-line rounded-lg p-3">
               <div class="flex items-center justify-between mb-1">
                 <span class="text-xs font-medium px-2 py-0.5 rounded {d.status_code && d.status_code >= 200 && d.status_code < 300 ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}">{d.status_code || 'Pending'}</span>
-                <span class="text-xs text-[#6b7280]">{d.event_type}</span>
+                <span class="text-xs text-muted">{d.event_type}</span>
               </div>
-              <p class="text-xs text-[#6b7280]">{new Date(d.attempted_at).toLocaleString()}</p>
+              <p class="text-xs text-muted">{new Date(d.attempted_at).toLocaleString()}</p>
               {#if d.response_body}
-                <p class="text-xs text-[#4b5563] mt-1 truncate">Response: {d.response_body}</p>
+                <p class="text-xs text-muted-dark mt-1 truncate">Response: {d.response_body}</p>
               {/if}
             </div>
           {/each}

@@ -76,7 +76,7 @@
       onclick={() => (open = false)}
     ></div>
     <div
-      class="absolute top-full left-0 mt-1 w-72 bg-[#131720] border border-[#1e2435] rounded-lg shadow-xl z-50 max-h-80 overflow-y-auto"
+      class="absolute top-full left-0 mt-1 w-72 bg-surface border border-line rounded-lg shadow-xl z-50 max-h-80 overflow-y-auto"
       role="listbox"
       aria-label="Select a signature"
     >
@@ -87,39 +87,39 @@
       {:else if error}
         <div class="text-sm text-red-400 p-3">{error}</div>
       {:else if signatures.length === 0}
-        <div class="text-sm text-[#6b7280] p-4 text-center">
+        <div class="text-sm text-muted p-4 text-center">
           No signatures yet — <a href="/settings/signatures" class="text-indigo-400 hover:underline" onclick={() => (open = false)}>create one</a> in Settings
         </div>
       {:else}
         <!-- Global signatures -->
         {#if grouped.global.length > 0}
-          <div class="px-3 pt-2 pb-1 text-xs text-[#6b7280] font-semibold uppercase tracking-wider">Global</div>
+          <div class="px-3 pt-2 pb-1 text-xs text-muted font-semibold uppercase tracking-wider">Global</div>
           {#each grouped.global as sig (sig.id)}
             <button
               onclick={() => handleSelect(sig)}
-              class="w-full text-left px-3 py-2 hover:bg-[#1a1f2e] transition-colors"
+              class="w-full text-left px-3 py-2 hover:bg-surface-hover transition-colors"
               role="option"
               aria-selected="false"
               aria-label={sig.name}
             >
-              <div class="text-sm text-[#d1d5db] truncate">{sig.name}</div>
-              <div class="text-xs text-[#6b7280] truncate mt-0.5">{sig.content.slice(0, 60)}{sig.content.length > 60 ? '...' : ''}</div>
+              <div class="text-sm text-content-secondary truncate">{sig.name}</div>
+              <div class="text-xs text-muted truncate mt-0.5">{sig.content.slice(0, 60)}{sig.content.length > 60 ? '...' : ''}</div>
             </button>
           {/each}
         {/if}
         <!-- Provider-specific signatures -->
         {#each [...grouped.byProvider.entries()] as [provider, sigs] (provider)}
-          <div class="px-3 pt-2 pb-1 text-xs text-[#6b7280] font-semibold uppercase tracking-wider">{provider}</div>
+          <div class="px-3 pt-2 pb-1 text-xs text-muted font-semibold uppercase tracking-wider">{provider}</div>
           {#each sigs as sig (sig.id)}
             <button
               onclick={() => handleSelect(sig)}
-              class="w-full text-left px-3 py-2 hover:bg-[#1a1f2e] transition-colors"
+              class="w-full text-left px-3 py-2 hover:bg-surface-hover transition-colors"
               role="option"
               aria-selected="false"
               aria-label={sig.name}
             >
-              <div class="text-sm text-[#d1d5db] truncate">{sig.name}</div>
-              <div class="text-xs text-[#6b7280] truncate mt-0.5">{sig.content.slice(0, 60)}{sig.content.length > 60 ? '...' : ''}</div>
+              <div class="text-sm text-content-secondary truncate">{sig.name}</div>
+              <div class="text-xs text-muted truncate mt-0.5">{sig.content.slice(0, 60)}{sig.content.length > 60 ? '...' : ''}</div>
             </button>
           {/each}
         {/each}

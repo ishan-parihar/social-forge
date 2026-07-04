@@ -69,7 +69,7 @@
     <Dropdown items={menuItems} align="right">
         <button
             aria-label="Channel actions"
-            class="text-[#6b7280] hover:text-white transition-colors text-lg leading-none"
+            class="text-muted hover:text-white transition-colors text-lg leading-none"
         >&#8942;</button>
     </Dropdown>
 

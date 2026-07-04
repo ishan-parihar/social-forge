@@ -78,22 +78,22 @@
 <Modal open={show} title="Connect via Web3" onclose={handleClose}>
   <form onsubmit={handleSubmit} class="space-y-4">
     <div>
-      <label for="connect-provider" class="block text-xs font-medium text-[#6b7280] mb-1">Provider</label>
+      <label for="connect-provider" class="block text-xs font-medium text-muted mb-1">Provider</label>
       <input
         id="connect-provider"
         type="text"
         value={provider}
         disabled
-        class="w-full px-3 py-2 bg-[#0d1117] border border-[#1e2435] rounded-lg text-sm text-[#6b7280] cursor-not-allowed"
+        class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-muted cursor-not-allowed"
       />
     </div>
 
-    <div class="text-xs text-[#9ca3af] bg-[#0d1117] rounded-lg px-3 py-2 border border-[#1e2435]">
+    <div class="text-xs text-[#9ca3af] bg-background-input rounded-lg px-3 py-2 border border-line">
       {instructions}
     </div>
 
     <div>
-      <label for="address" class="block text-xs font-medium text-[#6b7280] mb-1">
+      <label for="address" class="block text-xs font-medium text-muted mb-1">
         Address / Public Key <span class="text-red-400">*</span>
       </label>
       <input
@@ -101,12 +101,12 @@
         type="text"
         bind:value={address}
         {placeholder}
-        class="w-full px-3 py-2 bg-[#0d1117] border border-[#1e2435] rounded-lg text-sm text-white placeholder-[#4a5070] focus:outline-none focus:border-indigo-500 transition-colors"
+        class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-white placeholder-[#4a5070] focus:outline-none focus:border-indigo-500 transition-colors"
       />
     </div>
 
     <div>
-      <label for="label" class="block text-xs font-medium text-[#6b7280] mb-1">
+      <label for="label" class="block text-xs font-medium text-muted mb-1">
         Label <span class="text-[#4a5070]">(optional)</span>
       </label>
       <input
@@ -114,7 +114,7 @@
         type="text"
         bind:value={label}
         placeholder="e.g. My {provider} identity"
-        class="w-full px-3 py-2 bg-[#0d1117] border border-[#1e2435] rounded-lg text-sm text-white placeholder-[#4a5070] focus:outline-none focus:border-indigo-500 transition-colors"
+        class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-white placeholder-[#4a5070] focus:outline-none focus:border-indigo-500 transition-colors"
       />
     </div>
 

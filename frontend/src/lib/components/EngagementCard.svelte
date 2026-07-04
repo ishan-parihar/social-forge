@@ -80,12 +80,12 @@
   };
 </script>
 
-<div class="flex flex-wrap items-center gap-2 {compact ? '' : 'mt-3 pt-3 border-t border-[#1e2435]'}">
+<div class="flex flex-wrap items-center gap-2 {compact ? '' : 'mt-3 pt-3 border-t border-line'}">
     <!-- Core metrics (show only top 3 in compact mode) -->
     {#each (compact ? metrics.slice(0, 3) : metrics) as m}
       <span
         class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium
-          bg-[#0d121e] text-[#9ca3af] border border-[#1e2435]
+          bg-[#0d121e] text-[#9ca3af] border border-line
           group-hover:border-[#222a45] transition-colors"
         title={m.label}
       >
@@ -129,7 +129,7 @@
     {#if reactions}
       <span
         class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium
-          bg-[#0d121e] text-[#9ca3af] border border-[#1e2435]
+          bg-[#0d121e] text-[#9ca3af] border border-line
           group-hover:border-[#222a45] transition-colors"
         title="Reactions"
       >
