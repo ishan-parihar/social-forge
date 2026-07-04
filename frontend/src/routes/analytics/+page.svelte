@@ -11,6 +11,7 @@
   let error = $state<string | null>(null);
   let selectedProvider = $state<string>("all");
   let topPosts = $state<PostSummary[]>([]);
+  let providerAnalytics = $state<import("$lib/api/analytics").ProviderAnalytics | null>(null);
 
   const providers = [
     { value: "all", label: "All Platforms" },
@@ -30,10 +31,17 @@
   async function fetchData(signal?: AbortSignal) {
     loading = true;
     error = null;
-    const [summaryRes, postsRes] = await Promise.all([
+    const requests: Promise<unknown>[] = [
       analyticsApi.getSummary(days, signal),
       postsApi.list({ state: 'published', limit: 50 }),
-    ]);
+    ];
+    // When a specific provider is selected, also fetch per-platform analytics
+    if (selectedProvider !== "all") {
+      requests.push(analyticsApi.getProvider(selectedProvider, days, signal));
+    }
+    const [summaryRes, postsRes, provRes] = await Promise.all(requests) as [
+      typeof summaryRes, typeof postsRes, typeof provRes
+    ];
     if (signal?.aborted) return;
     if (summaryRes.error) {
       error = summaryRes.error;
@@ -42,14 +50,26 @@
       data = summaryRes.data;
     }
     if (postsRes.data) {
-      // Sort by engagement (likes + comments + shares) descending
-      topPosts = postsRes.data.posts
+      // Filter by selected provider if applicable
+      let posts = postsRes.data.posts;
+      if (selectedProvider !== "all") {
+        posts = posts.filter(p =>
+          p.integration_name?.toLowerCase().includes(selectedProvider)
+        );
+      }
+      topPosts = posts
         .map(p => ({
           ...p,
           _engagement: (p.likes || 0) + (p.comments || 0) + (p.shares || 0),
         }))
         .sort((a, b) => (b._engagement || 0) - (a._engagement || 0))
         .slice(0, 10) as PostSummary[];
+    }
+    // Store per-provider analytics if fetched
+    if (provRes) {
+      providerAnalytics = provRes.error ? null : provRes.data || null;
+    } else {
+      providerAnalytics = null;
     }
     loading = false;
   }
@@ -210,6 +230,41 @@
         </div>
       {/if}
     </div>
+
+    <!-- Per-Provider Engagement Analytics (when specific provider selected) -->
+    {#if providerAnalytics && providerAnalytics.data}
+      <div class="bg-surface border border-line rounded-xl p-5">
+        <h3 class="text-sm font-medium text-content mb-4">{providers.find(p => p.value === selectedProvider)?.label || selectedProvider} Engagement Metrics</h3>
+        <div class="space-y-3">
+          {#each providerAnalytics.data as metric}
+            <div>
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-xs text-muted capitalize">{metric.label}</span>
+                {#if metric.percentage_change !== 0}
+                  <span class="text-xs {metric.percentage_change > 0 ? 'text-green-400' : 'text-red-400'}">
+                    {metric.percentage_change > 0 ? '+' : ''}{metric.percentage_change.toFixed(1)}%
+                  </span>
+                {/if}
+              </div>
+              <div class="flex items-end gap-1 h-20">
+                {#each metric.data.slice(-14) as point}
+                  <div class="flex-1 flex flex-col items-center justify-end h-full">
+                    <div
+                      class="w-full bg-indigo-500/60 rounded-t hover:bg-indigo-400 transition-colors min-h-[2px]"
+                      style="height: {Math.max((parseFloat(point.total) || 0) / Math.max(...metric.data.map(d => parseFloat(d.total) || 0), 1)) * 100}%"
+                      title="{point.date}: {point.total}"
+                    ></div>
+                  </div>
+                {/each}
+              </div>
+              <div class="text-xs text-muted-dark mt-1">
+                Latest: {metric.data[metric.data.length - 1]?.total || '0'}
+              </div>
+            </div>
+          {/each}
+        </div>
+      </div>
+    {/if}
 
     <!-- Two-column: Provider Performance + Top Posts -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { toast } from "$lib/stores/toast";
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
+  import { realtime } from '$lib/stores/realtime';
   import { tagsApi, type Tag } from '$lib/api/tags';
 
   let tags = $state<Tag[]>([]);
@@ -101,7 +102,16 @@
     deletingId = null;
   }
 
-  onMount(loadTags);
+  let tagsUnsubscribers: (() => void)[] = [];
+
+  onMount(() => {
+    loadTags();
+    tagsUnsubscribers.push(realtime.on('post_created', () => loadTags()));
+  });
+
+  onDestroy(() => {
+    tagsUnsubscribers.forEach(fn => fn());
+  });
 </script>
 
 <div class="page-enter page-enter max-w-2xl mx-auto space-y-6">

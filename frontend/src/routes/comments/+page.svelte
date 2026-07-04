@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, onDestroy } from "svelte";
   import { commentsApi, type Comment } from "$lib/api/comments";
   import { toast } from "$lib/stores/toast";
+  import { realtime } from "$lib/stores/realtime";
 
   let comments = $state<Comment[]>([]);
   let filterPlatform = $state("all");
@@ -59,7 +60,19 @@
     return icons[p] || "•";
   }
 
-  onMount(load);
+  let commentsUnsubscribers: (() => void)[] = [];
+
+  onMount(() => {
+    load();
+    // Refresh when new comments arrive or posts change
+    for (const evt of ['post_published', 'post_created']) {
+      commentsUnsubscribers.push(realtime.on(evt, () => load()));
+    }
+  });
+
+  onDestroy(() => {
+    commentsUnsubscribers.forEach(fn => fn());
+  });
 </script>
 
 <div class="page-enter space-y-6">

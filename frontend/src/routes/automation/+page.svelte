@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, onDestroy } from "svelte";
   import { automationApi, type AutomationRule, type ExecutionLog } from "$lib/api/automation";
   import { toast } from "$lib/stores/toast";
+  import { realtime } from "$lib/stores/realtime";
 
   let rules = $state<AutomationRule[]>([]);
   let loading = $state(true);
@@ -109,7 +110,18 @@
     loadingLogs = false;
   }
 
-  onMount(load);
+  let autoUnsubscribers: (() => void)[] = [];
+
+  onMount(() => {
+    load();
+    for (const evt of ['post_published', 'post_failed']) {
+      autoUnsubscribers.push(realtime.on(evt, () => load()));
+    }
+  });
+
+  onDestroy(() => {
+    autoUnsubscribers.forEach(fn => fn());
+  });
 </script>
 
 <div class="page-enter space-y-6">

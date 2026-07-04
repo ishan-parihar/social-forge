@@ -1,6 +1,7 @@
 <script lang="ts">
   import { toast } from "$lib/stores/toast";
-  import { onMount } from "svelte";
+  import { onMount, onDestroy } from "svelte";
+  import { realtime } from "$lib/stores/realtime";
   import { dmsApi, type Conversation, type DmMessage } from "$lib/api/dms";
   import { integrationsApi, type Integration } from "$lib/api/integrations";
 
@@ -146,7 +147,17 @@
     return icons[p] || "•";
   }
 
-  onMount(load);
+  let dmsUnsubscribers: (() => void)[] = [];
+
+  onMount(() => {
+    load();
+    dmsUnsubscribers.push(realtime.on('integration_connected', () => load()));
+    dmsUnsubscribers.push(realtime.on('integration_disconnected', () => load()));
+  });
+
+  onDestroy(() => {
+    dmsUnsubscribers.forEach(fn => fn());
+  });
 </script>
 
 <div class="page-enter space-y-6">
