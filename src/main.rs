@@ -226,8 +226,53 @@ async fn main() -> anyhow::Result<()> {
     let app = api::build_router(state);
 
     // ── Start HTTP/HTTPS server ─────────────────────────────
-    let http_addr = format!("0.0.0.0:{port}");
+    // SECURITY: bind to loopback by default. The app is documented
+    // as a single-user local-deployment tool; binding 0.0.0.0 by
+    // default would expose the (intentionally light) auth layer
+    // to anyone on the LAN. Operators who want LAN exposure (e.g.
+    // to access from another machine on the home network) can opt
+    // in explicitly with `BIND_HOST=0.0.0.0`.
+    let bind_host = std::env::var("BIND_HOST").unwrap_or_else(|_| "127.0.0.1".into());
+    if bind_host == "0.0.0.0" {
+        tracing::warn!("⚠️  BIND_HOST=0.0.0.0 — server is reachable from the network.");
+        tracing::warn!("   Ensure APP_PASSWORD is strong and the port is firewalled.");
+    }
+    let http_addr = format!("{bind_host}:{port}");
     let use_tls = config.app_url.starts_with("https://");
+
+    // Shared shutdown signal — fires once on SIGINT (Ctrl+C) OR SIGTERM.
+    // Both the HTTP server (via `with_graceful_shutdown`) and the
+    // background-task drain logic below subscribe to this same signal,
+    // so a single SIGTERM cleanly stops everything in the right order:
+    //   1. axum stops accepting new connections
+    //   2. axum drains in-flight requests (default 5s)
+    //   3. shutdown_tx broadcast → scheduler/RSS/feed stop iterating
+    //   4. up to 10s grace, then process exits
+    let shutdown_tx_signal = Arc::new(tokio::sync::Notify::new());
+    let shutdown_rx_signal = shutdown_tx_signal.clone();
+    tokio::spawn(async move {
+        let ctrl_c = async {
+            let _ = tokio::signal::ctrl_c().await;
+        };
+        let sigterm = async {
+            #[cfg(unix)]
+            {
+                use tokio::signal::unix::{signal, SignalKind};
+                if let Ok(mut s) = signal(SignalKind::terminate()) {
+                    s.recv().await;
+                } else {
+                    std::future::pending::<()>().await;
+                }
+            }
+            #[cfg(not(unix))]
+            { std::future::pending::<()>().await; }
+        };
+        tokio::select! {
+            _ = ctrl_c => tracing::info!("Shutdown signal: Ctrl+C (SIGINT)"),
+            _ = sigterm => tracing::info!("Shutdown signal: SIGTERM"),
+        }
+        shutdown_tx_signal.notify_waiters();
+    });
 
     if use_tls {
         // Generate self-signed cert for localhost (or use mkcert certs if available)
@@ -254,21 +299,34 @@ async fn main() -> anyhow::Result<()> {
             .context("Failed to load TLS config")?;
 
         let addr: std::net::SocketAddr = http_addr.parse().unwrap();
+        let notify = shutdown_rx_signal.clone();
+        let handle = axum_server::Handle::new();
+        let handle_for_shutdown = handle.clone();
+        tokio::spawn(async move {
+            // When the shutdown signal fires, tell axum_server to drain.
+            notify.notified().await;
+            handle_for_shutdown.shutdown();
+        });
         tokio::spawn(async move {
             if let Err(e) = axum_server::bind_rustls(addr, tls_config)
-                .serve(app.into_make_service())
+                .handle(handle)
+                .serve(app.into_make_service_with_connect_info::<std::net::SocketAddr>())
                 .await
             {
                 tracing::error!("HTTPS server error: {e}");
             }
         });
-        tracing::info!("HTTPS server: https://localhost:{port}/");
+        tracing::info!("HTTPS server: https://localhost:{port}/ (bound to {bind_host})");
     } else {
         let listener = tokio::net::TcpListener::bind(&http_addr)
             .await
             .context("Failed to bind HTTP listener")?;
+        let notify = shutdown_rx_signal.clone();
         tokio::spawn(async move {
-            if let Err(e) = axum::serve(listener, app).await {
+            if let Err(e) = axum::serve(listener, app)
+                .with_graceful_shutdown(async move { notify.notified().await; })
+                .await
+            {
                 tracing::error!("HTTP server error: {e}");
             }
         });
@@ -291,13 +349,28 @@ async fn main() -> anyhow::Result<()> {
         });
     }
 
-    // ── Keep process alive ───────────────────────────────────
-    // Spawned tasks (HTTP + scheduler + optional MCP) keep the
-    // tokio runtime alive. In interactive terminals, Ctrl+C
-    // aborts the process. In Docker/CI, orchestrator sends
-    // SIGTERM. Graceful shutdown is not used here because
-    // tokio::signal::ctrl_c() does not work in non-TTY shells.
-    let () = std::future::pending().await;
+    // ── Wait for shutdown signal ────────────────────────────
+    // Block until SIGINT/SIGTERM fires the shared notify. Once it
+    // does, broadcast to all background tasks (scheduler, RSS, feed,
+    // analytics cache) via the existing `shutdown_tx` watch channel
+    // and give them a bounded grace period to finish in-flight work
+    // before exiting.
+    tracing::info!("Server running. Press Ctrl+C to shut down.");
+    shutdown_rx_signal.notified().await;
+
+    tracing::info!("Broadcasting shutdown to background tasks…");
+    let _ = shutdown_tx.send(true);
+
+    // Give background tasks up to 10 seconds to drain. The scheduler
+    // checks the shutdown flag between iterations; in-flight HTTP
+    // requests are already handled by axum's graceful shutdown above.
+    let drain_deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(10);
+    loop {
+        if tokio::time::Instant::now() >= drain_deadline {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    }
 
     tracing::info!("Server shut down gracefully");
     Ok(())

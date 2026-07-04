@@ -120,15 +120,32 @@ fn build_clear_cookie(app_url: &str) -> String {
     )
 }
 
-/// Manual constant-time byte-slice comparison. Avoids pulling in the
-/// `subtle` crate just for one call site.
+/// Constant-time byte-slice comparison.
+///
+/// Avoids timing leaks in two ways:
+///   1. Always processes the full length of `a` (the stored password
+///      hash), regardless of `b`'s length. This prevents an attacker
+///      from learning the stored length by measuring response time
+///      across password lengths.
+///   2. Each byte of `a` is XOR'd with either the corresponding byte
+///      of `b` (when `i < b.len()`) or a constant zero (when `i >= b.len()`).
+///      The accumulated diff is checked at the end.
+///
+/// We pair this with Argon2 hashing on the stored side, so even if
+/// the comparison leaks a few bits of timing data, the attacker can't
+/// recover the actual password from the hash.
 fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
-    if a.len() != b.len() {
-        return false;
-    }
     let mut diff: u8 = 0;
-    for (x, y) in a.iter().zip(b.iter()) {
-        diff |= x ^ y;
+    for (i, &byte_a) in a.iter().enumerate() {
+        let byte_b = if i < b.len() { b[i] } else { 0 };
+        diff |= byte_a ^ byte_b;
     }
-    diff == 0
+    // Also XOR any extra bytes in b (if b is longer than a) so a length
+    // difference doesn't go unmeasured.
+    if b.len() > a.len() {
+        diff |= 1; // mark as different — we don't care which extra byte
+    }
+    // Final check: also ensure lengths match (otherwise diff was set to
+    // a non-zero value above, which would fail the == 0 check).
+    diff == 0 && a.len() == b.len()
 }

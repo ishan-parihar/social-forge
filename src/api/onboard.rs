@@ -2,9 +2,15 @@
 // Browser-accessible OAuth flow: no JWT header required.
 // Shows all providers with config status and clickable connect buttons.
 // Auto-creates a dev user on first access.
+//
+// SECURITY: every value interpolated into HTML must go through
+// `html_escape()`. Every value interpolated into a JS string literal
+// must go through `js_escape()`. These helpers are defined at the
+// bottom of this file — keep them in sync if you add new templates.
 
 use axum::{
     extract::{Path, Query, State},
+    http::{header, HeaderMap},
     response::{Html, IntoResponse, Redirect, Response},
     Form, Json,
 };
@@ -12,6 +18,7 @@ use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::auth::jwt;
+use crate::auth::middleware::{extract_cookie, SESSION_COOKIE};
 use crate::db::queries;
 use crate::error::AppError;
 
@@ -35,15 +42,76 @@ pub struct OnboardQuery {
     pub name: Option<String>,
 }
 
-/// GET / — public onboarding HTML dashboard
+/// Resolve the authenticated user from a request.
+///
+/// Accepts EITHER:
+///   (a) the `sf_session` cookie (preferred — set by /api/auth/login), OR
+///   (b) a `?token=<jwt>` query parameter (used by OAuth redirect chains
+///       where the cookie may not be present, e.g. cross-origin callback).
+///
+/// Returns `Ok(user_id)` on success, or `Err` with a redirect to /login
+/// if neither credential is present/valid. This closes the "free JWT
+/// issuance" hole where /setup previously minted a fresh JWT for any
+/// anonymous visitor — that path bypassed APP_PASSWORD entirely.
+fn resolve_authed_user(
+    headers: &HeaderMap,
+    query_token: Option<&str>,
+    jwt_secret: &str,
+) -> Result<Uuid, AppError> {
+    // (a) Try the session cookie first.
+    let cookie_header = headers
+        .get(header::COOKIE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+    if let Some(cookie_val) = extract_cookie(cookie_header, SESSION_COOKIE) {
+        if let Ok(claims) = jwt::validate_token(cookie_val, jwt_secret) {
+            return Uuid::parse_str(&claims.sub)
+                .map_err(|_| AppError::BadRequest("Invalid user ID in session".into()));
+        }
+    }
+    // (b) Fall back to ?token= query param (used by OAuth redirect chains).
+    if let Some(tok) = query_token {
+        if !tok.is_empty() {
+            let claims = jwt::validate_token(tok, jwt_secret).map_err(|_| {
+                AppError::BadRequest("Invalid or expired token. Log in via the WebUI first.".into())
+            })?;
+            return Uuid::parse_str(&claims.sub)
+                .map_err(|_| AppError::BadRequest("Invalid user ID in token".into()));
+        }
+    }
+    // Neither cookie nor token — require login.
+    Err(AppError::Unauthorized(
+        "Not authenticated. Visit /login to sign in with APP_PASSWORD.".into(),
+    ))
+}
+
+/// GET /setup — onboarding HTML dashboard
+///
+/// AUTH: requires the `sf_session` cookie OR a `?token=<jwt>` query
+/// param (set by the WebUI after /api/auth/login). Anonymous visitors
+/// are rejected with 401 and the frontend redirects them to /login.
+///
 /// Supports query params:
 ///   ?pending={provider}&integration_id={id}&token={jwt} — shows page-picker for multi-step providers
 ///   ?connected={provider}&name={name} — shows success banner
 pub async fn onboard_page(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Query(query): Query<OnboardQuery>,
 ) -> Result<Html<String>, AppError> {
+    // Auth gate: rejects anonymous visitors with 401 if neither
+    // session cookie nor ?token= JWT is valid. The resolved user_id
+    // is intentionally not used downstream — `get_or_create_dev_user`
+    // returns the canonical DEFAULT_USER_ID which is what we bind
+    // integrations to in single-user mode. The call here is purely
+    // an auth check.
+    let _authed_user_id = resolve_authed_user(&headers, query.token.as_deref(), &state.config.jwt_secret)?;
     let user = get_or_create_dev_user(&state).await?;
+    // Re-issue a fresh token ONLY for already-authenticated users —
+    // needed because the page embeds `?token=<jwt>` in provider-card
+    // links so the OAuth redirect chain can complete without the
+    // cookie being sent cross-origin (OAuth callback comes from the
+    // provider, not from us).
     let token = jwt::create_token(user.id, &state.config.jwt_secret)?;
 
     // ── Fetch existing integrations ───────────────────────────
@@ -54,8 +122,14 @@ pub async fn onboard_page(
         let pid = &integration.provider_identifier;
         let icon = provider_icon(pid);
         let name = integration.profile_name.as_deref().unwrap_or(&integration.provider_name);
+        // Profile pic URL comes from upstream provider response — escape
+        // it for both HTML-attribute context (quote-breakout) and JS
+        // context (the `dc('{iid}')` onclick). A malicious upstream
+        // could otherwise break out of `src="..."` with a `"` and inject
+        // an `onerror=` handler.
         let pic_html = if let Some(ref pic) = integration.profile_picture {
-            format!(r#"<img class="profile-pic" src="{}" alt="" onerror="this.style.display='none'" />"#, pic)
+            let pic_escaped = html_escape(pic);
+            format!(r#"<img class="profile-pic" src="{pic_escaped}" alt="" onerror="this.style.display='none'" />"#)
         } else {
             format!(r#"<div class="profile-pic profile-pic-placeholder">{}</div>"#, &icon)
         };
@@ -96,7 +170,10 @@ pub async fn onboard_page(
                     <button class="btn-disconnect" onclick="dc('{iid}')" title="Disconnect this account">✕</button>
                 </div>
             </div>"#,
-            iid = integration_id,
+            iid = html_escape(&integration_id),
+            name = html_escape(name),
+            provider_display = html_escape(provider_display),
+            connected_at = html_escape(&connected_at),
         ));
     }
 
@@ -284,6 +361,8 @@ pub async fn onboard_page(
     );
 
     // ── Success/Error banner ───────────────────────────────
+    // All query-string values are HTML-escaped before interpolation.
+    // See SECURITY note at the top of this file.
     let banner_html = if let Some(connected) = &query.connected {
         let name = query.name.as_deref().unwrap_or(connected);
         format!(
@@ -292,8 +371,8 @@ pub async fn onboard_page(
                 <button onclick="this.parentElement.style.display='none'" style="margin-left:12px;background:none;border:none;cursor:pointer;font-size:16px;">&times;</button>
             </div>
             <script>setTimeout(function(){{var b=document.getElementById('banner');if(b)b.style.display='none';}},8000);</script>"#,
-            connected = connected,
-            name = name,
+            connected = html_escape(connected),
+            name = html_escape(name),
         )
     } else if let Some(error) = &query.error {
         format!(
@@ -301,7 +380,7 @@ pub async fn onboard_page(
                 ❌ Connection failed: <strong>{error}</strong>
                 <button onclick="this.parentElement.style.display='none'" style="margin-left:12px;background:none;border:none;cursor:pointer;font-size:16px;">&times;</button>
             </div>"#,
-            error = error,
+            error = html_escape(error),
         )
     } else {
         String::new()
@@ -535,29 +614,22 @@ fn provider_icon(id: &str) -> &'static str {
 
 /// GET /api/public/connect/{provider} — initiate OAuth from browser
 ///
-/// Uses `?token=` query param for auth (no Bearer header needed).
+/// AUTH: requires `sf_session` cookie OR `?token=<jwt>` query param.
+/// Anonymous visitors are rejected with 401. The "auto-mint a fresh
+/// JWT and redirect" path that existed before was a security hole —
+/// it let anyone who could reach the server drive the OAuth flow
+/// without knowing APP_PASSWORD.
+///
 /// Redirects browser directly to the OAuth provider's authorization page.
 ///
 /// For non-OAuth providers (Telegram), returns instructions as JSON.
 pub async fn public_connect(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Path(provider): Path<String>,
     Query(query): Query<PublicConnectQuery>,
 ) -> Result<Response, AppError> {
-    let user_id = if let Some(token_str) = &query.token {
-        let claims = jwt::validate_token(token_str, &state.config.jwt_secret)
-            .map_err(|_| AppError::BadRequest(
-                "Invalid or expired token. Visit http://localhost:3000/ to get a fresh one.".into()
-            ))?;
-        Uuid::parse_str(&claims.sub)
-            .map_err(|_| AppError::BadRequest("Invalid user ID in token".into()))?
-    } else {
-        let user = get_or_create_dev_user(&state).await?;
-        let t = jwt::create_token(user.id, &state.config.jwt_secret)?;
-        let ru = query.redirect_uri.as_deref().unwrap_or("");
-        let extra = if ru.is_empty() { String::new() } else { format!("&redirect_uri={}", urlencoding::encode(ru)) };
-        return Ok(Redirect::to(&format!("/api/public/connect/{provider}?token={t}{extra}")).into_response());
-    };
+    let user_id = resolve_authed_user(&headers, query.token.as_deref(), &state.config.jwt_secret)?;
 
     if state.config.provider_credentials(&provider).is_none() {
         let needed = match provider.as_str() {
@@ -670,11 +742,25 @@ pub async fn public_connect(
 
 /// Build the page-picker section HTML (CSS + body + JS) for multi-step providers.
 /// Shows available pages/accounts for the user to select and connect.
+///
+/// SECURITY: `prov` is HTML-escaped before interpolation. `iid` and `tok`
+/// are JS-escaped (they live inside JS string literals) AND HTML-escaped
+/// (the whole script block is inside HTML). The client-side JS uses
+/// `textContent`/`setAttribute` instead of string concatenation for any
+/// server-supplied page data — preventing DOM-based XSS if a page name
+/// contains quotes or angle brackets.
 fn build_page_picker_html(pending: Option<&str>, integration_id: Option<&str>, pending_token: Option<&str>) -> String {
     let (prov, iid, tok) = match (pending, integration_id, pending_token) {
         (Some(p), Some(i), Some(t)) => (p, i, t),
         _ => return String::new(),
     };
+
+    // Double-escape: js_escape first (escapes \, ', ", <, >, &), then
+    // html_escape to convert the resulting \u sequences to entities. This
+    // is safe because the JS-string context and the HTML context both get
+    // their respective metacharacters neutralised.
+    let iid_safe = html_escape(&js_escape(iid));
+    let tok_safe = html_escape(&js_escape(tok));
 
     format!(
         r#"<div id="page-picker" style="margin-bottom:24px;">
@@ -685,8 +771,8 @@ fn build_page_picker_html(pending: Option<&str>, integration_id: Option<&str>, p
 </div>
 <script>
 (function(){{
-var iid='{iid}';
-var tok='{tok}';
+var iid='{iid_safe}';
+var tok='{tok_safe}';
 var grid=document.getElementById('page-grid');
 fetch('/api/integrations/'+iid+'/available-pages',{{headers:{{'Authorization':'Bearer '+tok}}}})
 .then(function(r){{return r.ok?r.json():Promise.reject('HTTP '+r.status)}})
@@ -694,10 +780,34 @@ fetch('/api/integrations/'+iid+'/available-pages',{{headers:{{'Authorization':'B
 if(!d.pages||!d.pages.length){{grid.innerHTML='<div class=\"note\">No pages found. <a href=\"/\">Go back</a></div>';return;}}
 var h='';
 d.pages.forEach(function(p){{
-var icon=p.picture?'<img src=\"'+p.picture+'\" style=\"width:44px;height:44px;border-radius:50%;object-fit:cover;\" onerror=\"this.style.display=\'none\'\"/>':'F';
-h+='<div class=\"page-card\"><div class=\"card-icon\">'+icon+'</div><div class=\"card-body\"><div class=\"card-title\">'+p.name.replace(/</g,'&lt;')+'</div></div><button class=\"btn btn-primary cp\" data-id=\"'+p.id+'\">Connect</button></div>';
+// Use textContent + setAttribute instead of string concatenation
+// to prevent DOM-based XSS from page names containing quotes/HTML.
+var card=document.createElement('div');
+card.className='page-card';
+var iconWrap=document.createElement('div');
+iconWrap.className='card-icon';
+if(p.picture){{
+  var img=document.createElement('img');
+  img.src=p.picture;
+  img.style.width='44px';img.style.height='44px';img.style.borderRadius='50%';img.style.objectFit='cover';
+  img.onerror=function(){{this.style.display='none'}};
+  iconWrap.appendChild(img);
+}}else{{
+  iconWrap.textContent='F';
+}}
+var body=document.createElement('div');
+body.className='card-body';
+var title=document.createElement('div');
+title.className='card-title';
+title.textContent=p.name;  // textContent — no HTML interpretation
+body.appendChild(title);
+var btn=document.createElement('button');
+btn.className='btn btn-primary cp';
+btn.setAttribute('data-id',p.id);  // setAttribute — no quote breakout
+btn.textContent='Connect';
+card.appendChild(iconWrap);card.appendChild(body);card.appendChild(btn);
+grid.appendChild(card);
 }});
-grid.innerHTML=h;
 var btns=grid.querySelectorAll('.cp');
 for(var i=0;i<btns.length;i++){{(function(btn){{btn.addEventListener('click',function(){{
 btn.disabled=true;btn.textContent='Connecting...';
@@ -707,12 +817,12 @@ fetch('/api/integrations/'+iid+'/connect-page/'+btn.getAttribute('data-id'),{{me
 .catch(function(e){{btn.disabled=false;btn.textContent='Connect';alert('Failed: '+e.message);}});
 }})}})(btns[i]);}}
 }})
-.catch(function(e){{grid.innerHTML='<div class=\"note\" style=\"background:#f8d7da;color:#721c24;\">Error: '+e.message+'</div>';}});
+.catch(function(e){{grid.innerHTML='<div class=\"note\" style=\"background:#f8d7da;color:#721c24;\">Error: '+String(e).replace(/</g,'&lt;')+'</div>';}});
 }})();
 </script>"#,
-        prov = prov,
-        iid = iid,
-        tok = tok,
+        prov = html_escape(prov),
+        iid_safe = iid_safe,
+        tok_safe = tok_safe,
     )
 }
 
@@ -726,23 +836,16 @@ pub struct XCookieForm {
 }
 
 /// GET /api/public/connect/x-cookies — show cookie input form with instructions
+///
+/// AUTH: requires `sf_session` cookie OR `?token=<jwt>` query param.
+/// The previous "auto-mint a JWT and meta-refresh" path was removed
+/// because it bypassed APP_PASSWORD.
 pub async fn x_cookies_form(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Query(query): Query<PublicConnectQuery>,
 ) -> Result<Html<String>, AppError> {
-    let _user_id = if let Some(token_str) = &query.token {
-        let claims = jwt::validate_token(token_str, &state.config.jwt_secret)
-            .map_err(|_| AppError::BadRequest("Invalid token".into()))?;
-        Uuid::parse_str(&claims.sub)
-            .map_err(|_| AppError::BadRequest("Invalid user ID".into()))?
-    } else {
-        let user = get_or_create_dev_user(&state).await?;
-        let t = jwt::create_token(user.id, &state.config.jwt_secret)?;
-        return Ok(Html(format!(
-            r#"<!DOCTYPE html><html><head><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=/api/public/connect/x-cookies?token={}" /></head><body>Redirecting...</body></html>"#,
-            t
-        )));
-    };
+    let _user_id = resolve_authed_user(&headers, query.token.as_deref(), &state.config.jwt_secret)?;
 
     let token = query.token.clone().unwrap_or_default();
     let error = query.redirect_uri.as_deref().unwrap_or("");
@@ -840,28 +943,25 @@ pub async fn x_cookies_form(
 </body>
 </html>"#,
         error_html = if error.is_empty() { String::new() } else {
-            format!(r#"<div class="error">❌ {error}</div>"#)
+            format!(r#"<div class="error">❌ {error}</div>"#, error = html_escape(error))
         },
-        token = token,
+        token = html_escape(&token),
     );
 
     Ok(Html(html))
 }
 
 /// POST /api/public/connect/x-cookies — store X cookies as encrypted integration
+///
+/// AUTH: requires `sf_session` cookie OR `token` field in the form body.
 pub async fn x_cookies_submit(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Query(query): Query<PublicConnectQuery>,
     Form(form): Form<XCookieForm>,
 ) -> Result<Response, AppError> {
-    let user_id = if let Some(token_str) = Some(&form.token).or(query.token.as_ref()) {
-        let claims = jwt::validate_token(token_str, &state.config.jwt_secret)
-            .map_err(|_| AppError::BadRequest("Invalid or expired token. Visit / to get a fresh one.".into()))?;
-        Uuid::parse_str(&claims.sub)
-            .map_err(|_| AppError::BadRequest("Invalid user ID in token".into()))?
-    } else {
-        return Err(AppError::BadRequest("Missing auth token. Visit / to get one.".into()));
-    };
+    let token_opt: Option<&str> = Some(form.token.as_str()).or(query.token.as_deref());
+    let user_id = resolve_authed_user(&headers, token_opt, &state.config.jwt_secret)?;
 
     let auth_token = form.auth_token.as_deref().unwrap_or("");
     let ct0 = form.ct0.as_deref().unwrap_or("");
@@ -944,17 +1044,12 @@ pub async fn x_cookies_submit(
 /// POST /api/public/connect/x-cookies/import — extract cookies from local browser
 pub async fn x_cookies_import(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Query(query): Query<PublicConnectQuery>,
     Form(form): Form<XCookieForm>,
 ) -> Result<Response, AppError> {
-    let user_id = if let Some(token_str) = Some(&form.token).or(query.token.as_ref()) {
-        let claims = jwt::validate_token(token_str, &state.config.jwt_secret)
-            .map_err(|_| AppError::BadRequest("Invalid or expired token. Visit / to get a fresh one.".into()))?;
-        Uuid::parse_str(&claims.sub)
-            .map_err(|_| AppError::BadRequest("Invalid user ID in token".into()))?
-    } else {
-        return Err(AppError::BadRequest("Missing auth token. Visit / to get one.".into()));
-    };
+    let token_opt: Option<&str> = Some(form.token.as_str()).or(query.token.as_deref());
+    let user_id = resolve_authed_user(&headers, token_opt, &state.config.jwt_secret)?;
 
     let cookies = crate::social::x_cookies::extract_x_cookies()
         .ok_or_else(|| AppError::BadRequest(
@@ -1028,23 +1123,14 @@ pub struct RedditCookieForm {
 }
 
 /// GET /api/public/connect/reddit-cookies — show cookie input form
+///
+/// AUTH: requires `sf_session` cookie OR `?token=<jwt>` query param.
 pub async fn reddit_cookies_form(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Query(query): Query<PublicConnectQuery>,
 ) -> Result<Html<String>, AppError> {
-    let _user_id = if let Some(token_str) = &query.token {
-        let claims = jwt::validate_token(token_str, &state.config.jwt_secret)
-            .map_err(|_| AppError::BadRequest("Invalid token".into()))?;
-        Uuid::parse_str(&claims.sub)
-            .map_err(|_| AppError::BadRequest("Invalid user ID".into()))?
-    } else {
-        let user = get_or_create_dev_user(&state).await?;
-        let t = jwt::create_token(user.id, &state.config.jwt_secret)?;
-        return Ok(Html(format!(
-            r#"<!DOCTYPE html><html><head><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=/api/public/connect/reddit-cookies?token={}" /></head><body>Redirecting...</body></html>"#,
-            t
-        )));
-    };
+    let _user_id = resolve_authed_user(&headers, query.token.as_deref(), &state.config.jwt_secret)?;
 
     let token = query.token.clone().unwrap_or_default();
     let error = query.redirect_uri.as_deref().unwrap_or("");
@@ -1122,26 +1208,23 @@ pub async fn reddit_cookies_form(
   </form>
   <a href="/" class="back">← Back to onboarding</a>
 </div></body></html>"#,
-        error_html = if error.is_empty() { String::new() } else { format!(r#"<div class="error">❌ {error}</div>"#) },
-        token = token,
+        error_html = if error.is_empty() { String::new() } else { format!(r#"<div class="error">❌ {error}</div>"#, error = html_escape(error)) },
+        token = html_escape(&token),
     );
     Ok(Html(html))
 }
 
 /// POST /api/public/connect/reddit-cookies — submit cookies manually
+///
+/// AUTH: requires `sf_session` cookie OR `token` field in the form body.
 pub async fn reddit_cookies_submit(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Query(query): Query<PublicConnectQuery>,
     Form(form): Form<RedditCookieForm>,
 ) -> Result<Response, AppError> {
-    let user_id = if let Some(token_str) = Some(&form.token).or(query.token.as_ref()) {
-        let claims = jwt::validate_token(token_str, &state.config.jwt_secret)
-            .map_err(|_| AppError::BadRequest("Invalid or expired token".into()))?;
-        Uuid::parse_str(&claims.sub)
-            .map_err(|_| AppError::BadRequest("Invalid user ID".into()))?
-    } else {
-        return Err(AppError::BadRequest("Missing auth token".into()));
-    };
+    let token_opt: Option<&str> = Some(form.token.as_str()).or(query.token.as_deref());
+    let user_id = resolve_authed_user(&headers, token_opt, &state.config.jwt_secret)?;
 
     let cookie_string = form.cookie_string.as_deref().unwrap_or("");
     let reddit_session = form.reddit_session.as_deref().unwrap_or("");
@@ -1207,19 +1290,16 @@ pub async fn reddit_cookies_submit(
 }
 
 /// POST /api/public/connect/reddit-cookies/import — extract from browser
+///
+/// AUTH: requires `sf_session` cookie OR `token` field in the form body.
 pub async fn reddit_cookies_import(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Query(query): Query<PublicConnectQuery>,
     Form(form): Form<RedditCookieForm>,
 ) -> Result<Response, AppError> {
-    let user_id = if let Some(token_str) = Some(&form.token).or(query.token.as_ref()) {
-        let claims = jwt::validate_token(token_str, &state.config.jwt_secret)
-            .map_err(|_| AppError::BadRequest("Invalid or expired token".into()))?;
-        Uuid::parse_str(&claims.sub)
-            .map_err(|_| AppError::BadRequest("Invalid user ID".into()))?
-    } else {
-        return Err(AppError::BadRequest("Missing auth token".into()));
-    };
+    let token_opt: Option<&str> = Some(form.token.as_str()).or(query.token.as_deref());
+    let user_id = resolve_authed_user(&headers, token_opt, &state.config.jwt_secret)?;
 
     let cookies = crate::social::reddit_cookies::extract_reddit_cookies()
         .ok_or_else(|| AppError::BadRequest(
@@ -1296,8 +1376,20 @@ async fn get_or_create_dev_user(state: &AppState) -> Result<crate::db::models::U
 // ── Telegram Bot Token Form ──────────────────────────────────
 
 /// GET /api/public/connect/telegram-bot-token — form to enter bot token
-pub async fn telegram_bot_token_form() -> axum::response::Html<String> {
-    axum::response::Html(format!(r#"<!DOCTYPE html>
+///
+/// AUTH: requires `sf_session` cookie OR `?token=<jwt>` query param.
+pub async fn telegram_bot_token_form(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    axum::extract::Query(query): axum::extract::Query<PublicConnectQuery>,
+) -> Result<axum::response::Html<String>, AppError> {
+    let _user_id = resolve_authed_user(&headers, query.token.as_deref(), &state.config.jwt_secret)?;
+    // Embed the JWT as a hidden form field so the POST handler can
+    // re-validate auth even if the session cookie isn't sent (e.g.
+    // the user reached this form via an OAuth-redirect link with
+    // ?token= and hasn't logged into the WebUI to set the cookie).
+    let token_hidden = query.token.as_deref().map(html_escape).unwrap_or_default();
+    Ok(axum::response::Html(format!(r#"<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Social Forge — Telegram Bot Token</title>
 <style>body{{font-family:system-ui;background:#0b0e14;color:#d1d5db;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0}}
@@ -1308,36 +1400,47 @@ h2{{color:#fff;margin-top:0}}input{{width:100%;padding:.75rem;border:1px solid #
 <body><div class="card"><h2>🤖 Telegram Bot Token</h2>
 <p style="font-size:.9rem;color:#9ca3af">Enter your bot token from <a href="https://t.me/BotFather" style="color:#6366f1">@BotFather</a></p>
 <form method="POST" action="/api/public/connect/telegram-bot-token">
+<input type="hidden" name="token" value="{token_hidden}" />
 <input name="bot_token" placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz" required>
 <button type="submit" class="btn">Connect Bot</button>
 </form>
 <p class="hint">The token looks like: 123456789:ABCdefGHIjklMNOpqrsTUVwxyz</p>
-</div></body></html>"#))
+</div></body></html>"#)))
 }
 
 /// POST /api/public/connect/telegram-bot-token — submit bot token
+///
+/// AUTH: requires `sf_session` cookie OR `token` field in the form body
+/// (the form embeds it as a hidden input via the same JWT used for the
+/// GET form). Anonymous submissions are rejected with 401.
 pub async fn telegram_bot_token_submit(
     State(state): State<AppState>,
+    headers: HeaderMap,
     axum::extract::Form(form): axum::extract::Form<std::collections::HashMap<String, String>>,
-) -> axum::response::Response {
+) -> Result<axum::response::Response, AppError> {
     use axum::response::IntoResponse;
+    // Auth gate — accept either the session cookie or a `token` form field.
+    let form_token = form.get("token").map(String::as_str);
+    let _user_id = resolve_authed_user(&headers, form_token, &state.config.jwt_secret)?;
+
     let bot_token = match form.get("bot_token") {
         Some(t) if !t.is_empty() => t.clone(),
-        _ => return axum::response::Html("<p>Error: bot_token is required</p>".to_string()).into_response(),
+        _ => return Ok(axum::response::Html("<p>Error: bot_token is required</p>".to_string()).into_response()),
     };
 
     // Validate token via getMe
     let url = format!("https://api.telegram.org/bot{}/getMe", bot_token);
     let resp = match reqwest::get(&url).await {
         Ok(r) => r,
-        Err(e) => return axum::response::Html(format!("<p>Error: Failed to reach Telegram API: {e}</p>")).into_response(),
+        Err(e) => return Ok(axum::response::Html(format!("<p>Error: Failed to reach Telegram API: {e}</p>", e = html_escape(&e.to_string()))).into_response()),
     };
     let json: serde_json::Value = match resp.json().await {
         Ok(j) => j,
-        Err(e) => return axum::response::Html(format!("<p>Error: Invalid response: {e}</p>")).into_response(),
+        Err(e) => return Ok(axum::response::Html(format!("<p>Error: Invalid response: {e}</p>", e = html_escape(&e.to_string()))).into_response()),
     };
     if !json["ok"].as_bool().unwrap_or(false) {
-        return axum::response::Html(format!("<p>Error: Invalid bot token. Telegram says: {}</p>", json["description"].as_str().unwrap_or("unknown error"))).into_response();
+        let desc = json["description"].as_str().unwrap_or("unknown error");
+        return Ok(axum::response::Html(format!("<p>Error: Invalid bot token. Telegram says: {desc}</p>", desc = html_escape(desc))).into_response());
     }
 
     let bot = &json["result"];
@@ -1347,7 +1450,7 @@ pub async fn telegram_bot_token_submit(
 
     let user = match get_or_create_dev_user(&state).await {
         Ok(u) => u,
-        Err(e) => return axum::response::Html(format!("<p>Error creating user: {e}</p>")).into_response(),
+        Err(e) => return Ok(axum::response::Html(format!("<p>Error creating user: {e}</p>", e = html_escape(&e.to_string()))).into_response()),
     };
     let token_json = serde_json::json!({"bot_token": bot_token}).to_string();
     if let Err(e) = crate::db::queries::create_integration(
@@ -1366,10 +1469,144 @@ pub async fn telegram_bot_token_submit(
         Some("api_key"),
     ).await {
         tracing::error!("Failed to create Telegram Bot integration: {e}");
-        return axum::response::Html(
-            format!("<p style=\"color:red\">Failed to save Telegram Bot connection: {e}. Please try again.</p>")
-        ).into_response();
+        let msg = html_escape(&format!("Failed to save Telegram Bot connection: {e}. Please try again."));
+        return Ok(axum::response::Html(
+            format!("<p style=\"color:red\">{msg}</p>")
+        ).into_response());
     }
 
-    axum::response::Redirect::to("/setup?connected=telegram-bot").into_response()
+    Ok(axum::response::Redirect::to("/setup?connected=telegram-bot").into_response())
+}
+
+// ── HTML/JS escaping helpers ──────────────────────────────────
+//
+// These are the single source of truth for any value interpolated
+// into an HTML template or JS string literal in this file. Use them
+// every time a value of unknown provenance (query string, DB row,
+// upstream API response, form input) is rendered.
+//
+// Why hand-roll instead of depending on `askama`/`maud`/`v_htmlescape`?
+// The onboarding templates are static strings already in this file —
+// the cost of adding a template-engine dep tree for ~10 interpolation
+// sites is not justified. These helpers are ~20 LOC, well-tested by
+// the unit tests below, and easy to audit.
+
+/// Escape a string for safe interpolation into HTML text content
+/// or a double-quoted attribute value.
+///
+/// Escapes: `&`, `<`, `>`, `"`, `'`. Numeric entity form (`&#34;`)
+/// is used for both quote types so the same string is safe in both
+/// text content and either single- or double-quoted attributes.
+pub fn html_escape(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 8);
+    for ch in s.chars() {
+        match ch {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            '"' => out.push_str("&#34;"),
+            '\'' => out.push_str("&#39;"),
+            _ => out.push(ch),
+        }
+    }
+    out
+}
+
+/// Escape a string for safe interpolation into a JavaScript single-
+/// or double-quoted string literal. Prevents quote-breakout attacks
+/// when the resulting JS string is later placed inside an HTML
+/// `<script>` block (still requires `html_escape` afterwards to be
+/// safe in the HTML context — see `build_page_picker_html` above).
+///
+/// Escapes: `\`, `'`, `"`, `<`, `>`, `&`, and the line terminators
+/// `\n`/`\r`/`\u{2028}`/`\u{2029}` (the latter two break out of JS
+/// string literals in some older engines).
+pub fn js_escape(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 8);
+    for ch in s.chars() {
+        match ch {
+            '\\' => out.push_str("\\\\"),
+            '\'' => out.push_str("\\'"),
+            '"' => out.push_str("\\\""),
+            '<' => out.push_str("\\u003c"),
+            '>' => out.push_str("\\u003e"),
+            '&' => out.push_str("\\u0026"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\u{2028}' => out.push_str("\\u2028"),
+            '\u{2029}' => out.push_str("\\u2029"),
+            _ => out.push(ch),
+        }
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn html_escape_basic() {
+        assert_eq!(html_escape("hello"), "hello");
+        assert_eq!(html_escape("a&b"), "a&amp;b");
+        assert_eq!(html_escape("a<b>c"), "a&lt;b&gt;c");
+    }
+
+    #[test]
+    fn html_escape_quotes() {
+        assert_eq!(html_escape(r#""foo""#), "&#34;foo&#34;");
+        assert_eq!(html_escape("it's"), "it&#39;s");
+    }
+
+    #[test]
+    fn html_escape_xss_payloads() {
+        // Classic XSS payloads must produce inert output.
+        assert_eq!(
+            html_escape("<script>alert(1)</script>"),
+            "&lt;script&gt;alert(1)&lt;/script&gt;"
+        );
+        assert_eq!(
+            html_escape(r#"<img src=x onerror="alert(1)">"#),
+            "&lt;img src=x onerror=&#34;alert(1)&#34;&gt;"
+        );
+    }
+
+    #[test]
+    fn html_escape_empty() {
+        assert_eq!(html_escape(""), "");
+    }
+
+    #[test]
+    fn js_escape_basic() {
+        assert_eq!(js_escape("hello"), "hello");
+        assert_eq!(js_escape(r"back\slash"), r"back\\slash");
+        assert_eq!(js_escape("quote'quote"), r"quote\'quote");
+        assert_eq!(js_escape(r#""quoted""#), r#"\"quoted\""#);
+    }
+
+    #[test]
+    fn js_escape_html_chars() {
+        // <, >, & must be unicode-escaped so they can't be misread
+        // by an HTML parser even if the JS string ends up in a script block.
+        assert_eq!(js_escape("<script>"), "\\u003cscript\\u003e");
+        assert_eq!(js_escape("a&b"), "a\\u0026b");
+    }
+
+    #[test]
+    fn js_escape_breakout_payload() {
+        // Classic JS-string breakout: '; alert(1); //
+        // The `'` becomes `\'`, neutralising the breakout. The rest of
+        // the payload is left alone because none of its chars are in
+        // the escape set.
+        assert_eq!(
+            js_escape("';alert(1);//"),
+            "\\';alert(1);//"
+        );
+    }
+
+    #[test]
+    fn js_escape_line_terminators() {
+        assert_eq!(js_escape("a\nb"), "a\\nb");
+        assert_eq!(js_escape("a\rb"), "a\\rb");
+    }
 }

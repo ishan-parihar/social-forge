@@ -2,7 +2,7 @@
 // axum HTTP router combining all route modules.
 // Protected routes use the auth middleware chain.
 
-use axum::{body::Body, http::{Request, Response, StatusCode}, middleware, Router};
+use axum::{body::Body, extract::State, http::{Request, Response, StatusCode}, middleware::{self, Next}, Router};
 use rust_embed::RustEmbed;
 use tower_http::cors::CorsLayer;
 use tower_http::limit::RequestBodyLimitLayer;
@@ -82,6 +82,10 @@ pub fn build_router(state: AppState) -> Router {
     // Public routes — no auth required
     let public_routes = Router::new()
         .route("/health", axum::routing::get(health_check))
+        .route("/ready", axum::routing::get({
+            let db_for_ready = state.db.clone();
+            move || ready_check(db_for_ready)
+        }))
         .route("/api/auth/login", axum::routing::post(auth::login))
         .route("/api/auth/callback", axum::routing::get(integrations::oauth_callback))
         .route("/api/auth/callback/{provider}", axum::routing::get(integrations::oauth_callback))
@@ -184,6 +188,17 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/automation/rules", axum::routing::get(automation::list_rules).post(automation::create_rule))
         .route("/api/automation/rules/{id}", axum::routing::put(automation::update_rule).delete(automation::delete_rule))
         .route("/api/automation/rules/{id}/logs", axum::routing::get(automation::get_logs))
+        // CSRF defense-in-depth: validates Origin (or Referer fallback)
+        // on all state-changing requests. SameSite=Lax already blocks
+        // cross-site POST/PUT/DELETE cookie sends, but this catches:
+        //   (a) any future GET-with-side-effects route (Lax allows GET),
+        //   (b) attacks if SameSite is later relaxed to None for HTTPS.
+        // The check is a no-op for same-origin requests (which is the
+        // only legitimate origin in single-user mode).
+        .layer(middleware::from_fn_with_state(
+            CsrfState { allowed_origin: state.config.frontend_url.clone() },
+            csrf_origin_check,
+        ))
         // Auth middleware: validates `sf_session` cookie against the
         // JWT secret derived from `APP_PASSWORD`. Injects
         // `AuthenticatedUser { user_id: DEFAULT_USER_ID }` on success.
@@ -294,12 +309,125 @@ fn not_found() -> Response<Body> {
         .unwrap()
 }
 
-/// Health check endpoint
+/// Health check endpoint — liveness probe (no DB call, returns 200 if
+/// the process is up and the router is dispatching).
 async fn health_check() -> axum::Json<serde_json::Value> {
     axum::Json(serde_json::json!({
         "status": "ok",
         "version": env!("CARGO_PKG_VERSION"),
     }))
+}
+
+/// Readiness check — pings the DB with `SELECT 1` to verify the
+/// connection pool is healthy. Container orchestrators should probe
+/// `/ready` (not `/health`) before routing traffic, so a postgress
+/// outage takes the instance out of rotation without killing the
+/// process (which would prevent it from reconnecting).
+async fn ready_check(db: PgPool) -> axum::Json<serde_json::Value> {
+    let db_ok = match sqlx::query_scalar::<_, i32>("SELECT 1").fetch_one(&db).await {
+        Ok(1) => true,
+        Ok(_) => false,
+        Err(e) => {
+            tracing::warn!("Readiness check DB ping failed: {e}");
+            false
+        }
+    };
+    let status = if db_ok { "ok" } else { "degraded" };
+    axum::Json(serde_json::json!({
+        "status": status,
+        "database": db_ok,
+        "version": env!("CARGO_PKG_VERSION"),
+    }))
+}
+
+/// State carried by the CSRF middleware.
+#[derive(Clone)]
+struct CsrfState {
+    /// The single allowed origin for state-changing requests.
+    /// Defaults to `frontend_url` from config (which itself defaults
+    /// to `app_url`). Set to `*` to disable the check (not recommended).
+    allowed_origin: String,
+}
+
+/// CSRF defense-in-depth: for any non-GET/non-HEAD/non-OPTIONS request,
+/// verify that the `Origin` header (or `Referer` as fallback) matches
+/// the configured allowed origin. Rejects with 403 otherwise.
+///
+/// This is a defense-in-depth layer on top of SameSite=Lax cookies:
+/// Lax already blocks cross-site POST/PUT/DELETE cookie sends, but
+/// (a) GET requests are still allowed cross-site under Lax, and any
+/// future GET-with-side-effects route would be vulnerable, and
+/// (b) if SameSite is relaxed to `None` for HTTPS deployment, this
+/// becomes the primary CSRF defense.
+///
+/// Safe methods (GET, HEAD, OPTIONS) are not checked — they should
+/// not have side effects. If a future GET route ever does have a
+/// side effect, fix the route, not this middleware.
+async fn csrf_origin_check(
+    State(csrf): State<CsrfState>,
+    req: Request<Body>,
+    next: Next,
+) -> Response<Body> {
+    use axum::http::{header, Method};
+
+    // Skip check for safe methods.
+    let method = req.method().clone();
+    if matches!(method, Method::GET | Method::HEAD | Method::OPTIONS) {
+        return next.run(req).await;
+    }
+
+    // If allowed_origin is `*`, the check is disabled (operator opted out).
+    if csrf.allowed_origin == "*" || csrf.allowed_origin.is_empty() {
+        return next.run(req).await;
+    }
+
+    // Check Origin header first, then fall back to Referer.
+    let origin = req
+        .headers()
+        .get(header::ORIGIN)
+        .and_then(|v| v.to_str().ok())
+        .map(String::from);
+    let referer = req
+        .headers()
+        .get(header::REFERER)
+        .and_then(|v| v.to_str().ok())
+        .map(String::from);
+
+    // Extract just the origin part of Referer (scheme://host[:port])
+    // by parsing it as a URL and reading the origin string.
+    let referer_origin = referer.as_deref().and_then(|r| {
+        url::Url::parse(r)
+            .ok()
+            .map(|u| u.origin().ascii_serialization())
+    });
+
+    let request_origin = origin.clone().or(referer_origin.clone());
+
+    let allowed = match request_origin.as_deref() {
+        Some(o) => o == csrf.allowed_origin
+            || o == csrf.allowed_origin.trim_end_matches('/'),
+        None => false,
+    };
+
+    if !allowed {
+        tracing::warn!(
+            "CSRF check failed: origin={origin:?} referer={referer:?} allowed={}",
+            csrf.allowed_origin
+        );
+        return Response::builder()
+            .status(StatusCode::FORBIDDEN)
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(
+                serde_json::json!({
+                    "error": "Cross-origin request blocked",
+                    "code": "csrf_origin_mismatch",
+                })
+                .to_string(),
+            ))
+            .unwrap();
+    }
+
+    next.run(req).await
 }
 
 

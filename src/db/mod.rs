@@ -1,16 +1,58 @@
 // ─── Database Pool ─────────────────────────────────────────────
 // Creates and manages a sqlx PgPool with connection migration.
+//
+// Pool sizing is env-configurable so operators can tune for their
+// workload and DB instance class:
+//   DB_MAX_CONNECTIONS  (default 20)  — max simultaneous DB connections
+//   DB_ACQUIRE_TIMEOUT  (default 5)   — seconds to wait for a connection
+//   DB_MAX_LIFETIME     (default 3600)— seconds before a conn is recycled
+//   DB_IDLE_TIMEOUT     (default 600) — seconds before an idle conn is closed
+//
+// Without these knobs the pool used sqlx's defaults (10 conns, 30s
+// acquire, no max_lifetime) which caused two production issues:
+//   (a) under load, requests blocked on acquire_timeout because 10
+//       conns wasn't enough for the scheduler + RSS + feed + HTTP
+//       workers all competing for connections;
+//   (b) after a postgres restart, stale connections weren't recycled
+//       (no max_lifetime) so the first query on each one failed.
 
 pub use sqlx::PgPool;
 
 pub mod models;
 pub mod queries;
 
-/// Create a connection pool and run migrations
+/// Create a connection pool and run migrations.
 pub async fn create_pool(database_url: &str) -> anyhow::Result<PgPool> {
-    let pool = PgPool::connect(database_url).await?;
+    let max_connections: u32 = std::env::var("DB_MAX_CONNECTIONS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(20);
+    let acquire_timeout_secs: u64 = std::env::var("DB_ACQUIRE_TIMEOUT")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(5);
+    let max_lifetime_secs: u64 = std::env::var("DB_MAX_LIFETIME")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(3600);
+    let idle_timeout_secs: u64 = std::env::var("DB_IDLE_TIMEOUT")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(600);
+
+    let pool = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(max_connections)
+        .acquire_timeout(std::time::Duration::from_secs(acquire_timeout_secs))
+        .max_lifetime(std::time::Duration::from_secs(max_lifetime_secs))
+        .idle_timeout(std::time::Duration::from_secs(idle_timeout_secs))
+        .connect(database_url)
+        .await?;
+
     sqlx::migrate!("./migrations").run(&pool).await?;
-    tracing::info!("Database connected and migrations applied");
+    tracing::info!(
+        "Database connected — pool: max={max_connections}, acquire_timeout={acquire_timeout_secs}s, \
+         max_lifetime={max_lifetime_secs}s, idle_timeout={idle_timeout_secs}s. Migrations applied."
+    );
     Ok(pool)
 }
 
