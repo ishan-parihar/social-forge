@@ -4,7 +4,7 @@
   let userId = $derived(data?.userId ?? '');
 </script>
 
-<div class="space-y-4">
+<div class="page-enter space-y-6">
   <h2 class="text-xl font-semibold">Settings</h2>
   <div class="bg-[#131720] border border-[#1e2435] rounded-xl p-5 space-y-3">
     <div>

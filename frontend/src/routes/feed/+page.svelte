@@ -250,7 +250,7 @@
   });
 </script>
 
-<div class="max-w-3xl mx-auto space-y-5">
+<div class="page-enter page-enter max-w-3xl mx-auto space-y-5">
   <!-- Header -->
   <div class="flex items-center justify-between">
     <div class="flex items-center gap-3">
@@ -418,7 +418,7 @@
 
   <!-- Loading skeleton -->
   {:else if loading}
-    <div class="space-y-3    motion-safe:animate-in duration-300">
+    <div class="page-enter space-y-3    motion-safe:animate-in duration-300">
       {#each Array(5) as _, i (i)}
         <div class="bg-[#131825] rounded-xl p-5 border border-[#1e2435] space-y-3">
           <div class="flex items-center gap-2.5">
@@ -427,7 +427,7 @@
             <div class="h-2.5 bg-[#1e2435] rounded w-16" />
             <div class="ml-auto h-2.5 bg-[#1e2435] rounded w-12" />
           </div>
-          <div class="space-y-2">
+          <div class="page-enter space-y-2">
             <div class="h-3 bg-[#1e2435] rounded w-full" />
             <div class="h-3 bg-[#1e2435] rounded w-5/6" />
             <div class="h-3 bg-[#1e2435] rounded w-2/3" />
@@ -491,7 +491,7 @@
 
   <!-- Post list -->
   {:else}
-    <div class="space-y-2.5">
+    <div class="page-enter space-y-2.5">
       {#each filteredPosts as post (post.id)}
         {@const meta = providerMeta(post.provider)}
         <article

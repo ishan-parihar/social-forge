@@ -127,7 +127,7 @@
   onMount(load);
 </script>
 
-<div class="space-y-4">
+<div class="page-enter space-y-6">
   <div class="flex items-center justify-between">
     <h2 class="text-xl font-semibold">Webhooks</h2>
     <button onclick={openCreate} class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm transition-colors">
@@ -142,7 +142,7 @@
       No webhooks configured. Create one to receive real-time event notifications.
     </div>
   {:else}
-    <div class="space-y-3">
+    <div class="page-enter space-y-3">
       {#each webhooks as wh (wh.id)}
         <div class="bg-[#131720] border border-[#1e2435] rounded-xl p-4">
           <div class="flex items-center justify-between mb-2">
@@ -181,7 +181,7 @@
   <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50" role="dialog">
     <div class="bg-[#0d1117] border border-[#1e2435] rounded-xl p-6 w-full max-w-md">
       <h3 class="text-lg font-semibold mb-4">{editingWebhook ? "Edit Webhook" : "New Webhook"}</h3>
-      <div class="space-y-4">
+      <div class="page-enter space-y-6">
         <div>
           <label class="text-xs text-[#6b7280] mb-1 block">Name</label>
           <input bind:value={formName} placeholder="My Webhook" class="w-full px-3 py-2 bg-[#161b22] border border-[#30363d] rounded text-sm" />
@@ -196,7 +196,7 @@
         </div>
         <div>
           <label class="text-xs text-[#6b7280] mb-2 block">Event Types</label>
-          <div class="space-y-1">
+          <div class="page-enter space-y-1">
             {#each availableEventTypes as et}
               <label class="flex items-center gap-2 text-sm cursor-pointer">
                 <input type="checkbox" checked={formEventTypes.includes(et)} onchange={() => toggleEventType(et)} class="rounded" />
@@ -233,7 +233,7 @@
       {:else if deliveries.length === 0}
         <div class="text-center py-8 text-sm text-[#6b7280]">No deliveries yet</div>
       {:else}
-        <div class="space-y-2">
+        <div class="page-enter space-y-2">
           {#each deliveries as d (d.id)}
             <div class="bg-[#131720] border border-[#1e2435] rounded-lg p-3">
               <div class="flex items-center justify-between mb-1">

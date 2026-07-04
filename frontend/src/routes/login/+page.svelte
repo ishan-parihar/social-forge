@@ -26,7 +26,7 @@
   <title>Social Forge — Login</title>
 </svelte:head>
 
-<div class="min-h-screen flex items-center justify-center bg-[#0b0e14] px-4">
+<div class="page-enter min-h-screen flex items-center justify-center bg-[#0b0e14] px-4">
   <div class="w-full max-w-sm">
     <div class="text-center mb-8">
       <div class="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-indigo-500/10 border border-indigo-500/30 mb-4">

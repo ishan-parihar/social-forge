@@ -62,7 +62,7 @@
   onMount(loadPrefs);
 </script>
 
-<div class="space-y-6">
+<div class="page-enter space-y-6">
   <div>
     <h2 class="text-xl font-semibold text-[#e8edf5]">Notification Settings</h2>
     <p class="text-sm text-[#6b7280] mt-1">Configure how and when you receive notifications.</p>
@@ -89,7 +89,7 @@
   {:else}
     <div class="bg-[#131720] border border-[#1e2435] rounded-xl p-5 space-y-4">
       <h3 class="text-sm font-medium text-[#e8edf5]">Notification Types</h3>
-      <div class="space-y-3">
+      <div class="page-enter space-y-3">
         {#each notificationTypes as nt (nt.key)}
           <div class="flex items-center justify-between py-2">
             <div>

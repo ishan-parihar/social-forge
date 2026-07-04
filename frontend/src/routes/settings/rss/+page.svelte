@@ -6,6 +6,7 @@
   import { rssApi, type RssFeed, type RssFeedItem } from '$lib/api/rss';
   import RssFeedForm from '$lib/rss/RssFeedForm.svelte';
   import RssFeedCard from '$lib/rss/RssFeedCard.svelte';
+  import { toast } from "$lib/stores/toast";
 
   let feeds = $state<RssFeed[]>([]);
   let loading = $state(true);
@@ -92,7 +93,7 @@
   }
 </script>
 
-<div class="space-y-6">
+<div class="page-enter space-y-6">
   <div class="flex items-center justify-between">
     <div>
       <h2 class="text-xl font-semibold">RSS Autopost</h2>
@@ -121,7 +122,7 @@
       <p class="text-[#6b7280] text-sm">No RSS feeds configured. Add a feed to automatically post new content.</p>
     </div>
   {:else}
-    <div class="space-y-3">
+    <div class="page-enter space-y-3">
       {#each feeds as feed (feed.id)}
         <RssFeedCard
           {feed}
@@ -146,7 +147,7 @@
   {:else if items.length === 0}
     <p class="text-sm text-[#6b7280]">No items found for this feed.</p>
   {:else}
-    <div class="space-y-2 max-h-96 overflow-y-auto">
+    <div class="page-enter space-y-2 max-h-96 overflow-y-auto">
       {#each items as item (item.guid)}
         <div class="bg-[#0b0e14] border border-[#1e2435] rounded-lg p-3 space-y-1">
           <div class="flex items-start justify-between gap-2">

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { toast } from "$lib/stores/toast";
   import { onMount } from 'svelte';
   import Button from '$lib/ui/Button.svelte';
   import Modal from '$lib/ui/Modal.svelte';
@@ -122,7 +123,7 @@
   }
 </script>
 
-<div class="space-y-6">
+<div class="page-enter space-y-6">
   <div>
     <h2 class="text-xl font-semibold">Developer Portal</h2>
     <p class="text-sm text-[#6b7280] mt-1">Manage API keys for programmatic access and configure outgoing webhooks.</p>
@@ -148,7 +149,7 @@
 
   {#if activeTab === 'keys'}
     <!-- ═══════ API KEYS TAB ═══════ -->
-    <div class="space-y-4">
+    <div class="page-enter space-y-6">
       {#if keysError}
         <div class="bg-[#131720] border border-red-500/30 rounded-xl p-4 text-sm text-red-400">
           {keysError}

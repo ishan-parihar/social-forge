@@ -57,7 +57,7 @@
   }
 </script>
 
-<div class="max-w-2xl mx-auto space-y-6">
+<div class="page-enter page-enter max-w-2xl mx-auto space-y-6">
   <button onclick={() => goto("/posts")} class="text-sm text-[#6b7280] hover:text-white">&larr; Back to posts</button>
 
   {#if error}

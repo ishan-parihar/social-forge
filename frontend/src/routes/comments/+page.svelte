@@ -62,7 +62,7 @@
   onMount(load);
 </script>
 
-<div class="space-y-4">
+<div class="page-enter space-y-6">
   <div class="flex items-center justify-between">
     <h2 class="text-xl font-semibold">Comments</h2>
     <button onclick={load} class="px-3 py-1.5 text-sm text-[#6b7280] hover:text-white border border-[#1e2435] rounded-lg transition-colors">↻ Refresh</button>

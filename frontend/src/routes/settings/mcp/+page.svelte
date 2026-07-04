@@ -24,7 +24,7 @@ social-forge linkedin profile        # View LinkedIn profile`;
   }
 </script>
 
-<div class="space-y-6">
+<div class="page-enter space-y-6">
   <h2 class="text-xl font-semibold">MCP & CLI Configuration</h2>
 
   <!-- MCP Configuration -->

@@ -104,7 +104,7 @@
   onMount(loadTags);
 </script>
 
-<div class="max-w-2xl mx-auto space-y-6">
+<div class="page-enter page-enter max-w-2xl mx-auto space-y-6">
   <h2 class="text-xl font-semibold">Manage Tags</h2>
 
   {#if error}
@@ -170,7 +170,7 @@
         No tags yet. Create one above.
       </div>
     {:else}
-      <div class="space-y-2">
+      <div class="page-enter space-y-2">
         {#each tags as tag (tag.id)}
           <div class="flex items-center gap-3 px-3 py-2 rounded-lg border border-[#1e2435] hover:bg-[#1a1f2e] transition-colors">
             {#if editingId === tag.id}

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { toast } from "$lib/stores/toast";
   import { onMount } from 'svelte';
   import Button from '$lib/ui/Button.svelte';
   import Spinner from '$lib/ui/Spinner.svelte';
@@ -127,7 +128,7 @@
   }
 </script>
 
-<div class="space-y-6">
+<div class="page-enter space-y-6">
   <div>
     <h2 class="text-xl font-semibold">Signatures</h2>
     <p class="text-sm text-[#6b7280] mt-1">Create reusable signature blocks that you can insert into posts.</p>
@@ -199,12 +200,12 @@
       <p class="text-[#6b7280] text-sm">No signatures yet. Create one to quickly insert reusable content into your posts.</p>
     </div>
   {:else}
-    <div class="space-y-3">
+    <div class="page-enter space-y-3">
       {#each signatures as sig (sig.id)}
         <div class="bg-[#131720] border border-[#1e2435] rounded-xl p-4">
           {#if editing === sig.id}
             <!-- Inline edit -->
-            <div class="space-y-3">
+            <div class="page-enter space-y-3">
               <div>
                 <label for="edit-name-{sig.id}" class="text-xs text-[#6b7280] block mb-1">Name</label>
                 <input

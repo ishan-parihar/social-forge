@@ -87,7 +87,7 @@
 
 </script>
 
-<div class="space-y-5">
+<div class="page-enter space-y-6">
   <div class="flex items-center justify-between">
     <h2 class="text-xl font-semibold text-[#e8edf5]">Media Library</h2>
     <label class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm cursor-pointer transition-colors disabled:opacity-50" class:opacity-50={uploading}>

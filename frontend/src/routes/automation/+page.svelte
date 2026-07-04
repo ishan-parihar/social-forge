@@ -112,7 +112,7 @@
   onMount(load);
 </script>
 
-<div class="space-y-4">
+<div class="page-enter space-y-6">
   <div class="flex items-center justify-between">
     <h2 class="text-xl font-semibold">Automation Rules</h2>
     <button onclick={openCreate} class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm transition-colors">+ New Rule</button>

@@ -149,7 +149,7 @@
   onMount(load);
 </script>
 
-<div class="space-y-4">
+<div class="page-enter space-y-6">
   <div class="flex items-center justify-between">
     <h2 class="text-xl font-semibold">Direct Messages</h2>
     <div class="flex gap-2 items-center">
@@ -219,7 +219,7 @@
           <div class="flex-1 overflow-y-auto p-4 space-y-3">
             {#each selected.messages as msg (msg.id)}
               <div class="flex {msg.is_mine ? 'justify-end' : 'justify-start'}">
-                <div class="max-w-[70%] {msg.is_mine ? 'bg-indigo-600/30' : 'bg-[#1e2435]'} rounded-xl px-3 py-2">
+                <div class="page-enter max-w-[70%] {msg.is_mine ? 'bg-indigo-600/30' : 'bg-[#1e2435]'} rounded-xl px-3 py-2">
                   <p class="text-sm">{msg.text}</p>
                   <span class="text-[10px] text-[#6b7280]">{new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
                 </div>

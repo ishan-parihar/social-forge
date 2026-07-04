@@ -303,7 +303,7 @@
   });
 </script>
 
-<div class="space-y-6">
+<div class="page-enter space-y-6">
   <h2 class="text-xl font-semibold">Channel Management</h2>
 
   <!-- Connected channels -->
@@ -319,7 +319,7 @@
       {#each [...groups.entries()] as [name, ints] (name)}
         <div class="mb-4 last:mb-0">
           <div class="text-xs text-[#6b7280] px-1 mb-1">{name} ({ints.length})</div>
-          <div class="space-y-0.5">
+          <div class="page-enter space-y-0.5">
             {#each ints as int (int.id)}
               <ChannelCard
                 integration={int}
@@ -480,7 +480,7 @@
       {@const parts = (onboardDialog.instructions ?? "").split("\n")}
       {@const botUsername = parts[0] ?? ""}
       {@const connectCmd = parts[1] ?? ""}
-      <div class="space-y-3 mb-4">
+      <div class="page-enter space-y-3 mb-4">
         <p class="text-sm text-[#6b7280]">1. Open this bot in Telegram:</p>
         <a href="https://t.me/{botUsername.replace('@','')}" target="_blank" class="block text-center text-indigo-400 hover:text-indigo-300 font-medium">{botUsername}</a>
         <p class="text-sm text-[#6b7280]">2. Send this command to the bot or any group/channel it's in:</p>

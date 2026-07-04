@@ -145,7 +145,7 @@
   });
 </script>
 
-<div class="page-enter space-y-5">
+<div class="page-enter space-y-6">
   <!-- Header -->
   <div class="flex items-center justify-between">
     <div>

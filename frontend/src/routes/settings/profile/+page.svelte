@@ -91,7 +91,7 @@
   onMount(loadProfile);
 </script>
 
-<div class="page-enter space-y-5">
+<div class="page-enter space-y-6">
   <div class="flex items-center justify-between">
     <div>
       <h2 class="text-xl font-semibold">Brand Profile</h2>

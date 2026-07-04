@@ -297,7 +297,7 @@
   }
 </script>
 
-<div class="max-w-4xl mx-auto space-y-6">
+<div class="page-enter page-enter max-w-4xl mx-auto space-y-6">
   {#if showRestorePrompt}
     <div class="bg-indigo-500/10 border border-indigo-500/30 rounded-lg p-3 flex items-center justify-between">
       <span class="text-sm text-indigo-300">You have an unsaved draft. Restore it?</span>
@@ -411,7 +411,7 @@
     <div class="bg-[#131720] border border-[#1e2435] rounded-xl p-4">
       <h3 class="text-sm font-semibold mb-3">Platform-Specific Content</h3>
       <p class="text-xs text-[#6b7280] mb-3">Customize content for each platform.</p>
-      <div class="space-y-2">
+      <div class="page-enter space-y-2">
         {#each selectedIntegrations as intId, i}
           <div class="border border-[#1e2435] rounded-lg">
             <button
