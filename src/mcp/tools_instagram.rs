@@ -551,3 +551,89 @@ pub async fn handle_ig_get_messages(
     }).collect();
     Ok(Json(serde_json::json!({ "data": msg_values })))
 }
+// ── Unified Instagram Post (create + poll + publish in one call) ──
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct IgPostInput {
+    /// Instagram account ID (the integration's internal_id)
+    pub ig_id: String,
+    /// Caption for the post
+    pub caption: String,
+    /// URL of the image or video to post. Use media_upload_from_path first
+    /// to upload a local file, then pass the returned URL here.
+    pub media_url: String,
+    /// Media type: "IMAGE", "VIDEO", or "REELS" (for Instagram Reels).
+    #[serde(default = "default_media_type")]
+    pub media_type: String,
+}
+
+fn default_media_type() -> String { "IMAGE".into() }
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct IgPostOutput {
+    pub media_id: String,
+    pub permalink: Option<String>,
+    pub status: String,
+}
+
+/// Create and publish an Instagram media post in a single call.
+/// Handles the full container flow internally: create container → poll
+/// for processing completion → publish. This is the simplest way for AI
+/// agents to post to Instagram.
+pub async fn handle_ig_post(
+    state: &AppState,
+    input: &IgPostInput,
+) -> Result<Json<IgPostOutput>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let token = find_instagram_token(state, user_id, &input.ig_id).await?;
+    let provider = create_provider(state);
+
+    // Step 1: Create container
+    let container = provider
+        .create_ig_container(&token, &input.ig_id, &input.media_type, &input.media_url, &input.caption)
+        .await
+        .map_err(|e| format!("Instagram create container failed: {e}"))?;
+
+    let creation_id = container["id"]
+        .as_str()
+        .ok_or_else(|| "Container creation returned no ID".to_string())?
+        .to_string();
+
+    // Step 2: Poll for processing (VIDEO/REELS need processing time)
+    if input.media_type == "VIDEO" || input.media_type == "REELS" {
+        let max_polls = 10u32;
+        let poll_interval = std::time::Duration::from_secs(3);
+        for _ in 0..max_polls {
+            tokio::time::sleep(poll_interval).await;
+            let status = provider
+                .poll_container_status(&token, &creation_id)
+                .await
+                .map_err(|e| format!("Instagram poll container failed: {e}"))?;
+            // poll_container_status returns a status string like "FINISHED"
+            if status.contains("FINISHED") {
+                break;
+            }
+        }
+    }
+
+    // Step 3: Publish
+    let result = provider
+        .publish_ig_container(&token, &input.ig_id, &creation_id)
+        .await
+        .map_err(|e| format!("Instagram publish container failed: {e}"))?;
+
+    let media_id = result["media_id"]
+        .as_str()
+        .or_else(|| result["id"].as_str())
+        .unwrap_or("")
+        .to_string();
+    let permalink = result["permalink"]
+        .as_str()
+        .map(|s| s.to_string());
+
+    Ok(Json(IgPostOutput {
+        media_id,
+        permalink,
+        status: "published".into(),
+    }))
+}

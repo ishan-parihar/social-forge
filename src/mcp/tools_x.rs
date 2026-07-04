@@ -9,6 +9,7 @@ use uuid::Uuid;
 use crate::api::AppState;
 use crate::crypto;
 use crate::social::x::XProvider;
+use crate::social::SocialProvider;
 use super::auth::resolve_first_user;
 
 // ── Input/Output Types ──────────────────────────────────────
@@ -579,6 +580,64 @@ pub struct XReplyTweetOutput {
     pub url: Option<String>,
 }
 
+// ── Create Tweet ─────────────────────────────────────────────
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct XCreateTweetInput {
+    /// The text content of the tweet (max 280 chars for standard, 4000 for premium)
+    pub content: String,
+    /// Optional media URLs (images/videos) to attach. Use media_upload first to get URLs.
+    #[serde(default)]
+    pub media_urls: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct XCreateTweetOutput {
+    pub tweet_id: String,
+    pub url: Option<String>,
+    pub status: String,
+}
+
+/// Create and immediately publish a new tweet on X/Twitter.
+/// For media tweets, first upload via media_upload_from_path or media_upload,
+/// then pass the returned URLs in media_urls.
+pub async fn x_create_tweet(
+    state: &AppState,
+    input: &XCreateTweetInput,
+) -> Result<Json<XCreateTweetOutput>, String> {
+    let user_id = resolve_first_user(state).await?;
+    let (token, _my_id) = find_x_token(state, user_id).await?;
+    let provider = create_provider(state, &token);
+
+    let media: Vec<crate::social::MediaAttachment> = input
+        .media_urls
+        .iter()
+        .map(|url| crate::social::MediaAttachment {
+            url: url.clone(),
+            mime_type: "image/jpeg".to_string(), // X auto-detects from URL
+            alt: None,
+            poster_url: None,
+        })
+        .collect();
+
+    let post_content = crate::social::PostContent {
+        content: input.content.clone(),
+        media,
+        settings: serde_json::json!({}),
+    };
+
+    let result = provider
+        .publish(&token, &post_content)
+        .await
+        .map_err(|e| format!("Failed to create tweet: {e}"))?;
+
+    Ok(Json(XCreateTweetOutput {
+        tweet_id: result.platform_post_id,
+        url: result.platform_post_url,
+        status: result.status,
+    }))
+}
+
 pub async fn x_reply_tweet(
     state: &AppState,
     input: &XReplyTweetInput,
@@ -700,4 +759,69 @@ pub async fn x_get_dm_conversation(
         })
     }).collect();
     Ok(Json(XGetDmConversationOutput { messages: msg_values }))
+}
+
+// ── Analytics ────────────────────────────────────────────────
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct XGetAnalyticsInput {
+    /// Number of days of analytics to retrieve (default 30)
+    #[serde(default = "default_days")]
+    pub days: u32,
+}
+
+fn default_days() -> u32 { 30 }
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct XGetAnalyticsOutput {
+    pub data: serde_json::Value,
+}
+
+/// Get account-level analytics for the authenticated X/Twitter user
+/// (followers, following, tweet count, etc.)
+pub async fn x_get_analytics(
+    state: &AppState,
+    input: &XGetAnalyticsInput,
+) -> Result<Json<XGetAnalyticsOutput>, String> {
+    let user_id = resolve_first_user(state).await?;
+    let (token, my_id) = find_x_token(state, user_id).await?;
+    let provider = create_provider(state, &token);
+
+    let analytics = provider
+        .analytics(&token, &my_id, input.days)
+        .await
+        .map_err(|e| format!("X analytics failed: {e}"))?;
+
+    Ok(Json(XGetAnalyticsOutput {
+        data: serde_json::to_value(&analytics).unwrap_or(serde_json::Value::Null),
+    }))
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct XGetPostAnalyticsInput {
+    pub tweet_id: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct XGetPostAnalyticsOutput {
+    pub data: serde_json::Value,
+}
+
+/// Get engagement metrics (likes, retweets, replies, impressions) for a specific tweet.
+pub async fn x_get_post_analytics(
+    state: &AppState,
+    input: &XGetPostAnalyticsInput,
+) -> Result<Json<XGetPostAnalyticsOutput>, String> {
+    let user_id = resolve_first_user(state).await?;
+    let (token, _) = find_x_token(state, user_id).await?;
+    let provider = create_provider(state, &token);
+
+    let analytics = provider
+        .post_analytics(&token, &input.tweet_id)
+        .await
+        .map_err(|e| format!("X post analytics failed: {e}"))?;
+
+    Ok(Json(XGetPostAnalyticsOutput {
+        data: serde_json::to_value(&analytics).unwrap_or(serde_json::Value::Null),
+    }))
 }

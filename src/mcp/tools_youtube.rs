@@ -279,3 +279,74 @@ pub async fn handle_yt_reply_comment(
         }
     })))
 }
+
+// ── Upload Video ─────────────────────────────────────────────
+
+use super::auth::resolve_first_user;
+use crate::social::SocialProvider;
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct YtUploadVideoInput {
+    /// YouTube channel ID (the integration's internal_id)
+    pub channel_id: String,
+    /// Video title (max 100 chars)
+    pub title: String,
+    /// Video description
+    pub description: String,
+    /// URL of the video file to upload. Use media_upload_from_path first
+    /// to upload a local file, then pass the returned URL here.
+    pub video_url: String,
+    /// MIME type of the video (e.g. "video/mp4"). Defaults to "video/*" if empty.
+    #[serde(default)]
+    pub mime_type: String,
+    /// Privacy status: "private", "public", or "unlisted". Defaults to "private".
+    #[serde(default)]
+    pub privacy_status: Option<String>,
+}
+
+/// Upload and publish a video to YouTube immediately. Uses YouTube's
+/// resumable upload API. The video_url must be a publicly accessible URL
+/// or a local media URL returned by media_upload_from_path.
+pub async fn handle_yt_upload_video(
+    state: &AppState,
+    input: &YtUploadVideoInput,
+) -> Result<Json<serde_json::Value>, String> {
+    let user_id = resolve_first_user(state).await?;
+    let token = find_yt_token(state, user_id, &input.channel_id).await?;
+    let provider = create_yt_provider(state);
+
+    let mut settings = serde_json::json!({});
+    if let Some(ref privacy) = input.privacy_status {
+        settings["privacyStatus"] = serde_json::json!(privacy);
+    } else {
+        settings["privacyStatus"] = serde_json::json!("private");
+    }
+
+    let mime = if input.mime_type.is_empty() {
+        "video/*".to_string()
+    } else {
+        input.mime_type.clone()
+    };
+
+    let post = crate::social::PostContent {
+        content: format!("{}\n\n{}", input.title, input.description),
+        media: vec![crate::social::MediaAttachment {
+            url: input.video_url.clone(),
+            mime_type: mime,
+            alt: Some(input.title.clone()),
+            poster_url: None,
+        }],
+        settings,
+    };
+
+    let result = provider
+        .publish(&token, &post)
+        .await
+        .map_err(|e| format!("YouTube video upload failed: {e}"))?;
+
+    Ok(Json(serde_json::json!({
+        "video_id": result.platform_post_id,
+        "url": result.platform_post_url,
+        "status": result.status,
+    })))
+}

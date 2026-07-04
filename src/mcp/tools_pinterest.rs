@@ -67,6 +67,19 @@ async fn find_pi_token(state: &AppState, user_id: Uuid, board_id: &str) -> Resul
         })
 }
 
+/// Find any Pinterest integration token (for create_pin where we don't
+/// need a specific board_id to look up the token).
+async fn find_pi_token_any(state: &AppState, user_id: Uuid) -> Result<String, String> {
+    let integrations = crate::db::queries::list_integrations(&state.db, user_id)
+        .await
+        .map_err(|e| format!("DB error: {e}"))?;
+    integrations
+        .iter()
+        .find(|i| i.provider_identifier == "pinterest")
+        .map(|i| crate::crypto::maybe_decrypt_token(&i.access_token, state.token_key.as_ref()))
+        .ok_or_else(|| "Pinterest account not connected. Connect it via the onboarding page first.".to_string())
+}
+
 fn create_pi_provider(state: &AppState) -> PinterestProvider {
     PinterestProvider::new(&state.config)
 }
@@ -184,4 +197,71 @@ pub async fn handle_pi_search_pins(
         .await
         .map_err(|e| format!("Pinterest search pins failed: {e}"))?;
     Ok(Json(serde_json::json!({ "data": result })))
+}
+
+// ── Create Pin ───────────────────────────────────────────────
+
+use super::auth::resolve_first_user;
+use crate::social::SocialProvider;
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct PiCreatePinInput {
+    /// Board ID to pin to
+    pub board_id: String,
+    /// Pin title
+    pub title: String,
+    /// Pin description/text content
+    pub content: String,
+    /// Image URL(s) for the pin. At least 1 required. If the URL ends in .mp4, a video pin is created.
+    #[serde(default)]
+    pub media_urls: Vec<String>,
+    /// Optional destination link
+    pub link: Option<String>,
+}
+
+/// Create and publish a new Pinterest pin immediately. Supports image pins
+/// (single or multiple images) and video pins (auto-detected from .mp4 URL).
+pub async fn handle_pi_create_pin(
+    state: &AppState,
+    input: &PiCreatePinInput,
+) -> Result<Json<serde_json::Value>, String> {
+    let user_id = resolve_first_user(state).await?;
+    let token = find_pi_token_any(state, user_id).await?;
+    let provider = create_pi_provider(state);
+
+    let media: Vec<crate::social::MediaAttachment> = input
+        .media_urls
+        .iter()
+        .map(|url| crate::social::MediaAttachment {
+            url: url.clone(),
+            mime_type: if url.ends_with(".mp4") { "video/mp4".into() } else { "image/jpeg".into() },
+            alt: Some(input.title.clone()),
+            poster_url: None,
+        })
+        .collect();
+
+    let mut settings = serde_json::json!({
+        "board": input.board_id,
+        "title": input.title,
+    });
+    if let Some(ref link) = input.link {
+        settings["link"] = serde_json::json!(link);
+    }
+
+    let post = crate::social::PostContent {
+        content: input.content.clone(),
+        media,
+        settings,
+    };
+
+    let result = provider
+        .publish(&token, &post)
+        .await
+        .map_err(|e| format!("Pinterest create pin failed: {e}"))?;
+
+    Ok(Json(serde_json::json!({
+        "pin_id": result.platform_post_id,
+        "url": result.platform_post_url,
+        "status": result.status,
+    })))
 }

@@ -799,6 +799,30 @@ impl SocialForgeMcpServer {
         tools_x::x_list_timeline(&self.state, &params.0).await
     }
 
+    #[tool(description = "Create and immediately publish a new tweet on X/Twitter. For media tweets, first upload via media_upload_from_path, then pass returned URLs in media_urls.")]
+    async fn x_create_tweet(
+        &self,
+        params: Parameters<tools_x::XCreateTweetInput>,
+    ) -> Result<Json<tools_x::XCreateTweetOutput>, String> {
+        tools_x::x_create_tweet(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get account-level analytics for the authenticated X/Twitter user (followers, following, tweet count)")]
+    async fn x_get_analytics(
+        &self,
+        params: Parameters<tools_x::XGetAnalyticsInput>,
+    ) -> Result<Json<tools_x::XGetAnalyticsOutput>, String> {
+        tools_x::x_get_analytics(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get engagement metrics (likes, retweets, replies, impressions) for a specific tweet")]
+    async fn x_get_post_analytics(
+        &self,
+        params: Parameters<tools_x::XGetPostAnalyticsInput>,
+    ) -> Result<Json<tools_x::XGetPostAnalyticsOutput>, String> {
+        tools_x::x_get_post_analytics(&self.state, &params.0).await
+    }
+
     #[tool(description = "Reply to an X/Twitter tweet")]
     async fn x_reply_tweet(
         &self,
@@ -1116,6 +1140,14 @@ impl SocialForgeMcpServer {
         tools_instagram::handle_ig_get_messages(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
+    #[tool(description = "Create and publish an Instagram media post in a single call. Handles the full container flow internally (create + poll + publish). Pass ig_id, caption, media_url, and media_type (IMAGE/VIDEO/REELS).")]
+    pub async fn ig_post(
+        &self,
+        params: Parameters<tools_instagram::IgPostInput>,
+    ) -> Result<Json<tools_instagram::IgPostOutput>, String> {
+        tools_instagram::handle_ig_post(&self.state, &params.0).await
+    }
+
     // ── Instagram Standalone (Basic Display API) Tools ─────────────────
 
     #[tool(description = "Get Instagram media feed for a")]
@@ -1255,6 +1287,14 @@ impl SocialForgeMcpServer {
         params: Parameters<tools_youtube::YtReplyCommentInput>,
     ) -> Result<Json<McpJsonValue>, String> {
         tools_youtube::handle_yt_reply_comment(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Upload and publish a video to YouTube immediately. Uses YouTube's resumable upload API. Pass video_url (from media_upload), title, description, and channel_id.")]
+    pub async fn yt_upload_video(
+        &self,
+        params: Parameters<tools_youtube::YtUploadVideoInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_youtube::handle_yt_upload_video(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get Gmail profile info")]
@@ -1463,6 +1503,14 @@ impl SocialForgeMcpServer {
         params: Parameters<tools_pinterest::PiSearchPinsInput>,
     ) -> Result<Json<McpJsonValue>, String> {
         tools_pinterest::handle_pi_search_pins(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Create and publish a new Pinterest pin immediately. Supports image and video pins. Pass board_id, title, content, and media_urls.")]
+    pub async fn pi_create_pin(
+        &self,
+        params: Parameters<tools_pinterest::PiCreatePinInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_pinterest::handle_pi_create_pin(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     // ── Discord Tools ───────────────────────────────────────────
