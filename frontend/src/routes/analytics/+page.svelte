@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "$lib/ui/Icon.svelte";
   import { analyticsApi, type AnalyticsSummary } from '$lib/api/analytics';
   import { postsApi, type PostSummary } from '$lib/api/posts';
   import DateRangePicker from '$lib/analytics/DateRangePicker.svelte';
@@ -155,7 +156,7 @@
       <div class="grid grid-cols-3 gap-4">
         <div class="stat-card bg-[#131720] border border-[#1e2435] rounded-xl p-4 bg-pink-500/5">
           <div class="flex items-center gap-2">
-            <span class="text-lg">❤️</span>
+            <Icon name="heart" class="w-4 h-4 text-pink-400" />
             <div>
               <div class="text-xl font-bold text-pink-400">{totalEngagement.likes.toLocaleString()}</div>
               <div class="text-[10px] text-[#6b7280] uppercase tracking-wider">Total Likes</div>
@@ -164,7 +165,7 @@
         </div>
         <div class="stat-card bg-[#131720] border border-[#1e2435] rounded-xl p-4 bg-blue-500/5">
           <div class="flex items-center gap-2">
-            <span class="text-lg">💬</span>
+            <Icon name="comment-bubble" class="w-4 h-4 text-blue-400" />
             <div>
               <div class="text-xl font-bold text-blue-400">{totalEngagement.comments.toLocaleString()}</div>
               <div class="text-[10px] text-[#6b7280] uppercase tracking-wider">Total Comments</div>
@@ -173,7 +174,7 @@
         </div>
         <div class="stat-card bg-[#131720] border border-[#1e2435] rounded-xl p-4 bg-green-500/5">
           <div class="flex items-center gap-2">
-            <span class="text-lg">🔁</span>
+            <Icon name="share" class="w-4 h-4 text-green-400" />
             <div>
               <div class="text-xl font-bold text-green-400">{totalEngagement.shares.toLocaleString()}</div>
               <div class="text-[10px] text-[#6b7280] uppercase tracking-wider">Total Shares</div>
@@ -251,13 +252,13 @@
                   <div class="flex gap-3 mt-1 text-[10px] text-[#6b7280]">
                     <span>{post.integration_name}</span>
                     {#if post.likes != null && post.likes > 0}
-                      <span class="text-pink-400">❤️ {post.likes}</span>
+                      <span class="flex items-center gap-0.5 text-pink-400"><Icon name="heart" class="w-3 h-3" /> {post.likes}</span>
                     {/if}
                     {#if post.comments != null && post.comments > 0}
-                      <span class="text-blue-400">💬 {post.comments}</span>
+                      <span class="flex items-center gap-0.5 text-blue-400"><Icon name="comment-bubble" class="w-3 h-3" /> {post.comments}</span>
                     {/if}
                     {#if post.shares != null && post.shares > 0}
-                      <span class="text-green-400">🔁 {post.shares}</span>
+                      <span class="flex items-center gap-0.5 text-green-400"><Icon name="share" class="w-3 h-3" /> {post.shares}</span>
                     {/if}
                   </div>
                 </div>

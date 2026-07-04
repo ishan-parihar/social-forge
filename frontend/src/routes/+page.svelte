@@ -6,6 +6,7 @@
   import { formatDateTime } from '$lib/calendar/utils';
   import { goto } from '$app/navigation';
   import { realtime } from '$lib/stores/realtime';
+  import Icon from '$lib/ui/Icon.svelte';
 
   let upcoming = $state<PostSummary[]>([]);
   let recentPublished = $state<PostSummary[]>([]);
@@ -78,10 +79,10 @@
 
   function providerIcon(p: string): string {
     const icons: Record<string, string> = {
-      x: '𝕏', reddit: '𝗥', linkedin: 'in', facebook: 'f',
-      instagram: '📷', youtube: '▶', bluesky: '☁', mastodon: '🐘',
-      pinterest: '📌', tiktok: '🎵', threads: '🧵', discord: '🎮',
-      slack: '💬', 'telegram-bot': '✈', 'telegram-user': '✈', whatsapp: '📱',
+      x: 'X', reddit: 'R', linkedin: 'in', facebook: 'f',
+      instagram: 'IG', youtube: 'YT', bluesky: 'BS', mastodon: 'MA',
+      pinterest: 'PIN', tiktok: 'TT', threads: 'TH', discord: 'DC',
+      slack: 'SL', 'telegram-bot': 'TG', 'telegram-user': 'TG', whatsapp: 'WA',
     };
     return icons[p] || '•';
   }
@@ -116,7 +117,7 @@
         + New Post
       </button>
       <button onclick={() => goto('/analytics')} class="px-4 py-2 bg-[#1a1f2e] hover:bg-[#1e2435] border border-[#1e2435] rounded-lg text-sm transition-colors">
-        📊 Analytics
+        <Icon name="analytics" class="w-4 h-4 inline" /> Analytics
       </button>
     </div>
   </div>
@@ -143,7 +144,7 @@
       <div class="grid grid-cols-3 gap-4">
         <div class="stat-card bg-[#131720] border border-[#1e2435] rounded-xl p-4">
           <div class="flex items-center gap-2">
-            <span class="text-lg">❤️</span>
+            <Icon name="heart" class="w-4 h-4 text-pink-400" />
             <div>
               <div class="text-xl font-bold text-pink-400">{totalEngagement.likes.toLocaleString()}</div>
               <div class="text-[10px] text-[#6b7280] uppercase tracking-wider">Likes (7d)</div>
@@ -152,7 +153,7 @@
         </div>
         <div class="stat-card bg-[#131720] border border-[#1e2435] rounded-xl p-4">
           <div class="flex items-center gap-2">
-            <span class="text-lg">💬</span>
+            <Icon name="comment-bubble" class="w-4 h-4 text-blue-400" />
             <div>
               <div class="text-xl font-bold text-blue-400">{totalEngagement.comments.toLocaleString()}</div>
               <div class="text-[10px] text-[#6b7280] uppercase tracking-wider">Comments (7d)</div>
@@ -161,7 +162,7 @@
         </div>
         <div class="stat-card bg-[#131720] border border-[#1e2435] rounded-xl p-4">
           <div class="flex items-center gap-2">
-            <span class="text-lg">🔁</span>
+            <Icon name="share" class="w-4 h-4 text-green-400" />
             <div>
               <div class="text-xl font-bold text-green-400">{totalEngagement.shares.toLocaleString()}</div>
               <div class="text-[10px] text-[#6b7280] uppercase tracking-wider">Shares (7d)</div>
@@ -266,13 +267,13 @@
                 <span class="flex-1 text-sm truncate text-[#d1d5db]">{post.content || post.title || '(no content)'}</span>
                 <div class="flex gap-2 text-[10px] text-[#6b7280]">
                   {#if post.likes != null && post.likes > 0}
-                    <span>❤️ {post.likes}</span>
+                    <span class="flex items-center gap-0.5"><Icon name="heart" class="w-3 h-3 text-pink-400" /> {post.likes}</span>
                   {/if}
                   {#if post.comments != null && post.comments > 0}
-                    <span>💬 {post.comments}</span>
+                    <span class="flex items-center gap-0.5"><Icon name="comment-bubble" class="w-3 h-3 text-blue-400" /> {post.comments}</span>
                   {/if}
                   {#if post.shares != null && post.shares > 0}
-                    <span>🔁 {post.shares}</span>
+                    <span class="flex items-center gap-0.5"><Icon name="share" class="w-3 h-3 text-green-400" /> {post.shares}</span>
                   {/if}
                 </div>
               </div>
@@ -285,16 +286,16 @@
     <!-- Quick Actions -->
     <div class="flex gap-3 flex-wrap">
       <button onclick={() => goto('/posts/new')} class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm font-medium transition-colors">
-        ✍️ Compose Post
+        <Icon name="post" class="w-4 h-4 inline" /> Compose Post
       </button>
       <button onclick={() => goto('/feed')} class="px-4 py-2 bg-[#1a1f2e] hover:bg-[#1e2435] border border-[#1e2435] rounded-lg text-sm transition-colors">
-        📰 View Feed
+        <Icon name="feed" class="w-4 h-4 inline" /> View Feed
       </button>
       <button onclick={() => goto('/channels')} class="px-4 py-2 bg-[#1a1f2e] hover:bg-[#1e2435] border border-[#1e2435] rounded-lg text-sm transition-colors">
-        🔗 Manage Channels
+        <Icon name="channel" class="w-4 h-4 inline" /> Manage Channels
       </button>
       <button onclick={() => goto('/analytics')} class="px-4 py-2 bg-[#1a1f2e] hover:bg-[#1e2435] border border-[#1e2435] rounded-lg text-sm transition-colors">
-        📊 View Analytics
+        <Icon name="analytics" class="w-4 h-4 inline" /> View Analytics
       </button>
     </div>
   {/if}

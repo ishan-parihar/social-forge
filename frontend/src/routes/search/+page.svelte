@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "$lib/ui/Icon.svelte";
   import { onMount } from "svelte";
   import { feedApi, proxyMediaUrl, type FeedPost, type FeedAccount } from "$lib/api/feed";
   import { toast } from "$lib/stores/toast";
@@ -156,7 +157,7 @@
       disabled={importing}
       class="px-3 py-1.5 text-sm bg-[#1a1f2e] hover:bg-[#1e2435] border border-[#1e2435] rounded-lg transition-colors disabled:opacity-50"
     >
-      {importing ? "Importing..." : "↻ Refresh Feed"}
+      {importing ? "Importing..." : ""}
     </button>
   </div>
 
@@ -169,7 +170,7 @@
         placeholder="Search posts, authors, hashtags..."
         class="w-full px-4 py-2.5 pl-10 bg-[#0d1117] border border-[#1e2435] rounded-lg text-sm text-[#d1d5db] placeholder-[#6b7280] focus:border-indigo-500 outline-none transition-colors"
       />
-      <span class="absolute left-3 top-1/2 -translate-y-1/2 text-[#6b7280] text-sm">🔍</span>
+      <span class="absolute left-3 top-1/2 -translate-y-1/2 text-[#6b7280]"><Icon name="search" class="w-4 h-4" /></span>
     </div>
     <button
       onclick={() => showSaveDialog = true}
@@ -177,7 +178,7 @@
       class="px-3 py-2 text-sm bg-[#1a1f2e] hover:bg-[#1e2435] border border-[#1e2435] rounded-lg transition-colors disabled:opacity-30"
       title="Save this search"
     >
-      🔖 Save
+      <Icon name="bookmark" class="w-3.5 h-3.5 inline" /> Save
     </button>
   </div>
 
@@ -231,7 +232,7 @@
     </div>
   {:else if filteredPosts.length === 0}
     <div class="text-center py-16">
-      <span class="text-3xl">🔍</span>
+      <Icon name="search" class="w-8 h-8 text-[#6b7280]" />
       <p class="text-[#d1d5db] mt-3 mb-1">
         {#if posts.length === 0}
           No feed data yet. Click "Refresh Feed" to import posts from your connected accounts.

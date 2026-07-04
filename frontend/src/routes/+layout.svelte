@@ -3,6 +3,7 @@
   import { realtime } from '$lib/stores/realtime';
   import Toast from '$lib/components/Toast.svelte';
   import NotificationBell from '$lib/notifications/NotificationBell.svelte';
+  import Icon from '$lib/ui/Icon.svelte';
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
 
@@ -12,51 +13,51 @@
     {
       title: '',
       items: [
-        { href: '/', label: 'Dashboard', icon: '▦' },
+        { href: '/', label: 'Dashboard', icon: 'dashboard' },
       ],
     },
     {
       title: 'Publish',
       items: [
-        { href: '/calendar', label: 'Calendar', icon: '📅' },
-        { href: '/posts', label: 'Posts', icon: '📄' },
-        { href: '/media', label: 'Media', icon: '🖼' },
-        { href: '/tags', label: 'Tags', icon: '🏷' },
+        { href: '/calendar', label: 'Calendar', icon: 'calendar' },
+        { href: '/posts', label: 'Posts', icon: 'post' },
+        { href: '/media', label: 'Media', icon: 'media' },
+        { href: '/tags', label: 'Tags', icon: 'tag' },
       ],
     },
     {
       title: 'Engage',
       items: [
-        { href: '/feed', label: 'Feed', icon: '📰' },
-        { href: '/comments', label: 'Comments', icon: '💬' },
-        { href: '/dms', label: 'DMs', icon: '✉' },
-        { href: '/automation', label: 'Automation', icon: '⚡' },
+        { href: '/feed', label: 'Feed', icon: 'feed' },
+        { href: '/comments', label: 'Comments', icon: 'comment' },
+        { href: '/dms', label: 'DMs', icon: 'dm' },
+        { href: '/automation', label: 'Automation', icon: 'automation' },
       ],
     },
     {
       title: 'Insights',
       items: [
-        { href: '/search', label: 'Search', icon: '🔍' },
-        { href: '/analytics', label: 'Analytics', icon: '📊' },
+        { href: '/search', label: 'Search', icon: 'search' },
+        { href: '/analytics', label: 'Analytics', icon: 'analytics' },
       ],
     },
     {
       title: 'Channels',
       items: [
-        { href: '/channels', label: 'Channels', icon: '🔗' },
+        { href: '/channels', label: 'Channels', icon: 'channel' },
       ],
     },
     {
       title: 'Settings',
       items: [
-        { href: '/settings', label: 'General', icon: '⚙' },
-        { href: '/settings/profile', label: 'Brand Profile', icon: '🎯' },
-        { href: '/settings/rss', label: 'RSS Autopost', icon: '📡' },
-        { href: '/settings/signatures', label: 'Signatures', icon: '✍' },
-        { href: '/settings/developer', label: 'Developer', icon: '🔧' },
-        { href: '/settings/webhooks', label: 'Webhooks', icon: '🪝' },
-        { href: '/settings/mcp', label: 'MCP & CLI', icon: '🤖' },
-        { href: '/settings/notifications', label: 'Notifications', icon: '🔔' },
+        { href: '/settings', label: 'General', icon: 'settings' },
+        { href: '/settings/profile', label: 'Brand Profile', icon: 'profile' },
+        { href: '/settings/rss', label: 'RSS Autopost', icon: 'rss' },
+        { href: '/settings/signatures', label: 'Signatures', icon: 'signature' },
+        { href: '/settings/developer', label: 'Developer', icon: 'developer' },
+        { href: '/settings/webhooks', label: 'Webhooks', icon: 'webhook' },
+        { href: '/settings/mcp', label: 'MCP & CLI', icon: 'mcp' },
+        { href: '/settings/notifications', label: 'Notifications', icon: 'notification' },
       ],
     },
   ];
@@ -88,12 +89,12 @@
           {/if}
           {#each section.items as item}
             <a href={item.href}
-              class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors
+              class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors duration-200 cursor-pointer
                 {$page.url.pathname === item.href
                   ? 'bg-[#1a1f2e] text-indigo-400 font-medium'
                   : 'text-[#6b7280] hover:text-[#e8edf5] hover:bg-[#1a1f2e]'}"
             >
-              <span class="w-4 h-4 flex items-center justify-center text-xs">{item.icon}</span>
+              <Icon name={item.icon} class="w-4 h-4 flex-shrink-0" />
               {item.label}
             </a>
           {/each}
