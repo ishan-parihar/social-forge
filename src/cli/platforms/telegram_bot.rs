@@ -30,9 +30,6 @@ pub async fn handle(action: TelegramBotAction, state: &AppState) -> anyhow::Resu
             crate::mcp::tools_telegram_bot::handle_tb_get_updates(state, &input).await.map(|v| serde_json::to_value(v.0).unwrap_or_default())
         }
     };
-    match result {
-        Ok(v) => println!("{}", serde_json::to_string_pretty(&v).unwrap()),
-        Err(e) => { eprintln!("{}", serde_json::json!({"error": e})); std::process::exit(1); }
-    }
-    Ok(())
+
+    super::emit_result(result)
 }

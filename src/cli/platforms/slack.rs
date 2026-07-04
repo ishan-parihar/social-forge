@@ -24,9 +24,6 @@ pub async fn handle(action: SlackAction, state: &AppState) -> anyhow::Result<()>
             crate::mcp::tools_slack::handle_sl_list_users(state, &input).await.map(|v| v.0)
         }
     };
-    match result {
-        Ok(v) => println!("{}", serde_json::to_string_pretty(&v).unwrap()),
-        Err(e) => { eprintln!("{}", serde_json::json!({"error": e})); std::process::exit(1); }
-    }
-    Ok(())
+
+    super::emit_result(result)
 }

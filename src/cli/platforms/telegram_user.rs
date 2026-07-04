@@ -20,9 +20,6 @@ pub async fn handle(action: TelegramUserAction, state: &AppState) -> anyhow::Res
             crate::mcp::tools_telegram_user::handle_tu_search(state, &input).await.map(|v| v.0.data)
         }
     };
-    match result {
-        Ok(v) => println!("{}", serde_json::to_string_pretty(&v).unwrap()),
-        Err(e) => { eprintln!("{}", serde_json::json!({"error": e})); std::process::exit(1); }
-    }
-    Ok(())
+
+    super::emit_result(result)
 }

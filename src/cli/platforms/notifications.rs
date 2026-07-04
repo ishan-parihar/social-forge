@@ -60,9 +60,6 @@ pub async fn handle(action: NotificationsAction, state: &AppState) -> anyhow::Re
             }
         }
     };
-    match result {
-        Ok(v) => println!("{}", serde_json::to_string_pretty(&v).unwrap()),
-        Err(e) => { eprintln!("{}", serde_json::json!({"error": e})); std::process::exit(1); }
-    }
-    Ok(())
+
+    super::emit_result(result)
 }

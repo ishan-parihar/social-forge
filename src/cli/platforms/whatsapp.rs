@@ -45,9 +45,6 @@ pub async fn handle(action: WhatsappAction, state: &AppState) -> anyhow::Result<
                 .map_err(|e| e.to_string())
         }
     };
-    match result {
-        Ok(v) => println!("{}", serde_json::to_string_pretty(&v).unwrap()),
-        Err(e) => { eprintln!("{}", serde_json::json!({"error": e})); std::process::exit(1); }
-    }
-    Ok(())
+
+    super::emit_result(result)
 }

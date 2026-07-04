@@ -28,9 +28,6 @@ pub async fn handle(action: DriveAction, state: &AppState) -> anyhow::Result<()>
             crate::mcp::tools_google::handle_goog_export_file(state, &input).await.map(|v| v.0)
         }
     };
-    match result {
-        Ok(v) => println!("{}", serde_json::to_string_pretty(&v).unwrap()),
-        Err(e) => { eprintln!("{}", serde_json::json!({"error": e})); std::process::exit(1); }
-    }
-    Ok(())
+
+    super::emit_result(result)
 }

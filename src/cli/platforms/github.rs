@@ -51,9 +51,6 @@ pub async fn handle(action: GithubAction, state: &AppState) -> anyhow::Result<()
             crate::mcp::tools_github::handle_gh_list_my_repos(state, &input).await.map(|v| v.0)
         }
     };
-    match result {
-        Ok(v) => println!("{}", serde_json::to_string_pretty(&v).unwrap()),
-        Err(e) => { eprintln!("{}", serde_json::json!({"error": e})); std::process::exit(1); }
-    }
-    Ok(())
+
+    super::emit_result(result)
 }
