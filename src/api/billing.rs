@@ -439,8 +439,13 @@ async fn set_subscription_plan_free(
 }
 
 // ── Handlers ──────────────────────────────────────────────────
+// Note: create_checkout_session, get_subscription, get_invoices, and
+// create_portal_session are kept for potential future Stripe billing
+// integration but are NOT mounted in the router (single-user mode).
+// Only stripe_webhook is actively routed.
 
 /// POST /api/billing/create-checkout
+#[allow(dead_code)]
 pub async fn create_checkout_session(
     auth: AuthenticatedUser,
     State(state): State<AppState>,
@@ -732,6 +737,7 @@ pub async fn stripe_webhook(
 }
 
 /// GET /api/billing/subscription
+#[allow(dead_code)]
 pub async fn get_subscription(
     auth: AuthenticatedUser,
     State(state): State<AppState>,
@@ -752,6 +758,7 @@ pub async fn get_subscription(
 }
 
 /// GET /api/billing/invoices
+#[allow(dead_code)]
 pub async fn get_invoices(
     auth: AuthenticatedUser,
     State(state): State<AppState>,
@@ -774,6 +781,7 @@ pub async fn get_invoices(
 }
 
 /// POST /api/billing/portal-session
+#[allow(dead_code)]
 pub async fn create_portal_session(
     auth: AuthenticatedUser,
     State(state): State<AppState>,
