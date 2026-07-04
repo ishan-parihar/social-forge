@@ -5,6 +5,7 @@
   import { realtime } from "$lib/stores/realtime";
   import { groupIntegrations } from "$lib/channels/group-integrations";
   import ChannelCard from "$lib/channels/ChannelCard.svelte";
+  import TimeSlotEditor from "$lib/channels/TimeSlotEditor.svelte";
   import ProviderIcon from "$lib/channels/ProviderIcon.svelte";
   import ConnectFlow from "$lib/channels/ConnectFlow.svelte";
   import { getAuthType, MULTI_AUTH_PROVIDERS } from "$lib/channels/auth-types";
@@ -58,6 +59,7 @@
   ]);
   let connecting = $state<string | null>(null);
   let connectProvider = $state<string | null>(null);
+  let scheduleIntegration = $state<{ id: string; timeslots: import("$lib/api/integrations").TimeslotEntry[] } | null>(null);
 
   let groups = $derived.by(() => groupIntegrations(integrations));
 
@@ -323,6 +325,7 @@
             {#each ints as int (int.id)}
               <ChannelCard
                 integration={int}
+                timeslots={int.posting_times?.map((t: { time: number }) => ({ time: t.time })) || []}
                 onDisconnect={disconnect}
                 onRefresh={() => handleChannelRefresh(int.id)}
                 onReconnect={() => handleReconnect(int.id)}

@@ -4,6 +4,7 @@
   import { postsApi, type PostSummary } from "$lib/api/posts";
   import { realtime } from "$lib/stores/realtime";
   import Badge from "$lib/ui/Badge.svelte";
+  import Icon from "$lib/ui/Icon.svelte";
   import { goto } from "$app/navigation";
 
   let posts = $state<PostSummary[]>([]);
@@ -13,6 +14,7 @@
   let page = $state(1);
   let totalPages = $state(1);
   let totalItems = $state(0);
+  let groupByCampaign = $state(false);
   const limit = 20;
 
   async function load() {
@@ -42,6 +44,18 @@
     load();
   }
 
+  // Campaign grouping: cluster posts by group_id
+  let campaignGroups = $derived.by(() => {
+    if (!groupByCampaign) return null;
+    const groups = new Map<string, PostSummary[]>();
+    for (const p of posts) {
+      const gid = p.group_id || 'single';
+      if (!groups.has(gid)) groups.set(gid, []);
+      groups.get(gid)!.push(p);
+    }
+    return Array.from(groups.entries()).sort((a, b) => b[1].length - a[1].length);
+  });
+
   let postsUnsubscribers: (() => void)[] = [];
 
   onMount(() => {
@@ -62,7 +76,16 @@
 <div class="page-enter space-y-6">
   <div class="flex items-center justify-between">
     <h2 class="text-xl font-semibold">Posts</h2>
-    <button onclick={() => goto("/posts/new")} class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm transition-colors">+ New Post</button>
+    <div class="flex gap-2 items-center">
+      <button
+        onclick={() => groupByCampaign = !groupByCampaign}
+        class="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-line rounded-lg transition-colors {groupByCampaign ? 'bg-indigo-600 text-white' : 'text-muted hover:bg-surface-hover'}"
+      >
+        <Icon name="analytics" class="w-3.5 h-3.5" />
+        {groupByCampaign ? 'Grouped' : 'Group by Campaign'}
+      </button>
+      <button onclick={() => goto("/posts/new")} class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm transition-colors">+ New Post</button>
+    </div>
   </div>
 
   <!-- Filter tabs -->
@@ -81,8 +104,44 @@
   {:else if loading}
     <div class="text-center py-12 text-sm text-muted">Loading...</div>
   {:else if posts.length === 0}
-    <div class="text-center py-12 text-sm text-muted">No posts found</div>
+    <div class="text-center py-12">
+      <p class="text-sm text-muted mb-3">No posts found</p>
+      <button onclick={() => goto("/posts/new")} class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm transition-colors">
+        Create your first post
+      </button>
+    </div>
+  {:else if groupByCampaign && campaignGroups}
+    <!-- Campaign grouped view -->
+    <div class="space-y-4">
+      {#each campaignGroups as [gid, groupPosts] (gid)}
+        <div class="bg-surface border border-line rounded-xl overflow-hidden">
+          <div class="px-4 py-2.5 bg-surface-hover border-b border-line flex items-center gap-2">
+            <Icon name="analytics" class="w-3.5 h-3.5 text-indigo-400" />
+            <span class="text-sm font-medium">
+              {gid === 'single' ? 'Individual Posts' : `Campaign ${gid.slice(0, 8)}`}
+            </span>
+            <span class="text-xs text-muted ml-auto">{groupPosts.length} post{groupPosts.length > 1 ? 's' : ''}</span>
+          </div>
+          {#each groupPosts as post (post.id)}
+            <button
+              onclick={() => goto(`/posts/${post.id}`)}
+              class="w-full flex items-center gap-3 px-4 py-3 border-b border-line last:border-0 hover:bg-surface-hover transition-colors text-left"
+            >
+              <div class="flex-1 min-w-0">
+                <div class="text-sm truncate">{post.content || '(no content)'}</div>
+                <div class="text-xs text-muted mt-0.5">{post.integration_name}</div>
+              </div>
+              <div class="text-xs text-muted shrink-0">
+                {post.scheduled_at ? new Date(post.scheduled_at).toLocaleDateString() : ""}
+              </div>
+              <Badge state={post.state as "draft" | "queued" | "published" | "error"} />
+            </button>
+          {/each}
+        </div>
+      {/each}
+    </div>
   {:else}
+    <!-- Flat list view -->
     <div class="bg-surface border border-line rounded-xl overflow-hidden">
       {#each posts as post (post.id)}
         <div class="flex items-center gap-3 px-4 py-3 border-b border-line last:border-0 hover:bg-surface-hover transition-colors">
@@ -91,15 +150,20 @@
             class="flex-1 flex items-center gap-4 text-left min-w-0"
           >
             <div class="flex-1 min-w-0">
-              <div class="text-sm truncate">{post.content}</div>
-              <div class="text-xs text-muted mt-0.5">{post.integration_name}</div>
+              <div class="text-sm truncate">{post.content || '(no content)'}</div>
+              <div class="text-xs text-muted mt-0.5 flex items-center gap-2">
+                {post.integration_name}
+                {#if post.group_id}
+                  <span class="text-indigo-400">Campaign {post.group_id.slice(0, 8)}</span>
+                {/if}
+              </div>
             </div>
             <div class="text-xs text-muted shrink-0">
               {post.scheduled_at ? new Date(post.scheduled_at).toLocaleDateString() : ""}
             </div>
             <Badge state={post.state as "draft" | "queued" | "published" | "error"} />
             {#if post.error_message}
-              <span role="img" aria-label={post.error_message} class="text-xs text-red-400" title={post.error_message}>⚠</span>
+              <span class="text-xs text-red-400" title={post.error_message}>!</span>
             {/if}
           </button>
         </div>
@@ -115,13 +179,13 @@
           <button
             onclick={() => handlePageChange(page - 1)}
             disabled={page <= 1}
-            class="px-3 py-1 text-sm rounded bg-[#1e2435] text-content-secondary disabled:opacity-50 hover:bg-[#2a3045] transition-colors"
-          >← Previous</button>
+            class="px-3 py-1 text-sm rounded bg-surface-hover text-content-secondary disabled:opacity-50 hover:bg-line transition-colors"
+          >Previous</button>
           <button
             onclick={() => handlePageChange(page + 1)}
             disabled={page >= totalPages}
-            class="px-3 py-1 text-sm rounded bg-[#1e2435] text-content-secondary disabled:opacity-50 hover:bg-[#2a3045] transition-colors"
-          >Next →</button>
+            class="px-3 py-1 text-sm rounded bg-surface-hover text-content-secondary disabled:opacity-50 hover:bg-line transition-colors"
+          >Next</button>
         </div>
       </div>
     {/if}

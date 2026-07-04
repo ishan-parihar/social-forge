@@ -1,9 +1,12 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { postsApi, type PostDetail } from "$lib/api/posts";
+  import { tagsApi, type Tag } from "$lib/api/tags";
+  import { toast } from "$lib/stores/toast";
   import { page } from "$app/stores";
   import { goto } from "$app/navigation";
   import Badge from "$lib/ui/Badge.svelte";
+  import Icon from "$lib/ui/Icon.svelte";
   import RichTextEditor from "$lib/composer/RichTextEditor.svelte";
 
   let post = $state<PostDetail | null>(null);
@@ -11,10 +14,46 @@
   let editContent = $state("");
   let loading = $state(true);
   let error = $state<string | null>(null);
+  let allTags = $state<Tag[]>([]);
+  let showTagPicker = $state(false);
+  let selectedTagIds = $state<string[]>([]);
+
+  async function loadTags() {
+    const r = await tagsApi.list();
+    if (r.data) allTags = r.data;
+  }
+
+  async function saveTags() {
+    if (!post) return;
+    const r = await postsApi.setTags(post.id, selectedTagIds);
+    if (r.error) {
+      toast(`Failed to save tags: ${r.error}`, "error");
+    } else {
+      toast("Tags updated", "success");
+      // Reload post to get updated tags
+      const detail = await postsApi.get(post.id);
+      if (detail.data) post = detail.data;
+      showTagPicker = false;
+    }
+  }
+
+  function openTagPicker() {
+    selectedTagIds = post?.tags?.map(t => t.id) || [];
+    showTagPicker = true;
+  }
+
+  function toggleTag(id: string) {
+    if (selectedTagIds.includes(id)) {
+      selectedTagIds = selectedTagIds.filter(t => t !== id);
+    } else {
+      selectedTagIds = [...selectedTagIds, id];
+    }
+  }
 
   onMount(async () => {
     const id = $page.params.id;
     if (!id) { loading = false; return; }
+    loadTags();
     const r = await postsApi.get(id);
     if (r.data) { post = r.data; editContent = r.data.content; }
     else error = r.error || "Failed to load post";
@@ -91,7 +130,7 @@
       </div>
 
       {#if post.tags && post.tags.length > 0}
-        <div class="flex flex-wrap gap-1.5">
+        <div class="flex flex-wrap gap-1.5 items-center">
           {#each post.tags as tag (tag.id)}
             <span
               class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs"
@@ -101,7 +140,16 @@
               {tag.name}
             </span>
           {/each}
+          <button onclick={openTagPicker} class="text-xs text-muted hover:text-indigo-400 transition-colors flex items-center gap-1">
+            <Icon name="tag" class="w-3 h-3" />
+            Edit
+          </button>
         </div>
+      {:else}
+        <button onclick={openTagPicker} class="text-xs text-muted hover:text-indigo-400 transition-colors flex items-center gap-1">
+          <Icon name="tag" class="w-3 h-3" />
+          Add Tags
+        </button>
       {/if}
 
       {#if post.scheduled_at}
@@ -157,3 +205,34 @@
     <div class="text-center py-12 text-sm text-muted">Post not found</div>
   {/if}
 </div>
+
+<!-- Tag Picker Modal -->
+{#if showTagPicker}
+  <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50" role="dialog">
+    <div class="bg-background border border-line rounded-xl p-6 w-full max-w-md">
+      <h3 class="text-lg font-semibold mb-4">Manage Tags</h3>
+      {#if allTags.length === 0}
+        <p class="text-sm text-muted py-4 text-center">No tags available. Create tags in the Tags page first.</p>
+      {:else}
+        <div class="space-y-2 max-h-60 overflow-y-auto">
+          {#each allTags as tag (tag.id)}
+            <label class="flex items-center gap-2 text-sm cursor-pointer p-2 rounded-lg hover:bg-surface-hover transition-colors">
+              <input
+                type="checkbox"
+                checked={selectedTagIds.includes(tag.id)}
+                onchange={() => toggleTag(tag.id)}
+                class="rounded"
+              />
+              <span class="w-2 h-2 rounded-full" style="background: {tag.color}"></span>
+              <span>{tag.name}</span>
+            </label>
+          {/each}
+        </div>
+      {/if}
+      <div class="flex gap-3 justify-end mt-4">
+        <button onclick={() => showTagPicker = false} class="px-4 py-2 text-sm text-muted hover:text-content">Cancel</button>
+        <button onclick={saveTags} class="px-4 py-2 text-sm bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-colors">Save Tags</button>
+      </div>
+    </div>
+  </div>
+{/if}
