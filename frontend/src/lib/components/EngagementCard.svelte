@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { EngagementMetrics } from "$lib/api/feed";
 
-  let { engagement, provider }: { engagement: EngagementMetrics; provider: string } = $props();
+  let { engagement, provider, compact = false }: { engagement: EngagementMetrics; provider: string; compact?: boolean } = $props();
 
   // Format large numbers (e.g., 1234 -> "1.2k")
   function fmt(n: number): string {
@@ -80,9 +80,9 @@
   };
 </script>
 
-<div class="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-[#1a2035]">
-    <!-- Core metrics -->
-    {#each metrics as m}
+<div class="flex flex-wrap items-center gap-2 {compact ? '' : 'mt-3 pt-3 border-t border-[#1a2035]'}">
+    <!-- Core metrics (show only top 3 in compact mode) -->
+    {#each (compact ? metrics.slice(0, 3) : metrics) as m}
       <span
         class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium
           bg-[#0d121e] text-[#9ca3af] border border-[#1a2035]

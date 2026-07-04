@@ -36,6 +36,7 @@
     {
       title: 'Insights',
       items: [
+        { href: '/search', label: 'Search', icon: '🔍' },
         { href: '/analytics', label: 'Analytics', icon: '📊' },
       ],
     },
