@@ -296,14 +296,12 @@ async fn test_whatsapp_mcp_tool_compilation() {
 
     let broadcaster = Broadcaster::new();
     let registry = ProviderRegistry::new(&config, None, None);
-    let rate_limiter = social_forge::api::rate_limiter::AuthRateLimiter::new(5, 60);
 
     let state = AppState {
         db: db.clone(),
         config: config.clone(),
         broadcast: broadcaster.clone(),
         providers: registry,
-        rate_limiter,
         token_key: None,
         telegram_client_manager: None,
         wa_client: None,
@@ -335,14 +333,12 @@ async fn test_whatsapp_mcp_handler_functions() {
 
     let broadcaster = Broadcaster::new();
     let registry = ProviderRegistry::new(&config, None, None);
-    let rate_limiter = social_forge::api::rate_limiter::AuthRateLimiter::new(5, 60);
 
     let state = AppState {
         db: db.clone(),
         config: config.clone(),
         broadcast: broadcaster.clone(),
         providers: registry,
-        rate_limiter,
         token_key: None,
         telegram_client_manager: None,
         wa_client: None,

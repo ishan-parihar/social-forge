@@ -193,14 +193,12 @@ async fn test_mcp_tools_registration() {
 
     let broadcaster = Broadcaster::new();
     let registry = Arc::new(get_registry(&config));
-    let rate_limiter = social_forge::api::rate_limiter::AuthRateLimiter::new(5, 60);
 
     let state = AppState {
         db: db.clone(),
         config: config.clone(),
         broadcast: broadcaster.clone(),
         providers: (*registry).clone(),
-        rate_limiter,
         token_key: None,
         telegram_client_manager: None,
         wa_client: None,

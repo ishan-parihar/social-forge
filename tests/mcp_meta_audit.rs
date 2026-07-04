@@ -8,7 +8,6 @@ use social_forge::db;
 use social_forge::api::AppState;
 use social_forge::realtime::Broadcaster;
 use social_forge::social::registry::ProviderRegistry;
-use social_forge::api::rate_limiter::AuthRateLimiter;
 use rmcp::Json;
 
 use social_forge::mcp::tools_facebook as fb;
@@ -29,14 +28,12 @@ async fn setup_state() -> AppState {
     
     let broadcaster = Broadcaster::new();
     let providers = ProviderRegistry::new(&config, None, None);
-    let rate_limiter = AuthRateLimiter::new(100, 60); // High limit for audit
 
     AppState {
         db,
         config,
         broadcast: broadcaster,
         providers,
-        rate_limiter,
         token_key: None,
         telegram_client_manager: None,
         wa_client: None,

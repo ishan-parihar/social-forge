@@ -641,19 +641,16 @@ async fn test_ias_mcp_tool_handler_full_chain() {
     use social_forge::api::AppState;
     use social_forge::mcp::SocialForgeMcpServer;
     use social_forge::realtime::Broadcaster;
-    use social_forge::api::rate_limiter::AuthRateLimiter;
     use social_forge::social::registry::ProviderRegistry;
 
     let registry = Arc::new(ProviderRegistry::new(&config, None, None));
     let broadcaster = Broadcaster::new();
-    let rate_limiter = AuthRateLimiter::new(5, 60);
 
     let state = AppState {
         db: db.clone(),
         config: config.clone(),
         broadcast: broadcaster.clone(),
         providers: (*registry).clone(),
-        rate_limiter,
         token_key: None,
         telegram_client_manager: None,
         wa_client: None,
@@ -694,19 +691,16 @@ async fn test_threads_mcp_tool_handler_full_chain() {
     use social_forge::api::AppState;
     use social_forge::mcp::SocialForgeMcpServer;
     use social_forge::realtime::Broadcaster;
-    use social_forge::api::rate_limiter::AuthRateLimiter;
     use social_forge::social::registry::ProviderRegistry;
 
     let registry = Arc::new(ProviderRegistry::new(&config, None, None));
     let broadcaster = Broadcaster::new();
-    let rate_limiter = AuthRateLimiter::new(5, 60);
 
     let state = AppState {
         db: db.clone(),
         config: config.clone(),
         broadcast: broadcaster.clone(),
         providers: (*registry).clone(),
-        rate_limiter,
         token_key: None,
         telegram_client_manager: None,
         wa_client: None,
@@ -747,19 +741,16 @@ async fn test_linkedin_mcp_tool_handler_full_chain() {
     use social_forge::api::AppState;
     use social_forge::mcp::SocialForgeMcpServer;
     use social_forge::realtime::Broadcaster;
-    use social_forge::api::rate_limiter::AuthRateLimiter;
     use social_forge::social::registry::ProviderRegistry;
 
     let registry = Arc::new(ProviderRegistry::new(&config, None, None));
     let broadcaster = Broadcaster::new();
-    let rate_limiter = AuthRateLimiter::new(5, 60);
 
     let state = AppState {
         db: db.clone(),
         config: config.clone(),
         broadcast: broadcaster.clone(),
         providers: (*registry).clone(),
-        rate_limiter,
         token_key: None,
         telegram_client_manager: None,
         wa_client: None,

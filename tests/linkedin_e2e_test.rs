@@ -14,7 +14,6 @@
 use std::sync::Arc;
 
 use social_forge::api::AppState;
-use social_forge::api::rate_limiter::AuthRateLimiter;
 use social_forge::config::Config;
 use social_forge::db;
 use social_forge::mcp::SocialForgeMcpServer;
@@ -42,14 +41,12 @@ async fn create_test_state(config: &Config) -> AppState {
 
     let registry = Arc::new(get_registry(config));
     let broadcaster = Broadcaster::new();
-    let rate_limiter = AuthRateLimiter::new(5, 60);
 
     AppState {
         db: db.clone(),
         config: config.clone(),
         broadcast: broadcaster.clone(),
         providers: (*registry).clone(),
-        rate_limiter,
         token_key: None,
         telegram_client_manager: None,
         wa_client: None,
