@@ -5,4 +5,4 @@
     onContentChange?: (html: string) => void;
   } = $props();
 </script>
-<CharCountEditor {content} {onContentChange} {integrationId} platformLabel="Facebook" charLimit={63206} placeholder="What's on your mind?" />
+<CharCountEditor {content} {onContentChange} {integrationId} platformLabel="TikTok" charLimit={2200} placeholder="Write your video caption..." />
