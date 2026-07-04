@@ -33,8 +33,8 @@
       const r = await tagsApi.list();
       if (r.data) tags = r.data;
       else error = r.error || 'Failed to load tags';
-    } catch (e: any) {
-      error = e.message || 'Failed to load tags';
+    } catch (e: unknown) {
+      error = (e instanceof Error ? e.message : String(e)) || 'Failed to load tags';
     }
     loading = false;
   }
@@ -51,8 +51,8 @@
       } else {
         error = r.error || 'Failed to create tag';
       }
-    } catch (e: any) {
-      error = e.message || 'Failed to create tag';
+    } catch (e: unknown) {
+      error = (e instanceof Error ? e.message : String(e)) || 'Failed to create tag';
     }
     creating = false;
   }
@@ -80,8 +80,8 @@
       } else {
         error = r.error || 'Failed to update tag';
       }
-    } catch (e: any) {
-      error = e.message || 'Failed to update tag';
+    } catch (e: unknown) {
+      error = (e instanceof Error ? e.message : String(e)) || 'Failed to update tag';
     }
     savingEdit = false;
   }
@@ -94,8 +94,8 @@
       } else {
         error = r.error || 'Failed to delete tag';
       }
-    } catch (e: any) {
-      error = e.message || 'Failed to delete tag';
+    } catch (e: unknown) {
+      error = (e instanceof Error ? e.message : String(e)) || 'Failed to delete tag';
     }
     deletingId = null;
   }

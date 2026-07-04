@@ -16,8 +16,8 @@
       const r = await tagsApi.list();
       if (r.data) tags = r.data;
       else error = r.error || 'Failed to load tags';
-    } catch (e: any) {
-      error = e.message || 'Failed to load tags';
+    } catch (e: unknown) {
+      error = (e instanceof Error ? e.message : String(e)) || 'Failed to load tags';
     }
     loading = false;
   });

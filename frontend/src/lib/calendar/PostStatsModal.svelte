@@ -82,9 +82,9 @@
         error = r.error || "No data returned";
         analyticsData = null;
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       if (e.name === "AbortError") return;
-      error = e.message || "Failed to load analytics";
+      error = (e instanceof Error ? e.message : String(e)) || "Failed to load analytics";
       analyticsData = null;
     } finally {
       if (!signal.aborted) loading = false;

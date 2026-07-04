@@ -43,17 +43,20 @@ class ApiClient {
       }
 
       const text = await res.text();
-      let data: any;
+      let data: Record<string, unknown>;
       try {
         data = text ? JSON.parse(text) : {};
       } catch {
         return { error: `Invalid JSON response from ${path}`, status: res.status };
       }
-      if (!res.ok) return { error: data.error || `HTTP ${res.status}`, status: res.status };
+      if (!res.ok) {
+        const errorMsg = typeof data.error === 'string' ? data.error : `HTTP ${res.status}`;
+        return { error: errorMsg, status: res.status };
+      }
       return { data, status: res.status };
-    } catch (e: any) {
-      if (e.name === "AbortError") return { error: "Request timed out", status: 0 };
-      return { error: e.message, status: 0 };
+    } catch (e: unknown) {
+      if (e instanceof Error && e.name === "AbortError") return { error: "Request timed out", status: 0 };
+      return { error: (e instanceof Error ? e.message : String(e)), status: 0 };
     }
   }
 

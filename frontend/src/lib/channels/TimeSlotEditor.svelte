@@ -67,8 +67,8 @@
                 success = true;
                 setTimeout(() => onclose(), 1000);
             }
-        } catch (e: any) {
-            error = e.message || "Failed to save time slots";
+        } catch (e: unknown) {
+            error = (e instanceof Error ? e.message : String(e)) || "Failed to save time slots";
         } finally {
             saving = false;
         }

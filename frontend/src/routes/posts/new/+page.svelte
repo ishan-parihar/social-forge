@@ -146,7 +146,7 @@
         integrationTargets.set(integrationId, r.data.targets);
       }
     } catch (e) {
-      toast(`Failed to fetch targets for ${integrationId}: ${e instanceof Error ? e.message : "unknown"}`, "error");
+      toast(`Failed to fetch targets for ${integrationId}: ${e instanceof Error ? (e instanceof Error ? e.message : String(e)) : "unknown"}`, "error");
     } finally {
       targetsLoading.delete(integrationId);
     }
@@ -181,8 +181,8 @@
         return;
       }
       goto("/calendar");
-    } catch (e: any) {
-      error = e.message || "Failed to create thread";
+    } catch (e: unknown) {
+      error = (e instanceof Error ? e.message : String(e)) || "Failed to create thread";
     } finally {
       submitting = false;
     }
@@ -236,8 +236,8 @@
       }
       localStorage.removeItem(DRAFT_KEY);
       goto("/calendar");
-    } catch (e: any) {
-      error = e.message || "Failed to create post";
+    } catch (e: unknown) {
+      error = (e instanceof Error ? e.message : String(e)) || "Failed to create post";
     } finally {
       submitting = false;
     }
@@ -281,8 +281,8 @@
       }
       localStorage.removeItem(DRAFT_KEY);
       goto("/calendar");
-    } catch (e: any) {
-      error = e.message || "Failed to post";
+    } catch (e: unknown) {
+      error = (e instanceof Error ? e.message : String(e)) || "Failed to post";
     } finally {
       submitting = false;
     }

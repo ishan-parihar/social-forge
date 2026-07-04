@@ -48,8 +48,8 @@
           break;
       }
       aiResult = result;
-    } catch (e: any) {
-      aiError = e.message || "AI request failed. Check that LLM-Proxy is running on port 4488.";
+    } catch (e: unknown) {
+      aiError = (e instanceof Error ? e.message : String(e)) || "AI request failed. Check that LLM-Proxy is running on port 4488.";
     } finally {
       aiLoading = false;
     }

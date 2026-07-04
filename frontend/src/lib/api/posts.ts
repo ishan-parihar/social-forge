@@ -44,7 +44,7 @@ export const postsApi = {
     return api.get<{ posts: PostSummary[]; total: number }>(`/api/posts?${q}`);
   },
   get: (id: string) => api.get<PostDetail>(`/api/posts/${id}`),
-  create: (d: { integration_ids: string[]; content: string; title?: string; scheduled_at?: string; tag_ids?: string[]; first_comment?: string; media?: { id: string; url: string; mime_type: string; alt?: string }[]; overrides?: Record<string, { content?: string; settings?: any }> }) =>
+  create: (d: { integration_ids: string[]; content: string; title?: string; scheduled_at?: string; tag_ids?: string[]; first_comment?: string; media?: { id: string; url: string; mime_type: string; alt?: string }[]; overrides?: Record<string, { content?: string; settings?: Record<string, unknown> }> }) =>
     api.post<{ posts: PostSummary[]; group_id?: string }>("/api/posts", d),
   createThread: (d: ThreadRequest) =>
     api.post<{ posts: PostSummary[]; group_id: string }>("/api/posts/thread", d),

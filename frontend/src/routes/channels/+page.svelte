@@ -79,7 +79,7 @@
       await load();
     } catch (e) {
       error = "Failed to disconnect channel";
-      toast(`Disconnect failed: ${e instanceof Error ? e.message : "unknown"}`, "error");
+      toast(`Disconnect failed: ${e instanceof Error ? (e instanceof Error ? e.message : String(e)) : "unknown"}`, "error");
     }
   }
 
@@ -121,7 +121,7 @@
           window.addEventListener("message", onMessage);
           const interval = setInterval(() => { if (popup.closed) { clearInterval(interval); window.removeEventListener("message", onMessage); connecting = null; load(); } }, 1000);
         } else { connecting = null; }
-      }).catch((e) => { error = "Failed to connect " + provider; toast(`Connect failed: ${e instanceof Error ? e.message : "unknown"}`, "error"); connecting = null; });
+      }).catch((e) => { error = "Failed to connect " + provider; toast(`Connect failed: ${e instanceof Error ? (e instanceof Error ? e.message : String(e)) : "unknown"}`, "error"); connecting = null; });
     } else {
       connectProvider = provider;
     }
@@ -165,8 +165,8 @@
       credDialog = null;
       credFields = {};
       await load();
-    } catch (e: any) {
-      error = e?.message || "Connection failed";
+    } catch (e: unknown) {
+      error = (e instanceof Error ? e.message : undefined) || "Connection failed";
     }
   }
 
@@ -186,8 +186,8 @@
       } else {
         await load();
       }
-    } catch (e: any) {
-      error = `Refresh failed: ${e?.message || "Unknown error"}`;
+    } catch (e: unknown) {
+      error = `Refresh failed: ${(e instanceof Error ? e.message : undefined) || "Unknown error"}`;
     }
     refreshing = null;
   }
@@ -201,8 +201,8 @@
       await integrationsApi.disconnect(id);
       // Re-initiate the connect flow for this provider
       initiateConnect(int.provider_identifier);
-    } catch (e: any) {
-      error = `Reconnect failed: ${e?.message || "Unknown error"}`;
+    } catch (e: unknown) {
+      error = `Reconnect failed: ${(e instanceof Error ? e.message : undefined) || "Unknown error"}`;
     }
     refreshing = null;
   }
@@ -213,7 +213,7 @@
       await load();
     } catch (e) {
       error = "Failed to toggle channel";
-      toast(`Toggle disable failed: ${e instanceof Error ? e.message : "unknown"}`, "error");
+      toast(`Toggle disable failed: ${e instanceof Error ? (e instanceof Error ? e.message : String(e)) : "unknown"}`, "error");
     }
   }
 
@@ -235,7 +235,7 @@
         onboardDialog = { ...onboardDialog, step: "sms_code", code: "" };
         connecting = null;
       }
-    } catch (e: any) { error = e?.message || "Failed"; connecting = null; }
+    } catch (e: unknown) { error = (e instanceof Error ? e.message : undefined) || "Failed"; connecting = null; }
   }
 
   async function pollWhatsAppAuth() {
@@ -276,7 +276,7 @@
         connecting = null;
         await load();
       }
-    } catch (e: any) { error = e?.message || "Verification failed"; connecting = null; }
+    } catch (e: unknown) { error = (e instanceof Error ? e.message : undefined) || "Verification failed"; connecting = null; }
   }
 
   function handleConnectSuccess() {
