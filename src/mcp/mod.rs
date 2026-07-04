@@ -2253,6 +2253,14 @@ impl SocialForgeMcpServer {
         tools_bluesky::handle_bs_reply(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
+    #[tool(description = "Get account-level analytics for a Bluesky user (followers, following, posts, engagement)")]
+    pub async fn bs_get_analytics(
+        &self,
+        params: Parameters<tools_bluesky::BsGetAnalyticsInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_bluesky::handle_bs_get_analytics(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
     // ── TikTok Tools ─────────────────────────────────────────────────
 
     #[tool(description = "Get TikTok user profile info")]
@@ -2277,6 +2285,14 @@ impl SocialForgeMcpServer {
         params: Parameters<tools_tiktok::TtListVideosInput>,
     ) -> Result<Json<McpJsonValue>, String> {
         tools_tiktok::handle_tt_list_videos(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Get account-level analytics for TikTok (followers, likes, video engagement)")]
+    pub async fn tt_get_analytics(
+        &self,
+        params: Parameters<tools_tiktok::TtGetAnalyticsInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_tiktok::handle_tt_get_analytics(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     // ── Mastodon Tools ───────────────────────────────────────────────
@@ -2319,6 +2335,14 @@ impl SocialForgeMcpServer {
         params: Parameters<tools_mastodon::MsReplyInput>,
     ) -> Result<Json<McpJsonValue>, String> {
         tools_mastodon::handle_ms_reply(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Get account-level analytics for Mastodon (followers, following, statuses, engagement)")]
+    pub async fn ms_get_analytics(
+        &self,
+        params: Parameters<tools_mastodon::MsGetAnalyticsInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_mastodon::handle_ms_get_analytics(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     // ── Medium Tools ─────────────────────────────────────────────────

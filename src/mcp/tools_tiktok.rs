@@ -132,3 +132,81 @@ pub async fn handle_tt_list_videos(
 
     Ok(Json(serde_json::json!({ "data": result })))
 }
+
+// ── Analytics ────────────────────────────────────────────────
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct TtGetAnalyticsInput {
+    /// Number of days of analytics (default 30)
+    #[serde(default = "default_days")]
+    pub days: u32,
+}
+
+fn default_days() -> u32 { 30 }
+
+/// Get account-level analytics for the authenticated TikTok user
+/// (follower count, following count, likes, video count).
+pub async fn handle_tt_get_analytics(
+    state: &AppState,
+    input: &TtGetAnalyticsInput,
+) -> Result<Json<serde_json::Value>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let (token, _internal_id) = find_tiktok_integration(state, user_id).await?;
+    let provider = create_tiktok_provider(state);
+
+    let user_info = provider
+        .get_user_info(&token)
+        .await
+        .map_err(|e| format!("TikTok analytics failed: {e}"))?;
+
+    // Also fetch video list for engagement stats
+    let videos = provider
+        .list_videos(&token, 20)
+        .await
+        .map_err(|e| format!("TikTok video list for analytics failed: {e}"))?;
+
+    let total_views: i64 = videos
+        .as_array()
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v["view_count"].as_i64())
+                .sum()
+        })
+        .unwrap_or(0);
+    let total_likes: i64 = videos
+        .as_array()
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v["like_count"].as_i64())
+                .sum()
+        })
+        .unwrap_or(0);
+    let total_comments: i64 = videos
+        .as_array()
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v["comment_count"].as_i64())
+                .sum()
+        })
+        .unwrap_or(0);
+    let total_shares: i64 = videos
+        .as_array()
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v["share_count"].as_i64())
+                .sum()
+        })
+        .unwrap_or(0);
+
+    Ok(Json(serde_json::json!({
+        "account": user_info,
+        "recent_videos": {
+            "count": videos.as_array().map(|a| a.len()).unwrap_or(0),
+            "total_views": total_views,
+            "total_likes": total_likes,
+            "total_comments": total_comments,
+            "total_shares": total_shares,
+        },
+        "days": input.days,
+    })))
+}

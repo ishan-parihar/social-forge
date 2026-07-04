@@ -233,3 +233,59 @@ pub async fn handle_ms_reply(
         }
     })))
 }
+
+// ── Analytics ────────────────────────────────────────────────
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct MsGetAnalyticsInput {
+    /// Number of days of analytics (default 30)
+    #[serde(default = "default_days")]
+    pub days: u32,
+}
+
+fn default_days() -> u32 { 30 }
+
+/// Get account-level analytics for the authenticated Mastodon user
+/// (followers, following, statuses count, and recent engagement).
+pub async fn handle_ms_get_analytics(
+    state: &AppState,
+    input: &MsGetAnalyticsInput,
+) -> Result<Json<serde_json::Value>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let token = find_mastodon_integration(state, user_id).await?;
+    let provider = create_mastodon_provider(state);
+
+    // Get user profile (includes follower/following/status counts)
+    let user_info = provider
+        .get_user_info(&token)
+        .await
+        .map_err(|e| format!("Mastodon analytics failed: {e}"))?;
+
+    // Get recent timeline posts for engagement metrics
+    let timeline = provider
+        .get_timeline(&token, "home", 30)
+        .await
+        .map_err(|e| format!("Mastodon timeline for analytics failed: {e}"))?;
+
+    let posts = timeline.as_array().cloned().unwrap_or_default();
+    let total_replies: i64 = posts.iter()
+        .filter_map(|p| p["replies_count"].as_i64())
+        .sum();
+    let total_reblogs: i64 = posts.iter()
+        .filter_map(|p| p["reblogs_count"].as_i64())
+        .sum();
+    let total_favourites: i64 = posts.iter()
+        .filter_map(|p| p["favourites_count"].as_i64())
+        .sum();
+
+    Ok(Json(serde_json::json!({
+        "account": user_info,
+        "recent_engagement": {
+            "posts_analyzed": posts.len(),
+            "total_replies": total_replies,
+            "total_reblogs": total_reblogs,
+            "total_favourites": total_favourites,
+        },
+        "days": input.days,
+    })))
+}

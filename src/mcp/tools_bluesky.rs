@@ -276,3 +276,84 @@ pub async fn handle_bs_reply(
 
     Ok(Json(json!({ "data": result })))
 }
+
+// ── Analytics ────────────────────────────────────────────────
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct BsGetAnalyticsInput {
+    /// Handle or DID of the account to get analytics for (defaults to authenticated user)
+    pub handle_or_did: Option<String>,
+}
+
+/// Get account-level analytics for a Bluesky user (followers, following,
+/// post count, and engagement metrics from recent posts).
+pub async fn handle_bs_get_analytics(
+    state: &AppState,
+    input: &BsGetAnalyticsInput,
+) -> Result<Json<serde_json::Value>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let (token, did) = find_bs_token_and_did(state, user_id).await?;
+    let actor = input.handle_or_did.as_deref().unwrap_or(&did);
+    let client = reqwest::Client::new();
+
+    // Get profile (includes follower/following/post counts)
+    let profile_resp = client
+        .get("https://bsky.social/xrpc/app.bsky.actor.getProfile")
+        .header("Authorization", format!("Bearer {token}"))
+        .query(&[("actor", actor)])
+        .send()
+        .await
+        .map_err(|e| format!("Bluesky profile request failed: {e}"))?;
+
+    let profile: serde_json::Value = profile_resp
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse Bluesky profile: {e}"))?;
+
+    // Get recent posts for engagement metrics
+    let posts_resp = client
+        .get("https://bsky.social/xrpc/app.bsky.feed.getAuthorFeed")
+        .header("Authorization", format!("Bearer {token}"))
+        .query(&[("actor", actor), ("limit", "30")])
+        .send()
+        .await
+        .map_err(|e| format!("Bluesky feed request failed: {e}"))?;
+
+    let posts: serde_json::Value = posts_resp
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse Bluesky feed: {e}"))?;
+
+    // Aggregate engagement from recent posts
+    let feed = posts["feed"].as_array().cloned().unwrap_or_default();
+    let total_replies: i64 = feed.iter()
+        .filter_map(|p| p["post"]["replyCount"].as_i64())
+        .sum();
+    let total_reposts: i64 = feed.iter()
+        .filter_map(|p| p["post"]["repostCount"].as_i64())
+        .sum();
+    let total_likes: i64 = feed.iter()
+        .filter_map(|p| p["post"]["likeCount"].as_i64())
+        .sum();
+    let total_quotes: i64 = feed.iter()
+        .filter_map(|p| p["post"]["quoteCount"].as_i64())
+        .sum();
+
+    Ok(Json(serde_json::json!({
+        "account": {
+            "did": profile["did"],
+            "handle": profile["handle"],
+            "display_name": profile["displayName"],
+            "followers_count": profile["followersCount"],
+            "follows_count": profile["followsCount"],
+            "posts_count": profile["postsCount"],
+        },
+        "recent_engagement": {
+            "posts_analyzed": feed.len(),
+            "total_replies": total_replies,
+            "total_reposts": total_reposts,
+            "total_likes": total_likes,
+            "total_quotes": total_quotes,
+        },
+    })))
+}
