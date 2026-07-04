@@ -1,16 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { api } from "$lib/api";
-
-  interface Comment {
-    id: string;
-    platform: string;
-    post_content: string;
-    content: string;
-    author: string;
-    created_at: string;
-    status: "new" | "resolved";
-  }
+  import { commentsApi, type Comment } from "$lib/api/comments";
+  import { toast } from "$lib/stores/toast";
 
   let comments = $state<Comment[]>([]);
   let filterPlatform = $state("all");
@@ -26,12 +17,15 @@
   async function load() {
     loading = true;
     error = null;
-    const params = new URLSearchParams();
-    if (filterPlatform !== "all") params.set("platform", filterPlatform);
-    if (filterStatus !== "all") params.set("status", filterStatus);
-    const r = await api.get<{ comments: Comment[] }>(`/api/comments?${params}`);
+    const r = await commentsApi.list({
+      ...(filterStatus !== "all" && { resolved: filterStatus === "resolved" }),
+    });
     if (r.data) {
-      comments = r.data.comments;
+      let filtered = r.data.comments;
+      if (filterPlatform !== "all") {
+        filtered = filtered.filter(c => c.platform === filterPlatform);
+      }
+      comments = filtered;
     } else {
       error = r.error || "Failed to load comments";
     }
@@ -39,23 +33,22 @@
   }
 
   async function resolveComment(id: string) {
-    const r = await api.post(`/api/comments/${id}/resolve`);
+    const r = await commentsApi.resolve(id);
     if (r.error) {
-      error = r.error;
+      toast(`Failed to resolve: ${r.error}`, "error");
     } else {
-      comments = comments.map(c => c.id === id ? { ...c, status: "resolved" as const } : c);
+      comments = comments.map(c => c.id === id ? { ...c, is_resolved: true } : c);
     }
   }
 
   async function sendReply() {
     if (!replyModal || !replyModal.text.trim()) return;
     sending = true;
-    const r = await api.post(`/api/comments/${replyModal.comment.id}/reply`, {
-      text: replyModal.text,
-    });
+    const r = await commentsApi.reply(replyModal.comment.id, replyModal.text);
     if (r.error) {
-      error = r.error;
+      toast(`Reply failed: ${r.error}`, "error");
     } else {
+      toast("Reply sent", "success");
       replyModal = null;
     }
     sending = false;
@@ -110,12 +103,12 @@
       {#each comments as c (c.id)}
         <div class="grid grid-cols-[40px_1fr_1.5fr_100px_100px_90px] gap-3 px-4 py-3 border-b border-[#1e2435] last:border-0 hover:bg-[#1a1f2e] transition-colors items-center">
           <span class="text-sm text-indigo-400">{platformIcon(c.platform)}</span>
-          <span class="text-sm truncate">{c.post_content}</span>
-          <span class="text-sm text-[#d1d5db] truncate">{c.content}</span>
-          <span class="text-xs text-[#6b7280] truncate">{c.author}</span>
+          <span class="text-sm truncate">{c.post_id}</span>
+          <span class="text-sm text-[#d1d5db] truncate">{c.text}</span>
+          <span class="text-xs text-[#6b7280] truncate">{c.author_name || 'Unknown'}</span>
           <span class="text-xs text-[#6b7280]">{new Date(c.created_at).toLocaleDateString()}</span>
           <div class="flex items-center gap-2">
-            {#if c.status === "new"}
+            {#if !c.is_resolved}
               <span class="px-2 py-0.5 text-xs rounded bg-yellow-500/20 text-yellow-400">New</span>
               <button onclick={() => resolveComment(c.id)} class="text-xs text-[#6b7280] hover:text-green-400">✓</button>
               <button onclick={() => replyModal = { comment: c, text: "" }} class="text-xs text-[#6b7280] hover:text-indigo-400">↩</button>
@@ -133,8 +126,8 @@
 {#if replyModal}
   <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50" role="dialog">
     <div class="bg-[#0d1117] border border-[#1e2435] rounded-xl p-6 w-full max-w-md">
-      <h3 class="text-lg font-semibold mb-2">Reply to {replyModal.comment.author}</h3>
-      <p class="text-sm text-[#6b7280] mb-4 truncate">{replyModal.comment.content}</p>
+      <h3 class="text-lg font-semibold mb-2">Reply to {replyModal.comment.author_name || 'Unknown'}</h3>
+      <p class="text-sm text-[#6b7280] mb-4 truncate">{replyModal.comment.text}</p>
       <textarea
         bind:value={replyModal.text}
         placeholder="Write your reply..."

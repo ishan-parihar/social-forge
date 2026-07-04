@@ -28,13 +28,12 @@
     linkedin: "LinkedIn", "linkedin-page": "LinkedIn Page",
     google: "Google Suite", youtube: "YouTube", google_my_business: "Google Business",
     reddit: "Reddit", bluesky: "Bluesky", discord: "Discord", pinterest: "Pinterest",
-    tiktok: "TikTok", twitch: "Twitch", vk: "VK", mewe: "MeWe",
-    moltbook: "Moltbook", kick: "Kick", mastodon: "Mastodon",
+    tiktok: "TikTok", vk: "VK", kick: "Kick", mastodon: "Mastodon",
     "telegram-bot": "Telegram Bot", "telegram-user": "Telegram User",
     whatsapp: "WhatsApp", slack: "Slack",
     wordpress: "WordPress", medium: "Medium", devto: "Dev.to", hashnode: "Hashnode",
     github: "GitHub", lemmy: "Lemmy", whop: "Whop",
-    farcaster: "Farcaster", nostr: "Nostr",
+    farcaster: "Farcaster",
     skool: "Skool",
   };
 
@@ -47,13 +46,13 @@
     "linkedin", "linkedin-page",
     "google",
     "reddit", "bluesky", "discord", "pinterest",
-    "tiktok", "twitch", "vk", "mewe", "moltbook", "kick", "mastodon",
+    "tiktok", "vk", "kick", "mastodon",
     "google_my_business", "whop", "slack",
     "telegram-bot", "telegram-user",
     "whatsapp",
     "wordpress", "medium", "devto", "hashnode",
     "github", "lemmy",
-    "farcaster", "nostr",
+    "farcaster",
     "skool",
   ]);
   let connecting = $state<string | null>(null);

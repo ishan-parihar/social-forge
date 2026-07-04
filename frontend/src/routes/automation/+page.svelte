@@ -1,28 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { api } from "$lib/api";
-
-  interface AutomationRule {
-    id: string;
-    name: string;
-    platform: string;
-    trigger_type: string;
-    response_type: string;
-    response_template: string;
-    is_active: boolean;
-    last_triggered: string | null;
-    created_at: string;
-  }
-
-  interface ExecutionLog {
-    id: string;
-    rule_id: string;
-    trigger_type: string;
-    input_text: string;
-    output_text: string;
-    status: string;
-    created_at: string;
-  }
+  import { automationApi, type AutomationRule, type ExecutionLog } from "$lib/api/automation";
+  import { toast } from "$lib/stores/toast";
 
   let rules = $state<AutomationRule[]>([]);
   let loading = $state(true);
@@ -48,7 +27,7 @@
   async function load() {
     loading = true;
     error = null;
-    const r = await api.get<{ rules: AutomationRule[] }>("/api/automation/rules");
+    const r = await automationApi.listRules();
     if (r.data) {
       rules = r.data.rules;
     } else {
@@ -88,8 +67,8 @@
       response_template: formTemplate,
     };
     const r = editingRule
-      ? await api.put(`/api/automation/rules/${editingRule.id}`, body)
-      : await api.post("/api/automation/rules", body);
+      ? await automationApi.updateRule(editingRule.id, body as Partial<AutomationRule>)
+      : await automationApi.createRule(body as Omit<AutomationRule, 'id' | 'is_active'>);
     if (r.error) {
       error = r.error;
     } else {
@@ -101,7 +80,7 @@
 
   async function deleteRule(id: string) {
     if (!confirm("Delete this automation rule?")) return;
-    const r = await api.del(`/api/automation/rules/${id}`);
+    const r = await automationApi.deleteRule(id);
     if (r.error) {
       error = r.error;
     } else {
@@ -110,7 +89,7 @@
   }
 
   async function toggleActive(rule: AutomationRule) {
-    const r = await api.put(`/api/automation/rules/${rule.id}`, { is_active: !rule.is_active });
+    const r = await automationApi.updateRule(rule.id, { is_active: !rule.is_active });
     if (r.error) {
       error = r.error;
     } else {
@@ -121,7 +100,7 @@
   async function viewLogs(ruleId: string) {
     showLogs = ruleId;
     loadingLogs = true;
-    const r = await api.get<{ logs: ExecutionLog[] }>(`/api/automation/rules/${ruleId}/logs`);
+    const r = await automationApi.getLogs(ruleId);
     if (r.data) {
       logs = r.data.logs;
     } else {
