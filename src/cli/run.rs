@@ -33,9 +33,7 @@ async fn fetch_targets(state: &AppState, integration: &Integration) -> anyhow::R
     let provider_obj = state.providers.get(&integration.provider_identifier)
         .ok_or_else(|| anyhow::anyhow!("Provider not found in registry"))?;
 
-    let token = state.token_key.as_ref()
-        .and_then(|key| crypto::decrypt_string(&integration.access_token, key).ok())
-        .unwrap_or_else(|| integration.access_token.clone());
+    let token = crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
 
     let targets = provider_obj.targets(&token).await
         .map_err(|e| anyhow::anyhow!("Failed to fetch targets: {}", e))?;
@@ -132,9 +130,7 @@ async fn find_x_token(state: &AppState, user_id: Uuid) -> anyhow::Result<(String
 
     if let Some(preferred) = x_integrations.iter().find(|i| i.access_token.starts_with('{')) {
         let token = preferred.access_token.clone();
-        let token = state.token_key.as_ref()
-            .and_then(|key| crypto::decrypt_string(&token, key).ok())
-            .unwrap_or(token);
+        let token = crate::crypto::maybe_decrypt_token(&token, state.token_key.as_ref());
         return Ok((token, preferred.internal_id.clone()));
     }
 
@@ -152,9 +148,7 @@ async fn find_x_token(state: &AppState, user_id: Uuid) -> anyhow::Result<(String
 
     if let Some(oauth) = x_integrations.first() {
         let token = oauth.access_token.clone();
-        let token = state.token_key.as_ref()
-            .and_then(|key| crypto::decrypt_string(&token, key).ok())
-            .unwrap_or(token);
+        let token = crate::crypto::maybe_decrypt_token(&token, state.token_key.as_ref());
         return Ok((token, oauth.internal_id.clone()));
     }
 
@@ -169,9 +163,7 @@ async fn find_reddit_token(state: &AppState, user_id: Uuid) -> anyhow::Result<St
 
     if let Some(preferred) = reddit_integrations.iter().find(|i| i.access_token.starts_with('{')) {
         let token = preferred.access_token.clone();
-        let token = state.token_key.as_ref()
-            .and_then(|key| crypto::decrypt_string(&token, key).ok())
-            .unwrap_or(token);
+        let token = crate::crypto::maybe_decrypt_token(&token, state.token_key.as_ref());
         return Ok(token);
     }
 
@@ -183,9 +175,7 @@ async fn find_reddit_token(state: &AppState, user_id: Uuid) -> anyhow::Result<St
 
     if let Some(oauth) = reddit_integrations.first() {
         let token = oauth.access_token.clone();
-        let token = state.token_key.as_ref()
-            .and_then(|key| crypto::decrypt_string(&token, key).ok())
-            .unwrap_or(token);
+        let token = crate::crypto::maybe_decrypt_token(&token, state.token_key.as_ref());
         return Ok(token);
     }
 
@@ -198,9 +188,7 @@ async fn find_linkedin_token(state: &AppState, user_id: Uuid) -> anyhow::Result<
         .find(|i| i.provider_identifier == "linkedin")
         .ok_or_else(|| anyhow::anyhow!("No LinkedIn account connected"))?;
     let token = li.access_token.clone();
-    let token = state.token_key.as_ref()
-        .and_then(|key| crypto::decrypt_string(&token, key).ok())
-        .unwrap_or(token);
+    let token = crate::crypto::maybe_decrypt_token(&token, state.token_key.as_ref());
     Ok((token, li.internal_id.clone()))
 }
 
@@ -210,9 +198,7 @@ async fn find_linkedin_page_token(state: &AppState, user_id: Uuid, page_id: &str
         .find(|i| i.provider_identifier == "linkedin-page" && i.internal_id == page_id)
         .ok_or_else(|| anyhow::anyhow!("LinkedIn Page '{}' not connected", page_id))?;
     let token = lip.access_token.clone();
-    let token = state.token_key.as_ref()
-        .and_then(|key| crypto::decrypt_string(&token, key).ok())
-        .unwrap_or(token);
+    let token = crate::crypto::maybe_decrypt_token(&token, state.token_key.as_ref());
     Ok((token, lip.internal_id.clone()))
 }
 
@@ -222,9 +208,7 @@ async fn find_facebook_page_token(state: &AppState, user_id: Uuid, page_id: &str
         .find(|i| i.provider_identifier == "facebook" && i.internal_id == page_id)
         .ok_or_else(|| anyhow::anyhow!("Facebook page '{}' not connected", page_id))?;
     let token = page.access_token.clone();
-    let token = state.token_key.as_ref()
-        .and_then(|key| crypto::decrypt_string(&token, key).ok())
-        .unwrap_or(token);
+    let token = crate::crypto::maybe_decrypt_token(&token, state.token_key.as_ref());
     Ok(token)
 }
 
@@ -237,9 +221,7 @@ async fn handle_youtube(action: YoutubeAction) -> anyhow::Result<()> {
         .find(|i| i.provider_identifier == "youtube")
         .ok_or_else(|| anyhow::anyhow!("No YouTube integration found"))?;
     let token = yt.access_token.clone();
-    let token = state.token_key.as_ref()
-        .and_then(|key| crypto::decrypt_string(&token, key).ok())
-        .unwrap_or(token);
+    let token = crate::crypto::maybe_decrypt_token(&token, state.token_key.as_ref());
 
     let provider = crate::social::youtube::YoutubeProvider::new(&state.config);
 
@@ -322,9 +304,7 @@ async fn handle_bluesky(action: BlueskyAction) -> anyhow::Result<()> {
         .find(|i| i.provider_identifier == "bluesky")
         .ok_or_else(|| anyhow::anyhow!("No Bluesky integration found"))?;
     let token = bs.access_token.clone();
-    let token = state.token_key.as_ref()
-        .and_then(|key| crypto::decrypt_string(&token, key).ok())
-        .unwrap_or(token);
+    let token = crate::crypto::maybe_decrypt_token(&token, state.token_key.as_ref());
 
     let provider = crate::social::bluesky::BlueskyProvider::new(&state.config);
 
@@ -417,9 +397,7 @@ async fn handle_mastodon(action: MastodonAction) -> anyhow::Result<()> {
         .find(|i| i.provider_identifier == "mastodon")
         .ok_or_else(|| anyhow::anyhow!("No Mastodon integration found"))?;
     let token = ms.access_token.clone();
-    let token = state.token_key.as_ref()
-        .and_then(|key| crypto::decrypt_string(&token, key).ok())
-        .unwrap_or(token);
+    let token = crate::crypto::maybe_decrypt_token(&token, state.token_key.as_ref());
 
     let provider = crate::social::mastodon::MastodonProvider::new(&state.config);
 
@@ -972,9 +950,7 @@ async fn handle_doctor() -> anyhow::Result<()> {
     for integration in &integrations {
         let provider_id = &integration.provider_identifier;
         let name = integration.profile_name.as_deref().unwrap_or("Unknown");
-        let token = state.token_key.as_ref()
-            .and_then(|key| crypto::decrypt_string(&integration.access_token, key).ok())
-            .unwrap_or_else(|| integration.access_token.clone());
+        let token = crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
 
         let (status, detail) = match provider_id.as_str() {
             "x" => {
@@ -2157,9 +2133,7 @@ async fn handle_import(provider_name: &str, count: u32) -> anyhow::Result<()> {
     let state = init_state().await?;
     let user_id = resolve_user(&state).await?;
     let integration = find_integration(&state, user_id, provider_name).await?;
-    let token = state.token_key.as_ref()
-        .and_then(|key| crypto::decrypt_string(&integration.access_token, key).ok())
-        .unwrap_or_else(|| integration.access_token.clone());
+    let token = crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
 
     let provider = state.providers.get(provider_name)
         .ok_or_else(|| anyhow::anyhow!("Provider '{}' not found in registry", provider_name))?;
@@ -2260,9 +2234,7 @@ async fn handle_instagram(action: InstagramAction) -> anyhow::Result<()> {
                         None => Err("No Instagram account connected".to_string()),
                         Some(ig) => {
                             let token = ig.access_token.clone();
-                            let token = state.token_key.as_ref()
-                                .and_then(|key| crypto::decrypt_string(&token, key).ok())
-                                .unwrap_or(token);
+                            let token = crate::crypto::maybe_decrypt_token(&token, state.token_key.as_ref());
                             let provider = crate::social::instagram::InstagramProvider::new(&state.config);
                             provider.reply_to_ig_comment(&token, &media_id, &text).await
                                 .map_err(|e| e.to_string())
