@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { toast } from "$lib/stores/toast";
   import { onMount } from 'svelte';
   import { tagsApi, type Tag } from '$lib/api/tags';
 
@@ -32,7 +33,7 @@
     try {
       const r = await tagsApi.list();
       if (r.data) tags = r.data;
-      else error = r.error || 'Failed to load tags';
+      else toast(`Failed: ${r.error}`, 'error');
     } catch (e: unknown) {
       error = (e instanceof Error ? e.message : String(e)) || 'Failed to load tags';
     }
@@ -49,7 +50,7 @@
         newName = '';
         newColor = '#6366f1';
       } else {
-        error = r.error || 'Failed to create tag';
+        toast(`Failed: ${r.error}`, 'error');
       }
     } catch (e: unknown) {
       error = (e instanceof Error ? e.message : String(e)) || 'Failed to create tag';
@@ -78,7 +79,7 @@
         tags = tags.map(t => t.id === editingId ? r.data! : t);
         cancelEdit();
       } else {
-        error = r.error || 'Failed to update tag';
+        toast(`Failed: ${r.error}`, 'error');
       }
     } catch (e: unknown) {
       error = (e instanceof Error ? e.message : String(e)) || 'Failed to update tag';
@@ -92,7 +93,7 @@
       if (r.data) {
         tags = tags.filter(t => t.id !== id);
       } else {
-        error = r.error || 'Failed to delete tag';
+        toast(`Failed: ${r.error}`, 'error');
       }
     } catch (e: unknown) {
       error = (e instanceof Error ? e.message : String(e)) || 'Failed to delete tag';

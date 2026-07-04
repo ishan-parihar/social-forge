@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { postsApi, type PostSummary } from '$lib/api';
-  import { formatDateTime } from '$lib/calendar';
+  import { postsApi, type PostSummary } from '$lib/api/posts';
+  import { formatDateTime } from '$lib/calendar/utils';
   import { goto } from '$app/navigation';
 
   let upcoming = $state<PostSummary[]>([]);

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { toast } from "$lib/stores/toast";
   import { onMount } from "svelte";
   import { postsApi, type PostSummary } from "$lib/api/posts";
   import Badge from "$lib/ui/Badge.svelte";
@@ -24,7 +25,7 @@
       totalItems = r.data.total;
       totalPages = Math.ceil(r.data.total / limit);
     } else {
-      error = r.error || "Failed to load posts";
+      toast(`Failed: ${r.error}`, "error");
     }
     loading = false;
   }

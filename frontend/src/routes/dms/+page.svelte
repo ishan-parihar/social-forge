@@ -1,6 +1,7 @@
 <script lang="ts">
+  import { toast } from "$lib/stores/toast";
   import { onMount } from "svelte";
-  import { api } from "$lib/api";
+  import { api } from "$lib/api/client";
 
   interface Message {
     id: string;
@@ -96,7 +97,7 @@
         messages: []
       }));
     } else {
-      error = r.error || "Failed to load conversations";
+      toast(`Failed: ${r.error}`, "error");
     }
     loading = false;
   }
@@ -131,7 +132,7 @@
       media: []
     });
     if (r.error) {
-      error = r.error;
+      toast(`Error: ${r.error}`, "error");
     } else {
       newMessage = "";
       await loadMessages(selectedId);

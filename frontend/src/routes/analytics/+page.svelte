@@ -4,6 +4,7 @@
   import AnalyticsSummaryCards from '$lib/analytics/AnalyticsSummaryCards.svelte';
   import AnalyticsCharts from '$lib/analytics/AnalyticsCharts.svelte';
   import AnalyticsTable from '$lib/analytics/AnalyticsTable.svelte';
+  import { toast } from "$lib/stores/toast";
 
   let days = $state(30);
   let data = $state<AnalyticsSummary | null>(null);

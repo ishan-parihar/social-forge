@@ -4,6 +4,7 @@
   import EngagementCard from "$lib/components/EngagementCard.svelte";
   import CommentsThread from "$lib/components/CommentsThread.svelte";
   import MediaCarousel from "$lib/media/MediaCarousel.svelte";
+  import { toast } from "$lib/stores/toast";
 
   let posts = $state<FeedPost[]>([]);
   let loading = $state(false);
