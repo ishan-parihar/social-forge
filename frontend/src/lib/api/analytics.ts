@@ -23,13 +23,24 @@ export interface AnalyticsSummary {
   posts_by_day: Array<{ date: string; count: number }>;
 }
 
+export interface ProviderAnalytics {
+  data: Array<{
+    label: string;
+    data: Array<{ total: string; date: string }>;
+    percentage_change: number;
+  }>;
+}
+
 const daysQuery = (d?: number) => d ? `?days=${d}` : '';
 
 export const analyticsApi = {
-  getPostAnalytics: (postId: string, days?: number, signal?: AbortSignal) => {
-    return api.get<PostAnalytics>(`/api/analytics/post/${postId}${daysQuery(days)}`, signal);
-  },
   getSummary: (days?: number, signal?: AbortSignal) => {
     return api.get<AnalyticsSummary>(`/api/analytics/summary${daysQuery(days)}`, signal);
+  },
+  getProvider: (provider: string, days?: number, signal?: AbortSignal) => {
+    return api.get<ProviderAnalytics>(`/api/analytics?provider=${provider}${days ? `&days=${days}` : ''}`, signal);
+  },
+  getPostAnalytics: (postId: string, signal?: AbortSignal) => {
+    return api.get<{ data: unknown }>(`/api/analytics/post/${postId}`, signal);
   },
 };
