@@ -50,6 +50,7 @@
       title: 'Settings',
       items: [
         { href: '/settings', label: 'General', icon: '⚙' },
+        { href: '/settings/profile', label: 'Brand Profile', icon: '🎯' },
         { href: '/settings/rss', label: 'RSS Autopost', icon: '📡' },
         { href: '/settings/signatures', label: 'Signatures', icon: '✍' },
         { href: '/settings/developer', label: 'Developer', icon: '🔧' },
