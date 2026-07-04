@@ -4,7 +4,7 @@
   let maxCount = $derived(Math.max(...postsByDay.map(d => d.count), 1));
 </script>
 
-<div class="bg-[#1a1f2e] border border-[#2a3045] rounded-lg p-4">
+<div class="bg-[#131720] border border-[#1e2435] rounded-lg p-4">
   <h3 class="text-sm font-medium text-[#e8edf5] mb-4">Posts Over Time</h3>
   {#if postsByDay.length === 0}
     <p class="text-[#d1d5db] text-sm py-8 text-center">No data for this period</p>

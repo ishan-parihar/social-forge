@@ -111,7 +111,7 @@
       {/if}
 
       {#if showScheduleForm}
-        <div class="flex items-center gap-2 bg-[#0d1117] border border-[#2a3045] rounded-lg p-3">
+        <div class="flex items-center gap-2 bg-[#0d1117] border border-[#1e2435] rounded-lg p-3">
           <input type="date" bind:value={schedDate} class="px-2 py-1 bg-[#131720] border border-[#1e2435] rounded text-sm text-[#d1d5db]" />
           <input type="time" bind:value={schedTime} class="px-2 py-1 bg-[#131720] border border-[#1e2435] rounded text-sm text-[#d1d5db]" />
           <button onclick={confirmSchedule} class="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 rounded text-xs">Confirm</button>

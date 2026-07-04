@@ -93,7 +93,7 @@
                         type="time"
                         value={minToTime(slot.time)}
                         oninput={(e) => updateSlot(i, e.currentTarget.value)}
-                        class="bg-[#1a1f2e] border border-[#2a3045] rounded-md px-3 py-1.5 text-sm text-[#d1d5db] focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        class="bg-[#1a1f2e] border border-[#1e2435] rounded-md px-3 py-1.5 text-sm text-[#d1d5db] focus:outline-none focus:ring-1 focus:ring-indigo-500"
                     />
                     <button
                         onclick={() => removeSlot(i)}

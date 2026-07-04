@@ -98,7 +98,7 @@
             </div>
             <select
               bind:value={prefs[nt.key]}
-              class="bg-[#1e2435] text-[#d1d5db] border border-[#2a3045] rounded px-3 py-1.5 text-sm focus:outline-none focus:border-indigo-500/50 transition-colors"
+              class="bg-[#1e2435] text-[#d1d5db] border border-[#1e2435] rounded px-3 py-1.5 text-sm focus:outline-none focus:border-indigo-500/50 transition-colors"
             >
               <option value="push">Push</option>
               <option value="email">Email</option>
@@ -125,7 +125,7 @@
               id="quiet-start"
               type="time"
               bind:value={prefs.quiet_hours_start}
-              class="w-full bg-[#1e2435] text-[#d1d5db] border border-[#2a3045] rounded px-3 py-1.5 text-sm focus:outline-none focus:border-indigo-500/50 transition-colors"
+              class="w-full bg-[#1e2435] text-[#d1d5db] border border-[#1e2435] rounded px-3 py-1.5 text-sm focus:outline-none focus:border-indigo-500/50 transition-colors"
             />
           </div>
           <div>
@@ -134,7 +134,7 @@
               id="quiet-end"
               type="time"
               bind:value={prefs.quiet_hours_end}
-              class="w-full bg-[#1e2435] text-[#d1d5db] border border-[#2a3045] rounded px-3 py-1.5 text-sm focus:outline-none focus:border-indigo-500/50 transition-colors"
+              class="w-full bg-[#1e2435] text-[#d1d5db] border border-[#1e2435] rounded px-3 py-1.5 text-sm focus:outline-none focus:border-indigo-500/50 transition-colors"
             />
           </div>
         </div>

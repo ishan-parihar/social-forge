@@ -188,7 +188,7 @@
 
     <!-- Dot indicators + counter -->
     {#if items.length > 1}
-      <div class="flex items-center justify-center gap-1.5 px-4 py-2.5 bg-[#0d121e]/90 border-t border-[#1a2035]">
+      <div class="flex items-center justify-center gap-1.5 px-4 py-2.5 bg-[#0d121e]/90 border-t border-[#1e2435]">
         <button
           onclick={prev}
           class="p-1 text-[#4a5060] hover:text-[#9ca3af] transition-colors"

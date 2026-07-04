@@ -269,7 +269,7 @@
         disabled={importing}
         class="flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-lg transition-all duration-200
           bg-[#161b28] text-[#9ca3af] border border-[#1e2435]
-          hover:border-[#2a3045] hover:text-[#e8edf5]
+          hover:border-[#1e2435] hover:text-[#e8edf5]
           disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <svg
@@ -310,7 +310,7 @@
             class="flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-lg transition-all duration-200
               {showFilter || activeFilterLabel
                 ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 shadow-[0_0_12px_rgba(99,102,241,0.1)]'
-                : 'bg-[#161b28] text-[#9ca3af] border border-[#1e2435] hover:border-[#2a3045] hover:text-[#e8edf5]'}"
+                : 'bg-[#161b28] text-[#9ca3af] border border-[#1e2435] hover:border-[#1e2435] hover:text-[#e8edf5]'}"
           >
             <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
               <path d="M2 4h12M4 8h8M6 12h4" stroke-linecap="round" />
@@ -420,7 +420,7 @@
   {:else if loading}
     <div class="space-y-3    motion-safe:animate-in duration-300">
       {#each Array(5) as _, i (i)}
-        <div class="bg-[#131825] rounded-xl p-5 border border-[#1a2035] space-y-3">
+        <div class="bg-[#131825] rounded-xl p-5 border border-[#1e2435] space-y-3">
           <div class="flex items-center gap-2.5">
             <div class="w-6 h-6 rounded-full bg-[#1e2435]" />
             <div class="h-3 bg-[#1e2435] rounded w-20" />
@@ -495,7 +495,7 @@
       {#each filteredPosts as post (post.id)}
         {@const meta = providerMeta(post.provider)}
         <article
-          class="group relative bg-[#131825] rounded-xl border border-[#1a2035] transition-all duration-200
+          class="group relative bg-[#131825] rounded-xl border border-[#1e2435] transition-all duration-200
             hover:border-[#222a45] hover:bg-[#151b2a]"
         >
           <!-- Subtle top accent line -->
@@ -655,7 +655,7 @@
 
             <!-- Footer: link -->
             {#if post.url}
-              <div class="mt-3 pt-3 border-t border-[#1a2035]">
+              <div class="mt-3 pt-3 border-t border-[#1e2435]">
                 <a
                   href={post.url}
                   target="_blank"

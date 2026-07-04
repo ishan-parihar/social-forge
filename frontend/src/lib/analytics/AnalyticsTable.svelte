@@ -2,10 +2,10 @@
   let { postsByProvider }: { postsByProvider: Array<{ provider: string; count: number }> } = $props();
 </script>
 
-<div class="bg-[#1a1f2e] border border-[#2a3045] rounded-lg overflow-hidden">
+<div class="bg-[#131720] border border-[#1e2435] rounded-lg overflow-hidden">
   <table class="w-full">
     <thead>
-      <tr class="border-b border-[#2a3045]">
+      <tr class="border-b border-[#1e2435]">
         <th class="text-left text-xs font-medium text-[#d1d5db] uppercase tracking-wider px-4 py-3">Provider</th>
         <th class="text-right text-xs font-medium text-[#d1d5db] uppercase tracking-wider px-4 py-3">Posts</th>
       </tr>

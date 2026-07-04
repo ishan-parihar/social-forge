@@ -93,7 +93,7 @@
   });
 </script>
 
-<div class="mt-4 pt-4 border-t border-[#1a2035]">
+<div class="mt-4 pt-4 border-t border-[#1e2435]">
   <!-- Header -->
   <div class="flex items-center justify-between mb-3">
     <h4 class="text-xs font-semibold text-[#9ca3af] uppercase tracking-wider flex items-center gap-2">
@@ -131,7 +131,7 @@
   {:else}
     <div class="space-y-3">
       {#each comments as comment (comment.id)}
-        <div class="bg-[#0d121e] border border-[#1a2035] rounded-lg overflow-hidden">
+        <div class="bg-[#0d121e] border border-[#1e2435] rounded-lg overflow-hidden">
           <!-- Comment header -->
           <div class="flex items-start gap-2.5 p-3">
             <!-- Avatar -->
@@ -170,9 +170,9 @@
 
           <!-- Nested replies -->
           {#if expandedThreads.has(comment.id) && comment.replies.length > 0}
-            <div class="border-t border-[#1a2035] bg-[#0a0e16]">
+            <div class="border-t border-[#1e2435] bg-[#0a0e16]">
               {#each comment.replies as reply (reply.id)}
-                <div class="flex items-start gap-2.5 p-3 pl-8 border-b border-[#1a2035] last:border-b-0">
+                <div class="flex items-start gap-2.5 p-3 pl-8 border-b border-[#1e2435] last:border-b-0">
                   <!-- Reply avatar -->
                   {#if reply.author_avatar}
                     <img src={reply.author_avatar} alt="" class="w-5 h-5 rounded-full flex-shrink-0 object-cover ring-1 ring-[#1e2435]" />

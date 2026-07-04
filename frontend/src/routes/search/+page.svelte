@@ -249,7 +249,7 @@
   {:else}
     <div class="space-y-3">
       {#each filteredPosts as post (post.id)}
-        <div class="bg-[#131720] border border-[#1e2435] rounded-xl p-4 hover:border-[#2a3045] transition-colors">
+        <div class="bg-[#131720] border border-[#1e2435] rounded-xl p-4 hover:border-[#1e2435] transition-colors">
           <div class="flex items-start gap-3">
             <!-- Avatar -->
             {#if post.author_avatar}
