@@ -103,7 +103,7 @@
       bind:value={search}
       class="w-full px-3 py-2 pl-9 bg-[#0d1117] border border-[#1e2435] rounded-lg text-sm text-[#d1d5db] placeholder-[#6b7280] focus:border-indigo-500 outline-none transition-colors"
     />
-    <span class="absolute left-3 top-1/2 -translate-y-1/2 text-[#6b7280] text-sm">🔍</span>
+    <span class="absolute left-3 top-1/2 -translate-y-1/2 text-[#6b7280]"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></span>
   </div>
 
   {#if error && !loading}

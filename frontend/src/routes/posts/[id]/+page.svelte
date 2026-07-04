@@ -136,7 +136,7 @@
         <div class="border-t border-[#1e2435] pt-3 mt-3">
           <div class="text-xs text-indigo-400 mb-1">Thread post (sequence {post.sequence ?? 0})</div>
           <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-indigo-500/20 text-indigo-400">
-            🧵 Group: {post.group_id.slice(0, 8)}...
+            Group: {post.group_id.slice(0, 8)}...
           </span>
         </div>
       {/if}

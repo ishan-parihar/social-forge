@@ -16,18 +16,18 @@
   let nextCursor = $state<string | null>(null);
 
   const platforms = [
-    { value: "all", label: "All", icon: "🌐" },
-    { value: "x", label: "X", icon: "𝕏" },
-    { value: "reddit", label: "Reddit", icon: "𝗥" },
+    { value: "all", label: "All", icon: "ALL" },
+    { value: "x", label: "X", icon: "X" },
+    { value: "reddit", label: "Reddit", icon: "R" },
     { value: "facebook", label: "Facebook", icon: "f" },
-    { value: "instagram", label: "Instagram", icon: "📷" },
-    { value: "youtube", label: "YouTube", icon: "▶" },
+    { value: "instagram", label: "Instagram", icon: "IG" },
+    { value: "youtube", label: "YouTube", icon: "YT" },
     { value: "linkedin", label: "LinkedIn", icon: "in" },
-    { value: "bluesky", label: "Bluesky", icon: "☁" },
-    { value: "mastodon", label: "Mastodon", icon: "🐘" },
-    { value: "pinterest", label: "Pinterest", icon: "📌" },
-    { value: "tiktok", label: "TikTok", icon: "🎵" },
-    { value: "threads", label: "Threads", icon: "🧵" },
+    { value: "bluesky", label: "Bluesky", icon: "BS" },
+    { value: "mastodon", label: "Mastodon", icon: "MA" },
+    { value: "pinterest", label: "Pinterest", icon: "PIN" },
+    { value: "tiktok", label: "TikTok", icon: "TT" },
+    { value: "threads", label: "Threads", icon: "TH" },
   ];
 
   // Filtered results (client-side text search on feed data)

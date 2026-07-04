@@ -142,7 +142,7 @@
   }
 
   function platformIcon(p: string): string {
-    const icons: Record<string, string> = { x: "𝕏", reddit: "𝗥", linkedin: "in", facebook: "f", instagram: "📷", telegram: "✈", whatsapp: "📱", discord: "🎮" };
+    const icons: Record<string, string> = { x: "X", reddit: "R", linkedin: "in", facebook: "f", instagram: "IG", telegram: "TG", whatsapp: "WA", discord: "DC" };
     return icons[p] || "•";
   }
 
