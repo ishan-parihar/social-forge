@@ -214,9 +214,7 @@ pub(crate) async fn find_facebook_page_token(state: &AppState, user_id: Uuid, pa
 
 // ── Providers / Connect ──────────────────────────────────────
 
-async fn handle_providers() -> anyhow::Result<()> {
-    let state = init_state().await?;
-    let user_id = resolve_user(&state).await?;
+async fn handle_providers_with_state(state: &AppState) -> anyhow::Result<()> {let user_id = resolve_user(&state).await?;
     let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
     let list: Vec<serde_json::Value> = integrations.iter().map(|i| {
         serde_json::json!({
@@ -319,9 +317,7 @@ JWT_SECRET=change-me-to-a-random-secret
     Ok(())
 }
 
-async fn handle_connect(provider: &str) -> anyhow::Result<()> {
-    let state = init_state().await?;
-    let user_id = resolve_user(&state).await?;
+async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::Result<()> {let user_id = resolve_user(&state).await?;
 
     match provider {
         // ── X/Twitter: auto-import from browser ────────────────
@@ -673,9 +669,7 @@ async fn handle_connect(provider: &str) -> anyhow::Result<()> {
 
 // ── Doctor: health check for all providers ───────────────────
 
-async fn handle_doctor() -> anyhow::Result<()> {
-    let state = init_state().await?;
-    let user_id = resolve_user(&state).await?;
+async fn handle_doctor_with_state(state: &AppState) -> anyhow::Result<()> {let user_id = resolve_user(&state).await?;
     let integrations = crate::db::queries::list_integrations(&state.db, user_id)
         .await
         .map_err(|e| anyhow::anyhow!("Failed to list integrations: {e}"))?;
@@ -929,9 +923,7 @@ async fn handle_setup() -> anyhow::Result<()> {
 
 // ── Connect All: Bulk Cookie Import ──────────────────────────
 
-async fn handle_connect_all() -> anyhow::Result<()> {
-    let state = init_state().await?;
-    let user_id = resolve_user(&state).await?;
+async fn handle_connect_all_with_state(state: &AppState) -> anyhow::Result<()> {let user_id = resolve_user(&state).await?;
     let mut results: Vec<serde_json::Value> = Vec::new();
 
     // ── X/Twitter ─────────────────────────────────────────────
@@ -1160,9 +1152,7 @@ fn handle_config(action: ConfigAction) -> anyhow::Result<()> {
 
 // ── Import Handler ───────────────────────────────────────────
 
-async fn handle_import(provider_name: &str, count: u32) -> anyhow::Result<()> {
-    let state = init_state().await?;
-    let user_id = resolve_user(&state).await?;
+async fn handle_import_with_state(state: &AppState, provider_name: &str, count: u32) -> anyhow::Result<()> {let user_id = resolve_user(&state).await?;
     let integration = find_integration(&state, user_id, provider_name).await?;
     let token = crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
 
@@ -1211,9 +1201,7 @@ async fn handle_import(provider_name: &str, count: u32) -> anyhow::Result<()> {
 
 // ── Feed Handler ────────────────────────────────────────────
 
-async fn handle_feed(provider: Option<&str>, limit: u32) -> anyhow::Result<()> {
-    let state = init_state().await?;
-    let user_id = resolve_user(&state).await?;
+async fn handle_feed_with_state(state: &AppState, provider: Option<&str>, limit: u32) -> anyhow::Result<()> {let user_id = resolve_user(&state).await?;
     let limit = limit.min(100) as i64;
 
     let posts = crate::db::queries::list_all_external_posts(
@@ -1238,9 +1226,7 @@ async fn handle_feed(provider: Option<&str>, limit: u32) -> anyhow::Result<()> {
 
 // ── Comment Handler ──────────────────────────────────────────
 
-async fn handle_comment(action: CommentAction) -> anyhow::Result<()> {
-    let state = init_state().await?;
-    match action {
+async fn handle_comment_with_state(state: &AppState, action: CommentAction) -> anyhow::Result<()> {match action {
         CommentAction::Get { integration_id, post_id, limit } => {
             let input = crate::mcp::tools_comments::GetCommentsInput {
                 integration_id,
@@ -1276,9 +1262,7 @@ async fn handle_comment(action: CommentAction) -> anyhow::Result<()> {
 
 // ── DM Handler ───────────────────────────────────────────────
 
-async fn handle_dm(action: DmAction) -> anyhow::Result<()> {
-    let state = init_state().await?;
-    match action {
+async fn handle_dm_with_state(state: &AppState, action: DmAction) -> anyhow::Result<()> {match action {
         DmAction::Send { integration_id, recipient, content } => {
             let input = crate::mcp::tools_dm::SendDmInput {
                 integration_id,
@@ -1314,9 +1298,7 @@ async fn handle_dm(action: DmAction) -> anyhow::Result<()> {
 
 // ── Automation Handler ───────────────────────────────────────
 
-async fn handle_automation(action: AutomationAction) -> anyhow::Result<()> {
-    let state = init_state().await?;
-    match action {
+async fn handle_automation_with_state(state: &AppState, action: AutomationAction) -> anyhow::Result<()> {match action {
         AutomationAction::Create { integration_id, name, trigger_type, response_template, response_type } => {
             let input = crate::mcp::tools_automation::CreateRuleInput {
                 integration_id,
@@ -1381,15 +1363,11 @@ async fn handle_automation(action: AutomationAction) -> anyhow::Result<()> {
 
 
 // Unified Post Handler
-async fn handle_post(
-    text: &str,
+async fn handle_post_with_state(state: &AppState, text: &str,
     platforms: Option<&str>,
     media: Option<&str>,
     schedule: Option<&str>,
-    first_comment: Option<&str>,
-) -> anyhow::Result<()> {
-    let state = init_state().await?;
-    let user_id = resolve_user(&state).await?;
+    first_comment: Option<&str>,) -> anyhow::Result<()> {let user_id = resolve_user(&state).await?;
     let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
 
     let integration_ids: Vec<String> = if let Some(platforms_str) = platforms {
@@ -1429,17 +1407,13 @@ async fn handle_post(
 
 
 // Stage Handler
-async fn handle_stage(
-    text: &str,
+async fn handle_stage_with_state(state: &AppState, text: &str,
     integrations_str: Option<&str>,
     platforms_str: Option<&str>,
     media: Option<&str>,
     schedule: Option<&str>,
     preview_only: bool,
-    first_comment: Option<&str>,
-) -> anyhow::Result<()> {
-    let state = init_state().await?;
-    let user_id = resolve_user(&state).await?;
+    first_comment: Option<&str>,) -> anyhow::Result<()> {let user_id = resolve_user(&state).await?;
     let all_integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
     let integration_ids: Vec<Uuid> = if let Some(iids) = integrations_str {
         iids.split(',').map(|s| s.trim()).filter(|s| !s.is_empty())
@@ -1504,16 +1478,11 @@ async fn handle_stage(
 }
 
 // Carousel Handler
-async fn handle_carousel(
-    text: &str,
+async fn handle_carousel_with_state(state: &AppState, text: &str,
     integration_id_str: &str,
     media_str: &str,
     title: Option<&str>,
-    schedule: Option<&str>,
-) -> anyhow::Result<()> {
-    let state = init_state().await?;
-
-    let media_urls: Vec<String> = media_str.split(',')
+    schedule: Option<&str>,) -> anyhow::Result<()> {let media_urls: Vec<String> = media_str.split(',')
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
         .collect();
@@ -1559,9 +1528,7 @@ async fn handle_carousel(
 }
 
 // Media Handler
-async fn handle_media(action: MediaAction) -> anyhow::Result<()> {
-    let state = init_state().await?;
-    match action {
+async fn handle_media_with_state(state: &AppState, action: MediaAction) -> anyhow::Result<()> {match action {
         MediaAction::Upload { path, alt: _ } => {
             let result = crate::mcp::tools_media::upload_from_path(&state, &path).await
                 .map_err(|e| anyhow::anyhow!("{}", e))?;
@@ -1756,9 +1723,7 @@ async fn handle_posts_create_helper(
     }))
 }
 
-async fn handle_posts(action: PostsAction) -> anyhow::Result<()> {
-    let state = init_state().await?;
-    let user_id = resolve_user(&state).await?;
+async fn handle_posts_with_state(state: &AppState, action: PostsAction) -> anyhow::Result<()> {let user_id = resolve_user(&state).await?;
 
     let result: anyhow::Result<serde_json::Value> = match action {
         PostsAction::List { state: post_state, limit, offset } => {
@@ -1924,167 +1889,86 @@ fn handle_split_preview(text: &str, platforms: Option<&str>) -> anyhow::Result<(
 // ── Main CLI Dispatcher ──────────────────────────────────────
 
 pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
+    // Commands that don't need AppState — handle early, skip init_state().
     match cli.command {
         Command::Serve { .. } | Command::Mcp => {
             return Err(anyhow::anyhow!(
                 "Serve/Mcp are handled in main.rs before calling run_cli — this is a bug"
             ));
         }
-        Command::Init => handle_init(),
-        Command::Providers => handle_providers().await,
-        Command::Connect { provider } => handle_connect(&provider).await,
-        Command::Doctor => handle_doctor().await,
+        Command::Init => return handle_init(),
+        Command::Config { action } => return handle_config(action),
+        Command::SplitPreview { text, platforms } => {
+            return handle_split_preview(&text, platforms.as_deref());
+        }
+        _ => {}
+    }
+
+    // Initialize AppState once for all commands that need it.
+    let state = init_state().await?;
+
+    match cli.command {
+        Command::Init | Command::Config { .. } | Command::SplitPreview { .. } | Command::Serve { .. } | Command::Mcp => {
+            unreachable!("handled above")
+        }
+
+        Command::Providers => handle_providers_with_state(&state).await,
+        Command::Connect { provider } => handle_connect_with_state(&state, &provider).await,
+        Command::Doctor => handle_doctor_with_state(&state).await,
         Command::Setup => handle_setup().await,
-        Command::ConnectAll => handle_connect_all().await,
-        Command::Config { action } => handle_config(action),
+        Command::ConnectAll => handle_connect_all_with_state(&state).await,
 
         // ── Core Platform Handlers ──────────────────────────
-        Command::X { action } => {
-            let state = init_state().await?;
-            crate::cli::platforms::x::handle(action, &state).await
-        }
-        Command::Reddit { action } => {
-            let state = init_state().await?;
-            crate::cli::platforms::reddit::handle(action, &state).await
-        }
-        Command::Linkedin { action } => {
-            let state = init_state().await?;
-            crate::cli::platforms::linkedin::handle(action, &state).await
-        }
-        Command::LinkedinPage { action } => {
-            let state = init_state().await?;
-            crate::cli::platforms::linkedin_page::handle(action, &state).await
-        }
-        Command::Facebook { action } => {
-            let state = init_state().await?;
-            crate::cli::platforms::facebook::handle(action, &state).await
-        }
-        Command::Instagram { action } => {
-            let state = init_state().await?;
-            crate::cli::platforms::instagram::handle(action, &state).await
-        }
-        Command::Youtube { action } => {
-            let state = init_state().await?;
-            crate::cli::platforms::youtube::handle(action, &state).await
-        }
-        Command::Bluesky { action } => {
-            let state = init_state().await?;
-            crate::cli::platforms::bluesky::handle(action, &state).await
-        }
-        Command::Mastodon { action } => {
-            let state = init_state().await?;
-            crate::cli::platforms::mastodon::handle(action, &state).await
-        }
+        Command::X { action } => crate::cli::platforms::x::handle(action, &state).await,
+        Command::Reddit { action } => crate::cli::platforms::reddit::handle(action, &state).await,
+        Command::Linkedin { action } => crate::cli::platforms::linkedin::handle(action, &state).await,
+        Command::LinkedinPage { action } => crate::cli::platforms::linkedin_page::handle(action, &state).await,
+        Command::Facebook { action } => crate::cli::platforms::facebook::handle(action, &state).await,
+        Command::Instagram { action } => crate::cli::platforms::instagram::handle(action, &state).await,
+        Command::Youtube { action } => crate::cli::platforms::youtube::handle(action, &state).await,
+        Command::Bluesky { action } => crate::cli::platforms::bluesky::handle(action, &state).await,
+        Command::Mastodon { action } => crate::cli::platforms::mastodon::handle(action, &state).await,
 
         // ── Unified Commands ────────────────────────────────
-        Command::Import { provider, count } => handle_import(&provider, count).await,
-        Command::Feed { provider, limit } => handle_feed(provider.as_deref(), limit).await,
-        Command::Comment { action } => handle_comment(action).await,
-        Command::Dm { action } => handle_dm(action).await,
-        Command::Automation { action } => handle_automation(action).await,
-        Command::Posts { action } => handle_posts(action).await,
+        Command::Import { provider, count } => handle_import_with_state(&state, &provider, count).await,
+        Command::Feed { provider, limit } => handle_feed_with_state(&state, provider.as_deref(), limit).await,
+        Command::Comment { action } => handle_comment_with_state(&state, action).await,
+        Command::Dm { action } => handle_dm_with_state(&state, action).await,
+        Command::Automation { action } => handle_automation_with_state(&state, action).await,
+        Command::Posts { action } => handle_posts_with_state(&state, action).await,
         Command::Post { text, platforms, media, schedule, first_comment } => {
-            handle_post(&text, platforms.as_deref(), media.as_deref(), schedule.as_deref(), first_comment.as_deref()).await
+            handle_post_with_state(&state, &text, platforms.as_deref(), media.as_deref(), schedule.as_deref(), first_comment.as_deref()).await
         }
         Command::Stage { text, integrations, platforms, media, schedule, preview, first_comment } => {
-            handle_stage(&text, integrations.as_deref(), platforms.as_deref(), media.as_deref(), schedule.as_deref(), preview, first_comment.as_deref()).await
+            handle_stage_with_state(&state, &text, integrations.as_deref(), platforms.as_deref(), media.as_deref(), schedule.as_deref(), preview, first_comment.as_deref()).await
         }
         Command::Carousel { text, integration, media, title, schedule } => {
-            handle_carousel(&text, &integration, &media, title.as_deref(), schedule.as_deref()).await
+            handle_carousel_with_state(&state, &text, &integration, &media, title.as_deref(), schedule.as_deref()).await
         }
-        Command::Media { action } => handle_media(action).await,
-        Command::SplitPreview { text, platforms } => {
-            handle_split_preview(&text, platforms.as_deref())
-        }
+        Command::Media { action } => handle_media_with_state(&state, action).await,
 
         // ── New Platform Handlers (delegate to platform modules) ──
-        Command::Tiktok { action } => {
-            let state = init_state().await?;
-            crate::cli::platforms::tiktok::handle(action, &state).await
-        }
-        Command::Threads { action } => {
-            let state = init_state().await?;
-            crate::cli::platforms::threads::handle(action, &state).await
-        }
-        Command::Discord { action } => {
-            let state = init_state().await?;
-            crate::cli::platforms::discord::handle(action, &state).await
-        }
-        Command::Slack { action } => {
-            let state = init_state().await?;
-            crate::cli::platforms::slack::handle(action, &state).await
-        }
-        Command::TelegramBot { action } => {
-            let state = init_state().await?;
-            crate::cli::platforms::telegram_bot::handle(action, &state).await
-        }
-        Command::TelegramUser { action } => {
-            let state = init_state().await?;
-            crate::cli::platforms::telegram_user::handle(action, &state).await
-        }
-        Command::Whatsapp { action } => {
-            let state = init_state().await?;
-            crate::cli::platforms::whatsapp::handle(action, &state).await
-        }
-        Command::Pinterest { action } => {
-            let state = init_state().await?;
-            crate::cli::platforms::pinterest::handle(action, &state).await
-        }
-        Command::Github { action } => {
-            let state = init_state().await?;
-            crate::cli::platforms::github::handle(action, &state).await
-        }
-        Command::Wordpress { action } => {
-            let state = init_state().await?;
-            crate::cli::platforms::wordpress::handle(action, &state).await
-        }
-        Command::Hashnode { action } => {
-            let state = init_state().await?;
-            crate::cli::platforms::hashnode::handle(action, &state).await
-        }
-        Command::MediumBlog { action } => {
-            let state = init_state().await?;
-            crate::cli::platforms::medium_blog::handle(action, &state).await
-        }
-        Command::Devto { action } => {
-            let state = init_state().await?;
-            crate::cli::platforms::devto::handle(action, &state).await
-        }
-        Command::Skool { action } => {
-            let state = init_state().await?;
-            crate::cli::platforms::skool::handle(action, &state).await
-        }
-        Command::Google { action } => {
-            let state = init_state().await?;
-            crate::cli::platforms::google::handle(action, &state).await
-        }
-        Command::Gdrive { action } => {
-            let state = init_state().await?;
-            crate::cli::platforms::drive::handle(action, &state).await
-        }
-        Command::Gcal { action } => {
-            let state = init_state().await?;
-            crate::cli::platforms::gcal::handle(action, &state).await
-        }
-        Command::GmailOps { action } => {
-            let state = init_state().await?;
-            crate::cli::platforms::gmail::handle(action, &state).await
-        }
-        Command::Webhooks { action } => {
-            let state = init_state().await?;
-            crate::cli::platforms::webhooks::handle(action, &state).await
-        }
-        Command::Notifications { action } => {
-            let state = init_state().await?;
-            crate::cli::platforms::notifications::handle(action, &state).await
-        }
-        Command::Tags { action } => {
-            let state = init_state().await?;
-            crate::cli::platforms::tags::handle(action, &state).await
-        }
-        Command::Analytics { action } => {
-            let state = init_state().await?;
-            crate::cli::platforms::analytics::handle(action, &state).await
-        }
+        Command::Tiktok { action } => crate::cli::platforms::tiktok::handle(action, &state).await,
+        Command::Threads { action } => crate::cli::platforms::threads::handle(action, &state).await,
+        Command::Discord { action } => crate::cli::platforms::discord::handle(action, &state).await,
+        Command::Slack { action } => crate::cli::platforms::slack::handle(action, &state).await,
+        Command::TelegramBot { action } => crate::cli::platforms::telegram_bot::handle(action, &state).await,
+        Command::TelegramUser { action } => crate::cli::platforms::telegram_user::handle(action, &state).await,
+        Command::Whatsapp { action } => crate::cli::platforms::whatsapp::handle(action, &state).await,
+        Command::Pinterest { action } => crate::cli::platforms::pinterest::handle(action, &state).await,
+        Command::Github { action } => crate::cli::platforms::github::handle(action, &state).await,
+        Command::Wordpress { action } => crate::cli::platforms::wordpress::handle(action, &state).await,
+        Command::Hashnode { action } => crate::cli::platforms::hashnode::handle(action, &state).await,
+        Command::MediumBlog { action } => crate::cli::platforms::medium_blog::handle(action, &state).await,
+        Command::Devto { action } => crate::cli::platforms::devto::handle(action, &state).await,
+        Command::Skool { action } => crate::cli::platforms::skool::handle(action, &state).await,
+        Command::Google { action } => crate::cli::platforms::google::handle(action, &state).await,
+        Command::Gdrive { action } => crate::cli::platforms::drive::handle(action, &state).await,
+        Command::Gcal { action } => crate::cli::platforms::gcal::handle(action, &state).await,
+        Command::GmailOps { action } => crate::cli::platforms::gmail::handle(action, &state).await,
+        Command::Webhooks { action } => crate::cli::platforms::webhooks::handle(action, &state).await,
+        Command::Notifications { action } => crate::cli::platforms::notifications::handle(action, &state).await,
+        Command::Tags { action } => crate::cli::platforms::tags::handle(action, &state).await,
+        Command::Analytics { action } => crate::cli::platforms::analytics::handle(action, &state).await,
     }
 }
