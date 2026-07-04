@@ -1,7 +1,8 @@
 <script lang="ts">
   import { toast } from "$lib/stores/toast";
-  import { onMount } from "svelte";
+  import { onMount, onDestroy } from "svelte";
   import { postsApi, type PostSummary } from "$lib/api/posts";
+  import { realtime } from "$lib/stores/realtime";
   import Badge from "$lib/ui/Badge.svelte";
   import { goto } from "$app/navigation";
 
@@ -41,7 +42,19 @@
     load();
   }
 
-  onMount(load);
+  let postsUnsubscribers: (() => void)[] = [];
+
+  onMount(() => {
+    load();
+    const events = ['post_created', 'post_scheduled', 'post_published', 'post_failed', 'post_deleted'];
+    for (const evt of events) {
+      postsUnsubscribers.push(realtime.on(evt, () => load()));
+    }
+  });
+
+  onDestroy(() => {
+    postsUnsubscribers.forEach(fn => fn());
+  });
 
   const filters = ["all", "draft", "queued", "published", "error"];
 </script>

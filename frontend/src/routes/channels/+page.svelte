@@ -1,7 +1,8 @@
 <script lang="ts">
   import { integrationsApi, type Integration } from "$lib/api/integrations";
-  import { onMount } from "svelte";
+  import { onMount, onDestroy } from "svelte";
   import { toast } from "$lib/stores/toast";
+  import { realtime } from "$lib/stores/realtime";
   import { groupIntegrations } from "$lib/channels/group-integrations";
   import ChannelCard from "$lib/channels/ChannelCard.svelte";
   import ProviderIcon from "$lib/channels/ProviderIcon.svelte";
@@ -287,7 +288,19 @@
     connectProvider = null;
   }
 
-  onMount(load);
+  let chanUnsubscribers: (() => void)[] = [];
+
+  onMount(() => {
+    load();
+    const events = ['integration_connected', 'integration_disconnected'];
+    for (const evt of events) {
+      chanUnsubscribers.push(realtime.on(evt, () => load()));
+    }
+  });
+
+  onDestroy(() => {
+    chanUnsubscribers.forEach(fn => fn());
+  });
 </script>
 
 <div class="space-y-6">

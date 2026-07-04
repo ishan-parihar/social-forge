@@ -1,14 +1,15 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { postsApi, type PostSummary } from '$lib/api/posts';
   import { formatDateTime } from '$lib/calendar/utils';
   import { goto } from '$app/navigation';
+  import { realtime } from '$lib/stores/realtime';
 
   let upcoming = $state<PostSummary[]>([]);
   let todayPosts = $state<PostSummary[]>([]);
   let stats = $state({ draft: 0, queued: 0, published: 0, error: 0 });
 
-  onMount(async () => {
+  async function load() {
     const r = await postsApi.list({ limit: 100 });
     if (!r.data) return;
     const all = r.data.posts;
@@ -16,6 +17,21 @@
     const t = new Date().toDateString();
     todayPosts = all.filter(p => p.scheduled_at && new Date(p.scheduled_at).toDateString() === t).slice(0, 5);
     stats = { draft: all.filter(p => p.state === 'draft').length, queued: all.filter(p => p.state === 'queued').length, published: all.filter(p => p.state === 'published').length, error: all.filter(p => p.state === 'error').length };
+  }
+
+  let unsubscribers: (() => void)[] = [];
+
+  onMount(() => {
+    load();
+    // Auto-refresh on realtime events
+    const events = ['post_created', 'post_scheduled', 'post_published', 'post_failed', 'post_deleted'];
+    for (const evt of events) {
+      unsubscribers.push(realtime.on(evt, () => load()));
+    }
+  });
+
+  onDestroy(() => {
+    unsubscribers.forEach(fn => fn());
   });
 </script>
 

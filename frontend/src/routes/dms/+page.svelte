@@ -1,7 +1,8 @@
 <script lang="ts">
   import { toast } from "$lib/stores/toast";
   import { onMount } from "svelte";
-  import { api } from "$lib/api/client";
+  import { dmsApi, type Conversation, type DmMessage } from "$lib/api/dms";
+  import { integrationsApi, type Integration } from "$lib/api/integrations";
 
   interface Message {
     id: string;
@@ -62,7 +63,7 @@
   let selected = $derived(conversations.find(c => c.id === selectedId));
 
   async function loadIntegrations() {
-    const r = await api.get<{ integrations: Integration[] }>(`/api/integrations`);
+    const r = await integrationsApi.list();
     if (r.data) {
       integrations = r.data.integrations.filter(i => !i.disabled);
       if (integrations.length > 0 && !selectedIntegrationId) {
@@ -82,9 +83,7 @@
     }
     loading = true;
     error = null;
-    const r = await api.get<{ conversations: ConversationResponse[]; total: number }>(
-      `/api/dms/conversations?integration_id=${selectedIntegrationId}`
-    );
+    const r = await dmsApi.listConversations(selectedIntegrationId!);
     if (r.data) {
       const integration = integrations.find(i => i.id === selectedIntegrationId);
       conversations = r.data.conversations.map(c => ({
@@ -104,9 +103,7 @@
 
   async function loadMessages(convId: string) {
     if (!selectedIntegrationId) return;
-    const r = await api.get<{ messages: MessageResponse[]; total: number }>(
-      `/api/dms/${convId}/messages`
-    );
+    const r = await dmsApi.getMessages(convId);
     if (r.data) {
       const conv = conversations.find(c => c.id === convId);
       if (conv) {
@@ -125,12 +122,7 @@
     if (!selectedId || !newMessage.trim() || !selectedIntegrationId) return;
     sending = true;
     const recipient = selected?.contact || "";
-    const r = await api.post(`/api/dms/send`, {
-      integration_id: selectedIntegrationId,
-      recipient: recipient,
-      content: newMessage,
-      media: []
-    });
+    const r = await dmsApi.send(selectedIntegrationId!, recipient, newMessage);
     if (r.error) {
       toast(`Error: ${r.error}`, "error");
     } else {

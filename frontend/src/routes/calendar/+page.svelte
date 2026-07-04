@@ -1,9 +1,10 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, onDestroy } from "svelte";
   import { calendarApi } from "$lib/api/calendar";
   import { postsApi } from "$lib/api/posts";
   import { calendarState } from "$lib/stores/calendar.svelte";
   import { toast } from "$lib/stores/toast";
+  import { realtime } from "$lib/stores/realtime";
   import { toCalendarEvent, type CalendarEvent, type CalendarView } from "$lib/calendar/types";
   import { formatDateKey } from "$lib/calendar/utils";
   import CalendarHeader from "$lib/calendar/CalendarHeader.svelte";
@@ -179,7 +180,19 @@
     }
   }
 
-  onMount(() => refresh());
+  let calUnsubscribers: (() => void)[] = [];
+
+  onMount(() => {
+    refresh();
+    const events = ['post_created', 'post_scheduled', 'post_published', 'post_failed', 'post_deleted'];
+    for (const evt of events) {
+      calUnsubscribers.push(realtime.on(evt, () => refresh()));
+    }
+  });
+
+  onDestroy(() => {
+    calUnsubscribers.forEach(fn => fn());
+  });
 </script>
 
 <div class="space-y-4">

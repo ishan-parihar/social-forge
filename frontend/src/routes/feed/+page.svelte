@@ -1,10 +1,11 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, onDestroy } from "svelte";
   import { feedApi, proxyMediaUrl, type FeedPost, type FeedAccount } from "$lib/api/feed";
   import EngagementCard from "$lib/components/EngagementCard.svelte";
   import CommentsThread from "$lib/components/CommentsThread.svelte";
   import MediaCarousel from "$lib/media/MediaCarousel.svelte";
   import { toast } from "$lib/stores/toast";
+  import { realtime } from "$lib/stores/realtime";
 
   let posts = $state<FeedPost[]>([]);
   let loading = $state(false);
@@ -220,6 +221,8 @@
     return () => obs.disconnect();
   });
 
+  let feedUnsubscribers: (() => void)[] = [];
+
   onMount(async () => {
     await loadAccounts();
     await load();
@@ -235,6 +238,15 @@
       attemptedImport = true;
       await load();
     }
+    // Auto-refresh on realtime events
+    const events = ['post_published', 'post_created'];
+    for (const evt of events) {
+      feedUnsubscribers.push(realtime.on(evt, () => load()));
+    }
+  });
+
+  onDestroy(() => {
+    feedUnsubscribers.forEach(fn => fn());
   });
 </script>
 
