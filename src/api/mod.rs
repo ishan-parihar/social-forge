@@ -27,7 +27,7 @@ use crate::wa::OptionalWhaClient;
 
 mod analytics;
 mod auth;
-mod billing;
+mod billing;  // only stripe_webhook (public, signature-verified) is used
 mod calendar;
 mod comments;
 mod feed;
@@ -40,7 +40,6 @@ mod rss;
 mod sse;
 mod signatures;
 mod tags;
-mod teams;
 mod developer;
 mod webhooks;
 mod dms;
@@ -155,12 +154,6 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/analytics/post/{id}", axum::routing::get(analytics::get_post))
         .route("/api/tags", axum::routing::get(tags::list).post(tags::create))
         .route("/api/tags/{id}", axum::routing::get(tags::get).put(tags::update).delete(tags::delete))
-        .route("/api/teams", axum::routing::get(teams::list).post(teams::create))
-        .route("/api/teams/accept", axum::routing::post(teams::accept_invite))
-        .route("/api/teams/{id}", axum::routing::get(teams::get).put(teams::update).delete(teams::delete))
-        .route("/api/teams/{id}/invite", axum::routing::post(teams::invite))
-        .route("/api/teams/{id}/members", axum::routing::get(teams::members))
-        .route("/api/teams/{id}/members/{user_id}", axum::routing::delete(teams::remove_member))
         .route("/api/signatures", axum::routing::get(signatures::list).post(signatures::create))
         .route("/api/signatures/{id}", axum::routing::put(signatures::update).delete(signatures::delete))
         .route("/api/developer/api-keys", axum::routing::get(developer::list).post(developer::create))
@@ -176,11 +169,6 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/notifications/{id}/read", axum::routing::put(notifications::mark_read))
         .route("/api/notifications/read-all", axum::routing::put(notifications::mark_all_read))
         .route("/api/notifications/{id}", axum::routing::delete(notifications::delete))
-        // Billing / Stripe subscriptions
-        .route("/api/billing/create-checkout", axum::routing::post(billing::create_checkout_session))
-        .route("/api/billing/subscription", axum::routing::get(billing::get_subscription))
-        .route("/api/billing/invoices", axum::routing::get(billing::get_invoices))
-        .route("/api/billing/portal-session", axum::routing::post(billing::create_portal_session))
         // RSS autopost
         .route("/api/rss/feeds", axum::routing::get(rss::list_feeds).post(rss::create_feed))
         .route("/api/rss/feeds/{id}", axum::routing::delete(rss::delete_feed))

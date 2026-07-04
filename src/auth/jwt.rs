@@ -18,7 +18,12 @@ pub struct Claims {
     pub iat: usize,
 }
 
-/// Hash a password with Argon2
+/// Hash a password with Argon2.
+///
+/// Only used by tests now — the single-user password gate uses
+/// `constant_time_eq` against `APP_PASSWORD` directly (no DB hash).
+/// Kept for backward compat + tests; gated behind `#[cfg(test)]`.
+#[cfg(test)]
 pub fn hash_password(password: &str) -> Result<String, argon2::password_hash::Error> {
     let salt = SaltString::generate(&mut OsRng);
     let argon2 = Argon2::default();
@@ -26,7 +31,10 @@ pub fn hash_password(password: &str) -> Result<String, argon2::password_hash::Er
     Ok(hash.to_string())
 }
 
-/// Verify a password against an Argon2 hash
+/// Verify a password against an Argon2 hash.
+///
+/// Only used by tests — see `hash_password` docs.
+#[cfg(test)]
 pub fn verify_password(password: &str, hash: &str) -> Result<bool, argon2::password_hash::Error> {
     let parsed = PasswordHash::new(hash)?;
     Ok(Argon2::default()

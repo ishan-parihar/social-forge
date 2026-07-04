@@ -87,7 +87,8 @@ impl JsonSchema for McpJsonValue {
         std::borrow::Cow::Borrowed("OutputObject")
     }
     fn json_schema(_gen: &mut rmcp::schemars::SchemaGenerator) -> rmcp::schemars::Schema {
-        serde_json::from_value(serde_json::json!({"type": "object"})).unwrap()
+        serde_json::from_value(serde_json::json!({"type": "object"}))
+            .expect("OutputObject schema literal is valid JSON Schema")
     }
 }
 

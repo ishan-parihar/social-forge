@@ -1,5 +1,4 @@
 pub mod run;
-pub mod mcp_bridge;
 pub mod platforms;
 pub use run::run_cli;
 
@@ -224,18 +223,6 @@ pub enum Command {
         #[command(subcommand)]
         action: MediaAction,
     },
-
-    /// Call any MCP tool directly by name with JSON arguments
-    McpCall {
-        /// MCP tool name (e.g. posts_create, x_home_timeline, bs_create_post)
-        tool: String,
-        /// JSON arguments for the tool
-        #[arg(long, default_value = "{}")]
-        args: String,
-    },
-
-    /// List all available MCP tools that can be called via mcp-call
-    McpTools,
 
     /// Content split preview — see how content will be split across platforms
     SplitPreview {

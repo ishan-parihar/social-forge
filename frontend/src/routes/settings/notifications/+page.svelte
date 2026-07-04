@@ -9,7 +9,6 @@
   let prefs = $state<NotificationPrefs>({
     post_published: 'push',
     post_failed: 'push',
-    team_invite: 'push',
     analytics_weekly: 'push',
     quiet_hours_start: null,
     quiet_hours_end: null,
@@ -21,7 +20,6 @@
   const notificationTypes: { key: keyof NotificationPrefs; label: string; description: string }[] = [
     { key: 'post_published', label: 'Post Published', description: 'When a scheduled post is successfully published' },
     { key: 'post_failed', label: 'Post Failed', description: 'When a scheduled post fails to publish' },
-    { key: 'team_invite', label: 'Team Invite', description: 'When you are invited to a team' },
     { key: 'analytics_weekly', label: 'Weekly Analytics', description: 'Weekly analytics summary for your channels' },
   ];
 

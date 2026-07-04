@@ -125,6 +125,11 @@ pub struct Config {
     pub stripe_price_pro_annual: Option<String>,
     pub stripe_price_business_monthly: Option<String>,
     pub stripe_price_business_annual: Option<String>,
+
+    // AI/LLM endpoint for automation (auto-reply, content generation).
+    // If unset, AI automation features are disabled.
+    pub llm_endpoint: Option<String>,
+    pub llm_model: Option<String>,
 }
 
 impl Config {
@@ -256,6 +261,8 @@ impl Config {
             stripe_price_pro_annual: opt("STRIPE_PRICE_PRO_ANNUAL"),
             stripe_price_business_monthly: opt("STRIPE_PRICE_BUSINESS_MONTHLY"),
             stripe_price_business_annual: opt("STRIPE_PRICE_BUSINESS_ANNUAL"),
+            llm_endpoint: opt("LLM_ENDPOINT"),
+            llm_model: opt("LLM_MODEL"),
         })
     }
 

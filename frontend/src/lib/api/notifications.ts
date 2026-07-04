@@ -14,7 +14,6 @@ export interface Notification {
 export interface NotificationPrefs {
     post_published: string;
     post_failed: string;
-    team_invite: string;
     analytics_weekly: string;
     quiet_hours_start: string | null;
     quiet_hours_end: string | null;

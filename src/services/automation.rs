@@ -40,11 +40,17 @@ pub struct AutomationAction {
 
 pub struct AutomationEngine {
     db: PgPool,
+    llm_endpoint: Option<String>,
+    llm_model: String,
 }
 
 impl AutomationEngine {
-    pub fn new(db: PgPool) -> Self {
-        Self { db }
+    pub fn new(db: PgPool, llm_endpoint: Option<String>, llm_model: Option<String>) -> Self {
+        Self {
+            db,
+            llm_endpoint,
+            llm_model: llm_model.unwrap_or_else(|| "gpt-4o-mini".into()),
+        }
     }
 
     pub async fn check_triggers(
@@ -225,7 +231,9 @@ impl AutomationEngine {
         rule: &AutomationRule,
         context: &TriggerContext,
     ) -> Result<String, String> {
-        let model = rule.ai_model.as_deref().unwrap_or("gpt-4o-mini");
+        let endpoint = self.llm_endpoint.as_ref()
+            .ok_or_else(|| "AI automation disabled: LLM_ENDPOINT not configured".to_string())?;
+        let model = rule.ai_model.as_deref().unwrap_or(&self.llm_model);
 
         let prompt = format!(
             "You are a social media manager. Respond to this {} comment/message on {}.\n\nComment: {}\n\nGenerate a brief, friendly, professional response.",
@@ -234,9 +242,10 @@ impl AutomationEngine {
             context.content,
         );
 
+        let url = format!("{}/v1/chat/completions", endpoint.trim_end_matches('/'));
         let client = reqwest::Client::new();
         let resp = client
-            .post("http://localhost:4488/v1/chat/completions")
+            .post(&url)
             .json(&serde_json::json!({
                 "model": model,
                 "messages": [{"role": "user", "content": prompt}],

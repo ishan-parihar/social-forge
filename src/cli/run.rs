@@ -2719,29 +2719,6 @@ async fn handle_media(action: MediaAction) -> anyhow::Result<()> {
     Ok(())
 }
 
-// MCP Call Handler — delegates to the rmcp server's in-process call_tool.
-async fn handle_mcp_call(tool_name: &str, args_json: &str) -> anyhow::Result<()> {
-    let state = init_state().await?;
-    let result = crate::cli::mcp_bridge::call_tool(state, tool_name, args_json)
-        .await
-        .map_err(|e| anyhow::anyhow!("{}", e))?;
-    output_json(&result);
-    Ok(())
-}
-
-// MCP Tools List Handler — delegates to the rmcp server's in-process list_tools.
-async fn handle_mcp_tools() -> anyhow::Result<()> {
-    let state = init_state().await?;
-    let tools = crate::cli::mcp_bridge::list_tools(state)
-        .await
-        .map_err(|e| anyhow::anyhow!("{}", e))?;
-    let list: Vec<serde_json::Value> = tools.into_iter().map(|(name, desc)| {
-        serde_json::json!({"name": name, "description": desc})
-    }).collect();
-    output_json(&serde_json::json!({"count": list.len(), "tools": list}));
-    Ok(())
-}
-
 // ── Posts Handler ─────────────────────────────────────────────
 
 #[allow(clippy::too_many_arguments)]
@@ -3082,8 +3059,6 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
             handle_carousel(&text, &integration, &media, title.as_deref(), schedule.as_deref()).await
         }
         Command::Media { action } => handle_media(action).await,
-        Command::McpCall { tool, args } => handle_mcp_call(&tool, &args).await,
-        Command::McpTools => handle_mcp_tools().await,
         Command::SplitPreview { text, platforms } => {
             handle_split_preview(&text, platforms.as_deref())
         }
