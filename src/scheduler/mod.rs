@@ -189,7 +189,9 @@ async fn proactive_token_refresh(
                         "Integration {} has no refresh token, marking as refresh_needed",
                         integration.id
                     );
-                    let _ = queries::mark_integration_refresh_needed(db, integration.id).await;
+                    if let Err(e) = queries::mark_integration_refresh_needed(db, integration.id).await {
+                        tracing::warn!("DB operation failed: {e}");
+                    }
                     failed_count += 1;
                     continue;
                 }
@@ -250,7 +252,9 @@ async fn proactive_token_refresh(
                         integration.id
                     );
                     // Mark as needing reconnection
-                    let _ = queries::mark_integration_refresh_needed(db, integration.id).await;
+                    if let Err(e) = queries::mark_integration_refresh_needed(db, integration.id).await {
+                        tracing::warn!("DB operation failed: {e}");
+                    }
                     failed_count += 1;
                 }
             }

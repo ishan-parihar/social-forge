@@ -1,9 +1,9 @@
-// PUBLIC_AI_PROXY_URL can be set at build time (VITE_PUBLIC_AI_PROXY_URL) or
-// falls back to a local proxy default. Using import.meta.env avoids requiring
-// a .env file at build time (SvelteKit's $env/static/public would fail in CI).
-const AI_PROXY_URL: string =
-  (import.meta.env?.VITE_PUBLIC_AI_PROXY_URL as string | undefined) ||
-  "http://localhost:4488";
+// AI proxy URL — must be set via VITE_PUBLIC_AI_PROXY_URL at build time.
+// If unset, AI features are disabled and the UI shows a configuration hint
+// instead of silently hitting a localhost default that doesn't exist in
+// production.
+const AI_PROXY_URL: string | null =
+  (import.meta.env?.VITE_PUBLIC_AI_PROXY_URL as string | undefined) || null;
 
 interface AiResponse {
   choices: Array<{
@@ -12,6 +12,9 @@ interface AiResponse {
 }
 
 async function generate(prompt: string, temperature = 0.7, signal?: AbortSignal): Promise<string> {
+  if (!AI_PROXY_URL) {
+    throw new Error("AI features are disabled. Set VITE_PUBLIC_AI_PROXY_URL at build time to enable.");
+  }
   try {
     const r = await fetch(`${AI_PROXY_URL}/v1/chat/completions`, {
       method: "POST",

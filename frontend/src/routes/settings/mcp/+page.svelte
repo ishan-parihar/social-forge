@@ -72,10 +72,9 @@ Then edit: ~/.social-forge/.env</pre>
   <div class="bg-[#131720] border border-[#1e2435] rounded-xl p-5 space-y-3">
     <h3 class="text-sm font-medium">API Access</h3>
     <p class="text-xs text-[#6b7280]">REST API base URL:</p>
-    <pre class="bg-[#0b0e14] border border-[#1e2435] rounded-lg p-4 text-xs text-indigo-300 font-mono">{window.location.origin}/api</pre>
-    <p class="text-xs text-[#6b7280]">Authenticate requests with a Bearer token:</p>
-    <pre class="bg-[#0b0e14] border border-[#1e2435] rounded-lg p-4 text-xs text-green-300 font-mono overflow-x-auto">curl {window.location.origin}/api/posts \
-  -H "Authorization: Bearer YOUR_API_KEY"</pre>
-    <p class="text-xs text-[#6b7280]">Generate API keys in <a href="/settings/developer" class="text-indigo-400 hover:text-indigo-300">Developer Settings</a>.</p>
+    <pre class="bg-[#0b0e14] border border-[#1e2435] rounded-lg p-4 text-xs text-indigo-300 font-mono">{typeof window !== 'undefined' ? window.location.origin : 'https://your-host'}/api</pre>
+    <p class="text-xs text-[#6b7280]">The WebUI is protected by a password gate (<code class="text-indigo-400">APP_PASSWORD</code> env var). After login, a signed <code class="text-indigo-400">sf_session</code> cookie is set and sent automatically by the browser. For CLI/script access, use the MCP stdio server:</p>
+    <pre class="bg-[#0b0e14] border border-[#1e2435] rounded-lg p-4 text-xs text-green-300 font-mono overflow-x-auto">social-forge mcp</pre>
+    <p class="text-xs text-[#6b7280]">AI agents connect to this stdio server directly — no HTTP auth needed (local shell access implies trust).</p>
   </div>
 </div>

@@ -54,8 +54,8 @@ async fn find_di_token(state: &AppState, user_id: Uuid, channel_id: &str) -> Res
             )
         })?;
 
-    let __tok = crate::crypto::maybe_decrypt_token(&discord.access_token, state.token_key.as_ref());
-    Ok(__tok)
+    let tok = crate::crypto::maybe_decrypt_token(&discord.access_token, state.token_key.as_ref());
+    Ok(tok)
 }
 
 /// Create a DiscordProvider from the app config (bot_token sourced from config.discord_bot_token).

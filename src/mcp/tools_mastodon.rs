@@ -72,8 +72,8 @@ async fn find_mastodon_integration(
             "Mastodon not connected. Connect it via the integrations page first.".to_string()
         })?;
 
-    let __tok = crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
-    Ok(__tok)
+    let tok = crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
+    Ok(tok)
 }
 
 fn create_mastodon_provider(state: &AppState) -> MastodonProvider {

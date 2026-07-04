@@ -962,7 +962,9 @@ async fn handle_connect(provider: &str) -> anyhow::Result<()> {
 async fn handle_doctor() -> anyhow::Result<()> {
     let state = init_state().await?;
     let user_id = resolve_user(&state).await?;
-    let integrations = crate::db::queries::list_integrations(&state.db, user_id).await.unwrap_or_default();
+    let integrations = crate::db::queries::list_integrations(&state.db, user_id)
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to list integrations: {e}"))?;
 
     let mut checks: Vec<serde_json::Value> = Vec::new();
 

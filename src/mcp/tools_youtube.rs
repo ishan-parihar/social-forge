@@ -80,8 +80,8 @@ async fn find_yt_token(state: &AppState, user_id: Uuid, channel_id: &str) -> Res
             )
         })?;
 
-    let __tok = crate::crypto::maybe_decrypt_token(&yt.access_token, state.token_key.as_ref());
-    Ok(__tok)
+    let tok = crate::crypto::maybe_decrypt_token(&yt.access_token, state.token_key.as_ref());
+    Ok(tok)
 }
 
 fn create_yt_provider(state: &AppState) -> YoutubeProvider {

@@ -100,7 +100,9 @@ impl LinkedInProvider {
             );
             Ok(json)
         } else if status == 401 {
-            tracing::warn!("LinkedIn get_posts 401 — token expired. Response: {:#}", json);
+            // Don't log the full response body — LinkedIn error responses
+            // can echo the requested Bearer token or URN. Log status only.
+            tracing::warn!("LinkedIn get_posts 401 — token expired");
             Err(ProviderError::TokenExpired)
         } else {
             let msg = json["message"]

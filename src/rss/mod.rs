@@ -131,10 +131,13 @@ async fn poll_all_feeds(db: &PgPool) -> Result<(), Box<dyn std::error::Error + S
                         crate::db::queries::get_rss_post_by_hash(db, feed.id, &content_hash).await
                     {
                         if let Some(rp) = rss_post {
-                            let _ = crate::db::queries::update_rss_post_post_id(
+                            if let Err(e) = crate::db::queries::update_rss_post_post_id(
                                 db, rp.id, post.id,
                             )
-                            .await;
+                            .await
+                            {
+                                tracing::warn!("Failed to update RSS post post_id: {e}");
+                            }
                         }
                     }
                     tracing::info!(

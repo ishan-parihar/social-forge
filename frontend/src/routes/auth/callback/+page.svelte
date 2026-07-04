@@ -49,7 +49,14 @@
   }
 
   function handlePagePickerClose() {
-    window.location.href = '/channels';
+    if (window.opener) {
+      // Popup context: notify opener and close the popup.
+      window.opener.postMessage({ type: 'oauth-connected', provider: pendingProvider, success: false }, '*');
+      window.close();
+    } else {
+      // Direct navigation: go to channels page.
+      window.location.href = '/channels';
+    }
   }
 </script>
 

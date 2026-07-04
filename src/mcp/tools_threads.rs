@@ -88,8 +88,8 @@ async fn find_threads_token(
             )
         })?;
 
-    let __tok = crate::crypto::maybe_decrypt_token(&threads.access_token, state.token_key.as_ref());
-    Ok(__tok)
+    let tok = crate::crypto::maybe_decrypt_token(&threads.access_token, state.token_key.as_ref());
+    Ok(tok)
 }
 
 fn create_provider(state: &AppState) -> ThreadsProvider {

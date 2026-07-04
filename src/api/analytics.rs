@@ -77,16 +77,19 @@ pub async fn get(
         .await
         .map_err(AppError::from)?;
 
-    // Store in cache
+    // Store in cache (best-effort — cache miss is non-fatal)
     let data = serde_json::to_value(&analytics).unwrap_or(serde_json::Value::Null);
-    let _ = crate::db::queries::upsert_analytics_cache(
+    if let Err(e) = crate::db::queries::upsert_analytics_cache(
         &state.db,
         auth.user_id,
         &query.provider,
         None,
         &data,
     )
-    .await;
+    .await
+    {
+        tracing::warn!("Failed to upsert analytics cache: {e}");
+    }
 
     Ok(Json(serde_json::json!({ "data": analytics })))
 }
@@ -155,16 +158,19 @@ pub async fn get_post(
         .await
         .map_err(AppError::from)?;
 
-    // Store in cache
+    // Store in cache (best-effort — cache miss is non-fatal)
     let data = serde_json::to_value(&analytics).unwrap_or(serde_json::Value::Null);
-    let _ = crate::db::queries::upsert_analytics_cache(
+    if let Err(e) = crate::db::queries::upsert_analytics_cache(
         &state.db,
         auth.user_id,
         &integration.provider_identifier,
         Some(&platform_post_id),
         &data,
     )
-    .await;
+    .await
+    {
+        tracing::warn!("Failed to upsert analytics cache: {e}");
+    }
 
     Ok(Json(serde_json::json!({ "data": analytics })))
 }

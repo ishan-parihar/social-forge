@@ -3,6 +3,7 @@
   import { calendarApi } from "$lib/api/calendar";
   import { postsApi } from "$lib/api/posts";
   import { calendarState } from "$lib/stores/calendar.svelte";
+  import { toast } from "$lib/stores/toast";
   import { toCalendarEvent, type CalendarEvent, type CalendarView } from "$lib/calendar/types";
   import { formatDateKey } from "$lib/calendar/utils";
   import CalendarHeader from "$lib/calendar/CalendarHeader.svelte";
@@ -123,7 +124,7 @@
     const dateObj = new Date(`${newDate}T${time}:00Z`);
     const r = await postsApi.schedule(eventId, dateObj.toISOString());
     if (r.error) {
-      console.error("Failed to reschedule:", r.error);
+      toast(`Failed to reschedule: ${r.error}`, "error");
     } else {
       refresh();
     }
@@ -135,14 +136,14 @@
     try {
       const detail = await postsApi.get(eventId);
       if (detail.error || !detail.data) {
-        console.error("Failed to fetch post:", detail.error);
+        toast(`Failed to fetch post: ${detail.error || 'unknown'}`, "error");
         return;
       }
       const post = detail.data;
 
       const slot = await postsApi.findSlot(post.integration_id);
       if (slot.error || !slot.data?.date) {
-        console.error("Failed to find slot:", slot.error);
+        toast(`Failed to find slot: ${slot.error || 'unknown'}`, "error");
         return;
       }
 
@@ -155,7 +156,7 @@
 
       refresh();
     } catch (e) {
-      console.error("Failed to duplicate post:", e);
+      toast(`Failed to duplicate post: ${e instanceof Error ? e.message : 'unknown'}`, "error");
     } finally {
       duplicating = false;
     }
@@ -171,7 +172,7 @@
     deleting = true;
     try {
       const r = await postsApi.delete(eventId);
-      if (r.error) console.error("Failed to delete post:", r.error);
+      if (r.error) toast(`Failed to delete post: ${r.error}`, "error");
       else refresh();
     } finally {
       deleting = false;

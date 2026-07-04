@@ -1350,7 +1350,7 @@ pub async fn telegram_bot_token_submit(
         Err(e) => return axum::response::Html(format!("<p>Error creating user: {e}</p>")).into_response(),
     };
     let token_json = serde_json::json!({"bot_token": bot_token}).to_string();
-    let _ = crate::db::queries::create_integration(
+    if let Err(e) = crate::db::queries::create_integration(
         &state.db,
         user.id,
         "telegram-bot",
@@ -1364,7 +1364,12 @@ pub async fn telegram_bot_token_submit(
         Some(&format!("https://t.me/{bot_username}")),
         None,
         Some("api_key"),
-    ).await;
+    ).await {
+        tracing::error!("Failed to create Telegram Bot integration: {e}");
+        return axum::response::Html(
+            format!("<p style=\"color:red\">Failed to save Telegram Bot connection: {e}. Please try again.</p>")
+        ).into_response();
+    }
 
     axum::response::Redirect::to("/setup?connected=telegram-bot").into_response()
 }

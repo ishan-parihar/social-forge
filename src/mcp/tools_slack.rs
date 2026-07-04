@@ -55,8 +55,8 @@ async fn find_slack_token(
             "Slack not connected. Connect Slack first via integrations_connect.".to_string()
         })?;
 
-    let __tok = crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
-    Ok(__tok)
+    let tok = crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
+    Ok(tok)
 }
 
 fn create_slack_provider(state: &AppState) -> SlackProvider {

@@ -114,7 +114,9 @@ impl IntegrationService {
             .map_err(|e| format!("Token exchange failed: {e}"))?;
 
         // Delete the used state
-        let _ = queries::delete_oauth_state(db, state).await;
+        if let Err(e) = queries::delete_oauth_state(db, state).await {
+            tracing::warn!("DB operation failed: {e}");
+        }
 
         // Encrypt tokens before storing if encryption key is configured
         let enc_access_token = match token_key {

@@ -495,7 +495,9 @@ pub async fn refresh(
             }
             Err(e) => {
                 tracing::warn!("Token refresh failed for integration {}: {e}", id);
-                let _ = queries::mark_integration_refresh_needed(&state.db, id).await;
+                if let Err(e) = queries::mark_integration_refresh_needed(&state.db, id).await {
+                    tracing::warn!("DB operation failed: {e}");
+                }
                 return Err(AppError::Provider(format!("Token refresh failed: {e}")));
             }
         }

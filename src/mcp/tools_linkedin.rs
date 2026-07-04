@@ -80,8 +80,8 @@ async fn find_linkedin_token(
             )
         })?;
 
-    let __tok = crate::crypto::maybe_decrypt_token(&li.access_token, state.token_key.as_ref());
-    Ok(__tok)
+    let tok = crate::crypto::maybe_decrypt_token(&li.access_token, state.token_key.as_ref());
+    Ok(tok)
 }
 
 fn create_provider(state: &AppState) -> LinkedInProvider {

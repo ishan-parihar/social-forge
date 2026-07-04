@@ -47,17 +47,21 @@ pub async fn handle(action: NotificationsAction, state: &AppState) -> anyhow::Re
             Ok(serde_json::json!({ "updated": count }))
         }
         NotificationsAction::Create { title, body } => {
-            let user_id = match crate::mcp::tools_posts::resolve_first_user(state).await {
-                Ok(id) => id,
-                Err(e) => return Err(anyhow::anyhow!("Auth error: {e}")),
+            // Route through the MCP handler so the notification is created
+            // via queries::create_notification (consistent timestamps,
+            // is_read=false, notification_type, etc.) instead of inlining
+            // a raw SQL INSERT that bypasses those defaults.
+            let input = crate::mcp::tools_notifications::NotifCreateInput {
+                title,
+                body: Some(body),
+                notification_type: "manual".into(),
+                reference_type: None,
+                reference_id: None,
             };
-            let notif_id = uuid::Uuid::new_v4();
-            match sqlx::query!("INSERT INTO notifications (id, user_id, title, body, is_read, created_at) VALUES ($1, $2, $3, $4, false, NOW())", notif_id, user_id, title, body)
-                .execute(&state.db).await
-            {
-                Ok(_) => Ok(serde_json::json!({ "id": notif_id.to_string(), "title": title, "body": body })),
-                Err(e) => Err(format!("Create failed: {e}")),
-            }
+            crate::mcp::tools_notifications::handle_notif_create(state, &input)
+                .await
+                .map(|v| v.0)
+                .map_err(|e| e.to_string())
         }
     };
 
