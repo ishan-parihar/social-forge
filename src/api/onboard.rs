@@ -17,10 +17,6 @@ use crate::error::AppError;
 
 use super::AppState;
 
-const DEV_EMAIL: &str = "dev@social-forge.dev";
-const DEV_PASSWORD: &str = "devdev123";
-const DEV_NAME: &str = "Dev User";
-
 /// Query params for public connect
 #[derive(Debug, Deserialize)]
 pub struct PublicConnectQuery {
@@ -507,7 +503,7 @@ function dc(iid){{
 </script>
 </body>
 </html>"#,
-        dev_email = DEV_EMAIL,
+        dev_email = "local@socialforge",
         app_url = app_url,
         frontend_url = frontend_url,
         banner_html = banner_html,
@@ -1271,18 +1267,30 @@ pub async fn reddit_cookies_import(
     Ok(Redirect::to(&format!("/?connected=reddit&name={}", urlencoding::encode(&profile_name))).into_response())
 }
 
-// ── Dev user helpers ──────────────────────────────────────────
+// ── Local user helper ─────────────────────────────────────────
+//
+// Single-user mode: the onboarding flow (and all public OAuth/cookie
+// connect endpoints) operate on `DEFAULT_USER_ID`. There is no separate
+// "dev user" anymore — `ensure_local_user` in `db/mod.rs` creates the
+// row at startup, and every connect call binds the integration to that
+// single user id.
 
-/// Find or create the dev user for public onboarding
+/// Return the single local user row. The row is created at startup by
+/// `db::ensure_local_user`; if for some reason it's missing (e.g. the
+/// DB was wiped between startup and this request), we fall back to a
+/// `get_user_by_id` lookup and surface a clear error if still absent.
 async fn get_or_create_dev_user(state: &AppState) -> Result<crate::db::models::User, AppError> {
-    if let Some(user) = queries::get_user_by_email(&state.db, DEV_EMAIL).await? {
+    let user_id = crate::auth::middleware::DEFAULT_USER_ID;
+    if let Some(user) = queries::get_user_by_id(&state.db, user_id).await? {
         return Ok(user);
     }
-
-    let hash = jwt::hash_password(DEV_PASSWORD)?;
-    let user = queries::create_user(&state.db, DEV_EMAIL, &hash, DEV_NAME).await?;
-    tracing::info!("Created dev user: {} ({})", DEV_EMAIL, user.id);
-    Ok(user)
+    // Row missing — recreate it (mirrors db::ensure_local_user).
+    crate::db::ensure_local_user(&state.db)
+        .await
+        .map_err(|e| AppError::Internal(format!("Failed to ensure local user: {e}")))?;
+    queries::get_user_by_id(&state.db, user_id)
+        .await?
+        .ok_or_else(|| AppError::Internal("Local user row missing after ensure".into()))
 }
 
 // ── Telegram Bot Token Form ──────────────────────────────────

@@ -173,14 +173,20 @@ impl Config {
                 } else {
                     let generated = generate_random_password(32);
                     persist_app_password(&generated);
+                    // Do NOT log the password value — it would leak into
+                    // container logs, journald, shell history, etc. Point
+                    // the user at the persisted file instead.
+                    let env_path = config_dir().join(".env");
                     tracing::warn!(
                         "┌──────────────────────────────────────────────────────────┐"
                     );
                     tracing::warn!("│ No APP_PASSWORD set. Generated a random one and persisted │");
-                    tracing::warn!("│ it to ~/.social-forge/.env. To change it, edit that file  │");
-                    tracing::warn!("│ or set APP_PASSWORD in your environment.                  │");
-                    tracing::warn!("│                                                           │");
-                    tracing::warn!("│ Generated password: {:<37}│", generated);
+                    tracing::warn!("│ it to {}|",
+                        format!("{:<48}", env_path.display().to_string()).trim_end()
+                    );
+                    tracing::warn!("│                                                          │");
+                    tracing::warn!("│ To view it:  cat ~/.social-forge/.env                    │");
+                    tracing::warn!("│ To change it: edit that file or set APP_PASSWORD in env  │");
                     tracing::warn!(
                         "└──────────────────────────────────────────────────────────┘"
                     );

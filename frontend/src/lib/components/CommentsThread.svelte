@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { api } from "$lib/api/client";
   import { feedApi, type FeedPost, type FeedAccount } from "$lib/api/feed";
   import { engagementIcon, formatMetricCount } from "$lib/calendar/engagement";
 
@@ -46,29 +47,28 @@
   async function loadComments() {
     loading = true;
     error = null;
-    try {
-      const res = await fetch(`/api/feed/${post.id}/comments`);
-      const text = await res.text();
-      if (!res.ok) {
-        error = `Failed to load comments (${res.status})`;
-        return;
-      }
-      const data = JSON.parse(text);
+    // Use the shared api client so 401 → /login redirect, timeout, and
+    // error envelope all work. Previously this used raw fetch() which
+    // silently swallowed auth failures.
+    const r = await api.get<Comment[]>(`/api/feed/${post.id}/comments`);
+    if (r.error) {
+      error = r.error;
+    } else if (r.data) {
       // Deduplicate by comment ID to prevent duplicates from appearing
-      const deduped = new Map<string, any>();
-      for (const c of data) {
+      const deduped = new Map<string, Comment>();
+      for (const c of r.data) {
         if (!deduped.has(c.id)) {
           deduped.set(c.id, c);
         }
       }
-      comments = Array.from(deduped.values()).map((c: any) => ({
+      comments = Array.from(deduped.values()).map((c) => ({
         id: c.id,
         author_name: c.author_name,
         author_avatar: c.author_avatar,
         text: c.text,
         created_at: c.created_at,
         like_count: c.like_count || 0,
-        replies: (c.replies || []).reduce((acc: any[], r: any) => {
+        replies: (c.replies || []).reduce((acc: Comment[], r: Comment) => {
           if (!acc.some(existing => existing.id === r.id)) {
             acc.push({
               id: r.id,
@@ -83,11 +83,8 @@
           return acc;
         }, []),
       }));
-    } catch (e: any) {
-      error = e.message || "Failed to load comments";
-    } finally {
-      loading = false;
     }
+    loading = false;
   }
 
   // Load on mount

@@ -20,9 +20,37 @@
     messages: Message[];
   }
 
+  interface ConversationResponse {
+    id: string;
+    participant: string;
+    participant_name: Option<string>;
+    participant_avatar: Option<string>;
+    last_message: Option<string>;
+    last_message_at: Option<string>;
+    unread_count: number;
+  }
+
+  interface MessageResponse {
+    id: string;
+    conversation_id: string;
+    sender: string;
+    sender_name: Option<string>;
+    content: string;
+    created_at: string;
+    read: boolean;
+  }
+
+  interface Integration {
+    id: string;
+    provider_identifier: string;
+    internal_id: string;
+    disabled: boolean;
+  }
+
   let conversations = $state<Conversation[]>([]);
+  let integrations = $state<Integration[]>([]);
+  let selectedIntegrationId = $state<string | null>(null);
   let selectedId = $state<string | null>(null);
-  let filterPlatform = $state("all");
   let loading = $state(true);
   let error = $state<string | null>(null);
   let newMessage = $state("");
@@ -32,28 +60,73 @@
 
   let selected = $derived(conversations.find(c => c.id === selectedId));
 
+  async function loadIntegrations() {
+    const r = await api.get<{ integrations: Integration[] }>(`/api/integrations`);
+    if (r.data) {
+      integrations = r.data.integrations.filter(i => !i.disabled);
+      if (integrations.length > 0 && !selectedIntegrationId) {
+        selectedIntegrationId = integrations[0].id;
+      }
+    }
+  }
+
   async function load() {
+    if (!selectedIntegrationId) {
+      await loadIntegrations();
+    }
+    if (!selectedIntegrationId) {
+      error = "No integrations connected. Connect a social account first.";
+      loading = false;
+      return;
+    }
     loading = true;
     error = null;
-    const params = new URLSearchParams();
-    if (filterPlatform !== "all") params.set("platform", filterPlatform);
-    const r = await api.get<{ conversations: Conversation[] }>(`/api/dms/conversations?${params}`);
+    const r = await api.get<{ conversations: ConversationResponse[]; total: number }>(
+      `/api/dms/conversations?integration_id=${selectedIntegrationId}`
+    );
     if (r.data) {
-      conversations = r.data.conversations;
+      const integration = integrations.find(i => i.id === selectedIntegrationId);
+      conversations = r.data.conversations.map(c => ({
+        id: c.id,
+        platform: integration?.provider_identifier || "unknown",
+        contact: c.participant_name || c.participant,
+        last_message: c.last_message || "",
+        updated_at: c.last_message_at || new Date().toISOString(),
+        unread_count: c.unread_count,
+        messages: []
+      }));
     } else {
       error = r.error || "Failed to load conversations";
     }
     loading = false;
   }
 
+  async function loadMessages(convId: string) {
+    if (!selectedIntegrationId) return;
+    const r = await api.get<{ messages: MessageResponse[]; total: number }>(
+      `/api/dms/${convId}/messages`
+    );
+    if (r.data) {
+      const conv = conversations.find(c => c.id === convId);
+      if (conv) {
+        conv.messages = r.data.messages.map(m => ({
+          id: m.id,
+          sender: m.sender,
+          text: m.content,
+          created_at: m.created_at,
+          is_mine: m.read === false && m.sender === "me"
+        }));
+      }
+    }
+  }
+
   async function sendMessage() {
-    if (!selectedId || !newMessage.trim()) return;
+    if (!selectedId || !newMessage.trim() || !selectedIntegrationId) return;
     sending = true;
-    // TODO: Backend expects integration_id, recipient, content, media
-    // Frontend currently sends text only - need to track integration_id and recipient
-    const r = await api.post(`/api/dms/send`, { 
-      integration_id: selectedId,  // FIXME: Should be the actual integration UUID
-      recipient: selected?.contact || "",  // FIXME: Should be the recipient identifier
+    const recipient = selected?.contact || "";
+    const r = await api.post(`/api/dms/send`, {
+      integration_id: selectedIntegrationId,
+      recipient: recipient,
       content: newMessage,
       media: []
     });
@@ -61,16 +134,18 @@
       error = r.error;
     } else {
       newMessage = "";
-      await load();
+      await loadMessages(selectedId);
     }
     sending = false;
   }
 
   function selectConversation(id: string) {
     selectedId = id;
-    // Mark as read
     const conv = conversations.find(c => c.id === id);
-    if (conv) conv.unread_count = 0;
+    if (conv) {
+      conv.unread_count = 0;
+      loadMessages(id);
+    }
   }
 
   function platformIcon(p: string): string {
@@ -84,17 +159,20 @@
 <div class="space-y-4">
   <div class="flex items-center justify-between">
     <h2 class="text-xl font-semibold">Direct Messages</h2>
-    <button onclick={load} class="px-3 py-1.5 text-sm text-[#6b7280] hover:text-white border border-[#1e2435] rounded-lg transition-colors">↻ Refresh</button>
-  </div>
-
-  <!-- Platform filter -->
-  <div class="flex gap-1 bg-[#131720] border border-[#1e2435] rounded-lg p-1 overflow-x-auto">
-    {#each platforms as p}
-      <button
-        onclick={() => { filterPlatform = p; load(); }}
-        class="px-3 py-1.5 text-xs capitalize rounded-md transition-colors {filterPlatform === p ? 'bg-indigo-600 text-white' : 'text-[#6b7280] hover:bg-[#1a1f2e]'}"
-      >{p}</button>
-    {/each}
+    <div class="flex gap-2 items-center">
+      {#if integrations.length > 0}
+        <select
+          bind:value={selectedIntegrationId}
+          onchange={load}
+          class="px-3 py-1.5 text-sm bg-[#131720] border border-[#1e2435] rounded-lg text-[#e8edf5]"
+        >
+          {#each integrations as int (int.id)}
+            <option value={int.id}>{int.provider_identifier} ({int.internal_id.slice(0, 8)})</option>
+          {/each}
+        </select>
+      {/if}
+      <button onclick={load} class="px-3 py-1.5 text-sm text-[#6b7280] hover:text-white border border-[#1e2435] rounded-lg transition-colors">↻ Refresh</button>
+    </div>
   </div>
 
   {#if error}

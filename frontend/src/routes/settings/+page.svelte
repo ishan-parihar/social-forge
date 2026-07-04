@@ -1,12 +1,7 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import { auth } from '$lib/api';
-
-  let userId = $state<string>('');
-  onMount(async () => {
-    const r = await auth.me();
-    if (r.data) userId = r.data.user_id;
-  });
+  // userId comes from +layout.ts — no redundant auth.me() probe here.
+  let { data } = $props();
+  let userId = $derived(data?.userId ?? '');
 </script>
 
 <div class="space-y-4">
