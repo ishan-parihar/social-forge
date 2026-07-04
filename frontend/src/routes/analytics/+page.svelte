@@ -10,6 +10,22 @@
   let data = $state<AnalyticsSummary | null>(null);
   let loading = $state(true);
   let error = $state<string | null>(null);
+  let selectedProvider = $state<string>("all");
+
+  const providers = [
+    { value: "all", label: "All Platforms" },
+    { value: "x", label: "X (Twitter)" },
+    { value: "facebook", label: "Facebook" },
+    { value: "instagram", label: "Instagram" },
+    { value: "linkedin", label: "LinkedIn" },
+    { value: "youtube", label: "YouTube" },
+    { value: "reddit", label: "Reddit" },
+    { value: "bluesky", label: "Bluesky" },
+    { value: "mastodon", label: "Mastodon" },
+    { value: "pinterest", label: "Pinterest" },
+    { value: "tiktok", label: "TikTok" },
+    { value: "threads", label: "Threads" },
+  ];
 
   async function fetchData(signal?: AbortSignal) {
     loading = true;
@@ -39,7 +55,17 @@
 <div class="space-y-6">
   <div class="flex items-center justify-between">
     <h1 class="text-xl font-bold text-[#e8edf5]">Analytics</h1>
-    <DateRangePicker selected={days} onChange={handleDaysChange} />
+    <div class="flex gap-3 items-center">
+      <select
+        bind:value={selectedProvider}
+        class="px-3 py-1.5 text-sm bg-[#131720] border border-[#1e2435] rounded-lg text-[#e8edf5]"
+      >
+        {#each providers as p}
+          <option value={p.value}>{p.label}</option>
+        {/each}
+      </select>
+      <DateRangePicker selected={days} onChange={handleDaysChange} />
+    </div>
   </div>
 
   {#if error}
@@ -74,6 +100,6 @@
   {:else if data}
     <AnalyticsSummaryCards data={data} />
     <AnalyticsCharts postsByDay={data.posts_by_day} />
-    <AnalyticsTable postsByProvider={data.posts_by_provider} />
+    <AnalyticsTable postsByProvider={selectedProvider === "all" ? data.posts_by_provider : data.posts_by_provider.filter(p => p.provider === selectedProvider)} />
   {/if}
 </div>

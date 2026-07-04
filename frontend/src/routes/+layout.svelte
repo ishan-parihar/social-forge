@@ -24,6 +24,7 @@
     { href: '/settings/rss', label: 'RSS Autopost', icon: '📡' },
     { href: '/settings/signatures', label: 'Signatures', icon: '✍' },
     { href: '/settings/developer', label: 'Developer', icon: '🔧' },
+    { href: '/settings/webhooks', label: 'Webhooks', icon: '🪝' },
     { href: '/settings/mcp', label: 'MCP & CLI', icon: '🤖' },
     { href: '/settings/notifications', label: 'Notifications', icon: '🔔' },
   ];
