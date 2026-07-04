@@ -1321,6 +1321,8 @@ mod tests {
             stripe_price_pro_annual: None,
             stripe_price_business_monthly: None,
             stripe_price_business_annual: None,
+            llm_endpoint: None,
+            llm_model: None,
         }
     }
 
