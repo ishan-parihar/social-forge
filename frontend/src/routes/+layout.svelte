@@ -74,9 +74,9 @@
 {#if !data.authenticated}
   {@render children()}
 {:else}
-  <div class="flex h-screen overflow-hidden bg-[#0b0e14]">
-    <aside class="w-56 bg-[#0b0e14] border-r border-line flex flex-col flex-shrink-0 overflow-y-auto">
-      <div class="h-14 flex items-center justify-between px-5 border-b border-line sticky top-0 bg-[#0b0e14] z-10">
+  <div class="flex h-screen overflow-hidden bg-background">
+    <aside class="w-56 bg-background border-r border-line flex flex-col flex-shrink-0 overflow-y-auto">
+      <div class="h-14 flex items-center justify-between px-5 border-b border-line sticky top-0 bg-background z-10">
         <span class="text-indigo-400 font-bold text-lg">Social Forge</span>
         <NotificationBell />
       </div>
@@ -91,7 +91,7 @@
             <a href={item.href}
               class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors duration-200 cursor-pointer
                 {$page.url.pathname === item.href
-                  ? 'bg-[#1a1f2e] text-indigo-400 font-medium'
+                  ? 'bg-surface-hover text-indigo-400 font-medium'
                   : 'text-muted hover:text-content hover:bg-surface-hover'}"
             >
               <Icon name={item.icon} class="w-4 h-4 flex-shrink-0" />

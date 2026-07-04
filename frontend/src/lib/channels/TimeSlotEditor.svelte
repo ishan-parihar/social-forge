@@ -75,7 +75,7 @@
     }
 </script>
 
-<Modal {show} title="Posting Time Slots" {onclose}>
+<Modal open={show} title="Posting Time Slots" {onclose}>
     <div class="space-y-4">
         {#if error}
             <div class="text-sm text-red-400 bg-red-400/10 rounded-md px-3 py-2">{error}</div>

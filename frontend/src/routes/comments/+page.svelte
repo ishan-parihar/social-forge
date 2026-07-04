@@ -145,7 +145,7 @@
         bind:value={replyModal.text}
         placeholder="Write your reply..."
         rows="4"
-        class="w-full px-3 py-2 bg-[#161b22] border border-[#30363d] rounded text-sm mb-4"
+        class="w-full px-3 py-2 bg-surface-hover border border-line rounded text-sm mb-4"
       ></textarea>
       <div class="flex gap-3 justify-end">
         <button onclick={() => replyModal = null} class="px-4 py-2 text-sm text-muted hover:text-white">Cancel</button>

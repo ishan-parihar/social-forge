@@ -1,14 +1,16 @@
 <script lang="ts">
-  let { variant = "primary", size = "md", disabled = false, onclick, children }: {
+  let { variant = "primary", size = "md", disabled = false, onclick, children, type = "button", "aria-label": ariaLabel }: {
     variant?: "primary" | "secondary" | "ghost" | "danger";
     size?: "sm" | "md" | "lg";
     disabled?: boolean;
     onclick?: (e: MouseEvent) => void;
     children?: import("svelte").Snippet;
+    type?: "button" | "submit" | "reset";
+    "aria-label"?: string;
   } = $props();
 </script>
 
-<button type="button" {onclick} {disabled} class="btn btn-{variant} btn-{size}">
+<button {type} {onclick} {disabled} aria-label={ariaLabel} class="btn btn-{variant} btn-{size}">
   {#if children}{@render children()}{/if}
 </button>
 

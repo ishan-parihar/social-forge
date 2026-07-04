@@ -53,7 +53,7 @@ class ApiClient {
         const errorMsg = typeof data.error === 'string' ? data.error : `HTTP ${res.status}`;
         return { error: errorMsg, status: res.status };
       }
-      return { data, status: res.status };
+      return { data: data as T, status: res.status };
     } catch (e: unknown) {
       if (e instanceof Error && e.name === "AbortError") return { error: "Request timed out", status: 0 };
       return { error: (e instanceof Error ? e.message : String(e)), status: 0 };

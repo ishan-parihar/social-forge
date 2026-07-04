@@ -40,7 +40,8 @@ export const analyticsApi = {
   getProvider: (provider: string, days?: number, signal?: AbortSignal) => {
     return api.get<ProviderAnalytics>(`/api/analytics?provider=${provider}${days ? `&days=${days}` : ''}`, signal);
   },
-  getPostAnalytics: (postId: string, signal?: AbortSignal) => {
-    return api.get<{ data: unknown }>(`/api/analytics/post/${postId}`, signal);
+  getPostAnalytics: (postId: string, days?: number, signal?: AbortSignal) => {
+    const q = days ? `?days=${days}` : '';
+    return api.get<PostAnalytics>(`/api/analytics/post/${postId}${q}`, signal);
   },
 };

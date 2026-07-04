@@ -83,7 +83,7 @@
         analyticsData = null;
       }
     } catch (e: unknown) {
-      if (e.name === "AbortError") return;
+      if (e instanceof Error && e.name === "AbortError") return;
       error = (e instanceof Error ? e.message : String(e)) || "Failed to load analytics";
       analyticsData = null;
     } finally {

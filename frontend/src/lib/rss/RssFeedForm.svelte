@@ -114,8 +114,8 @@
       <div class="text-xs text-red-400">{error}</div>
     {/if}
 
-    <Button type="submit" disabled={saving || loadingIntegrations}>
+    <button type="submit" disabled={saving || loadingIntegrations} class="btn btn-primary btn-md">
       {saving ? 'Adding...' : 'Add Feed'}
-    </Button>
+    </button>
   </form>
 </div>

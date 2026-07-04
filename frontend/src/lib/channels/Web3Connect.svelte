@@ -49,11 +49,11 @@
     submitting = true;
     errorMsg = "";
     try {
-      const body: Record<string, string> = {
+      const body: import("$lib/api/integrations").ConnectWeb3Request = {
         provider,
         address: address.trim(),
+        label: label.trim() || undefined,
       };
-      if (label.trim()) body.label = label.trim();
       const r = await integrationsApi.connectWeb3(body);
       if (r.error) {
         errorMsg = r.error;

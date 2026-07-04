@@ -34,6 +34,7 @@
     loadingKeys = true;
     keysError = null;
     try {
+      const r = await developerApi.listKeys();
       if (r.error) { keysError = r.error; }
       else if (r.data) { keys = r.data; }
     } catch (e: unknown) {
@@ -49,6 +50,7 @@
     keyFormError = null;
     justCreatedKey = null;
     try {
+      const r = await developerApi.createKey(newKeyName.trim(), newKeyExpiry || undefined);
       if (r.error) { keyFormError = r.error; }
       else if (r.data) {
         justCreatedKey = r.data;
@@ -68,6 +70,7 @@
     if (!confirm('Revoke this API key? This action cannot be undone.')) return;
     revivingKey = id;
     try {
+      const r = await developerApi.revokeKey(id);
       if (r.error) { keysError = r.error; }
       else { loadKeys(); }
     } catch (e: unknown) {
@@ -82,6 +85,7 @@
     regeneratingKey = id;
     justCreatedKey = null;
     try {
+      const r = await developerApi.regenerateKey(id);
       if (r.error) { keysError = r.error; }
       else if (r.data) {
         justCreatedKey = r.data;
@@ -237,7 +241,7 @@
                 <th class="px-4 py-3 font-medium text-right">Actions</th>
               </tr>
             </thead>
-            <tbody class="divide-y divide-[#1e2435]">
+            <tbody class="divide-y divide-line">
               {#each keys as key (key.id)}
                 <tr class="hover:bg-surface-hover transition-colors">
                   <td class="px-4 py-3 text-content-secondary">{key.name}</td>

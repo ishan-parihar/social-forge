@@ -256,7 +256,7 @@
     <div class="flex items-center gap-3">
       <h2 class="text-xl font-bold text-content tracking-tight">Feed</h2>
       {#if !loading && posts.length > 0}
-        <span class="text-xs text-muted font-mono bg-[#161b28] px-2 py-0.5 rounded-full border border-line">
+        <span class="text-xs text-muted font-mono bg-surface-hover px-2 py-0.5 rounded-full border border-line">
           {filteredPosts.length}{#if filteredPosts.length !== posts.length} / {posts.length}{/if}
         </span>
       {/if}
@@ -268,7 +268,7 @@
         onclick={triggerImport}
         disabled={importing}
         class="flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-lg transition-all duration-200
-          bg-[#161b28] text-[#9ca3af] border border-line
+          bg-surface-hover text-muted border border-line
           hover:border-line hover:text-content
           disabled:opacity-50 disabled:cursor-not-allowed"
       >
@@ -310,7 +310,7 @@
             class="flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-lg transition-all duration-200
               {showFilter || activeFilterLabel
                 ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 shadow-[0_0_12px_rgba(99,102,241,0.1)]'
-                : 'bg-[#161b28] text-[#9ca3af] border border-line hover:border-line hover:text-content'}"
+                : 'bg-surface-hover text-muted border border-line hover:border-line hover:text-content'}"
           >
             <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
               <path d="M2 4h12M4 8h8M6 12h4" stroke-linecap="round" />
@@ -321,7 +321,7 @@
           <!-- Filter dropdown -->
           {#if showFilter}
             <div class="absolute right-0 top-full mt-2 w-72 z-50
-              bg-[#111622] border border-line rounded-xl shadow-2xl shadow-black/40
+              bg-surface border border-line rounded-xl shadow-2xl shadow-black/40
               overflow-hidden motion-safe:animate-in duration-200">
               <!-- Header -->
               <div class="px-4 py-3 border-b border-line">
@@ -337,7 +337,7 @@
                 class="w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors duration-150 border-b border-line
                   {!selectedAccountHandle && !selectedProvider
                     ? 'bg-indigo-500/10 text-content'
-                    : 'text-muted hover:text-[#9ca3af] hover:bg-[#0d121e]'}"
+                    : 'text-muted hover:text-muted hover:bg-background-input'}"
               >
                 <svg class="w-4 h-4 flex-shrink-0" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
                   <path d="M2 4h12M4 8h8M6 12h4" stroke-linecap="round" />
@@ -355,7 +355,7 @@
                   <!-- Provider header -->
                   <div class="px-4 py-1.5 flex items-center gap-2">
                     <span class="w-1.5 h-1.5 rounded-full flex-shrink-0" style="background: {pmeta.dot}" />
-                    <span class="text-[10px] font-semibold uppercase tracking-wider text-[#5a6070]">{pmeta.label}</span>
+                    <span class="text-[10px] font-semibold uppercase tracking-wider text-muted">{pmeta.label}</span>
                   </div>
 
                   <!-- Accounts in this provider -->
@@ -365,17 +365,17 @@
                       class="w-full flex items-center gap-3 px-4 py-2 text-left transition-colors duration-150
                         {selectedAccountHandle === acct.author_handle
                           ? 'bg-indigo-500/10 text-content'
-                          : 'text-[#9ca3af] hover:text-content hover:bg-[#0d121e]'}"
+                          : 'text-muted hover:text-content hover:bg-background-input'}"
                     >
                       {#if acct.author_avatar}
                         <img
                           src={acct.author_avatar}
                           alt=""
-                          class="w-6 h-6 rounded-full flex-shrink-0 object-cover ring-1 ring-[#1e2435]"
+                          class="w-6 h-6 rounded-full flex-shrink-0 object-cover ring-1 ring-line"
                         />
                       {:else}
-                        <span class="w-6 h-6 rounded-full flex-shrink-0 bg-[#1e2435] flex items-center justify-center">
-                          <svg class="w-3 h-3 text-[#5a6070]" viewBox="0 0 16 16" fill="currentColor">
+                        <span class="w-6 h-6 rounded-full flex-shrink-0 bg-line flex items-center justify-center">
+                          <svg class="w-3 h-3 text-muted" viewBox="0 0 16 16" fill="currentColor">
                             <path d="M8 8a3 3 0 100-6 3 3 0 000 6zm-5 6a5 5 0 0110 0H3z"/>
                           </svg>
                         </span>
@@ -383,7 +383,7 @@
                       <div class="flex-1 min-w-0">
                         <div class="text-sm font-medium truncate">{acct.author_name || acct.author_handle || 'Unknown'}</div>
                         {#if acct.author_handle}
-                          <div class="text-[10px] text-[#5a6070] truncate">@{acct.author_handle}</div>
+                          <div class="text-[10px] text-muted truncate">@{acct.author_handle}</div>
                         {/if}
                       </div>
                       {#if selectedAccountHandle === acct.author_handle}
@@ -411,7 +411,7 @@
       </div>
       <button
         onclick={load}
-        class="mt-4 px-4 py-2 text-xs font-medium rounded-lg bg-[#1a1f2e] text-[#9ca3af] hover:text-content hover:bg-[#1e2435] border border-line transition-colors">
+        class="mt-4 px-4 py-2 text-xs font-medium rounded-lg bg-surface-hover text-muted hover:text-content hover:bg-line border border-line transition-colors">
         Try again
       </button>
     </div>
@@ -420,17 +420,17 @@
   {:else if loading}
     <div class="page-enter space-y-3    motion-safe:animate-in duration-300">
       {#each Array(5) as _, i (i)}
-        <div class="bg-[#131825] rounded-xl p-5 border border-line space-y-3">
+        <div class="bg-surface rounded-xl p-5 border border-line space-y-3">
           <div class="flex items-center gap-2.5">
-            <div class="w-6 h-6 rounded-full bg-[#1e2435]" />
-            <div class="h-3 bg-[#1e2435] rounded w-20" />
-            <div class="h-2.5 bg-[#1e2435] rounded w-16" />
-            <div class="ml-auto h-2.5 bg-[#1e2435] rounded w-12" />
+            <div class="w-6 h-6 rounded-full bg-line" />
+            <div class="h-3 bg-line rounded w-20" />
+            <div class="h-2.5 bg-line rounded w-16" />
+            <div class="ml-auto h-2.5 bg-line rounded w-12" />
           </div>
           <div class="page-enter space-y-2">
-            <div class="h-3 bg-[#1e2435] rounded w-full" />
-            <div class="h-3 bg-[#1e2435] rounded w-5/6" />
-            <div class="h-3 bg-[#1e2435] rounded w-2/3" />
+            <div class="h-3 bg-line rounded w-full" />
+            <div class="h-3 bg-line rounded w-5/6" />
+            <div class="h-3 bg-line rounded w-2/3" />
           </div>
         </div>
       {/each}
@@ -439,14 +439,14 @@
   <!-- Empty state: importing for the first time -->
   {:else if importing}
     <div class="text-center py-20">
-      <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-[#131825] border border-line flex items-center justify-center">
+      <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-surface border border-line flex items-center justify-center">
         <svg class="w-7 h-7 text-indigo-400 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" stroke-linecap="round" />
         </svg>
       </div>
       <p class="text-sm font-medium text-content">Importing your posts…</p>
       <p class="text-xs text-muted mt-1">Fetching recent posts from all your connected providers</p>
-      <div class="mt-6 w-48 h-1 mx-auto bg-[#1e2435] rounded-full overflow-hidden">
+      <div class="mt-6 w-48 h-1 mx-auto bg-line rounded-full overflow-hidden">
         <div class="h-full bg-indigo-500/50 rounded-full animate-pulse" style="width: 60%" />
       </div>
     </div>
@@ -454,17 +454,17 @@
   <!-- Empty state (already attempted) -->
   {:else if !initialLoad && posts.length === 0 && attemptedImport}
     <div class="text-center py-20">
-      <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-[#131825] border border-line flex items-center justify-center">
+      <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-surface border border-line flex items-center justify-center">
         <svg class="w-7 h-7 text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <path d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
       </div>
-      <p class="text-sm font-medium text-[#9ca3af] mb-1">No posts found</p>
+      <p class="text-sm font-medium text-muted mb-1">No posts found</p>
       <p class="text-xs text-muted mb-6">Connect a social media account to see your feed here</p>
       <button
         onclick={triggerImport}
         class="inline-flex items-center gap-2 px-4 py-2 text-xs font-medium rounded-lg
-          bg-[#1a1f2e] text-[#9ca3af] hover:text-content hover:bg-[#1e2435]
+          bg-surface-hover text-muted hover:text-content hover:bg-line
           border border-line transition-colors"
       >
         <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -478,12 +478,12 @@
   <!-- Filtered-empty state -->
   {:else if filteredPosts.length === 0 && posts.length > 0}
     <div class="text-center py-20">
-      <div class="w-14 h-14 mx-auto mb-4 rounded-2xl bg-[#131825] border border-line flex items-center justify-center">
+      <div class="w-14 h-14 mx-auto mb-4 rounded-2xl bg-surface border border-line flex items-center justify-center">
         <svg class="w-6 h-6 text-muted" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
           <path d="M2 4h12M4 8h8M6 12h4" stroke-linecap="round" />
         </svg>
       </div>
-      <p class="text-sm font-medium text-[#9ca3af]">No posts match your filters</p>
+      <p class="text-sm font-medium text-muted">No posts match your filters</p>
       <button onclick={clearFilter} class="mt-3 text-xs text-indigo-400 hover:text-indigo-300 transition-colors">
         Clear filters
       </button>
@@ -495,8 +495,8 @@
       {#each filteredPosts as post (post.id)}
         {@const meta = providerMeta(post.provider)}
         <article
-          class="group relative bg-[#131825] rounded-xl border border-line transition-all duration-200
-            hover:border-[#222a45] hover:bg-[#151b2a]"
+          class="group relative bg-surface rounded-xl border border-line transition-all duration-200
+            hover:border-line-hover hover:bg-surface-hover"
         >
           <!-- Subtle top accent line -->
           <div class="absolute top-0 left-6 right-6 h-px opacity-0 group-hover:opacity-100 transition-opacity duration-300"
@@ -519,7 +519,7 @@
                 <img
                   src={post.author_avatar}
                   alt=""
-                  class="w-5 h-5 rounded-full flex-shrink-0 object-cover ring-1 ring-[#1e2435]"
+                  class="w-5 h-5 rounded-full flex-shrink-0 object-cover ring-1 ring-line"
                   loading="lazy"
                 />
               {/if}
@@ -529,15 +529,15 @@
                 <span class="text-sm font-medium text-content">{post.author_name}</span>
               {/if}
               {#if post.author_handle}
-                <span class="text-xs text-[#5a6070]">@{post.author_handle}</span>
+                <span class="text-xs text-muted">@{post.author_handle}</span>
               {/if}
 
               <!-- Time -->
-              <span class="ml-auto text-[11px] text-[#5a6070] font-mono">{formatTime(post.created_at)}</span>
+              <span class="ml-auto text-[11px] text-muted font-mono">{formatTime(post.created_at)}</span>
             </div>
 
             <!-- Content -->
-            <p class="text-sm text-[#cdd2dc] leading-relaxed whitespace-pre-wrap break-words
+            <p class="text-sm text-content-secondary leading-relaxed whitespace-pre-wrap break-words
               selection:bg-indigo-500/20 selection:text-indigo-200">
               {post.text}
             </p>
@@ -547,7 +547,7 @@
               {#if post.media.length === 1}
                 {@const item = post.media[0]}
                 <div class="mt-3">
-                  <div class="rounded-xl overflow-hidden bg-[#0d121e] ring-1 ring-[#1e2435] group/media">
+                  <div class="rounded-xl overflow-hidden bg-background-input ring-1 ring-line group/media">
                     {#if isEmbed(item.mime_type)}
                       <!-- Embedded content (YouTube, TikTok, etc.) -->
                       <div class="relative w-full" style="aspect-ratio: 16 / 9; max-height: 65vh;">
@@ -640,7 +640,7 @@
                 class="inline-flex items-center gap-1.5 text-xs font-medium transition-colors duration-150 px-2.5 py-1 rounded-lg
                   {commentsOpenFor === post.id
                     ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/25'
-                    : 'text-[#5a6070] hover:text-[#9ca3af] hover:bg-[#0d121e] border border-transparent'}"
+                    : 'text-muted hover:text-muted hover:bg-background-input border border-transparent'}"
               >
                 <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
                   <path d="M14 8a6 6 0 01-9.3 5L2 14l1-2.7A6 6 0 1114 8z" stroke-linecap="round" stroke-linejoin="round"/>
@@ -688,8 +688,8 @@
             <button
               onclick={loadMore}
               class="group flex items-center gap-2.5 px-6 py-3 text-sm font-medium rounded-xl
-                bg-[#1a2035] border border-[#222a45] text-[#cdd2dc]
-                hover:bg-[#1e2440] hover:border-indigo-500/30 hover:text-content
+                bg-surface-hover border border-line-hover text-content-secondary
+                hover:bg-line-hover hover:border-indigo-500/30 hover:text-content
                 transition-all duration-200 shadow-sm hover:shadow-[0_0_20px_rgba(99,102,241,0.08)]"
             >
               <svg class="w-4 h-4 transition-transform group-hover:rotate-180 duration-300" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -697,20 +697,20 @@
               </svg>
               Load more posts
               {#if nextCursor}
-                <span class="text-[10px] text-[#5a6070] font-mono">· next page</span>
+                <span class="text-[10px] text-muted font-mono">· next page</span>
               {/if}
             </button>
           </div>
         {:else}
           <div class="flex justify-center">
-            <span class="text-[10px] text-[#4a5060] font-mono tracking-wider uppercase">Scroll down to load more</span>
+            <span class="text-[10px] text-muted-dark font-mono tracking-wider uppercase">Scroll down to load more</span>
           </div>
         {/if}
       {:else if posts.length > 0}
         <div class="flex flex-col items-center gap-2 py-8">
-          <div class="w-12 h-px bg-gradient-to-r from-transparent via-[#1e2435] to-transparent" />
-          <span class="text-[10px] text-[#4a5060] font-mono tracking-wider">You're all caught up</span>
-          <div class="w-12 h-px bg-gradient-to-r from-transparent via-[#1e2435] to-transparent" />
+          <div class="w-12 h-px bg-gradient-to-r from-transparent via-line to-transparent" />
+          <span class="text-[10px] text-muted-dark font-mono tracking-wider">You're all caught up</span>
+          <div class="w-12 h-px bg-gradient-to-r from-transparent via-line to-transparent" />
         </div>
       {/if}
     </div>

@@ -116,7 +116,7 @@
       <button onclick={() => goto('/posts/new')} class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm font-medium transition-colors">
         + New Post
       </button>
-      <button onclick={() => goto('/analytics')} class="px-4 py-2 bg-[#1a1f2e] hover:bg-[#1e2435] border border-line rounded-lg text-sm transition-colors">
+      <button onclick={() => goto('/analytics')} class="px-4 py-2 bg-surface-hover hover:bg-line border border-line rounded-lg text-sm transition-colors">
         <Icon name="analytics" class="w-4 h-4 inline" /> Analytics
       </button>
     </div>
@@ -288,13 +288,13 @@
       <button onclick={() => goto('/posts/new')} class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm font-medium transition-colors">
         <Icon name="post" class="w-4 h-4 inline" /> Compose Post
       </button>
-      <button onclick={() => goto('/feed')} class="px-4 py-2 bg-[#1a1f2e] hover:bg-[#1e2435] border border-line rounded-lg text-sm transition-colors">
+      <button onclick={() => goto('/feed')} class="px-4 py-2 bg-surface-hover hover:bg-line border border-line rounded-lg text-sm transition-colors">
         <Icon name="feed" class="w-4 h-4 inline" /> View Feed
       </button>
-      <button onclick={() => goto('/channels')} class="px-4 py-2 bg-[#1a1f2e] hover:bg-[#1e2435] border border-line rounded-lg text-sm transition-colors">
+      <button onclick={() => goto('/channels')} class="px-4 py-2 bg-surface-hover hover:bg-line border border-line rounded-lg text-sm transition-colors">
         <Icon name="channel" class="w-4 h-4 inline" /> Manage Channels
       </button>
-      <button onclick={() => goto('/analytics')} class="px-4 py-2 bg-[#1a1f2e] hover:bg-[#1e2435] border border-line rounded-lg text-sm transition-colors">
+      <button onclick={() => goto('/analytics')} class="px-4 py-2 bg-surface-hover hover:bg-line border border-line rounded-lg text-sm transition-colors">
         <Icon name="analytics" class="w-4 h-4 inline" /> View Analytics
       </button>
     </div>

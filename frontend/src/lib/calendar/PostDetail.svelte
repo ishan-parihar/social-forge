@@ -43,7 +43,7 @@
         </div>
         <div>
           <div class="text-xs text-muted mb-1">Status</div>
-          <Badge state={event.state} />
+          <Badge state={event.state as "draft" | "queued" | "published" | "error"} />
         </div>
         <div>
           <div class="text-xs text-muted mb-1">{event.state === 'published' ? 'Posted' : 'Scheduled'}</div>

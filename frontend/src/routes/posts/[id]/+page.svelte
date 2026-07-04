@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, onDestroy } from "svelte";
   import { postsApi, type PostDetail } from "$lib/api/posts";
   import { tagsApi, type Tag } from "$lib/api/tags";
   import { toast } from "$lib/stores/toast";
@@ -8,6 +8,7 @@
   import Badge from "$lib/ui/Badge.svelte";
   import Icon from "$lib/ui/Icon.svelte";
   import RichTextEditor from "$lib/composer/RichTextEditor.svelte";
+  import { realtime } from "$lib/stores/realtime";
 
   let post = $state<PostDetail | null>(null);
   let editing = $state(false);
@@ -50,6 +51,14 @@
     }
   }
 
+  let unsubscribers: (() => void)[] = [];
+
+  async function reloadPost() {
+    if (!post) return;
+    const r = await postsApi.get(post.id);
+    if (r.data) { post = r.data; editContent = r.data.content; }
+  }
+
   onMount(async () => {
     const id = $page.params.id;
     if (!id) { loading = false; return; }
@@ -58,6 +67,23 @@
     if (r.data) { post = r.data; editContent = r.data.content; }
     else error = r.error || "Failed to load post";
     loading = false;
+
+    // Realtime: when this post is published/failed/scheduled by the
+    // scheduler (or another tab), refresh the detail view so the
+    // state badge and published_at timestamp update live.
+    const events = ['post_published', 'post_failed', 'post_scheduled'];
+    for (const evt of events) {
+      unsubscribers.push(
+        realtime.on(evt, (data: unknown) => {
+          const payload = data as { id?: string };
+          if (payload?.id === id) reloadPost();
+        })
+      );
+    }
+  });
+
+  onDestroy(() => {
+    unsubscribers.forEach(fn => fn());
   });
 
   async function save() {

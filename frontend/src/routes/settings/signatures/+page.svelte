@@ -250,7 +250,7 @@
                   {#if sig.provider}
                     <span class="text-xs px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">{sig.provider}</span>
                   {:else}
-                    <span class="text-xs px-2 py-0.5 rounded-full bg-[#1e2435] text-muted">Global</span>
+                    <span class="text-xs px-2 py-0.5 rounded-full bg-line text-muted">Global</span>
                   {/if}
                 </div>
                 <p class="text-xs text-muted mt-1">{preview(sig.content)}</p>

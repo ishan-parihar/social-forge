@@ -60,7 +60,7 @@
   }
 </script>
 
-<div class="page-enter min-h-screen bg-[#0b0e14] flex items-center justify-center">
+<div class="page-enter min-h-screen bg-background flex items-center justify-center">
   <div class="text-center space-y-4">
     {#if status === 'loading'}
       <div class="animate-spin h-8 w-8 border-2 border-indigo-500 border-t-transparent rounded-full mx-auto"></div>

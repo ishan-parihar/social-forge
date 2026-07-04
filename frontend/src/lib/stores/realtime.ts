@@ -43,6 +43,7 @@ class RealtimeClient {
                                 "post_deleted",
                                 "integration_connected",
                                 "integration_disconnected",
+                                "notification_new",
                         ].forEach((type) => {
                                 this.es!.addEventListener(type, (e: MessageEvent) => {
                                         try {

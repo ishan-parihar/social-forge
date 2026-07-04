@@ -184,15 +184,15 @@
       <div class="page-enter space-y-6">
         <div>
           <label class="text-xs text-muted mb-1 block">Name</label>
-          <input bind:value={formName} placeholder="My Webhook" class="w-full px-3 py-2 bg-[#161b22] border border-[#30363d] rounded text-sm" />
+          <input bind:value={formName} placeholder="My Webhook" class="w-full px-3 py-2 bg-surface-hover border border-line rounded text-sm" />
         </div>
         <div>
           <label class="text-xs text-muted mb-1 block">URL</label>
-          <input bind:value={formUrl} placeholder="https://example.com/webhook" class="w-full px-3 py-2 bg-[#161b22] border border-[#30363d] rounded text-sm" />
+          <input bind:value={formUrl} placeholder="https://example.com/webhook" class="w-full px-3 py-2 bg-surface-hover border border-line rounded text-sm" />
         </div>
         <div>
           <label class="text-xs text-muted mb-1 block">Secret (optional)</label>
-          <input bind:value={formSecret} type="password" placeholder="Webhook signing secret" class="w-full px-3 py-2 bg-[#161b22] border border-[#30363d] rounded text-sm" />
+          <input bind:value={formSecret} type="password" placeholder="Webhook signing secret" class="w-full px-3 py-2 bg-surface-hover border border-line rounded text-sm" />
         </div>
         <div>
           <label class="text-xs text-muted mb-2 block">Event Types</label>

@@ -149,7 +149,7 @@
   {:else}
     <div class="page-enter space-y-2 max-h-96 overflow-y-auto">
       {#each items as item (item.guid)}
-        <div class="bg-[#0b0e14] border border-line rounded-lg p-3 space-y-1">
+        <div class="bg-background border border-line rounded-lg p-3 space-y-1">
           <div class="flex items-start justify-between gap-2">
             <div class="min-w-0">
               <p class="text-sm font-medium truncate">{item.title}</p>

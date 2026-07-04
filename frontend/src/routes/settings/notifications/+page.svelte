@@ -98,7 +98,7 @@
             </div>
             <select
               bind:value={prefs[nt.key]}
-              class="bg-[#1e2435] text-content-secondary border border-line rounded px-3 py-1.5 text-sm focus:outline-none focus:border-indigo-500/50 transition-colors"
+              class="bg-line text-content-secondary border border-line rounded px-3 py-1.5 text-sm focus:outline-none focus:border-indigo-500/50 transition-colors"
             >
               <option value="push">Push</option>
               <option value="email">Email</option>
@@ -114,7 +114,7 @@
         <h3 class="text-sm font-medium text-content">Quiet Hours</h3>
         <label class="relative inline-flex items-center cursor-pointer">
           <input type="checkbox" bind:checked={quietHoursEnabled} class="sr-only peer" />
-          <div class="w-9 h-5 bg-[#1e2435] rounded-full peer peer-checked:bg-indigo-600 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
+          <div class="w-9 h-5 bg-line rounded-full peer peer-checked:bg-indigo-600 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
         </label>
       </div>
       {#if quietHoursEnabled}
@@ -125,7 +125,7 @@
               id="quiet-start"
               type="time"
               bind:value={prefs.quiet_hours_start}
-              class="w-full bg-[#1e2435] text-content-secondary border border-line rounded px-3 py-1.5 text-sm focus:outline-none focus:border-indigo-500/50 transition-colors"
+              class="w-full bg-line text-content-secondary border border-line rounded px-3 py-1.5 text-sm focus:outline-none focus:border-indigo-500/50 transition-colors"
             />
           </div>
           <div>
@@ -134,7 +134,7 @@
               id="quiet-end"
               type="time"
               bind:value={prefs.quiet_hours_end}
-              class="w-full bg-[#1e2435] text-content-secondary border border-line rounded px-3 py-1.5 text-sm focus:outline-none focus:border-indigo-500/50 transition-colors"
+              class="w-full bg-line text-content-secondary border border-line rounded px-3 py-1.5 text-sm focus:outline-none focus:border-indigo-500/50 transition-colors"
             />
           </div>
         </div>

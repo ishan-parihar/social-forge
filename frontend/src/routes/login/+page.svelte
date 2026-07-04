@@ -26,7 +26,7 @@
   <title>Social Forge — Login</title>
 </svelte:head>
 
-<div class="page-enter min-h-screen flex items-center justify-center bg-[#0b0e14] px-4">
+<div class="page-enter min-h-screen flex items-center justify-center bg-background px-4">
   <div class="w-full max-w-sm">
     <div class="text-center mb-8">
       <div class="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-indigo-500/10 border border-indigo-500/30 mb-4">
@@ -45,7 +45,7 @@
           bind:value={password}
           autocomplete="current-password"
           autofocus
-          class="w-full px-3.5 py-2.5 bg-[#1a1f2e] border border-line rounded-lg text-content text-sm
+          class="w-full px-3.5 py-2.5 bg-surface-hover border border-line rounded-lg text-content text-sm
             focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500
             placeholder:text-muted-dark"
           placeholder="••••••••••••"
@@ -61,9 +61,9 @@
       <button
         type="submit"
         disabled={loading || !password}
-        class="w-full py-2.5 px-4 bg-indigo-500 hover:bg-indigo-400 disabled:bg-[#1a1f2e] disabled:text-muted-dark
+        class="w-full py-2.5 px-4 bg-indigo-500 hover:bg-indigo-400 disabled:bg-surface-hover disabled:text-muted-dark
           text-white font-medium text-sm rounded-lg transition-colors
-          focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-[#0b0e14]"
+          focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-background"
       >
         {loading ? 'Verifying…' : 'Unlock'}
       </button>

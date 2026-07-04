@@ -4,6 +4,8 @@
   import { postsApi, type PostSummary } from '$lib/api/posts';
   import DateRangePicker from '$lib/analytics/DateRangePicker.svelte';
   import { toast } from "$lib/stores/toast";
+  import { realtime } from "$lib/stores/realtime";
+  import { onMount, onDestroy } from "svelte";
 
   let days = $state(30);
   let data = $state<AnalyticsSummary | null>(null);
@@ -78,6 +80,25 @@
     const controller = new AbortController();
     fetchData(controller.signal);
     return () => controller.abort();
+  });
+
+  // ── Realtime: refresh when posts are published/failed/deleted ──
+  // Analytics are derived from post state, so any post state change
+  // means the charts and top-posts list are stale. We re-fetch on
+  // these events. The fetchData() call above is idempotent and
+  // abort-safe, so duplicate triggers (e.g. rapid publishes) just
+  // collapse into the latest fetch.
+  let unsubscribers: (() => void)[] = [];
+
+  onMount(() => {
+    const events = ['post_published', 'post_failed', 'post_deleted', 'post_created'];
+    for (const evt of events) {
+      unsubscribers.push(realtime.on(evt, () => fetchData()));
+    }
+  });
+
+  onDestroy(() => {
+    unsubscribers.forEach(fn => fn());
   });
 
   function handleDaysChange(newDays: number) {

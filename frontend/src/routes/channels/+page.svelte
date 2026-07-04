@@ -371,29 +371,29 @@
     <p class="text-sm text-muted mb-4">Choose how to connect:</p>
     <div class="flex flex-col gap-3">
       {#if connectChoice === "x"}
-        <button onclick={() => { const p = connectChoice; connectChoice = null; initiateOAuth(p!); }} class="px-4 py-3 bg-[#161b22] border border-[#30363d] rounded-lg hover:border-indigo-500/50 text-left">
+        <button onclick={() => { const p = connectChoice; connectChoice = null; initiateOAuth(p!); }} class="px-4 py-3 bg-surface-hover border border-line rounded-lg hover:border-indigo-500/50 text-left">
           <div class="text-sm font-medium">OAuth 2.0</div>
           <div class="text-xs text-muted">Standard login — limited to API scopes</div>
         </button>
-        <button onclick={() => { connectChoice = null; credDialog = { provider: "x", type: "cookie" }; credFields = {}; }} class="px-4 py-3 bg-[#161b22] border border-[#30363d] rounded-lg hover:border-orange-500/50 text-left">
+        <button onclick={() => { connectChoice = null; credDialog = { provider: "x", type: "cookie" }; credFields = {}; }} class="px-4 py-3 bg-surface-hover border border-line rounded-lg hover:border-orange-500/50 text-left">
           <div class="text-sm font-medium">Browser Cookies</div>
           <div class="text-xs text-muted">Full access — DMs, analytics, advanced features</div>
         </button>
       {:else if connectChoice === "reddit"}
-        <button onclick={() => { const p = connectChoice; connectChoice = null; initiateOAuth(p!); }} class="px-4 py-3 bg-[#161b22] border border-[#30363d] rounded-lg hover:border-indigo-500/50 text-left">
+        <button onclick={() => { const p = connectChoice; connectChoice = null; initiateOAuth(p!); }} class="px-4 py-3 bg-surface-hover border border-line rounded-lg hover:border-indigo-500/50 text-left">
           <div class="text-sm font-medium">OAuth 2.0</div>
           <div class="text-xs text-muted">Standard Reddit API access</div>
         </button>
-        <button onclick={() => { connectChoice = null; credDialog = { provider: "reddit", type: "cookie" }; credFields = {}; }} class="px-4 py-3 bg-[#161b22] border border-[#30363d] rounded-lg hover:border-orange-500/50 text-left">
+        <button onclick={() => { connectChoice = null; credDialog = { provider: "reddit", type: "cookie" }; credFields = {}; }} class="px-4 py-3 bg-surface-hover border border-line rounded-lg hover:border-orange-500/50 text-left">
           <div class="text-sm font-medium">Browser Cookies</div>
           <div class="text-xs text-muted">Full access — voting, moderation, all subreddits</div>
         </button>
       {:else if connectChoice === "telegram-bot"}
-        <button onclick={() => { const p = connectChoice; connectChoice = null; initiateOAuth(p!); }} class="px-4 py-3 bg-[#161b22] border border-[#30363d] rounded-lg hover:border-indigo-500/50 text-left">
+        <button onclick={() => { const p = connectChoice; connectChoice = null; initiateOAuth(p!); }} class="px-4 py-3 bg-surface-hover border border-line rounded-lg hover:border-indigo-500/50 text-left">
           <div class="text-sm font-medium">Use Configured Bot</div>
           <div class="text-xs text-muted">Connect a chat/channel to the bot already set up in .env</div>
         </button>
-        <button onclick={() => { connectChoice = null; credDialog = { provider: "telegram-bot", type: "pat" }; credFields = {}; }} class="px-4 py-3 bg-[#161b22] border border-[#30363d] rounded-lg hover:border-emerald-500/50 text-left">
+        <button onclick={() => { connectChoice = null; credDialog = { provider: "telegram-bot", type: "pat" }; credFields = {}; }} class="px-4 py-3 bg-surface-hover border border-line rounded-lg hover:border-emerald-500/50 text-left">
           <div class="text-sm font-medium">Add Custom Bot Token</div>
           <div class="text-xs text-muted">Paste a bot token from @BotFather</div>
         </button>
@@ -412,22 +412,22 @@
     </h3>
     {#if credDialog.provider === "x" && credDialog.type === "cookie"}
       <label class="block text-sm text-muted mb-1">auth_token</label>
-      <input type="text" bind:value={credFields.auth_token} placeholder="Paste auth_token cookie" class="w-full mb-3 px-3 py-2 bg-[#161b22] border border-[#30363d] rounded text-sm" />
+      <input type="text" bind:value={credFields.auth_token} placeholder="Paste auth_token cookie" class="w-full mb-3 px-3 py-2 bg-surface-hover border border-line rounded text-sm" />
       <label class="block text-sm text-muted mb-1">ct0</label>
-      <input type="text" bind:value={credFields.ct0} placeholder="Paste ct0 cookie" class="w-full mb-4 px-3 py-2 bg-[#161b22] border border-[#30363d] rounded text-sm" />
+      <input type="text" bind:value={credFields.ct0} placeholder="Paste ct0 cookie" class="w-full mb-4 px-3 py-2 bg-surface-hover border border-line rounded text-sm" />
     {:else if credDialog.provider === "reddit" && credDialog.type === "cookie"}
       <p class="text-sm text-muted mb-3">Paste your Reddit cookie string from browser DevTools (Application → Cookies → www.reddit.com).</p>
       <label class="block text-sm text-muted mb-1">Cookie String</label>
-      <textarea bind:value={credFields.cookie_string} placeholder="reddit_session=...; token_v2=...; csv=..." rows="4" class="w-full mb-4 px-3 py-2 bg-[#161b22] border border-[#30363d] rounded text-sm font-mono"></textarea>
+      <textarea bind:value={credFields.cookie_string} placeholder="reddit_session=...; token_v2=...; csv=..." rows="4" class="w-full mb-4 px-3 py-2 bg-surface-hover border border-line rounded text-sm font-mono"></textarea>
     {:else if credDialog.provider === "telegram-bot"}
       <p class="text-sm text-muted mb-3">Get a token from <a href="https://t.me/BotFather" target="_blank" class="text-indigo-400 hover:text-indigo-300">@BotFather</a> on Telegram.</p>
       <label class="block text-sm text-muted mb-1">Bot Token</label>
-      <input type="password" bind:value={credFields.token} placeholder="123456:ABC-DEF..." class="w-full mb-4 px-3 py-2 bg-[#161b22] border border-[#30363d] rounded text-sm font-mono" />
+      <input type="password" bind:value={credFields.token} placeholder="123456:ABC-DEF..." class="w-full mb-4 px-3 py-2 bg-surface-hover border border-line rounded text-sm font-mono" />
     {:else if credDialog.provider === "github"}
       <label class="block text-sm text-muted mb-1">Personal Access Token</label>
-      <input type="password" bind:value={credFields.pat} placeholder="ghp_..." class="w-full mb-3 px-3 py-2 bg-[#161b22] border border-[#30363d] rounded text-sm" />
+      <input type="password" bind:value={credFields.pat} placeholder="ghp_..." class="w-full mb-3 px-3 py-2 bg-surface-hover border border-line rounded text-sm" />
       <label class="block text-sm text-muted mb-1">Label (optional)</label>
-      <input type="text" bind:value={credFields.label} placeholder="My GitHub" class="w-full mb-4 px-3 py-2 bg-[#161b22] border border-[#30363d] rounded text-sm" />
+      <input type="text" bind:value={credFields.label} placeholder="My GitHub" class="w-full mb-4 px-3 py-2 bg-surface-hover border border-line rounded text-sm" />
     {/if}
     {#if error}<p class="text-red-400 text-sm mb-3">{error}</p>{/if}
     <div class="flex gap-3 justify-end">
@@ -447,7 +447,7 @@
       <p class="text-sm text-muted mb-3">
         {#if onboardDialog.provider === "whatsapp"}Enter your phone number to get a pairing code.{:else}Enter your phone number to receive a login code via Telegram.{/if}
       </p>
-      <input type="tel" bind:value={onboardDialog.phone} placeholder="+1234567890" class="w-full mb-4 px-3 py-2 bg-[#161b22] border border-[#30363d] rounded text-sm" />
+      <input type="tel" bind:value={onboardDialog.phone} placeholder="+1234567890" class="w-full mb-4 px-3 py-2 bg-surface-hover border border-line rounded text-sm" />
       {#if error}<p class="text-red-400 text-sm mb-3">{error}</p>{/if}
       <div class="flex justify-end gap-2">
         <button onclick={() => { onboardDialog = null; error = ""; }} class="px-4 py-2 text-sm text-muted hover:text-white">Cancel</button>
@@ -458,8 +458,8 @@
 
     {:else if onboardDialog.step === "pair_code"}
       <p class="text-sm text-muted mb-2">Open WhatsApp on your phone:</p>
-      <p class="text-sm text-[#c9d1d9] mb-3">Settings → Linked Devices → Link a Device → Enter code</p>
-      <div class="bg-[#161b22] border border-[#30363d] rounded-lg p-4 mb-4 text-center">
+      <p class="text-sm text-content-secondary mb-3">Settings → Linked Devices → Link a Device → Enter code</p>
+      <div class="bg-surface-hover border border-line rounded-lg p-4 mb-4 text-center">
         <span class="text-2xl font-mono font-bold tracking-[0.3em] text-white">{onboardDialog.pairCode}</span>
       </div>
       <p class="text-xs text-muted mb-3 text-center">Waiting for you to enter the code on your phone…</p>
@@ -470,7 +470,7 @@
 
     {:else if onboardDialog.step === "sms_code"}
       <p class="text-sm text-muted mb-3">Enter the code sent to your Telegram app.</p>
-      <input type="text" bind:value={onboardDialog.code} placeholder="12345" class="w-full mb-4 px-3 py-2 bg-[#161b22] border border-[#30363d] rounded text-sm font-mono text-center text-lg tracking-widest" />
+      <input type="text" bind:value={onboardDialog.code} placeholder="12345" class="w-full mb-4 px-3 py-2 bg-surface-hover border border-line rounded text-sm font-mono text-center text-lg tracking-widest" />
       {#if error}<p class="text-red-400 text-sm mb-3">{error}</p>{/if}
       <div class="flex justify-end gap-2">
         <button onclick={() => { onboardDialog = null; error = ""; }} class="px-4 py-2 text-sm text-muted hover:text-white">Cancel</button>
@@ -487,7 +487,7 @@
         <p class="text-sm text-muted">1. Open this bot in Telegram:</p>
         <a href="https://t.me/{botUsername.replace('@','')}" target="_blank" class="block text-center text-indigo-400 hover:text-indigo-300 font-medium">{botUsername}</a>
         <p class="text-sm text-muted">2. Send this command to the bot or any group/channel it's in:</p>
-        <div class="bg-[#161b22] border border-[#30363d] rounded-lg p-3 text-center">
+        <div class="bg-surface-hover border border-line rounded-lg p-3 text-center">
           <code class="text-sm text-white font-mono">{connectCmd}</code>
         </div>
         <p class="text-sm text-muted">3. Click Verify below.</p>

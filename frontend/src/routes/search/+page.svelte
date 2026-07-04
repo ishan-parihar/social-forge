@@ -1,8 +1,9 @@
 <script lang="ts">
   import Icon from "$lib/ui/Icon.svelte";
-  import { onMount } from "svelte";
+  import { onMount, onDestroy } from "svelte";
   import { feedApi, proxyMediaUrl, type FeedPost, type FeedAccount } from "$lib/api/feed";
   import { toast } from "$lib/stores/toast";
+  import { realtime } from "$lib/stores/realtime";
   import EngagementCard from "$lib/components/EngagementCard.svelte";
   import MediaCarousel from "$lib/media/MediaCarousel.svelte";
 
@@ -138,10 +139,28 @@
     return d.toLocaleDateString();
   }
 
+  let unsubscribers: (() => void)[] = [];
+
   onMount(() => {
     loadSavedSearches();
     loadAccounts();
     load();
+    // Realtime: when the feed refresher pulls new posts in the
+    // background, refresh the search results so they appear without
+    // a manual reload. Also refresh on integration changes (new
+    // account connected → new feed source available).
+    unsubscribers.push(realtime.on('integration_connected', () => {
+      loadAccounts();
+      load();
+    }));
+    unsubscribers.push(realtime.on('integration_disconnected', () => {
+      loadAccounts();
+      load();
+    }));
+  });
+
+  onDestroy(() => {
+    unsubscribers.forEach(fn => fn());
   });
 </script>
 
@@ -155,7 +174,7 @@
     <button
       onclick={importFeed}
       disabled={importing}
-      class="px-3 py-1.5 text-sm bg-[#1a1f2e] hover:bg-[#1e2435] border border-line rounded-lg transition-colors disabled:opacity-50"
+      class="px-3 py-1.5 text-sm bg-surface-hover hover:bg-line border border-line rounded-lg transition-colors disabled:opacity-50"
     >
       {importing ? "Importing..." : ""}
     </button>
@@ -168,14 +187,14 @@
         type="text"
         bind:value={searchQuery}
         placeholder="Search posts, authors, hashtags..."
-        class="w-full px-4 py-2.5 pl-10 bg-background-input border border-line rounded-lg text-sm text-content-secondary placeholder-[#6b7280] focus:border-indigo-500 outline-none transition-colors"
+        class="w-full px-4 py-2.5 pl-10 bg-background-input border border-line rounded-lg text-sm text-content-secondary placeholder-muted focus:border-indigo-500 outline-none transition-colors"
       />
       <span class="absolute left-3 top-1/2 -translate-y-1/2 text-muted"><Icon name="search" class="w-4 h-4" /></span>
     </div>
     <button
       onclick={() => showSaveDialog = true}
       disabled={!searchQuery.trim()}
-      class="px-3 py-2 text-sm bg-[#1a1f2e] hover:bg-[#1e2435] border border-line rounded-lg transition-colors disabled:opacity-30"
+      class="px-3 py-2 text-sm bg-surface-hover hover:bg-line border border-line rounded-lg transition-colors disabled:opacity-30"
       title="Save this search"
     >
       <Icon name="bookmark" class="w-3.5 h-3.5 inline" /> Save
@@ -255,7 +274,7 @@
             {#if post.author_avatar}
               <img src={proxyMediaUrl(post.author_avatar)} alt="" class="w-10 h-10 rounded-full flex-shrink-0 object-cover" />
             {:else}
-              <div class="w-10 h-10 rounded-full bg-[#1e2435] flex items-center justify-center flex-shrink-0">
+              <div class="w-10 h-10 rounded-full bg-line flex items-center justify-center flex-shrink-0">
                 <span class="text-sm {providerColor(post.provider)}">{providerIcon(post.provider)}</span>
               </div>
             {/if}
@@ -277,7 +296,7 @@
               <!-- Media -->
               {#if post.media.length > 0}
                 <div class="mb-2">
-                  <MediaCarousel media={post.media} />
+                  <MediaCarousel items={post.media} />
                 </div>
               {/if}
 
@@ -301,7 +320,7 @@
     <!-- Load more -->
     {#if hasMore}
       <div class="text-center py-4">
-        <button onclick={loadMore} class="px-4 py-2 text-sm bg-[#1a1f2e] hover:bg-[#1e2435] border border-line rounded-lg transition-colors">
+        <button onclick={loadMore} class="px-4 py-2 text-sm bg-surface-hover hover:bg-line border border-line rounded-lg transition-colors">
           Load More
         </button>
       </div>

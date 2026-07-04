@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { notificationsApi } from '$lib/api/notifications';
+  import { realtime } from '$lib/stores/realtime';
   import NotificationPanel from './NotificationPanel.svelte';
 
   let unreadCount = $state(0);
@@ -26,10 +27,20 @@
     fetchUnreadCount();
   }
 
+  let unsubscribers: (() => void)[] = [];
+
   onMount(() => {
     fetchUnreadCount();
+    // Polling fallback (every 60s) in case SSE drops silently.
+    // The realtime listener below handles the common case where the
+    // backend broadcasts `notification_new` and we get instant updates.
     const interval = setInterval(fetchUnreadCount, 60000);
+    unsubscribers.push(realtime.on('notification_new', () => fetchUnreadCount()));
     return () => clearInterval(interval);
+  });
+
+  onDestroy(() => {
+    unsubscribers.forEach(fn => fn());
   });
 </script>
 

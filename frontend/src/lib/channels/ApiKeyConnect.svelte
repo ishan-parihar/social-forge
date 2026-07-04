@@ -38,12 +38,12 @@
     submitting = true;
     errorMsg = "";
     try {
-      const body: Record<string, string> = {
+      const body: import("$lib/api/integrations").ConnectApiKeyRequest = {
         provider,
         api_key: apiKey.trim(),
+        instance_url: instanceUrl.trim() || undefined,
+        label: label.trim() || undefined,
       };
-      if (instanceUrl.trim()) body.instance_url = instanceUrl.trim();
-      if (label.trim()) body.label = label.trim();
       const r = await integrationsApi.connectApiKey(body);
       if (r.error) {
         errorMsg = r.error;

@@ -1,16 +1,16 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
-  import { automationApi, type AutomationRule, type ExecutionLog } from "$lib/api/automation";
+  import { automationApi, type AutomationRuleDisplay, type ExecutionLogDisplay, type CreateRulePayload } from "$lib/api/automation";
   import { toast } from "$lib/stores/toast";
   import { realtime } from "$lib/stores/realtime";
 
-  let rules = $state<AutomationRule[]>([]);
+  let rules = $state<AutomationRuleDisplay[]>([]);
   let loading = $state(true);
   let error = $state<string | null>(null);
   let showModal = $state(false);
-  let editingRule = $state<AutomationRule | null>(null);
+  let editingRule = $state<AutomationRuleDisplay | null>(null);
   let showLogs = $state<string | null>(null);
-  let logs = $state<ExecutionLog[]>([]);
+  let logs = $state<ExecutionLogDisplay[]>([]);
   let loadingLogs = $state(false);
 
   // Form state
@@ -47,29 +47,29 @@
     showModal = true;
   }
 
-  function openEdit(rule: AutomationRule) {
+  function openEdit(rule: AutomationRuleDisplay) {
     editingRule = rule;
     formName = rule.name;
-    formPlatform = rule.platform;
+    formPlatform = rule.platform || "x";
     formTrigger = rule.trigger_type;
     formResponseType = rule.response_type;
-    formTemplate = rule.response_template;
+    formTemplate = "";
     showModal = true;
   }
 
   async function saveRule() {
     saving = true;
     error = null;
-    const body = {
+    const body: CreateRulePayload = {
+      integration_id: "00000000-0000-0000-0000-000000000000", // TODO: wire to selected integration
       name: formName,
-      platform: formPlatform,
       trigger_type: formTrigger,
       response_type: formResponseType,
       response_template: formTemplate,
     };
     const r = editingRule
-      ? await automationApi.updateRule(editingRule.id, body as Partial<AutomationRule>)
-      : await automationApi.createRule(body as Omit<AutomationRule, 'id' | 'is_active'>);
+      ? await automationApi.updateRule(editingRule.id, body as Partial<AutomationRuleDisplay>)
+      : await automationApi.createRule(body);
     if (r.error) {
       error = r.error;
     } else {
@@ -89,7 +89,7 @@
     }
   }
 
-  async function toggleActive(rule: AutomationRule) {
+  async function toggleActive(rule: AutomationRuleDisplay) {
     const r = await automationApi.updateRule(rule.id, { is_active: !rule.is_active });
     if (r.error) {
       error = r.error;
@@ -156,7 +156,7 @@
             {#if rule.is_active}
               <span class="px-2 py-0.5 text-xs rounded bg-green-500/20 text-green-400">Active</span>
             {:else}
-              <span class="px-2 py-0.5 text-xs rounded bg-[#6b7280]/20 text-muted">Inactive</span>
+              <span class="px-2 py-0.5 text-xs rounded bg-muted/20 text-muted">Inactive</span>
             {/if}
           </button>
           <div class="flex items-center gap-2">
@@ -177,31 +177,31 @@
       <h3 class="text-lg font-semibold mb-4">{editingRule ? "Edit" : "Create"} Automation Rule</h3>
       
       <label class="block text-sm text-muted mb-1">Name</label>
-      <input type="text" bind:value={formName} placeholder="Auto-reply to comments" class="w-full mb-3 px-3 py-2 bg-[#161b22] border border-[#30363d] rounded text-sm" />
+      <input type="text" bind:value={formName} placeholder="Auto-reply to comments" class="w-full mb-3 px-3 py-2 bg-surface-hover border border-line rounded text-sm" />
 
       <label class="block text-sm text-muted mb-1">Platform</label>
-      <select bind:value={formPlatform} class="w-full mb-3 px-3 py-2 bg-[#161b22] border border-[#30363d] rounded text-sm">
+      <select bind:value={formPlatform} class="w-full mb-3 px-3 py-2 bg-surface-hover border border-line rounded text-sm">
         {#each platforms as p}
           <option value={p}>{p}</option>
         {/each}
       </select>
 
       <label class="block text-sm text-muted mb-1">Trigger Type</label>
-      <select bind:value={formTrigger} class="w-full mb-3 px-3 py-2 bg-[#161b22] border border-[#30363d] rounded text-sm">
+      <select bind:value={formTrigger} class="w-full mb-3 px-3 py-2 bg-surface-hover border border-line rounded text-sm">
         {#each triggers as t}
           <option value={t}>{t}</option>
         {/each}
       </select>
 
       <label class="block text-sm text-muted mb-1">Response Type</label>
-      <select bind:value={formResponseType} class="w-full mb-3 px-3 py-2 bg-[#161b22] border border-[#30363d] rounded text-sm">
+      <select bind:value={formResponseType} class="w-full mb-3 px-3 py-2 bg-surface-hover border border-line rounded text-sm">
         {#each responseTypes as rt}
           <option value={rt}>{rt.replace("_", " ")}</option>
         {/each}
       </select>
 
       <label class="block text-sm text-muted mb-1">Response Template</label>
-      <textarea bind:value={formTemplate} placeholder="Thanks for your comment! {user} said: {comment}" rows="4" class="w-full mb-4 px-3 py-2 bg-[#161b22] border border-[#30363d] rounded text-sm font-mono"></textarea>
+      <textarea bind:value={formTemplate} placeholder="Thanks for your comment! {'{user}'} said: {'{comment}'}" rows="4" class="w-full mb-4 px-3 py-2 bg-surface-hover border border-line rounded text-sm font-mono"></textarea>
 
       {#if error}<p class="text-red-400 text-sm mb-3">{error}</p>{/if}
 
@@ -230,7 +230,7 @@
       {:else}
         <div class="flex-1 overflow-y-auto space-y-2">
           {#each logs as log (log.id)}
-            <div class="bg-[#161b22] border border-[#30363d] rounded-lg p-3">
+            <div class="bg-surface-hover border border-line rounded-lg p-3">
               <div class="flex items-center gap-2 mb-1">
                 <span class="text-xs text-muted">{new Date(log.created_at).toLocaleString()}</span>
                 <span class="px-1.5 py-0.5 text-[10px] rounded {log.status === 'success' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}">{log.status}</span>

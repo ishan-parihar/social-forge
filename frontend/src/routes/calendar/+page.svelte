@@ -233,7 +233,7 @@
   {:else if loading}
     <div class="grid grid-cols-7 gap-px">
       {#each Array(35) as _, i (i)}
-        <div class="h-24 bg-[#1a1f2e] animate-pulse rounded"></div>
+        <div class="h-24 bg-surface-hover animate-pulse rounded"></div>
       {/each}
     </div>
   {:else if calendarState.state.view === "month"}

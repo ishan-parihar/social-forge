@@ -3,8 +3,9 @@
   import { page } from "$app/stores";
   import { postsApi } from "$lib/api/posts";
   import { integrationsApi, type Integration } from "$lib/api/integrations";
-  import { onMount } from "svelte";
+  import { onMount, onDestroy } from "svelte";
   import { toast } from "$lib/stores/toast";
+  import { realtime } from "$lib/stores/realtime";
   import ChannelSelector from "$lib/composer/ChannelSelector.svelte";
   import RichTextEditor from "$lib/composer/RichTextEditor.svelte";
   import MediaUpload from "$lib/composer/MediaUpload.svelte";
@@ -55,6 +56,19 @@
   const DRAFT_KEY = 'social-forge-composer-draft';
   let autoSaveTimer: ReturnType<typeof setTimeout>;
 
+  let unsubscribers: (() => void)[] = [];
+
+  async function refreshIntegrations() {
+    const r = await integrationsApi.list();
+    if (r.data) {
+      allIntegrations = r.data.integrations.filter(i => !i.disabled);
+      // Prune any selected integrations that no longer exist (e.g.
+      // user disconnected an account in another tab while composing).
+      const validIds = new Set(allIntegrations.map(i => i.id));
+      selectedIntegrations = selectedIntegrations.filter(id => validIds.has(id));
+    }
+  }
+
   onMount(async () => {
     const dateParam = new URL(window.location.href).searchParams.get('date');
     if (dateParam) {
@@ -73,6 +87,17 @@
     }
     const r = await integrationsApi.list();
     if (r.data) allIntegrations = r.data.integrations.filter(i => !i.disabled);
+
+    // Realtime: if the user connects/disconnects an account in
+    // another tab (or via the onboarding flow), refresh the channel
+    // selector so newly-connected accounts appear immediately and
+    // disconnected ones are pruned from the selection.
+    unsubscribers.push(realtime.on('integration_connected', () => refreshIntegrations()));
+    unsubscribers.push(realtime.on('integration_disconnected', () => refreshIntegrations()));
+  });
+
+  onDestroy(() => {
+    unsubscribers.forEach(fn => fn());
   });
 
   function restoreDraft() {
