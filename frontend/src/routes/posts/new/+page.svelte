@@ -4,6 +4,7 @@
   import { postsApi } from "$lib/api/posts";
   import { integrationsApi, type Integration } from "$lib/api/integrations";
   import { onMount } from "svelte";
+  import { toast } from "$lib/stores/toast";
   import ChannelSelector from "$lib/composer/ChannelSelector.svelte";
   import RichTextEditor from "$lib/composer/RichTextEditor.svelte";
   import MediaUpload from "$lib/composer/MediaUpload.svelte";
@@ -145,7 +146,7 @@
         integrationTargets.set(integrationId, r.data.targets);
       }
     } catch (e) {
-      console.error(`Failed to fetch targets for ${integrationId}:`, e);
+      toast(`Failed to fetch targets for ${integrationId}: ${e instanceof Error ? e.message : "unknown"}`, "error");
     } finally {
       targetsLoading.delete(integrationId);
     }

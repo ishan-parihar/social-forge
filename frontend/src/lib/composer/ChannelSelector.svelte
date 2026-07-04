@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { integrationsApi, type Integration } from "$lib/api/integrations";
   import ProviderIcon from "$lib/channels/ProviderIcon.svelte";
+  import { toast } from "$lib/stores/toast";
 
   let { selected = [], onToggle }: {
     selected?: string[];
@@ -15,7 +16,7 @@
       const r = await integrationsApi.list();
       if (r.data) integrations = r.data.integrations.filter(i => !i.disabled);
     } catch (e) {
-      console.error("Failed to load integrations:", e);
+      toast(`Failed to load integrations: ${e instanceof Error ? e.message : "unknown"}`, "error");
       integrations = [];
     }
   });

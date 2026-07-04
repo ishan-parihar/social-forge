@@ -2,6 +2,7 @@
   import Modal from "$lib/ui/Modal.svelte";
   import Button from "$lib/ui/Button.svelte";
   import { integrationsApi } from "$lib/api/integrations";
+  import { toast } from "$lib/stores/toast";
   import { onMount } from "svelte";
 
   let {
@@ -64,7 +65,7 @@
       }
     } catch (e) {
       error = "Failed to connect. Please try again.";
-      console.error("Extension connect failed:", e);
+      toast(`Extension connect failed: ${e instanceof Error ? e.message : "unknown"}`, "error");
     }
     verifying = false;
   }

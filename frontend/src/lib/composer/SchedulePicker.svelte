@@ -1,5 +1,6 @@
 <script lang="ts">
   import { postsApi } from "$lib/api/posts";
+  import { toast } from "$lib/stores/toast";
 
   let { scheduledAt, onChange, recurring, onRecurringChange, integrationId }: {
     scheduledAt?: string | null;
@@ -52,11 +53,11 @@
     try {
       const r = await postsApi.findSlot(integrationId);
       if (r.error) {
-        console.error("Auto-schedule failed:", r.error);
+        toast(`Auto-schedule failed: ${r.error}`, "error");
         return;
       }
       if (!r.data?.date) {
-        console.error("No available slot returned");
+        toast("No available slot returned", "error");
         return;
       }
       const d = new Date(r.data.date + "Z");  // UTC
@@ -65,7 +66,7 @@
       scheduled = true;
       update();
     } catch (e) {
-      console.error("Auto-schedule failed:", e);
+      toast(`Auto-schedule failed: ${e instanceof Error ? e.message : "unknown"}`, "error");
     } finally {
       autoScheduling = false;
     }

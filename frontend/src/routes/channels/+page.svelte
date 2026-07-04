@@ -1,6 +1,7 @@
 <script lang="ts">
   import { integrationsApi, type Integration } from "$lib/api/integrations";
   import { onMount } from "svelte";
+  import { toast } from "$lib/stores/toast";
   import { groupIntegrations } from "$lib/channels/group-integrations";
   import ChannelCard from "$lib/channels/ChannelCard.svelte";
   import ProviderIcon from "$lib/channels/ProviderIcon.svelte";
@@ -78,7 +79,7 @@
       await load();
     } catch (e) {
       error = "Failed to disconnect channel";
-      console.error("Disconnect failed:", e);
+      toast(`Disconnect failed: ${e instanceof Error ? e.message : "unknown"}`, "error");
     }
   }
 
@@ -120,7 +121,7 @@
           window.addEventListener("message", onMessage);
           const interval = setInterval(() => { if (popup.closed) { clearInterval(interval); window.removeEventListener("message", onMessage); connecting = null; load(); } }, 1000);
         } else { connecting = null; }
-      }).catch((e) => { error = "Failed to connect " + provider; console.error("Connect failed:", e); connecting = null; });
+      }).catch((e) => { error = "Failed to connect " + provider; toast(`Connect failed: ${e instanceof Error ? e.message : "unknown"}`, "error"); connecting = null; });
     } else {
       connectProvider = provider;
     }
@@ -212,7 +213,7 @@
       await load();
     } catch (e) {
       error = "Failed to toggle channel";
-      console.error("Toggle disable failed:", e);
+      toast(`Toggle disable failed: ${e instanceof Error ? e.message : "unknown"}`, "error");
     }
   }
 

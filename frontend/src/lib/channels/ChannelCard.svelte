@@ -3,6 +3,7 @@
   import ChannelContextMenu from "./ChannelContextMenu.svelte";
   import { integrationsApi, type Integration, type TimeslotEntry } from "$lib/api/integrations";
   import { getAuthType } from "./auth-types";
+  import { toast } from "$lib/stores/toast";
 
   let { integration, timeslots, onDisconnect, onRefresh, onReconnect, onToggleDisable, isRefreshing }: {
     integration: Integration;
@@ -64,9 +65,9 @@
     } else {
       try {
         const r = await integrationsApi.toggleDisable(integration.id, newDisabled);
-        if (r.error) console.error("Toggle disable failed:", r.error);
+        if (r.error) toast(`Toggle disable failed: ${r.error}`, "error");
       } catch (e) {
-        console.error("Toggle disable error:", e);
+        toast(`Toggle disable error: ${e instanceof Error ? e.message : "unknown"}`, "error");
       }
     }
   }
