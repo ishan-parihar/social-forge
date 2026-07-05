@@ -53,6 +53,7 @@ pub mod tools_notifications;
 pub mod tools_webhooks;
 pub mod tools_feed;
 pub mod tools_wordpress;
+pub mod tools_admin;
 pub mod tools_youtube;
 pub mod tools_x;
 pub mod tools_github;
@@ -2728,6 +2729,88 @@ impl SocialForgeMcpServer {
         params: Parameters<tools_github::GhListMyReposInput>,
     ) -> Result<Json<McpJsonValue>, String> {
         tools_github::handle_gh_list_my_repos(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    // ── Admin/Parity Tools (v9 MCP parity wrappers) ────────────────
+
+    #[tool(description = "Set up a recurring/evergreen post. The scheduler creates a new queued copy every interval_days days until end_date. Wraps POST /api/posts/{id}/repeat.")]
+    pub async fn posts_repeat(
+        &self,
+        params: Parameters<tools_admin::PostsRepeatInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_admin::handle_posts_repeat(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Attach tags to a post. Replaces any existing tags. Wraps PUT /api/posts/{id}/tags.")]
+    pub async fn posts_set_tags(
+        &self,
+        params: Parameters<tools_admin::PostsSetTagsInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_admin::handle_posts_set_tags(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Delete a media file (DB row + file on disk). Wraps DELETE /api/media/{id}.")]
+    pub async fn media_delete(
+        &self,
+        params: Parameters<tools_admin::MediaDeleteInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_admin::handle_media_delete(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Manually refresh the OAuth access token for an integration. Wraps POST /api/integrations/{id}/refresh.")]
+    pub async fn integrations_refresh(
+        &self,
+        params: Parameters<tools_admin::IntegrationsRefreshInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_admin::handle_integrations_refresh(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "List all per-platform signatures. Wraps GET /api/signatures.")]
+    pub async fn signatures_list(
+        &self,
+        params: Parameters<tools_admin::SignatureListInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_admin::handle_signatures_list(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Create a new per-platform signature. Wraps POST /api/signatures.")]
+    pub async fn signatures_create(
+        &self,
+        params: Parameters<tools_admin::SignatureCreateInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_admin::handle_signatures_create(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Update an existing signature. Wraps PUT /api/signatures/{id}.")]
+    pub async fn signatures_update(
+        &self,
+        params: Parameters<tools_admin::SignatureUpdateInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_admin::handle_signatures_update(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Delete a signature. Wraps DELETE /api/signatures/{id}.")]
+    pub async fn signatures_delete(
+        &self,
+        params: Parameters<tools_admin::SignatureDeleteInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_admin::handle_signatures_delete(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Get aggregate analytics summary: total posts, published/failed/draft/queued counts. Wraps GET /api/analytics/summary.")]
+    pub async fn analytics_summary(
+        &self,
+        params: Parameters<tools_admin::AnalyticsSummaryInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_admin::handle_analytics_summary(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Get feed-level engagement analytics: total likes/comments/shares/impressions across all imported feed posts. Wraps GET /api/feed/analytics.")]
+    pub async fn feed_analytics(
+        &self,
+        params: Parameters<tools_admin::FeedAnalyticsInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_admin::handle_feed_analytics(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
     }
 
 
