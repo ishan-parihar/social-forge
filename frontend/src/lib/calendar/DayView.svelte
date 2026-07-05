@@ -19,6 +19,16 @@
   let dayEvents = $derived(events.filter(e => e.date === key));
   let hours = $derived(getDayHours());
 
+  // State summary for the day — shows at a glance how many posts are
+  // scheduled vs published vs failed vs draft on this day.
+  let stateSummary = $derived.by(() => {
+    const s = { draft: 0, queued: 0, published: 0, error: 0 };
+    for (const e of dayEvents) {
+      if (e.state in s) s[e.state as keyof typeof s]++;
+    }
+    return s;
+  });
+
   let eventsByHour = $derived.by(() => {
     const map = new Map<string, CEvent[]>();
     for (const e of dayEvents) {
@@ -43,11 +53,25 @@
 </script>
 
 <div class="bg-surface border border-line rounded-xl overflow-hidden">
-  <div class="text-center py-3 border-b border-line">
-    <div class="text-lg font-semibold">
+  <div class="py-3 border-b border-line px-4">
+    <div class="text-lg font-semibold text-center">
       {date.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
     </div>
-    <div class="text-xs text-muted">{dayEvents.length} posts scheduled</div>
+    <div class="flex items-center justify-center gap-3 mt-1 text-xs">
+      <span class="text-muted">{dayEvents.length} total</span>
+      {#if stateSummary.queued > 0}
+        <span class="text-indigo-400">{stateSummary.queued} scheduled</span>
+      {/if}
+      {#if stateSummary.published > 0}
+        <span class="text-green-400">{stateSummary.published} published</span>
+      {/if}
+      {#if stateSummary.draft > 0}
+        <span class="text-muted">{stateSummary.draft} drafts</span>
+      {/if}
+      {#if stateSummary.error > 0}
+        <span class="text-red-400">{stateSummary.error} failed</span>
+      {/if}
+    </div>
   </div>
   <div class="overflow-y-auto max-h-[700px]">
     {#each hours as hour (hour)}

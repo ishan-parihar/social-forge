@@ -361,6 +361,7 @@ pub async fn create_thread_posts(
     scheduled_at: Option<DateTime<Utc>>,
     state: Option<PostState>,
     group_id: Uuid,
+    delay_minutes: Option<i64>,
 ) -> Result<Vec<Post>, sqlx::Error> {
     let st = state.unwrap_or(PostState::Draft);
     let mut tx = pool.begin().await?;
@@ -368,6 +369,21 @@ pub async fn create_thread_posts(
     let mut seq = 1i32;
 
     for part in content_parts {
+        // Apply per-part delay: each part's scheduled_at is offset by
+        // (seq - 1) * delay_minutes. Part 1 publishes at scheduled_at,
+        // part 2 at scheduled_at + delay, part 3 at scheduled_at + 2*delay, etc.
+        let part_scheduled_at = scheduled_at.map(|base| {
+            if let Some(delay) = delay_minutes {
+                if delay > 0 && seq > 1 {
+                    base + chrono::Duration::minutes(delay * (seq as i64 - 1))
+                } else {
+                    base
+                }
+            } else {
+                base
+            }
+        });
+
         for &integration_id in integration_ids {
             let post = sqlx::query_as::<_, Post>(
                 r#"INSERT INTO posts
@@ -386,7 +402,7 @@ pub async fn create_thread_posts(
             .bind(None::<&str>)
             .bind(&serde_json::Value::Null)
             .bind(&serde_json::json!({}))
-            .bind(scheduled_at)
+            .bind(part_scheduled_at)
             .bind(&st)
             .bind(None::<&str>)
             .bind(seq)

@@ -34,6 +34,8 @@ export interface ThreadRequest {
   content_parts: string[];
   integration_ids: string[];
   scheduled_at?: string;
+  /** Delay (minutes) between each thread part. Part N publishes at scheduled_at + (N-1)*delay. */
+  delay_minutes?: number;
 }
 
 export const postsApi = {

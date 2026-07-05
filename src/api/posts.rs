@@ -52,6 +52,12 @@ pub struct CreateThreadRequest {
     pub content_parts: Vec<String>,
     pub integration_ids: Vec<Uuid>,
     pub scheduled_at: Option<String>,
+    /// Delay (in minutes) between each thread part. If set, each part's
+    /// scheduled_at is offset by (sequence - 1) * delay_minutes.
+    /// e.g. delay_minutes=5 with 3 parts scheduled at 09:00 →
+    /// part 1 at 09:00, part 2 at 09:05, part 3 at 09:10.
+    /// If omitted, all parts share the same scheduled_at.
+    pub delay_minutes: Option<i64>,
 }
 
 #[derive(Debug, Serialize)]
@@ -418,6 +424,7 @@ pub async fn create_thread(
         scheduled_at,
         state_enum,
         group_id,
+        body.delay_minutes,
     )
     .await?;
 
