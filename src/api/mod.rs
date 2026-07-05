@@ -280,7 +280,17 @@ async fn embedded_frontend_handler(req: Request<Body>) -> Response<Body> {
 
     match asset {
         Some(file) => {
-            let mime = mime_guess::from_path(path).first_or_octet_stream();
+            // Use the resolved asset key for MIME guessing, not the original
+            // request path — empty path "/" would guess octet-stream instead
+            // of text/html for the index.html fallback.
+            let resolved_key = if FrontendAssets::get(path).is_some() {
+                path.to_string()
+            } else if path.is_empty() || path.ends_with('/') {
+                format!("{path}index.html")
+            } else {
+                path.to_string()
+            };
+            let mime = mime_guess::from_path(&resolved_key).first_or_octet_stream();
             Response::builder()
                 .status(StatusCode::OK)
                 .header("content-type", mime.as_ref())
