@@ -52,6 +52,11 @@ export const postsApi = {
   update: (id: string, d: { content: string; title?: string }) =>
     api.put<PostDetail>(`/api/posts/${id}`, d),
   schedule: (id: string, at: string) => api.post<PostDetail>(`/api/posts/${id}/schedule`, { scheduled_at: at }),
+  reschedule: (id: string, scheduledAt: string, moveGroup?: boolean) =>
+    api.put<{ rescheduled: boolean; post?: PostDetail; group_id?: string; count?: number }>(
+      `/api/posts/${id}/date`,
+      { scheduled_at: scheduledAt, move_group: moveGroup || false }
+    ),
   delete: (id: string) => api.del<{ deleted: boolean }>(`/api/posts/${id}`),
   setTags: (id: string, tagIds: string[]) =>
     api.put<{ success: boolean }>(`/api/posts/${id}/tags`, { tag_ids: tagIds }),

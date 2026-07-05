@@ -527,6 +527,96 @@ pub async fn schedule(
     Ok(Json(public))
 }
 
+/// PUT /api/posts/:id/date — reschedule a post by dragging it on the calendar.
+///
+/// Accepts `{ "scheduled_at": "<RFC3339>" }` and updates the post's
+/// `scheduled_at` field. Only works for posts in `queued` or `draft`
+/// state — published posts can't be rescheduled (they're already live).
+///
+/// If the post is part of a thread (has `group_id`), the caller can
+/// pass `move_group: true` to reschedule all posts in the same group
+/// by the same delta. This is useful for dragging a thread to a new
+/// time slot.
+#[derive(Debug, Deserialize)]
+pub struct RescheduleRequest {
+    pub scheduled_at: String,
+    /// If true and the post is part of a thread, reschedule all posts
+    /// in the same group by the same time delta. Default: false.
+    pub move_group: Option<bool>,
+}
+
+pub async fn reschedule(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(id): Path<Uuid>,
+    Json(body): Json<RescheduleRequest>,
+) -> Result<Json<serde_json::Value>, crate::error::AppError> {
+    let new_scheduled_at = DateTime::parse_from_rfc3339(&body.scheduled_at)
+        .map_err(|_| crate::error::AppError::BadRequest("Invalid date format, use RFC3339/ISO8601".into()))?
+        .with_timezone(&Utc);
+
+    // Fetch the post to verify ownership and get current scheduled_at + group_id
+    let post = queries::get_post(&state.db, id, auth.user_id)
+        .await
+        .map_err(|e| crate::error::AppError::Internal(format!("DB error: {e}")))?
+        .ok_or_else(|| crate::error::AppError::NotFound("Post not found".into()))?;
+
+    // Only allow rescheduling queued or draft posts
+    if post.state == crate::db::models::PostState::Published {
+        return Err(crate::error::AppError::BadRequest(
+            "Cannot reschedule a published post. It's already live.".into(),
+        ));
+    }
+
+    // If move_group is true and post has a group_id, reschedule all posts in the group
+    let move_group = body.move_group.unwrap_or(false);
+    if move_group && post.group_id.is_some() {
+        let group_id = post.group_id.as_ref().unwrap();
+        let group_posts = queries::get_posts_by_group_id(&state.db, auth.user_id, *group_id)
+            .await
+            .map_err(|e| crate::error::AppError::Internal(format!("DB error: {e}")))?;
+
+        // Calculate the delta from the dragged post's current scheduled_at
+        let old_scheduled_at = post.scheduled_at.unwrap_or_else(Utc::now);
+        let delta = new_scheduled_at - old_scheduled_at;
+
+        // Apply the same delta to all posts in the group
+        for group_post in &group_posts {
+            if let Some(ref old_at) = group_post.scheduled_at {
+                let new_at = *old_at + delta;
+                let _ = queries::schedule_post(
+                    &state.db,
+                    group_post.id,
+                    auth.user_id,
+                    new_at,
+                )
+                .await;
+            }
+        }
+
+        return Ok(Json(serde_json::json!({
+            "rescheduled": true,
+            "group_id": group_id,
+            "count": group_posts.len(),
+            "new_scheduled_at": new_scheduled_at.to_rfc3339(),
+        })));
+    }
+
+    // Single post reschedule
+    let updated = queries::schedule_post(&state.db, id, auth.user_id, new_scheduled_at)
+        .await
+        .map_err(|e| crate::error::AppError::Internal(format!("DB error: {e}")))?
+        .ok_or_else(|| crate::error::AppError::NotFound("Post not found after reschedule".into()))?;
+
+    let public = PostPublic::from(updated);
+    state.broadcast.send("post_scheduled", &public);
+
+    Ok(Json(serde_json::json!({
+        "rescheduled": true,
+        "post": public,
+    })))
+}
+
 /// DELETE /api/posts/:id
 pub async fn delete(
     State(state): State<AppState>,

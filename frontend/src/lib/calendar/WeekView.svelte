@@ -38,6 +38,11 @@
     if (id && onDrop) onDrop(id, dateStr);
   }
 
+  function handleDragStart(e: DragEvent, eventId: string) {
+    e.dataTransfer?.setData("text/plain", eventId);
+    e.dataTransfer!.effectAllowed = "move";
+  }
+
   function handleKeyDown(e: KeyboardEvent, dateStr: string) {
     if ((e.key === 'Enter' || e.key === ' ') && onDrop) {
       e.preventDefault();
@@ -71,7 +76,15 @@
             onkeydown={(e) => handleKeyDown(e, wd.dateStr)}
           >
             {#each (eventsByDayHour.get(`${wd.dateStr}-${hour.slice(0, 2)}`) || []) as event (event.id)}
-              <div class="flex items-center gap-1" onclick={() => onEventClick?.(event.id)} onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') onEventClick?.(event.id); }} role="button" tabindex="-1">
+              <div
+                class="flex items-center gap-1 {event.state === 'published' ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'}"
+                draggable={event.state !== 'published'}
+                ondragstart={(e) => handleDragStart(e, event.id)}
+                onclick={() => onEventClick?.(event.id)}
+                onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') onEventClick?.(event.id); }}
+                role="button"
+                tabindex="-1"
+              >
                 {#if onToggleSelect}
                   <input type="checkbox" checked={selected.has(event.id)} onclick={(e) => onToggleSelect?.(event.id, e)} class="rounded shrink-0 w-3 h-3" />
                 {/if}

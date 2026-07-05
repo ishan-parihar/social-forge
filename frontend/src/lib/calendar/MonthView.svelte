@@ -71,13 +71,13 @@
         <div class="space-y-0.5">
           {#each dayEvents.slice(0, 3) as event (event.id)}
             <div
-              draggable="true"
+              draggable={event.state !== 'published'}
               ondragstart={(e) => handleDragStart(e, event.id)}
               onclick={(e) => { e.stopPropagation(); onEventClick?.(event.id); }}
               onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onEventClick?.(event.id); } }}
               role="button"
               tabindex="-1"
-              class="flex items-center gap-1"
+              class="flex items-center gap-1 {event.state === 'published' ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'}"
             >
               {#if onToggleSelect}
                 <input type="checkbox" checked={selected.has(event.id)} onclick={(e) => onToggleSelect?.(event.id, e)} class="rounded shrink-0 w-3 h-3" />

@@ -121,12 +121,27 @@
 
   async function handleDrop(eventId: string, newDate: string) {
     const event = events.find(e => e.id === eventId);
-    const time = event?.time || "00:00";
+    if (!event) return;
+    if (event.state === 'published') {
+      toast("Cannot reschedule a published post", "error");
+      return;
+    }
+    const time = event.time || "09:00";
     const dateObj = new Date(`${newDate}T${time}:00Z`);
-    const r = await postsApi.schedule(eventId, dateObj.toISOString());
+    let moveGroup = false;
+    if (event.groupId) {
+      moveGroup = confirm("Move all posts in this group by the same offset? Cancel to move only this post.");
+    }
+    const r = await postsApi.reschedule(eventId, dateObj.toISOString(), moveGroup);
     if (r.error) {
-      toast(`Failed to reschedule: ${r.error}`, "error");
+      toast("Failed to reschedule", "error");
     } else {
+      const count = r.data?.count;
+      if (moveGroup && count) {
+        toast("Rescheduled " + count + " posts in group", "success");
+      } else {
+        toast("Post rescheduled", "success");
+      }
       refresh();
     }
   }
@@ -270,6 +285,7 @@
       {selected}
       onEventClick={(id) => selectedEvent = events.find(e => e.id === id) || null}
       onDateClick={(date) => goto(`/posts/new?date=${date}`)}
+      onDrop={handleDrop}
       onDuplicate={handleDuplicate}
       onStats={handleStats}
       onDelete={handleDelete}
