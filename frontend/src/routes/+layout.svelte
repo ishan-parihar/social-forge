@@ -2,13 +2,15 @@
   import '../app.css';
   import { realtime } from '$lib/stores/realtime';
   import { timezone } from '$lib/stores/timezone.svelte';
+  import { initKeyboardShortcuts, destroyKeyboardShortcuts } from '$lib/stores/keyboard.svelte';
   import Toast from '$lib/components/Toast.svelte';
   import NotificationBell from '$lib/notifications/NotificationBell.svelte';
   import Icon from '$lib/ui/Icon.svelte';
   import { page } from '$app/stores';
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
 
   let { children, data } = $props();
+  let showShortcuts = $state(false);
 
   const navSections = [
     {
@@ -66,7 +68,12 @@
   onMount(() => {
     if (data.authenticated) {
       realtime.connect();
+      initKeyboardShortcuts(() => showShortcuts = true);
     }
+  });
+
+  onDestroy(() => {
+    destroyKeyboardShortcuts();
   });
 </script>
 
@@ -118,5 +125,37 @@
     <main class="flex-1 overflow-auto">
       <div class="max-w-6xl mx-auto p-6">{@render children()}</div>
     </main>
+  </div>
+{/if}
+
+<!-- Keyboard shortcut cheat-sheet -->
+{#if showShortcuts}
+  <div
+    class="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
+    role="dialog"
+    onclick={() => showShortcuts = false}
+    onkeydown={(e) => { if (e.key === 'Escape') showShortcuts = false; }}
+  >
+    <div
+      class="bg-surface border border-line rounded-xl p-6 max-w-md w-full mx-4"
+      onclick={(e) => e.stopPropagation()}
+    >
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-semibold">Keyboard Shortcuts</h3>
+        <button onclick={() => showShortcuts = false} class="text-muted hover:text-white text-xl">&times;</button>
+      </div>
+      <div class="space-y-2 text-sm">
+        <div class="flex justify-between"><span class="text-muted">New post</span><kbd class="px-2 py-0.5 bg-surface-hover rounded text-xs font-mono">n</kbd></div>
+        <div class="flex justify-between"><span class="text-muted">Search</span><kbd class="px-2 py-0.5 bg-surface-hover rounded text-xs font-mono">/</kbd></div>
+        <div class="flex justify-between"><span class="text-muted">Go to Calendar</span><kbd class="px-2 py-0.5 bg-surface-hover rounded text-xs font-mono">g c</kbd></div>
+        <div class="flex justify-between"><span class="text-muted">Go to Posts</span><kbd class="px-2 py-0.5 bg-surface-hover rounded text-xs font-mono">g p</kbd></div>
+        <div class="flex justify-between"><span class="text-muted">Go to Feed</span><kbd class="px-2 py-0.5 bg-surface-hover rounded text-xs font-mono">g f</kbd></div>
+        <div class="flex justify-between"><span class="text-muted">Go to Analytics</span><kbd class="px-2 py-0.5 bg-surface-hover rounded text-xs font-mono">g a</kbd></div>
+        <div class="flex justify-between"><span class="text-muted">Go to Media</span><kbd class="px-2 py-0.5 bg-surface-hover rounded text-xs font-mono">g m</kbd></div>
+        <div class="flex justify-between"><span class="text-muted">Show this help</span><kbd class="px-2 py-0.5 bg-surface-hover rounded text-xs font-mono">?</kbd></div>
+        <div class="flex justify-between"><span class="text-muted">Close modal</span><kbd class="px-2 py-0.5 bg-surface-hover rounded text-xs font-mono">Esc</kbd></div>
+      </div>
+      <p class="text-xs text-muted-dark mt-4 text-center">Shortcuts are disabled while typing in inputs.</p>
+    </div>
   </div>
 {/if}
