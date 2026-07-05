@@ -90,6 +90,10 @@ pub fn build_router(state: AppState) -> Router {
             let db_for_metrics = state.db.clone();
             move || metrics_check(db_for_metrics)
         }))
+        .route("/api/streak", axum::routing::get({
+            let db_for_streak = state.db.clone();
+            move || streak_check(db_for_streak)
+        }))
         .route("/api/auth/login", axum::routing::post(auth::login))
         .route("/api/auth/callback", axum::routing::get(integrations::oauth_callback))
         .route("/api/auth/callback/{provider}", axum::routing::get(integrations::oauth_callback))
@@ -477,6 +481,34 @@ async fn metrics_check(db: PgPool) -> axum::Json<serde_json::Value> {
         "draining": DRAINING.load(std::sync::atomic::Ordering::SeqCst),
         "version": env!("CARGO_PKG_VERSION"),
     }))
+}
+
+/// Streak endpoint — returns the user's current posting streak.
+/// Used by the frontend flame icon in the top bar.
+async fn streak_check(db: PgPool) -> axum::Json<serde_json::Value> {
+    use sqlx::Row;
+    let user_id = crate::auth::middleware::DEFAULT_USER_ID;
+    let row = sqlx::query(
+        "SELECT streak_days, streak_since FROM users WHERE id = $1",
+    )
+    .bind(user_id)
+    .fetch_optional(&db)
+    .await;
+
+    match row {
+        Ok(Some(r)) => {
+            let streak_days: i32 = r.try_get("streak_days").unwrap_or(0);
+            let streak_since: Option<chrono::DateTime<chrono::Utc>> = r.try_get("streak_since").ok();
+            axum::Json(serde_json::json!({
+                "streak_days": streak_days,
+                "streak_since": streak_since.map(|d| d.to_rfc3339()),
+            }))
+        }
+        _ => axum::Json(serde_json::json!({
+            "streak_days": 0,
+            "streak_since": null,
+        })),
+    }
 }
 
 /// State carried by the CSRF middleware.

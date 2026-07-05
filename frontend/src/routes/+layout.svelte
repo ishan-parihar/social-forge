@@ -5,6 +5,7 @@
   import { initKeyboardShortcuts, destroyKeyboardShortcuts } from '$lib/stores/keyboard.svelte';
   import Toast from '$lib/components/Toast.svelte';
   import NotificationBell from '$lib/notifications/NotificationBell.svelte';
+  import StreakBadge from '$lib/streak/StreakBadge.svelte';
   import Icon from '$lib/ui/Icon.svelte';
   import { page } from '$app/stores';
   import { onMount, onDestroy } from 'svelte';
@@ -86,7 +87,10 @@
     <aside class="w-56 bg-background border-r border-line flex flex-col flex-shrink-0 overflow-y-auto">
       <div class="h-14 flex items-center justify-between px-5 border-b border-line sticky top-0 bg-background z-10">
         <span class="text-indigo-400 font-bold text-lg">Social Forge</span>
-        <NotificationBell />
+        <div class="flex items-center gap-2">
+          <StreakBadge />
+          <NotificationBell />
+        </div>
       </div>
       <nav class="flex-1 py-3 px-2">
         {#each navSections as section}

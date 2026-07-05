@@ -605,6 +605,12 @@ async fn publish_post(
                 // delay the scheduler tick).
                 dispatch_webhook_background(db, post.user_id, "post.published", &event_payload);
 
+                // Update posting streak — the solo founder's daily
+                // posting motivation. If this is the first post today,
+                // increment streak_days. The daily reset cron (below)
+                // handles the "no post in 24h → reset" case.
+                update_streak_on_publish(db, post.user_id).await;
+
                 // Publish first_comment if present
                 if let Some(ref comment_text) = post.first_comment {
                     if !comment_text.is_empty() {
@@ -865,6 +871,101 @@ async fn mark_post_error(db: &PgPool, post_id: uuid::Uuid, error: &str) {
     if let Err(e) = queries::update_post_state(db, post_id, PostState::Error, None, None, Some(error)).await {
         tracing::error!("Failed to mark post {post_id} as error: {e}");
     }
+}
+
+// ── Posting Streak ───────────────────────────────────────────
+
+/// Update the user's posting streak when a post is published.
+///
+/// - If `streak_since` is NULL (never posted) → set to NOW, streak_days = 1
+/// - If last post was yesterday (streak_since < NOW - 24h but < NOW - 0h) →
+///   streak_days += 1, streak_since = NOW
+/// - If last post was today (streak_since > NOW - 24h) → no change (already counted)
+/// - The daily reset cron handles the "no post in 24h → reset" case
+async fn update_streak_on_publish(db: &PgPool, user_id: uuid::Uuid) {
+    let now = Utc::now();
+    let row = sqlx::query("SELECT streak_since, streak_days FROM users WHERE id = $1")
+        .bind(user_id)
+        .fetch_optional(db)
+        .await;
+
+    match row {
+        Ok(Some(r)) => {
+            use sqlx::Row;
+            let streak_since: Option<chrono::DateTime<chrono::Utc>> = r.try_get("streak_since").ok();
+            let streak_days: i32 = r.try_get("streak_days").unwrap_or(0);
+
+            if streak_since.is_none() {
+                // First ever post
+                let _ = sqlx::query("UPDATE users SET streak_since = $1, streak_days = 1 WHERE id = $2")
+                    .bind(now)
+                    .bind(user_id)
+                    .execute(db)
+                    .await;
+                tracing::info!("Streak: first post for user {user_id}, streak = 1");
+            } else if let Some(since) = streak_since {
+                let elapsed = now - since;
+                if elapsed.num_hours() >= 24 {
+                    let new_streak = streak_days + 1;
+                    let _ = sqlx::query("UPDATE users SET streak_since = $1, streak_days = $2 WHERE id = $3")
+                        .bind(now)
+                        .bind(new_streak)
+                        .bind(user_id)
+                        .execute(db)
+                        .await;
+                    tracing::info!("Streak: user {user_id} now at {new_streak} days");
+                }
+            }
+        }
+        Ok(None) => {}
+        Err(e) => {
+            tracing::warn!("Streak: failed to query user {user_id}: {e}");
+        }
+    }
+}
+
+/// Daily streak reset: checks all users. If streak_since is more than
+/// 48 hours ago (missed a full day), reset streak_days to 0.
+/// Runs every hour (lightweight query).
+pub fn start_streak_reset(db: PgPool, mut shutdown: tokio::sync::watch::Receiver<bool>) {
+    tokio::spawn(async move {
+        let interval = Duration::from_secs(3600); // every hour
+        tracing::info!("Streak reset checker started (interval: 1 hour)");
+        loop {
+            tokio::select! {
+                _ = tokio::time::sleep(interval) => {
+                    if let Err(e) = reset_expired_streaks(&db).await {
+                        tracing::error!("Streak reset error: {e}");
+                    }
+                }
+                _ = shutdown.changed() => {
+                    if *shutdown.borrow() {
+                        tracing::info!("Streak reset checker shutting down");
+                        break;
+                    }
+                }
+            }
+        }
+    });
+}
+
+async fn reset_expired_streaks(db: &PgPool) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    // Reset streaks where no post has been published in the last 48 hours.
+    // (48h gives a grace period so a streak isn't lost if you post at 11pm
+    // one day and 1am the next — those are ~2h apart but count as 2 days.)
+    let result = sqlx::query(
+        "UPDATE users
+         SET streak_days = 0, streak_since = NULL
+         WHERE streak_since IS NOT NULL
+           AND streak_since < NOW() - INTERVAL '48 hours'",
+    )
+    .execute(db)
+    .await?;
+
+    if result.rows_affected() > 0 {
+        tracing::info!("Streak: reset {} user(s) with expired streaks", result.rows_affected());
+    }
+    Ok(())
 }
 
 // ── Analytics Cache Refresh ──────────────────────────────────

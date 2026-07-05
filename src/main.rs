@@ -222,6 +222,10 @@ async fn main() -> anyhow::Result<()> {
         feed_rx,
     );
 
+    // ── Start streak reset checker ────────────────────────────
+    let streak_rx = shutdown_tx.subscribe();
+    scheduler::start_streak_reset(db.clone(), streak_rx);
+
     // ── Build HTTP router ─────────────────────────────────────
     let app = api::build_router(state);
 
