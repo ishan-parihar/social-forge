@@ -6,12 +6,15 @@
   import Toast from '$lib/components/Toast.svelte';
   import NotificationBell from '$lib/notifications/NotificationBell.svelte';
   import StreakBadge from '$lib/streak/StreakBadge.svelte';
+  import OnboardingModal from '$lib/onboarding/OnboardingModal.svelte';
   import Icon from '$lib/ui/Icon.svelte';
   import { page } from '$app/stores';
   import { onMount, onDestroy } from 'svelte';
+  import { browser } from '$app/environment';
 
   let { children, data } = $props();
   let showShortcuts = $state(false);
+  let showOnboarding = $state(false);
 
   const navSections = [
     {
@@ -70,6 +73,10 @@
     if (data.authenticated) {
       realtime.connect();
       initKeyboardShortcuts(() => showShortcuts = true);
+      // Show onboarding on first login
+      if (browser && !localStorage.getItem('social-forge-onboarded')) {
+        showOnboarding = true;
+      }
     }
   });
 
@@ -162,4 +169,9 @@
       <p class="text-xs text-muted-dark mt-4 text-center">Shortcuts are disabled while typing in inputs.</p>
     </div>
   </div>
+{/if}
+
+<!-- First-run onboarding -->
+{#if showOnboarding}
+  <OnboardingModal onClose={() => showOnboarding = false} />
 {/if}
