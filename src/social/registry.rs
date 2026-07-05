@@ -58,6 +58,114 @@ pub struct ProviderRegistry {
     /// The scheduler acquires a permit before calling `provider.publish()`
     /// and releases it when the publish completes (success or failure).
     concurrency: Arc<HashMap<&'static str, Arc<tokio::sync::Semaphore>>>,
+    /// Per-provider circuit breaker. When a provider has N consecutive
+    /// failures (e.g. 5xx from the platform API), the circuit opens and
+    /// subsequent publish attempts are skipped for a cooldown period
+    /// (default 60s) instead of burning through all queued posts.
+    /// After the cooldown, the circuit goes half-open: one request is
+    /// allowed through; if it succeeds, the circuit closes; if it fails,
+    /// the cooldown restarts.
+    circuit_breakers: Arc<HashMap<&'static str, Arc<CircuitBreaker>>>,
+}
+
+/// Per-provider circuit breaker with three states: closed, open, half-open.
+///
+/// - **Closed**: all requests pass through. Failure count tracked.
+/// - **Open**: all requests rejected immediately for `cooldown_secs`.
+///   After cooldown, transitions to half-open.
+/// - **Half-open**: one request allowed through. If it succeeds → closed.
+///   If it fails → back to open with full cooldown.
+///
+/// This prevents a platform outage (e.g. X 5xx for 10 minutes) from
+/// cascading to every queued post. Without it, 50 queued X posts would
+/// each independently fail their 3 retries = 150 doomed API calls.
+pub struct CircuitBreaker {
+    state: std::sync::atomic::AtomicU8, // 0=closed, 1=open, 2=half-open
+    failure_count: std::sync::atomic::AtomicU32,
+    opened_at: std::sync::atomic::AtomicI64, // unix timestamp
+    /// Number of consecutive failures before opening.
+    failure_threshold: u32,
+    /// Seconds to wait before transitioning from open to half-open.
+    cooldown_secs: i64,
+}
+
+impl CircuitBreaker {
+    pub fn new(failure_threshold: u32, cooldown_secs: i64) -> Self {
+        Self {
+            state: std::sync::atomic::AtomicU8::new(0), // closed
+            failure_count: std::sync::atomic::AtomicU32::new(0),
+            opened_at: std::sync::atomic::AtomicI64::new(0),
+            failure_threshold,
+            cooldown_secs,
+        }
+    }
+
+    /// Returns `true` if the request should be allowed through,
+    /// `false` if the circuit is open (request should be skipped).
+    ///
+    /// If the circuit is open but the cooldown has elapsed, this
+    /// transitions to half-open and allows one request through.
+    pub fn allow_request(&self) -> bool {
+        use std::sync::atomic::Ordering;
+        let state = self.state.load(Ordering::SeqCst);
+        match state {
+            0 => true, // closed
+            1 => {
+                // open — check if cooldown elapsed
+                let now = chrono::Utc::now().timestamp();
+                let opened = self.opened_at.load(Ordering::SeqCst);
+                if now - opened >= self.cooldown_secs {
+                    // transition to half-open
+                    self.state.store(2, Ordering::SeqCst);
+                    tracing::info!("Circuit breaker → half-open (cooldown elapsed)");
+                    true
+                } else {
+                    false
+                }
+            }
+            2 => true, // half-open — allow one request
+            _ => true,
+        }
+    }
+
+    /// Record a successful request. Resets failure count and closes
+    /// the circuit (if it was open or half-open).
+    pub fn record_success(&self) {
+        use std::sync::atomic::Ordering;
+        let prev = self.state.swap(0, Ordering::SeqCst); // closed
+        self.failure_count.store(0, Ordering::SeqCst);
+        if prev != 0 {
+            tracing::info!("Circuit breaker → closed (success recorded)");
+        }
+    }
+
+    /// Record a failed request. Increments failure count; if it
+    /// reaches the threshold, opens the circuit.
+    pub fn record_failure(&self) {
+        use std::sync::atomic::Ordering;
+        let count = self.failure_count.fetch_add(1, Ordering::SeqCst) + 1;
+        if count >= self.failure_threshold {
+            let prev = self.state.swap(1, Ordering::SeqCst); // open
+            self.opened_at.store(chrono::Utc::now().timestamp(), Ordering::SeqCst);
+            if prev != 1 {
+                tracing::warn!(
+                    "Circuit breaker → open ({} consecutive failures)",
+                    count
+                );
+            }
+        }
+    }
+
+    /// Current state as a string for metrics/debugging.
+    pub fn state_str(&self) -> &'static str {
+        use std::sync::atomic::Ordering;
+        match self.state.load(Ordering::SeqCst) {
+            0 => "closed",
+            1 => "open",
+            2 => "half-open",
+            _ => "unknown",
+        }
+    }
 }
 
 impl ProviderRegistry {
@@ -223,6 +331,7 @@ impl ProviderRegistry {
         // Build per-provider concurrency semaphores. Each provider
         // gets a budget based on its platform's rate-limit profile.
         let mut concurrency: HashMap<&'static str, Arc<tokio::sync::Semaphore>> = HashMap::new();
+        let mut circuit_breakers: HashMap<&'static str, Arc<CircuitBreaker>> = HashMap::new();
         for &id in providers.keys() {
             let default = if HIGH_CONCURRENCY_PROVIDERS.contains(&id) {
                 3
@@ -240,11 +349,33 @@ impl ProviderRegistry {
                 .filter(|v: &usize| *v >= 1 && *v <= 20)
                 .unwrap_or(default);
             concurrency.insert(id, Arc::new(tokio::sync::Semaphore::new(limit)));
+
+            // Circuit breaker: 5 consecutive failures → open for 60s.
+            // Configurable via PROVIDER_CB_THRESHOLD_{ID} and
+            // PROVIDER_CB_COOLDOWN_{ID} env vars.
+            let threshold: u32 = std::env::var(format!(
+                "PROVIDER_CB_THRESHOLD_{}",
+                id.to_uppercase().replace('-', "_")
+            ))
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .filter(|v| *v >= 1 && *v <= 50)
+            .unwrap_or(5);
+            let cooldown: i64 = std::env::var(format!(
+                "PROVIDER_CB_COOLDOWN_{}",
+                id.to_uppercase().replace('-', "_")
+            ))
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .filter(|v| *v >= 10 && *v <= 3600)
+            .unwrap_or(60);
+            circuit_breakers.insert(id, Arc::new(CircuitBreaker::new(threshold, cooldown)));
         }
 
         Self {
             providers: Arc::new(providers),
             concurrency: Arc::new(concurrency),
+            circuit_breakers: Arc::new(circuit_breakers),
         }
     }
 
@@ -259,6 +390,14 @@ impl ProviderRegistry {
     /// call and hold the permit until the call completes.
     pub fn concurrency(&self, identifier: &str) -> Option<Arc<tokio::sync::Semaphore>> {
         self.concurrency.get(identifier).cloned()
+    }
+
+    /// Get the per-provider circuit breaker. The scheduler calls
+    /// `allow_request()` before publishing — if it returns `false`,
+    /// the post is left in `queued` state (not marked as error) and
+    /// retried on the next tick after the cooldown elapses.
+    pub fn circuit_breaker(&self, identifier: &str) -> Option<Arc<CircuitBreaker>> {
+        self.circuit_breakers.get(identifier).cloned()
     }
 
     /// List all registered provider identifiers

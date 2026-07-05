@@ -329,10 +329,45 @@ async fn process_due_posts(
 
     tracing::info!("Processing {} due post(s)", posts.len());
 
+    // ── Circuit breaker check ──────────────────────────────────
+    // For each provider with an open circuit, push all its claimed
+    // posts back to 'queued' so they get retried after the cooldown.
+    // This prevents burning through all queued posts when a platform
+    // API is down (e.g. X 5xx for 10 minutes).
+    let mut skipped = 0u64;
+    let mut posts_to_publish: Vec<PostWithIntegration> = Vec::new();
+    for post in posts {
+        if let Some(cb) = providers.circuit_breaker(&post.provider_identifier) {
+            if !cb.allow_request() {
+                // Circuit is open — push this post back to queued
+                let _ = sqlx::query(
+                    "UPDATE posts SET state = 'queued', updated_at = NOW() WHERE id = $1",
+                )
+                .bind(post.id)
+                .execute(db)
+                .await;
+                skipped += 1;
+                continue;
+            }
+        }
+        posts_to_publish.push(post);
+    }
+
+    if skipped > 0 {
+        tracing::warn!(
+            "Circuit breaker: skipped {} post(s) (pushed back to queued)",
+            skipped
+        );
+    }
+
+    if posts_to_publish.is_empty() {
+        return Ok(());
+    }
+
     // Tracked task set — we await all of these before returning.
     let mut join_set: tokio::task::JoinSet<()> = tokio::task::JoinSet::new();
 
-    for post in &posts {
+    for post in &posts_to_publish {
         let provider = match providers.get(&post.provider_identifier) {
             Some(p) => p,
             None => {
@@ -363,22 +398,37 @@ async fn process_due_posts(
         let post_clone = post.clone();
         let bcast = broadcaster.clone();
         let tk = token_key; // Copy (Option<[u8; 32]> implements Copy)
+        let cb = providers.circuit_breaker(&post.provider_identifier);
         join_set.spawn(async move {
             // `_permit` is held for the duration of the publish call,
             // then dropped automatically when the task exits.
             let _permit = permit;
 
-            if let Err(e) = publish_post(&db_clone, provider_clone.as_ref(), &post_clone, &bcast, tk).await {
-                tracing::error!("Failed to publish post {}: {e}", post_clone.id);
-                let err_str = e.to_string();
-                mark_post_error(&db_clone, post_clone.id, &err_str).await;
-                bcast.send(
-                    "post_failed",
-                    &serde_json::json!({
-                        "id": post_clone.id.to_string(),
-                        "error": err_str,
-                    }),
-                );
+            match publish_post(&db_clone, provider_clone.as_ref(), &post_clone, &bcast, tk).await {
+                Ok(()) => {
+                    // Publish succeeded — record success in circuit breaker
+                    if let Some(ref breaker) = cb {
+                        breaker.record_success();
+                    }
+                }
+                Err(e) => {
+                    tracing::error!("Failed to publish post {}: {e}", post_clone.id);
+                    let err_str = e.to_string();
+                    mark_post_error(&db_clone, post_clone.id, &err_str).await;
+                    bcast.send(
+                        "post_failed",
+                        &serde_json::json!({
+                            "id": post_clone.id.to_string(),
+                            "error": err_str,
+                        }),
+                    );
+                    // Publish failed — record failure in circuit breaker.
+                    // After N consecutive failures, the circuit opens and
+                    // subsequent posts for this provider are skipped.
+                    if let Some(ref breaker) = cb {
+                        breaker.record_failure();
+                    }
+                }
             }
         });
     }
