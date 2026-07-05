@@ -2,6 +2,7 @@
   import { onMount, onDestroy } from "svelte";
   import { calendarApi } from "$lib/api/calendar";
   import { postsApi } from "$lib/api/posts";
+  import { tagsApi, type Tag } from "$lib/api/tags";
   import { calendarState } from "$lib/stores/calendar.svelte";
   import { toast } from "$lib/stores/toast";
   import { realtime } from "$lib/stores/realtime";
@@ -17,6 +18,13 @@
   import { goto } from "$app/navigation";
 
   let events = $state<CalendarEvent[]>([]);
+  let allTags = $state<Tag[]>([]);
+  let selectedTagId = $state<string | null>(null);
+  let filteredEvents = $derived(
+    selectedTagId
+      ? events.filter(e => e.tags?.some(t => t.id === selectedTagId))
+      : events
+  );
   let selectedEvent = $state<CalendarEvent | null>(null);
   let duplicating = $state(false);
   let deleting = $state(false);
@@ -197,8 +205,11 @@
 
   let calUnsubscribers: (() => void)[] = [];
 
-  onMount(() => {
+  onMount(async () => {
     refresh();
+    // Fetch tags for the filter dropdown
+    const tagRes = await tagsApi.list();
+    if (tagRes.data) allTags = tagRes.data;
     const events = ['post_created', 'post_scheduled', 'post_published', 'post_failed', 'post_deleted'];
     for (const evt of events) {
       calUnsubscribers.push(realtime.on(evt, () => refresh()));
@@ -225,6 +236,9 @@
     onNext={handleNext}
     onToday={handleToday}
     onViewChange={handleViewChange}
+    tags={allTags}
+    {selectedTagId}
+    onTagFilter={(id) => selectedTagId = id}
   />
 
   {#if selected.size > 0}
@@ -255,7 +269,7 @@
     <MonthView
       year={calendarState.state.currentDate.getFullYear()}
       month={calendarState.state.currentDate.getMonth()}
-      {events}
+      events={filteredEvents}
       {selected}
       onEventClick={(id) => selectedEvent = events.find(e => e.id === id) || null}
       onDateClick={(date) => goto(`/posts/new?date=${date}`)}
@@ -268,7 +282,7 @@
   {:else if calendarState.state.view === "week"}
     <WeekView
       referenceDate={calendarState.state.currentDate}
-      {events}
+      events={filteredEvents}
       {selected}
       onEventClick={(id) => selectedEvent = events.find(e => e.id === id) || null}
       onDateClick={(date) => goto(`/posts/new?date=${date}`)}
@@ -281,7 +295,7 @@
   {:else if calendarState.state.view === "day"}
     <DayView
       date={calendarState.state.currentDate}
-      {events}
+      events={filteredEvents}
       {selected}
       onEventClick={(id) => selectedEvent = events.find(e => e.id === id) || null}
       onDateClick={(date) => goto(`/posts/new?date=${date}`)}
@@ -293,7 +307,7 @@
     />
   {:else if calendarState.state.view === "list"}
     <ListView
-      {events}
+      events={filteredEvents}
       {selected}
       onEventClick={(id) => selectedEvent = events.find(e => e.id === id) || null}
       onDuplicate={handleDuplicate}
