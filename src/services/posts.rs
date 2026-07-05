@@ -283,10 +283,39 @@ impl PostService {
         let resolved_media: Vec<crate::social::MediaAttachment> = media.into_iter().map(|m| {
             provider.resolve_media_url(&m, &app_url)
         }).collect();
+
+        // ── Thread linking ──────────────────────────────────
+        // If this post is part of a thread (group_id + sequence > 1),
+        // look up the predecessor's platform_post_id for in_reply_to.
+        let in_reply_to: Option<String> = if let Some(ref group_id) = post.group_id.as_ref() {
+            let seq = post.sequence;
+            if seq > 1 {
+                match sqlx::query_scalar::<_, Option<String>>(
+                    r#"SELECT platform_post_id FROM posts
+                       WHERE group_id = $1 AND sequence = $2
+                         AND state = 'published' AND platform_post_id IS NOT NULL
+                       LIMIT 1"#,
+                )
+                .bind(group_id)
+                .bind(seq - 1)
+                .fetch_optional(db)
+                .await
+                {
+                    Ok(Some(Some(pid))) => Some(pid),
+                    _ => None,
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
         let content = PostContent {
             content: Self::sanitize_content(&post.content, 2000),
             media: resolved_media,
             settings: post.settings.clone(),
+            in_reply_to,
         };
 
         // Validate
@@ -323,6 +352,7 @@ impl PostService {
                     content: comment_text.clone(),
                     media: vec![],
                     settings: serde_json::json!({}),
+                in_reply_to: None,
                 };
                 if let Err(e) = provider
                     .comment(

@@ -1079,6 +1079,15 @@ impl SocialProvider for XProvider {
                 "dark_request": false,
             });
 
+            // Thread linking: if in_reply_to is set, add the reply field
+            // so X creates this tweet as a reply to the predecessor.
+            if let Some(ref reply_to_id) = post.in_reply_to {
+                variables["reply"] = serde_json::json!({
+                    "in_reply_to_tweet_id": reply_to_id,
+                    "reply_options": [],
+                });
+            }
+
             // Upload and attach media
             if !post.media.is_empty() {
                 let media_ids = self.upload_media(access_token, &post.media).await?;

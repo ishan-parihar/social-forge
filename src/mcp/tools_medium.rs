@@ -80,6 +80,7 @@ pub async fn handle_md_create_post(
         content: input.content.clone(),
         media: vec![],
         settings,
+    in_reply_to: None,
     };
 
     let result = provider

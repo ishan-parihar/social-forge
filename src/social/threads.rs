@@ -257,6 +257,11 @@ impl SocialProvider for ThreadsProvider {
             ("access_token", access_token),
         ];
 
+        // Thread linking: Threads uses `reply_to_id` to link replies
+        if let Some(ref reply_to) = post.in_reply_to {
+            form.push(("reply_to_id", reply_to));
+        }
+
         if !url_key.is_empty() {
             form.push((url_key, post.media[0].url.as_str()));
         }

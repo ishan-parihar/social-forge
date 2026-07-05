@@ -438,10 +438,66 @@ async fn publish_post(
         // (Instagram, Facebook, Threads, Reddit require absolute URLs)
         provider.resolve_media_url(&m, &app_url)
     }).collect();
+
+    // ── Thread linking ──────────────────────────────────────
+    // If this post is part of a thread (has a group_id and sequence > 1),
+    // look up the PREVIOUS post in the same group and use its
+    // platform_post_id as in_reply_to. This makes the scheduler publish
+    // real linked threads on X/Bluesky/Mastodon/Threads instead of
+    // standalone posts.
+    let in_reply_to: Option<String> = if let Some(ref group_id) = post.group_id.as_ref() {
+        let seq = post.sequence;
+        if seq > 1 {
+            // Find the previous post in this thread (sequence - 1)
+            // that was successfully published and has a platform_post_id.
+            match sqlx::query_scalar::<_, Option<String>>(
+                r#"SELECT platform_post_id
+                   FROM posts
+                   WHERE group_id = $1
+                     AND sequence = $2
+                     AND state = 'published'
+                     AND platform_post_id IS NOT NULL
+                   LIMIT 1"#,
+            )
+            .bind(group_id)
+            .bind(seq - 1)
+            .fetch_optional(db)
+            .await
+            {
+                Ok(Some(Some(pid))) => {
+                    tracing::info!(
+                        "Thread link: post {} (seq {}) replying to platform_post_id {}",
+                        post.id, seq, pid
+                    );
+                    Some(pid)
+                }
+                Ok(Some(None)) | Ok(None) => {
+                    tracing::warn!(
+                        "Thread link: post {} (seq {}) has no published predecessor in group {} — publishing as standalone",
+                        post.id, seq, group_id
+                    );
+                    None
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        "Thread link: failed to look up predecessor for post {} (seq {}): {e} — publishing as standalone",
+                        post.id, seq
+                    );
+                    None
+                }
+            }
+        } else {
+            None // First post in thread — no predecessor to reply to
+        }
+    } else {
+        None // Not part of a thread
+    };
+
     let content = PostContent {
         content: post.content.clone(),
         media: resolved_media,
         settings: post.settings.clone(),
+        in_reply_to,
     };
 
     // Validate content against provider limits before publishing
@@ -506,6 +562,7 @@ async fn publish_post(
                             content: comment_text.clone(),
                             media: vec![],
                             settings: serde_json::json!({}),
+                        in_reply_to: None,
                         };
                         if let Err(e) = provider.comment(
                             &access_token,

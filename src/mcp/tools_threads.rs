@@ -200,6 +200,7 @@ pub async fn handle_th_create_thread(
             vec![]
         },
         settings: serde_json::Value::Object(serde_json::Map::new()),
+    in_reply_to: None,
     };
 
     let result = provider

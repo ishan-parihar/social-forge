@@ -70,6 +70,13 @@ pub struct PostContent {
     pub content: String,
     pub media: Vec<MediaAttachment>,
     pub settings: serde_json::Value,
+    /// Platform-specific post ID that this post is replying to (for threads).
+    /// When the scheduler publishes a multi-part thread (posts sharing a
+    /// `group_id`), it sets this to the previous part's `platform_post_id`
+    /// so providers that support threading (X, Bluesky, Mastodon, Threads)
+    /// can link them. Providers that don't support threading ignore this.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub in_reply_to: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]

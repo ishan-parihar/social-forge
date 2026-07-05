@@ -24,6 +24,7 @@ pub async fn handle(action: YoutubeAction, state: &AppState) -> anyhow::Result<(
                 content,
                 media: vec![],
                 settings: serde_json::Value::Object(serde_json::Map::new()),
+            in_reply_to: None,
             };
             provider.reply_to_comment(&token, &comment_id, &post).await
                 .map(|r| serde_json::json!({"id": r.platform_post_id, "status": r.status}))

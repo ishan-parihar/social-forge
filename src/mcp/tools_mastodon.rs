@@ -130,6 +130,7 @@ pub async fn handle_ms_create_post(
         content: input.content.clone(),
         media,
         settings,
+    in_reply_to: None,
     };
 
     let provider = create_mastodon_provider(state);
@@ -219,6 +220,7 @@ pub async fn handle_ms_reply(
         content: input.content.clone(),
         media: vec![],
         settings: serde_json::json!({}),
+    in_reply_to: None,
     };
     let result = provider
         .reply_to_comment(&token, &input.status_id, &post)

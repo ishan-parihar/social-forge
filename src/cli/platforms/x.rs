@@ -21,6 +21,7 @@ pub async fn handle(action: XAction, state: &AppState) -> anyhow::Result<()> {
                 content: text,
                 media: vec![],
                 settings: serde_json::Value::Object(serde_json::Map::new()),
+            in_reply_to: None,
             };
             provider.publish(&token, &post).await
                 .map(|r| serde_json::json!({"id": r.platform_post_id, "url": r.platform_post_url, "status": r.status}))
@@ -64,6 +65,7 @@ pub async fn handle(action: XAction, state: &AppState) -> anyhow::Result<()> {
                 content: text,
                 media: vec![],
                 settings: serde_json::Value::Object(serde_json::Map::new()),
+            in_reply_to: None,
             };
             provider.reply_to_comment(&token, &tweet_id, &post).await
                 .map(|r| serde_json::json!({"id": r.platform_post_id, "url": r.platform_post_url, "status": r.status}))
@@ -74,6 +76,7 @@ pub async fn handle(action: XAction, state: &AppState) -> anyhow::Result<()> {
                 content: text,
                 media: vec![],
                 settings: serde_json::Value::Object(serde_json::Map::new()),
+            in_reply_to: None,
             };
             provider.send_dm(&token, &recipient, &post).await
                 .map(|r| serde_json::json!({"id": r.platform_post_id, "status": r.status}))

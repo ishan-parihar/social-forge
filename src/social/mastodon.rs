@@ -557,11 +557,15 @@ impl SocialProvider for MastodonProvider {
             .get("visibility")
             .and_then(|v| v.as_str())
             .unwrap_or("public");
-        let in_reply_to_id = post
-            .settings
-            .get("in_reply_to_id")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
+        // Thread linking: prefer the explicit `in_reply_to` field on
+        // PostContent (set by the scheduler for group_id threads), fall
+        // back to `settings.in_reply_to_id` for backward compat.
+        let in_reply_to_id = post.in_reply_to.clone().or_else(|| {
+            post.settings
+                .get("in_reply_to_id")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string())
+        });
 
         // Build the status body
         let mut body = serde_json::json!({

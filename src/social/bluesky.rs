@@ -67,6 +67,38 @@ impl BlueskyProvider {
             .map(String::from)
             .ok_or_else(|| ProviderError::Auth("Could not resolve handle".into()))
     }
+
+    /// Fetch the CID for a Bluesky record URI (needed for the `reply` field
+    /// when threading). The URI looks like `at://did:plc:xxx/app.bsky.feed.post/yyy`.
+    async fn fetch_record_cid(&self, uri: &str, access_token: &str) -> Result<String, ProviderError> {
+        // Parse the URI to extract the repo (DID), collection, and rkey
+        // Format: at://did:plc:xxx/app.bsky.feed.post/yyy
+        let parts: Vec<&str> = uri.split('/').collect();
+        if parts.len() < 5 {
+            return Err(ProviderError::Api(format!("Invalid Bluesky URI: {uri}")));
+        }
+        let repo = parts[2]; // did:plc:xxx
+        let collection = parts[3]; // app.bsky.feed.post
+        let rkey = parts[4]; // post rkey
+
+        let resp = self
+            .http
+            .get("https://bsky.social/xrpc/com.atproto.repo.getRecord")
+            .query(&[
+                ("repo", repo),
+                ("collection", collection),
+                ("rkey", rkey),
+            ])
+            .header("Authorization", format!("Bearer {access_token}"))
+            .send()
+            .await?;
+
+        let json: serde_json::Value = resp.json().await?;
+        json["cid"]
+            .as_str()
+            .map(String::from)
+            .ok_or_else(|| ProviderError::Api(format!("Could not fetch CID for {uri}")))
+    }
 }
 
 #[async_trait]
@@ -152,6 +184,19 @@ impl SocialProvider for BlueskyProvider {
             "createdAt": chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
             "text": post.content,
         });
+
+        // Thread linking: Bluesky uses a "reply" field with the parent
+        // post's URI + CID. We have the platform_post_id (which is the
+        // URI) but not the CID — so we fetch it via getRecord.
+        if let Some(ref reply_uri) = post.in_reply_to {
+            // Fetch the parent post's CID from the Bluesky API
+            if let Ok(parent_cid) = self.fetch_record_cid(reply_uri, access_token).await {
+                record["reply"] = serde_json::json!({
+                    "root": { "uri": reply_uri, "cid": parent_cid },
+                    "parent": { "uri": reply_uri, "cid": parent_cid },
+                });
+            }
+        }
 
         // Add embed if media present
         if !post.media.is_empty() {

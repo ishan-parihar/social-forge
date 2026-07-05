@@ -267,6 +267,7 @@ pub async fn handle_yt_reply_comment(
         content: input.content.clone(),
         media: vec![],
         settings: serde_json::json!({}),
+    in_reply_to: None,
     };
     let result = provider
         .reply_to_comment(&token, &input.comment_id, &post)
@@ -337,6 +338,7 @@ pub async fn handle_yt_upload_video(
             poster_url: None,
         }],
         settings,
+    in_reply_to: None,
     };
 
     let result = provider

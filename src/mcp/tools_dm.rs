@@ -87,6 +87,7 @@ pub async fn send_dm(
         content: input.content.clone(),
         media: vec![],
         settings: serde_json::json!({}),
+    in_reply_to: None,
     };
 
     let result = provider.send_dm(&token, &input.recipient, &post_content)
