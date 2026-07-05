@@ -159,6 +159,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/integrations/{id}/disable", axum::routing::put(integrations::toggle_disable))
     .route("/api/integrations/{id}/refresh", axum::routing::post(integrations::refresh))
     .route("/api/integrations/{id}/targets", axum::routing::get(integrations::list_targets))
+        .route("/api/integrations/{id}/mentions", axum::routing::get(integrations::search_mentions))
         .route("/api/calendar", axum::routing::get(calendar::get))
         .route("/api/feed", axum::routing::get(feed::get))
         .route("/api/feed/import", axum::routing::post(feed::import))

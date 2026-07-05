@@ -1378,3 +1378,56 @@ pub async fn list_targets(
         provider: integration.provider_identifier.clone(),
     }))
 }
+
+// ── Mentions search ──────────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+pub struct MentionQuery {
+    pub q: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct MentionResponse {
+    pub results: Vec<MentionItem>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct MentionItem {
+    pub id: String,
+    pub label: String,
+    pub image: Option<String>,
+    pub provider: String,
+    pub formatted: String,
+}
+
+/// GET /api/integrations/:id/mentions?q=...
+/// Search for users/accounts to @mention on the given integration's platform.
+pub async fn search_mentions(
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+    Query(query): Query<MentionQuery>,
+    user: AuthenticatedUser,
+) -> Result<Json<MentionResponse>, AppError> {
+    let integration = queries::get_integration(&state.db, id, user.user_id).await?
+        .ok_or_else(|| AppError::NotFound("Integration not found".into()))?;
+
+    let provider = state.providers.get(&integration.provider_identifier)
+        .ok_or_else(|| AppError::NotFound(format!("Provider '{}' not in registry", integration.provider_identifier)))?;
+
+    let token = state.token_key.as_ref()
+        .and_then(|key| crypto::decrypt_string(&integration.access_token, key).ok())
+        .unwrap_or_else(|| integration.access_token.clone());
+
+    let mentions = provider.search_mention(&token, &query.q).await
+        .map_err(|e| AppError::Internal(format!("Mention search failed: {}", e)))?;
+
+    let results = mentions.into_iter().map(|m| MentionItem {
+        formatted: provider.format_mention(&m.id, &m.label),
+        id: m.id,
+        label: m.label,
+        image: m.image,
+        provider: integration.provider_identifier.clone(),
+    }).collect();
+
+    Ok(Json(MentionResponse { results }))
+}
