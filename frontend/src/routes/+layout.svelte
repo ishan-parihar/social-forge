@@ -1,6 +1,7 @@
 <script lang="ts">
   import '../app.css';
   import { realtime } from '$lib/stores/realtime';
+  import { timezone } from '$lib/stores/timezone.svelte';
   import Toast from '$lib/components/Toast.svelte';
   import NotificationBell from '$lib/notifications/NotificationBell.svelte';
   import Icon from '$lib/ui/Icon.svelte';
@@ -100,6 +101,19 @@
           {/each}
         {/each}
       </nav>
+      <!-- Timezone picker -->
+      <div class="px-3 py-3 border-t border-line">
+        <label class="text-[10px] font-semibold uppercase tracking-wider text-muted-dark block mb-1">Timezone</label>
+        <select
+          value={timezone.value}
+          onchange={(e) => timezone.set(e.currentTarget.value)}
+          class="w-full px-2 py-1.5 bg-background-input border border-line rounded-lg text-xs text-content focus:outline-none focus:border-indigo-500"
+        >
+          {#each timezone.commonTimezones as tz}
+            <option value={tz}>{tz}</option>
+          {/each}
+        </select>
+      </div>
     </aside>
     <main class="flex-1 overflow-auto">
       <div class="max-w-6xl mx-auto p-6">{@render children()}</div>
