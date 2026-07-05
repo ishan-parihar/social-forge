@@ -10,7 +10,6 @@
   import RichTextEditor from "$lib/composer/RichTextEditor.svelte";
   import MediaUpload from "$lib/composer/MediaUpload.svelte";
   import SchedulePicker from "$lib/composer/SchedulePicker.svelte";
-  import ProviderEditor from "$lib/composer/ProviderEditor.svelte";
   import PostPreview from "$lib/composer/PostPreview.svelte";
   import TagPicker from "$lib/composer/TagPicker.svelte";
   import PostSetModal from "$lib/composer/PostSetModal.svelte";
@@ -31,7 +30,6 @@
   let mediaItems = $state<MediaItem[]>([]);
   let scheduledAt = $state<string | null>(null);
   let recurring = $state<{ intervalDays: number; endDate: string } | null>(null);
-  let activeProvider = $state<string | null>(null);
   let selectedTagIds = $state<string[]>([]);
   // "global" = shared content for all channels
   // "internal:{integrationId}" = per-channel override

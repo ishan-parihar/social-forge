@@ -1068,7 +1068,7 @@ impl SocialProvider for XProvider {
         post: &PostContent,
     ) -> Result<PublishResult, ProviderError> {
         // Try GraphQL path if cookie auth
-        if let Some((_auth_token, ct0)) = Self::parse_cookie_token(access_token) {
+        if let Some((_auth_token, _ct0)) = Self::parse_cookie_token(access_token) {
             let mut variables = serde_json::json!({
                 "tweet_text": post.content,
                 "media": {
@@ -1355,7 +1355,7 @@ impl XProvider {
     where
         F: FnOnce(serde_json::Value) -> serde_json::Value,
     {
-        if let Some((_at, ct0)) = Self::parse_cookie_token(access_token) {
+        if let Some((_at, _ct0)) = Self::parse_cookie_token(access_token) {
             let qid = FALLBACK_QUERY_IDS
                 .get(gql_op)
                 .ok_or_else(|| ProviderError::Api(format!("Missing {gql_op} queryId")))?;
@@ -1471,7 +1471,7 @@ impl XProvider {
         access_token: &str,
         username: &str,
     ) -> Result<serde_json::Value, ProviderError> {
-        if let Some((_at, ct0)) = Self::parse_cookie_token(access_token) {
+        if let Some((_at, _ct0)) = Self::parse_cookie_token(access_token) {
             let vars = serde_json::json!({"screen_name": username, "withSafetyModeUserFields": true});
             let qid = FALLBACK_QUERY_IDS.get("UserByScreenName")
                 .ok_or_else(|| ProviderError::Api("Missing UserByScreenName queryId".into()))?;
@@ -1502,7 +1502,7 @@ impl XProvider {
         max_results: u32,
         pagination_token: Option<&str>,
     ) -> Result<serde_json::Value, ProviderError> {
-        if let Some((_at, ct0)) = Self::parse_cookie_token(access_token) {
+        if let Some((_at, _ct0)) = Self::parse_cookie_token(access_token) {
             let mut vars = serde_json::json!({
                 "count": max_results.min(100).max(1) as u32,
                 "includePromotedContent": false,
@@ -1544,7 +1544,7 @@ impl XProvider {
         max_results: u32,
         pagination_token: Option<&str>,
     ) -> Result<serde_json::Value, ProviderError> {
-        if let Some((_at, ct0)) = Self::parse_cookie_token(access_token) {
+        if let Some((_at, _ct0)) = Self::parse_cookie_token(access_token) {
             let mut vars = serde_json::json!({
                 "userId": user_id,
                 "count": max_results.min(100).max(1) as u32,
@@ -1587,7 +1587,7 @@ impl XProvider {
         access_token: &str,
         tweet_id: &str,
     ) -> Result<serde_json::Value, ProviderError> {
-        if let Some((_at, ct0)) = Self::parse_cookie_token(access_token) {
+        if let Some((_at, _ct0)) = Self::parse_cookie_token(access_token) {
             let vars = serde_json::json!({
                 "focalTweetId": tweet_id,
                 "count": 40,
@@ -1631,7 +1631,7 @@ impl XProvider {
         max_results: u32,
         next_token: Option<&str>,
     ) -> Result<serde_json::Value, ProviderError> {
-        if let Some((_at, ct0)) = Self::parse_cookie_token(access_token) {
+        if let Some((_at, _ct0)) = Self::parse_cookie_token(access_token) {
             let mut vars = serde_json::json!({
                 "rawQuery": query,
                 "count": max_results.min(100).max(1) as u32,
@@ -1670,7 +1670,7 @@ impl XProvider {
         access_token: &str,
         tweet_id: &str,
     ) -> Result<serde_json::Value, ProviderError> {
-        if let Some((_at, ct0)) = Self::parse_cookie_token(access_token) {
+        if let Some((_at, _ct0)) = Self::parse_cookie_token(access_token) {
             let vars = serde_json::json!({
                 "tweet_id": tweet_id,
                 "dark_request": false,
@@ -1692,7 +1692,7 @@ impl XProvider {
         user_id: &str,
         tweet_id: &str,
     ) -> Result<serde_json::Value, ProviderError> {
-        if let Some((_at, ct0)) = Self::parse_cookie_token(access_token) {
+        if let Some((_at, _ct0)) = Self::parse_cookie_token(access_token) {
             let vars = serde_json::json!({ "tweet_id": tweet_id });
             let qid = FALLBACK_QUERY_IDS
                 .get("FavoriteTweet")
@@ -1712,7 +1712,7 @@ impl XProvider {
         user_id: &str,
         tweet_id: &str,
     ) -> Result<serde_json::Value, ProviderError> {
-        if let Some((_at, ct0)) = Self::parse_cookie_token(access_token) {
+        if let Some((_at, _ct0)) = Self::parse_cookie_token(access_token) {
             let vars = serde_json::json!({
                 "tweet_id": tweet_id,
                 "dark_request": false,
@@ -1734,7 +1734,7 @@ impl XProvider {
         user_id: &str,
         tweet_id: &str,
     ) -> Result<serde_json::Value, ProviderError> {
-        if let Some((_at, ct0)) = Self::parse_cookie_token(access_token) {
+        if let Some((_at, _ct0)) = Self::parse_cookie_token(access_token) {
             let vars = serde_json::json!({
                 "tweet_id": tweet_id,
                 "dark_request": false,
@@ -1757,7 +1757,7 @@ impl XProvider {
         user_id: &str,
         tweet_id: &str,
     ) -> Result<serde_json::Value, ProviderError> {
-        if let Some((_at, ct0)) = Self::parse_cookie_token(access_token) {
+        if let Some((_at, _ct0)) = Self::parse_cookie_token(access_token) {
             let vars = serde_json::json!({
                 "source_tweet_id": tweet_id,
                 "dark_request": false,
@@ -1782,7 +1782,7 @@ impl XProvider {
         max_results: u32,
         pagination_token: Option<&str>,
     ) -> Result<serde_json::Value, ProviderError> {
-        if let Some((_at, ct0)) = Self::parse_cookie_token(access_token) {
+        if let Some((_at, _ct0)) = Self::parse_cookie_token(access_token) {
             let mut vars = serde_json::json!({
                 "count": max_results.min(100).max(1) as u32,
             });
@@ -1821,7 +1821,7 @@ impl XProvider {
         user_id: &str,
         tweet_id: &str,
     ) -> Result<serde_json::Value, ProviderError> {
-        if let Some((_at, ct0)) = Self::parse_cookie_token(access_token) {
+        if let Some((_at, _ct0)) = Self::parse_cookie_token(access_token) {
             let vars = serde_json::json!({ "tweet_id": tweet_id });
             let qid = FALLBACK_QUERY_IDS
                 .get("CreateBookmark")
@@ -1840,7 +1840,7 @@ impl XProvider {
         user_id: &str,
         tweet_id: &str,
     ) -> Result<serde_json::Value, ProviderError> {
-        if let Some((_at, ct0)) = Self::parse_cookie_token(access_token) {
+        if let Some((_at, _ct0)) = Self::parse_cookie_token(access_token) {
             let vars = serde_json::json!({ "tweet_id": tweet_id });
             let qid = FALLBACK_QUERY_IDS
                 .get("DeleteBookmark")
@@ -1861,7 +1861,7 @@ impl XProvider {
         max_results: u32,
         pagination_token: Option<&str>,
     ) -> Result<serde_json::Value, ProviderError> {
-        if let Some((_at, ct0)) = Self::parse_cookie_token(access_token) {
+        if let Some((_at, _ct0)) = Self::parse_cookie_token(access_token) {
             let mut vars = serde_json::json!({
                 "userId": user_id,
                 "count": max_results.min(100).max(1) as u32,
@@ -1899,7 +1899,7 @@ impl XProvider {
         max_results: u32,
         pagination_token: Option<&str>,
     ) -> Result<serde_json::Value, ProviderError> {
-        if let Some((_at, ct0)) = Self::parse_cookie_token(access_token) {
+        if let Some((_at, _ct0)) = Self::parse_cookie_token(access_token) {
             let mut vars = serde_json::json!({
                 "userId": user_id,
                 "count": max_results.min(100).max(1) as u32,
@@ -2002,7 +2002,7 @@ impl XProvider {
         max_results: u32,
         pagination_token: Option<&str>,
     ) -> Result<serde_json::Value, ProviderError> {
-        if let Some((_at, ct0)) = Self::parse_cookie_token(access_token) {
+        if let Some((_at, _ct0)) = Self::parse_cookie_token(access_token) {
             let mut vars = serde_json::json!({
                 "listId": list_id,
                 "count": max_results.min(100).max(1) as u32,
@@ -2041,7 +2041,7 @@ impl XProvider {
         comment_id: &str,
         post: &PostContent,
     ) -> Result<PublishResult, ProviderError> {
-        if let Some((_auth_token, ct0)) = Self::parse_cookie_token(access_token) {
+        if let Some((_auth_token, _ct0)) = Self::parse_cookie_token(access_token) {
             let mut variables = serde_json::json!({
                 "tweet_text": post.content,
                 "media": {

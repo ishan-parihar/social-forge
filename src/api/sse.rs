@@ -14,7 +14,6 @@ use futures::StreamExt;
 use tokio_stream::wrappers::BroadcastStream;
 
 use crate::api::AppState;
-use crate::realtime::ServerEvent;
 
 /// GET /api/events — SSE stream
 pub async fn sse_handler(

@@ -1,10 +1,6 @@
 // ─── JWT Auth ──────────────────────────────────────────────────
 // Token creation and validation using jsonwebtoken crate.
 
-use argon2::{
-    password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
-    Argon2,
-};
 use chrono::{Duration, Utc};
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};

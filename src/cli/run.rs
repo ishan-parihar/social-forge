@@ -10,9 +10,8 @@ use crate::crypto;
 use crate::db;
 use crate::realtime::Broadcaster;
 use crate::social::registry::ProviderRegistry;
-use crate::social::SocialProvider;
 
-use super::{Cli, Command, ConfigAction, XAction, RedditAction, RedditModAction, LinkedinAction, LinkedinPageAction, FacebookAction, InstagramAction, YoutubeAction, BlueskyAction, MastodonAction, CommentAction, DmAction, AutomationAction, MediaAction, PostsAction};
+use super::{Cli, Command, ConfigAction, CommentAction, DmAction, AutomationAction, MediaAction, PostsAction};
 use crate::social::TargetInfo;
 use crate::db::models::Integration;
 
