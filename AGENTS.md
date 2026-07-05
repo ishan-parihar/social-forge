@@ -24,6 +24,69 @@
 
 ---
 
+## 0.5. DESIGN PREFERENCES (non-negotiable — do NOT violate these)
+
+These are the core design decisions that define social-forge's identity. They were established by the user and must not be changed, even when adding features inspired by competitors like postiz-app. If a feature addition conflicts with any of these, skip the feature rather than violate the preference.
+
+### 1. Single-user, solo-founder social-media management
+- **NO multi-user auth.** There is no user-registration, no user table lookups, no per-user permissions, no team roles, no team collaboration features. The WebUI is gated by a single `APP_PASSWORD` env var.
+- **NO team collaboration features.** No "invite team member", no per-user roles (USER/ADMIN/SUPERADMIN), no slot-level comments, no approval queues, no impersonation. If postiz-app has a team feature, social-forge does NOT copy it.
+- The `users` table exists only to satisfy FK constraints. The `password` column is unused (a random invalid hash is stored). All data is owned by `DEFAULT_USER_ID`.
+- If a competitor analysis suggests adding "team collaboration" or "multi-tenant" features, SKIP that suggestion. It violates this preference.
+
+### 2. Solo-founder digital-marketing-agency level command center
+- The frontend is a **command center for one person managing many social accounts**, not a SaaS platform for multiple organizations.
+- Features should help ONE person manage MANY channels efficiently. Examples: multi-platform cross-posting, per-platform content adaptation, drag-and-drop calendar, AI assistance, bulk operations.
+- Features that add organizational complexity (marketplace, payouts, customer management, org-to-org submission) are OUT OF SCOPE.
+
+### 3. Local-deployment first, single binary
+- The app runs as a **single Rust binary** on a VPS or local machine. No microservices, no orchestrator process, no Temporal server, no Redis.
+- The only external dependency is PostgreSQL (which can run in Docker).
+- Do NOT suggest adding Temporal.io, Redis, or splitting the app into multiple processes. The single-binary design is a feature, not a limitation.
+- Background tasks (scheduler, RSS poller, feed refresher, analytics cache) run as `tokio::spawn` tasks within the single binary.
+
+### 4. Triple interface: CLI + REST API + MCP server
+- All three interfaces must have feature parity for core operations. If a feature is added to REST, it should be exposed via MCP (for AI agents) and CLI (for shell users).
+- The MCP server is the primary interface for AI agents (Claude, Cursor). It must be comprehensive — 328+ tools is the target, not a limitation.
+- The CLI mirrors the MCP tools for shell-based automation.
+
+### 5. Security-first design
+- OAuth tokens are **encrypted at rest** with AES-256-GCM when `TOKEN_ENCRYPTION_KEY` is set. This is non-negotiable. Do NOT add code paths that store tokens in plaintext.
+- The server binds to `127.0.0.1` by default. LAN exposure is opt-in via `BIND_HOST=0.0.0.0`.
+- HTML interpolation always uses `html_escape()`. File uploads always validate MIME + magic bytes. CSRF defense-in-depth on all state-changing routes.
+- If a competitor stores tokens in plaintext (postiz-app does), social-forge does NOT copy that pattern. Social-forge's encryption-at-rest is a security advantage, not a drawback.
+
+### 6. Realtime-first frontend
+- The frontend uses SSE (`/api/events`) for live updates. 9 routes subscribe to realtime events. This is a UX advantage over polling-based competitors (postiz-app uses SWR polling).
+- When adding new pages, wire them to the realtime store. Do NOT add polling as a substitute.
+
+### What this means for feature parity work
+
+When implementing features inspired by postiz-app or other competitors, apply this filter:
+
+| Competitor feature | Adopt? | Why |
+|---|---|---|
+| Drag-and-drop calendar | ✅ YES | Solo-founder UX, no team dependency |
+| Global/Internal per-channel editor | ✅ YES | Solo-founder managing many channels |
+| Day view calendar | ✅ YES | Content planning for one person |
+| Per-thread-item delay | ✅ YES | Solo-founder scheduling optimization |
+| AI post generator | ✅ YES | AI agent efficacy |
+| Sets/Templates | ✅ YES | Solo-founder efficiency |
+| Short-linking | ✅ YES | Content management |
+| Timezone picker | ✅ YES | Solo-founder convenience |
+| Tag-colored calendar items | ✅ YES | Visual organization |
+| Team collaboration / roles | ❌ NO | Violates single-user preference |
+| Marketplace / orders / payouts | ❌ NO | Violates solo-founder preference |
+| Multi-tenant org switching | ❌ NO | Violates single-user preference |
+| Impersonation | ❌ NO | Violates single-user preference |
+| Approval workflows (team) | ❌ NO | Violates single-user preference |
+| Slot-level team comments | ❌ NO | Violates single-user preference |
+| Temporal.io workflow engine | ❌ NO | Violates single-binary preference |
+| Redis dependency | ❌ NO | Violates single-binary preference |
+| SWR polling instead of SSE | ❌ NO | Violates realtime-first preference |
+
+---
+
 ## 1. What is Social Forge?
 
 Social Forge is a **single-user, self-hosted social media management platform** designed for AI agents. It provides a triple interface — CLI, REST API, and MCP server — over 30+ social platforms (X, Reddit, LinkedIn, Facebook, Instagram, YouTube, Threads, TikTok, Bluesky, Mastodon, Pinterest, Discord, Slack, Telegram, WhatsApp, WordPress, Medium, Dev.to, Hashnode, GitHub, etc.).
