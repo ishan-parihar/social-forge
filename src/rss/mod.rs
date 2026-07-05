@@ -12,7 +12,7 @@ use crate::social::registry::ProviderRegistry;
 pub fn start_rss_poller(
     db: PgPool,
     _providers: Arc<ProviderRegistry>,
-    _config: Arc<Config>,
+    config: Arc<Config>,
     mut shutdown_rx: watch::Receiver<bool>,
 ) {
     tokio::spawn(async move {
@@ -21,7 +21,7 @@ pub fn start_rss_poller(
         loop {
             tokio::select! {
                 _ = tokio::time::sleep(interval) => {
-                    if let Err(e) = poll_all_feeds(&db).await {
+                    if let Err(e) = poll_all_feeds(&db, &config).await {
                         tracing::error!("RSS poller error: {e}");
                     }
                 }
@@ -36,7 +36,10 @@ pub fn start_rss_poller(
     });
 }
 
-async fn poll_all_feeds(db: &PgPool) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn poll_all_feeds(
+    db: &PgPool,
+    config: &Config,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let feeds = crate::db::queries::get_feeds_due_for_polling(db).await?;
 
     for feed in feeds {
@@ -108,8 +111,30 @@ async fn poll_all_feeds(db: &PgPool) -> Result<(), Box<dyn std::error::Error + S
                 continue;
             }
 
-            // Auto-create a queued post so the scheduler publishes it
-            let post_content = format!("{}\n\n{}", title, url);
+            // ── Build post content ──────────────────────────────
+            // If use_ai_summary is enabled AND LLM_ENDPOINT is configured,
+            // call the LLM to summarize the RSS entry into ≤280 chars.
+            // Otherwise, use the simple "{title}\n\n{url}" template.
+            //
+            // IMPORTANT: RSS-imported posts are created as DRAFT (not QUEUED)
+            // so the solo founder can review — especially when AI-generated —
+            // before the scheduler publishes them. This matches postiz-app's
+            // pattern and is safer than going straight to QUEUED.
+            let post_content = if feed.use_ai_summary {
+                match summarize_with_llm(config, &title, &content, &url).await {
+                    Ok(summary) => summary,
+                    Err(e) => {
+                        tracing::warn!(
+                            "RSS AI summary failed for feed {}, falling back to template: {e}",
+                            feed.id
+                        );
+                        format!("{}\n\n{}", title, url)
+                    }
+                }
+            } else {
+                format!("{}\n\n{}", title, url)
+            };
+
             match crate::db::queries::create_post(
                 db,
                 feed.user_id,
@@ -119,7 +144,7 @@ async fn poll_all_feeds(db: &PgPool) -> Result<(), Box<dyn std::error::Error + S
                 &serde_json::json!({}),
                 &serde_json::json!({"rss_auto": true}),
                 None,
-                Some(PostState::Queued),
+                Some(PostState::Draft), // Changed from Queued → Draft for review
                 None,
                 0,
             )
@@ -141,9 +166,10 @@ async fn poll_all_feeds(db: &PgPool) -> Result<(), Box<dyn std::error::Error + S
                         }
                     }
                     tracing::info!(
-                        "RSS autopost: created queued post {} for feed {}",
+                        "RSS autopost: created draft post {} for feed {} (ai_summary={})",
                         post.id,
-                        feed.id
+                        feed.id,
+                        feed.use_ai_summary
                     );
                 }
                 Err(e) => {
@@ -161,4 +187,86 @@ async fn poll_all_feeds(db: &PgPool) -> Result<(), Box<dyn std::error::Error + S
     }
 
     Ok(())
+}
+
+/// Call an OpenAI-compatible LLM endpoint to summarize an RSS entry
+/// into a social-media-friendly post (≤280 chars, no hashtags, engaging tone).
+///
+/// Uses `LLM_ENDPOINT` + `LLM_MODEL` from config. If either is unset,
+/// returns an error and the caller falls back to the template.
+async fn summarize_with_llm(
+    config: &Config,
+    title: &str,
+    content: &str,
+    url: &str,
+) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    let endpoint = config
+        .llm_endpoint
+        .as_ref()
+        .ok_or("LLM_ENDPOINT not configured")?;
+    let model = config
+        .llm_model
+        .as_ref()
+        .ok_or("LLM_MODEL not configured")?;
+
+    // Strip HTML from content for the LLM prompt (simple tag stripper)
+    let clean_content: String = content
+        .chars()
+        .fold((false, String::new()), |(in_tag, mut acc), ch| {
+            match ch {
+                '<' => (true, acc),
+                '>' => (false, acc),
+                _ if !in_tag => {
+                    acc.push(ch);
+                    (false, acc)
+                }
+                _ => (in_tag, acc),
+            }
+        })
+        .1;
+    let clean_content = clean_content.trim();
+    // Truncate to 2000 chars to avoid token overflow
+    let clean_content = if clean_content.len() > 2000 {
+        &clean_content[..2000]
+    } else {
+        clean_content
+    };
+
+    let prompt = format!(
+        "Summarize this article into a engaging social media post (max 280 characters). \
+         Do NOT include hashtags. Do NOT include the URL. \
+         Write in a conversational, engaging tone.\n\n\
+         Title: {title}\n\n\
+         Content: {clean_content}\n\n\
+         Summary:"
+    );
+
+    let client = reqwest::Client::new();
+    let response = client
+        .post(endpoint)
+        .json(&serde_json::json!({
+            "model": model,
+            "messages": [
+                {"role": "user", "content": prompt}
+            ],
+            "max_tokens": 150,
+            "temperature": 0.7,
+        }))
+        .timeout(std::time::Duration::from_secs(30))
+        .send()
+        .await?;
+
+    if !response.status().is_success() {
+        return Err(format!("LLM returned status {}", response.status()).into());
+    }
+
+    let json: serde_json::Value = response.json().await?;
+    let summary = json["choices"][0]["message"]["content"]
+        .as_str()
+        .ok_or("LLM response missing content")?
+        .trim()
+        .to_string();
+
+    // Append the URL so the post has a link
+    Ok(format!("{summary}\n\n{url}"))
 }
