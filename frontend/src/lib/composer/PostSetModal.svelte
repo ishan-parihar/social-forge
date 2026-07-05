@@ -5,14 +5,14 @@
   export interface PostSet {
     id: string;
     name: string;
-    description: string;
+    description?: string;
     content: string;
     channelIds: string[];
-    scheduledAt: string | null;
+    scheduledAt?: string | null;
     createdAt: string;
   }
 
-  let { open = false, onclose, currentContent = '', currentChannelIds = [], currentScheduleAt = null as string | null, onLoad }: {
+  let { open = false, onclose, currentContent = '', currentChannelIds: _ch = [], currentScheduleAt = null as string | null, onLoad }: {
     open?: boolean;
     onclose?: () => void;
     currentContent?: string;
@@ -21,21 +21,33 @@
     onLoad?: (set: PostSet) => void;
   } = $props();
 
-  const STORAGE_KEY = 'social-forge-post-sets';
-
   let tab = $state<'save' | 'load'>('save');
   let saveName = $state('');
   let saveDescription = $state('');
   let savedSets = $state<PostSet[]>([]);
   let saveError = $state<string | null>(null);
+  let loading = $state(false);
 
-  function loadSets() {
+  async function loadSets() {
+    loading = true;
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      savedSets = raw ? JSON.parse(raw) : [];
+      const res = await fetch('/api/sets', { credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        savedSets = (data as Array<any>).map(s => ({
+          id: s.id,
+          name: s.name,
+          description: s.description,
+          content: typeof s.content === 'string' ? s.content : (s.content?.content || ''),
+          channelIds: s.channel_ids || [],
+          scheduledAt: s.content?.scheduledAt || null,
+          createdAt: s.created_at,
+        }));
+      }
     } catch {
       savedSets = [];
     }
+    loading = false;
   }
 
   $effect(() => {
@@ -48,26 +60,35 @@
     }
   });
 
-  function handleSave() {
+  async function handleSave() {
     if (!saveName.trim()) {
       saveError = 'Name is required';
       return;
     }
     saveError = null;
-    const newSet: PostSet = {
-      id: crypto.randomUUID(),
-      name: saveName.trim(),
-      description: saveDescription.trim(),
-      content: currentContent,
-      channelIds: [...currentChannelIds],
-      scheduledAt: currentScheduleAt,
-      createdAt: new Date().toISOString(),
-    };
-    const updated = [...savedSets, newSet];
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-    savedSets = updated;
-    saveName = '';
-    saveDescription = '';
+    try {
+      const res = await fetch('/api/sets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          name: saveName.trim(),
+          description: saveDescription.trim() || undefined,
+          content: { content: currentContent, scheduledAt: currentScheduleAt },
+          channel_ids: _ch,
+        }),
+      });
+      if (res.ok) {
+        saveName = '';
+        saveDescription = '';
+        await loadSets();
+        tab = 'load';
+      } else {
+        saveError = 'Failed to save set';
+      }
+    } catch {
+      saveError = 'Network error';
+    }
   }
 
   function handleLoad(set: PostSet) {
@@ -75,12 +96,15 @@
     onclose?.();
   }
 
-  function handleDelete(e: MouseEvent, id: string) {
+  async function handleDelete(e: MouseEvent, id: string) {
     e.stopPropagation();
     if (!confirm('Delete this post set?')) return;
-    const updated = savedSets.filter(s => s.id !== id);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-    savedSets = updated;
+    try {
+      await fetch(`/api/sets/${id}`, { method: 'DELETE', credentials: 'include' });
+      savedSets = savedSets.filter(s => s.id !== id);
+    } catch {
+      // ignore
+    }
   }
 </script>
 
@@ -144,7 +168,9 @@
     </div>
   {:else}
     <div class="space-y-2 max-h-60 overflow-y-auto">
-      {#if savedSets.length === 0}
+      {#if loading}
+        <div class="text-sm text-muted text-center py-6">Loading...</div>
+      {:else if savedSets.length === 0}
         <div class="text-sm text-muted text-center py-6">
           No saved post sets. Save a set on the "Save" tab to reuse it later.
         </div>
@@ -155,7 +181,7 @@
             tabindex="0"
             onclick={() => handleLoad(set)}
             onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleLoad(set); } }}
-            class="w-full text-left bg-[#0b0e14] border border-line rounded-lg p-3 hover:bg-surface-hover transition-colors cursor-pointer"
+            class="w-full text-left bg-background border border-line rounded-lg p-3 hover:bg-surface-hover transition-colors cursor-pointer"
             aria-label={'Load set: ' + set.name}
           >
             <div class="flex items-start justify-between gap-2">

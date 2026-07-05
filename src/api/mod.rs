@@ -39,6 +39,7 @@ mod onboard;
 mod posts;
 mod rss;
 mod sse;
+mod sets;
 mod signatures;
 mod tags;
 mod developer;
@@ -196,6 +197,8 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/rss/feeds/{id}/poll", axum::routing::post(rss::poll_feed))
         .route("/api/rss/feeds/{id}/items", axum::routing::get(rss::list_feed_items))
         .route("/api/rss/feeds/{id}/items/{guid}/import", axum::routing::post(rss::import_item))
+        .route("/api/sets", axum::routing::get(sets::list_sets).post(sets::create_set))
+        .route("/api/sets/{id}", axum::routing::delete(sets::delete_set))
         // DMs
         .route("/api/dms/conversations", axum::routing::get(dms::list_conversations))
         .route("/api/dms/send", axum::routing::post(dms::send_dm))

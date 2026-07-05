@@ -158,7 +158,7 @@
   let providerOverride = $state<Map<string, string>>(new Map());
   let showPostSets = $state(false);
 
-  function handlePostSetLoad(set: { content: string; channelIds: string[]; scheduledAt: string | null }) {
+  function handlePostSetLoad(set: { content: string; channelIds: string[]; scheduledAt?: string | null }) {
     if (set.content) content = set.content;
     if (set.channelIds.length > 0) selectedIntegrations = set.channelIds;
     if (set.scheduledAt) scheduledAt = set.scheduledAt;
