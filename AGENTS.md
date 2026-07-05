@@ -379,26 +379,43 @@ draft → queued → publishing → published
 - `published`: successfully published
 - `error`: failed after MAX_RETRIES (3)
 
-### 7.2 How `process_due_posts` works (v9)
+### 7.2 How `process_due_posts` works (v9-v10)
 
 1. `get_due_posts()` atomically transitions `queued → publishing` for due posts via a CTE (`UPDATE ... WHERE id IN (SELECT ... FOR UPDATE SKIP LOCKED) RETURNING`). This prevents dual-instance double-publish.
-2. For each claimed post, acquire a per-provider `Semaphore` permit (default 1 for strict platforms, 3 for high-headroom).
-3. Spawn the publish task on a **tracked `JoinSet`** (not detached `tokio::spawn`).
-4. Wait for all tasks to complete (with 5min timeout per `join_next`) before returning.
-5. On startup, `reclaim_stuck_publishing()` marks posts stuck in `publishing` > 5min as `error`.
+2. **Circuit breaker check (v10)**: for each claimed post, check the per-provider circuit breaker. If open, push the post back to `queued` state (skip publishing). This prevents cascading failures during platform outages.
+3. For each post that passes the circuit breaker, acquire a per-provider `Semaphore` permit (default 1 for strict platforms, 3 for high-headroom).
+4. Spawn the publish task on a **tracked `JoinSet`** (not detached `tokio::spawn`).
+5. After each publish, call `circuit_breaker.record_success()` or `record_failure()` to update the breaker state.
+6. Wait for all tasks to complete (with 5min timeout per `join_next`) before returning.
+7. On startup, `reclaim_stuck_publishing()` marks posts stuck in `publishing` > 5min as `error`.
 
-### 7.3 Retry policy
+### 7.3 Circuit breaker (v10)
+
+Each provider has a `CircuitBreaker` with three states:
+- **Closed**: all requests pass through. Failure count tracked.
+- **Open** (after 5 consecutive failures): all requests rejected for 60s. Posts pushed back to `queued`.
+- **Half-open** (after cooldown): one request allowed. If success → closed. If fail → open.
+
+Configurable via env vars:
+- `PROVIDER_CB_THRESHOLD_{ID}` (default 5, range 1-50) — failures before opening
+- `PROVIDER_CB_COOLDOWN_{ID}` (default 60s, range 10-3600) — open duration
+
+### 7.4 Retry policy
 
 - `TokenExpired`: refresh once, retry immediately. If refresh fails, mark `integration.refresh_needed = true`.
 - `RateLimited`: exponential backoff `2^attempt × 5s ± 25% jitter`. Max 3 retries.
 - `Network`: same exponential backoff (was: immediate fail — a bug fixed in v9).
 - `Auth` / `Api` / `InvalidRequest`: no retry (won't succeed).
 
-### 7.4 Webhook dispatch
+### 7.5 Thread linking (v10)
+
+When the scheduler publishes a post with `group_id` and `sequence > 1`, it looks up the previous post in the same group (by `sequence - 1`) and passes its `platform_post_id` as `in_reply_to` in the `PostContent`. Providers that support threading (X, Bluesky, Mastodon, Threads) use this to create linked replies instead of standalone posts.
+
+### 7.6 Webhook dispatch
 
 `dispatch_webhook_background()` fires `post.published` and `post.failed` events to all active webhooks matching the event type. Runs in a detached task so it doesn't block the scheduler tick. Records delivery attempts in `webhook_deliveries` table.
 
-### 7.5 Audit trail
+### 7.7 Audit trail
 
 Every publish attempt (success or failure) is recorded in the `publish_attempts` table via `record_publish_attempt()`. The operator can query this to see the full retry history.
 
@@ -492,6 +509,8 @@ See `.env.example` for the full list. Critical ones:
 | `DB_MAX_CONNECTIONS` | No | `20` | PgPool max connections |
 | `DB_ACQUIRE_TIMEOUT` | No | `5` | seconds to wait for a pool connection |
 | `PROVIDER_CONCURRENCY_X` | No | `1` | Per-provider concurrent publish limit (override) |
+| `PROVIDER_CB_THRESHOLD_X` | No | `5` | Per-provider circuit breaker failure threshold (v10) |
+| `PROVIDER_CB_COOLDOWN_X` | No | `60` | Per-provider circuit breaker cooldown seconds (v10) |
 
 ---
 
