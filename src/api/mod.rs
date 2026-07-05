@@ -26,6 +26,7 @@ use crate::social::registry::ProviderRegistry;
 use crate::wa::OptionalWhaClient;
 
 mod analytics;
+mod ai;
 mod auth;
 mod billing;  // only stripe_webhook (public, signature-verified) is used
 mod calendar;
@@ -119,6 +120,11 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/posts", axum::routing::get(posts::list).post(posts::create))
         .route("/api/posts/thread", axum::routing::post(posts::create_thread))
         .route("/api/posts/validate", axum::routing::post(posts::validate))
+        .route("/api/ai/generate-post", axum::routing::post(ai::generate_post))
+        .route("/api/ai/improve-writing", axum::routing::post(ai::improve_writing))
+        .route("/api/ai/suggest-hashtags", axum::routing::post(ai::suggest_hashtags))
+        .route("/api/ai/change-tone", axum::routing::post(ai::change_tone))
+        .route("/api/ai/summarize", axum::routing::post(ai::summarize))
         .route("/api/providers", axum::routing::get(integrations::list_providers))
         .route(
             "/api/posts/{id}",

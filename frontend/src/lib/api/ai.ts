@@ -1,35 +1,29 @@
-// AI proxy URL — must be set via VITE_PUBLIC_AI_PROXY_URL at build time.
-// If unset, AI features are disabled and the UI shows a configuration hint
-// instead of silently hitting a localhost default that doesn't exist in
-// production.
-const AI_PROXY_URL: string | null =
-  (import.meta.env?.VITE_PUBLIC_AI_PROXY_URL as string | undefined) || null;
+// AI API — calls the backend's /api/ai/* endpoints which proxy to the
+// configured LLM_ENDPOINT + LLM_MODEL. This keeps the API key server-side
+// and enables MCP/CLI parity (the same LLM logic runs for all interfaces).
 
 interface AiResponse {
-  choices: Array<{
-    message: { content: string };
-  }>;
+  content: string;
+  error?: string;
 }
 
-async function generate(prompt: string, temperature = 0.7, signal?: AbortSignal): Promise<string> {
-  if (!AI_PROXY_URL) {
-    throw new Error("AI features are disabled. Set VITE_PUBLIC_AI_PROXY_URL at build time to enable.");
-  }
+async function callBackend(endpoint: string, body: Record<string, unknown>, signal?: AbortSignal): Promise<string> {
   try {
-    const r = await fetch(`${AI_PROXY_URL}/v1/chat/completions`, {
+    const r = await fetch(`/api/ai/${endpoint}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [{ role: "user", content: prompt }],
-        temperature,
-      }),
+      credentials: "include",
+      body: JSON.stringify(body),
       signal,
     });
-    if (!r.ok) throw new Error(`LLM-Proxy returned ${r.status}`);
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error(err.error || `Backend returned ${r.status}`);
+    }
     const data: AiResponse = await r.json();
-    return data.choices?.[0]?.message?.content || "";
+    return data.content || "";
   } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") throw err;
     throw new Error(`AI request failed: ${err instanceof Error ? err.message : "Unknown error"}`);
   }
 }
@@ -37,26 +31,26 @@ async function generate(prompt: string, temperature = 0.7, signal?: AbortSignal)
 export const ai = {
   /** Generate a post from topic/tone/length */
   async generatePost(topic: string, tone: string, length: string, signal?: AbortSignal): Promise<string> {
-    return generate(`Write a ${tone} social media post about "${topic}". Length: ${length}. Do not add hashtags.`, 0.7, signal);
+    return callBackend("generate-post", { topic, tone, length }, signal);
   },
 
   /** Improve existing content */
   async improveWriting(content: string, signal?: AbortSignal): Promise<string> {
-    return generate(`Improve the following social media post for clarity and engagement. Keep the same message and length:\n\n${content}`, 0.5, signal);
+    return callBackend("improve-writing", { content }, signal);
   },
 
   /** Suggest hashtags from content */
   async suggestHashtags(content: string, signal?: AbortSignal): Promise<string> {
-    return generate(`Extract 5-10 relevant hashtags from this content. Return ONLY the hashtags separated by spaces, no explanations:\n\n${content}`, 0.3, signal);
+    return callBackend("suggest-hashtags", { content }, signal);
   },
 
   /** Change tone of content */
   async changeTone(content: string, tone: string, signal?: AbortSignal): Promise<string> {
-    return generate(`Rewrite the following post in a ${tone} tone. Keep the same information and approximate length:\n\n${content}`, 0.8, signal);
+    return callBackend("change-tone", { content, tone }, signal);
   },
 
   /** Summarize for X/Twitter (280 chars) */
   async summarize(content: string, signal?: AbortSignal): Promise<string> {
-    return generate(`Summarize the following content for an X/Twitter post. Maximum 280 characters. Return ONLY the post, no explanations:\n\n${content}`, 0.3, signal);
+    return callBackend("summarize", { content }, signal);
   },
 };
