@@ -358,13 +358,20 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("Server running. Press Ctrl+C to shut down.");
     shutdown_rx_signal.notified().await;
 
+    // Mark the process as draining — /ready returns 503 so the load
+    // balancer stops routing new traffic. Existing in-flight requests
+    // continue to be served by axum's graceful shutdown.
+    api::set_draining();
+
     tracing::info!("Broadcasting shutdown to background tasks…");
     let _ = shutdown_tx.send(true);
 
-    // Give background tasks up to 10 seconds to drain. The scheduler
-    // checks the shutdown flag between iterations; in-flight HTTP
-    // requests are already handled by axum's graceful shutdown above.
-    let drain_deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(10);
+    // Give background tasks up to 30 seconds to drain (was 10s — too
+    // short for a JoinSet of 50 publishes each potentially in retry
+    // backoff). The scheduler's process_due_posts now waits on its
+    // JoinSet, so this drain window is the upper bound on how long
+    // a single publish can hold up shutdown.
+    let drain_deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(30);
     loop {
         if tokio::time::Instant::now() >= drain_deadline {
             break;

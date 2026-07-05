@@ -1,6 +1,15 @@
 // ─── Provider Registry ────────────────────────────────────────
 // Central registry of all available social media providers.
 // Used by both the API layer and the MCP layer to route requests.
+//
+// Also holds a per-provider concurrency limiter (`Semaphore`) so the
+// scheduler can't fire 30 simultaneous posts at the same X account
+// and trip per-account rate limits. The limit defaults to 1 for
+// strict-serial platforms (X, Threads, Instagram — all have aggressive
+// per-account rate windows) and 3 for platforms with more headroom
+// (Reddit, Discord, Slack, Telegram-Bot, etc.). Override via the
+// `PROVIDER_CONCURRENCY_{IDENTIFIER}` env var (uppercased, hyphens →
+// underscores, e.g. `PROVIDER_CONCURRENCY_LINKEDIN_PAGE=2`).
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -14,10 +23,41 @@ use crate::config::Config;
 use crate::services::telegram_client::TelegramClientManager;
 use crate::wa::WhaClient;
 
+/// Default per-provider concurrent publish budget. Conservative to
+/// avoid tripping per-account rate limits on the strictest platforms
+/// (X free tier ≈ 17 posts / 24h; we don't want to blow through
+/// that in a single scheduler tick).
+const DEFAULT_PROVIDER_CONCURRENCY: usize = 1;
+
+/// Providers that can safely handle more concurrent calls (their rate
+/// limits are per-IP or per-token-with-high-ceiling, not per-account).
+const HIGH_CONCURRENCY_PROVIDERS: &[&str] = &[
+    "reddit",
+    "discord",
+    "slack",
+    "telegram-bot",
+    "telegram-user",
+    "whatsapp",
+    "github",
+    "wordpress",
+    "medium",
+    "devto",
+    "hashnode",
+    "lemmy",
+    "vk",
+    "kick",
+    "skool",
+];
+
 /// Thread-safe provider registry
 #[derive(Clone)]
 pub struct ProviderRegistry {
     providers: Arc<HashMap<&'static str, Arc<dyn SocialProvider>>>,
+    /// Per-provider concurrency limiter. Each entry is an
+    /// `Arc<Semaphore>` sized to the platform's concurrent-post budget.
+    /// The scheduler acquires a permit before calling `provider.publish()`
+    /// and releases it when the publish completes (success or failure).
+    concurrency: Arc<HashMap<&'static str, Arc<tokio::sync::Semaphore>>>,
 }
 
 impl ProviderRegistry {
@@ -180,14 +220,45 @@ impl ProviderRegistry {
             providers.keys().cloned().collect::<Vec<_>>().join(", ")
         );
 
+        // Build per-provider concurrency semaphores. Each provider
+        // gets a budget based on its platform's rate-limit profile.
+        let mut concurrency: HashMap<&'static str, Arc<tokio::sync::Semaphore>> = HashMap::new();
+        for &id in providers.keys() {
+            let default = if HIGH_CONCURRENCY_PROVIDERS.contains(&id) {
+                3
+            } else {
+                DEFAULT_PROVIDER_CONCURRENCY
+            };
+            // Allow env override: PROVIDER_CONCURRENCY_X=2 etc.
+            let env_key = format!(
+                "PROVIDER_CONCURRENCY_{}",
+                id.to_uppercase().replace('-', "_")
+            );
+            let limit = std::env::var(&env_key)
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .filter(|v: &usize| *v >= 1 && *v <= 20)
+                .unwrap_or(default);
+            concurrency.insert(id, Arc::new(tokio::sync::Semaphore::new(limit)));
+        }
+
         Self {
             providers: Arc::new(providers),
+            concurrency: Arc::new(concurrency),
         }
     }
 
     /// Get a provider by identifier
     pub fn get(&self, identifier: &str) -> Option<Arc<dyn SocialProvider>> {
         self.providers.get(identifier).cloned()
+    }
+
+    /// Get the per-provider concurrency semaphore for the given
+    /// provider. Returns `None` if the provider isn't registered.
+    /// The caller should `.acquire()` before making the platform API
+    /// call and hold the permit until the call completes.
+    pub fn concurrency(&self, identifier: &str) -> Option<Arc<tokio::sync::Semaphore>> {
+        self.concurrency.get(identifier).cloned()
     }
 
     /// List all registered provider identifiers

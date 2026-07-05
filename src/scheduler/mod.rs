@@ -45,6 +45,23 @@ pub fn start_scheduler(
     let mut shutdown1 = shutdown.clone();
     tokio::spawn(async move {
         tracing::info!("Scheduler started (poll interval: {POLL_INTERVAL_SECS}s)");
+
+        // On startup, reclaim any posts stuck in `publishing` state
+        // from a previous crash. 5 minutes is the threshold — anything
+        // still publishing after 5 min is almost certainly a dead
+        // process, not a slow API call.
+        match queries::reclaim_stuck_publishing(&db1, 300).await {
+            Ok(count) if count > 0 => {
+                tracing::warn!(
+                    "Reclaimed {count} post(s) stuck in 'publishing' state — marked as error for manual review"
+                );
+            }
+            Ok(_) => {}
+            Err(e) => {
+                tracing::error!("Failed to reclaim stuck publishing posts: {e}");
+            }
+        }
+
         let mut interval = tokio::time::interval(Duration::from_secs(POLL_INTERVAL_SECS));
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
@@ -272,7 +289,18 @@ async fn proactive_token_refresh(
     Ok(())
 }
 
-/// Process all posts due for publishing
+/// Process all posts due for publishing.
+///
+/// Uses a tracked `JoinSet` instead of detached `tokio::spawn` so that:
+///   (a) the scheduler tick doesn't return until all spawned publishes
+///       complete — prevents ticks from stacking under load;
+///   (b) on shutdown, we can wait for in-flight publishes to drain
+///       instead of killing them mid-API-call (which would cause
+///       double-publishes on restart).
+///
+/// Each publish acquires a permit from the per-provider `Semaphore`
+/// before calling `provider.publish()`, so 30 queued posts for the
+/// same X account serialize instead of all hitting the API at once.
 async fn process_due_posts(
     db: &PgPool,
     providers: &ProviderRegistry,
@@ -301,6 +329,9 @@ async fn process_due_posts(
 
     tracing::info!("Processing {} due post(s)", posts.len());
 
+    // Tracked task set — we await all of these before returning.
+    let mut join_set: tokio::task::JoinSet<()> = tokio::task::JoinSet::new();
+
     for post in &posts {
         let provider = match providers.get(&post.provider_identifier) {
             Some(p) => p,
@@ -314,14 +345,29 @@ async fn process_due_posts(
             }
         };
 
-        // Spawn each post's publishing as an isolated task to prevent a
-        // single panic from killing the entire scheduler loop.
+        // Acquire the per-provider concurrency permit BEFORE spawning
+        // so that we serialize same-platform publishes. The permit is
+        // moved into the task and released when the task completes.
+        let semaphore = providers.concurrency(&post.provider_identifier);
+        let permit = match semaphore.as_ref() {
+            Some(sem) => match sem.clone().acquire_owned().await {
+                Ok(p) => Some(p),
+                // Semaphore closed — shouldn't happen, but proceed without throttling.
+                Err(_) => None,
+            },
+            None => None,
+        };
+
         let db_clone = db.clone();
         let provider_clone = provider.clone();
         let post_clone = post.clone();
         let bcast = broadcaster.clone();
         let tk = token_key; // Copy (Option<[u8; 32]> implements Copy)
-        tokio::spawn(async move {
+        join_set.spawn(async move {
+            // `_permit` is held for the duration of the publish call,
+            // then dropped automatically when the task exits.
+            let _permit = permit;
+
             if let Err(e) = publish_post(&db_clone, provider_clone.as_ref(), &post_clone, &bcast, tk).await {
                 tracing::error!("Failed to publish post {}: {e}", post_clone.id);
                 let err_str = e.to_string();
@@ -337,13 +383,43 @@ async fn process_due_posts(
         });
     }
 
-    // Brief pause to let spawned tasks make progress before next tick
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    // Wait for all spawned publishes to complete before returning.
+    // This prevents the next scheduler tick from stacking on top of
+    // the current one. If a publish takes longer than one tick
+    // interval, the next tick simply starts later — no unbounded
+    // task growth.
+    while join_set.len() > 0 {
+        // Use a timeout so we don't block forever if a single publish
+        // hangs (e.g. a provider API that never responds). 5 minutes
+        // is generous; most publishes complete in <10s.
+        match tokio::time::timeout(Duration::from_secs(300), join_set.join_next()).await {
+            Ok(Some(Err(e))) => {
+                tracing::error!("Publish task panicked: {e}");
+            }
+            Ok(Some(Ok(()))) => { /* task completed normally */ }
+            Ok(None) => break, // JoinSet empty
+            Err(_) => {
+                tracing::warn!("Publish task timed out after 300s — leaving it detached");
+                break;
+            }
+        }
+    }
 
     Ok(())
 }
 
-/// Publish a single post, with token refresh and retry logic
+/// Publish a single post, with token refresh and retry logic.
+///
+/// Retry policy:
+///   - `TokenExpired`: refresh once, retry immediately
+///   - `RateLimited`: exponential backoff (2^attempt × 5s) with ±25% jitter
+///   - `Network`: retry with exponential backoff (was: immediate fail —
+///     this was a bug where a single transient reqwest error permanently
+///     marked the post as `Error`)
+///   - `Auth` / `Api` / `InvalidRequest`: no retry (won't succeed)
+///
+/// After `MAX_RETRIES` exhausted, the post is marked `Error` and the
+/// caller broadcasts `post_failed` + fires webhooks.
 async fn publish_post(
     db: &PgPool,
     provider: &dyn SocialProvider,
@@ -352,7 +428,7 @@ async fn publish_post(
     token_key: Option<[u8; 32]>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Resolve access token, potentially refreshed
-    let mut access_token = resolve_token(db, provider, post).await?;
+    let mut access_token = resolve_token(db, provider, post, token_key).await?;
 
     // Build post content - resolve media URLs to absolute paths
     let media: Vec<crate::social::MediaAttachment> = serde_json::from_value(post.media.clone()).unwrap_or_default();
@@ -380,6 +456,7 @@ async fn publish_post(
     let mut did_refresh = false; // guard against token refresh recursion
 
     for attempt in 1..=MAX_RETRIES {
+        let attempt_start = Utc::now();
         match provider.publish(&access_token, &content).await {
             Ok(result) => {
                 queries::update_post_state(
@@ -392,6 +469,16 @@ async fn publish_post(
                 )
                 .await?;
 
+                // Record successful attempt in audit trail.
+                let _ = queries::record_publish_attempt(
+                    db,
+                    post.id,
+                    attempt as i32,
+                    "success",
+                    None,
+                    attempt_start,
+                ).await;
+
                 tracing::info!(
                     "Post {} published on {}: {}",
                     post.id,
@@ -399,14 +486,18 @@ async fn publish_post(
                     result.platform_post_url.as_deref().unwrap_or("(no URL)")
                 );
 
-                broadcaster.send(
-                    "post_published",
-                    &serde_json::json!({
-                        "id": post.id.to_string(),
-                        "platform_post_url": result.platform_post_url,
-                        "provider": post.provider_identifier,
-                    }),
-                );
+                let event_payload = serde_json::json!({
+                    "id": post.id.to_string(),
+                    "platform_post_url": result.platform_post_url,
+                    "provider": post.provider_identifier,
+                });
+
+                broadcaster.send("post_published", &event_payload);
+
+                // Fire webhooks for post.published event (best-effort,
+                // non-blocking — runs in a detached task so it doesn't
+                // delay the scheduler tick).
+                dispatch_webhook_background(db, post.user_id, "post.published", &event_payload);
 
                 // Publish first_comment if present
                 if let Some(ref comment_text) = post.first_comment {
@@ -439,7 +530,13 @@ async fn publish_post(
                                         // Encrypt token before storing if encryption key is configured
                         let enc_access_token = if let Some(ref k) = token_key {
                             crate::crypto::encrypt_string(&t.access_token, k)
-                                .unwrap_or_else(|_| t.access_token.clone())
+                                .unwrap_or_else(|e| {
+                                    tracing::warn!(
+                                        "Failed to encrypt refreshed token for integration {}: {e}",
+                                        post.integration_id
+                                    );
+                                    t.access_token.clone()
+                                })
                         } else {
                             t.access_token.clone()
                         };
@@ -454,6 +551,9 @@ async fn publish_post(
                     }
                     Err(e) => {
                         tracing::error!("Token refresh failed for post {}: {e}", post.id);
+                        // Mark the integration as needing re-auth so the
+                        // user gets a UI prompt to reconnect.
+                        let _ = queries::mark_integration_refresh_needed(db, post.integration_id).await;
                         return Err(e.into());
                     }
                 };
@@ -464,13 +564,38 @@ async fn publish_post(
             Err(ProviderError::TokenExpired) => {
                 // Already refreshed once; second TokenExpired means refresh didn't help
                 tracing::error!("Token still expired after refresh for post {}", post.id);
+                let _ = queries::mark_integration_refresh_needed(db, post.integration_id).await;
                 last_error = Some("Token expired and refresh did not resolve it".to_string());
                 break;
             }
             Err(ProviderError::RateLimited(ref msg)) => {
-                let wait = RETRY_BACKOFF_SECS * attempt as u64;
-                tracing::warn!("Rate limited for post {}: {}. Retrying in {}s", post.id, msg, wait);
+                // Exponential backoff with jitter: 2^attempt × 5s ± 25%
+                // (was: linear 10/20/30s with no jitter — caused thundering
+                // herd when 50 posts all backed off in lockstep).
+                let base = 5u64 * (1u64 << (attempt - 1)); // 5, 10, 20s
+                let jitter = (base as f64 * 0.25 * rand::random::<f64>()) as u64;
+                let wait = base + jitter;
+                tracing::warn!(
+                    "Rate limited for post {} (attempt {}): {}. Backing off {}s",
+                    post.id, attempt, msg, wait
+                );
                 last_error = Some(msg.clone());
+                tokio::time::sleep(Duration::from_secs(wait)).await;
+                continue;
+            }
+            Err(ProviderError::Network(ref e)) => {
+                // Transient network errors are now retried with the same
+                // exponential backoff as rate limits. Previously a single
+                // reqwest::Error permanently marked the post as `Error`.
+                let base = 5u64 * (1u64 << (attempt - 1));
+                let jitter = (base as f64 * 0.25 * rand::random::<f64>()) as u64;
+                let wait = base + jitter;
+                let err_str = e.to_string();
+                tracing::warn!(
+                    "Network error for post {} (attempt {}): {}. Retrying in {}s",
+                    post.id, attempt, err_str, wait
+                );
+                last_error = Some(err_str);
                 tokio::time::sleep(Duration::from_secs(wait)).await;
                 continue;
             }
@@ -482,14 +607,108 @@ async fn publish_post(
         }
     }
 
+    // Record the final failed attempt in the audit trail.
+    let _ = queries::record_publish_attempt(
+        db,
+        post.id,
+        MAX_RETRIES as i32,
+        "failed",
+        last_error.as_deref(),
+        Utc::now(),
+    ).await;
+
+    // Fire webhook for post.failed before returning the error.
+    let fail_payload = serde_json::json!({
+        "id": post.id.to_string(),
+        "provider": post.provider_identifier,
+        "error": last_error.clone().unwrap_or_default(),
+    });
+    dispatch_webhook_background(db, post.user_id, "post.failed", &fail_payload);
+
     Err(last_error.unwrap_or_else(|| "Max retries exceeded".to_string()).into())
 }
 
-/// Resolve a valid access token, refreshing if necessary
+/// Fire a webhook event in the background without blocking the caller.
+///
+/// We can't use `services::webhook_dispatcher::dispatch_event` directly
+/// because it requires a full `&AppState` (which the scheduler doesn't
+/// have — it only has `&PgPool`). Instead we inline a minimal version
+/// that does the same DB query + HTTP send, spawned as a detached
+/// task so the scheduler tick isn't delayed by webhook delivery.
+fn dispatch_webhook_background(db: &PgPool, user_id: uuid::Uuid, event_type: &str, payload: &serde_json::Value) {
+    let db = db.clone();
+    let user_id = user_id;
+    let event_type = event_type.to_string();
+    let payload = payload.clone();
+    tokio::spawn(async move {
+        // Fetch active webhooks matching this event type for the user.
+        let webhooks: Vec<(uuid::Uuid, String, Option<String>)> = match sqlx::query_as(
+            r#"SELECT id, url, secret FROM webhooks
+               WHERE user_id = $1 AND is_active = true AND $2 = ANY(event_types)"#,
+        )
+        .bind(user_id)
+        .bind(&event_type)
+        .fetch_all(&db)
+        .await
+        {
+            Ok(rows) => rows,
+            Err(e) => {
+                tracing::warn!("Failed to fetch webhooks for {event_type}: {e}");
+                return;
+            }
+        };
+
+        for (webhook_id, url, secret) in webhooks {
+            let result = crate::services::webhook_dispatcher::send_webhook(
+                &url,
+                secret.as_deref(),
+                &event_type,
+                &payload,
+            ).await;
+
+            let (status, status_code, response_body) = match &result {
+                Ok((code, body)) => {
+                    if *code == 200 || *code == 201 {
+                        ("delivered", Some(*code as i32), Some(body.clone()))
+                    } else {
+                        ("failed", Some(*code as i32), Some(body.clone()))
+                    }
+                }
+                Err(e) => ("failed", None, Some(e.clone())),
+            };
+
+            // Record delivery attempt.
+            let _ = sqlx::query(
+                r#"INSERT INTO webhook_deliveries
+                   (webhook_id, event_type, status, status_code, response_body, attempted_at)
+                   VALUES ($1, $2, $3, $4, $5, NOW())"#,
+            )
+            .bind(webhook_id)
+            .bind(&event_type)
+            .bind(status)
+            .bind(status_code)
+            .bind(response_body)
+            .execute(&db)
+            .await;
+
+            if result.is_err() {
+                tracing::warn!("Webhook delivery to {url} for {event_type} failed");
+            }
+        }
+    });
+}
+
+/// Resolve a valid access token, refreshing if necessary.
+///
+/// SECURITY: when `token_key` is `Some`, the refreshed access token is
+/// AES-256-GCM encrypted before being written to the DB. Previously
+/// this path stored the raw token — a silent at-rest encryption
+/// downgrade on every scheduler-triggered refresh.
 async fn resolve_token(
     db: &PgPool,
     provider: &dyn SocialProvider,
     post: &PostWithIntegration,
+    token_key: Option<[u8; 32]>,
 ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
     let needs_refresh = match post.token_expires_at {
         Some(exp) => Utc::now() + chrono::Duration::seconds(TOKEN_REFRESH_BUFFER_SECS) >= exp,
@@ -502,10 +721,25 @@ async fn resolve_token(
             .refresh_token(post.refresh_token.as_deref().unwrap_or(""))
             .await?;
 
+        // Encrypt before storing if encryption key is configured.
+        let enc_access_token = if let Some(ref k) = token_key {
+            crate::crypto::encrypt_string(&token.access_token, k)
+                .unwrap_or_else(|e| {
+                    tracing::warn!(
+                        "Failed to encrypt refreshed access token for integration {}: {e}. \
+                         Storing unencrypted (downgrade).",
+                        post.integration_id
+                    );
+                    token.access_token.clone()
+                })
+        } else {
+            token.access_token.clone()
+        };
+
         queries::update_integration_token(
             db,
             post.integration_id,
-            &token.access_token,
+            &enc_access_token,
             token.refresh_token.as_deref(),
             token
                 .expires_in

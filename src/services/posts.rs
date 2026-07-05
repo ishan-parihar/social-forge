@@ -236,12 +236,19 @@ impl PostService {
 
     /// Publish a post immediately (or retry a failed post).
     /// Returns the platform_post_url on success.
+    ///
+    /// `token_key` is the optional AES-256 key used for at-rest token
+    /// encryption. When `Some`, freshly refreshed access tokens are
+    /// encrypted before being written to the DB — matching the
+    /// scheduler's behavior. When `None`, tokens are stored as-is
+    /// (legacy/dev mode).
     pub async fn publish(
         db: &PgPool,
         providers: &ProviderRegistry,
         broadcaster: &Broadcaster,
         user_id: Uuid,
         post_id: Uuid,
+        token_key: Option<[u8; 32]>,
     ) -> ServiceResult<String> {
         // Fetch post with integration details
         let post = queries::get_post_with_integration(db, post_id, user_id)
@@ -265,7 +272,7 @@ impl PostService {
             .ok_or_else(|| format!("Provider '{}' not found", post.provider_identifier))?;
 
         // Resolve token, refreshing if needed
-        let access_token = Self::resolve_token(db, provider.as_ref(), &post).await?;
+        let access_token = Self::resolve_token(db, provider.as_ref(), &post, token_key).await?;
 
         // Build publish content (load media from post — matches scheduler behavior)
         let media: Vec<crate::social::MediaAttachment> =
@@ -345,11 +352,18 @@ impl PostService {
         Ok(platform_url)
     }
 
-    /// Resolve an access token, refreshing if it's about to expire
+    /// Resolve an access token, refreshing if it's about to expire.
+    ///
+    /// SECURITY: when `token_key` is `Some`, the freshly-refreshed
+    /// access token is AES-256-GCM encrypted before being written to
+    /// the DB — matching the scheduler's behavior. Previously this
+    /// path stored the raw token, silently downgrading at-rest
+    /// encryption on every manual publish.
     async fn resolve_token(
         db: &PgPool,
         provider: &dyn SocialProvider,
         post: &PostWithIntegration,
+        token_key: Option<[u8; 32]>,
     ) -> ServiceResult<String> {
         const TOKEN_REFRESH_BUFFER: i64 = 300; // 5 minutes
 
@@ -364,10 +378,27 @@ impl PostService {
                 .await
                 .map_err(|e| format!("Token refresh failed: {e}"))?;
 
+            // Encrypt the access token before storing if encryption is configured.
+            // On encryption failure we fall back to the raw token (with a warning)
+            // rather than failing the publish — matching scheduler behavior.
+            let enc_access_token = if let Some(ref k) = token_key {
+                crate::crypto::encrypt_string(&token.access_token, k)
+                    .unwrap_or_else(|e| {
+                        tracing::warn!(
+                            "Failed to encrypt refreshed access token for integration {}: {e}. \
+                             Storing unencrypted (downgrade).",
+                            post.integration_id
+                        );
+                        token.access_token.clone()
+                    })
+            } else {
+                token.access_token.clone()
+            };
+
             queries::update_integration_token(
                 db,
                 post.integration_id,
-                &token.access_token,
+                &enc_access_token,
                 token.refresh_token.as_deref(),
                 token
                     .expires_in

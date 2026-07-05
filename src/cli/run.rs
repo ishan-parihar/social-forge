@@ -1825,7 +1825,7 @@ async fn handle_posts_with_state(state: &AppState, action: PostsAction) -> anyho
                 Err(_) => return output_error("Invalid post ID"),
             };
             crate::services::posts::PostService::publish(
-                &state.db, &state.providers, &state.broadcast, user_id, post_id
+                &state.db, &state.providers, &state.broadcast, user_id, post_id, state.token_key
             ).await
                 .map(|platform_url| serde_json::json!({
                     "ok": true,

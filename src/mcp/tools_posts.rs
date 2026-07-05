@@ -340,6 +340,7 @@ pub async fn publish_post(
         &state.broadcast,
         user_id,
         post_id,
+        state.token_key,
     ).await?;
 
     Ok(Json(SchedulePostOutput {

@@ -106,6 +106,12 @@ impl From<Integration> for IntegrationPublic {
 pub enum PostState {
     Draft,
     Queued,
+    /// `Publishing` is a transient state: the scheduler has claimed the
+    /// post and is mid-API-call. It exists so that (a) a second scheduler
+    /// instance can't double-claim the same post, and (b) on shutdown
+    /// the operator can distinguish "queued" (safe to retry) from
+    /// "publishing" (may have been half-published — needs manual review).
+    Publishing,
     Published,
     Error,
 }
@@ -115,6 +121,7 @@ impl std::fmt::Display for PostState {
         match self {
             PostState::Draft => write!(f, "draft"),
             PostState::Queued => write!(f, "queued"),
+            PostState::Publishing => write!(f, "publishing"),
             PostState::Published => write!(f, "published"),
             PostState::Error => write!(f, "error"),
         }

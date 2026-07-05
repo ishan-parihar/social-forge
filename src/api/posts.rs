@@ -717,6 +717,7 @@ pub async fn publish_post(
         &state.broadcast,
         auth.user_id,
         id,
+        state.token_key,
     )
     .await
     .map_err(crate::error::AppError::BadRequest)?;

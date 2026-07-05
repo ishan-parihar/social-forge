@@ -684,37 +684,114 @@ pub async fn get_due_posts(
     pool: &PgPool,
     limit: i64,
 ) -> Result<Vec<PostWithIntegration>, sqlx::Error> {
+    // Atomically claim due posts by transitioning them
+    // `queued -> publishing` in the same transaction that selects them.
+    // This closes the dual-instance double-publish hole: a second
+    // `social-forge serve` instance running concurrently will not see
+    // rows already claimed by the first, because the WHERE clause
+    // filters on `state = 'queued'` and we just flipped them to
+    // `'publishing'`.
+    //
+    // Previously the transaction committed immediately after SELECT,
+    // releasing the row lock before publish_post ran -- so two
+    // instances could both pull the same queued posts.
+    //
+    // Uses runtime `sqlx::query_as` (not the `query_as!` macro) so
+    // the build doesn't require a live DB or the .sqlx offline cache.
+    // The trade-off is no compile-time column type checking — but
+    // `PostWithIntegration` derives `FromRow` which handles the
+    // runtime deserialization.
     let mut tx = pool.begin().await?;
-    sqlx::query_as!(
-        PostWithIntegration,
-         r#"SELECT p.id, p.user_id, p.integration_id,
-             p.state as "state: PostState",
-             p.content, p.title, p.media, p.settings,
-             p.scheduled_at, p.published_at,
-             p.platform_post_id, p.platform_post_url, p.error_message,
-             p.created_at, p.updated_at,
-             p.repeat_interval_days, p.repeat_end_date, p.group_id,
-             p.first_comment, p.sequence,
-             i.provider_identifier, i.access_token,
-             i.refresh_token, i.token_expires_at,
-             i.disabled as "integration_disabled",
-             i.refresh_needed as "integration_refresh_needed"
-           FROM posts p
-           JOIN integrations i ON p.integration_id = i.id
-           WHERE p.state = 'queued'
-             AND p.scheduled_at <= NOW()
-             AND i.disabled = false
-           ORDER BY p.scheduled_at ASC
-           LIMIT $1
-           FOR UPDATE SKIP LOCKED"#,
-        limit,
+
+    let sql = r#"WITH claimed AS (
+        UPDATE posts
+        SET state = 'publishing',
+            updated_at = NOW()
+        WHERE id IN (
+            SELECT p.id
+            FROM posts p
+            JOIN integrations i ON p.integration_id = i.id
+            WHERE p.state = 'queued'
+              AND p.scheduled_at <= NOW()
+              AND i.disabled = false
+            ORDER BY p.scheduled_at ASC
+            LIMIT $1
+            FOR UPDATE SKIP LOCKED
+        )
+        RETURNING id
     )
-    .fetch_all(&mut *tx)
-    .await
-    .map(|rows| {
-        let _ = tx.commit();
-        rows
-    })
+    SELECT p.id, p.user_id, p.integration_id,
+        p.state,
+        p.content, p.title, p.media, p.settings,
+        p.scheduled_at, p.published_at,
+        p.platform_post_id, p.platform_post_url, p.error_message,
+        p.created_at, p.updated_at,
+        p.repeat_interval_days, p.repeat_end_date, p.group_id,
+        p.first_comment, p.sequence,
+        i.provider_identifier, i.access_token,
+        i.refresh_token, i.token_expires_at,
+        i.disabled as integration_disabled,
+        i.refresh_needed as integration_refresh_needed
+      FROM posts p
+      JOIN integrations i ON p.integration_id = i.id
+      JOIN claimed ON p.id = claimed.id"#;
+
+    let rows: Vec<PostWithIntegration> = sqlx::query_as(sql)
+        .bind(limit)
+        .fetch_all(&mut *tx)
+        .await?;
+
+    tx.commit().await?;
+    Ok(rows)
+}
+
+/// Reclaim posts stuck in `publishing` state for longer than the
+/// given threshold (e.g. 5 minutes). Called on scheduler startup to
+/// recover from a crash that left posts mid-flight. The operator
+/// should manually review reclaimed posts before re-queuing, since
+/// the platform API may have actually accepted the publish.
+pub async fn reclaim_stuck_publishing(
+    pool: &PgPool,
+    stuck_after_secs: i64,
+) -> Result<u64, sqlx::Error> {
+    let result = sqlx::query(
+        "UPDATE posts
+         SET state = 'error',
+             error_message = CONCAT('Post was stuck in publishing state for > ', $1::text, ' seconds -- manual review required'),
+             updated_at = NOW()
+         WHERE state = 'publishing'
+           AND updated_at < NOW() - make_interval(secs => $1::double precision)",
+    )
+    .bind(stuck_after_secs as f64)
+    .execute(pool)
+    .await?;
+    Ok(result.rows_affected())
+}
+
+/// Record a single publish attempt in the `publish_attempts` audit
+/// table. Called by the scheduler on every publish call (success or
+/// failure) so the operator has a full history.
+pub async fn record_publish_attempt(
+    pool: &PgPool,
+    post_id: Uuid,
+    attempt_number: i32,
+    status: &str,
+    error_message: Option<&str>,
+    started_at: chrono::DateTime<chrono::Utc>,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "INSERT INTO publish_attempts
+         (post_id, attempt_number, status, error_message, started_at, finished_at)
+         VALUES ($1, $2, $3, $4, $5, NOW())",
+    )
+    .bind(post_id)
+    .bind(attempt_number)
+    .bind(status)
+    .bind(error_message)
+    .bind(started_at)
+    .execute(pool)
+    .await?;
+    Ok(())
 }
 
 // ══════════════════════════════════════════════════════════════

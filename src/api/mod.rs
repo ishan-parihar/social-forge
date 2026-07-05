@@ -86,6 +86,10 @@ pub fn build_router(state: AppState) -> Router {
             let db_for_ready = state.db.clone();
             move || ready_check(db_for_ready)
         }))
+        .route("/api/metrics", axum::routing::get({
+            let db_for_metrics = state.db.clone();
+            move || metrics_check(db_for_metrics)
+        }))
         .route("/api/auth/login", axum::routing::post(auth::login))
         .route("/api/auth/callback", axum::routing::get(integrations::oauth_callback))
         .route("/api/auth/callback/{provider}", axum::routing::get(integrations::oauth_callback))
@@ -318,12 +322,42 @@ async fn health_check() -> axum::Json<serde_json::Value> {
     }))
 }
 
+/// Global drain flag — set to `true` when the process receives
+/// SIGTERM/SIGINT. The `/ready` endpoint checks this and returns 503
+/// so the load balancer stops routing traffic during the shutdown
+/// drain window. This prevents new HTTP requests from creating posts
+/// that will be killed mid-publish when the process exits.
+static DRAINING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Mark the process as draining — called from main.rs on shutdown signal.
+pub fn set_draining() {
+    DRAINING.store(true, std::sync::atomic::Ordering::SeqCst);
+    tracing::info!("Process marked as draining — /ready will return 503");
+}
+
 /// Readiness check — pings the DB with `SELECT 1` to verify the
 /// connection pool is healthy. Container orchestrators should probe
 /// `/ready` (not `/health`) before routing traffic, so a postgress
 /// outage takes the instance out of rotation without killing the
 /// process (which would prevent it from reconnecting).
-async fn ready_check(db: PgPool) -> axum::Json<serde_json::Value> {
+///
+/// Returns 503 if the process is draining (shutdown in progress) so
+/// the load balancer stops sending new traffic. Existing in-flight
+/// requests continue to be served — only new connections are
+/// de-registered by the LB.
+async fn ready_check(db: PgPool) -> Result<axum::Json<serde_json::Value>, (StatusCode, axum::Json<serde_json::Value>)> {
+    // If we're draining, return 503 immediately — don't even ping the DB.
+    if DRAINING.load(std::sync::atomic::Ordering::SeqCst) {
+        return Err((
+            StatusCode::SERVICE_UNAVAILABLE,
+            axum::Json(serde_json::json!({
+                "status": "draining",
+                "database": true,
+                "version": env!("CARGO_PKG_VERSION"),
+            })),
+        ));
+    }
+
     let db_ok = match sqlx::query_scalar::<_, i32>("SELECT 1").fetch_one(&db).await {
         Ok(1) => true,
         Ok(_) => false,
@@ -333,9 +367,103 @@ async fn ready_check(db: PgPool) -> axum::Json<serde_json::Value> {
         }
     };
     let status = if db_ok { "ok" } else { "degraded" };
-    axum::Json(serde_json::json!({
+    Ok(axum::Json(serde_json::json!({
         "status": status,
         "database": db_ok,
+        "version": env!("CARGO_PKG_VERSION"),
+    })))
+}
+
+/// Metrics endpoint — returns per-platform publish counts, queue
+/// depth, and token-expiry status. Designed for Prometheus scrape
+/// (JSON now; can add `text/plain; version=0.0.4` format later).
+///
+/// This is the operator's primary observability surface for the
+/// scheduler. Without it, the only way to see "X failed 47 times in
+/// the last hour" was to grep logs.
+///
+/// Uses runtime `sqlx::query` (not the `query!` macro) so the build
+/// doesn't require a live DB or the .sqlx offline cache for these
+/// new aggregate queries.
+async fn metrics_check(db: PgPool) -> axum::Json<serde_json::Value> {
+    #[derive(Default, sqlx::FromRow)]
+    struct PostCounts {
+        draft: i64,
+        queued: i64,
+        publishing: i64,
+        published: i64,
+        error: i64,
+    }
+
+    #[derive(Default, sqlx::FromRow)]
+    struct IntegrationCounts {
+        total: i64,
+        disabled: i64,
+        refresh_needed: i64,
+        expiring_soon: i64,
+    }
+
+    #[derive(Default, sqlx::FromRow)]
+    struct AttemptCounts {
+        success: i64,
+        failed: i64,
+    }
+
+    let post_counts: PostCounts = sqlx::query_as(
+        "SELECT
+            COUNT(*) FILTER (WHERE state = 'draft') as draft,
+            COUNT(*) FILTER (WHERE state = 'queued') as queued,
+            COUNT(*) FILTER (WHERE state = 'publishing') as publishing,
+            COUNT(*) FILTER (WHERE state = 'published') as published,
+            COUNT(*) FILTER (WHERE state = 'error') as error
+           FROM posts",
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap_or_default();
+
+    let integration_counts: IntegrationCounts = sqlx::query_as(
+        "SELECT
+            COUNT(*) as total,
+            COUNT(*) FILTER (WHERE disabled = true) as disabled,
+            COUNT(*) FILTER (WHERE refresh_needed = true) as refresh_needed,
+            COUNT(*) FILTER (WHERE token_expires_at IS NOT NULL AND token_expires_at < NOW() + INTERVAL '24 hours') as expiring_soon
+           FROM integrations",
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap_or_default();
+
+    let recent_attempts: AttemptCounts = sqlx::query_as(
+        "SELECT
+            COUNT(*) FILTER (WHERE status = 'success') as success,
+            COUNT(*) FILTER (WHERE status = 'failed') as failed
+           FROM publish_attempts
+           WHERE started_at > NOW() - INTERVAL '1 hour'",
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap_or_default();
+
+    axum::Json(serde_json::json!({
+        "posts": {
+            "draft": post_counts.draft,
+            "queued": post_counts.queued,
+            "publishing": post_counts.publishing,
+            "published": post_counts.published,
+            "error": post_counts.error,
+        },
+        "integrations": {
+            "total": integration_counts.total,
+            "disabled": integration_counts.disabled,
+            "refresh_needed": integration_counts.refresh_needed,
+            "expiring_soon": integration_counts.expiring_soon,
+        },
+        "publish_attempts_last_1h": {
+            "success": recent_attempts.success,
+            "failed": recent_attempts.failed,
+        },
+        "draining": DRAINING.load(std::sync::atomic::Ordering::SeqCst),
         "version": env!("CARGO_PKG_VERSION"),
     }))
 }
