@@ -272,6 +272,28 @@ pub async fn create(
         validated_integrations.push(integ);
     }
 
+    // ── Per-provider content validation at create-time ────────
+    // Checks each integration's provider-specific limits (char count,
+    // media count, media type) BEFORE creating posts. Returns structured
+    // errors so the frontend can highlight the failing integration.
+    let media_val: Vec<crate::social::MediaAttachment> =
+        serde_json::from_value(body.media.clone().unwrap_or(serde_json::json!([])))
+            .unwrap_or_default();
+    let validation_errors = validate_posts_for_integrations(
+        &state,
+        &body,
+        &validated_integrations,
+        &media_val,
+    );
+    if !validation_errors.is_empty() {
+        return Err(crate::error::AppError::BadRequest(
+            serde_json::to_string(&serde_json::json!({
+                "validation_errors": validation_errors,
+            }))
+            .unwrap_or_else(|_| "Content validation failed".into()),
+        ));
+    }
+
     let scheduled_at: Option<DateTime<Utc>> = match body.scheduled_at {
         Some(ref s) => {
             let dt = DateTime::parse_from_rfc3339(s)
@@ -824,4 +846,158 @@ pub async fn publish_post(
         state: "published".into(),
         platform_post_url: platform_url,
     }))
+}
+
+// ── Per-provider validation ──────────────────────────────────
+
+/// A single validation error for a specific integration.
+#[derive(Debug, serde::Serialize)]
+pub struct ValidationError {
+    pub integration_id: String,
+    pub provider: String,
+    pub provider_name: String,
+    pub kind: String, // "too_long", "empty", "media_count", "media_type"
+    pub message: String,
+    pub max_length: Option<usize>,
+    pub actual_length: Option<usize>,
+}
+
+/// Validate post content against each selected integration's provider limits.
+/// Returns a list of validation errors (empty if all valid).
+fn validate_posts_for_integrations(
+    state: &AppState,
+    body: &CreatePostRequest,
+    integrations: &[crate::db::models::Integration],
+    media: &[crate::social::MediaAttachment],
+) -> Vec<ValidationError> {
+    let mut errors = Vec::new();
+    let settings = body.settings.clone().unwrap_or(serde_json::json!({}));
+
+    for integ in integrations {
+        let provider = match state.providers.get(&integ.provider_identifier) {
+            Some(p) => p,
+            None => continue, // Skip unregistered providers
+        };
+
+        // Get per-integration content (from overrides if present, else global)
+        let content = body
+            .overrides
+            .as_ref()
+            .and_then(|o| o.get(&integ.id.to_string()))
+            .and_then(|o| o.content.as_deref())
+            .unwrap_or(&body.content);
+
+        // Strip HTML for length check (same as PostService::sanitize_content)
+        let clean: String = content
+            .chars()
+            .fold((false, String::new()), |(in_tag, mut acc), ch| {
+                match ch {
+                    '<' => (true, acc),
+                    '>' => (false, acc),
+                    _ if !in_tag => {
+                        acc.push(ch);
+                        (false, acc)
+                    }
+                    _ => (in_tag, acc),
+                }
+            })
+            .1;
+        let clean = clean.trim();
+        let max_len = provider.max_content_length();
+
+        // Check empty content
+        if clean.is_empty() {
+            errors.push(ValidationError {
+                integration_id: integ.id.to_string(),
+                provider: integ.provider_identifier.clone(),
+                provider_name: integ.provider_name.clone(),
+                kind: "empty".into(),
+                message: format!("Content is empty for {}", integ.provider_name),
+                max_length: None,
+                actual_length: None,
+            });
+            continue; // No point checking other constraints if empty
+        }
+
+        // Check content too long
+        if clean.len() > max_len {
+            errors.push(ValidationError {
+                integration_id: integ.id.to_string(),
+                provider: integ.provider_identifier.clone(),
+                provider_name: integ.provider_name.clone(),
+                kind: "too_long".into(),
+                message: format!(
+                    "Content is {} chars, max {} for {}",
+                    clean.len(),
+                    max_len,
+                    integ.provider_name
+                ),
+                max_length: Some(max_len),
+                actual_length: Some(clean.len()),
+            });
+        }
+
+        // Check media limits
+        let post_content = crate::social::PostContent {
+            content: clean.to_string(),
+            media: media.to_vec(),
+            settings: settings.clone(),
+            in_reply_to: None,
+        };
+
+        if let Err(e) = crate::social::validate_media_limits(&integ.provider_identifier, &post_content) {
+            errors.push(ValidationError {
+                integration_id: integ.id.to_string(),
+                provider: integ.provider_identifier.clone(),
+                provider_name: integ.provider_name.clone(),
+                kind: "media_count".into(),
+                message: e,
+                max_length: None,
+                actual_length: None,
+            });
+        }
+
+        // Check provider-specific media validation
+        if let Err(e) = provider.validate_media(&post_content) {
+            errors.push(ValidationError {
+                integration_id: integ.id.to_string(),
+                provider: integ.provider_identifier.clone(),
+                provider_name: integ.provider_name.clone(),
+                kind: "media_type".into(),
+                message: e,
+                max_length: None,
+                actual_length: None,
+            });
+        }
+    }
+
+    errors
+}
+
+/// POST /api/posts/validate — validate post content against provider limits
+/// without creating the post. Used by the composer for live validation.
+pub async fn validate(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Json(body): Json<CreatePostRequest>,
+) -> Result<Json<serde_json::Value>, crate::error::AppError> {
+    // Validate integration ownership
+    let mut integrations = Vec::with_capacity(body.integration_ids.len());
+    for &id in &body.integration_ids {
+        let integ = queries::get_integration(&state.db, id, auth.user_id)
+            .await?
+            .ok_or_else(|| crate::error::AppError::NotFound("Integration not found".into()))?;
+        integrations.push(integ);
+    }
+
+    let media: Vec<crate::social::MediaAttachment> =
+        serde_json::from_value(body.media.clone().unwrap_or(serde_json::json!([])))
+            .unwrap_or_default();
+
+    let errors = validate_posts_for_integrations(&state, &body, &integrations, &media);
+
+    Ok(Json(serde_json::json!({
+        "valid": errors.is_empty(),
+        "errors": errors,
+    })))
 }

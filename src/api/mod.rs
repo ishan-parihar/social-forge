@@ -118,6 +118,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/auth/logout", axum::routing::post(auth::logout))
         .route("/api/posts", axum::routing::get(posts::list).post(posts::create))
         .route("/api/posts/thread", axum::routing::post(posts::create_thread))
+        .route("/api/posts/validate", axum::routing::post(posts::validate))
         .route("/api/providers", axum::routing::get(integrations::list_providers))
         .route(
             "/api/posts/{id}",

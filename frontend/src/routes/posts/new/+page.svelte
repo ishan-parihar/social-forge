@@ -240,7 +240,8 @@
           settings[intId] = { target_ids: targets };
         }
       }
-      const r = await postsApi.create({
+
+      const payload = {
         integration_ids: selectedIntegrations,
         content,
         title: title || undefined,
@@ -250,7 +251,20 @@
         media: mediaItems.length > 0 ? mediaItems.map(m => ({ id: m.id, url: m.url, mime_type: m.mime_type, alt: undefined })) : undefined,
         overrides: Object.keys(overridesObj).length > 0 ? overridesObj : undefined,
         settings: Object.keys(settings).length > 0 ? settings : undefined,
-      });
+      };
+
+      // ── Pre-submit validation ──────────────────────────────
+      // Call /api/posts/validate to check per-provider limits before
+      // creating posts. If validation fails, show the first error.
+      const valRes = await postsApi.validate(payload);
+      if (valRes.data && !valRes.data.valid && valRes.data.errors.length > 0) {
+        const firstErr = valRes.data.errors[0];
+        error = firstErr.provider_name + ": " + firstErr.message;
+        submitting = false;
+        return;
+      }
+
+      const r = await postsApi.create(payload);
       if (r.error) {
         error = r.error;
         submitting = false;
@@ -290,7 +304,7 @@
           settings[intId] = { target_ids: targets };
         }
       }
-      const r = await postsApi.create({
+      const payload = {
         integration_ids: selectedIntegrations,
         content,
         title: title || undefined,
@@ -299,7 +313,18 @@
         media: mediaItems.length > 0 ? mediaItems.map(m => ({ id: m.id, url: m.url, mime_type: m.mime_type, alt: undefined })) : undefined,
         overrides: Object.keys(overridesObj).length > 0 ? overridesObj : undefined,
         settings: Object.keys(settings).length > 0 ? settings : undefined,
-      });
+      };
+
+      // Pre-submit validation
+      const valRes = await postsApi.validate(payload);
+      if (valRes.data && !valRes.data.valid && valRes.data.errors.length > 0) {
+        const firstErr = valRes.data.errors[0];
+        error = firstErr.provider_name + ": " + firstErr.message;
+        submitting = false;
+        return;
+      }
+
+      const r = await postsApi.create(payload);
       if (r.error) { error = r.error; return; }
       if (r.data?.posts?.[0]?.id) {
         const pub = await postsApi.publish(r.data.posts[0].id);
