@@ -1257,6 +1257,9 @@ mod tests {
             stripe_price_business_annual: None,
             llm_endpoint: None,
             llm_model: None,
+            dub_co_api_key: None,
+            dub_co_workspace: None,
+            strip_links_from_x: false,
         }
     }
 

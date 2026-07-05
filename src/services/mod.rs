@@ -10,6 +10,7 @@ pub mod telegram_client;
 pub mod webhook_dispatcher;
 pub mod content_splitter;
 pub mod staging;
+pub mod short_link;
 
 pub use posts::PostService;
 pub use integrations::IntegrationService;

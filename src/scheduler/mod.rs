@@ -543,8 +543,35 @@ async fn publish_post(
         None // Not part of a thread
     };
 
+    // ── Short-link processing ────────────────────────────────
+    // If STRIP_LINKS_FROM_X is enabled and this is an X post, remove
+    // all URLs from the content (X downranks posts with external links).
+    // If DUB_CO_API_KEY is configured, shorten URLs in the content.
+    let processed_content = {
+        let mut c = post.content.clone();
+        let provider_id = &post.provider_identifier;
+
+        // Strip links from X if configured
+        let strip_x = std::env::var("STRIP_LINKS_FROM_X")
+            .map(|v| v == "true" || v == "1")
+            .unwrap_or(false);
+        if provider_id == "x" && strip_x {
+            c = crate::services::short_link::strip_links(&c);
+        }
+
+        // Shorten URLs if Dub.co is configured
+        if let Ok(api_key) = std::env::var("DUB_CO_API_KEY") {
+            if !api_key.is_empty() && crate::services::short_link::has_urls(&c) {
+                let workspace = std::env::var("DUB_CO_WORKSPACE").ok().filter(|s| !s.is_empty());
+                c = crate::services::short_link::shorten_urls(&c, &api_key, workspace.as_deref()).await;
+            }
+        }
+
+        c
+    };
+
     let content = PostContent {
-        content: post.content.clone(),
+        content: processed_content,
         media: resolved_media,
         settings: post.settings.clone(),
         in_reply_to,

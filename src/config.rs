@@ -130,6 +130,14 @@ pub struct Config {
     // If unset, AI automation features are disabled.
     pub llm_endpoint: Option<String>,
     pub llm_model: Option<String>,
+
+    // Short-link configuration (Dub.co API).
+    // If DUB_CO_API_KEY is set, URLs in post content are auto-shortened
+    // before publishing. STRIP_LINKS_FROM_X removes URLs from X posts
+    // entirely (X downranks posts with external links).
+    pub dub_co_api_key: Option<String>,
+    pub dub_co_workspace: Option<String>,
+    pub strip_links_from_x: bool,
 }
 
 impl Config {
@@ -263,6 +271,11 @@ impl Config {
             stripe_price_business_annual: opt("STRIPE_PRICE_BUSINESS_ANNUAL"),
             llm_endpoint: opt("LLM_ENDPOINT"),
             llm_model: opt("LLM_MODEL"),
+            dub_co_api_key: opt("DUB_CO_API_KEY"),
+            dub_co_workspace: opt("DUB_CO_WORKSPACE"),
+            strip_links_from_x: std::env::var("STRIP_LINKS_FROM_X")
+                .map(|v| v == "true" || v == "1")
+                .unwrap_or(false),
         })
     }
 
