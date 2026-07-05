@@ -226,6 +226,15 @@ async fn main() -> anyhow::Result<()> {
     let streak_rx = shutdown_tx.subscribe();
     scheduler::start_streak_reset(db.clone(), streak_rx);
 
+    // ── Start plug runner (outbound post-publish automations) ──
+    let plug_rx = shutdown_tx.subscribe();
+    social_forge::services::plugs::start_plug_runner(
+        db.clone(),
+        providers_arc.clone(),
+        token_key,
+        plug_rx,
+    );
+
     // ── Build HTTP router ─────────────────────────────────────
     let app = api::build_router(state);
 
