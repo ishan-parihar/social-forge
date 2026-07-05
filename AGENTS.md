@@ -93,7 +93,7 @@ Social Forge is a **single-user, self-hosted social media management platform** 
 
 **Architecture in one paragraph:** A single Rust binary (`social-forge`) runs an axum HTTP server (REST API + embedded SvelteKit frontend), an rmcp MCP server (stdio, for AI agents like Claude/Cursor), an in-process scheduler (polls for due posts every 30s), an SSE broadcaster (realtime updates to the frontend), and background tasks (RSS poller, feed refresher, analytics cache refresher). All state lives in PostgreSQL. OAuth tokens are AES-256-GCM encrypted at rest when `TOKEN_ENCRYPTION_KEY` is set.
 
-**Key numbers (as of v9):**
+**Key numbers (as of v11):**
 - 328 MCP tools across 44 files in `src/mcp/`
 - 31 providers registered in `src/social/registry.rs` (25 with MCP coverage)
 - 18 SQL migrations in `migrations/`
