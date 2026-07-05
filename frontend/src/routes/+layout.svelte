@@ -3,6 +3,7 @@
   import { realtime } from '$lib/stores/realtime';
   import { timezone } from '$lib/stores/timezone.svelte';
   import { initKeyboardShortcuts, destroyKeyboardShortcuts } from '$lib/stores/keyboard.svelte';
+  import { theme } from '$lib/stores/theme.svelte';
   import Toast from '$lib/components/Toast.svelte';
   import NotificationBell from '$lib/notifications/NotificationBell.svelte';
   import StreakBadge from '$lib/streak/StreakBadge.svelte';
@@ -70,10 +71,10 @@
   ];
 
   onMount(() => {
+    theme.init();
     if (data.authenticated) {
       realtime.connect();
       initKeyboardShortcuts(() => showShortcuts = true);
-      // Show onboarding on first login
       if (browser && !localStorage.getItem('social-forge-onboarded')) {
         showOnboarding = true;
       }
@@ -119,18 +120,33 @@
           {/each}
         {/each}
       </nav>
-      <!-- Timezone picker -->
-      <div class="px-3 py-3 border-t border-line">
-        <label class="text-[10px] font-semibold uppercase tracking-wider text-muted-dark block mb-1">Timezone</label>
-        <select
-          value={timezone.value}
-          onchange={(e) => timezone.set(e.currentTarget.value)}
-          class="w-full px-2 py-1.5 bg-background-input border border-line rounded-lg text-xs text-content focus:outline-none focus:border-indigo-500"
+      <!-- Sidebar footer: timezone + theme toggle -->
+      <div class="px-3 py-3 border-t border-line space-y-2">
+        <div>
+          <label class="text-[10px] font-semibold uppercase tracking-wider text-muted-dark block mb-1">Timezone</label>
+          <select
+            value={timezone.value}
+            onchange={(e) => timezone.set(e.currentTarget.value)}
+            class="w-full px-2 py-1.5 bg-background-input border border-line rounded-lg text-xs text-content focus:outline-none focus:border-indigo-500"
+          >
+            {#each timezone.commonTimezones as tz}
+              <option value={tz}>{tz}</option>
+            {/each}
+          </select>
+        </div>
+        <button
+          onclick={() => theme.toggle()}
+          class="flex items-center gap-2 px-2 py-1.5 text-xs text-muted hover:text-content transition-colors"
+          title="Toggle dark/light mode"
         >
-          {#each timezone.commonTimezones as tz}
-            <option value={tz}>{tz}</option>
-          {/each}
-        </select>
+          {#if theme.value === 'dark'}
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+            Light mode
+          {:else}
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+            Dark mode
+          {/if}
+        </button>
       </div>
     </aside>
     <main class="flex-1 overflow-auto">
