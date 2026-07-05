@@ -33,6 +33,9 @@
   let recurring = $state<{ intervalDays: number; endDate: string } | null>(null);
   let activeProvider = $state<string | null>(null);
   let selectedTagIds = $state<string[]>([]);
+  // "global" = shared content for all channels
+  // "internal:{integrationId}" = per-channel override
+  let editingMode = $state<string>("global");
   let submitting = $state(false);
   let error = $state<string | null>(null);
   let firstComment = $state("");
@@ -417,10 +420,70 @@
     />
   </div>
 
-  <!-- Main content -->
+  <!-- Global vs Internal channel editor toggle -->
+  {#if selectedIntegrations.length > 1}
+    <div class="bg-surface border border-line rounded-xl p-3">
+      <div class="flex items-center gap-2 flex-wrap">
+        <span class="text-xs text-muted mr-2">Editing:</span>
+        <button
+          onclick={() => editingMode = "global"}
+          class="px-3 py-1.5 text-xs rounded-lg transition-colors {editingMode === 'global' ? 'bg-brand-500 text-white' : 'bg-surface-hover text-muted hover:text-white'}"
+        >
+          🌐 Global (all channels)
+        </button>
+        {#each selectedIntegrations as intId, i}
+          <button
+            onclick={() => editingMode = "internal:" + intId}
+            class="px-3 py-1.5 text-xs rounded-lg transition-colors flex items-center gap-1 {editingMode === 'internal:' + intId ? 'bg-brand-500 text-white' : 'bg-surface-hover text-muted hover:text-white'}"
+          >
+            {#if providerOverride.has(intId)}
+              <span class="w-1.5 h-1.5 rounded-full bg-pink-400"></span>
+            {/if}
+            {integrationNames.get(intId) || "Channel " + (i + 1)}
+          </button>
+        {/each}
+      </div>
+      {#if editingMode !== "global"}
+        <div class="mt-2 flex items-center justify-between">
+          <p class="text-xs text-pink-400">
+            ✏️ Editing custom content for {integrationNames.get(editingMode.split(":")[1]) || "this channel"}
+          </p>
+          <button
+            onclick={() => {
+              const intId = editingMode.split(":")[1];
+              providerOverride.delete(intId);
+              editingMode = "global";
+            }}
+            class="text-xs text-muted hover:text-white underline"
+          >
+            Reset to global
+          </button>
+        </div>
+      {/if}
+    </div>
+  {/if}
+
+  <!-- Main content editor — switches between global and internal mode -->
   <div class="bg-surface border border-line rounded-xl p-4">
-    <h3 class="text-sm font-semibold mb-3">Content</h3>
-    <RichTextEditor {content} onUpdate={(html) => content = html} />
+    <h3 class="text-sm font-semibold mb-3">
+      {#if editingMode === "global"}
+        Content (shared across all channels)
+      {:else}
+        Content for {integrationNames.get(editingMode.split(":")[1]) || "this channel"}
+      {/if}
+    </h3>
+    {#if editingMode === "global"}
+      <RichTextEditor {content} onUpdate={(html) => content = html} />
+    {:else}
+      <RichTextEditor
+        content={providerOverride.get(editingMode.split(":")[1]) || content}
+        onUpdate={(html) => {
+          const intId = editingMode.split(":")[1];
+          providerOverride.set(intId, html);
+          providerOverride = new Map(providerOverride); // trigger reactivity
+        }}
+      />
+    {/if}
   </div>
 
   <!-- AI Assistant Panel -->
@@ -431,36 +494,7 @@
   <!-- AI Hashtag Suggestions -->
   <AiHashtagSuggestions {content} onAddHashtag={addHashtag} />
 
-  <!-- Per-provider content overrides -->
-  {#if selectedIntegrations.length > 1}
-    <div class="bg-surface border border-line rounded-xl p-4">
-      <h3 class="text-sm font-semibold mb-3">Platform-Specific Content</h3>
-      <p class="text-xs text-muted mb-3">Customize content for each platform.</p>
-      <div class="page-enter space-y-2">
-        {#each selectedIntegrations as intId, i}
-          <div class="border border-line rounded-lg">
-            <button
-              onclick={() => activeProvider = activeProvider === intId ? null : intId}
-              class="w-full flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface-hover transition-colors"
-            >
-              <span class="flex-1">{integrationNames.get(intId) || `Platform ${i + 1}`}</span>
-              <span class="text-muted text-xs">{activeProvider === intId ? "▾" : "▸"}</span>
-            </button>
-            {#if activeProvider === intId}
-              <div class="px-3 pb-3">
-                <ProviderEditor
-                  provider={integrationProviders.get(intId) || intId}
-                  content={providerOverride.get(intId) || content}
-                  onContentChange={(html) => providerOverride.set(intId, html)}
-                  integrationId={intId}
-                />
-              </div>
-            {/if}
-          </div>
-        {/each}
-      </div>
-    </div>
-  {/if}
+  <!-- Per-provider content overrides — replaced by Global/Internal toggle above -->
 
   <!-- Media -->
   <div class="bg-surface border border-line rounded-xl p-4">
