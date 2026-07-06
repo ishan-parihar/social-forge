@@ -20,7 +20,7 @@
   import DayView from "$lib/calendar/DayView.svelte";
   import ListView from "$lib/calendar/ListView.svelte";
   import PostDetail from "$lib/calendar/PostDetail.svelte";
-  import { goto } from "$app/navigation";
+  import { goto, replaceState } from "$app/navigation";
 
   let events = $state<CalendarEvent[]>([]);
   let allTags = $state<Tag[]>([]);
@@ -330,6 +330,21 @@
   });
 
   onMount(async () => {
+    // Phase v21: read ?display= and ?date= from the URL on mount so the
+    // calendar is deep-linkable. URL params win over localStorage (which
+    // is the persisted default). This mirrors postiz-app's calendar URL sync.
+    const url = new URL(window.location.href);
+    const urlDisplay = url.searchParams.get('display');
+    if (urlDisplay === 'month' || urlDisplay === 'week' || urlDisplay === 'day' || urlDisplay === 'list') {
+      calendarState.setView(urlDisplay);
+    }
+    const urlDate = url.searchParams.get('date');
+    if (urlDate) {
+      const d = new Date(urlDate);
+      if (!isNaN(d.getTime())) {
+        calendarState.setDate(d);
+      }
+    }
     refresh();
     // Fetch tags for the filter dropdown
     const tagRes = await tagsApi.list();
@@ -341,6 +356,20 @@
     for (const evt of events) {
       calUnsubscribers.push(realtime.on(evt, () => refresh()));
     }
+  });
+
+  // Phase v21: sync view + date to URL via replaceState (no history
+  // pollution — back button doesn't get a stack entry per week nav).
+  // Postiz-app uses the same pattern: window.history.replaceState.
+  $effect(() => {
+    // Read these so the effect re-runs when they change.
+    const view = calendarState.state.view;
+    const currentDate = calendarState.state.currentDate;
+    if (typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    url.searchParams.set('display', view);
+    url.searchParams.set('date', formatDateKey(currentDate));
+    replaceState(url.pathname + url.search + url.hash, '');
   });
 
   onDestroy(() => {

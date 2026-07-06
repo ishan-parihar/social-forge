@@ -65,6 +65,10 @@ export const calendarState = {
     _state.currentDate = d;
   },
   goToday() { _state.currentDate = new Date(); },
+  /** Phase v21: set an explicit date (used by URL ?date= restore). */
+  setDate(d: Date) {
+    if (!isNaN(d.getTime())) _state.currentDate = d;
+  },
   selectDate(date: string | null) { _state.selectedDate = date; },
   selectPost(id: string | null) { _state.selectedPostId = id; },
   // Phase 4: list-view state setters.

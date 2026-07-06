@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { getMonthDays, isToday, isCurrentMonth, formatDateKey, days } from "./utils";
+  import { getMonthDays, isToday, isCurrentMonth, isPast, formatDateKey, days } from "./utils";
   import CalendarEvent from "./CalendarEvent.svelte";
   import type { CalendarEvent as CEvent } from "./types";
 
@@ -52,16 +52,18 @@
     {#each calDays as date (formatDateKey(date))}
       {@const key = formatDateKey(date)}
       {@const dayEvents = eventsByDate.get(key) || []}
+      {@const past = isPast(date)}
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div
-        ondragover={handleDragOver}
-        ondrop={(e) => handleDrop(e, key)}
+        ondragover={(e) => { if (!past) handleDragOver(e); }}
+        ondrop={(e) => { if (!past) handleDrop(e, key); }}
         onclick={() => onDateClick?.(key)}
         role="gridcell"
         tabindex="-1"
         onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onDateClick?.(key); } }}
-        class="min-h-24 p-1.5 border-b border-r border-line transition-colors hover:bg-surface-hover cursor-pointer"
+        class="min-h-24 p-1.5 border-b border-r border-line transition-colors hover:bg-surface-hover cursor-pointer {past ? 'opacity-40' : ''}"
         class:opacity-30={!isCurrentMonth(date, year, month)}
+        class:cursor-not-allowed={past}
       >
         <span class="text-xs w-6 h-6 flex items-center justify-center rounded-full mb-0.5"
           class:bg-indigo-600!={isToday(date)}
@@ -71,13 +73,13 @@
         <div class="space-y-0.5">
           {#each dayEvents.slice(0, 3) as event (event.id)}
             <div
-              draggable={event.state !== 'published'}
+              draggable={event.state !== 'published' && !past}
               ondragstart={(e) => handleDragStart(e, event.id)}
               onclick={(e) => { e.stopPropagation(); onEventClick?.(event.id); }}
               onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onEventClick?.(event.id); } }}
               role="button"
               tabindex="-1"
-              class="flex items-center gap-1 {event.state === 'published' ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'}"
+              class="flex items-center gap-1 {event.state === 'published' || past ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'}"
             >
               {#if onToggleSelect}
                 <input type="checkbox" checked={selected.has(event.id)} onclick={(e) => onToggleSelect?.(event.id, e)} class="rounded shrink-0 w-3 h-3" />

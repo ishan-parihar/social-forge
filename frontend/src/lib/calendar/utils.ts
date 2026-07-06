@@ -46,6 +46,23 @@ export function isCurrentMonth(d: Date, y: number, m: number): boolean {
   return d.getFullYear() === y && d.getMonth() === m;
 }
 
+/**
+ * Phase v21: returns true if the given date is strictly before today
+ * (i.e., yesterday or earlier). Used by calendar views to grey-out past
+ * cells and disable drop targets (postiz-style UX cue: you can't
+ * schedule in the past).
+ *
+ * Compares calendar days only — time-of-day is ignored. A cell for
+ * "today" returns false even if the current time is 23:59.
+ */
+export function isPast(d: Date): boolean {
+  const t = new Date();
+  // Compare year/month/day only.
+  const today = new Date(t.getFullYear(), t.getMonth(), t.getDate());
+  const cell = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  return cell.getTime() < today.getTime();
+}
+
 export function formatDateKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }

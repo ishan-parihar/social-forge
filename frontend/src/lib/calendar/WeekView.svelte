@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { buildWeekDays, getDayHours } from "./utils";
+  import { buildWeekDays, getDayHours, isPast, isToday } from "./utils";
   import CalendarEvent from "./CalendarEvent.svelte";
   import type { CalendarEvent as CEvent } from "./types";
   import { timezone } from "$lib/stores/timezone.svelte";
@@ -84,6 +84,22 @@
     dragOverKey = null;
   }
 
+  /**
+   * Phase v21: a cell is "past" (and thus a non-drop target) if either:
+   *   - the day is before today (whole day is past), OR
+   *   - the day is today AND the hour has already ended.
+   * Past cells get opacity-40 + cursor-not-allowed and drop is suppressed.
+   */
+  function isCellPast(date: Date, hour: string): boolean {
+    if (isPast(date)) return true;
+    if (isToday(date)) {
+      const now = new Date();
+      const cellHour = parseInt(hour.slice(0, 2), 10);
+      return cellHour < now.getHours();
+    }
+    return false;
+  }
+
   // Phase 10: touch-device DnD fallback.
   // Uses a long-press + elementFromPoint approach so drag-to-reschedule
   // works on mobile browsers where HTML5 DnD doesn't fire.
@@ -139,17 +155,19 @@
         {#each weekDays as wd (wd.dateStr)}
           {@const cellKey = `${wd.dateStr}-${hour}`}
           {@const isDragOver = dragOverKey === cellKey}
+          {@const past = isCellPast(wd.date, hour)}
           <!-- svelte-ignore a11y_no_static_element_interactions -->
           <div
             data-drop-date={wd.dateStr}
             data-drop-hour={hour.slice(0, 2)}
             class="relative px-1 py-1 border-r border-line min-h-[48px] cursor-pointer hover:bg-surface-hover transition-colors
               {isDragOver ? 'ring-2 ring-indigo-500 ring-inset bg-indigo-500/5' : ''}
-              {wd.isToday ? 'bg-indigo-500/5' : ''}"
-            ondragover={(e) => { e.preventDefault(); handleDragEnter(wd.dateStr, hour); }}
+              {wd.isToday ? 'bg-indigo-500/5' : ''}
+              {past ? 'opacity-40 cursor-not-allowed' : ''}"
+            ondragover={(e) => { if (!past) { e.preventDefault(); handleDragEnter(wd.dateStr, hour); } }}
             ondragleave={() => handleDragLeave(wd.dateStr, hour)}
-            ondrop={(e) => handleDrop(e, wd.dateStr, hour)}
-            onclick={() => onDateClick?.(wd.dateStr)}
+            ondrop={(e) => { if (!past) handleDrop(e, wd.dateStr, hour); }}
+            onclick={() => { if (!past) onDateClick?.(wd.dateStr); }}
             role="gridcell"
             tabindex="-1"
             onkeydown={(e) => handleKeyDown(e, wd.dateStr)}
@@ -157,8 +175,8 @@
             {#each (eventsByDayHour.get(cellKey) || []) as event (event.id)}
               <div
                 data-event-id={event.id}
-                class="flex items-center gap-1 {event.state === 'published' ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'}"
-                draggable={event.state !== 'published'}
+                class="flex items-center gap-1 {event.state === 'published' || past ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'}"
+                draggable={event.state !== 'published' && !past}
                 ondragstart={(e) => handleDragStart(e, event.id)}
                 onclick={() => onEventClick?.(event.id)}
                 onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') onEventClick?.(event.id); }}
