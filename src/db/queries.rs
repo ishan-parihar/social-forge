@@ -1927,7 +1927,9 @@ pub async fn get_engagement_summary(
     pool: &PgPool,
     user_id: Uuid,
     provider: Option<&str>,
+    cutoff: Option<DateTime<Utc>>,
 ) -> Result<EngagementSummary, sqlx::Error> {
+    // Phase 2: add cutoff filter for date-range analytics.
     if let Some(provider) = provider {
         sqlx::query_as::<_, EngagementSummary>(
             r#"SELECT
@@ -1942,10 +1944,12 @@ pub async fn get_engagement_summary(
                COUNT(pe.id)::bigint AS posts_with_engagement
              FROM external_posts ep
              INNER JOIN post_engagement pe ON pe.post_id = ep.id
-             WHERE ep.user_id = $1 AND ep.provider = $2"#,
+             WHERE ep.user_id = $1 AND ep.provider = $2
+               AND ($3::timestamptz IS NULL OR ep.created_at >= $3)"#,
         )
         .bind(user_id)
         .bind(provider)
+        .bind(cutoff)
         .fetch_one(pool)
         .await
     } else {
@@ -1962,9 +1966,11 @@ pub async fn get_engagement_summary(
                COUNT(pe.id)::bigint AS posts_with_engagement
              FROM external_posts ep
              INNER JOIN post_engagement pe ON pe.post_id = ep.id
-             WHERE ep.user_id = $1"#,
+             WHERE ep.user_id = $1
+               AND ($2::timestamptz IS NULL OR ep.created_at >= $2)"#,
         )
         .bind(user_id)
+        .bind(cutoff)
         .fetch_one(pool)
         .await
     }

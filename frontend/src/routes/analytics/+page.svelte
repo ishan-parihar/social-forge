@@ -16,7 +16,7 @@
   let selectedProvider = $state<string>("all");
   let topPosts = $state<PostSummary[]>([]);
   let providerAnalytics = $state<import("$lib/api/analytics").ProviderAnalytics | null>(null);
-  let feedEngagement = $state<{ total_posts: number; total_likes: number; total_comments: number; total_shares: number; total_impressions: number } | null>(null);
+  let feedEngagement = $state<{ total_likes: number; total_comments: number; total_shares: number; total_views: number; posts_with_engagement: number; total_reposts: number; total_replies: number; total_upvotes: number; total_awards: number } | null>(null);
   let connectedIntegrations = $state<Integration[]>([]);
 
   // Build provider list dynamically from connected integrations
@@ -186,7 +186,7 @@
       {/each}
     </div>
     <div class="skeleton h-48 rounded-xl"></div>
-  {:else if data && data.total_posts === 0 && (!feedEngagement || feedEngagement.total_posts === 0)}
+  {:else if data && data.total_posts === 0 && (!feedEngagement || feedEngagement.posts_with_engagement === 0)}
     <div class="text-center py-16">
       <p class="text-content-secondary mb-4">No analytics data yet. Import your feed or start posting!</p>
       <div class="flex gap-2 justify-center">
@@ -200,13 +200,13 @@
     </div>
   {:else if data}
     <!-- Feed Engagement Summary (from imported posts) -->
-    {#if feedEngagement && feedEngagement.total_posts > 0}
+    {#if feedEngagement && feedEngagement.posts_with_engagement > 0}
       <div class="bg-surface border border-line rounded-xl p-4">
         <h3 class="text-sm font-semibold mb-3">Imported Post Engagement ({days}d)</h3>
         <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
           <div>
-            <div class="text-xl font-bold text-indigo-400">{feedEngagement.total_posts}</div>
-            <div class="text-xs text-muted">Imported Posts</div>
+            <div class="text-xl font-bold text-indigo-400">{feedEngagement.posts_with_engagement}</div>
+            <div class="text-xs text-muted">Posts w/ Engagement</div>
           </div>
           <div>
             <div class="text-xl font-bold text-green-400">{feedEngagement.total_likes?.toLocaleString() ?? 0}</div>
@@ -221,8 +221,8 @@
             <div class="text-xs text-muted">Total Shares</div>
           </div>
           <div>
-            <div class="text-xl font-bold text-purple-400">{feedEngagement.total_impressions?.toLocaleString() ?? 0}</div>
-            <div class="text-xs text-muted">Total Impressions</div>
+            <div class="text-xl font-bold text-purple-400">{feedEngagement.total_views?.toLocaleString() ?? 0}</div>
+            <div class="text-xs text-muted">Total Views</div>
           </div>
         </div>
       </div>

@@ -224,10 +224,10 @@ pub async fn get_summary(
     .await?;
 
     let provider_rows: Vec<(String, i64)> = sqlx::query_as(
-        "SELECT i.provider_name, COUNT(*)::bigint \
+        "SELECT i.provider_identifier, COUNT(*)::bigint \
          FROM posts p JOIN integrations i ON p.integration_id = i.id \
          WHERE p.user_id = $1 AND p.created_at >= $2 \
-         GROUP BY i.provider_name \
+         GROUP BY i.provider_identifier \
          ORDER BY COUNT(*)::bigint DESC",
     )
     .bind(auth.user_id)

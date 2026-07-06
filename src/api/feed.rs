@@ -240,6 +240,8 @@ pub async fn accounts(
 #[derive(Debug, Deserialize)]
 pub struct AnalyticsQuery {
     pub provider: Option<String>,
+    /// Phase 2: filter by date range (days back from now). If None, returns lifetime totals.
+    pub days: Option<i32>,
 }
 
 #[derive(Debug, Serialize)]
@@ -260,7 +262,11 @@ pub async fn analytics(
     auth: AuthenticatedUser,
     Query(query): Query<AnalyticsQuery>,
 ) -> Result<Json<AnalyticsResponse>, AppError> {
-    let summary = queries::get_engagement_summary(&state.db, auth.user_id, query.provider.as_deref()).await?;
+    // Phase 2: compute the cutoff date if days is provided.
+    let cutoff: Option<chrono::DateTime<chrono::Utc>> = query.days.map(|d| {
+        chrono::Utc::now() - chrono::Duration::days(d as i64)
+    });
+    let summary = queries::get_engagement_summary(&state.db, auth.user_id, query.provider.as_deref(), cutoff).await?;
     Ok(Json(AnalyticsResponse {
         total_likes: summary.total_likes.unwrap_or(0),
         total_comments: summary.total_comments.unwrap_or(0),

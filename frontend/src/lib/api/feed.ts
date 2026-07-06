@@ -96,11 +96,15 @@ export const feedApi = {
   analytics: (days?: number) => {
     const q = days ? `?days=${days}` : '';
     return api.get<{
-      total_posts: number;
       total_likes: number;
       total_comments: number;
       total_shares: number;
-      total_impressions: number;
+      total_views: number;
+      total_reposts: number;
+      total_replies: number;
+      total_upvotes: number;
+      total_awards: number;
+      posts_with_engagement: number;
     }>(`/api/feed/analytics${q}`);
   },
   delete: (postId: string) => {
