@@ -44,6 +44,12 @@ pub async fn list(
 
     let integrations = queries::list_integrations(&state.db, auth.user_id).await?;
 
+    // Load the user's resolved-comment set so we can flag each CommentItem
+    // as "new" or "resolved" instead of always "new".
+    let resolved_ids = queries::list_resolved_comment_ids(&state.db, auth.user_id)
+        .await
+        .unwrap_or_default();
+
     let mut comments: Vec<CommentItem> = Vec::new();
 
     for post in &posts {
@@ -73,6 +79,7 @@ pub async fn list(
             for c in provider_comments {
                 let author = c.author_name.unwrap_or_else(|| "Unknown".into());
                 let created_at = c.created_at.format("%Y-%m-%d %H:%M:%S").to_string();
+                let status = if resolved_ids.contains(&c.id) { "resolved" } else { "new" };
                 comments.push(CommentItem {
                     id: c.id,
                     post_id: post.id.to_string(),
@@ -80,7 +87,7 @@ pub async fn list(
                     platform: post.provider.clone(),
                     author,
                     content: c.text,
-                    status: "new".into(),
+                    status: status.into(),
                     created_at,
                 });
             }
@@ -97,10 +104,13 @@ pub async fn list(
 }
 
 pub async fn resolve(
-    State(_state): State<AppState>,
-    _auth: AuthenticatedUser,
-    Path(_comment_id): Path<String>,
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(comment_id): Path<String>,
 ) -> Result<Json<serde_json::Value>, AppError> {
+    queries::resolve_comment(&state.db, auth.user_id, &comment_id)
+        .await
+        .map_err(|e| AppError::Internal(format!("Failed to resolve comment: {e}")))?;
     Ok(Json(serde_json::json!({ "ok": true })))
 }
 

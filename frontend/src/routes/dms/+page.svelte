@@ -45,7 +45,7 @@
 
   async function loadMessages(convId: string) {
     if (!selectedIntegrationId) return;
-    const r = await dmsApi.getMessages(convId);
+    const r = await dmsApi.getMessages(convId, selectedIntegrationId);
     if (r.data) {
       messages = r.data.messages;
     }

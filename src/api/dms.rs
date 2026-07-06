@@ -26,6 +26,10 @@ pub struct ListConversationsQuery {
 
 #[derive(Debug, Deserialize)]
 pub struct GetMessagesQuery {
+    /// Required: which integration's token to use for fetching messages.
+    /// DMs are provider-specific, so we must use the user-selected integration's
+    /// access token — not just any active integration's.
+    pub integration_id: Uuid,
     #[serde(default = "default_limit")]
     pub limit: u32,
 }
@@ -134,19 +138,19 @@ pub async fn list_conversations(
     }))
 }
 
-/// GET /api/dms/{conversation_id}/messages?limit=50
+/// GET /api/dms/{conversation_id}/messages?integration_id=X&limit=50
 pub async fn get_messages(
     State(state): State<AppState>,
     auth: AuthenticatedUser,
     Path(conversation_id): Path<String>,
     Query(query): Query<GetMessagesQuery>,
 ) -> Result<Json<GetMessagesResponse>, AppError> {
-    // Find any integration for this user (DMs are provider-specific, but we need a token)
-    let integrations = queries::list_integrations(&state.db, auth.user_id).await?;
-    let integration = integrations
-        .into_iter()
-        .find(|i| !i.disabled)
-        .ok_or_else(|| AppError::NotFound("No active integration found".into()))?;
+    // Use the user-selected integration's token — DMs are provider-specific
+    // and using "any" integration (as the previous code did) would leak
+    // messages from a different platform's account.
+    let integration = queries::get_integration(&state.db, query.integration_id, auth.user_id)
+        .await?
+        .ok_or_else(|| AppError::NotFound("Integration not found".into()))?;
 
     let provider = state
         .providers

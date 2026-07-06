@@ -2177,3 +2177,151 @@ pub async fn list_all_external_posts(
         .await
     }
 }
+
+/// Search external posts with engagement data LEFT JOINed, mirroring
+/// `list_all_external_posts_with_engagement`. Used by the /api/feed?q= endpoint
+/// so search results include engagement metrics.
+///
+/// Case-insensitive ILIKE on `text`, `author_name`, or `author_handle`.
+/// `q` is the raw user query — caller should pass it non-empty.
+/// LIKE metacharacters (%, _, \) in the query are escaped so user input
+/// is treated literally.
+pub async fn search_all_external_posts_with_engagement(
+    pool: &PgPool,
+    user_id: Uuid,
+    q: &str,
+    provider: Option<&str>,
+    cursor: Option<DateTime<Utc>>,
+    limit: i64,
+) -> Result<Vec<ExternalPostWithEngagement>, sqlx::Error> {
+    let escaped = q.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
+    let pattern = format!("%{escaped}%");
+
+    if let Some(provider) = provider {
+        sqlx::query_as::<_, ExternalPostWithEngagement>(
+            r#"SELECT ep.id, ep.user_id, ep.provider, ep.platform_post_id,
+               ep.text, ep.author_name, ep.author_handle, ep.author_avatar,
+               ep.created_at, ep.url, ep.media, ep.metadata, ep.imported_at,
+               pe.likes AS engagement_likes,
+               pe.comments AS engagement_comments,
+               pe.shares AS engagement_shares,
+               pe.views AS engagement_views,
+               pe.saves AS engagement_saves,
+               pe.quotes AS engagement_quotes,
+               pe.reposts AS engagement_reposts,
+               pe.replies AS engagement_replies,
+               pe.reactions AS engagement_reactions,
+               pe.upvotes AS engagement_upvotes,
+               pe.downvotes AS engagement_downvotes,
+               pe.upvote_ratio AS engagement_upvote_ratio,
+               pe.awards AS engagement_awards,
+               pe.raw AS engagement_raw,
+               pe.fetched_at AS engagement_fetched_at
+             FROM external_posts ep
+             LEFT JOIN post_engagement pe ON pe.post_id = ep.id
+             WHERE ep.user_id = $1 AND ep.provider = $2
+               AND ($3::timestamptz IS NULL OR ep.created_at < $3)
+               AND (ep.text ILIKE $4 OR ep.author_name ILIKE $4 OR ep.author_handle ILIKE $4)
+             ORDER BY ep.created_at DESC
+             LIMIT $5"#,
+        )
+        .bind(user_id)
+        .bind(provider)
+        .bind(cursor)
+        .bind(&pattern)
+        .bind(limit)
+        .fetch_all(pool)
+        .await
+    } else {
+        sqlx::query_as::<_, ExternalPostWithEngagement>(
+            r#"SELECT ep.id, ep.user_id, ep.provider, ep.platform_post_id,
+               ep.text, ep.author_name, ep.author_handle, ep.author_avatar,
+               ep.created_at, ep.url, ep.media, ep.metadata, ep.imported_at,
+               pe.likes AS engagement_likes,
+               pe.comments AS engagement_comments,
+               pe.shares AS engagement_shares,
+               pe.views AS engagement_views,
+               pe.saves AS engagement_saves,
+               pe.quotes AS engagement_quotes,
+               pe.reposts AS engagement_reposts,
+               pe.replies AS engagement_replies,
+               pe.reactions AS engagement_reactions,
+               pe.upvotes AS engagement_upvotes,
+               pe.downvotes AS engagement_downvotes,
+               pe.upvote_ratio AS engagement_upvote_ratio,
+               pe.awards AS engagement_awards,
+               pe.raw AS engagement_raw,
+               pe.fetched_at AS engagement_fetched_at
+             FROM external_posts ep
+             LEFT JOIN post_engagement pe ON pe.post_id = ep.id
+             WHERE ep.user_id = $1
+               AND ($2::timestamptz IS NULL OR ep.created_at < $2)
+               AND (ep.text ILIKE $3 OR ep.author_name ILIKE $3 OR ep.author_handle ILIKE $3)
+             ORDER BY ep.created_at DESC
+             LIMIT $4"#,
+        )
+        .bind(user_id)
+        .bind(cursor)
+        .bind(&pattern)
+        .bind(limit)
+        .fetch_all(pool)
+        .await
+    }
+}
+
+// ── Resolved comments ──────────────────────────────────────────
+// Persists which platform comments the user has marked "resolved"
+// in the UI. Comments themselves are fetched live from provider APIs;
+// this lightweight table is the only place the resolved flag can live.
+
+/// Mark a comment as resolved for this user. Idempotent — if already
+/// resolved, the row is touched (resolved_at refreshed) but no error
+/// is returned.
+pub async fn resolve_comment(
+    pool: &PgPool,
+    user_id: Uuid,
+    comment_id: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "INSERT INTO resolved_comments (user_id, comment_id, resolved_at) \
+         VALUES ($1, $2, NOW()) \
+         ON CONFLICT (user_id, comment_id) DO UPDATE SET resolved_at = NOW()",
+    )
+    .bind(user_id)
+    .bind(comment_id)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+/// Unmark a comment as resolved (re-open it). Idempotent.
+pub async fn unresolve_comment(
+    pool: &PgPool,
+    user_id: Uuid,
+    comment_id: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "DELETE FROM resolved_comments WHERE user_id = $1 AND comment_id = $2",
+    )
+    .bind(user_id)
+    .bind(comment_id)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+/// Return the set of resolved comment IDs for this user.
+/// Used by the comments list endpoint to flag each CommentItem.status
+/// as "resolved" instead of always "new".
+pub async fn list_resolved_comment_ids(
+    pool: &PgPool,
+    user_id: Uuid,
+) -> Result<std::collections::HashSet<String>, sqlx::Error> {
+    let rows: Vec<(String,)> = sqlx::query_as(
+        "SELECT comment_id FROM resolved_comments WHERE user_id = $1",
+    )
+    .bind(user_id)
+    .fetch_all(pool)
+    .await?;
+    Ok(rows.into_iter().map(|r| r.0).collect())
+}

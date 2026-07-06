@@ -26,10 +26,13 @@ export const dmsApi = {
     api.get<{ conversations: Conversation[]; total: number }>(
       `/api/dms/conversations?integration_id=${integrationId}${limit ? `&limit=${limit}` : ''}`
     ),
-  getMessages: (conversationId: string, limit?: number) =>
-    api.get<{ messages: DmMessage[]; total: number }>(
-      `/api/dms/${conversationId}/messages${limit ? `?limit=${limit}` : ''}`
-    ),
+  getMessages: (conversationId: string, integrationId: string, limit?: number) => {
+    const params = new URLSearchParams({ integration_id: integrationId });
+    if (limit) params.set('limit', String(limit));
+    return api.get<{ messages: DmMessage[]; total: number }>(
+      `/api/dms/${conversationId}/messages?${params.toString()}`
+    );
+  },
   send: (integrationId: string, recipient: string, content: string) =>
     api.post<{ message_id: string; status: string }>(`/api/dms/send`, {
       integration_id: integrationId,

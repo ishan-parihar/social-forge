@@ -312,7 +312,7 @@ impl PostService {
         };
 
         let content = PostContent {
-            content: Self::sanitize_content(&post.content, 2000),
+            content: Self::sanitize_content(&post.content, provider.max_content_length()),
             media: resolved_media,
             settings: post.settings.clone(),
             in_reply_to,

@@ -26,6 +26,10 @@ pub struct FeedQuery {
     pub provider: Option<String>,
     /// Optional author handle filter
     pub author_handle: Option<String>,
+    /// Optional full-text search query (ILIKE on text/author_name/author_handle).
+    /// When present, switches the underlying query from `list_all_external_posts`
+    /// to `search_all_external_posts`. Empty string is treated as None.
+    pub q: Option<String>,
     #[serde(default = "default_limit")]
     pub limit: i64,
 }
@@ -80,7 +84,7 @@ pub struct FeedResponse {
     pub has_more: bool,
 }
 
-/// GET /api/feed?cursor=...&provider=...&limit=20
+/// GET /api/feed?cursor=...&provider=...&q=...&limit=20
 pub async fn get(
     State(state): State<AppState>,
     auth: AuthenticatedUser,
@@ -97,11 +101,27 @@ pub async fn get(
 
     let provider = query.provider.as_deref();
     let author_handle = query.author_handle.as_deref();
+    // Trim the search query; an empty/whitespace query means "no search".
+    let q: Option<&str> = query
+        .q
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
 
-    let posts = queries::list_all_external_posts_with_engagement(
-        &state.db, auth.user_id, provider, author_handle, cursor, limit + 1,
-    )
-    .await?;
+    // If a search query is present, use the ILIKE search path; otherwise
+    // use the regular list path. The search path ignores author_handle
+    // (searching text/author_name/author_handle is more useful).
+    let posts = if let Some(q) = q {
+        queries::search_all_external_posts_with_engagement(
+            &state.db, auth.user_id, q, provider, cursor, limit + 1,
+        )
+        .await?
+    } else {
+        queries::list_all_external_posts_with_engagement(
+            &state.db, auth.user_id, provider, author_handle, cursor, limit + 1,
+        )
+        .await?
+    };
 
     // Check if there are more posts beyond this page
     let has_more = posts.len() as i64 > limit;
