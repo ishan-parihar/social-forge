@@ -92,4 +92,17 @@ export const feedApi = {
   accounts: () => {
     return api.get<FeedAccount[]>('/api/feed/accounts');
   },
+  analytics: (days?: number) => {
+    const q = days ? `?days=${days}` : '';
+    return api.get<{
+      total_posts: number;
+      total_likes: number;
+      total_comments: number;
+      total_shares: number;
+      total_impressions: number;
+    }>(`/api/feed/analytics${q}`);
+  },
+  delete: (postId: string) => {
+    return api.del<{ deleted: boolean }>(`/api/feed/${postId}`);
+  },
 };

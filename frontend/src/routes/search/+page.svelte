@@ -2,6 +2,7 @@
   import Icon from "$lib/ui/Icon.svelte";
   import { onMount, onDestroy } from "svelte";
   import { feedApi, proxyMediaUrl, type FeedPost, type FeedAccount } from "$lib/api/feed";
+  import { integrationsApi, type Integration } from "$lib/api/integrations";
   import { toast } from "$lib/stores/toast";
   import { realtime } from "$lib/stores/realtime";
   import EngagementCard from "$lib/components/EngagementCard.svelte";
@@ -9,6 +10,7 @@
 
   let posts = $state<FeedPost[]>([]);
   let accounts = $state<FeedAccount[]>([]);
+  let connectedIntegrations = $state<Integration[]>([]);
   let loading = $state(true);
   let importing = $state(false);
   let searchQuery = $state("");
@@ -16,20 +18,25 @@
   let hasMore = $state(false);
   let nextCursor = $state<string | null>(null);
 
-  const platforms = [
-    { value: "all", label: "All", icon: "ALL" },
-    { value: "x", label: "X", icon: "X" },
-    { value: "reddit", label: "Reddit", icon: "R" },
-    { value: "facebook", label: "Facebook", icon: "f" },
-    { value: "instagram", label: "Instagram", icon: "IG" },
-    { value: "youtube", label: "YouTube", icon: "YT" },
-    { value: "linkedin", label: "LinkedIn", icon: "in" },
-    { value: "bluesky", label: "Bluesky", icon: "BS" },
-    { value: "mastodon", label: "Mastodon", icon: "MA" },
-    { value: "pinterest", label: "Pinterest", icon: "PIN" },
-    { value: "tiktok", label: "TikTok", icon: "TT" },
-    { value: "threads", label: "Threads", icon: "TH" },
-  ];
+  // Build platform list dynamically from connected integrations
+  let platforms = $derived.by(() => {
+    const connected = connectedIntegrations
+      .filter(i => !i.disabled)
+      .map(i => i.provider_identifier);
+    const unique = [...new Set(connected)];
+    const icons: Record<string, string> = {
+      x: "X", reddit: "R", facebook: "f", instagram: "IG", youtube: "YT",
+      linkedin: "in", bluesky: "BS", mastodon: "MA", pinterest: "PIN",
+      tiktok: "TT", threads: "TH", discord: "DC", slack: "SL",
+      "telegram-bot": "TG", whatsapp: "WA", "instagram-standalone": "IG",
+      "linkedin-page": "in", wordpress: "WP", medium: "MD", devto: "DT",
+      hashnode: "HN", github: "GH", vk: "VK", kick: "KI", skool: "SK",
+    };
+    return [
+      { value: "all", label: "All", icon: "ALL" },
+      ...unique.map(p => ({ value: p, label: p.charAt(0).toUpperCase() + p.slice(1), icon: icons[p] || p.slice(0, 2).toUpperCase() })),
+    ];
+  });
 
   // Filtered results (client-side text search on feed data)
   let filteredPosts = $derived(
@@ -141,10 +148,12 @@
 
   let unsubscribers: (() => void)[] = [];
 
-  onMount(() => {
+  onMount(async () => {
     loadSavedSearches();
     loadAccounts();
     load();
+    const integRes = await integrationsApi.list();
+    if (integRes.data) connectedIntegrations = integRes.data.integrations;
     // Realtime: when the feed refresher pulls new posts in the
     // background, refresh the search results so they appear without
     // a manual reload. Also refresh on integration changes (new

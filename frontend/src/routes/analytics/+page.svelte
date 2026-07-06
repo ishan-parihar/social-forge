@@ -2,6 +2,8 @@
   import Icon from "$lib/ui/Icon.svelte";
   import { analyticsApi, type AnalyticsSummary } from '$lib/api/analytics';
   import { postsApi, type PostSummary } from '$lib/api/posts';
+  import { feedApi } from '$lib/api/feed';
+  import { integrationsApi, type Integration } from '$lib/api/integrations';
   import DateRangePicker from '$lib/analytics/DateRangePicker.svelte';
   import { toast } from "$lib/stores/toast";
   import { realtime } from "$lib/stores/realtime";
@@ -14,21 +16,30 @@
   let selectedProvider = $state<string>("all");
   let topPosts = $state<PostSummary[]>([]);
   let providerAnalytics = $state<import("$lib/api/analytics").ProviderAnalytics | null>(null);
+  let feedEngagement = $state<{ total_posts: number; total_likes: number; total_comments: number; total_shares: number; total_impressions: number } | null>(null);
+  let connectedIntegrations = $state<Integration[]>([]);
 
-  const providers = [
-    { value: "all", label: "All Platforms" },
-    { value: "x", label: "X (Twitter)" },
-    { value: "facebook", label: "Facebook" },
-    { value: "instagram", label: "Instagram" },
-    { value: "linkedin", label: "LinkedIn" },
-    { value: "youtube", label: "YouTube" },
-    { value: "reddit", label: "Reddit" },
-    { value: "bluesky", label: "Bluesky" },
-    { value: "mastodon", label: "Mastodon" },
-    { value: "pinterest", label: "Pinterest" },
-    { value: "tiktok", label: "TikTok" },
-    { value: "threads", label: "Threads" },
-  ];
+  // Build provider list dynamically from connected integrations
+  let providers = $derived.by(() => {
+    const connected = connectedIntegrations
+      .filter(i => !i.disabled)
+      .map(i => i.provider_identifier);
+    const unique = [...new Set(connected)];
+    const labels: Record<string, string> = {
+      x: "X (Twitter)", facebook: "Facebook", instagram: "Instagram",
+      linkedin: "LinkedIn", youtube: "YouTube", reddit: "Reddit",
+      bluesky: "Bluesky", mastodon: "Mastodon", pinterest: "Pinterest",
+      tiktok: "TikTok", threads: "Threads", "instagram-standalone": "Instagram (Standalone)",
+      "linkedin-page": "LinkedIn Page", discord: "Discord", slack: "Slack",
+      "telegram-bot": "Telegram Bot", whatsapp: "WhatsApp", wordpress: "WordPress",
+      medium: "Medium", devto: "Dev.to", hashnode: "Hashnode", github: "GitHub",
+      vk: "VK", kick: "Kick", skool: "Skool", lemmy: "Lemmy", farcaster: "Farcaster",
+    };
+    return [
+      { value: "all", label: "All Platforms" },
+      ...unique.map(p => ({ value: p, label: labels[p] || p })),
+    ];
+  });
 
   async function fetchData(signal?: AbortSignal) {
     loading = true;
@@ -36,13 +47,13 @@
     const requests: Promise<unknown>[] = [
       analyticsApi.getSummary(days, signal),
       postsApi.list({ state: 'published', limit: 50 }),
+      feedApi.analytics(days),
     ];
-    // When a specific provider is selected, also fetch per-platform analytics
     if (selectedProvider !== "all") {
       requests.push(analyticsApi.getProvider(selectedProvider, days, signal));
     }
-    const [summaryRes, postsRes, provRes] = await Promise.all(requests) as [
-      typeof summaryRes, typeof postsRes, typeof provRes
+    const [summaryRes, postsRes, feedRes, provRes] = await Promise.all(requests) as [
+      typeof summaryRes, typeof postsRes, typeof feedRes, typeof provRes
     ];
     if (signal?.aborted) return;
     if (summaryRes.error) {
@@ -51,8 +62,10 @@
     } else if (summaryRes.data) {
       data = summaryRes.data;
     }
+    if (feedRes.data) {
+      feedEngagement = feedRes.data;
+    }
     if (postsRes.data) {
-      // Filter by selected provider if applicable
       let posts = postsRes.data.posts;
       if (selectedProvider !== "all") {
         posts = posts.filter(p =>
@@ -67,7 +80,6 @@
         .sort((a, b) => (b._engagement || 0) - (a._engagement || 0))
         .slice(0, 10) as PostSummary[];
     }
-    // Store per-provider analytics if fetched
     if (provRes) {
       providerAnalytics = provRes.error ? null : provRes.data || null;
     } else {
@@ -94,6 +106,13 @@
     const events = ['post_published', 'post_failed', 'post_deleted', 'post_created'];
     for (const evt of events) {
       unsubscribers.push(realtime.on(evt, () => fetchData()));
+    }
+  });
+
+  onMount(async () => {
+    const integRes = await integrationsApi.list();
+    if (integRes.data) {
+      connectedIntegrations = integRes.data.integrations;
     }
   });
 
@@ -164,19 +183,53 @@
       {/each}
     </div>
     <div class="skeleton h-48 rounded-xl"></div>
-  {:else if data && data.total_posts === 0}
+  {:else if data && data.total_posts === 0 && (!feedEngagement || feedEngagement.total_posts === 0)}
     <div class="text-center py-16">
-      <p class="text-content-secondary mb-4">No analytics data yet. Start posting!</p>
-      <a href="/posts/new" class="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 transition-colors text-sm">
-        Create Post
-      </a>
+      <p class="text-content-secondary mb-4">No analytics data yet. Import your feed or start posting!</p>
+      <div class="flex gap-2 justify-center">
+        <a href="/feed" class="inline-flex items-center gap-2 px-4 py-2 bg-surface-hover text-content rounded-lg hover:bg-line-hover transition-colors text-sm">
+          Import Feed
+        </a>
+        <a href="/posts/new" class="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 transition-colors text-sm">
+          Create Post
+        </a>
+      </div>
     </div>
   {:else if data}
+    <!-- Feed Engagement Summary (from imported posts) -->
+    {#if feedEngagement && feedEngagement.total_posts > 0}
+      <div class="bg-surface border border-line rounded-xl p-4">
+        <h3 class="text-sm font-semibold mb-3">Imported Post Engagement ({days}d)</h3>
+        <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
+          <div>
+            <div class="text-xl font-bold text-indigo-400">{feedEngagement.total_posts}</div>
+            <div class="text-xs text-muted">Imported Posts</div>
+          </div>
+          <div>
+            <div class="text-xl font-bold text-green-400">{feedEngagement.total_likes?.toLocaleString() ?? 0}</div>
+            <div class="text-xs text-muted">Total Likes</div>
+          </div>
+          <div>
+            <div class="text-xl font-bold text-blue-400">{feedEngagement.total_comments?.toLocaleString() ?? 0}</div>
+            <div class="text-xs text-muted">Total Comments</div>
+          </div>
+          <div>
+            <div class="text-xl font-bold text-orange-400">{feedEngagement.total_shares?.toLocaleString() ?? 0}</div>
+            <div class="text-xs text-muted">Total Shares</div>
+          </div>
+          <div>
+            <div class="text-xl font-bold text-purple-400">{feedEngagement.total_impressions?.toLocaleString() ?? 0}</div>
+            <div class="text-xs text-muted">Total Impressions</div>
+          </div>
+        </div>
+      </div>
+    {/if}
+
     <!-- Summary Cards -->
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
       <div class="stat-card bg-surface border border-line rounded-xl p-4">
         <div class="text-2xl font-bold text-indigo-400">{data.total_posts}</div>
-        <div class="text-xs text-muted mt-1 uppercase tracking-wider">Total Posts</div>
+        <div class="text-xs text-muted mt-1 uppercase tracking-wider">Scheduled Posts</div>
       </div>
       <div class="stat-card bg-surface border border-line rounded-xl p-4">
         <div class="text-2xl font-bold text-green-400">{data.published}</div>

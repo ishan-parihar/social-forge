@@ -653,9 +653,9 @@
               {/if}
             </div>
 
-            <!-- Footer: link -->
-            {#if post.url}
-              <div class="mt-3 pt-3 border-t border-line">
+            <!-- Footer: link + hide -->
+            <div class="mt-3 pt-3 border-t border-line flex items-center justify-between">
+              {#if post.url}
                 <a
                   href={post.url}
                   target="_blank"
@@ -668,8 +668,25 @@
                     <path d="M6 3l5 5-5 5" stroke-linecap="round" stroke-linejoin="round" />
                   </svg>
                 </a>
-              </div>
-            {/if}
+              {:else}
+                <span></span>
+              {/if}
+              <button
+                onclick={async () => {
+                  const r = await feedApi.delete(post.id);
+                  if (r.error) {
+                    toast("Failed to hide: " + r.error, "error");
+                  } else {
+                    posts = posts.filter(p => p.id !== post.id);
+                    toast("Post hidden from feed", "success");
+                  }
+                }}
+                class="text-xs text-muted hover:text-red-400 transition-colors"
+                title="Hide from feed (does not delete on platform)"
+              >
+                Hide
+              </button>
+            </div>
           </div>
         </article>
       {/each}

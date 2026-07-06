@@ -293,3 +293,21 @@ pub async fn get_comments(
 
     Ok(Json(json_comments))
 }
+
+/// DELETE /api/feed/{post_id} — hide/remove an imported feed post from the local DB.
+/// This does NOT delete the post on the platform — it only removes the local
+/// mirror copy so it no longer appears in the feed/dashboard.
+pub async fn delete_post(
+    State(state): State<AppState>,
+    Path(post_id): Path<Uuid>,
+    auth: AuthenticatedUser,
+) -> Result<Json<serde_json::Value>, AppError> {
+    sqlx::query("DELETE FROM external_posts WHERE id = $1 AND user_id = $2")
+        .bind(post_id)
+        .bind(auth.user_id)
+        .execute(&state.db)
+        .await
+        .map_err(|e| AppError::Internal(format!("Failed to delete feed post: {e}")))?;
+
+    Ok(Json(serde_json::json!({ "deleted": true })))
+}
