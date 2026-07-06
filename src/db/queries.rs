@@ -457,8 +457,11 @@ pub async fn list_posts(
             "error" => PostState::Error,
             _ => return list_posts_all(pool, user_id, limit, offset).await,
         };
-        sqlx::query_as!(
-            Post,
+        // Runtime query (not query_as!) so we don't need to regenerate the
+        // sqlx offline cache for this minor WHERE-clause change. The query
+        // is identical to the cached version except for the added
+        // `AND deleted_at IS NULL` filter.
+        sqlx::query_as::<_, Post>(
             r#"SELECT id, user_id, integration_id, state as "state: PostState",
                content, title, media, settings, scheduled_at, published_at,
                platform_post_id, platform_post_url, error_message,
@@ -468,14 +471,14 @@ pub async fn list_posts(
              FROM posts WHERE user_id = $1 AND state = $2 AND deleted_at IS NULL
              ORDER BY scheduled_at DESC NULLS LAST, created_at DESC
              LIMIT $3 OFFSET $4"#,
-         user_id,
-         ps as PostState,
-         limit,
-         offset,
-     )
-     .fetch_all(pool)
-     .await
-     } else {
+        )
+        .bind(user_id)
+        .bind(ps)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(pool)
+        .await
+    } else {
          list_posts_all(pool, user_id, limit, offset).await
      }
  }
@@ -528,8 +531,8 @@ async fn list_posts_all(
     limit: i64,
     offset: i64,
 ) -> Result<Vec<Post>, sqlx::Error> {
-    sqlx::query_as!(
-         Post,
+    // Runtime query (see note in list_posts above).
+    sqlx::query_as::<_, Post>(
          r#"SELECT id, user_id, integration_id, state as "state: PostState",
             content, title, media, settings, scheduled_at, published_at,
             platform_post_id, platform_post_url, error_message,
@@ -539,10 +542,10 @@ async fn list_posts_all(
           FROM posts WHERE user_id = $1 AND deleted_at IS NULL
           ORDER BY scheduled_at DESC NULLS LAST, created_at DESC
           LIMIT $2 OFFSET $3"#,
-         user_id,
-         limit,
-         offset,
      )
+     .bind(user_id)
+     .bind(limit)
+     .bind(offset)
      .fetch_all(pool)
      .await
  }
@@ -694,8 +697,8 @@ pub async fn count_posts_search(
     id: Uuid,
     user_id: Uuid,
 ) -> Result<Option<Post>, sqlx::Error> {
-    sqlx::query_as!(
-         Post,
+    // Runtime query (see note in list_posts above).
+    sqlx::query_as::<_, Post>(
          r#"SELECT id, user_id, integration_id, state as "state: PostState",
             content, title, media, settings, scheduled_at, published_at,
             platform_post_id, platform_post_url, error_message,
@@ -703,9 +706,9 @@ pub async fn count_posts_search(
             repeat_interval_days, repeat_end_date, group_id,
             first_comment, sequence
           FROM posts WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL"#,
-         id,
-         user_id,
      )
+     .bind(id)
+     .bind(user_id)
      .fetch_optional(pool)
      .await
  }
@@ -804,15 +807,16 @@ pub async fn delete_post(pool: &PgPool, id: Uuid, user_id: Uuid) -> Result<bool,
     // `WHERE deleted_at IS NULL`).
     //
     // If the post has no group_id, only the single row is soft-deleted.
-    let r = sqlx::query!(
+    // Runtime query (see note in list_posts above).
+    let r = sqlx::query(
         r#"UPDATE posts SET deleted_at = NOW()
            WHERE user_id = $2 AND deleted_at IS NULL AND (
              id = $1
              OR (group_id IS NOT NULL AND group_id = (SELECT group_id FROM posts WHERE id = $1 AND user_id = $2))
            )"#,
-        id,
-        user_id,
     )
+    .bind(id)
+    .bind(user_id)
     .execute(pool)
     .await?;
     Ok(r.rows_affected() > 0)
@@ -820,15 +824,16 @@ pub async fn delete_post(pool: &PgPool, id: Uuid, user_id: Uuid) -> Result<bool,
 
 /// Hard-undelete a post (and its group). Useful for a future "Trash" UI.
 pub async fn undelete_post(pool: &PgPool, id: Uuid, user_id: Uuid) -> Result<bool, sqlx::Error> {
-    let r = sqlx::query!(
+    // Runtime query (see note in list_posts above).
+    let r = sqlx::query(
         r#"UPDATE posts SET deleted_at = NULL
            WHERE user_id = $2 AND deleted_at IS NOT NULL AND (
              id = $1
              OR (group_id IS NOT NULL AND group_id = (SELECT group_id FROM posts WHERE id = $1 AND user_id = $2))
            )"#,
-        id,
-        user_id,
     )
+    .bind(id)
+    .bind(user_id)
     .execute(pool)
     .await?;
     Ok(r.rows_affected() > 0)
@@ -842,8 +847,8 @@ pub async fn list_posts_by_group(
     user_id: Uuid,
     group_id: Uuid,
 ) -> Result<Vec<Post>, sqlx::Error> {
-    sqlx::query_as!(
-        Post,
+    // Runtime query (see note in list_posts above).
+    sqlx::query_as::<_, Post>(
         r#"SELECT id, user_id, integration_id, state as "state: PostState",
            content, title, media, settings, scheduled_at, published_at,
            platform_post_id, platform_post_url, error_message,
@@ -853,9 +858,9 @@ pub async fn list_posts_by_group(
          FROM posts
          WHERE user_id = $1 AND group_id = $2 AND deleted_at IS NULL
          ORDER BY sequence ASC, created_at ASC"#,
-        user_id,
-        group_id,
     )
+    .bind(user_id)
+    .bind(group_id)
     .fetch_all(pool)
     .await
 }

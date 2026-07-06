@@ -84,13 +84,19 @@ impl IntoResponse for AppError {
                 // Include a stable error code so the frontend can branch on it
                 // without parsing the human-readable message. We do NOT leak
                 // SQL details — just the sqlx::Error discriminant.
+                //
+                // Note: sqlx::Error variants vary slightly across versions.
+                // We list the ones that exist in sqlx 0.8 and use a fallback
+                // for everything else. Pool-related errors are represented
+                // by PoolTimedOut / PoolClosed (there is no generic `Pool`
+                // variant in sqlx::Error itself — pool errors come through
+                // these specific variants or as Database/Configuration).
                 let code = match e {
                     sqlx::Error::RowNotFound => "db_row_not_found",
                     sqlx::Error::TypeNotFound { .. } => "db_type_not_found",
                     sqlx::Error::ColumnNotFound(_) => "db_column_not_found",
                     sqlx::Error::ColumnDecode { .. } => "db_column_decode",
                     sqlx::Error::Decode(_) => "db_decode",
-                    sqlx::Error::Pool(_) => "db_pool",
                     sqlx::Error::PoolTimedOut => "db_pool_timed_out",
                     sqlx::Error::PoolClosed => "db_pool_closed",
                     sqlx::Error::WorkerCrashed => "db_worker_crashed",

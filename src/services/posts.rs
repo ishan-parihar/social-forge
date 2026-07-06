@@ -48,7 +48,7 @@ pub struct PostService;
 
 impl PostService {
     /// Sanitize post content: strip HTML tags and limit length
-    fn sanitize_content(raw: &str, max_len: usize) -> String {
+    pub fn sanitize_content(raw: &str, max_len: usize) -> String {
         let mut clean = String::with_capacity(raw.len());
         let mut in_tag = false;
         for ch in raw.chars() {
