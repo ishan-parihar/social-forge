@@ -40,11 +40,23 @@ export interface ThreadRequest {
 }
 
 export const postsApi = {
-  list: (params?: { state?: string; limit?: number; offset?: number }) => {
+  list: (params?: {
+    state?: string;
+    limit?: number;
+    offset?: number;
+    q?: string;
+    integration_ids?: string[];
+    tag_ids?: string[];
+    sort?: string;
+  }) => {
     const q = new URLSearchParams();
     if (params?.state) q.set("state", params.state);
     if (params?.limit) q.set("limit", String(params.limit));
     if (params?.offset) q.set("offset", String(params.offset));
+    if (params?.q && params.q.trim()) q.set("q", params.q.trim());
+    if (params?.integration_ids?.length) q.set("integration_ids", params.integration_ids.join(","));
+    if (params?.tag_ids?.length) q.set("tag_ids", params.tag_ids.join(","));
+    if (params?.sort) q.set("sort", params.sort);
     return api.get<{ posts: PostSummary[]; total: number }>(`/api/posts?${q}`);
   },
   get: (id: string) => api.get<PostDetail>(`/api/posts/${id}`),

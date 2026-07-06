@@ -2,9 +2,11 @@
   import { toast } from "$lib/stores/toast";
   import { onMount, onDestroy } from "svelte";
   import { postsApi, type PostSummary } from "$lib/api/posts";
+  import { integrationsApi, type Integration } from "$lib/api/integrations";
   import { realtime } from "$lib/stores/realtime";
   import { timezone } from "$lib/stores/timezone.svelte";
   import { composer } from "$lib/stores/composer.svelte";
+  import { confirmModal } from "$lib/stores/modals.svelte";
   import Badge from "$lib/ui/Badge.svelte";
   import Icon from "$lib/ui/Icon.svelte";
   import { goto } from "$app/navigation";
@@ -19,6 +21,13 @@
   let totalItems = $state(0);
   let groupByCampaign = $state(false);
   const limit = 20;
+
+  // Phase 5: search + sort state.
+  let searchQuery = $state("");
+  let searchTimer: ReturnType<typeof setTimeout> | null = null;
+  let sortBy = $state("scheduled_date");
+  let allIntegrations = $state<Integration[]>([]);
+  let filterIntegrationIds = $state<string[]>([]);
 
   // Bulk-selection state (R-15 / U-6): a Set of post IDs the user has
   // checked. Empty by default; cleared on filter change or page change.
@@ -55,9 +64,14 @@
   async function load() {
     loading = true;
     error = null;
-    const params: Record<string, string | number> = { limit, offset: (currentPage - 1) * limit };
-    if (filter !== "all") params.state = filter;
-    const r = await postsApi.list(params);
+    const r = await postsApi.list({
+      limit,
+      offset: (currentPage - 1) * limit,
+      ...(filter !== "all" && { state: filter }),
+      ...(searchQuery.trim() && { q: searchQuery.trim() }),
+      ...(filterIntegrationIds.length > 0 && { integration_ids: filterIntegrationIds }),
+      sort: sortBy,
+    });
     if (r.data) {
       posts = r.data.posts;
       totalItems = r.data.total;
@@ -71,8 +85,34 @@
     loading = false;
   }
 
+  // Phase 5: debounced search trigger.
+  function onSearchInput() {
+    if (searchTimer) clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+      searchTimer = null;
+      currentPage = 1;
+      load();
+    }, 350);
+  }
+
   function toggleFilter(f: string) {
     filter = f;
+    currentPage = 1;
+    load();
+  }
+
+  function toggleIntegrationFilter(intId: string) {
+    if (filterIntegrationIds.includes(intId)) {
+      filterIntegrationIds = filterIntegrationIds.filter(id => id !== intId);
+    } else {
+      filterIntegrationIds = [...filterIntegrationIds, intId];
+    }
+    currentPage = 1;
+    load();
+  }
+
+  function handleSortChange(e: Event) {
+    sortBy = (e.currentTarget as HTMLSelectElement).value;
     currentPage = 1;
     load();
   }
@@ -148,12 +188,60 @@
   let postsUnsubscribers: (() => void)[] = [];
   const filters = ["all", "draft", "queued", "published", "error"];
 
-  onMount(() => {
+  // Phase 5: bulk reschedule with offset.
+  // Reschedules all selected posts to a base date, spread by N minutes.
+  async function handleBulkReschedule() {
+    if (selectedIds.size === 0) return;
+    const baseDate = prompt(`Enter base date+time for ${selectedIds.size} posts (YYYY-MM-DD HH:MM):`);
+    if (!baseDate) return;
+    const spreadMin = parseInt(prompt('Spread posts by how many minutes? (0 = same time)', '30') || '0', 10);
+    const baseIso = new Date(baseDate.replace(' ', 'T') + ':00.000Z').toISOString();
+    if (isNaN(new Date(baseIso).getTime())) {
+      toast('Invalid date format', 'error');
+      return;
+    }
+    bulkActionLoading = true;
+    let failures = 0;
+    let successes = 0;
+    const ids = Array.from(selectedIds);
+    for (let i = 0; i < ids.length; i++) {
+      const offsetMs = i * spreadMin * 60 * 1000;
+      const schedAt = new Date(new Date(baseIso).getTime() + offsetMs).toISOString();
+      const r = await postsApi.reschedule(ids[i], schedAt, false);
+      if (r.error) failures++;
+      else successes++;
+    }
+    bulkActionLoading = false;
+    if (failures === 0) {
+      toast(`Rescheduled ${successes} posts`, 'success');
+    } else {
+      toast(`Rescheduled ${successes}, ${failures} failed`, 'error');
+    }
+    clearSelection();
+    load();
+  }
+
+  // Phase 5: bulk duplicate — opens the composer with the first post's
+  // content prefilled. (One at a time; bulk duplicate via composer is
+  // more useful than blind batch creation.)
+  async function handleBulkDuplicate() {
+    if (selectedIds.size === 0) return;
+    const firstId = Array.from(selectedIds)[0];
+    const detail = await postsApi.get(firstId);
+    if (detail.data) {
+      composer.openCreate(undefined, [detail.data.integration_id], detail.data.content);
+    }
+  }
+
+  onMount(async () => {
     // Read state filter from URL params (e.g. /posts?state=error)
     const stateParam = $pageStore.url.searchParams.get('state');
     if (stateParam && filters.includes(stateParam)) {
       filter = stateParam;
     }
+    // Phase 5: load integrations for the channel filter.
+    const integRes = await integrationsApi.list();
+    if (integRes.data) allIntegrations = integRes.data.integrations.filter(i => !i.disabled);
     load();
     const events = ['post_created', 'post_scheduled', 'post_published', 'post_failed', 'post_deleted'];
     for (const evt of events) {
@@ -163,6 +251,7 @@
 
   onDestroy(() => {
     postsUnsubscribers.forEach(fn => fn());
+    if (searchTimer) clearTimeout(searchTimer);
   });
 </script>
 
@@ -177,9 +266,52 @@
         <Icon name="analytics" class="w-3.5 h-3.5" />
         {groupByCampaign ? 'Grouped' : 'Group by Campaign'}
       </button>
-      <button onclick={() => goto("/posts/new")} class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm transition-colors">+ New Post</button>
+      <button onclick={() => composer.openCreate()} class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm transition-colors">+ New Post</button>
     </div>
   </div>
+
+  <!-- Search + sort + channel filter row (Phase 5) -->
+  <div class="flex gap-2 flex-wrap items-center">
+    <div class="relative flex-1 min-w-[200px]">
+      <input
+        type="text"
+        bind:value={searchQuery}
+        oninput={onSearchInput}
+        placeholder="Search posts by content or title..."
+        class="w-full px-3 py-2 pl-9 bg-background-input border border-line rounded-lg text-sm focus:border-indigo-500 outline-none"
+      />
+      <span class="absolute left-3 top-1/2 -translate-y-1/2 text-muted">
+        <Icon name="search" class="w-4 h-4" />
+      </span>
+    </div>
+    <select
+      value={sortBy}
+      onchange={handleSortChange}
+      class="px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-indigo-500 outline-none"
+      title="Sort by"
+    >
+      <option value="scheduled_date">Sort: Scheduled date</option>
+      <option value="created_date">Sort: Created date</option>
+      <option value="engagement">Sort: Engagement</option>
+    </select>
+  </div>
+
+  <!-- Channel filter (Phase 5) — only show if integrations exist -->
+  {#if allIntegrations.length > 0}
+    <div class="flex gap-1 flex-wrap items-center">
+      <span class="text-xs text-muted mr-1">Channels:</span>
+      <button
+        onclick={() => { filterIntegrationIds = []; currentPage = 1; load(); }}
+        class="px-2 py-1 text-[10px] rounded-md transition-colors {filterIntegrationIds.length === 0 ? 'bg-indigo-600 text-white' : 'text-muted hover:bg-surface-hover border border-line'}"
+      >All</button>
+      {#each allIntegrations as int (int.id)}
+        <button
+          onclick={() => toggleIntegrationFilter(int.id)}
+          class="px-2 py-1 text-[10px] rounded-md transition-colors {filterIntegrationIds.includes(int.id) ? 'bg-indigo-600 text-white' : 'text-muted hover:bg-surface-hover border border-line'}"
+        >{int.provider_name}</button>
+      {/each}
+    </div>
+  {/if}
 
   <!-- Filter tabs -->
   <div class="flex gap-1 bg-surface border border-line rounded-lg p-1 overflow-x-auto">
@@ -200,11 +332,25 @@
       </div>
       <div class="flex items-center gap-2">
         <button
+          onclick={handleBulkReschedule}
+          disabled={bulkActionLoading}
+          class="px-3 py-1.5 text-xs bg-surface-hover hover:bg-line border border-line text-content rounded-lg disabled:opacity-50 transition-colors"
+        >
+          {bulkActionLoading ? '...' : 'Reschedule'}
+        </button>
+        <button
+          onclick={handleBulkDuplicate}
+          disabled={bulkActionLoading}
+          class="px-3 py-1.5 text-xs bg-surface-hover hover:bg-line border border-line text-content rounded-lg disabled:opacity-50 transition-colors"
+        >
+          Duplicate
+        </button>
+        <button
           onclick={handleBulkDelete}
           disabled={bulkActionLoading}
           class="px-3 py-1.5 text-xs bg-red-600 hover:bg-red-500 text-white rounded-lg disabled:opacity-50 transition-colors"
         >
-          {bulkActionLoading ? 'Deleting...' : 'Delete Selected'}
+          {bulkActionLoading ? 'Deleting...' : 'Delete'}
         </button>
       </div>
     </div>

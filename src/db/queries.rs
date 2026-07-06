@@ -545,6 +545,146 @@ async fn list_posts_all(
      .await
  }
 
+// ── Phase 5: search + filter + sort variants ───────────────────
+// Runtime queries (not sqlx::query! macros) per AGENTS.md §0 rule 4.
+// These support the new ListPostsQuery params: q, integration_ids,
+// tag_ids, sort. The original list_posts / list_posts_all are kept
+// for backward compatibility (MCP/CLI use them).
+
+/// Build the ORDER BY clause from a sort string.
+/// Supported: "scheduled_date" (default), "created_date", "engagement".
+/// Prefix with "-" for descending (descending is the default for all).
+fn sort_to_order_by(sort: &str) -> &'static str {
+    let ascending = !sort.starts_with('-');
+    let field = sort.trim_start_matches('-');
+    // We only support descending for now (ascending would need index work);
+    // ignore the ascending flag and always return DESC.
+    let _ = ascending;
+    match field {
+        "created_date" => "created_at DESC NULLS LAST",
+        "engagement" => {
+            // engagement sort: left-join post_engagement and order by
+            // (likes + comments + shares) DESC. Done in the query itself.
+            "engagement DESC NULLS LAST"
+        },
+        _ => "scheduled_at DESC NULLS LAST, created_at DESC",
+    }
+}
+
+/// Search + filter + sort posts for a user. Used by the Phase 5 posts
+/// list endpoint. All params are optional; passing None for a filter
+/// means "no filter on this field".
+pub async fn list_posts_search(
+    pool: &PgPool,
+    user_id: Uuid,
+    state_filter: Option<&str>,
+    q: Option<&str>,
+    integration_ids: Option<&[Uuid]>,
+    tag_ids: Option<&[Uuid]>,
+    sort: &str,
+    limit: i64,
+    offset: i64,
+) -> Result<Vec<Post>, sqlx::Error> {
+    let order_by = sort_to_order_by(sort);
+
+    // Build a dynamic query. We use string interpolation for the ORDER BY
+    // (safe because sort_to_order_by returns a fixed set of literals) and
+    // bind all user-provided values as parameters.
+    let q_pattern = q.map(|s| {
+        let escaped = s.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
+        format!("%{escaped}%")
+    });
+
+    let sql: String = if sort == "engagement" {
+        // Engagement sort needs a LEFT JOIN to post_engagement.
+        r#"SELECT p.id, p.user_id, p.integration_id, p.state as "state: PostState",
+                  p.content, p.title, p.media, p.settings, p.scheduled_at, p.published_at,
+                  p.platform_post_id, p.platform_post_url, p.error_message,
+                  p.created_at, p.updated_at,
+                  p.repeat_interval_days, p.repeat_end_date, p.group_id,
+                  p.first_comment, p.sequence
+           FROM posts p
+           LEFT JOIN post_engagement pe ON pe.post_id = p.id
+           WHERE p.user_id = $1
+             AND ($2::text IS NULL OR p.state = $2::text)
+             AND ($3::text IS NULL OR p.content ILIKE $3 OR p.title ILIKE $3)
+             AND ($4::uuid[] IS NULL OR p.integration_id = ANY($4::uuid[]))
+             AND ($5::uuid[] IS NULL OR p.id IN (
+               SELECT post_id FROM post_tags WHERE tag_id = ANY($5::uuid[])
+             ))
+           ORDER BY (COALESCE(pe.likes, 0) + COALESCE(pe.comments, 0) + COALESCE(pe.shares, 0)) DESC NULLS LAST
+           LIMIT $6 OFFSET $7"#.to_string()
+    } else {
+        format!(r#"SELECT id, user_id, integration_id, state as "state: PostState",
+                  content, title, media, settings, scheduled_at, published_at,
+                  platform_post_id, platform_post_url, error_message,
+                  created_at, updated_at,
+                  repeat_interval_days, repeat_end_date, group_id,
+                  first_comment, sequence
+           FROM posts
+           WHERE user_id = $1
+             AND ($2::text IS NULL OR state = $2::text)
+             AND ($3::text IS NULL OR content ILIKE $3 OR title ILIKE $3)
+             AND ($4::uuid[] IS NULL OR integration_id = ANY($4::uuid[]))
+             AND ($5::uuid[] IS NULL OR id IN (
+               SELECT post_id FROM post_tags WHERE tag_id = ANY($5::uuid[])
+             ))
+           ORDER BY {} LIMIT $6 OFFSET $7"#, order_by)
+    };
+
+    let mut q_builder = sqlx::query_as::<_, Post>(&sql)
+        .bind(user_id)
+        .bind(state_filter)
+        .bind(q_pattern);
+    // Bind integration_ids as a Vec<Uuid> (sqlx maps this to uuid[])
+    q_builder = if let Some(ids) = integration_ids {
+        q_builder.bind(ids)
+    } else {
+        q_builder.bind(None::<&[Uuid]>)
+    };
+    q_builder = if let Some(ids) = tag_ids {
+        q_builder.bind(ids)
+    } else {
+        q_builder.bind(None::<&[Uuid]>)
+    };
+    q_builder = q_builder.bind(limit).bind(offset);
+    q_builder.fetch_all(pool).await
+}
+
+/// Count posts matching the search + filter criteria (for pagination total).
+pub async fn count_posts_search(
+    pool: &PgPool,
+    user_id: Uuid,
+    state_filter: Option<&str>,
+    q: Option<&str>,
+    integration_ids: Option<&[Uuid]>,
+    tag_ids: Option<&[Uuid]>,
+) -> Result<i64, sqlx::Error> {
+    let q_pattern = q.map(|s| {
+        let escaped = s.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
+        format!("%{escaped}%")
+    });
+
+    let row: (Option<i64>,) = sqlx::query_as(
+        r#"SELECT COUNT(*)::bigint FROM posts
+           WHERE user_id = $1
+             AND ($2::text IS NULL OR state = $2::text)
+             AND ($3::text IS NULL OR content ILIKE $3 OR title ILIKE $3)
+             AND ($4::uuid[] IS NULL OR integration_id = ANY($4::uuid[]))
+             AND ($5::uuid[] IS NULL OR id IN (
+               SELECT post_id FROM post_tags WHERE tag_id = ANY($5::uuid[])
+             ))"#,
+    )
+    .bind(user_id)
+    .bind(state_filter)
+    .bind(q_pattern)
+    .bind(integration_ids)
+    .bind(tag_ids)
+    .fetch_one(pool)
+    .await?;
+    Ok(row.0.unwrap_or(0))
+}
+
  pub async fn get_post(
     pool: &PgPool,
     id: Uuid,

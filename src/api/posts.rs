@@ -84,6 +84,20 @@ pub struct ListPostsQuery {
     pub state: Option<String>,
     pub limit: Option<i64>,
     pub offset: Option<i64>,
+    /// Phase 5: search query (ILIKE on content + title).
+    pub q: Option<String>,
+    /// Phase 5: filter by integration IDs (comma-separated).
+    pub integration_ids: Option<String>,
+    /// Phase 5: filter by tag IDs (comma-separated).
+    pub tag_ids: Option<String>,
+    /// Phase 5: sort order. One of: scheduled_date (default), created_date,
+    /// engagement. Prefix with '-' for descending (e.g. '-scheduled_date').
+    #[serde(default = "default_sort")]
+    pub sort: String,
+}
+
+fn default_sort() -> String {
+    "scheduled_date".into()
 }
 
 #[derive(Debug, Serialize)]
@@ -199,23 +213,62 @@ pub async fn list(
 ) -> Result<Json<PostsListResponse>, crate::error::AppError> {
     let limit = query.limit.unwrap_or(50).min(200);
     let offset = query.offset.unwrap_or(0);
-    
-    // Get total count for pagination
-    let total = queries::count_posts_by_user(
-        &state.db,
-        auth.user_id,
-        query.state.as_deref(),
-    )
-    .await?;
 
-    let posts = queries::list_posts(
-        &state.db,
-        auth.user_id,
-        query.state.as_deref(),
-        limit,
-        offset,
-    )
-    .await?;
+    // Phase 5: parse the new search/filter/sort params.
+    let q = query.q.as_deref().map(str::trim).filter(|s| !s.is_empty());
+    let integration_ids: Option<Vec<Uuid>> = query.integration_ids.as_deref()
+        .filter(|s| !s.is_empty())
+        .map(|s| s.split(',')
+             .filter_map(|id| Uuid::parse_str(id.trim()).ok())
+             .collect::<Vec<_>>())
+        .filter(|v| !v.is_empty());
+    let tag_ids: Option<Vec<Uuid>> = query.tag_ids.as_deref()
+        .filter(|s| !s.is_empty())
+        .map(|s| s.split(',')
+             .filter_map(|id| Uuid::parse_str(id.trim()).ok())
+             .collect::<Vec<_>>())
+        .filter(|v| !v.is_empty());
+
+    // Use the new search query if any of the new params are present;
+    // otherwise fall back to the original list_posts for backward compat.
+    let use_search = q.is_some() || integration_ids.is_some() || tag_ids.is_some() || query.sort != "scheduled_date";
+
+    let (posts, total) = if use_search {
+        let posts = queries::list_posts_search(
+            &state.db,
+            auth.user_id,
+            query.state.as_deref(),
+            q,
+            integration_ids.as_deref(),
+            tag_ids.as_deref(),
+            &query.sort,
+            limit,
+            offset,
+        ).await?;
+        let total = queries::count_posts_search(
+            &state.db,
+            auth.user_id,
+            query.state.as_deref(),
+            q,
+            integration_ids.as_deref(),
+            tag_ids.as_deref(),
+        ).await?;
+        (posts, total)
+    } else {
+        let total = queries::count_posts_by_user(
+            &state.db,
+            auth.user_id,
+            query.state.as_deref(),
+        ).await?;
+        let posts = queries::list_posts(
+            &state.db,
+            auth.user_id,
+            query.state.as_deref(),
+            limit,
+            offset,
+        ).await?;
+        (posts, total)
+    };
 
     let mut enriched = Vec::with_capacity(posts.len());
     for p in posts {
