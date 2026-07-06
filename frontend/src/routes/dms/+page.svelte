@@ -5,61 +5,15 @@
   import { dmsApi, type Conversation, type DmMessage } from "$lib/api/dms";
   import { integrationsApi, type Integration } from "$lib/api/integrations";
 
-  interface Message {
-    id: string;
-    sender: string;
-    text: string;
-    created_at: string;
-    is_mine: boolean;
-  }
-
-  interface Conversation {
-    id: string;
-    platform: string;
-    contact: string;
-    last_message: string;
-    updated_at: string;
-    unread_count: number;
-    messages: Message[];
-  }
-
-  interface ConversationResponse {
-    id: string;
-    participant: string;
-    participant_name: string | null;
-    participant_avatar: string | null;
-    last_message: string | null;
-    last_message_at: string | null;
-    unread_count: number;
-  }
-
-  interface MessageResponse {
-    id: string;
-    conversation_id: string;
-    sender: string;
-    sender_name: string | null;
-    content: string;
-    created_at: string;
-    read: boolean;
-  }
-
-  interface Integration {
-    id: string;
-    provider_identifier: string;
-    internal_id: string;
-    disabled: boolean;
-  }
-
   let conversations = $state<Conversation[]>([]);
   let integrations = $state<Integration[]>([]);
   let selectedIntegrationId = $state<string | null>(null);
   let selectedId = $state<string | null>(null);
+  let messages = $state<DmMessage[]>([]);
   let loading = $state(true);
   let error = $state<string | null>(null);
   let newMessage = $state("");
   let sending = $state(false);
-
-  const platforms = ["all", "x", "reddit", "linkedin", "facebook", "instagram", "telegram", "whatsapp", "discord"];
 
   let selected = $derived(conversations.find(c => c.id === selectedId));
 
@@ -75,10 +29,6 @@
 
   async function load() {
     if (!selectedIntegrationId) {
-      await loadIntegrations();
-    }
-    if (!selectedIntegrationId) {
-      error = "No integrations connected. Connect a social account first.";
       loading = false;
       return;
     }
@@ -86,18 +36,9 @@
     error = null;
     const r = await dmsApi.listConversations(selectedIntegrationId!);
     if (r.data) {
-      const integration = integrations.find(i => i.id === selectedIntegrationId);
-      conversations = r.data.conversations.map(c => ({
-        id: c.id,
-        platform: integration?.provider_identifier || "unknown",
-        contact: c.participant_name || c.participant,
-        last_message: c.last_message || "",
-        updated_at: c.last_message_at || new Date().toISOString(),
-        unread_count: c.unread_count,
-        messages: []
-      }));
+      conversations = r.data.conversations;
     } else {
-      toast(`Failed: ${r.error}`, "error");
+      error = r.error || "Failed to load conversations";
     }
     loading = false;
   }
@@ -106,26 +47,17 @@
     if (!selectedIntegrationId) return;
     const r = await dmsApi.getMessages(convId);
     if (r.data) {
-      const conv = conversations.find(c => c.id === convId);
-      if (conv) {
-        conv.messages = r.data.messages.map(m => ({
-          id: m.id,
-          sender: m.sender,
-          text: m.content,
-          created_at: m.created_at,
-          is_mine: m.read === false && m.sender === "me"
-        }));
-      }
+      messages = r.data.messages;
     }
   }
 
   async function sendMessage() {
-    if (!selectedId || !newMessage.trim() || !selectedIntegrationId) return;
+    if (!selectedId || !newMessage.trim() || !selectedIntegrationId || !selected) return;
     sending = true;
-    const recipient = selected?.contact || "";
+    const recipient = selected.participant_name || selected.participant || "";
     const r = await dmsApi.send(selectedIntegrationId!, recipient, newMessage);
     if (r.error) {
-      toast(`Error: ${r.error}`, "error");
+      toast("Error: " + r.error, "error");
     } else {
       newMessage = "";
       await loadMessages(selectedId);
@@ -135,11 +67,8 @@
 
   function selectConversation(id: string) {
     selectedId = id;
-    const conv = conversations.find(c => c.id === id);
-    if (conv) {
-      conv.unread_count = 0;
-      loadMessages(id);
-    }
+    messages = [];
+    loadMessages(id);
   }
 
   function platformIcon(p: string): string {
@@ -149,10 +78,15 @@
 
   let dmsUnsubscribers: (() => void)[] = [];
 
-  onMount(() => {
+  onMount(async () => {
+    await loadIntegrations();
     load();
     dmsUnsubscribers.push(realtime.on('integration_connected', () => load()));
     dmsUnsubscribers.push(realtime.on('integration_disconnected', () => load()));
+    dmsUnsubscribers.push(realtime.on('dm_received', () => {
+      if (selectedId) loadMessages(selectedId);
+      load();
+    }));
   });
 
   onDestroy(() => {
@@ -175,7 +109,7 @@
           {/each}
         </select>
       {/if}
-      <button onclick={load} class="px-3 py-1.5 text-sm text-muted hover:text-white border border-line rounded-lg transition-colors">↻ Refresh</button>
+      <button onclick={load} class="px-3 py-1.5 text-sm text-muted hover:text-white border border-line rounded-lg transition-colors">Refresh</button>
     </div>
   </div>
 
@@ -184,9 +118,11 @@
   {:else if loading}
     <div class="text-center py-12 text-sm text-muted">Loading...</div>
   {:else if conversations.length === 0}
-    <div class="text-center py-12 text-sm text-muted">No conversations found</div>
+    <div class="text-center py-12">
+      <p class="text-sm text-muted mb-2">No conversations found</p>
+      <p class="text-xs text-muted-dark">DMs are available for X, Instagram, and LinkedIn integrations.</p>
+    </div>
   {:else}
-    <!-- Two-panel layout -->
     <div class="flex gap-4 h-[calc(100vh-200px)]">
       <!-- Conversation list -->
       <div class="w-80 bg-surface border border-line rounded-xl overflow-hidden flex flex-col shrink-0">
@@ -201,14 +137,16 @@
             >
               <div class="flex items-center gap-2 mb-1">
                 <span class="text-xs text-indigo-400">{platformIcon(conv.platform)}</span>
-                <span class="text-sm font-medium truncate">{conv.contact}</span>
+                <span class="text-sm font-medium truncate">{conv.participant_name || conv.participant}</span>
                 {#if conv.unread_count > 0}
                   <span class="ml-auto px-1.5 py-0.5 text-[10px] bg-indigo-600 text-white rounded-full">{conv.unread_count}</span>
                 {/if}
               </div>
               <div class="flex items-center gap-2">
-                <span class="text-xs text-muted truncate flex-1">{conv.last_message}</span>
-                <span class="text-[10px] text-muted shrink-0">{new Date(conv.updated_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                <span class="text-xs text-muted truncate flex-1">{conv.last_message || '(no messages)'}</span>
+                {#if conv.last_message_at}
+                  <span class="text-[10px] text-muted shrink-0">{new Date(conv.last_message_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                {/if}
               </div>
             </button>
           {/each}
@@ -218,27 +156,24 @@
       <!-- Message thread -->
       <div class="flex-1 bg-surface border border-line rounded-xl flex flex-col">
         {#if selected}
-          <!-- Header -->
           <div class="px-4 py-3 border-b border-line">
             <div class="flex items-center gap-2">
               <span class="text-xs text-indigo-400">{platformIcon(selected.platform)}</span>
-              <span class="text-sm font-medium">{selected.contact}</span>
+              <span class="text-sm font-medium">{selected.participant_name || selected.participant}</span>
             </div>
           </div>
 
-          <!-- Messages -->
           <div class="flex-1 overflow-y-auto p-4 space-y-3">
-            {#each selected.messages as msg (msg.id)}
-              <div class="flex {msg.is_mine ? 'justify-end' : 'justify-start'}">
-                <div class="page-enter max-w-[70%] {msg.is_mine ? 'bg-indigo-600/30' : 'bg-line'} rounded-xl px-3 py-2">
-                  <p class="text-sm">{msg.text}</p>
+            {#each messages as msg (msg.id)}
+              <div class="flex {msg.read ? 'justify-end' : 'justify-start'}">
+                <div class="page-enter max-w-[70%] {msg.read ? 'bg-indigo-600/30' : 'bg-line'} rounded-xl px-3 py-2">
+                  <p class="text-sm">{msg.content}</p>
                   <span class="text-[10px] text-muted">{new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
                 </div>
               </div>
             {/each}
           </div>
 
-          <!-- Input -->
           <div class="p-3 border-t border-line">
             <div class="flex gap-2">
               <input

@@ -44,6 +44,8 @@ class RealtimeClient {
                                 "integration_connected",
                                 "integration_disconnected",
                                 "notification_new",
+                                "comment_received",
+                                "dm_received",
                         ].forEach((type) => {
                                 this.es!.addEventListener(type, (e: MessageEvent) => {
                                         try {
