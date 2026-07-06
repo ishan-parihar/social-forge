@@ -6,12 +6,13 @@
   import Badge from "$lib/ui/Badge.svelte";
   import Icon from "$lib/ui/Icon.svelte";
   import { goto } from "$app/navigation";
+  import { page as pageStore } from "$app/stores";
 
   let posts = $state<PostSummary[]>([]);
   let filter = $state("all");
   let loading = $state(true);
   let error = $state<string | null>(null);
-  let page = $state(1);
+  let currentPage = $state(1);
   let totalPages = $state(1);
   let totalItems = $state(0);
   let groupByCampaign = $state(false);
@@ -20,7 +21,7 @@
   async function load() {
     loading = true;
     error = null;
-    const params: Record<string, string | number> = { limit, offset: (page - 1) * limit };
+    const params: Record<string, string | number> = { limit, offset: (currentPage - 1) * limit };
     if (filter !== "all") params.state = filter;
     const r = await postsApi.list(params);
     if (r.data) {
@@ -35,12 +36,12 @@
 
   function toggleFilter(f: string) {
     filter = f;
-    page = 1;
+    currentPage = 1;
     load();
   }
 
   function handlePageChange(p: number) {
-    page = p;
+    currentPage = p;
     load();
   }
 
@@ -57,8 +58,14 @@
   });
 
   let postsUnsubscribers: (() => void)[] = [];
+  const filters = ["all", "draft", "queued", "published", "error"];
 
   onMount(() => {
+    // Read state filter from URL params (e.g. /posts?state=error)
+    const stateParam = $pageStore.url.searchParams.get('state');
+    if (stateParam && filters.includes(stateParam)) {
+      filter = stateParam;
+    }
     load();
     const events = ['post_created', 'post_scheduled', 'post_published', 'post_failed', 'post_deleted'];
     for (const evt of events) {
@@ -69,8 +76,6 @@
   onDestroy(() => {
     postsUnsubscribers.forEach(fn => fn());
   });
-
-  const filters = ["all", "draft", "queued", "published", "error"];
 </script>
 
 <div class="page-enter space-y-6">
@@ -173,17 +178,17 @@
     {#if totalPages > 1}
       <div class="flex items-center justify-between px-4 py-3 bg-surface border border-line rounded-xl">
         <span class="text-sm text-muted">
-          Showing {(page - 1) * limit + 1}–{Math.min(page * limit, totalItems)} of {totalItems}
+          Showing {(currentPage - 1) * limit + 1}–{Math.min(currentPage * limit, totalItems)} of {totalItems}
         </span>
         <div class="flex gap-2">
           <button
-            onclick={() => handlePageChange(page - 1)}
-            disabled={page <= 1}
+            onclick={() => handlePageChange(currentPage - 1)}
+            disabled={currentPage <= 1}
             class="px-3 py-1 text-sm rounded bg-surface-hover text-content-secondary disabled:opacity-50 hover:bg-line transition-colors"
           >Previous</button>
           <button
-            onclick={() => handlePageChange(page + 1)}
-            disabled={page >= totalPages}
+            onclick={() => handlePageChange(currentPage + 1)}
+            disabled={currentPage >= totalPages}
             class="px-3 py-1 text-sm rounded bg-surface-hover text-content-secondary disabled:opacity-50 hover:bg-line transition-colors"
           >Next</button>
         </div>

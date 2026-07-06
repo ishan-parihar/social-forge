@@ -73,7 +73,7 @@ function handleKeydown(e: KeyboardEvent) {
       case 'f': goto('/feed'); e.preventDefault(); return;
       case 'a': goto('/analytics'); e.preventDefault(); return;
       case 'm': goto('/media'); e.preventDefault(); return;
-      case 'd': goto('/dashboard'); e.preventDefault(); return;
+      case 'd': goto('/'); e.preventDefault(); return;
       default: return;
     }
   }

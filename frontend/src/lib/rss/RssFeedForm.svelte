@@ -114,7 +114,8 @@
       <div class="text-xs text-red-400">{error}</div>
     {/if}
 
-    <button type="submit" disabled={saving || loadingIntegrations} class="btn btn-primary btn-md">
+    <button type="submit" disabled={saving || loadingIntegrations}
+      class="px-4 py-2 text-sm font-medium bg-brand-500 hover:bg-brand-600 text-white rounded-lg disabled:opacity-50 transition-colors">
       {saving ? 'Adding...' : 'Add Feed'}
     </button>
   </form>

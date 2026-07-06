@@ -28,7 +28,7 @@
     )
   );
 
-  let alertCount = $derived(stats.error + upcoming.filter(p => p.state === 'error').length);
+  let alertCount = $derived(stats.error);
 
   async function load() {
     loading = true;

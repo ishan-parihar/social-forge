@@ -122,7 +122,7 @@
   }
 </script>
 
-<div class="page-enter page-enter max-w-2xl mx-auto space-y-6">
+<div class="page-enter max-w-2xl mx-auto space-y-6">
   <button onclick={() => goto("/posts")} class="text-sm text-muted hover:text-white">&larr; Back to posts</button>
 
   {#if error}
@@ -139,7 +139,7 @@
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-2">
           <Badge state={post.state as "draft" | "queued" | "published" | "error"} />
-          <span class="text-sm text-muted">{post.integration_id}</span>
+          <span class="text-sm text-muted">{post.integration_name}</span>
         </div>
         <div class="flex gap-2">
           {#if !editing}

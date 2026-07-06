@@ -114,7 +114,7 @@
   });
 </script>
 
-<div class="page-enter page-enter max-w-2xl mx-auto space-y-6">
+<div class="page-enter max-w-2xl mx-auto space-y-6">
   <h2 class="text-xl font-semibold">Manage Tags</h2>
 
   {#if error}

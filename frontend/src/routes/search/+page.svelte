@@ -185,7 +185,7 @@
       disabled={importing}
       class="px-3 py-1.5 text-sm bg-surface-hover hover:bg-line border border-line rounded-lg transition-colors disabled:opacity-50"
     >
-      {importing ? "Importing..." : ""}
+      {importing ? "Importing..." : "Import Feed"}
     </button>
   </div>
 

@@ -187,7 +187,7 @@
         integrationTargets.set(integrationId, r.data.targets);
       }
     } catch (e) {
-      toast(`Failed to fetch targets for ${integrationId}: ${e instanceof Error ? (e instanceof Error ? e.message : String(e)) : "unknown"}`, "error");
+      toast("Failed to fetch targets for " + integrationId + ": " + (e instanceof Error ? e.message : String(e)), "error");
     } finally {
       targetsLoading.delete(integrationId);
     }
@@ -369,7 +369,7 @@
   }
 </script>
 
-<div class="page-enter page-enter max-w-4xl mx-auto space-y-6">
+<div class="page-enter max-w-4xl mx-auto space-y-6">
   {#if showRestorePrompt}
     <div class="bg-indigo-500/10 border border-indigo-500/30 rounded-lg p-3 flex items-center justify-between">
       <span class="text-sm text-indigo-300">You have an unsaved draft. Restore it?</span>
@@ -380,7 +380,7 @@
     </div>
   {/if}
 
-  <div class="flex items-center justify-between">
+  <div class="sticky top-0 z-20 bg-background -mx-6 px-6 py-3 border-b border-line flex items-center justify-between">
     <h2 class="text-xl font-semibold">Create Post</h2>
     <div class="flex items-center gap-3">
       {#if draftSaved}
