@@ -2662,3 +2662,28 @@ pub async fn list_cached_comments(
         .await
     }
 }
+
+/// Phase v21: list cached comments for a specific post (used by
+/// GET /api/feed/{post_id}/comments). Falls back to live-fetch on cache
+/// miss (handled by the caller). Returns newest-first, no limit (the
+/// background refresher caps the cache size per post).
+pub async fn list_cached_comments_for_post(
+    pool: &PgPool,
+    user_id: Uuid,
+    post_id: Uuid,
+) -> Result<Vec<CachedComment>, sqlx::Error> {
+    sqlx::query_as::<_, CachedComment>(
+        r#"SELECT cc.id, cc.user_id, cc.comment_id, cc.post_id, cc.provider,
+                  cc.author_name, cc.author_handle, cc.author_avatar,
+                  cc.text, cc.created_at, cc.fetched_at,
+                  ep.text AS post_text
+           FROM cached_comments cc
+           LEFT JOIN external_posts ep ON ep.id = cc.post_id
+           WHERE cc.user_id = $1 AND cc.post_id = $2
+           ORDER BY cc.created_at ASC"#,
+    )
+    .bind(user_id)
+    .bind(post_id)
+    .fetch_all(pool)
+    .await
+}

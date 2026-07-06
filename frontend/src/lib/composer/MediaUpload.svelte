@@ -46,24 +46,23 @@
     uploadError = null;
     for (const file of files) {
       uploadProgress = { ...uploadProgress, [file.name]: 0 };
-      // Simulate progress since the API doesn't support progress callbacks.
-      // (A real progress bar would need XMLHttpRequest with onprogress.)
-      const progressInterval = setInterval(() => {
-        uploadProgress = {
-          ...uploadProgress,
-          [file.name]: Math.min((uploadProgress[file.name] || 0) + 20, 90),
-        };
-      }, 200);
       try {
-        const r = await mediaApi.upload(file);
-        clearInterval(progressInterval);
+        // Phase v21: use real XHR upload progress instead of the fake
+        // setInterval that polled a fake progress value (+20 every 200ms,
+        // capped at 90%). The fake progress was misleading — it showed
+        // "90%" indefinitely on slow uploads and jumped to 100% only when
+        // the response came back. XHR's upload.onprogress gives real
+        // byte-level progress, which is what users expect especially for
+        // video uploads.
+        const r = await mediaApi.uploadWithProgress(file, (pct: number) => {
+          uploadProgress = { ...uploadProgress, [file.name]: pct };
+        });
         if (r.data) {
           onAdd?.(r.data);
         } else {
           uploadError = r.error || "Upload failed";
         }
       } catch (e) {
-        clearInterval(progressInterval);
         uploadError = e instanceof Error ? e.message : "Upload failed";
       }
       const { [file.name]: _, ...rest } = uploadProgress;

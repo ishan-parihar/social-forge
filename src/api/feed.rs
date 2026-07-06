@@ -281,12 +281,43 @@ pub async fn analytics(
     }))
 }
 
-/// GET /api/feed/{post_id}/comments — fetch comments for a feed post from the provider
+/// GET /api/feed/{post_id}/comments — fetch comments for a feed post.
+///
+/// Phase v21: read from `cached_comments` first (instant), fall back to
+/// live-fetch from the provider only on cache miss. The background feed
+/// refresher (`feed::refresh_all_comments`) writes to `cached_comments`
+/// periodically; previously this endpoint ignored the cache and always
+/// hit the provider API (50 sequential calls = slow + rate-limit-prone).
+///
+/// Live-fetch results are also written back to the cache so the next
+/// request is instant.
 pub async fn get_comments(
     State(state): State<AppState>,
     auth: AuthenticatedUser,
     Path(post_id): Path<Uuid>,
 ) -> Result<Json<Vec<serde_json::Value>>, AppError> {
+    // 1. Try the cache first.
+    let cached = queries::list_cached_comments_for_post(&state.db, auth.user_id, post_id)
+        .await?;
+
+    if !cached.is_empty() {
+        // Cache hit — return immediately.
+        let json_comments: Vec<serde_json::Value> = cached
+            .into_iter()
+            .map(|c| serde_json::json!({
+                "comment_id": c.comment_id,
+                "text": c.text,
+                "author_name": c.author_name,
+                "author_handle": c.author_handle,
+                "author_avatar": c.author_avatar,
+                "created_at": c.created_at.to_rfc3339(),
+                "fetched_at": c.fetched_at.to_rfc3339(),
+            }))
+            .collect();
+        return Ok(Json(json_comments));
+    }
+
+    // 2. Cache miss — live-fetch from the provider.
     // Look up the external post to get provider + platform_post_id
     let post = queries::get_external_post_by_id(&state.db, auth.user_id, post_id)
         .await?
@@ -311,6 +342,35 @@ pub async fn get_comments(
         .get_post_comments(&access_token, &post.platform_post_id)
         .await
         .map_err(|e| AppError::Internal(format!("Failed to fetch comments: {e}")))?;
+
+    // 3. Write the live-fetched comments back to the cache so the next
+    // request is instant. (Best-effort — if this fails we still return
+    // the comments to the user.)
+    //
+    // Note: CommentData doesn't have an `author_handle` field (some
+    // providers don't expose it), so we pass None for that column.
+    if !comments.is_empty() {
+        let cache_rows: Vec<(String, String, Option<String>, Option<String>, Option<String>, chrono::DateTime<chrono::Utc>)> = comments
+            .iter()
+            .map(|c| (
+                c.id.clone(),
+                c.text.clone(),
+                c.author_name.clone(),
+                None, // author_handle — not in CommentData
+                c.author_avatar.clone(),
+                c.created_at,
+            ))
+            .collect();
+        if let Err(e) = queries::upsert_cached_comments(
+            &state.db,
+            auth.user_id,
+            post_id,
+            &post.provider,
+            &cache_rows,
+        ).await {
+            tracing::warn!("Failed to cache live-fetched comments for post {}: {}", post_id, e);
+        }
+    }
 
     // Serialize comments as JSON values
     let json_comments: Vec<serde_json::Value> = comments
