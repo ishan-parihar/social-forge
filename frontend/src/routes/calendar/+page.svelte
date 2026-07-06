@@ -7,7 +7,9 @@
   import { toast } from "$lib/stores/toast";
   import { realtime } from "$lib/stores/realtime";
   import { confirmModal } from "$lib/stores/modals.svelte";
+  import { modals } from "$lib/stores/modals.svelte";
   import { composer } from "$lib/stores/composer.svelte";
+  import PostStatsModal from "$lib/calendar/PostStatsModal.svelte";
   import { toCalendarEvent, type CalendarEvent, type CalendarView } from "$lib/calendar/types";
   import { formatDateKey } from "$lib/calendar/utils";
   import CalendarHeader from "$lib/calendar/CalendarHeader.svelte";
@@ -16,7 +18,6 @@
   import DayView from "$lib/calendar/DayView.svelte";
   import ListView from "$lib/calendar/ListView.svelte";
   import PostDetail from "$lib/calendar/PostDetail.svelte";
-  import PostStatsModal from "$lib/calendar/PostStatsModal.svelte";
   import { goto } from "$app/navigation";
 
   let events = $state<CalendarEvent[]>([]);
@@ -30,7 +31,6 @@
   let selectedEvent = $state<CalendarEvent | null>(null);
   let duplicating = $state(false);
   let deleting = $state(false);
-  let statsPostId = $state<string | null>(null);
   let loading = $state(false);
   let refreshing = $state(false);
   let fetchError = $state<string | null>(null);
@@ -245,7 +245,15 @@
   }
 
   function handleStats(eventId: string) {
-    statsPostId = eventId;
+    const post = events.find(e => e.id === eventId);
+    modals.open(PostStatsModal, {
+      postId: eventId,
+      postTitle: post?.title || 'Post',
+      onclose: () => {},
+    }, {
+      title: 'Post Statistics',
+      size: 'max-w-2xl',
+    });
   }
 
   async function handleDelete(eventId: string) {
@@ -387,11 +395,4 @@
   {/if}
 
   <PostDetail event={selectedEvent} onclose={() => selectedEvent = null} onDuplicate={handleDuplicate} {duplicating} />
-
-  {#if statsPostId}
-    {@const post = events.find(e => e.id === statsPostId)}
-    {#if post}
-      <PostStatsModal postId={statsPostId} postTitle={post.title} onclose={() => statsPostId = null} />
-    {/if}
-  {/if}
 </div>

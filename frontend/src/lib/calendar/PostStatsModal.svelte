@@ -1,4 +1,16 @@
 <script lang="ts">
+  // PostStatsModal — per-post analytics with charts (Phase 1, v19).
+  //
+  // Upgraded from a right-side slide-in panel to a centered ModalManager
+  // modal. Shows:
+  //   - Date-range selector (7 / 30 / 90 days)
+  //   - Grid of 4 metric cards (Impressions, Likes, Shares, Comments)
+  //     with totals + delta indicators
+  //   - Per-metric bar charts with date labels
+  //
+  // Inspired by postiz-app's StatisticsModal, but uses inline bar charts
+  // (no Chart.js dependency — YAGNI for 4 small charts).
+
   import { analyticsApi } from "$lib/api/analytics";
   import { engagementIcon, engagementLabel, formatMetricCount } from "./engagement";
   import type { AnalyticsDataPoint } from "$lib/api/analytics";
@@ -13,8 +25,6 @@
   let analyticsData = $state<AnalyticsDataPoint[] | null>(null);
   let loading = $state(false);
   let error = $state<string | null>(null);
-  let panelEl: HTMLDivElement | undefined = $state();
-  let dialogEl: HTMLDivElement | undefined = $state();
   let abortController: AbortController | null = null;
 
   let totalImpressions = $derived(analyticsData?.reduce((s, d) => s + d.impressions, 0) ?? 0);
@@ -63,10 +73,6 @@
     return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   }
 
-  function handleKeydown(e: KeyboardEvent) {
-    if (e.key === "Escape") onclose();
-  }
-
   async function fetchData() {
     abortController?.abort();
     abortController = new AbortController();
@@ -83,7 +89,7 @@
         analyticsData = null;
       }
     } catch (e: unknown) {
-      if (e instanceof Error && e.name === "AbortError") return;
+      if (e instanceof Error && e.name === 'AbortError') return;
       error = (e instanceof Error ? e.message : String(e)) || "Failed to load analytics";
       analyticsData = null;
     } finally {
@@ -94,81 +100,70 @@
   $effect(() => {
     fetchData();
   });
-
-  $effect(() => {
-    document.body.style.overflow = "hidden";
-    dialogEl?.focus();
-    return () => {
-      document.body.style.overflow = "";
-    };
-  });
 </script>
 
-<div bind:this={dialogEl} class="fixed inset-0 z-40 flex justify-end" role="dialog" aria-modal="true" aria-labelledby="stats-modal-title" tabindex="-1" onkeydown={handleKeydown}>
-  <!-- svelte-ignore a11y_click_events_have_key_events -->
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="absolute inset-0 bg-black/40" onclick={onclose}></div>
-  <div bind:this={panelEl} tabindex="-1" class="relative w-96 bg-surface border-l border-line p-6 overflow-y-auto outline-none">
-    <div class="flex items-center justify-between mb-6">
-      <h3 id="stats-modal-title" class="font-semibold text-sm truncate pr-2" title={postTitle}>{postTitle}</h3>
-      <button onclick={onclose} aria-label="Close" class="text-muted hover:text-white text-xl shrink-0">&times;</button>
-    </div>
+<div class="space-y-5">
+  <!-- Date range selector -->
+  <div class="flex bg-background-input rounded-lg border border-line overflow-hidden">
+    {#each [7, 30, 90] as d (d)}
+      <button
+        onclick={() => days = d as 7 | 30 | 90}
+        class="flex-1 px-3 py-1.5 text-xs font-medium transition-colors
+          {days === d ? 'bg-indigo-600 text-white' : 'text-muted hover:text-white hover:bg-surface-hover'}"
+      >{d}d</button>
+    {/each}
+  </div>
 
-    <div class="flex bg-background-input rounded-lg border border-line overflow-hidden mb-6">
-      {#each [7, 30, 90] as d (d)}
-        <button
-          onclick={() => days = d as 7 | 30 | 90}
-          class="flex-1 px-3 py-1.5 text-xs font-medium transition-colors
-            {days === d ? 'bg-indigo-600 text-white' : 'text-muted hover:text-white hover:bg-surface-hover'}"
-        >{d}d</button>
+  {#if loading}
+    <div class="flex items-center justify-center py-12">
+      <span class="animate-spin text-muted text-2xl">⏳</span>
+    </div>
+  {:else if error && !analyticsData}
+    <div class="text-center py-8 text-sm text-red-400">{error}</div>
+  {:else if analyticsData && analyticsData.length === 0}
+    <div class="text-center py-8 text-sm text-muted">
+      No analytics data available yet.
+      <br>
+      <span class="text-xs">The feed refresher pulls engagement data every 30 minutes.</span>
+    </div>
+  {:else if analyticsData}
+    <!-- Metric cards grid -->
+    <div class="grid grid-cols-2 gap-3">
+      {#each metricCards as card (card.label)}
+        <div class="bg-background-input border border-line rounded-lg p-3">
+          <div class="text-xs text-muted mb-1">{card.icon} {card.label}</div>
+          <div class="text-lg font-semibold text-white">{card.value.toLocaleString()}</div>
+          {#if analyticsData.length >= 2}
+            {@const first = analyticsData[0][card.key] as number}
+            {@const last = analyticsData[analyticsData.length - 1][card.key] as number}
+            <div class="text-xs mt-1 {last >= first ? 'text-green-400' : 'text-red-400'}">
+              {last >= first ? '↑' : '↓'} {Math.abs(last - first).toLocaleString()}
+            </div>
+          {/if}
+        </div>
       {/each}
     </div>
 
-    {#if loading}
-      <div class="flex items-center justify-center py-12">
-        <span class="animate-spin text-muted text-2xl">&#x23F3;</span>
-      </div>
-    {:else if error && !analyticsData}
-      <div class="text-center py-8 text-sm text-red-400">{error}</div>
-    {:else if analyticsData && analyticsData.length === 0}
-      <div class="text-center py-8 text-sm text-muted">No analytics data available yet.</div>
-    {:else if analyticsData}
-      <div class="grid grid-cols-2 gap-3 mb-6">
-        {#each metricCards as card (card.label)}
-          <div class="bg-background-input border border-line rounded-lg p-3">
-            <div class="text-xs text-muted mb-1">{card.icon} {card.label}</div>
-            <div class="text-lg font-semibold text-white">{card.value.toLocaleString()}</div>
-            {#if analyticsData.length >= 2}
-              {@const first = analyticsData[0][card.key] as number}
-              {@const last = analyticsData[analyticsData.length - 1][card.key] as number}
-              <div class="text-xs mt-1 {last >= first ? 'text-green-400' : 'text-red-400'}">
-                {last >= first ? '\u2191' : '\u2193'} {Math.abs(last - first).toLocaleString()}
+    <!-- Per-metric bar charts -->
+    <div class="space-y-4">
+      {#each metricCards as card (card.label)}
+        <div>
+          <div class="text-xs text-muted mb-2">{card.icon} {card.label}</div>
+          <div class="flex items-end gap-1 h-20">
+            {#each chartData as point, i (i)}
+              <div class="flex-1 flex flex-col items-center justify-end h-full">
+                <div
+                  class="w-full rounded-t transition-all duration-300"
+                  style="height: {((point[card.key] as number) / (card.key === 'impressions' ? maxImpressions : card.key === 'likes' ? maxLikes : card.key === 'shares' ? maxShares : maxComments)) * 100}%; background: {card.color}; min-height: {(point[card.key] as number) > 0 ? '4px' : '0'}"
+                ></div>
+                {#if chartData.length <= 7 || (chartData.length <= 10 && i % 2 === 0) || i % 3 === 0}
+                  <span class="text-[8px] text-muted mt-1 truncate w-full text-center">{shortDate(point.date)}</span>
+                {/if}
               </div>
-            {/if}
+            {/each}
           </div>
-        {/each}
-      </div>
-
-      <div class="space-y-5">
-        {#each metricCards as card (card.label)}
-          <div>
-            <div class="text-xs text-muted mb-2">{card.icon} {card.label}</div>
-            <div class="flex items-end gap-1 h-24">
-              {#each chartData as point, i (i)}
-                <div class="flex-1 flex flex-col items-center justify-end h-full">
-                  <div
-                    class="w-full rounded-t transition-all duration-300"
-                    style="height: {((point[card.key] as number) / (card.key === 'impressions' ? maxImpressions : card.key === 'likes' ? maxLikes : card.key === 'shares' ? maxShares : maxComments)) * 100}%; background: {card.color}; min-height: {(point[card.key] as number) > 0 ? '4px' : '0'}"
-                  ></div>
-                  {#if chartData.length <= 7 || (chartData.length <= 10 && i % 2 === 0) || i % 3 === 0}
-                    <span class="text-[8px] text-muted mt-1 truncate w-full text-center">{shortDate(point.date)}</span>
-                  {/if}
-                </div>
-              {/each}
-            </div>
-          </div>
-        {/each}
-      </div>
-    {/if}
-  </div>
+        </div>
+      {/each}
+    </div>
+  {/if}
 </div>
