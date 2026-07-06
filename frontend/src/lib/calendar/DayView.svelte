@@ -3,6 +3,7 @@
   import CalendarEvent from "./CalendarEvent.svelte";
   import type { CalendarEvent as CEvent } from "./types";
   import type { Integration } from "$lib/api/integrations";
+  import { makeTouchDragHandler, type TouchDropTarget } from "./touch-drag";
 
   let { date, events = [], selected = new Set(), onEventClick, onDateClick, onDrop, onDuplicate, onStats, onDelete, onToggleSelect, integrations = [] }: {
     date: Date; events?: CEvent[];
@@ -90,9 +91,36 @@
     e.dataTransfer?.setData("text/plain", eventId);
     e.dataTransfer!.effectAllowed = "move";
   }
+
+  // Phase 10: touch-device DnD fallback.
+  const touchDrag = makeTouchDragHandler({
+    getEventId: (e: TouchEvent) => {
+      const target = e.target as HTMLElement;
+      return target.closest('[data-event-id]')?.getAttribute('data-event-id') || null;
+    },
+    getDropTarget: (x: number, y: number) => {
+      const el = document.elementFromPoint(x, y);
+      const cell = el?.closest('[data-drop-date]') as HTMLElement | null;
+      if (!cell) return null;
+      return {
+        date: cell.dataset.dropDate!,
+        hour: cell.dataset.dropHour,
+      };
+    },
+    onDrop: (eventId: string, date: string, hour?: string) => {
+      onDrop?.(eventId, date, hour);
+    },
+    onHighlight: (target: TouchDropTarget | null) => {
+      if (target) {
+        dragOverHour = target.hour || null;
+      } else {
+        dragOverHour = null;
+      }
+    },
+  });
 </script>
 
-<div class="bg-surface border border-line rounded-xl overflow-hidden">
+<div class="bg-surface border border-line rounded-xl overflow-hidden" ontouchstart={touchDrag.onTouchStart} ontouchmove={touchDrag.onTouchMove} ontouchend={touchDrag.onTouchEnd}>
   <div class="py-3 border-b border-line px-4">
     <div class="text-lg font-semibold text-center">
       {date.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
@@ -121,6 +149,8 @@
         <div class="w-16 text-xs text-muted px-2 py-1 border-r border-line shrink-0">{hour}</div>
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div
+          data-drop-date={key}
+          data-drop-hour={hourStr}
           class="flex-1 px-2 py-1 space-y-0.5 cursor-pointer hover:bg-surface-hover transition-colors
             {isDragOver ? 'ring-2 ring-indigo-500 ring-inset bg-indigo-500/5' : ''}"
           onclick={() => onDateClick?.(key)}
@@ -132,6 +162,7 @@
         >
           {#each (eventsByHour.get(hourStr) || []) as event (event.id)}
             <div
+              data-event-id={event.id}
               class="flex items-center gap-1 {event.state === 'published' ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'}"
               draggable={event.state !== 'published'}
               ondragstart={(e) => handleDragStart(e, event.id)}

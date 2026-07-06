@@ -3,6 +3,7 @@
   import CalendarEvent from "./CalendarEvent.svelte";
   import type { CalendarEvent as CEvent } from "./types";
   import { timezone } from "$lib/stores/timezone.svelte";
+  import { makeTouchDragHandler, type TouchDropTarget } from "./touch-drag";
 
   let { referenceDate, events = [], selected = new Set(), onEventClick, onDateClick, onDrop, onDuplicate, onStats, onDelete, onToggleSelect }: {
     referenceDate: Date; events?: CEvent[];
@@ -82,11 +83,42 @@
   function handleDragEnd() {
     dragOverKey = null;
   }
+
+  // Phase 10: touch-device DnD fallback.
+  // Uses a long-press + elementFromPoint approach so drag-to-reschedule
+  // works on mobile browsers where HTML5 DnD doesn't fire.
+  let touchHighlight = $state<TouchDropTarget | null>(null);
+  const touchDrag = makeTouchDragHandler({
+    getEventId: (e: TouchEvent) => {
+      const target = e.target as HTMLElement;
+      return target.closest('[data-event-id]')?.getAttribute('data-event-id') || null;
+    },
+    getDropTarget: (x: number, y: number) => {
+      const el = document.elementFromPoint(x, y);
+      const cell = el?.closest('[data-drop-date]') as HTMLElement | null;
+      if (!cell) return null;
+      return {
+        date: cell.dataset.dropDate!,
+        hour: cell.dataset.dropHour,
+      };
+    },
+    onDrop: (eventId: string, date: string, hour?: string) => {
+      onDrop?.(eventId, date, hour);
+    },
+    onHighlight: (target: TouchDropTarget | null) => {
+      touchHighlight = target;
+      if (target) {
+        dragOverKey = target.hour ? `${target.date}-${target.hour}` : target.date;
+      } else {
+        dragOverKey = null;
+      }
+    },
+  });
 </script>
 
 <svelte:window ondragend={handleDragEnd} />
 
-<div class="week-calendar bg-surface border border-line rounded-xl overflow-hidden">
+<div class="week-calendar bg-surface border border-line rounded-xl overflow-hidden" ontouchstart={touchDrag.onTouchStart} ontouchmove={touchDrag.onTouchMove} ontouchend={touchDrag.onTouchEnd}>
   <div class="grid grid-cols-8 text-center border-b border-line">
     <div class="py-2 text-xs text-muted border-r border-line">{tzLabel}</div>
     {#each weekDays as wd (wd.dateStr)}
@@ -109,6 +141,8 @@
           {@const isDragOver = dragOverKey === cellKey}
           <!-- svelte-ignore a11y_no_static_element_interactions -->
           <div
+            data-drop-date={wd.dateStr}
+            data-drop-hour={hour.slice(0, 2)}
             class="relative px-1 py-1 border-r border-line min-h-[48px] cursor-pointer hover:bg-surface-hover transition-colors
               {isDragOver ? 'ring-2 ring-indigo-500 ring-inset bg-indigo-500/5' : ''}
               {wd.isToday ? 'bg-indigo-500/5' : ''}"
@@ -122,6 +156,7 @@
           >
             {#each (eventsByDayHour.get(cellKey) || []) as event (event.id)}
               <div
+                data-event-id={event.id}
                 class="flex items-center gap-1 {event.state === 'published' ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'}"
                 draggable={event.state !== 'published'}
                 ondragstart={(e) => handleDragStart(e, event.id)}
