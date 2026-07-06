@@ -320,20 +320,52 @@ pub async fn get_comments(
     Ok(Json(json_comments))
 }
 
-/// DELETE /api/feed/{post_id} — hide/remove an imported feed post from the local DB.
-/// This does NOT delete the post on the platform — it only removes the local
-/// mirror copy so it no longer appears in the feed/dashboard.
+/// DELETE /api/feed/{post_id} — soft-hide an imported feed post.
+/// Phase 3: changed from hard DELETE to UPDATE hidden_at = NOW() so the
+/// hide persists across refresh cycles (re-import won't clear it).
 pub async fn delete_post(
     State(state): State<AppState>,
     Path(post_id): Path<Uuid>,
     auth: AuthenticatedUser,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    sqlx::query("DELETE FROM external_posts WHERE id = $1 AND user_id = $2")
+    sqlx::query("UPDATE external_posts SET hidden_at = NOW() WHERE id = $1 AND user_id = $2")
         .bind(post_id)
         .bind(auth.user_id)
         .execute(&state.db)
         .await
-        .map_err(|e| AppError::Internal(format!("Failed to delete feed post: {e}")))?;
+        .map_err(|e| AppError::Internal(format!("Failed to hide feed post: {e}")))?;
 
-    Ok(Json(serde_json::json!({ "deleted": true })))
+    Ok(Json(serde_json::json!({ "hidden": true })))
+}
+
+/// POST /api/feed/{post_id}/save — bookmark a feed post for later reference.
+pub async fn save_post(
+    State(state): State<AppState>,
+    Path(post_id): Path<Uuid>,
+    auth: AuthenticatedUser,
+) -> Result<Json<serde_json::Value>, AppError> {
+    sqlx::query("UPDATE external_posts SET saved_at = NOW() WHERE id = $1 AND user_id = $2")
+        .bind(post_id)
+        .bind(auth.user_id)
+        .execute(&state.db)
+        .await
+        .map_err(|e| AppError::Internal(format!("Failed to save feed post: {e}")))?;
+
+    Ok(Json(serde_json::json!({ "saved": true })))
+}
+
+/// DELETE /api/feed/{post_id}/save — remove bookmark from a feed post.
+pub async fn unsave_post(
+    State(state): State<AppState>,
+    Path(post_id): Path<Uuid>,
+    auth: AuthenticatedUser,
+) -> Result<Json<serde_json::Value>, AppError> {
+    sqlx::query("UPDATE external_posts SET saved_at = NULL WHERE id = $1 AND user_id = $2")
+        .bind(post_id)
+        .bind(auth.user_id)
+        .execute(&state.db)
+        .await
+        .map_err(|e| AppError::Internal(format!("Failed to unsave feed post: {e}")))?;
+
+    Ok(Json(serde_json::json!({ "saved": false })))
 }

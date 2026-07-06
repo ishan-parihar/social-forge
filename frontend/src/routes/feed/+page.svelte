@@ -6,6 +6,7 @@
   import MediaCarousel from "$lib/media/MediaCarousel.svelte";
   import { toast } from "$lib/stores/toast";
   import { realtime } from "$lib/stores/realtime";
+  import { composer } from "$lib/stores/composer.svelte";
   import { providerMeta as centralProviderMeta } from "$lib/providers";
 
   let posts = $state<FeedPost[]>([]);
@@ -639,7 +640,7 @@
               {/if}
             </div>
 
-            <!-- Footer: link + hide -->
+            <!-- Footer: link + repurpose + hide -->
             <div class="mt-3 pt-3 border-t border-line flex items-center justify-between">
               {#if post.url}
                 <a
@@ -657,21 +658,46 @@
               {:else}
                 <span></span>
               {/if}
-              <button
-                onclick={async () => {
-                  const r = await feedApi.delete(post.id);
-                  if (r.error) {
-                    toast("Failed to hide: " + r.error, "error");
-                  } else {
-                    posts = posts.filter(p => p.id !== post.id);
-                    toast("Post hidden from feed", "success");
-                  }
-                }}
-                class="text-xs text-muted hover:text-red-400 transition-colors"
-                title="Hide from feed (does not delete on platform)"
-              >
-                Hide
-              </button>
+              <div class="flex items-center gap-3">
+                <!-- Phase 3: Repurpose — open composer with this post's content prefilled -->
+                <button
+                  onclick={() => composer.openCreate(undefined, undefined, post.text)}
+                  class="text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
+                  title="Create a new post from this content"
+                >
+                  ✏️ Repurpose
+                </button>
+                <!-- Phase 3: Save/bookmark -->
+                <button
+                  onclick={async () => {
+                    const r = await feedApi.save(post.id);
+                    if (r.error) {
+                      toast("Failed to save: " + r.error, "error");
+                    } else {
+                      toast("Post saved", "success");
+                    }
+                  }}
+                  class="text-xs text-muted hover:text-yellow-400 transition-colors"
+                  title="Save for later"
+                >
+                  🔖 Save
+                </button>
+                <button
+                  onclick={async () => {
+                    const r = await feedApi.delete(post.id);
+                    if (r.error) {
+                      toast("Failed to hide: " + r.error, "error");
+                    } else {
+                      posts = posts.filter(p => p.id !== post.id);
+                      toast("Post hidden from feed", "success");
+                    }
+                  }}
+                  class="text-xs text-muted hover:text-red-400 transition-colors"
+                  title="Hide from feed (does not delete on platform)"
+                >
+                  Hide
+                </button>
+              </div>
             </div>
           </div>
         </article>

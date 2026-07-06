@@ -1860,6 +1860,7 @@ pub async fn list_all_external_posts_with_engagement(
              FROM external_posts ep
              LEFT JOIN post_engagement pe ON pe.post_id = ep.id
              WHERE ep.user_id = $1 AND ep.provider = $2
+               AND ep.hidden_at IS NULL
                AND ($3::timestamptz IS NULL OR ep.created_at < $3)
                AND ($4::text IS NULL OR ep.author_handle = $4)
              ORDER BY ep.created_at DESC
@@ -1895,6 +1896,7 @@ pub async fn list_all_external_posts_with_engagement(
              FROM external_posts ep
              LEFT JOIN post_engagement pe ON pe.post_id = ep.id
              WHERE ep.user_id = $1
+               AND ep.hidden_at IS NULL
                AND ($2::timestamptz IS NULL OR ep.created_at < $2)
                AND ($3::text IS NULL OR ep.author_handle = $3)
              ORDER BY ep.created_at DESC

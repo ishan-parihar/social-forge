@@ -170,6 +170,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/feed/analytics", axum::routing::get(feed::analytics))
         .route("/api/feed/{post_id}/comments", axum::routing::get(feed::get_comments))
         .route("/api/feed/{post_id}", axum::routing::delete(feed::delete_post))
+        .route("/api/feed/{post_id}/save", axum::routing::post(feed::save_post).delete(feed::unsave_post))
         .route("/api/comments", axum::routing::get(comments::list))
         .route("/api/comments/{id}/resolve", axum::routing::post(comments::resolve))
         .route("/api/comments/{id}/reply", axum::routing::post(comments::reply))

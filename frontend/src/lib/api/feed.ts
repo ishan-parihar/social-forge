@@ -108,6 +108,12 @@ export const feedApi = {
     }>(`/api/feed/analytics${q}`);
   },
   delete: (postId: string) => {
-    return api.del<{ deleted: boolean }>(`/api/feed/${postId}`);
+    return api.del<{ hidden: boolean }>(`/api/feed/${postId}`);
+  },
+  save: (postId: string) => {
+    return api.post<{ saved: boolean }>(`/api/feed/${postId}/save`, {});
+  },
+  unsave: (postId: string) => {
+    return api.del<{ saved: boolean }>(`/api/feed/${postId}/save`);
   },
 };
