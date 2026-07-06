@@ -24,12 +24,25 @@
 
 <div class="group relative">
   <div
-    class="event-chip {event.state} {isPast ? 'opacity-50' : ''} {event.error ? 'ring-1 ring-red-500/50' : ''}"
+    class="event-chip {event.state} {isPast ? 'opacity-50' : ''} {event.error ? 'ring-2 ring-red-500' : ''}"
     style={event.campaignColor
       ? "border-left: 3px solid " + event.campaignColor
       : (event.tags && event.tags.length > 0 ? "border-left: 3px solid " + event.tags[0].color : "")}
-    title={event.content.length > 200 ? event.content.slice(0, 200) + '...' : event.content}
+    title={event.error
+      ? `Failed to publish: ${event.error}`
+      : (event.content.length > 200 ? event.content.slice(0, 200) + '...' : event.content)}
   >
+    {#if event.error}
+      <!-- Phase v21: postiz-style per-post error indicator.
+           A red "!" badge in the top-left corner makes failed posts
+           immediately visible on the calendar without needing to hover.
+           The chip itself also gets ring-2 ring-red-500 (above) and
+           the title attribute shows the error message on hover. -->
+      <span
+        class="absolute -top-1 -left-1 w-3.5 h-3.5 rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center shadow-sm z-10"
+        title={`Publishing failed: ${event.error}`}
+      >!</span>
+    {/if}
     {#if !compact && event.tags && event.tags.length > 0}
       <span class="event-tags">
         {#each visibleTags as tag (tag.id)}

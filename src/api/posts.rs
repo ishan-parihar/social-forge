@@ -522,6 +522,23 @@ pub async fn create_thread(
     Ok(Json(CreateThreadResponse { posts: publics, group_id }))
 }
 
+/// GET /api/posts/group/:group_id — fetch all posts sharing a group_id.
+///
+/// Used by the composer's edit-mode to load all sibling posts in a thread
+/// (main post + first-comment + thread parts). Returns an empty array if
+/// the group_id has no posts (or if the caller doesn't own them).
+///
+/// Excludes soft-deleted posts.
+pub async fn get_group(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(group_id): Path<Uuid>,
+) -> Result<Json<Vec<PostPublic>>, crate::error::AppError> {
+    let posts = queries::list_posts_by_group(&state.db, auth.user_id, group_id).await?;
+    let publics: Vec<PostPublic> = posts.into_iter().map(PostPublic::from).collect();
+    Ok(Json(publics))
+}
+
 /// GET /api/posts/:id
 pub async fn get(
     State(state): State<AppState>,

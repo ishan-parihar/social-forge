@@ -116,4 +116,23 @@ export const feedApi = {
   unsave: (postId: string) => {
     return api.del<{ saved: boolean }>(`/api/feed/${postId}/save`);
   },
+  /**
+   * Update an imported feed post's cached text/media/metadata.
+   * Does NOT touch the original post on the platform — only the cached copy
+   * in `external_posts`. Use cases: fix import errors, annotate metadata.
+   */
+  update: (postId: string, d: { text?: string; media?: unknown; metadata?: unknown }) =>
+    api.put<{ id: string; text: string; media: unknown; metadata: unknown }>(`/api/feed/${postId}`, d),
+  /**
+   * Convert an imported feed post into a Social Forge `posts` row.
+   * Creates a new draft (or queued if scheduled_at is provided) post with
+   * source_external_post_id set to the feed post's id for provenance.
+   * Returns the newly-created post so the caller can open the composer
+   * to edit/schedule/publish it.
+   */
+  repurpose: (postId: string, d: { integration_id: string; content?: string; title?: string; scheduled_at?: string }) =>
+    api.post<{
+      post: import('./posts').PostSummary & { integration_id: string };
+      source_external_post_id: string;
+    }>(`/api/feed/${postId}/repurpose`, d),
 };

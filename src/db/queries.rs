@@ -450,6 +450,7 @@ pub async fn list_posts(
 ) -> Result<Vec<Post>, sqlx::Error> {
     if let Some(st) = state_filter {
         let ps: PostState = match st {
+            "idea" => PostState::Idea,
             "draft" => PostState::Draft,
             "queued" => PostState::Queued,
             "published" => PostState::Published,
@@ -464,7 +465,7 @@ pub async fn list_posts(
                created_at, updated_at,
                repeat_interval_days, repeat_end_date, group_id,
                first_comment, sequence
-             FROM posts WHERE user_id = $1 AND state = $2
+             FROM posts WHERE user_id = $1 AND state = $2 AND deleted_at IS NULL
              ORDER BY scheduled_at DESC NULLS LAST, created_at DESC
              LIMIT $3 OFFSET $4"#,
          user_id,
@@ -487,13 +488,14 @@ pub async fn count_posts_by_user(
 ) -> Result<i64, sqlx::Error> {
     if let Some(st) = state_filter {
         let ps: PostState = match st {
+            "idea" => PostState::Idea,
             "draft" => PostState::Draft,
             "queued" => PostState::Queued,
             "published" => PostState::Published,
             "error" => PostState::Error,
             _ => {
                 let row: (Option<i64>,) = sqlx::query_as(
-                    "SELECT COUNT(*)::bigint FROM posts WHERE user_id = $1"
+                    "SELECT COUNT(*)::bigint FROM posts WHERE user_id = $1 AND deleted_at IS NULL"
                 )
                 .bind(user_id)
                 .fetch_one(pool)
@@ -502,7 +504,7 @@ pub async fn count_posts_by_user(
             }
         };
         let row: (Option<i64>,) = sqlx::query_as(
-            "SELECT COUNT(*)::bigint FROM posts WHERE user_id = $1 AND state = $2"
+            "SELECT COUNT(*)::bigint FROM posts WHERE user_id = $1 AND state = $2 AND deleted_at IS NULL"
         )
         .bind(user_id)
         .bind(ps)
@@ -511,7 +513,7 @@ pub async fn count_posts_by_user(
         Ok(row.0.unwrap_or(0))
     } else {
         let row: (Option<i64>,) = sqlx::query_as(
-            "SELECT COUNT(*)::bigint FROM posts WHERE user_id = $1"
+            "SELECT COUNT(*)::bigint FROM posts WHERE user_id = $1 AND deleted_at IS NULL"
         )
         .bind(user_id)
         .fetch_one(pool)
@@ -534,7 +536,7 @@ async fn list_posts_all(
             created_at, updated_at,
             repeat_interval_days, repeat_end_date, group_id,
             first_comment, sequence
-          FROM posts WHERE user_id = $1
+          FROM posts WHERE user_id = $1 AND deleted_at IS NULL
           ORDER BY scheduled_at DESC NULLS LAST, created_at DESC
           LIMIT $2 OFFSET $3"#,
          user_id,
@@ -606,6 +608,7 @@ pub async fn list_posts_search(
            FROM posts p
            LEFT JOIN post_engagement pe ON pe.post_id = p.id
            WHERE p.user_id = $1
+             AND p.deleted_at IS NULL
              AND ($2::text IS NULL OR p.state = $2::text)
              AND ($3::text IS NULL OR p.content ILIKE $3 OR p.title ILIKE $3)
              AND ($4::uuid[] IS NULL OR p.integration_id = ANY($4::uuid[]))
@@ -623,6 +626,7 @@ pub async fn list_posts_search(
                   first_comment, sequence
            FROM posts
            WHERE user_id = $1
+             AND deleted_at IS NULL
              AND ($2::text IS NULL OR state = $2::text)
              AND ($3::text IS NULL OR content ILIKE $3 OR title ILIKE $3)
              AND ($4::uuid[] IS NULL OR integration_id = ANY($4::uuid[]))
@@ -698,7 +702,7 @@ pub async fn count_posts_search(
             created_at, updated_at,
             repeat_interval_days, repeat_end_date, group_id,
             first_comment, sequence
-          FROM posts WHERE id = $1 AND user_id = $2"#,
+          FROM posts WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL"#,
          id,
          user_id,
      )
@@ -794,10 +798,66 @@ pub async fn count_posts_search(
 }
 
 pub async fn delete_post(pool: &PgPool, id: Uuid, user_id: Uuid) -> Result<bool, sqlx::Error> {
-    let r = sqlx::query!("DELETE FROM posts WHERE id = $1 AND user_id = $2", id, user_id)
-        .execute(pool)
-        .await?;
+    // Soft-delete: set deleted_at = NOW() on the post AND on every post
+    // sharing the same group_id (if any). This makes the delete reversible
+    // and keeps the calendar / posts-list queries clean (they filter
+    // `WHERE deleted_at IS NULL`).
+    //
+    // If the post has no group_id, only the single row is soft-deleted.
+    let r = sqlx::query!(
+        r#"UPDATE posts SET deleted_at = NOW()
+           WHERE user_id = $2 AND deleted_at IS NULL AND (
+             id = $1
+             OR (group_id IS NOT NULL AND group_id = (SELECT group_id FROM posts WHERE id = $1 AND user_id = $2))
+           )"#,
+        id,
+        user_id,
+    )
+    .execute(pool)
+    .await?;
     Ok(r.rows_affected() > 0)
+}
+
+/// Hard-undelete a post (and its group). Useful for a future "Trash" UI.
+pub async fn undelete_post(pool: &PgPool, id: Uuid, user_id: Uuid) -> Result<bool, sqlx::Error> {
+    let r = sqlx::query!(
+        r#"UPDATE posts SET deleted_at = NULL
+           WHERE user_id = $2 AND deleted_at IS NOT NULL AND (
+             id = $1
+             OR (group_id IS NOT NULL AND group_id = (SELECT group_id FROM posts WHERE id = $1 AND user_id = $2))
+           )"#,
+        id,
+        user_id,
+    )
+    .execute(pool)
+    .await?;
+    Ok(r.rows_affected() > 0)
+}
+
+/// List all posts sharing a group_id (for thread/group editing in the composer).
+/// Returns empty vec if group_id is None or no posts match.
+/// Excludes soft-deleted posts.
+pub async fn list_posts_by_group(
+    pool: &PgPool,
+    user_id: Uuid,
+    group_id: Uuid,
+) -> Result<Vec<Post>, sqlx::Error> {
+    sqlx::query_as!(
+        Post,
+        r#"SELECT id, user_id, integration_id, state as "state: PostState",
+           content, title, media, settings, scheduled_at, published_at,
+           platform_post_id, platform_post_url, error_message,
+           created_at, updated_at,
+           repeat_interval_days, repeat_end_date, group_id,
+           first_comment, sequence
+         FROM posts
+         WHERE user_id = $1 AND group_id = $2 AND deleted_at IS NULL
+         ORDER BY sequence ASC, created_at ASC"#,
+        user_id,
+        group_id,
+    )
+    .fetch_all(pool)
+    .await
 }
 
 /// Get a single post with its integration details (used for retry/publish now)
@@ -1058,14 +1118,14 @@ pub async fn get_calendar_posts_with_metrics(
            p.repeat_interval_days, p.repeat_end_date,
            p.group_id, p.first_comment, p.sequence,
            i.provider_name as integration_name,
-           (ac.data->>'likes')::bigint as likes,
-           (ac.data->>'comments')::bigint as comments,
-           (ac.data->>'shares')::bigint as shares,
-           (ac.data->>'impressions')::bigint as impressions
+           NULL::bigint as likes,
+           NULL::bigint as comments,
+           NULL::bigint as shares,
+           NULL::bigint as impressions
          FROM posts p
          LEFT JOIN integrations i ON p.integration_id = i.id
-         LEFT JOIN analytics_cache ac ON p.platform_post_id = ac.platform_post_id AND p.user_id = ac.user_id
          WHERE p.user_id = $1
+           AND p.deleted_at IS NULL
            AND (
              -- Queued/draft posts: filter by scheduled_at
              (p.state != 'published' AND p.scheduled_at >= $2 AND p.scheduled_at <= $3)

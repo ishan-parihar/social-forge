@@ -60,8 +60,12 @@ impl PostService {
             }
         }
         let clean = clean.trim();
-        if clean.len() > max_len {
-            clean[..max_len].to_string()
+        if clean.chars().count() > max_len {
+            // Use char-boundary-safe truncation to avoid panicking on
+            // multi-byte UTF-8 sequences (e.g., emoji). `String::len()`
+            // returns byte length, and slicing `clean[..max_len]` would
+            // panic if `max_len` falls inside a multi-byte sequence.
+            clean.chars().take(max_len).collect()
         } else {
             clean.to_string()
         }
@@ -77,8 +81,8 @@ impl PostService {
         if content.trim().is_empty() {
             return Err("Content cannot be empty".into());
         }
-        if content.len() > 2000 {
-            return Err(format!("Content exceeds 2000 chars (got {})", content.len()));
+        if content.chars().count() > 2000 {
+            return Err(format!("Content exceeds 2000 chars (got {})", content.chars().count()));
         }
 
         let state = input.state.unwrap_or(PostState::Draft);

@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::auth::middleware::AuthenticatedUser;
+use crate::db::models::PostPublic;
 use crate::db::queries;
 use crate::error::AppError;
 use crate::feed;
@@ -368,4 +369,181 @@ pub async fn unsave_post(
         .map_err(|e| AppError::Internal(format!("Failed to unsave feed post: {e}")))?;
 
     Ok(Json(serde_json::json!({ "saved": false })))
+}
+
+// ── Feed CRUD: Update + Repurpose ───────────────────────────────────
+//
+// These close the v20 Phase 3 gap where "Repurpose" was frontend-only.
+// Now the frontend can:
+//   PUT  /api/feed/{id}              — edit an imported post's text/media/metadata
+//   POST /api/feed/{id}/repurpose    — convert an imported post into a Social
+//                                       Forge `posts` row with provenance FK
+//
+// Repurpose design:
+//   - The user picks a target integration_id (which channel to post to).
+//   - The endpoint creates a new `posts` row with state='draft', content
+//     copied from external_posts.text, media copied from external_posts.media,
+//     and source_external_post_id set to the feed post's id.
+//   - The user can then open the composer to schedule/publish it.
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateFeedPostRequest {
+    pub text: Option<String>,
+    pub media: Option<serde_json::Value>,
+    pub metadata: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct UpdateFeedPostResponse {
+    pub id: Uuid,
+    pub text: String,
+    pub media: serde_json::Value,
+    pub metadata: serde_json::Value,
+}
+
+/// PUT /api/feed/{post_id} — update an imported feed post's text/media/metadata.
+///
+/// Use cases:
+///   - Fix an import error (e.g., truncated text, wrong media extracted).
+///   - Annotate the metadata for search/filter.
+///
+/// Does NOT touch the original post on the platform — only the cached copy
+/// in `external_posts`.
+pub async fn update_post(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(post_id): Path<Uuid>,
+    Json(body): Json<UpdateFeedPostRequest>,
+) -> Result<Json<UpdateFeedPostResponse>, AppError> {
+    // Verify ownership + fetch current values (so we can merge partial updates)
+    let current = queries::get_external_post_by_id(&state.db, auth.user_id, post_id)
+        .await?
+        .ok_or_else(|| AppError::NotFound("Feed post not found".into()))?;
+
+    let new_text = body.text.unwrap_or(current.text);
+    let new_media = body.media.unwrap_or(current.media);
+    let new_metadata = body.metadata.unwrap_or(current.metadata);
+
+    let updated: Option<(Uuid, String, serde_json::Value, serde_json::Value)> = sqlx::query_as(
+        "UPDATE external_posts SET text = $1, media = $2, metadata = $3 \
+         WHERE id = $4 AND user_id = $5 \
+         RETURNING id, text, media, metadata",
+    )
+    .bind(&new_text)
+    .bind(&new_media)
+    .bind(&new_metadata)
+    .bind(post_id)
+    .bind(auth.user_id)
+    .fetch_optional(&state.db)
+    .await?;
+
+    let row = updated.ok_or_else(|| AppError::NotFound("Feed post not found".into()))?;
+
+    Ok(Json(UpdateFeedPostResponse {
+        id: row.0,
+        text: row.1,
+        media: row.2,
+        metadata: row.3,
+    }))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RepurposeRequest {
+    /// Target integration to repurpose into. Required — the user must pick
+    /// a channel (X, LinkedIn, etc.) to create the new post for.
+    pub integration_id: Uuid,
+    /// Optional content override. If None, uses external_posts.text.
+    pub content: Option<String>,
+    /// Optional title override.
+    pub title: Option<String>,
+    /// Optional scheduled_at (RFC3339). If None, the new post is a draft.
+    pub scheduled_at: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct RepurposeResponse {
+    /// The newly-created Social Forge post (draft by default).
+    pub post: PostPublic,
+    /// The source feed post id, for the frontend to show provenance.
+    pub source_external_post_id: Uuid,
+}
+
+/// POST /api/feed/{post_id}/repurpose — convert an imported feed post into
+/// a Social Forge `posts` row.
+///
+/// Creates a new post in `draft` state (or `queued` if `scheduled_at` is
+/// provided) with:
+///   - content = external_posts.text (or override)
+///   - media   = external_posts.media
+///   - source_external_post_id = external_posts.id  (provenance FK)
+///
+/// The user can then open the composer to edit/schedule/publish it.
+pub async fn repurpose_post(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(post_id): Path<Uuid>,
+    Json(body): Json<RepurposeRequest>,
+) -> Result<Json<RepurposeResponse>, AppError> {
+    // 1. Fetch the source feed post (verifies ownership)
+    let source = queries::get_external_post_by_id(&state.db, auth.user_id, post_id)
+        .await?
+        .ok_or_else(|| AppError::NotFound("Feed post not found".into()))?;
+
+    // 2. Verify the target integration exists + belongs to the user
+    let integration = queries::get_integration(&state.db, body.integration_id, auth.user_id)
+        .await?
+        .ok_or_else(|| AppError::NotFound("Target integration not found".into()))?;
+
+    // 3. Resolve content + scheduled_at + state
+    let content = body.content.unwrap_or_else(|| source.text.clone());
+    let content = crate::services::PostService::sanitize_content(&content, 2000);
+    if content.trim().is_empty() {
+        return Err(AppError::BadRequest("Cannot repurpose an empty post".into()));
+    }
+
+    let (scheduled_at, state_enum): (Option<chrono::DateTime<chrono::Utc>>, crate::db::models::PostState) =
+        if let Some(s) = body.scheduled_at.as_deref() {
+            let dt = chrono::DateTime::parse_from_rfc3339(s)
+                .map_err(|_| AppError::BadRequest("Invalid scheduled_at format, use ISO8601".into()))?
+                .with_timezone(&chrono::Utc);
+            (Some(dt), crate::db::models::PostState::Queued)
+        } else {
+            (None, crate::db::models::PostState::Draft)
+        };
+
+    // 4. Insert the new post with source_external_post_id set
+    let post: crate::db::models::Post = sqlx::query_as::<_, crate::db::models::Post>(
+        r#"INSERT INTO posts
+           (user_id, integration_id, content, title, media, settings,
+            scheduled_at, state, source_external_post_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+           RETURNING id, user_id, integration_id, state as "state: PostState",
+              content, title, media, settings, scheduled_at, published_at,
+              platform_post_id, platform_post_url, error_message,
+              created_at, updated_at,
+              repeat_interval_days, repeat_end_date, group_id,
+              first_comment, sequence"#,
+    )
+    .bind(auth.user_id)
+    .bind(integration.id)
+    .bind(&content)
+    .bind(body.title.as_deref())
+    .bind(&source.media)
+    .bind(serde_json::json!({}))
+    .bind(scheduled_at)
+    .bind(state_enum)
+    .bind(post_id)
+    .fetch_one(&state.db)
+    .await?;
+
+    // 5. Broadcast the creation (so the calendar / posts list update in realtime)
+    state.broadcast.send(
+        "post_created",
+        &serde_json::json!({"id": post.id.to_string()}),
+    );
+
+    Ok(Json(RepurposeResponse {
+        post: PostPublic::from(post),
+        source_external_post_id: post_id,
+    }))
 }

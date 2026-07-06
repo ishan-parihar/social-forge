@@ -143,6 +143,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/posts/{id}/tags", axum::routing::put(posts::set_post_tags))
         .route("/api/posts/{id}/stage", axum::routing::patch(campaigns::update_stage))
         .route("/api/posts/find-slot", axum::routing::get(posts::find_slot))
+        .route("/api/posts/group/{group_id}", axum::routing::get(posts::get_group))
         // Phase 7: Campaigns + Kanban
         .route("/api/campaigns", axum::routing::get(campaigns::list).post(campaigns::create))
         .route("/api/campaigns/{id}", axum::routing::put(campaigns::update).delete(campaigns::delete))
@@ -174,8 +175,12 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/feed/accounts", axum::routing::get(feed::accounts))
         .route("/api/feed/analytics", axum::routing::get(feed::analytics))
         .route("/api/feed/{post_id}/comments", axum::routing::get(feed::get_comments))
-        .route("/api/feed/{post_id}", axum::routing::delete(feed::delete_post))
+        .route("/api/feed/{post_id}/repurpose", axum::routing::post(feed::repurpose_post))
         .route("/api/feed/{post_id}/save", axum::routing::post(feed::save_post).delete(feed::unsave_post))
+        .route(
+            "/api/feed/{post_id}",
+            axum::routing::put(feed::update_post).delete(feed::delete_post),
+        )
         .route("/api/comments", axum::routing::get(comments::list))
         .route("/api/comments/{id}/resolve", axum::routing::post(comments::resolve))
         .route("/api/comments/{id}/reply", axum::routing::post(comments::reply))

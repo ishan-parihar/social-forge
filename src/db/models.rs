@@ -104,6 +104,10 @@ impl From<Integration> for IntegrationPublic {
 #[sqlx(type_name = "post_state")]
 #[sqlx(rename_all = "lowercase")]
 pub enum PostState {
+    /// `Idea` is a kanban-only state (migration 026). Posts in this state
+    /// are not scheduled and not visible on the calendar — they live in
+    /// the "Ideas" kanban column until promoted to `Draft`.
+    Idea,
     Draft,
     Queued,
     /// `Publishing` is a transient state: the scheduler has claimed the
@@ -119,6 +123,7 @@ pub enum PostState {
 impl std::fmt::Display for PostState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            PostState::Idea => write!(f, "idea"),
             PostState::Draft => write!(f, "draft"),
             PostState::Queued => write!(f, "queued"),
             PostState::Publishing => write!(f, "publishing"),

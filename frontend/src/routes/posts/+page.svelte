@@ -6,7 +6,7 @@
   import { realtime } from "$lib/stores/realtime";
   import { timezone } from "$lib/stores/timezone.svelte";
   import { composer } from "$lib/stores/composer.svelte";
-  import { confirmModal } from "$lib/stores/modals.svelte";
+  import { confirmModal, modals } from "$lib/stores/modals.svelte";
   import Badge from "$lib/ui/Badge.svelte";
   import Icon from "$lib/ui/Icon.svelte";
   import { goto } from "$app/navigation";
@@ -33,6 +33,15 @@
   // checked. Empty by default; cleared on filter change or page change.
   let selectedIds = $state<Set<string>>(new Set());
   let bulkActionLoading = $state(false);
+
+  // Phase v21: bulk-reschedule modal state. Previously this used two
+  // sequential native prompt() calls asking the user to type a date+time
+  // string by hand. Now we render a proper modal with date+time inputs +
+  // a spread-minutes input, and confirm via modals.areYouSure.
+  let bulkRescheduleModalOpen = $state(false);
+  let bulkRescheduleDate = $state("");
+  let bulkRescheduleTime = $state("09:00");
+  let bulkRescheduleSpread = $state("30");
   // Per-post duplication in-flight flag (R-14 / U-5): prevents double-clicks
   // from spawning two duplicates of the same post.
   let duplicatingId = $state<string | null>(null);
@@ -155,7 +164,16 @@
   // Failures are collected and surfaced as a single toast.
   async function handleBulkDelete() {
     if (selectedIds.size === 0) return;
-    if (!confirm(`Delete ${selectedIds.size} post${selectedIds.size > 1 ? 's' : ''}? This cannot be undone.`)) return;
+    // Phase v21: replace native confirm() with modals.areYouSure for
+    // consistent UX with the calendar's bulk-delete flow.
+    const ok = await modals.areYouSure({
+      title: `Delete ${selectedIds.size} post${selectedIds.size > 1 ? 's' : ''}?`,
+      message: 'These posts will be soft-deleted. They will be hidden from the calendar and posts list, but can be recovered from the Trash (coming in v22).',
+      confirmLabel: 'Delete',
+      cancelLabel: 'Cancel',
+      danger: true,
+    });
+    if (!ok) return;
     bulkActionLoading = true;
     let failures = 0;
     const ids = Array.from(selectedIds);
@@ -190,16 +208,39 @@
 
   // Phase 5: bulk reschedule with offset.
   // Reschedules all selected posts to a base date, spread by N minutes.
+  //
+  // Phase v21: previously this used two sequential native prompt() calls
+  // asking the user to hand-type "YYYY-MM-DD HH:MM" and a spread-minutes
+  // number. Now we render a proper modal (bulkRescheduleModalOpen) with
+  // native date+time inputs + a numeric spread input. The actual reschedule
+  // runs in confirmBulkReschedule() below.
   async function handleBulkReschedule() {
     if (selectedIds.size === 0) return;
-    const baseDate = prompt(`Enter base date+time for ${selectedIds.size} posts (YYYY-MM-DD HH:MM):`);
-    if (!baseDate) return;
-    const spreadMin = parseInt(prompt('Spread posts by how many minutes? (0 = same time)', '30') || '0', 10);
-    const baseIso = new Date(baseDate.replace(' ', 'T') + ':00.000Z').toISOString();
-    if (isNaN(new Date(baseIso).getTime())) {
-      toast('Invalid date format', 'error');
+    // Pre-fill date with today + 1 day, time with 09:00.
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    bulkRescheduleDate = tomorrow.toISOString().slice(0, 10);
+    bulkRescheduleTime = "09:00";
+    bulkRescheduleSpread = "30";
+    bulkRescheduleModalOpen = true;
+  }
+
+  async function confirmBulkReschedule() {
+    if (!bulkRescheduleDate) {
+      toast('Please pick a date', 'error');
       return;
     }
+    const spreadMin = parseInt(bulkRescheduleSpread || '0', 10);
+    if (isNaN(spreadMin) || spreadMin < 0) {
+      toast('Spread must be a non-negative number', 'error');
+      return;
+    }
+    const baseIso = `${bulkRescheduleDate}T${bulkRescheduleTime}:00.000Z`;
+    if (isNaN(new Date(baseIso).getTime())) {
+      toast('Invalid date/time', 'error');
+      return;
+    }
+    bulkRescheduleModalOpen = false;
     bulkActionLoading = true;
     let failures = 0;
     let successes = 0;
@@ -481,3 +522,67 @@
     {/if}
   {/if}
 </div>
+
+<!-- Phase v21: Bulk reschedule modal — replaces two sequential native
+     prompt() calls with a proper modal that has date + time + spread inputs. -->
+{#if bulkRescheduleModalOpen}
+  <div
+    class="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+    onclick={() => (bulkRescheduleModalOpen = false)}
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="bulk-reschedule-title"
+  >
+    <div
+      class="bg-surface border border-line rounded-xl shadow-2xl w-full max-w-md p-5"
+      onclick={(e) => e.stopPropagation()}
+    >
+      <h3 id="bulk-reschedule-title" class="text-lg font-semibold mb-1">
+        Reschedule {selectedIds.size} post{selectedIds.size > 1 ? 's' : ''}
+      </h3>
+      <p class="text-xs text-muted mb-4">
+        The first post goes out at the date/time below. Each subsequent post is offset by the spread minutes.
+      </p>
+      <div class="space-y-3 mb-4">
+        <div>
+          <label class="text-sm text-muted block mb-1.5">Base date</label>
+          <input
+            type="date"
+            bind:value={bulkRescheduleDate}
+            class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-indigo-500 outline-none"
+          />
+        </div>
+        <div>
+          <label class="text-sm text-muted block mb-1.5">Base time (UTC)</label>
+          <input
+            type="time"
+            bind:value={bulkRescheduleTime}
+            class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-indigo-500 outline-none"
+          />
+        </div>
+        <div>
+          <label class="text-sm text-muted block mb-1.5">Spread (minutes between posts)</label>
+          <input
+            type="number"
+            min="0"
+            step="5"
+            bind:value={bulkRescheduleSpread}
+            class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-indigo-500 outline-none"
+          />
+          <p class="text-[10px] text-muted-dark mt-1">0 = all at the same time. 30 = first at base, second at base+30min, etc.</p>
+        </div>
+      </div>
+      <div class="flex items-center justify-end gap-2">
+        <button
+          onclick={() => (bulkRescheduleModalOpen = false)}
+          class="px-3 py-1.5 text-sm text-muted hover:text-content border border-line rounded-lg transition-colors"
+        >Cancel</button>
+        <button
+          onclick={confirmBulkReschedule}
+          disabled={!bulkRescheduleDate}
+          class="px-3 py-1.5 text-sm bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-lg transition-colors"
+        >Reschedule</button>
+      </div>
+    </div>
+  </div>
+{/if}

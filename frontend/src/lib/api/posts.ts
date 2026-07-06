@@ -66,7 +66,7 @@ export const postsApi = {
     api.post<{ valid: boolean; errors: Array<{ integration_id: string; provider: string; provider_name: string; kind: string; message: string; max_length?: number; actual_length?: number }> }>("/api/posts/validate", d),
   createThread: (d: ThreadRequest) =>
     api.post<{ posts: PostSummary[]; group_id: string }>("/api/posts/thread", d),
-  update: (id: string, d: { content: string; title?: string }) =>
+  update: (id: string, d: { content: string; title?: string; media?: { id: string; url: string; mime_type: string; alt?: string }[]; settings?: Record<string, unknown> }) =>
     api.put<PostDetail>(`/api/posts/${id}`, d),
   schedule: (id: string, at: string) => api.post<PostDetail>(`/api/posts/${id}/schedule`, { scheduled_at: at }),
   reschedule: (id: string, scheduledAt: string, moveGroup?: boolean) =>
@@ -86,4 +86,7 @@ export const postsApi = {
     api.post<{ group_id: string; count: number; post_ids: string[]; scheduled_dates: string[] }>(
       `/api/posts/${id}/repeat`, { interval_days: intervalDays, end_date: endDate }
     ),
+  /** Fetch all sibling posts sharing a group_id (for thread/group editing). */
+  getGroup: (groupId: string) =>
+    api.get<PostSummary[]>(`/api/posts/group/${groupId}`),
 };

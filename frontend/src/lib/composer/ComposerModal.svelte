@@ -284,9 +284,34 @@
         ...settings,
         ...(selectedMusic ? { audio_id: selectedMusic.id, audio_title: selectedMusic.title } : {}),
       },
+      // Phase v21: wire recurring schedule into the payload so it actually
+      // gets sent to the backend. Previously SchedulePicker wrote to
+      // `recurring` state but buildPayload() never included it — the field
+      // was silently dropped and no repeat series was ever created.
+      recurring: recurring ? { interval_days: recurring.intervalDays, end_date: recurring.endDate } : undefined,
     };
   }
 
+  /**
+   * Phase v21 fix: edit-mode branch.
+   *
+   * Previously `submit()`/`postNow()`/`saveAsDraft()` all unconditionally
+   * called `postsApi.create()`, even when `composer.mode === 'edit'`. This
+   * meant editing a post and clicking "Schedule" created a DUPLICATE post
+   * instead of updating the existing one. The `postsApi.update()` method
+   * existed but was never called from the UI.
+   *
+   * Now we branch on `composer.mode === 'edit'` and call
+   * `postsApi.update(editingPostId, payload)` instead. The update endpoint
+   * accepts content/title/media/settings; it does NOT change scheduled_at
+   * (use the separate reschedule endpoint for that) and does NOT change
+   * integration_ids (you can't move a post to a different channel after
+   * creation — that's a duplicate-and-delete flow).
+   *
+   * Recurring schedule is wired into the create flow only — for edit mode,
+   * the user must use the dedicated "Repeat" action on the post (outside
+   * the composer) because the repeat endpoint requires an existing post id.
+   */
   async function submit() {
     if (submitting) return;
     if (selectedIntegrations.length === 0) { error = 'Please select at least one channel'; return; }
@@ -294,17 +319,62 @@
     submitting = true;
     error = null;
     try {
-      const valRes = await postsApi.validate(buildPayload());
+      const payload = buildPayload();
+      const valRes = await postsApi.validate(payload);
       if (valRes.data && !valRes.data.valid && valRes.data.errors.length > 0) {
+        // Phase v21: show ALL per-platform validation errors as toasts,
+        // not just the first one. Format: "X (@handle): post is too long".
+        for (const err of valRes.data.errors) {
+          toast(`${err.provider_name}: ${err.message}`, 'error');
+        }
         const firstErr = valRes.data.errors[0];
         error = firstErr.provider_name + ': ' + firstErr.message;
         return;
       }
-      const r = await postsApi.create(buildPayload());
-      if (r.error) { error = r.error; return; }
-      localStorage.removeItem(DRAFT_KEY);
-      composer.close();
-      toast('Post scheduled', 'success');
+
+      if (composer.mode === 'edit' && composer.editingPostId) {
+        // ── Edit mode: update existing post ──
+        const r = await postsApi.update(composer.editingPostId, {
+          content: payload.content,
+          title: payload.title,
+          media: payload.media,
+          settings: payload.settings,
+        });
+        if (r.error) { error = r.error; return; }
+
+        // If a scheduled_at is set and differs from the original, reschedule.
+        // (The update endpoint doesn't touch scheduled_at.)
+        if (payload.scheduled_at && r.data?.scheduled_at && payload.scheduled_at !== r.data.scheduled_at) {
+          await postsApi.reschedule(composer.editingPostId, payload.scheduled_at, false);
+        }
+
+        localStorage.removeItem(DRAFT_KEY);
+        composer.close();
+        toast('Post updated', 'success');
+      } else {
+        // ── Create mode: create new post(s) ──
+        const r = await postsApi.create(payload);
+        if (r.error) { error = r.error; return; }
+
+        // Phase v21: wire recurring schedule. After successful creation,
+        // if recurring is set, call postsApi.repeat() to spawn the series.
+        if (recurring && r.data?.posts?.[0]?.id) {
+          const repeatRes = await postsApi.repeat(
+            r.data.posts[0].id,
+            recurring.intervalDays,
+            recurring.endDate,
+          );
+          if (repeatRes.error) {
+            toast(`Post created but repeat setup failed: ${repeatRes.error}`, 'error');
+          } else {
+            toast(`Post scheduled + ${repeatRes.data?.count || 0} recurring copies created`, 'success');
+          }
+        }
+
+        localStorage.removeItem(DRAFT_KEY);
+        composer.close();
+        if (!recurring) toast('Post scheduled', 'success');
+      }
     } catch (e: unknown) {
       error = (e instanceof Error ? e.message : String(e)) || 'Failed to schedule';
     } finally {
@@ -319,21 +389,43 @@
     submitting = true;
     error = null;
     try {
-      const valRes = await postsApi.validate(buildPayload());
+      const payload = buildPayload();
+      const valRes = await postsApi.validate(payload);
       if (valRes.data && !valRes.data.valid && valRes.data.errors.length > 0) {
+        for (const err of valRes.data.errors) {
+          toast(`${err.provider_name}: ${err.message}`, 'error');
+        }
         const firstErr = valRes.data.errors[0];
         error = firstErr.provider_name + ': ' + firstErr.message;
         return;
       }
-      const r = await postsApi.create(buildPayload());
-      if (r.error) { error = r.error; return; }
-      if (r.data?.posts?.[0]?.id) {
-        const pub = await postsApi.publish(r.data.posts[0].id);
+
+      if (composer.mode === 'edit' && composer.editingPostId) {
+        // Edit mode: update content, then publish immediately.
+        const r = await postsApi.update(composer.editingPostId, {
+          content: payload.content,
+          title: payload.title,
+          media: payload.media,
+          settings: payload.settings,
+        });
+        if (r.error) { error = r.error; return; }
+        const pub = await postsApi.publish(composer.editingPostId);
         if (pub.error) { error = pub.error; return; }
+        localStorage.removeItem(DRAFT_KEY);
+        composer.close();
+        toast('Post published', 'success');
+      } else {
+        // Create mode: create + publish.
+        const r = await postsApi.create({ ...payload, scheduled_at: undefined });
+        if (r.error) { error = r.error; return; }
+        if (r.data?.posts?.[0]?.id) {
+          const pub = await postsApi.publish(r.data.posts[0].id);
+          if (pub.error) { error = pub.error; return; }
+        }
+        localStorage.removeItem(DRAFT_KEY);
+        composer.close();
+        toast('Post published', 'success');
       }
-      localStorage.removeItem(DRAFT_KEY);
-      composer.close();
-      toast('Post published', 'success');
     } catch (e: unknown) {
       error = (e instanceof Error ? e.message : String(e)) || 'Failed to post';
     } finally {
@@ -349,11 +441,30 @@
     try {
       const payload = buildPayload();
       // Save as draft: no scheduled_at, state will default to draft
-      const r = await postsApi.create({ ...payload, scheduled_at: undefined });
-      if (r.error) { error = r.error; return; }
-      localStorage.removeItem(DRAFT_KEY);
-      composer.close();
-      toast('Draft saved', 'success');
+      if (composer.mode === 'edit' && composer.editingPostId) {
+        // Edit mode: update content + clear scheduled_at by transitioning
+        // back to draft state via reschedule (the backend's reschedule
+        // endpoint accepts a new scheduled_at; we set it to the current
+        // time + 100 years to effectively unschedule — TODO: add a
+        // dedicated "unchedule" endpoint in v22).
+        // For now, just update content; the state stays as-is.
+        const r = await postsApi.update(composer.editingPostId, {
+          content: payload.content,
+          title: payload.title,
+          media: payload.media,
+          settings: payload.settings,
+        });
+        if (r.error) { error = r.error; return; }
+        localStorage.removeItem(DRAFT_KEY);
+        composer.close();
+        toast('Draft updated', 'success');
+      } else {
+        const r = await postsApi.create({ ...payload, scheduled_at: undefined });
+        if (r.error) { error = r.error; return; }
+        localStorage.removeItem(DRAFT_KEY);
+        composer.close();
+        toast('Draft saved', 'success');
+      }
     } catch (e: unknown) {
       error = (e instanceof Error ? e.message : String(e)) || 'Failed to save draft';
     } finally {

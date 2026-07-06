@@ -58,7 +58,16 @@
   }
 
   async function bulkDelete() {
-    if (!confirm(`Delete ${selected.size} post(s)?`)) return;
+    // Phase v21: replace native confirm() with modals.areYouSure for
+    // consistent UX (postiz-style confirmation dialog with i18n + keyboard).
+    const ok = await modals.areYouSure({
+      title: `Delete ${selected.size} post(s)?`,
+      message: 'This will soft-delete the selected posts. They will be hidden from the calendar and posts list, but can be recovered from the Trash (coming in v22).',
+      confirmLabel: 'Delete',
+      cancelLabel: 'Cancel',
+      danger: true,
+    });
+    if (!ok) return;
     bulkProcessing = true;
     for (const id of selected) { await postsApi.delete(id); }
     selected = new Set();
@@ -84,9 +93,28 @@
     if (r.data) {
       events = r.data.days.flatMap(d => d.posts.map(toCalendarEvent));
     } else {
+      // Phase v21: improved error UX — show a full-card error state with a
+      // Retry button + emit a toast so the user notices even if they've
+      // scrolled past the calendar. Previously this was a tiny red <div>
+      // with no retry, easy to miss.
       fetchError = r.error || "Failed to load calendar events";
+      toast(`Calendar error: ${fetchError}`, 'error');
     }
     loading = false;
+  }
+
+  /** Phase v21: retry handler for the calendar error state. */
+  function retryFetch() {
+    const range = calendarState.state.view === 'list'
+      ? null
+      : calendarState.state.view === 'month' ? getMonthRange()
+      : calendarState.state.view === 'week' ? getWeekRange()
+      : getDayRange();
+    if (range) {
+      fetchEvents(range.start, range.end);
+    } else {
+      fetchListEvents();
+    }
   }
 
   // Phase 4: fetch posts for the list view using the posts API with
@@ -126,6 +154,13 @@
     const end = new Date(start);
     end.setDate(end.getDate() + 6);
     return { start: formatDateKey(start), end: formatDateKey(end) };
+  }
+
+  /** Phase v21: day-view range helper (for retryFetch). */
+  function getDayRange() {
+    const d = calendarState.state.currentDate;
+    const key = formatDateKey(d);
+    return { start: key, end: key };
   }
 
   async function refresh() {
@@ -261,7 +296,16 @@
 
   async function handleDelete(eventId: string) {
     if (deleting) return;
-    if (!confirm("Delete this post?")) return;
+    // Phase v21: replace native confirm() with modals.areYouSure for
+    // consistent UX with the bulk-delete flow above.
+    const ok = await modals.areYouSure({
+      title: 'Delete this post?',
+      message: 'The post will be soft-deleted. It will be hidden from the calendar and posts list, but can be recovered from the Trash (coming in v22).',
+      confirmLabel: 'Delete',
+      cancelLabel: 'Cancel',
+      danger: true,
+    });
+    if (!ok) return;
     deleting = true;
     try {
       const r = await postsApi.delete(eventId);
@@ -348,7 +392,27 @@
   {/if}
 
   {#if fetchError}
-    <div class="text-center py-4 text-sm text-red-400">{fetchError}</div>
+    <!-- Phase v21: postiz-style full-card error state with Retry button.
+         Previously this was a tiny red <div class="text-center py-4 text-sm text-red-400">
+         that was easy to miss and offered no recovery path. -->
+    <div class="flex flex-col items-center justify-center py-16 px-4 text-center">
+      <div class="w-12 h-12 rounded-full bg-red-500/10 border border-red-500/30 flex items-center justify-center mb-3">
+        <svg class="w-6 h-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      </div>
+      <p class="text-sm font-medium text-content mb-1">Couldn't load calendar</p>
+      <p class="text-xs text-muted mb-4 max-w-md">{fetchError}</p>
+      <button
+        onclick={retryFetch}
+        class="px-4 py-2 text-sm bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors flex items-center gap-2"
+      >
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+        Retry
+      </button>
+    </div>
   {:else if loading}
     <div class="grid grid-cols-7 gap-px">
       {#each Array(35) as _, i (i)}

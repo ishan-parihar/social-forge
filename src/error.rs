@@ -74,29 +74,49 @@ impl From<crate::social::ProviderError> for AppError {
 
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
-        let (status, message) = match &self {
-            AppError::NotFound(msg) => (StatusCode::NOT_FOUND, msg.clone()),
-            AppError::Unauthorized(msg) => (StatusCode::UNAUTHORIZED, msg.clone()),
-            AppError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg.clone()),
-            AppError::Conflict(msg) => (StatusCode::CONFLICT, msg.clone()),
+        let (status, message, code) = match &self {
+            AppError::NotFound(msg) => (StatusCode::NOT_FOUND, msg.clone(), "not_found"),
+            AppError::Unauthorized(msg) => (StatusCode::UNAUTHORIZED, msg.clone(), "unauthorized"),
+            AppError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg.clone(), "bad_request"),
+            AppError::Conflict(msg) => (StatusCode::CONFLICT, msg.clone(), "conflict"),
             AppError::Database(e) => {
                 tracing::error!("Database error: {:?}", e);
-                (StatusCode::INTERNAL_SERVER_ERROR, "Database error".into())
+                // Include a stable error code so the frontend can branch on it
+                // without parsing the human-readable message. We do NOT leak
+                // SQL details — just the sqlx::Error discriminant.
+                let code = match e {
+                    sqlx::Error::RowNotFound => "db_row_not_found",
+                    sqlx::Error::TypeNotFound { .. } => "db_type_not_found",
+                    sqlx::Error::ColumnNotFound(_) => "db_column_not_found",
+                    sqlx::Error::ColumnDecode { .. } => "db_column_decode",
+                    sqlx::Error::Decode(_) => "db_decode",
+                    sqlx::Error::Pool(_) => "db_pool",
+                    sqlx::Error::PoolTimedOut => "db_pool_timed_out",
+                    sqlx::Error::PoolClosed => "db_pool_closed",
+                    sqlx::Error::WorkerCrashed => "db_worker_crashed",
+                    sqlx::Error::Database(_) => "db_database",
+                    sqlx::Error::Io(_) => "db_io",
+                    sqlx::Error::Tls(_) => "db_tls",
+                    sqlx::Error::Protocol(_) => "db_protocol",
+                    sqlx::Error::Configuration(_) => "db_configuration",
+                    _ => "db_unknown",
+                };
+                (StatusCode::INTERNAL_SERVER_ERROR, "Database error".into(), code)
             }
             AppError::Auth(e) => {
                 tracing::error!("Auth error: {:?}", e);
-                (StatusCode::UNAUTHORIZED, "Invalid token".into())
+                (StatusCode::UNAUTHORIZED, "Invalid token".into(), "auth")
             }
-            AppError::Hash(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Hashing error".into()),
-            AppError::Provider(msg) => (StatusCode::BAD_GATEWAY, msg.clone()),
-            AppError::TokenExpired => (StatusCode::UNAUTHORIZED, "Token expired".into()),
-            AppError::RateLimited(msg) => (StatusCode::TOO_MANY_REQUESTS, msg.clone()),
+            AppError::Hash(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Hashing error".into(), "hash"),
+            AppError::Provider(msg) => (StatusCode::BAD_GATEWAY, msg.clone(), "provider"),
+            AppError::TokenExpired => (StatusCode::UNAUTHORIZED, "Token expired".into(), "token_expired"),
+            AppError::RateLimited(msg) => (StatusCode::TOO_MANY_REQUESTS, msg.clone(), "rate_limited"),
             AppError::Internal(msg) => {
                 tracing::error!("Internal error: {}", msg);
-                (StatusCode::INTERNAL_SERVER_ERROR, "Internal error".into())
+                (StatusCode::INTERNAL_SERVER_ERROR, "Internal error".into(), "internal")
             }
         };
 
-        (status, Json(json!({ "error": message }))).into_response()
+        (status, Json(json!({ "error": message, "code": code }))).into_response()
     }
 }

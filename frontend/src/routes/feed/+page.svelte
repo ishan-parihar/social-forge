@@ -1,12 +1,14 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import { feedApi, proxyMediaUrl, type FeedPost, type FeedAccount } from "$lib/api/feed";
+  import { integrationsApi } from "$lib/api/integrations";
   import EngagementCard from "$lib/components/EngagementCard.svelte";
   import CommentsThread from "$lib/components/CommentsThread.svelte";
   import MediaCarousel from "$lib/media/MediaCarousel.svelte";
   import { toast } from "$lib/stores/toast";
   import { realtime } from "$lib/stores/realtime";
   import { composer } from "$lib/stores/composer.svelte";
+  import { modals } from "$lib/stores/modals.svelte";
   import { providerMeta as centralProviderMeta } from "$lib/providers";
 
   let posts = $state<FeedPost[]>([]);
@@ -19,6 +21,22 @@
   let initialLoad = $state(true);
   let attemptedImport = $state(false);
   let commentsOpenFor = $state<string | null>(null);
+
+  // Phase v21: Repurpose + Edit modal state.
+  // The Repurpose modal asks the user to pick a target integration (channel)
+  // before calling POST /api/feed/{id}/repurpose. The Edit modal is a simple
+  // textarea + JSON-editor for fixing import errors on the cached copy.
+  let repurposeModalOpen = $state(false);
+  let repurposePost = $state<FeedPost | null>(null);
+  let repurposeTargetIntegration = $state<string>("");
+  let repurposeSubmitting = $state(false);
+  let editModalOpen = $state(false);
+  let editPost = $state<FeedPost | null>(null);
+  let editText = $state("");
+  let editSubmitting = $state(false);
+
+  // We need integrations list for the Repurpose target picker.
+  let allIntegrations = $state<Array<{ id: string; provider_name: string; provider_identifier: string; disabled: boolean }>>([]);
 
   // Filter state — accounts (channels) grouped by provider
   let showFilter = $state(false);
@@ -209,6 +227,107 @@
   });
 
   let feedUnsubscribers: (() => void)[] = [];
+
+  // ── Phase v21: Repurpose + Edit modal functions ──────────────────────
+
+  async function openRepurposeModal(post: FeedPost) {
+    repurposePost = post;
+    repurposeTargetIntegration = "";
+    repurposeSubmitting = false;
+    // Load integrations if not already loaded
+    if (allIntegrations.length === 0) {
+      const r = await integrationsApi.list();
+      if (r.data) {
+        allIntegrations = r.data.integrations.filter(i => !i.disabled);
+      }
+    }
+    if (allIntegrations.length === 0) {
+      toast("Connect a channel first to repurpose posts", "error");
+      return;
+    }
+    // Pre-select the first integration if there's only one
+    if (allIntegrations.length === 1) {
+      repurposeTargetIntegration = allIntegrations[0].id;
+    }
+    repurposeModalOpen = true;
+  }
+
+  async function submitRepurpose() {
+    if (!repurposePost || !repurposeTargetIntegration) return;
+    repurposeSubmitting = true;
+    try {
+      const r = await feedApi.repurpose(repurposePost.id, {
+        integration_id: repurposeTargetIntegration,
+      });
+      if (r.error) {
+        toast(`Repurpose failed: ${r.error}`, "error");
+        return;
+      }
+      toast("Post created as draft — open the composer to schedule it", "success");
+      repurposeModalOpen = false;
+      repurposePost = null;
+      // Optionally open the composer to edit the new draft
+      if (r.data?.post?.id) {
+        composer.openEdit(r.data.post.id);
+      }
+    } finally {
+      repurposeSubmitting = false;
+    }
+  }
+
+  function openEditModal(post: FeedPost) {
+    editPost = post;
+    editText = post.text;
+    editSubmitting = false;
+    editModalOpen = true;
+  }
+
+  async function submitEdit() {
+    if (!editPost) return;
+    if (!editText.trim()) {
+      toast("Text cannot be empty", "error");
+      return;
+    }
+    editSubmitting = true;
+    try {
+      const r = await feedApi.update(editPost.id, { text: editText });
+      if (r.error) {
+        toast(`Edit failed: ${r.error}`, "error");
+        return;
+      }
+      // Update the local post in-place so the UI reflects the change immediately
+      const idx = posts.findIndex(p => p.id === editPost!.id);
+      if (idx >= 0) {
+        posts[idx] = { ...posts[idx], text: editText };
+        posts = posts; // trigger Svelte 5 reactivity
+      }
+      toast("Post updated", "success");
+      editModalOpen = false;
+      editPost = null;
+    } finally {
+      editSubmitting = false;
+    }
+  }
+
+  async function hidePost(post: FeedPost) {
+    // Phase v21: replace inline anonymous handler with named function +
+    // use modals.areYouSure for confirmation (consistent with calendar/posts).
+    const ok = await modals.areYouSure({
+      title: 'Hide this post from feed?',
+      message: 'The post will be hidden from your feed but remains on the platform. You can re-import it later by clicking Refresh.',
+      confirmLabel: 'Hide',
+      cancelLabel: 'Cancel',
+      danger: true,
+    });
+    if (!ok) return;
+    const r = await feedApi.delete(post.id);
+    if (r.error) {
+      toast("Failed to hide: " + r.error, "error");
+    } else {
+      posts = posts.filter(p => p.id !== post.id);
+      toast("Post hidden from feed", "success");
+    }
+  }
 
   onMount(async () => {
     await loadAccounts();
@@ -659,13 +778,28 @@
                 <span></span>
               {/if}
               <div class="flex items-center gap-3">
-                <!-- Phase 3: Repurpose — open composer with this post's content prefilled -->
+                <!-- Phase v21: Repurpose — now calls the real backend
+                     endpoint POST /api/feed/{id}/repurpose which creates
+                     a Social Forge post row with source_external_post_id
+                     set for provenance. Previously this was a frontend-only
+                     no-op that just opened the composer with prefilled text
+                     and made zero backend calls. -->
                 <button
-                  onclick={() => composer.openCreate(undefined, undefined, post.text)}
+                  onclick={() => openRepurposeModal(post)}
                   class="text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
-                  title="Create a new post from this content"
+                  title="Create a new Social Forge post from this content"
                 >
                   ✏️ Repurpose
+                </button>
+                <!-- Phase v21: Edit — calls PUT /api/feed/{id} to update the
+                     cached text/media/metadata. Useful for fixing import
+                     errors without re-importing. -->
+                <button
+                  onclick={() => openEditModal(post)}
+                  class="text-xs text-muted hover:text-emerald-400 transition-colors"
+                  title="Edit the cached copy of this post"
+                >
+                  Edit
                 </button>
                 <!-- Phase 3: Save/bookmark -->
                 <button
@@ -683,15 +817,7 @@
                   🔖 Save
                 </button>
                 <button
-                  onclick={async () => {
-                    const r = await feedApi.delete(post.id);
-                    if (r.error) {
-                      toast("Failed to hide: " + r.error, "error");
-                    } else {
-                      posts = posts.filter(p => p.id !== post.id);
-                      toast("Post hidden from feed", "success");
-                    }
-                  }}
+                  onclick={() => hidePost(post)}
                   class="text-xs text-muted hover:text-red-400 transition-colors"
                   title="Hide from feed (does not delete on platform)"
                 >
@@ -745,6 +871,107 @@
     </div>
   {/if}
 </div>
+
+<!-- Phase v21: Repurpose modal — pick a target channel + call the backend -->
+{#if repurposeModalOpen && repurposePost}
+  <div
+    class="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+    onclick={() => !repurposeSubmitting && (repurposeModalOpen = false)}
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="repurpose-title"
+  >
+    <div
+      class="bg-surface border border-line rounded-xl shadow-2xl w-full max-w-md p-5"
+      onclick={(e) => e.stopPropagation()}
+    >
+      <h3 id="repurpose-title" class="text-lg font-semibold mb-1">Repurpose post</h3>
+      <p class="text-xs text-muted mb-4">
+        Create a new Social Forge draft from this imported post. You can edit and schedule it after.
+      </p>
+      <div class="bg-background-input border border-line rounded-lg p-3 mb-4 max-h-32 overflow-y-auto">
+        <p class="text-xs text-content-secondary whitespace-pre-wrap line-clamp-4">{repurposePost.text}</p>
+      </div>
+      <label class="text-sm text-muted block mb-1.5">Post to channel</label>
+      <select
+        bind:value={repurposeTargetIntegration}
+        disabled={repurposeSubmitting}
+        class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-indigo-500 outline-none mb-4"
+      >
+        <option value="">Select a channel…</option>
+        {#each allIntegrations as int (int.id)}
+          <option value={int.id}>{int.provider_name}</option>
+        {/each}
+      </select>
+      <div class="flex items-center justify-end gap-2">
+        <button
+          onclick={() => (repurposeModalOpen = false)}
+          disabled={repurposeSubmitting}
+          class="px-3 py-1.5 text-sm text-muted hover:text-content border border-line rounded-lg disabled:opacity-50 transition-colors"
+        >Cancel</button>
+        <button
+          onclick={submitRepurpose}
+          disabled={repurposeSubmitting || !repurposeTargetIntegration}
+          class="px-3 py-1.5 text-sm bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-lg transition-colors flex items-center gap-2"
+        >
+          {#if repurposeSubmitting}
+            <div class="w-3 h-3 rounded-full border-2 border-white/30 border-t-white animate-spin"></div>
+            Creating…
+          {:else}
+            Create draft
+          {/if}
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+<!-- Phase v21: Edit modal — update the cached feed post's text -->
+{#if editModalOpen && editPost}
+  <div
+    class="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+    onclick={() => !editSubmitting && (editModalOpen = false)}
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="edit-title"
+  >
+    <div
+      class="bg-surface border border-line rounded-xl shadow-2xl w-full max-w-lg p-5"
+      onclick={(e) => e.stopPropagation()}
+    >
+      <h3 id="edit-title" class="text-lg font-semibold mb-1">Edit cached post</h3>
+      <p class="text-xs text-muted mb-4">
+        Update the cached copy of this imported post. This does NOT change the original on the platform — only what you see in this feed.
+      </p>
+      <label class="text-sm text-muted block mb-1.5">Text</label>
+      <textarea
+        bind:value={editText}
+        disabled={editSubmitting}
+        rows="6"
+        class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-indigo-500 outline-none mb-4 resize-y"
+      ></textarea>
+      <div class="flex items-center justify-end gap-2">
+        <button
+          onclick={() => (editModalOpen = false)}
+          disabled={editSubmitting}
+          class="px-3 py-1.5 text-sm text-muted hover:text-content border border-line rounded-lg disabled:opacity-50 transition-colors"
+        >Cancel</button>
+        <button
+          onclick={submitEdit}
+          disabled={editSubmitting || !editText.trim()}
+          class="px-3 py-1.5 text-sm bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-lg transition-colors flex items-center gap-2"
+        >
+          {#if editSubmitting}
+            <div class="w-3 h-3 rounded-full border-2 border-white/30 border-t-white animate-spin"></div>
+            Saving…
+          {:else}
+            Save changes
+          {/if}
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
 
 <style>
   @keyframes fade-in {
