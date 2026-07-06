@@ -7,6 +7,7 @@
   import RssFeedForm from '$lib/rss/RssFeedForm.svelte';
   import RssFeedCard from '$lib/rss/RssFeedCard.svelte';
   import { toast } from "$lib/stores/toast";
+  import SettingsBreadcrumb from "$lib/settings/SettingsBreadcrumb.svelte";
 
   let feeds = $state<RssFeed[]>([]);
   let loading = $state(true);
@@ -94,6 +95,7 @@
 </script>
 
 <div class="page-enter space-y-6">
+  <SettingsBreadcrumb title="RSS Autopost" />
   <div class="flex items-center justify-between">
     <div>
       <h2 class="text-xl font-semibold">RSS Autopost</h2>

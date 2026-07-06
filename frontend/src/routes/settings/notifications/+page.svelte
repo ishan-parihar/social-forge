@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { notificationsApi, type NotificationPrefs } from '$lib/api/notifications';
   import { toast } from '$lib/stores/toast';
+  import SettingsBreadcrumb from "$lib/settings/SettingsBreadcrumb.svelte";
 
   let loading = $state(true);
   let saving = $state(false);
@@ -63,6 +64,7 @@
 </script>
 
 <div class="page-enter space-y-6">
+  <SettingsBreadcrumb title="Notifications" />
   <div>
     <h2 class="text-xl font-semibold text-content">Notification Settings</h2>
     <p class="text-sm text-muted mt-1">Configure how and when you receive notifications.</p>

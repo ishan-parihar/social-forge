@@ -4,6 +4,7 @@
   import Button from '$lib/ui/Button.svelte';
   import Spinner from '$lib/ui/Spinner.svelte';
   import { signaturesApi, type Signature } from '$lib/api/signatures';
+  import SettingsBreadcrumb from "$lib/settings/SettingsBreadcrumb.svelte";
 
   let signatures = $state<Signature[]>([]);
   let loading = $state(true);
@@ -129,6 +130,7 @@
 </script>
 
 <div class="page-enter space-y-6">
+  <SettingsBreadcrumb title="Signatures" />
   <div>
     <h2 class="text-xl font-semibold">Signatures</h2>
     <p class="text-sm text-muted mt-1">Create reusable signature blocks that you can insert into posts.</p>

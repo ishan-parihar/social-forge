@@ -368,12 +368,13 @@
         },
       };
 
-      // Pre-submit validation
+      // Pre-submit validation. On validation failure we just `return` —
+      // the `finally` block resets `submitting = false` for us, so no
+      // need to set it manually here (R-18 cleanup).
       const valRes = await postsApi.validate(payload);
       if (valRes.data && !valRes.data.valid && valRes.data.errors.length > 0) {
         const firstErr = valRes.data.errors[0];
         error = firstErr.provider_name + ": " + firstErr.message;
-        submitting = false;
         return;
       }
 

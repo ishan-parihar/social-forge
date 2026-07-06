@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { toast } from "$lib/stores/toast";
+  import SettingsBreadcrumb from "$lib/settings/SettingsBreadcrumb.svelte";
 
   // Brand profile stored in localStorage — used by AI assistant for
   // content generation context. No backend changes needed.
@@ -92,6 +93,7 @@
 </script>
 
 <div class="page-enter space-y-6">
+  <SettingsBreadcrumb title="Brand Profile" />
   <div class="flex items-center justify-between">
     <div>
       <h2 class="text-xl font-semibold">Brand Profile</h2>

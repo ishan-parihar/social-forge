@@ -1,6 +1,5 @@
 <script lang="ts">
   import Button from '$lib/ui/Button.svelte';
-  import Badge from '$lib/ui/Badge.svelte';
   import { rssApi, type RssFeed } from '$lib/api/rss';
 
   let {
@@ -89,7 +88,14 @@
   <div class="flex items-center justify-between">
     <div class="flex items-center gap-2 min-w-0">
       <h4 class="text-sm font-semibold truncate">{feed.title || 'Untitled Feed'}</h4>
-      <Badge state={feed.enabled ? 'published' : 'draft'} />
+      <!-- R-6: Use an explicit Enabled/Disabled pill instead of reusing the
+           post-state Badge component (which would show "Published"/"Draft"
+           — semantically wrong for an RSS feed that has no publication state). -->
+      <span class="px-2 py-0.5 rounded text-[10px] font-medium border {feed.enabled
+        ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+        : 'bg-gray-500/10 border-gray-500/30 text-gray-400'}">
+        {feed.enabled ? 'Enabled' : 'Disabled'}
+      </span>
     </div>
     <div class="flex items-center gap-2 flex-shrink-0">
       <Button size="sm" variant="ghost" disabled={polling} onclick={handlePoll}>

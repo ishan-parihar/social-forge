@@ -1,4 +1,6 @@
 <script lang="ts">
+  import SettingsBreadcrumb from "$lib/settings/SettingsBreadcrumb.svelte";
+
   let copiedMcp = $state(false);
   let copiedCli = $state(false);
 
@@ -25,6 +27,7 @@ social-forge linkedin profile        # View LinkedIn profile`;
 </script>
 
 <div class="page-enter space-y-6">
+  <SettingsBreadcrumb title="MCP & CLI" />
   <h2 class="text-xl font-semibold">MCP & CLI Configuration</h2>
 
   <!-- MCP Configuration -->
