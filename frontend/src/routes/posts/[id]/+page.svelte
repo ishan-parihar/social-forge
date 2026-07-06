@@ -1,84 +1,46 @@
 <script lang="ts">
-  import { onMount, onDestroy } from "svelte";
-  import { postsApi, type PostDetail } from "$lib/api/posts";
-  import { tagsApi, type Tag } from "$lib/api/tags";
-  import { toast } from "$lib/stores/toast";
-  import { page } from "$app/stores";
-  import { goto } from "$app/navigation";
-  import Badge from "$lib/ui/Badge.svelte";
-  import Icon from "$lib/ui/Icon.svelte";
-  import RichTextEditor from "$lib/composer/RichTextEditor.svelte";
-  import { realtime } from "$lib/stores/realtime";
+  // Phase 8: /posts/[id] is now a read-only detail view. The Edit
+  // button opens the composer modal (composer.openEdit(id)). The full
+  // edit logic lives in lib/composer/ComposerModal.svelte.
+  //
+  // This route is kept for direct-link compatibility (e.g., bookmarks,
+  // the browser address bar, no-JS fallbacks). The primary edit flow
+  // is the modal opened via composer.openEdit() from anywhere.
+
+  import { onMount, onDestroy } from 'svelte';
+  import { goto } from '$app/navigation';
+  import { page } from '$app/stores';
+  import { postsApi, type PostDetail } from '$lib/api/posts';
+  import { realtime } from '$lib/stores/realtime';
+  import { timezone } from '$lib/stores/timezone.svelte';
+  import { composer } from '$lib/stores/composer.svelte';
+  import Badge from '$lib/ui/Badge.svelte';
+  import Icon from '$lib/ui/Icon.svelte';
 
   let post = $state<PostDetail | null>(null);
-  let editing = $state(false);
-  let editContent = $state("");
   let loading = $state(true);
   let error = $state<string | null>(null);
-  let allTags = $state<Tag[]>([]);
-  let showTagPicker = $state(false);
-  let selectedTagIds = $state<string[]>([]);
-
-  async function loadTags() {
-    const r = await tagsApi.list();
-    if (r.data) allTags = r.data;
-  }
-
-  async function saveTags() {
-    if (!post) return;
-    const r = await postsApi.setTags(post.id, selectedTagIds);
-    if (r.error) {
-      toast(`Failed to save tags: ${r.error}`, "error");
-    } else {
-      toast("Tags updated", "success");
-      // Reload post to get updated tags
-      const detail = await postsApi.get(post.id);
-      if (detail.data) post = detail.data;
-      showTagPicker = false;
-    }
-  }
-
-  function openTagPicker() {
-    selectedTagIds = post?.tags?.map(t => t.id) || [];
-    showTagPicker = true;
-  }
-
-  function toggleTag(id: string) {
-    if (selectedTagIds.includes(id)) {
-      selectedTagIds = selectedTagIds.filter(t => t !== id);
-    } else {
-      selectedTagIds = [...selectedTagIds, id];
-    }
-  }
-
   let unsubscribers: (() => void)[] = [];
 
-  async function reloadPost() {
-    if (!post) return;
-    const r = await postsApi.get(post.id);
-    if (r.data) { post = r.data; editContent = r.data.content; }
+  let postId = $derived($page.params.id);
+
+  async function load() {
+    loading = true;
+    error = null;
+    const r = await postsApi.get(postId);
+    if (r.data) {
+      post = r.data;
+    } else {
+      error = r.error || 'Post not found';
+    }
+    loading = false;
   }
 
-  onMount(async () => {
-    const id = $page.params.id;
-    if (!id) { loading = false; return; }
-    loadTags();
-    const r = await postsApi.get(id);
-    if (r.data) { post = r.data; editContent = r.data.content; }
-    else error = r.error || "Failed to load post";
-    loading = false;
-
-    // Realtime: when this post is published/failed/scheduled by the
-    // scheduler (or another tab), refresh the detail view so the
-    // state badge and published_at timestamp update live.
-    const events = ['post_published', 'post_failed', 'post_scheduled'];
+  onMount(() => {
+    load();
+    const events = ['post_published', 'post_failed', 'post_deleted'];
     for (const evt of events) {
-      unsubscribers.push(
-        realtime.on(evt, (data: unknown) => {
-          const payload = data as { id?: string };
-          if (payload?.id === id) reloadPost();
-        })
-      );
+      unsubscribers.push(realtime.on(evt, () => load()));
     }
   });
 
@@ -86,179 +48,93 @@
     unsubscribers.forEach(fn => fn());
   });
 
-  async function save() {
+  async function handleDelete() {
     if (!post) return;
-    error = null;
-    const r = await postsApi.update(post.id, { content: editContent });
-    if (r.error) { error = r.error; return; }
-    post.content = editContent;
-    editing = false;
-  }
-
-  let showScheduleForm = $state(false);
-  let schedDate = $state("");
-  let schedTime = $state("09:00");
-
-  async function schedulePost() {
-    if (!post) return;
-    showScheduleForm = true;
-  }
-
-  async function confirmSchedule() {
-    if (!post || !schedDate) return;
-    error = null;
-    const iso = `${schedDate}T${schedTime}:00.000Z`;
-    const r = await postsApi.schedule(post.id, iso);
-    if (r.data) { post.state = "queued"; post.scheduled_at = iso; showScheduleForm = false; }
-    else error = r.error || "Failed to schedule post";
-  }
-
-  async function deletePost() {
-    if (!post || !confirm("Delete this post?")) return;
-    error = null;
+    if (!confirm('Delete this post?')) return;
     const r = await postsApi.delete(post.id);
-    if (r.error) { error = r.error; return; }
-    goto("/posts");
+    if (r.error) {
+      error = r.error;
+    } else {
+      goto('/posts');
+    }
   }
 </script>
 
 <div class="page-enter max-w-2xl mx-auto space-y-6">
-  <button onclick={() => goto("/posts")} class="text-sm text-muted hover:text-white">&larr; Back to posts</button>
-
-  {#if error}
-    <div class="bg-red-500/10 border border-red-500/30 text-red-400 text-sm rounded-lg p-3 flex items-center justify-between">
-      <span>{error}</span>
-      <button onclick={() => error = null} class="text-red-400/70 hover:text-red-400">&times;</button>
-    </div>
-  {/if}
+  <!-- Back + actions -->
+  <div class="flex items-center justify-between">
+    <button onclick={() => goto('/posts')} class="text-sm text-muted hover:text-content flex items-center gap-1">
+      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+      Back to Posts
+    </button>
+    {#if post}
+      <div class="flex gap-2">
+        <button
+          onclick={() => composer.openEdit(post.id)}
+          class="px-3 py-1.5 text-sm bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-colors"
+        >✏️ Edit</button>
+        <button
+          onclick={handleDelete}
+          class="px-3 py-1.5 text-sm text-red-400 hover:text-red-300 border border-line rounded-lg transition-colors"
+        >🗑️ Delete</button>
+      </div>
+    {/if}
+  </div>
 
   {#if loading}
     <div class="text-center py-12 text-sm text-muted">Loading...</div>
+  {:else if error}
+    <div class="text-center py-12 text-sm text-red-400">{error}</div>
   {:else if post}
-    <div class="bg-surface border border-line rounded-xl p-6 space-y-4">
+    <div class="bg-surface border border-line rounded-xl p-5 space-y-4">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-2">
           <Badge state={post.state as "draft" | "queued" | "published" | "error"} />
           <span class="text-sm text-muted">{post.integration_name}</span>
         </div>
-        <div class="flex gap-2">
-          {#if !editing}
-            <button onclick={() => editing = true} class="text-xs text-indigo-400 hover:underline">Edit</button>
-            {#if post.state === "draft" || post.state === "queued"}
-              <button onclick={schedulePost} class="text-xs text-indigo-400 hover:underline">{post.state === "queued" ? "Reschedule" : "Schedule"}</button>
-            {/if}
-            <button onclick={deletePost} class="text-xs text-red-400 hover:underline">Delete</button>
-          {:else}
-            <button onclick={save} class="text-xs text-green-400 hover:underline">Save</button>
-            <button onclick={() => editing = false} class="text-xs text-muted hover:underline">Cancel</button>
-          {/if}
-        </div>
+        {#if post.scheduled_at}
+          <span class="text-xs text-muted">{timezone.formatDateTime(post.scheduled_at)}</span>
+        {/if}
       </div>
 
-      {#if post.tags && post.tags.length > 0}
-        <div class="flex flex-wrap gap-1.5 items-center">
-          {#each post.tags as tag (tag.id)}
-            <span
-              class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs"
-              style="background: {tag.color}22; color: {tag.color}; border: 1px solid {tag.color}44"
-            >
-              <span class="w-1.5 h-1.5 rounded-full" style="background: {tag.color}"></span>
-              {tag.name}
-            </span>
-          {/each}
-          <button onclick={openTagPicker} class="text-xs text-muted hover:text-indigo-400 transition-colors flex items-center gap-1">
-            <Icon name="tag" class="w-3 h-3" />
-            Edit
-          </button>
-        </div>
-      {:else}
-        <button onclick={openTagPicker} class="text-xs text-muted hover:text-indigo-400 transition-colors flex items-center gap-1">
-          <Icon name="tag" class="w-3 h-3" />
-          Add Tags
-        </button>
+      {#if post.title}
+        <h2 class="text-lg font-semibold">{post.title}</h2>
       {/if}
 
-      {#if post.scheduled_at}
-        <div class="text-sm text-muted">
-          Scheduled: {new Date(post.scheduled_at).toLocaleString()}
-        </div>
-      {/if}
-
-      {#if showScheduleForm}
-        <div class="flex items-center gap-2 bg-background-input border border-line rounded-lg p-3">
-          <input type="date" bind:value={schedDate} class="px-2 py-1 bg-surface border border-line rounded text-sm text-content-secondary" />
-          <input type="time" bind:value={schedTime} class="px-2 py-1 bg-surface border border-line rounded text-sm text-content-secondary" />
-          <button onclick={confirmSchedule} class="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 rounded text-xs">Confirm</button>
-          <button onclick={() => showScheduleForm = false} class="px-3 py-1 text-muted hover:text-white text-xs">Cancel</button>
-        </div>
-      {/if}
-
-      {#if editing}
-        <RichTextEditor content={editContent} onUpdate={(html: string) => editContent = html} />
-      {:else}
-        <div class="prose prose-invert max-w-none text-sm">{@html post.content}</div>
-      {/if}
+      <div class="text-sm text-content-secondary whitespace-pre-wrap break-words leading-relaxed">
+        {@html post.content}
+      </div>
 
       {#if post.first_comment}
-        <div class="border-t border-line pt-3 mt-3">
-          <div class="text-xs text-muted mb-1">First Comment</div>
+        <div class="border-t border-line pt-3">
+          <div class="text-xs text-muted mb-1">First comment:</div>
           <div class="text-sm text-content-secondary">{post.first_comment}</div>
         </div>
       {/if}
 
-      {#if post.group_id}
-        <div class="border-t border-line pt-3 mt-3">
-          <div class="text-xs text-indigo-400 mb-1">Thread post (sequence {post.sequence ?? 0})</div>
-          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-indigo-500/20 text-indigo-400">
-            Group: {post.group_id.slice(0, 8)}...
-          </span>
+      {#if post.tags && post.tags.length > 0}
+        <div class="flex gap-1 flex-wrap border-t border-line pt-3">
+          {#each post.tags as tag (tag.id)}
+            <span class="px-2 py-0.5 rounded-full text-xs" style="background: {tag.color || '#4f46e5'}20; color: {tag.color || '#4f46e5'}">#{tag.name}</span>
+          {/each}
         </div>
       {/if}
 
       {#if post.platform_post_url}
-        <a href={post.platform_post_url} target="_blank" class="text-sm text-indigo-400 hover:underline inline-block">
-          View on platform &rarr;
-        </a>
+        <div class="border-t border-line pt-3">
+          <a href={post.platform_post_url} target="_blank" rel="noopener" class="text-xs text-indigo-400 hover:underline">
+            View original post →
+          </a>
+        </div>
       {/if}
 
       {#if post.error_message}
-        <div class="bg-red-500/10 border border-red-500/30 text-red-400 text-sm rounded-lg p-3">
-          Error: {post.error_message}
+        <div class="border-t border-line pt-3">
+          <div class="text-xs text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg p-2">
+            {post.error_message}
+          </div>
         </div>
       {/if}
     </div>
-  {:else}
-    <div class="text-center py-12 text-sm text-muted">Post not found</div>
   {/if}
 </div>
-
-<!-- Tag Picker Modal -->
-{#if showTagPicker}
-  <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50" role="dialog">
-    <div class="bg-background border border-line rounded-xl p-6 w-full max-w-md">
-      <h3 class="text-lg font-semibold mb-4">Manage Tags</h3>
-      {#if allTags.length === 0}
-        <p class="text-sm text-muted py-4 text-center">No tags available. Create tags in the Tags page first.</p>
-      {:else}
-        <div class="space-y-2 max-h-60 overflow-y-auto">
-          {#each allTags as tag (tag.id)}
-            <label class="flex items-center gap-2 text-sm cursor-pointer p-2 rounded-lg hover:bg-surface-hover transition-colors">
-              <input
-                type="checkbox"
-                checked={selectedTagIds.includes(tag.id)}
-                onchange={() => toggleTag(tag.id)}
-                class="rounded"
-              />
-              <span class="w-2 h-2 rounded-full" style="background: {tag.color}"></span>
-              <span>{tag.name}</span>
-            </label>
-          {/each}
-        </div>
-      {/if}
-      <div class="flex gap-3 justify-end mt-4">
-        <button onclick={() => showTagPicker = false} class="px-4 py-2 text-sm text-muted hover:text-content">Cancel</button>
-        <button onclick={saveTags} class="px-4 py-2 text-sm bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-colors">Save Tags</button>
-      </div>
-    </div>
-  </div>
-{/if}
