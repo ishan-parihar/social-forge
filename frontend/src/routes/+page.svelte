@@ -2,7 +2,9 @@
   import { onMount, onDestroy } from 'svelte';
   import { postsApi, type PostSummary } from '$lib/api/posts';
   import { analyticsApi, type AnalyticsSummary } from '$lib/api/analytics';
+  import { feedApi } from '$lib/api/feed';
   import { integrationsApi, type Integration } from '$lib/api/integrations';
+  import { auth } from '$lib/api/auth';
   import { formatDateTime } from '$lib/calendar/utils';
   import { goto } from '$app/navigation';
   import { realtime } from '$lib/stores/realtime';
@@ -11,39 +13,42 @@
   let upcoming = $state<PostSummary[]>([]);
   let recentPublished = $state<PostSummary[]>([]);
   let todayPosts = $state<PostSummary[]>([]);
+  let allTodayPosts = $state<PostSummary[]>([]);
   let stats = $state({ draft: 0, queued: 0, published: 0, error: 0 });
   let analyticsSummary = $state<AnalyticsSummary | null>(null);
+  let feedEngagement = $state<{ total_likes: number; total_comments: number; total_shares: number } | null>(null);
   let integrations = $state<Integration[]>([]);
   let loading = $state(true);
 
-  // Derived engagement totals from recent published posts
-  let totalEngagement = $derived(
-    recentPublished.reduce(
-      (acc, p) => ({
-        likes: acc.likes + (p.likes || 0),
-        comments: acc.comments + (p.comments || 0),
-        shares: acc.shares + (p.shares || 0),
-      }),
-      { likes: 0, comments: 0, shares: 0 }
-    )
-  );
+  // Engagement totals from real feed analytics data (7d)
+  let totalEngagement = $derived({
+    likes: feedEngagement?.total_likes ?? 0,
+    comments: feedEngagement?.total_comments ?? 0,
+    shares: feedEngagement?.total_shares ?? 0,
+  });
 
   let alertCount = $derived(stats.error);
 
   async function load() {
     loading = true;
-    const [postsRes, summaryRes, integRes] = await Promise.all([
+    const [postsRes, summaryRes, integRes, feedRes] = await Promise.all([
       postsApi.list({ limit: 100 }),
       analyticsApi.getSummary(7),
       integrationsApi.list(),
+      feedApi.analytics(7),
     ]);
+
+    if (feedRes.data) {
+      feedEngagement = feedRes.data;
+    }
 
     if (postsRes.data) {
       const all = postsRes.data.posts;
       upcoming = all.filter(p => p.state === 'queued').slice(0, 5);
       recentPublished = all.filter(p => p.state === 'published').slice(0, 5);
       const t = new Date().toDateString();
-      todayPosts = all.filter(p => p.scheduled_at && new Date(p.scheduled_at).toDateString() === t).slice(0, 5);
+      allTodayPosts = all.filter(p => p.scheduled_at && new Date(p.scheduled_at).toDateString() === t);
+      todayPosts = allTodayPosts.slice(0, 5);
       stats = {
         draft: all.filter(p => p.state === 'draft').length,
         queued: all.filter(p => p.state === 'queued').length,
@@ -212,13 +217,13 @@
         {:else}
           <div class="space-y-2">
             {#if stats.error > 0}
-              <a href="/posts" class="flex items-center gap-2 p-2 rounded-lg hover:bg-surface-hover transition-colors">
+              <a href="/posts?state=error" class="flex items-center gap-2 p-2 rounded-lg hover:bg-surface-hover transition-colors">
                 <span class="w-2 h-2 rounded-full bg-red-400"></span>
                 <span class="text-xs text-red-400">{stats.error} failed post{stats.error > 1 ? 's' : ''}</span>
               </a>
             {/if}
             {#if stats.draft > 0}
-              <a href="/posts" class="flex items-center gap-2 p-2 rounded-lg hover:bg-surface-hover transition-colors">
+              <a href="/posts?state=draft" class="flex items-center gap-2 p-2 rounded-lg hover:bg-surface-hover transition-colors">
                 <span class="w-2 h-2 rounded-full bg-blue-400"></span>
                 <span class="text-xs text-blue-400">{stats.draft} draft{stats.draft > 1 ? 's' : ''} waiting</span>
               </a>
@@ -247,10 +252,15 @@
               <div class="flex items-center gap-3 py-2 border-b border-line last:border-0">
                 <span class="text-xs text-muted w-12 font-mono">{post.scheduled_at ? formatDateTime(post.scheduled_at).slice(-5) : ''}</span>
                 <span class="flex-1 text-sm truncate text-content-secondary">{post.content || post.title || '(no content)'}</span>
-                <span class="text-xs px-2 py-0.5 rounded badge-{post.state}">{post.integration_name}</span>
+                <span class="text-xs text-muted">{post.integration_name}</span>
               </div>
             {/each}
           </div>
+          {#if allTodayPosts.length > 5}
+            <a href="/calendar" class="block text-center text-xs text-indigo-400 hover:underline mt-2">
+              View all ({allTodayPosts.length})
+            </a>
+          {/if}
         {/if}
       </div>
 
