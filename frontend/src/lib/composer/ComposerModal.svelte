@@ -580,6 +580,7 @@
           <MediaUpload items={mediaItems}
             onAdd={(item) => mediaItems = [...mediaItems, item]}
             onRemove={(id) => mediaItems = mediaItems.filter(m => m.id !== id)}
+            onReorder={(newItems) => mediaItems = newItems}
           />
         </div>
 
