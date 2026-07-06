@@ -155,3 +155,103 @@ pub async fn summarize(
     let content = call_llm(&state, &prompt, 0.3, 150).await?;
     Ok(Json(AiResponse { content }))
 }
+
+// ── Phase 9: AI Generator (bulk post generation) ────────────────
+
+#[derive(Debug, Deserialize)]
+pub struct GenerateBulkRequest {
+    pub topic: String,
+    /// "one_short" | "one_long" | "thread_short" | "thread_long"
+    pub format: String,
+    /// "personal" | "company"
+    pub tone: String,
+    /// Number of posts to generate (default 3, max 5).
+    #[serde(default = "default_count")]
+    pub count: u32,
+}
+
+fn default_count() -> u32 {
+    3
+}
+
+#[derive(Debug, Serialize)]
+pub struct GenerateBulkResponse {
+    pub posts: Vec<String>,
+    /// Suggested schedule: one post per day starting tomorrow at 9am UTC.
+    pub suggested_dates: Vec<String>,
+}
+
+/// POST /api/ai/generate-bulk
+///
+/// Generates multiple posts from a single topic prompt. Returns an array
+/// of post contents + suggested schedule dates (one per day starting
+/// tomorrow at 9am UTC).
+///
+/// The frontend GeneratorModal calls this, shows the results, and lets
+/// the user pipe each one into the composer modal for review/scheduling.
+pub async fn generate_bulk(
+    State(state): State<AppState>,
+    _auth: AuthenticatedUser,
+    Json(body): Json<GenerateBulkRequest>,
+) -> Result<Json<GenerateBulkResponse>, AppError> {
+    let count = body.count.clamp(1, 5);
+
+    let format_desc = match body.format.as_str() {
+        "one_short" => "a single short post (under 280 characters)",
+        "one_long" => "a single long-form post (500-1000 characters)",
+        "thread_short" => "a 3-tweet thread where each tweet is under 280 characters",
+        "thread_long" => "a 5-tweet thread where each tweet is 200-400 characters",
+        _ => "a single short post (under 280 characters)",
+    };
+
+    let tone_desc = match body.tone.as_str() {
+        "personal" => "personal (first person, conversational, relatable)",
+        "company" => "company (professional, brand voice, third person)",
+        _ => "personal (first person, conversational, relatable)",
+    };
+
+    let prompt = format!(
+        "Generate {count} distinct social media posts about \"{topic}\".\n\
+         Format: {format_desc}\n\
+         Tone: {tone_desc}\n\
+         \n\
+         Requirements:\n\
+         - Each post must be unique — different angles, hooks, or aspects of the topic.\n\
+         - Do NOT include hashtags unless they're naturally part of the content.\n\
+         - Do NOT include numbering or labels like 'Post 1:' — just the content.\n\
+         - Separate each post with a line containing only '---'.\n\
+         \n\
+         Return ONLY the posts separated by '---', no explanations.",
+        count = count,
+        topic = body.topic,
+        format_desc = format_desc,
+        tone_desc = tone_desc,
+    );
+
+    let raw = call_llm(&state, &prompt, 0.8, 2000).await?;
+
+    // Split the response by '---' and trim each piece.
+    let posts: Vec<String> = raw
+        .split("---")
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .take(count as usize)
+        .collect();
+
+    if posts.is_empty() {
+        return Err(AppError::Internal(
+            "AI returned no valid posts. Please try again.".into(),
+        ));
+    }
+
+    // Suggested schedule: one post per day starting tomorrow at 9am UTC.
+    let now = chrono::Utc::now();
+    let suggested_dates: Vec<String> = (0..posts.len() as i64)
+        .map(|i| {
+            let d = now + chrono::Duration::days(i + 1);
+            d.format("%Y-%m-%dT09:00:00Z").to_string()
+        })
+        .collect();
+
+    Ok(Json(GenerateBulkResponse { posts, suggested_dates }))
+}

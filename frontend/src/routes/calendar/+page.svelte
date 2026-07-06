@@ -11,6 +11,7 @@
   import { modals } from "$lib/stores/modals.svelte";
   import { composer } from "$lib/stores/composer.svelte";
   import PostStatsModal from "$lib/calendar/PostStatsModal.svelte";
+  import GeneratorModal from "$lib/composer/GeneratorModal.svelte";
   import { toCalendarEvent, type CalendarEvent, type CalendarView } from "$lib/calendar/types";
   import { formatDateKey } from "$lib/calendar/utils";
   import CalendarHeader from "$lib/calendar/CalendarHeader.svelte";
@@ -306,9 +307,16 @@
 <div class="page-enter space-y-6">
   <div class="flex items-center justify-between">
     <h2 class="text-xl font-semibold">Content Calendar</h2>
-    <button onclick={() => composer.openCreate()} class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm transition-colors">
-      + New Post
-    </button>
+    <div class="flex gap-2">
+      <button
+        onclick={() => modals.open(GeneratorModal, {}, { title: 'AI Post Generator', size: 'max-w-lg' })}
+        class="px-3 py-1.5 text-sm border border-line rounded-lg text-muted hover:text-white hover:bg-surface-hover transition-colors"
+        title="Generate multiple posts from a topic using AI"
+      >✨ Generate Posts</button>
+      <button onclick={() => composer.openCreate()} class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm transition-colors">
+        + New Post
+      </button>
+    </div>
   </div>
 
   <CalendarHeader

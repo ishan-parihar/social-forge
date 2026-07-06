@@ -123,6 +123,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/posts/thread", axum::routing::post(posts::create_thread))
         .route("/api/posts/validate", axum::routing::post(posts::validate))
         .route("/api/ai/generate-post", axum::routing::post(ai::generate_post))
+        .route("/api/ai/generate-bulk", axum::routing::post(ai::generate_bulk))
         .route("/api/ai/improve-writing", axum::routing::post(ai::improve_writing))
         .route("/api/ai/suggest-hashtags", axum::routing::post(ai::suggest_hashtags))
         .route("/api/ai/change-tone", axum::routing::post(ai::change_tone))

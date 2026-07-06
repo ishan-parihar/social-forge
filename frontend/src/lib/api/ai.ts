@@ -34,6 +34,28 @@ export const ai = {
     return callBackend("generate-post", { topic, tone, length }, signal);
   },
 
+  /** Phase 9: Generate multiple posts from a single topic (bulk generator) */
+  async generateBulk(
+    topic: string,
+    format: string,
+    tone: string,
+    count: number = 3,
+    signal?: AbortSignal,
+  ): Promise<{ posts: string[]; suggested_dates: string[] }> {
+    const r = await fetch(`/api/ai/generate-bulk`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ topic, format, tone, count }),
+      signal,
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error(err.error || `Backend returned ${r.status}`);
+    }
+    return r.json();
+  },
+
   /** Improve existing content */
   async improveWriting(content: string, signal?: AbortSignal): Promise<string> {
     return callBackend("improve-writing", { content }, signal);
