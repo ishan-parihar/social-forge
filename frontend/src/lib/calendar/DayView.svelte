@@ -8,7 +8,7 @@
     selected?: Set<string>;
     onEventClick?: (id: string) => void;
     onDateClick?: (date: string) => void;
-    onDrop?: (eventId: string, newDate: string) => void;
+    onDrop?: (eventId: string, newDate: string, newHour?: string) => void;
     onDuplicate?: (id: string) => void;
     onStats?: (id: string) => void;
     onDelete?: (id: string) => void;
@@ -40,10 +40,14 @@
     return map;
   });
 
-  function handleDrop(e: DragEvent, dateStr: string) {
+  // Phase 1: hour-precision drop + dragover highlight.
+  let dragOverHour = $state<string | null>(null);
+
+  function handleDrop(e: DragEvent, dateStr: string, hour: string) {
     e.preventDefault();
+    dragOverHour = null;
     const id = e.dataTransfer?.getData("text/plain");
-    if (id && onDrop) onDrop(id, dateStr);
+    if (id && onDrop) onDrop(id, dateStr, hour);
   }
 
   function handleDragStart(e: DragEvent, eventId: string) {
@@ -75,18 +79,22 @@
   </div>
   <div class="overflow-y-auto max-h-[700px]">
     {#each hours as hour (hour)}
+      {@const hourStr = hour.slice(0, 2)}
+      {@const isDragOver = dragOverHour === hourStr}
       <div class="flex border-b border-line min-h-[56px]">
         <div class="w-16 text-xs text-muted px-2 py-1 border-r border-line shrink-0">{hour}</div>
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div
-          class="flex-1 px-2 py-1 space-y-0.5 cursor-pointer hover:bg-surface-hover"
+          class="flex-1 px-2 py-1 space-y-0.5 cursor-pointer hover:bg-surface-hover transition-colors
+            {isDragOver ? 'ring-2 ring-indigo-500 ring-inset bg-indigo-500/5' : ''}"
           onclick={() => onDateClick?.(key)}
-          ondragover={(e) => e.preventDefault()}
-          ondrop={(e) => handleDrop(e, key)}
+          ondragover={(e) => { e.preventDefault(); dragOverHour = hourStr; }}
+          ondragleave={() => { if (dragOverHour === hourStr) dragOverHour = null; }}
+          ondrop={(e) => handleDrop(e, key, hourStr)}
           role="gridcell"
           tabindex="-1"
         >
-          {#each (eventsByHour.get(hour.slice(0, 2)) || []) as event (event.id)}
+          {#each (eventsByHour.get(hourStr) || []) as event (event.id)}
             <div
               class="flex items-center gap-1 {event.state === 'published' ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'}"
               draggable={event.state !== 'published'}

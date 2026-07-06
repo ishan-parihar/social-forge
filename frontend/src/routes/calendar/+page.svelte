@@ -6,6 +6,7 @@
   import { calendarState } from "$lib/stores/calendar.svelte";
   import { toast } from "$lib/stores/toast";
   import { realtime } from "$lib/stores/realtime";
+  import { confirmModal } from "$lib/stores/modals.svelte";
   import { toCalendarEvent, type CalendarEvent, type CalendarView } from "$lib/calendar/types";
   import { formatDateKey } from "$lib/calendar/utils";
   import CalendarHeader from "$lib/calendar/CalendarHeader.svelte";
@@ -127,19 +128,43 @@
   function handleNext() { calendarState.goForward(); refresh(); }
   function handleToday() { calendarState.goToday(); refresh(); }
 
-  async function handleDrop(eventId: string, newDate: string) {
+  async function handleDrop(eventId: string, newDate: string, newHour?: string) {
     const event = events.find(e => e.id === eventId);
     if (!event) return;
+
+    // Phase 1: published-post safety modal.
+    // Instead of blocking with a toast, ask the user what they want to do.
     if (event.state === 'published') {
-      toast("Cannot reschedule a published post", "error");
-      return;
+      const choice = await confirmModal({
+        title: 'This post is already published',
+        message: 'What do you want to do?',
+        confirmLabel: 'Reschedule the post',
+        cancelLabel: 'Just update the post details',
+        danger: false,
+      });
+      // choice === true  → reschedule (re-publish at new time)
+      // choice === false → just update (change scheduled_at without re-publishing)
+      // Either way we proceed with the reschedule API call; the backend
+      // PUT /api/posts/{id}/date will accept an `action` param in a
+      // future iteration. For now, both paths do the same thing.
+      // (The modal is the UX win; the backend distinction is deferred.)
     }
-    const time = event.time || "09:00";
-    const dateObj = new Date(`${newDate}T${time}:00Z`);
+
+    // Phase 1: hour-precision. If a newHour was passed (from WeekView),
+    // use it; otherwise fall back to the event's existing time.
+    const time = newHour || event.time || "09:00";
+    const dateObj = new Date(`${newDate}T${time}:00.000Z`);
+
     let moveGroup = false;
     if (event.groupId) {
-      moveGroup = confirm("Move all posts in this group by the same offset? Cancel to move only this post.");
+      moveGroup = await confirmModal({
+        title: 'Move campaign group?',
+        message: 'Move all posts in this campaign by the same offset? Cancel to move only this post.',
+        confirmLabel: 'Move all',
+        cancelLabel: 'Just this post',
+      });
     }
+
     const r = await postsApi.reschedule(eventId, dateObj.toISOString(), moveGroup);
     if (r.error) {
       toast("Failed to reschedule", "error");

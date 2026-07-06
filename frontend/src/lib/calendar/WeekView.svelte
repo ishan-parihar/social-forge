@@ -9,7 +9,7 @@
     selected?: Set<string>;
     onEventClick?: (id: string) => void;
     onDateClick?: (date: string) => void;
-    onDrop?: (eventId: string, newDate: string) => void;
+    onDrop?: (eventId: string, newDate: string, newHour?: string) => void;
     onDuplicate?: (id: string) => void;
     onStats?: (id: string) => void;
     onDelete?: (id: string) => void;
@@ -50,10 +50,10 @@
     return map;
   });
 
-  function handleDrop(e: DragEvent, dateStr: string) {
+  function handleDrop(e: DragEvent, dateStr: string, hour: string) {
     e.preventDefault();
     const id = e.dataTransfer?.getData("text/plain");
-    if (id && onDrop) onDrop(id, dateStr);
+    if (id && onDrop) onDrop(id, dateStr, hour);
   }
 
   function handleDragStart(e: DragEvent, eventId: string) {
@@ -66,7 +66,25 @@
       e.preventDefault();
     }
   }
+
+  // Dragover highlight state: track which cell is currently being hovered
+  // so we can show a visual affordance (ring) on the drop target.
+  let dragOverKey = $state<string | null>(null);
+  function handleDragEnter(dateStr: string, hour: string) {
+    dragOverKey = `${dateStr}-${hour}`;
+  }
+  function handleDragLeave(dateStr: string, hour: string) {
+    // Only clear if we're leaving the exact cell that was highlighted.
+    if (dragOverKey === `${dateStr}-${hour}`) {
+      dragOverKey = null;
+    }
+  }
+  function handleDragEnd() {
+    dragOverKey = null;
+  }
 </script>
+
+<svelte:window ondragend={handleDragEnd} />
 
 <div class="week-calendar bg-surface border border-line rounded-xl overflow-hidden">
   <div class="grid grid-cols-8 text-center border-b border-line">
@@ -83,17 +101,21 @@
       <div class="grid grid-cols-8 border-b border-line min-h-[48px]">
         <div class="text-xs text-muted px-2 py-1 border-r border-line">{hour}</div>
         {#each weekDays as wd (wd.dateStr)}
+          {@const cellKey = `${wd.dateStr}-${hour}`}
+          {@const isDragOver = dragOverKey === cellKey}
           <!-- svelte-ignore a11y_no_static_element_interactions -->
           <div
-            class="relative px-1 py-1 border-r border-line min-h-[48px] cursor-pointer hover:bg-surface-hover"
-            ondragover={(e) => e.preventDefault()}
-            ondrop={(e) => handleDrop(e, wd.dateStr)}
+            class="relative px-1 py-1 border-r border-line min-h-[48px] cursor-pointer hover:bg-surface-hover transition-colors
+              {isDragOver ? 'ring-2 ring-indigo-500 ring-inset bg-indigo-500/5' : ''}"
+            ondragover={(e) => { e.preventDefault(); handleDragEnter(wd.dateStr, hour); }}
+            ondragleave={() => handleDragLeave(wd.dateStr, hour)}
+            ondrop={(e) => handleDrop(e, wd.dateStr, hour)}
             onclick={() => onDateClick?.(wd.dateStr)}
             role="gridcell"
             tabindex="-1"
             onkeydown={(e) => handleKeyDown(e, wd.dateStr)}
           >
-            {#each (eventsByDayHour.get(`${wd.dateStr}-${hour.slice(0, 2)}`) || []) as event (event.id)}
+            {#each (eventsByDayHour.get(cellKey) || []) as event (event.id)}
               <div
                 class="flex items-center gap-1 {event.state === 'published' ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'}"
                 draggable={event.state !== 'published'}
