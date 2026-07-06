@@ -86,6 +86,29 @@
     loading = false;
   }
 
+  // Phase 4: fetch posts for the list view using the posts API with
+  // state filter + pagination. This is separate from fetchEvents because
+  // the list view uses a different endpoint (posts, not calendar) and
+  // supports server-side pagination + state filter.
+  async function fetchListEvents() {
+    loading = true;
+    fetchError = null;
+    const limit = 100;
+    const offset = (calendarState.state.listPage - 1) * limit;
+    const stateFilter = calendarState.state.listState === 'all'
+      ? undefined
+      : calendarState.state.listState === 'scheduled' ? 'queued' : calendarState.state.listState;
+    const r = await postsApi.list({ limit, offset, ...(stateFilter && { state: stateFilter }) });
+    if (r.data) {
+      events = r.data.posts.map(toCalendarEvent);
+      calendarState.setListTotalPages(Math.max(1, Math.ceil(r.data.total / limit)));
+    } else {
+      fetchError = r.error || "Failed to load posts";
+      events = [];
+    }
+    loading = false;
+  }
+
   function getMonthRange() {
     const d = calendarState.state.currentDate;
     const start = new Date(d.getFullYear(), d.getMonth(), 1);
@@ -108,10 +131,8 @@
     try {
       const st = calendarState.state;
       if (st.view === "list") {
-        await fetchEvents(
-          formatDateKey(new Date()),
-          formatDateKey(new Date(Date.now() + 90 * 24 * 60 * 60 * 1000))
-        );
+        // Phase 4: list view uses the posts API with state filter + pagination.
+        await fetchListEvents();
       } else {
         const r = st.view === "week" ? getWeekRange() : getMonthRange();
         await fetchEvents(r.start, r.end);
@@ -241,6 +262,17 @@
   }
 
   let calUnsubscribers: (() => void)[] = [];
+
+  // Phase 4: re-fetch when list-view state filter or page changes.
+  $effect(() => {
+    // Track these reactive reads so the effect re-runs when they change.
+    const _listState = calendarState.state.listState;
+    const _listPage = calendarState.state.listPage;
+    const _view = calendarState.state.view;
+    if (_view === 'list') {
+      refresh();
+    }
+  });
 
   onMount(async () => {
     refresh();

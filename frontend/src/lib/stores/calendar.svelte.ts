@@ -33,6 +33,10 @@ let _state = $state({
   currentDate: getInitialDate(),
   selectedDate: null as string | null,  // YYYY-MM-DD
   selectedPostId: null as string | null,
+  // Phase 4: list-view state — state filter + pagination.
+  listState: 'all' as 'all' | 'scheduled' | 'draft' | 'published',
+  listPage: 1,
+  listTotalPages: 1,
 });
 
 // Persist view + date changes to localStorage.
@@ -63,4 +67,11 @@ export const calendarState = {
   goToday() { _state.currentDate = new Date(); },
   selectDate(date: string | null) { _state.selectedDate = date; },
   selectPost(id: string | null) { _state.selectedPostId = id; },
+  // Phase 4: list-view state setters.
+  setListState(s: 'all' | 'scheduled' | 'draft' | 'published') {
+    _state.listState = s;
+    _state.listPage = 1;  // reset to first page on filter change
+  },
+  setListPage(p: number) { _state.listPage = p; },
+  setListTotalPages(n: number) { _state.listTotalPages = n; },
 };
