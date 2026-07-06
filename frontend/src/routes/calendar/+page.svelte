@@ -2,6 +2,7 @@
   import { onMount, onDestroy } from "svelte";
   import { calendarApi } from "$lib/api/calendar";
   import { postsApi } from "$lib/api/posts";
+  import { integrationsApi, type Integration } from "$lib/api/integrations";
   import { tagsApi, type Tag } from "$lib/api/tags";
   import { calendarState } from "$lib/stores/calendar.svelte";
   import { toast } from "$lib/stores/toast";
@@ -22,6 +23,7 @@
 
   let events = $state<CalendarEvent[]>([]);
   let allTags = $state<Tag[]>([]);
+  let allIntegrations = $state<Integration[]>([]);
   let selectedTagId = $state<string | null>(null);
   let filteredEvents = $derived(
     selectedTagId
@@ -287,6 +289,9 @@
     // Fetch tags for the filter dropdown
     const tagRes = await tagsApi.list();
     if (tagRes.data) allTags = tagRes.data;
+    // Phase 2: fetch integrations for DayView ghost slots
+    const integRes = await integrationsApi.list();
+    if (integRes.data) allIntegrations = integRes.data.integrations.filter(i => !i.disabled);
     const events = ['post_created', 'post_scheduled', 'post_published', 'post_failed', 'post_deleted'];
     for (const evt of events) {
       calUnsubscribers.push(realtime.on(evt, () => refresh()));
@@ -374,6 +379,7 @@
       date={calendarState.state.currentDate}
       events={filteredEvents}
       {selected}
+      integrations={allIntegrations}
       onEventClick={(id) => selectedEvent = events.find(e => e.id === id) || null}
       onDateClick={(date) => composer.openCreate(date)}
       onDrop={handleDrop}

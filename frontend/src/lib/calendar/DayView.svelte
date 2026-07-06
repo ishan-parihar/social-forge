@@ -2,8 +2,9 @@
   import { formatDateKey, getDayHours } from "./utils";
   import CalendarEvent from "./CalendarEvent.svelte";
   import type { CalendarEvent as CEvent } from "./types";
+  import type { Integration } from "$lib/api/integrations";
 
-  let { date, events = [], selected = new Set(), onEventClick, onDateClick, onDrop, onDuplicate, onStats, onDelete, onToggleSelect }: {
+  let { date, events = [], selected = new Set(), onEventClick, onDateClick, onDrop, onDuplicate, onStats, onDelete, onToggleSelect, integrations = [] }: {
     date: Date; events?: CEvent[];
     selected?: Set<string>;
     onEventClick?: (id: string) => void;
@@ -13,11 +14,46 @@
     onStats?: (id: string) => void;
     onDelete?: (id: string) => void;
     onToggleSelect?: (id: string, e: Event) => void;
+    integrations?: Integration[];
   } = $props();
 
   let key = $derived(formatDateKey(date));
   let dayEvents = $derived(events.filter(e => e.date === key));
   let hours = $derived(getDayHours());
+
+  // Phase 2: ghost slots — per-channel posting time presets that have
+  // no real post at that time. These show as dashed-border empty drop
+  // targets so the user sees when their channel "usually" posts.
+  // Each ghost slot is { hour: string, integrationName: string }.
+  let ghostSlots = $derived.by(() => {
+    const ghosts: { hour: string; integrationName: string; integrationId: string }[] = [];
+    for (const int of integrations) {
+      if (!int.posting_times || int.posting_times.length === 0) continue;
+      for (const pt of int.posting_times) {
+        const hourStr = String(Math.floor(pt.time / 60)).padStart(2, '0');
+        const minuteStr = String(pt.time % 60).padStart(2, '0');
+        const timeStr = `${hourStr}:${minuteStr}`;
+        // Only show ghost if no real event exists at this hour for this date.
+        const hasReal = dayEvents.some(e => (e.time || '').slice(0, 2) === hourStr);
+        if (!hasReal) {
+          ghosts.push({ hour: `${hourStr}:00`, integrationName: int.provider_name, integrationId: int.id });
+        }
+      }
+    }
+    return ghosts;
+  });
+
+  // Group ghost slots by hour for rendering alongside real events.
+  let ghostsByHour = $derived.by(() => {
+    const map = new Map<string, typeof ghostSlots>();
+    for (const g of ghostSlots) {
+      const hourKey = g.hour.slice(0, 2);
+      const list = map.get(hourKey) || [];
+      list.push(g);
+      map.set(hourKey, list);
+    }
+    return map;
+  });
 
   // State summary for the day — shows at a glance how many posts are
   // scheduled vs published vs failed vs draft on this day.
@@ -108,6 +144,16 @@
                 <input type="checkbox" checked={selected.has(event.id)} onclick={(e) => onToggleSelect?.(event.id, e)} class="rounded shrink-0 w-3 h-3" />
               {/if}
               <CalendarEvent {event} {onDuplicate} {onStats} {onDelete} />
+            </div>
+          {/each}
+          <!-- Phase 2: ghost slots — per-channel posting time presets -->
+          {#each (ghostsByHour.get(hourStr) || []) as ghost}
+            <div
+              class="flex items-center gap-1 border border-dashed border-line rounded px-1 py-0.5 opacity-50 hover:opacity-100 transition-opacity cursor-pointer"
+              onclick={() => onDateClick?.(key)}
+              title="{ghost.integrationName} usually posts at this time — click to create"
+            >
+              <span class="text-[10px] text-muted truncate">⏰ {ghost.integrationName}</span>
             </div>
           {/each}
         </div>
