@@ -38,6 +38,7 @@
   import MusicPicker from '$lib/composer/MusicPicker.svelte';
   import PerPlatformCharCount from '$lib/composer/PerPlatformCharCount.svelte';
   import PostPreview from '$lib/composer/PostPreview.svelte';
+  import SelectCurrent from '$lib/composer/SelectCurrent.svelte';
   import type { MediaItem } from '$lib/api/media';
   import TargetPicker from '$lib/composer/TargetPicker.svelte';
   import type { TargetInfo } from '$lib/api/integrations';
@@ -373,6 +374,44 @@
   }
 
   let isDirty = $derived(!!content.trim() || !!title.trim() || selectedIntegrations.length > 0);
+
+  // Phase 3: compute which integrations have diverged from global.
+  // An integration "diverged" when it has an override in providerOverride
+  // AND that override differs from the current global content.
+  // This drives the pink dot on the SelectCurrent pill strip.
+  let divergedIntegrations = $derived.by(() => {
+    const set = new Set<string>();
+    for (const [intId, html] of providerOverride) {
+      if (html && html !== content) {
+        set.add(intId);
+      }
+    }
+    return set;
+  });
+
+  // Phase 3: when the user switches to a per-channel tab for the first
+  // time (no override exists yet), clone the global content into the
+  // override so the editor starts from global and then diverges.
+  // This matches postiz-app's addRemoveInternal() clone-on-first-switch.
+  function handleCurrentChange(tab: string) {
+    if (tab !== 'global' && !providerOverride.has(tab)) {
+      // Clone global → internal[tab] so the editor has something to edit.
+      providerOverride.set(tab, content);
+      providerOverride = new Map(providerOverride);
+    }
+    editingMode = tab === 'global' ? 'global' : `internal:${tab}`;
+  }
+
+  // Phase 3: remove a per-channel override (reset to global).
+  // Called by SelectCurrent's X button.
+  function handleRemoveOverride(integrationId: string) {
+    providerOverride.delete(integrationId);
+    providerOverride = new Map(providerOverride);
+    // If we were editing this channel, switch back to global.
+    if (editingMode === `internal:${integrationId}`) {
+      editingMode = 'global';
+    }
+  }
 </script>
 
 <div class="flex flex-col h-full">
@@ -471,26 +510,18 @@
           />
         </div>
 
-        <!-- Global vs Internal channel editor toggle -->
+        <!-- Global vs Internal channel editor toggle (Phase 3: SelectCurrent) -->
         {#if selectedIntegrations.length > 1}
           <div class="bg-surface border border-line rounded-xl p-3">
-            <div class="flex items-center gap-2 flex-wrap">
-              <button
-                onclick={() => editingMode = 'global'}
-                class="px-3 py-1.5 text-xs rounded-lg transition-colors {editingMode === 'global' ? 'bg-indigo-600 text-white' : 'text-muted hover:bg-surface-hover'}"
-              >🌐 Global</button>
-              {#each selectedIntegrations as intId (intId)}
-                <button
-                  onclick={() => editingMode = `internal:${intId}`}
-                  class="px-3 py-1.5 text-xs rounded-lg transition-colors flex items-center gap-1 {editingMode === `internal:${intId}` ? 'bg-indigo-600 text-white' : 'text-muted hover:bg-surface-hover'}"
-                >
-                  {integrationNames.get(intId)}
-                  {#if providerOverride.has(intId) && providerOverride.get(intId) !== content}
-                    <span class="w-1.5 h-1.5 rounded-full bg-pink-400"></span>
-                  {/if}
-                </button>
-              {/each}
-            </div>
+            <SelectCurrent
+              {selectedIntegrations}
+              {integrationProviders}
+              {integrationNames}
+              current={editingMode === 'global' ? 'global' : editingMode.split(':')[1]}
+              {divergedIntegrations}
+              onCurrentChange={handleCurrentChange}
+              onRemoveIntegration={handleRemoveOverride}
+            />
           </div>
         {/if}
 
