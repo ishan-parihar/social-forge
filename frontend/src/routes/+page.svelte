@@ -234,6 +234,12 @@
                 <span class="text-xs text-yellow-400">{upcoming.length} scheduled post{upcoming.length > 1 ? 's' : ''} upcoming</span>
               </a>
             {/if}
+            {#if integrations.filter(i => i.refresh_needed).length > 0}
+              <a href="/channels" class="flex items-center gap-2 p-2 rounded-lg hover:bg-surface-hover transition-colors">
+                <span class="w-2 h-2 rounded-full bg-orange-400"></span>
+                <span class="text-xs text-orange-400">{integrations.filter(i => i.refresh_needed).length} channel{integrations.filter(i => i.refresh_needed).length > 1 ? 's' : ''} need{integrations.filter(i => i.refresh_needed).length === 1 ? 's' : ''} reconnect</span>
+              </a>
+            {/if}
           </div>
         {/if}
       </div>
