@@ -1,0 +1,110 @@
+<script lang="ts">
+  // LinkedInPreview — LinkedIn-style preview card (Phase 4).
+  //
+  // Distinctive LinkedIn chrome:
+  //   - Avatar + name + headline + "•••" menu
+  //   - Content (article-style, no character limit visually but crop highlighted)
+  //   - Reactions row (Like, Celebrate, Support, Love, Insightful, Funny)
+  //
+  // Inspired by postiz-app's providers/linkedin/linkedin.preview.tsx.
+
+  import { providerMeta } from '$lib/providers';
+  import type { MediaItem } from '$lib/api/media';
+
+  let {
+    content = '',
+    authorName = 'Your Brand',
+    authorHandle = 'yourbrand',
+    authorAvatar = '',
+    media = [] as MediaItem[],
+  }: {
+    content?: string;
+    authorName?: string;
+    authorHandle?: string;
+    authorAvatar?: string;
+    media?: MediaItem[];
+  } = $props();
+
+  let plainText = $derived(content.replace(/<[^>]*>/g, ''));
+  let charLimit = $derived(providerMeta('linkedin').charLimit);
+  let isOverLimit = $derived(plainText.length > charLimit);
+
+  let highlightedHtml = $derived.by(() => {
+    let escaped = plainText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    escaped = escaped.replace(/@(\w+)/g, '<span style="color: #0a66c2; font-weight: 500;">@$1</span>');
+    escaped = escaped.replace(/#(\w+)/g, '<span style="color: #0a66c2; font-weight: 500;">#$1</span>');
+    if (isOverLimit) {
+      const before = escaped.slice(0, charLimit);
+      const after = escaped.slice(charLimit);
+      return `${before}<mark style="background-color: rgba(239, 68, 68, 0.2); color: #f87171;">${after}</mark>`;
+    }
+    return escaped;
+  });
+</script>
+
+<div class="bg-white text-black rounded-xl overflow-hidden max-w-[500px] mx-auto border border-gray-200" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+  <!-- Header -->
+  <div class="flex items-start gap-2 p-3">
+    {#if authorAvatar}
+      <img src={authorAvatar} alt={authorName} class="w-12 h-12 rounded-full object-cover flex-shrink-0" />
+    {:else}
+      <div class="w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold flex-shrink-0">
+        {authorName.charAt(0).toUpperCase()}
+      </div>
+    {/if}
+    <div class="flex-1 min-w-0">
+      <div class="text-sm font-semibold text-black">{authorName}</div>
+      <div class="text-xs text-gray-500">{authorHandle} · 1st</div>
+      <div class="text-xs text-gray-500">Just now · 🌐</div>
+    </div>
+    <span class="text-gray-400 text-lg">•••</span>
+  </div>
+
+  <!-- Content -->
+  <div class="px-3 pb-3">
+    <p class="text-sm text-gray-800 whitespace-pre-wrap break-words leading-relaxed">{@html highlightedHtml}</p>
+    {#if isOverLimit}
+      <p class="text-[10px] text-red-500 mt-1">{plainText.length}/{charLimit} — text beyond {charLimit} will be cropped</p>
+    {/if}
+  </div>
+
+  <!-- Media -->
+  {#if media.length > 0}
+    <div class="border-t border-gray-200">
+      {#if media[0].mime_type.startsWith('image/')}
+        <img src={media[0].url} alt="" class="w-full max-h-[300px] object-cover" />
+      {:else}
+        <div class="w-full h-[200px] bg-gray-100 flex items-center justify-center text-gray-400 text-sm">video</div>
+      {/if}
+    </div>
+  {/if}
+
+  <!-- Reactions + comments count -->
+  <div class="flex items-center justify-between px-3 py-2 border-t border-gray-200 text-xs text-gray-500">
+    <div class="flex items-center gap-1">
+      <span class="w-4 h-4 rounded-full bg-blue-600 flex items-center justify-center text-white text-[8px]">👍</span>
+      <span>12</span>
+    </div>
+    <span>3 comments</span>
+  </div>
+
+  <!-- Action buttons -->
+  <div class="flex items-center justify-around border-t border-gray-200 py-2 text-xs text-gray-600 font-medium">
+    <span class="flex items-center gap-1 hover:bg-gray-100 px-3 py-1 rounded cursor-default">
+      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>
+      Like
+    </span>
+    <span class="flex items-center gap-1 hover:bg-gray-100 px-3 py-1 rounded cursor-default">
+      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+      Comment
+    </span>
+    <span class="flex items-center gap-1 hover:bg-gray-100 px-3 py-1 rounded cursor-default">
+      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+      Share
+    </span>
+    <span class="flex items-center gap-1 hover:bg-gray-100 px-3 py-1 rounded cursor-default">
+      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+      Save
+    </span>
+  </div>
+</div>

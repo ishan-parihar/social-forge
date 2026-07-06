@@ -37,7 +37,7 @@
   import AiHashtagSuggestions from '$lib/composer/AiHashtagSuggestions.svelte';
   import MusicPicker from '$lib/composer/MusicPicker.svelte';
   import PerPlatformCharCount from '$lib/composer/PerPlatformCharCount.svelte';
-  import PostPreview from '$lib/composer/PostPreview.svelte';
+  import PlatformPreviewPane from '$lib/composer/PlatformPreviewPane.svelte';
   import SelectCurrent from '$lib/composer/SelectCurrent.svelte';
   import type { MediaItem } from '$lib/api/media';
   import TargetPicker from '$lib/composer/TargetPicker.svelte';
@@ -646,13 +646,15 @@
 
       <!-- Right column: preview + schedule (fixed width on lg+) -->
       <div class="lg:w-[400px] lg:border-l lg:border-line lg:bg-background/50 overflow-y-auto p-5 space-y-4">
-        <!-- Preview -->
-        <h3 class="text-sm font-semibold">Preview</h3>
-        {#if selectedIntegrations.length > 0}
-          <PostPreview {content} {selectedIntegrations} {integrationProviders} />
-        {:else}
-          <p class="text-xs text-muted">Select a channel to see preview.</p>
-        {/if}
+        <!-- Phase 4: per-platform live preview pane -->
+        <PlatformPreviewPane
+          content={editingMode === 'global' ? content : (providerOverride.get(editingMode.split(':')[1]) || content)}
+          current={editingMode === 'global' ? 'global' : editingMode.split(':')[1]}
+          {selectedIntegrations}
+          {integrationProviders}
+          {integrationNames}
+          media={mediaItems}
+        />
 
         <!-- Schedule -->
         <div class="bg-surface border border-line rounded-xl p-4">
