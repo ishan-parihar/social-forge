@@ -2,11 +2,16 @@
   import { mediaApi, type MediaItem } from "$lib/api/media";
   import MediaPopover from "$lib/media/MediaPopover.svelte";
 
-  let { items = [], onAdd, onRemove, onInsertUrl }: {
+  // F-15 / Y-12 fix: the previous version exposed an `onInsertUrl` prop
+  // that the composer never passed, which kept the "Choose from library"
+  // button permanently hidden. The library now adds the picked URL
+  // directly through `onAdd` (constructed as a synthetic MediaItem),
+  // so the composer doesn't need a separate handler and the dead
+  // `onInsertUrl` prop is gone.
+  let { items = [], onAdd, onRemove }: {
     items?: MediaItem[];
     onAdd?: (item: MediaItem) => void;
     onRemove?: (id: string) => void;
-    onInsertUrl?: (url: string) => void;
   } = $props();
 
   let uploading = $state(false);
@@ -44,8 +49,18 @@
     });
   }
 
+  // Library pick: construct a MediaItem from the chosen URL and push
+  // it through the same `onAdd` path used by file uploads so the
+  // composer treats it identically.
   function handlePopoverSelect(url: string) {
-    onInsertUrl?.(url);
+    const isImage = /\.(png|jpe?g|webp|gif|avif|svg)$/i.test(url);
+    onAdd?.({
+      id: crypto.randomUUID(),
+      url,
+      mime_type: isImage ? 'image/jpeg' : 'application/octet-stream',
+      original_name: url.split('/').pop() || 'library-media',
+      file_size: 0,
+    });
     mediaPopoverOpen = false;
   }
 </script>
@@ -90,15 +105,13 @@
         <input type="file" multiple accept="image/*,video/*" onchange={handleUpload} class="hidden" />
         {items.length > 0 ? "Add more media" : "Drop media here or click to upload"}
       </label>
-      {#if onInsertUrl}
-        <span class="text-[#1e2435]">|</span>
-        <button
-          onclick={() => mediaPopoverOpen = true}
-          class="text-sm text-indigo-400 hover:text-indigo-300 cursor-pointer"
-        >
-          Choose from library
-        </button>
-      {/if}
+      <span class="text-[#1e2435]">|</span>
+      <button
+        onclick={() => mediaPopoverOpen = true}
+        class="text-sm text-indigo-400 hover:text-indigo-300 cursor-pointer"
+      >
+        Choose from library
+      </button>
     </div>
   {/if}
 

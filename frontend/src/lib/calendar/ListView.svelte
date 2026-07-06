@@ -3,7 +3,11 @@
   import { engagementIcon, engagementLabel, formatMetricCount } from "./engagement";
   import type { CalendarEvent as CEvent } from "./types";
 
-  let { events = [], selected = new Set(), onEventClick, onDuplicate, onStats, onDelete, onToggleSelect, page = 1, totalPages = 1, totalItems = 0, onPageChange, pageSize = 20, showActions = false }: {
+  // Pagination props were removed (Y-11): the calendar page never passed
+  // them and the {#if totalPages > 1} footer never rendered. If list-view
+  // pagination is needed in the future, re-add page/totalPages/onPageChange
+  // and have the calendar page track slice indices.
+  let { events = [], selected = new Set(), onEventClick, onDuplicate, onStats, onDelete, onToggleSelect, showActions = false }: {
     events?: CEvent[];
     selected?: Set<string>;
     onEventClick?: (id: string) => void;
@@ -11,11 +15,6 @@
     onStats?: (id: string) => void;
     onDelete?: (id: string) => void;
     onToggleSelect?: (id: string, e: Event) => void;
-    page?: number;
-    totalPages?: number;
-    totalItems?: number;
-    onPageChange?: (p: number) => void;
-    pageSize?: number;
     showActions?: boolean;
   } = $props();
 
@@ -74,25 +73,5 @@
         </div>
       </div>
     {/each}
-  {/if}
-
-  {#if totalPages > 1}
-    <div class="flex items-center justify-between px-4 py-3 border-t border-line">
-      <span class="text-sm text-muted">
-        Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, totalItems)} of {totalItems}
-      </span>
-      <div class="flex gap-2">
-        <button
-          onclick={() => onPageChange?.(page - 1)}
-          disabled={page <= 1}
-          class="px-3 py-1 text-sm rounded bg-[#1e2435] text-content-secondary disabled:opacity-50 hover:bg-[#2a3045] transition-colors"
-        >← Previous</button>
-        <button
-          onclick={() => onPageChange?.(page + 1)}
-          disabled={page >= totalPages}
-          class="px-3 py-1 text-sm rounded bg-[#1e2435] text-content-secondary disabled:opacity-50 hover:bg-[#2a3045] transition-colors"
-        >Next →</button>
-      </div>
-    </div>
   {/if}
 </div>
