@@ -18,6 +18,9 @@ export interface CalendarEvent {
   repeatIntervalDays?: number | null;
   repeatEndDate?: string | null;
   groupId?: string | null;
+  // Phase 8: campaign awareness for calendar.
+  campaignId?: string | null;
+  campaignColor?: string | null;
   // Engagement metrics (optional — populated from analytics_cache)
   likes?: number | null;
   comments?: number | null;

@@ -30,6 +30,7 @@
   import MediaUpload from '$lib/composer/MediaUpload.svelte';
   import SchedulePicker from '$lib/composer/SchedulePicker.svelte';
   import TagPicker from '$lib/composer/TagPicker.svelte';
+  import { campaignsApi, type Campaign } from '$lib/api/campaigns';
   import PostSetModal from '$lib/composer/PostSetModal.svelte';
   import ThreadFinisher from '$lib/composer/ThreadFinisher.svelte';
   import FirstComment from '$lib/composer/FirstComment.svelte';
@@ -57,6 +58,9 @@
   let scheduledAt = $state<string | null>(null);
   let recurring = $state<{ intervalDays: number; endDate: string } | null>(null);
   let selectedTagIds = $state<string[]>([]);
+  // Phase 8: campaign selector in composer.
+  let allCampaigns = $state<Campaign[]>([]);
+  let selectedCampaignId = $state<string | null>(null);
   let editingMode = $state<string>('global');
   let submitting = $state(false);
   let error = $state<string | null>(null);
@@ -155,6 +159,10 @@
     } else {
       await loadIntegrations();
     }
+
+    // Phase 8: load campaigns for the campaign selector.
+    const campRes = await campaignsApi.list();
+    if (campRes.data) allCampaigns = campRes.data;
 
     // Realtime: refresh integrations if connected/disconnected in another tab.
     unsubscribers.push(realtime.on('integration_connected', loadIntegrations));
@@ -512,6 +520,23 @@
             }}
           />
         </div>
+
+        <!-- Phase 8: Campaign selector -->
+        {#if allCampaigns.length > 0}
+          <div class="bg-surface border border-line rounded-xl p-4">
+            <h3 class="text-sm font-semibold mb-3">Campaign</h3>
+            <select
+              value={selectedCampaignId || ''}
+              onchange={(e) => selectedCampaignId = e.currentTarget.value || null}
+              class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-indigo-500 outline-none"
+            >
+              <option value="">No campaign</option>
+              {#each allCampaigns as c (c.id)}
+                <option value={c.id}>{c.name}</option>
+              {/each}
+            </select>
+          </div>
+        {/if}
 
         <!-- Global vs Internal channel editor toggle (Phase 3: SelectCurrent) -->
         {#if selectedIntegrations.length > 1}

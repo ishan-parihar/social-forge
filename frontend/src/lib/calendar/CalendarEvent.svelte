@@ -25,7 +25,9 @@
 <div class="group relative">
   <div
     class="event-chip {event.state} {isPast ? 'opacity-50' : ''} {event.error ? 'ring-1 ring-red-500/50' : ''}"
-    style={event.tags && event.tags.length > 0 ? "border-left: 3px solid " + event.tags[0].color : ""}
+    style={event.campaignColor
+      ? "border-left: 3px solid " + event.campaignColor
+      : (event.tags && event.tags.length > 0 ? "border-left: 3px solid " + event.tags[0].color : "")}
     title={event.content.length > 200 ? event.content.slice(0, 200) + '...' : event.content}
   >
     {#if !compact && event.tags && event.tags.length > 0}
