@@ -1,11 +1,12 @@
 <script lang="ts">
-  // Phase 8: /posts/[id] is now a read-only detail view. The Edit
-  // button opens the composer modal (composer.openEdit(id)). The full
-  // edit logic lives in lib/composer/ComposerModal.svelte.
+  // Phase 8: /posts/[id] is a read-only detail view. The Edit button
+  // opens the composer modal (composer.openEdit(id)). The full edit
+  // logic lives in lib/composer/ComposerModal.svelte.
   //
   // This route is kept for direct-link compatibility (e.g., bookmarks,
-  // the browser address bar, no-JS fallbacks). The primary edit flow
-  // is the modal opened via composer.openEdit() from anywhere.
+  // the browser address bar, the "View original" link from other pages).
+  // The primary edit flow is the modal opened via composer.openEdit()
+  // from anywhere.
 
   import { onMount, onDestroy } from 'svelte';
   import { goto } from '$app/navigation';
@@ -14,6 +15,7 @@
   import { realtime } from '$lib/stores/realtime';
   import { timezone } from '$lib/stores/timezone.svelte';
   import { composer } from '$lib/stores/composer.svelte';
+  import { modals } from '$lib/stores/modals.svelte';
   import Badge from '$lib/ui/Badge.svelte';
   import Icon from '$lib/ui/Icon.svelte';
 
@@ -50,7 +52,16 @@
 
   async function handleDelete() {
     if (!post) return;
-    if (!confirm('Delete this post?')) return;
+    // Phase v21: replace native confirm() with modals.areYouSure for
+    // consistent UX with the calendar + posts list.
+    const ok = await modals.areYouSure({
+      title: 'Delete this post?',
+      message: 'The post will be soft-deleted. It will be hidden from the calendar and posts list, but can be recovered from the Trash (coming in v22).',
+      confirmLabel: 'Delete',
+      cancelLabel: 'Cancel',
+      danger: true,
+    });
+    if (!ok) return;
     const r = await postsApi.delete(post.id);
     if (r.error) {
       error = r.error;

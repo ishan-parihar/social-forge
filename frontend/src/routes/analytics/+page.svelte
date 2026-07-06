@@ -3,6 +3,7 @@
   import { analyticsApi, type AnalyticsSummary } from '$lib/api/analytics';
   import { postsApi, type PostSummary } from '$lib/api/posts';
   import { feedApi } from '$lib/api/feed';
+  import { providerLabel } from '$lib/providers';
   import { integrationsApi, type Integration } from '$lib/api/integrations';
   import DateRangePicker from '$lib/analytics/DateRangePicker.svelte';
   import { toast } from "$lib/stores/toast";
@@ -25,19 +26,12 @@
       .filter(i => !i.disabled)
       .map(i => i.provider_identifier);
     const unique = [...new Set(connected)];
-    const labels: Record<string, string> = {
-      x: "X (Twitter)", facebook: "Facebook", instagram: "Instagram",
-      linkedin: "LinkedIn", youtube: "YouTube", reddit: "Reddit",
-      bluesky: "Bluesky", mastodon: "Mastodon", pinterest: "Pinterest",
-      tiktok: "TikTok", threads: "Threads", "instagram-standalone": "Instagram (Standalone)",
-      "linkedin-page": "LinkedIn Page", discord: "Discord", slack: "Slack",
-      "telegram-bot": "Telegram Bot", whatsapp: "WhatsApp", wordpress: "WordPress",
-      medium: "Medium", devto: "Dev.to", hashnode: "Hashnode", github: "GitHub",
-      vk: "VK", kick: "Kick", skool: "Skool", lemmy: "Lemmy", farcaster: "Farcaster",
-    };
+    // Phase v21: use the central providerLabel() from $lib/providers
+    // instead of a duplicated 26-entry labels map. Adding a new provider
+    // to providers.ts now automatically shows up here.
     return [
       { value: "all", label: "All Platforms" },
-      ...unique.map(p => ({ value: p, label: labels[p] || p })),
+      ...unique.map(p => ({ value: p, label: providerLabel(p) })),
     ];
   });
 
