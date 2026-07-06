@@ -5,6 +5,7 @@
   import { integrationsApi, type Integration } from "$lib/api/integrations";
   import { toast } from "$lib/stores/toast";
   import { realtime } from "$lib/stores/realtime";
+  import { timezone } from "$lib/stores/timezone.svelte";
   import EngagementCard from "$lib/components/EngagementCard.svelte";
   import MediaCarousel from "$lib/media/MediaCarousel.svelte";
 
@@ -17,6 +18,11 @@
   let selectedProvider = $state("all");
   let hasMore = $state(false);
   let nextCursor = $state<string | null>(null);
+  // Debounce timer for server-side ?q= search.
+  let searchTimer: ReturnType<typeof setTimeout> | null = null;
+  // Tracks the most recent query we sent to the backend so we can ignore
+  // stale responses that arrive after the user has typed more.
+  let lastSentQuery = $state<string>("");
 
   // Build platform list dynamically from connected integrations
   let platforms = $derived.by(() => {
@@ -38,15 +44,15 @@
     ];
   });
 
-  // Filtered results (client-side text search on feed data)
+  // Filtered results: when the user types a search query, the backend
+  // already filters via ?q= (server-side ILIKE across text/author fields),
+  // so we only need client-side provider filtering on the response set.
+  // When no query is typed, we still apply provider filtering client-side
+  // for the "All" tab to avoid an extra round-trip.
   let filteredPosts = $derived(
     posts.filter(p => {
       const matchesProvider = selectedProvider === "all" || p.provider === selectedProvider;
-      const matchesQuery = !searchQuery.trim() ||
-        p.text.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (p.author_name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (p.author_handle || "").toLowerCase().includes(searchQuery.toLowerCase());
-      return matchesProvider && matchesQuery;
+      return matchesProvider;
     })
   );
 
@@ -80,8 +86,17 @@
 
   async function load() {
     loading = true;
-    const r = await feedApi.list(undefined, undefined, undefined, 100);
+    const q = searchQuery.trim() || undefined;
+    // Track which query this request corresponds to so we can ignore
+    // stale responses (user typed more before the first response arrived).
+    lastSentQuery = q || "";
+    const r = await feedApi.list(undefined, undefined, undefined, 100, q);
     if (r.data) {
+      // Ignore stale responses — only apply if the user hasn't typed more.
+      if (lastSentQuery !== (q || "")) {
+        loading = false;
+        return;
+      }
       posts = r.data.posts;
       hasMore = r.data.has_more;
       nextCursor = r.data.next_cursor;
@@ -89,6 +104,21 @@
       toast(`Failed to load feed: ${r.error}`, "error");
     }
     loading = false;
+  }
+
+  // Debounced search trigger — fires 350ms after the user stops typing.
+  // Coalesces rapid keystrokes so we don't spam the backend on every char.
+  function scheduleSearch() {
+    if (searchTimer) clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+      searchTimer = null;
+      nextCursor = null;
+      load();
+    }, 350);
+  }
+
+  function onSearchInput() {
+    scheduleSearch();
   }
 
   async function loadAccounts() {
@@ -112,7 +142,10 @@
 
   async function loadMore() {
     if (!nextCursor) return;
-    const r = await feedApi.list(nextCursor, undefined, undefined, 50);
+    // Pass the same search query through to the next page so pagination
+    // stays within the result set of the current search.
+    const q = searchQuery.trim() || undefined;
+    const r = await feedApi.list(nextCursor, undefined, undefined, 50, q);
     if (r.data) {
       posts = [...posts, ...r.data.posts];
       hasMore = r.data.has_more;
@@ -136,6 +169,9 @@
   }
 
   function formatTime(iso: string): string {
+    // Render in the user's selected timezone (F-7) instead of the
+    // browser's local timezone. Relative-time strings ("just now",
+    // "5h ago") are timezone-independent so they stay as-is.
     const d = new Date(iso);
     const now = new Date();
     const diffH = Math.floor((now.getTime() - d.getTime()) / 3600000);
@@ -143,7 +179,7 @@
     if (diffH < 24) return `${diffH}h ago`;
     const diffD = Math.floor(diffH / 24);
     if (diffD < 7) return `${diffD}d ago`;
-    return d.toLocaleDateString();
+    return timezone.formatDate(iso);
   }
 
   let unsubscribers: (() => void)[] = [];
@@ -170,6 +206,7 @@
 
   onDestroy(() => {
     unsubscribers.forEach(fn => fn());
+    if (searchTimer) clearTimeout(searchTimer);
   });
 </script>
 
@@ -195,6 +232,7 @@
       <input
         type="text"
         bind:value={searchQuery}
+        oninput={onSearchInput}
         placeholder="Search posts, authors, hashtags..."
         class="w-full px-4 py-2.5 pl-10 bg-background-input border border-line rounded-lg text-sm text-content-secondary placeholder-muted focus:border-indigo-500 outline-none transition-colors"
       />
@@ -215,7 +253,7 @@
     <div class="flex gap-2 flex-wrap">
       {#each savedSearches as term}
         <div class="flex items-center gap-1 px-3 py-1 bg-surface border border-line rounded-full text-xs">
-          <button onclick={() => searchQuery = term} class="text-muted hover:text-indigo-400 transition-colors">
+          <button onclick={() => { searchQuery = term; onSearchInput(); }} class="text-muted hover:text-indigo-400 transition-colors">
             {term}
           </button>
           <button onclick={() => removeSearch(term)} class="text-muted-dark hover:text-red-400 transition-colors ml-1">

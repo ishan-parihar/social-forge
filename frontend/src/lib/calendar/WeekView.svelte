@@ -2,6 +2,7 @@
   import { buildWeekDays, getDayHours } from "./utils";
   import CalendarEvent from "./CalendarEvent.svelte";
   import type { CalendarEvent as CEvent } from "./types";
+  import { timezone } from "$lib/stores/timezone.svelte";
 
   let { referenceDate, events = [], selected = new Set(), onEventClick, onDateClick, onDrop, onDuplicate, onStats, onDelete, onToggleSelect }: {
     referenceDate: Date; events?: CEvent[];
@@ -17,6 +18,23 @@
 
   let weekDays = $derived(buildWeekDays(referenceDate, events));
   let hours = $derived(getDayHours());
+
+  // Show the user's selected timezone abbreviation in the corner instead
+  // of a hard-coded "GMT" — matches what the column times actually render in.
+  // Intl can resolve the abbreviation (e.g. "EST", "PST", "IST") for the
+  // current timezone, falling back to the IANA name on edge cases.
+  let tzLabel = $derived.by(() => {
+    try {
+      const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: timezone.value,
+        timeZoneName: 'short',
+      }).formatToParts(new Date());
+      const tzPart = parts.find(p => p.type === 'timeZoneName');
+      return tzPart?.value || timezone.value;
+    } catch {
+      return 'GMT';
+    }
+  });
 
   let eventsByDayHour = $derived.by(() => {
     const map = new Map<string, CEvent[]>();
@@ -52,7 +70,7 @@
 
 <div class="week-calendar bg-surface border border-line rounded-xl overflow-hidden">
   <div class="grid grid-cols-8 text-center border-b border-line">
-    <div class="py-2 text-xs text-muted border-r border-line">GMT</div>
+    <div class="py-2 text-xs text-muted border-r border-line">{tzLabel}</div>
     {#each weekDays as wd (wd.dateStr)}
       <div class="py-2 text-xs {wd.isToday ? 'text-indigo-400' : 'text-muted'}">
         <div>{wd.date.toLocaleDateString("en-US", { weekday: "short" })}</div>

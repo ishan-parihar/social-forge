@@ -171,11 +171,22 @@
         return;
       }
 
+      // Preserve media, tags, and first_comment when duplicating —
+      // the previous version only copied content + title + scheduled_at,
+      // losing all the rich context the user had attached to the original.
       await postsApi.create({
         integration_ids: [post.integration_id],
         content: post.content,
         title: post.title,
         scheduled_at: slot.data.date,
+        tag_ids: post.tags?.map(t => t.id) || [],
+        first_comment: post.first_comment || undefined,
+        media: (post.media || []).map(m => ({
+          id: crypto.randomUUID(),
+          url: m.url,
+          mime_type: m.mime_type,
+          alt: m.alt,
+        })),
       });
 
       refresh();

@@ -14,6 +14,9 @@
   let recentPublished = $state<PostSummary[]>([]);
   let todayPosts = $state<PostSummary[]>([]);
   let allTodayPosts = $state<PostSummary[]>([]);
+  // Drafts the user is composing — surfaced in the "Needs Attention"
+  // inbox (U-2) so they don't get forgotten.
+  let draftPosts = $state<PostSummary[]>([]);
   let stats = $state({ draft: 0, queued: 0, published: 0, error: 0 });
   let analyticsSummary = $state<AnalyticsSummary | null>(null);
   let feedEngagement = $state<{ total_likes: number; total_comments: number; total_shares: number } | null>(null);
@@ -46,6 +49,7 @@
       const all = postsRes.data.posts;
       upcoming = all.filter(p => p.state === 'queued').slice(0, 5);
       recentPublished = all.filter(p => p.state === 'published').slice(0, 5);
+      draftPosts = all.filter(p => p.state === 'draft');
       const t = new Date().toDateString();
       allTodayPosts = all.filter(p => p.scheduled_at && new Date(p.scheduled_at).toDateString() === t);
       todayPosts = allTodayPosts.slice(0, 5);
@@ -243,6 +247,45 @@
           </div>
         {/if}
       </div>
+    </div>
+
+    <!-- Needs Attention inbox (R-1 + U-2): aggregates failed posts,
+         drafts waiting to be scheduled, and channels needing reconnect. -->
+    <div class="bg-surface border border-line rounded-xl p-5">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="font-medium text-sm">Needs Attention</h3>
+        <span class="text-xs text-muted">{draftPosts.length + stats.error + integrations.filter(i => i.refresh_needed).length} item{(draftPosts.length + stats.error + integrations.filter(i => i.refresh_needed).length) !== 1 ? 's' : ''}</span>
+      </div>
+      {#if draftPosts.length === 0 && stats.error === 0 && integrations.filter(i => i.refresh_needed).length === 0}
+        <div class="text-center py-4">
+          <span class="text-xl">✅</span>
+          <p class="text-xs text-muted mt-1">All clear — nothing needs your attention</p>
+        </div>
+      {:else}
+        <div class="space-y-1.5">
+          {#each draftPosts.slice(0, 5) as post (post.id)}
+            <a href="/posts/{post.id}" class="flex items-center gap-2 py-1.5 px-2 -mx-2 rounded-lg hover:bg-surface-hover transition-colors group">
+              <span class="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0"></span>
+              <span class="flex-1 text-xs truncate text-content-secondary group-hover:text-content">{post.content || post.title || '(no content)'}</span>
+              <span class="text-[10px] text-muted-dark">draft</span>
+            </a>
+          {/each}
+          {#if stats.error > 0}
+            <a href="/posts?state=error" class="flex items-center gap-2 py-1.5 px-2 -mx-2 rounded-lg hover:bg-surface-hover transition-colors group">
+              <span class="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0"></span>
+              <span class="flex-1 text-xs text-red-400">{stats.error} failed post{stats.error > 1 ? 's' : ''} need{stats.error === 1 ? 's' : ''} retry</span>
+              <span class="text-[10px] text-muted-dark">→</span>
+            </a>
+          {/if}
+          {#each integrations.filter(i => i.refresh_needed).slice(0, 3) as int (int.id)}
+            <a href="/channels" class="flex items-center gap-2 py-1.5 px-2 -mx-2 rounded-lg hover:bg-surface-hover transition-colors group">
+              <span class="w-1.5 h-1.5 rounded-full bg-orange-400 shrink-0"></span>
+              <span class="flex-1 text-xs text-orange-400 truncate">{int.provider_name} token expiring</span>
+              <span class="text-[10px] text-muted-dark">→</span>
+            </a>
+          {/each}
+        </div>
+      {/if}
     </div>
 
     <!-- Two-column: Today's Schedule + Recent Activity -->

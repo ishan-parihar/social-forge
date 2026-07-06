@@ -23,6 +23,7 @@ export interface PostDetail {
   content: string; title?: string; scheduled_at?: string;
   published_at?: string; platform_post_url?: string; error_message?: string; created_at: string;
   tags?: Tag[];
+  media?: { url: string; mime_type: string; alt?: string }[] | null;
   repeat_interval_days?: number | null;
   repeat_end_date?: string | null;
   group_id?: string | null;

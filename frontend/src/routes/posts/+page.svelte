@@ -3,6 +3,7 @@
   import { onMount, onDestroy } from "svelte";
   import { postsApi, type PostSummary } from "$lib/api/posts";
   import { realtime } from "$lib/stores/realtime";
+  import { timezone } from "$lib/stores/timezone.svelte";
   import Badge from "$lib/ui/Badge.svelte";
   import Icon from "$lib/ui/Icon.svelte";
   import { goto } from "$app/navigation";
@@ -137,7 +138,7 @@
                 <div class="text-xs text-muted mt-0.5">{post.integration_name}</div>
               </div>
               <div class="text-xs text-muted shrink-0">
-                {post.scheduled_at ? new Date(post.scheduled_at).toLocaleDateString() : ""}
+                {post.scheduled_at ? timezone.formatDate(post.scheduled_at) : ""}
               </div>
               <Badge state={post.state as "draft" | "queued" | "published" | "error"} />
             </button>
@@ -164,7 +165,7 @@
               </div>
             </div>
             <div class="text-xs text-muted shrink-0">
-              {post.scheduled_at ? new Date(post.scheduled_at).toLocaleDateString() : ""}
+              {post.scheduled_at ? timezone.formatDate(post.scheduled_at) : ""}
             </div>
             <Badge state={post.state as "draft" | "queued" | "published" | "error"} />
             {#if post.error_message}

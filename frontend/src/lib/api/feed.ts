@@ -78,12 +78,13 @@ export function proxyMediaUrl(url: string): string {
 }
 
 export const feedApi = {
-  list: (cursor?: string, provider?: string, authorHandle?: string, limit = 20) => {
+  list: (cursor?: string, provider?: string, authorHandle?: string, limit = 20, q?: string) => {
     const params = new URLSearchParams();
     params.set('limit', String(limit));
     if (cursor) params.set('cursor', cursor);
     if (provider) params.set('provider', provider);
     if (authorHandle) params.set('author_handle', authorHandle);
+    if (q && q.trim()) params.set('q', q.trim());
     return api.get<FeedResponse>(`/api/feed?${params.toString()}`);
   },
   import: () => {
