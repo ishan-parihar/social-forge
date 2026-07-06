@@ -6,6 +6,7 @@
   import MediaCarousel from "$lib/media/MediaCarousel.svelte";
   import { toast } from "$lib/stores/toast";
   import { realtime } from "$lib/stores/realtime";
+  import { providerMeta as centralProviderMeta } from "$lib/providers";
 
   let posts = $state<FeedPost[]>([]);
   let loading = $state(false);
@@ -172,28 +173,13 @@
     return null;
   }
 
+  // Provider metadata now comes from the central $lib/providers module
+  // (R-8) — no more 18-entry local map. The local providerMeta() wrapper
+  // adapts the central shape ({label, color, icon, charLimit}) to the
+  // {label, color, dot} shape this file's template expects (dot == color).
   function providerMeta(provider: string): { label: string; color: string; dot: string } {
-    const meta: Record<string, { label: string; color: string; dot: string }> = {
-      x:          { label: 'X',      color: '#9ca3af', dot: '#9ca3af' },
-      reddit:     { label: 'Reddit', color: '#fb923c', dot: '#fb923c' },
-      bluesky:    { label: 'Bluesky',color: '#38bdf8', dot: '#38bdf8' },
-      github:     { label: 'GitHub', color: '#d1d5db', dot: '#d1d5db' },
-      devto:      { label: 'Dev.to', color: '#9ca3af', dot: '#9ca3af' },
-      mastodon:   { label: 'Mastodon',color:'#38bdf8', dot: '#38bdf8' },
-      lemmy:      { label: 'Lemmy',  color: '#f97316', dot: '#f97316' },
-      medium:     { label: 'Medium', color: '#22c55e', dot: '#22c55e' },
-      wordpress:  { label: 'WordPress',color:'#60a5fa', dot: '#60a5fa' },
-      linkedin:   { label: 'LinkedIn',color:'#3b82f6', dot: '#3b82f6' },
-      facebook:   { label: 'Facebook',color:'#2563eb', dot: '#2563eb' },
-      instagram:  { label: 'Instagram',color:'#f472b6', dot: '#f472b6' },
-      threads:    { label: 'Threads',color:'#a78bfa', dot: '#a78bfa' },
-      youtube:    { label: 'YouTube',color:'#ef4444', dot: '#ef4444' },
-      pinterest:  { label: 'Pinterest',color:'#f87171', dot: '#f87171' },
-      tiktok:     { label: 'TikTok', color:'#67e8f9', dot: '#67e8f9' },
-      hashnode:   { label: 'Hashnode',color:'#60a5fa', dot: '#60a5fa' },
-      vk:         { label: 'VK',     color:'#60a5fa', dot: '#60a5fa' },
-    };
-    return meta[provider] || { label: provider.replace(/_/g, ' '), color: '#818cf8', dot: '#818cf8' };
+    const m = centralProviderMeta(provider);
+    return { label: m.label, color: m.color, dot: m.color };
   }
 
   // Click outside to close filter

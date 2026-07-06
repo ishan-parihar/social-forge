@@ -8,30 +8,11 @@
   // ProviderEditor: when the user is composing shared content for
   // multiple channels at once, they still need to see how close they
   // are to each platform's individual limit (X=280, Threads=500, etc.).
+  //
+  // Provider metadata (label, charLimit) comes from the central
+  // $lib/providers.ts module (R-8) so there's a single source of truth.
 
-  // Per-provider character limits — kept in sync with the Rust
-  // `Provider::max_content_length()` impls in src/social/. If a new
-  // provider is added on the backend, add its limit here too.
-  const PROVIDER_CHAR_LIMITS: Record<string, { label: string; limit: number }> = {
-    x: { label: 'X', limit: 280 },
-    reddit: { label: 'Reddit', limit: 10000 },
-    linkedin: { label: 'LinkedIn', limit: 3000 },
-    'linkedin-page': { label: 'LinkedIn', limit: 3000 },
-    facebook: { label: 'Facebook', limit: 63206 },
-    instagram: { label: 'Instagram', limit: 2200 },
-    'instagram-standalone': { label: 'Instagram', limit: 2200 },
-    threads: { label: 'Threads', limit: 500 },
-    bluesky: { label: 'Bluesky', limit: 300 },
-    mastodon: { label: 'Mastodon', limit: 500 },
-    pinterest: { label: 'Pinterest', limit: 500 },
-    tiktok: { label: 'TikTok', limit: 2200 },
-    youtube: { label: 'YouTube', limit: 5000 },
-    discord: { label: 'Discord', limit: 2000 },
-    slack: { label: 'Slack', limit: 40000 },
-    'telegram-bot': { label: 'Telegram', limit: 4096 },
-    'telegram-user': { label: 'Telegram', limit: 4096 },
-    whatsapp: { label: 'WhatsApp', limit: 65536 },
-  };
+  import { providerMeta } from "$lib/providers";
 
   let { content, selectedIntegrations, integrationProviders, integrationNames }: {
     content: string;
@@ -53,18 +34,17 @@
     for (const intId of selectedIntegrations) {
       const provider = integrationProviders.get(intId);
       if (!provider) continue;
-      const meta = PROVIDER_CHAR_LIMITS[provider];
-      if (!meta) continue;
       if (seen.has(provider)) continue;
       seen.add(provider);
+      const meta = providerMeta(provider);
       const count = plainTextLength;
       out.push({
         key: provider,
         label: meta.label,
-        limit: meta.limit,
+        limit: meta.charLimit,
         count,
-        isOver: count > meta.limit,
-        isWarning: count > meta.limit * 0.9 && count <= meta.limit,
+        isOver: count > meta.charLimit,
+        isWarning: count > meta.charLimit * 0.9 && count <= meta.charLimit,
       });
     }
     return out;

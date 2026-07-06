@@ -8,6 +8,7 @@
   import { formatDateTime } from '$lib/calendar/utils';
   import { goto } from '$app/navigation';
   import { realtime } from '$lib/stores/realtime';
+  import { providerIcon, providerColor } from '$lib/providers';
   import Icon from '$lib/ui/Icon.svelte';
 
   let upcoming = $state<PostSummary[]>([]);
@@ -86,25 +87,8 @@
     unsubscribers.forEach(fn => fn());
   });
 
-  function providerIcon(p: string): string {
-    const icons: Record<string, string> = {
-      x: 'X', reddit: 'R', linkedin: 'in', facebook: 'f',
-      instagram: 'IG', youtube: 'YT', bluesky: 'BS', mastodon: 'MA',
-      pinterest: 'PIN', tiktok: 'TT', threads: 'TH', discord: 'DC',
-      slack: 'SL', 'telegram-bot': 'TG', 'telegram-user': 'TG', whatsapp: 'WA',
-    };
-    return icons[p] || '•';
-  }
-
-  function providerColor(p: string): string {
-    const colors: Record<string, string> = {
-      x: 'text-gray-300', reddit: 'text-orange-400', linkedin: 'text-blue-400',
-      facebook: 'text-blue-500', instagram: 'text-pink-400', youtube: 'text-red-400',
-      bluesky: 'text-sky-400', mastodon: 'text-purple-400', pinterest: 'text-red-500',
-      tiktok: 'text-white', threads: 'text-gray-400',
-    };
-    return colors[p] || 'text-gray-400';
-  }
+  // Provider icon/color now come from the central $lib/providers module
+  // (R-8) instead of being duplicated here.
 
   // Max count for channel performance bars
   let maxProviderCount = $derived(
@@ -322,7 +306,7 @@
           <div class="space-y-1">
             {#each recentPublished as post}
               <div class="flex items-center gap-3 py-2 border-b border-line last:border-0">
-                <span class="text-xs {providerColor(post.integration_name?.toLowerCase() || '')}">{providerIcon(post.integration_name?.toLowerCase() || '')}</span>
+                <span class="text-xs" style="color: {providerColor(post.integration_name?.toLowerCase() || '')}">{providerIcon(post.integration_name?.toLowerCase() || '')}</span>
                 <span class="flex-1 text-sm truncate text-content-secondary">{post.content || post.title || '(no content)'}</span>
                 <div class="flex gap-2 text-[10px] text-muted">
                   {#if post.likes != null && post.likes > 0}

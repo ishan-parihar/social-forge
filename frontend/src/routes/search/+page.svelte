@@ -6,6 +6,7 @@
   import { toast } from "$lib/stores/toast";
   import { realtime } from "$lib/stores/realtime";
   import { timezone } from "$lib/stores/timezone.svelte";
+  import { providerIcon, providerColor, providerLabel } from "$lib/providers";
   import EngagementCard from "$lib/components/EngagementCard.svelte";
   import MediaCarousel from "$lib/media/MediaCarousel.svelte";
 
@@ -24,23 +25,16 @@
   // stale responses that arrive after the user has typed more.
   let lastSentQuery = $state<string>("");
 
-  // Build platform list dynamically from connected integrations
+  // Build platform list dynamically from connected integrations,
+  // using the central provider metadata (R-8) for labels and icons.
   let platforms = $derived.by(() => {
     const connected = connectedIntegrations
       .filter(i => !i.disabled)
       .map(i => i.provider_identifier);
     const unique = [...new Set(connected)];
-    const icons: Record<string, string> = {
-      x: "X", reddit: "R", facebook: "f", instagram: "IG", youtube: "YT",
-      linkedin: "in", bluesky: "BS", mastodon: "MA", pinterest: "PIN",
-      tiktok: "TT", threads: "TH", discord: "DC", slack: "SL",
-      "telegram-bot": "TG", whatsapp: "WA", "instagram-standalone": "IG",
-      "linkedin-page": "in", wordpress: "WP", medium: "MD", devto: "DT",
-      hashnode: "HN", github: "GH", vk: "VK", kick: "KI", skool: "SK",
-    };
     return [
       { value: "all", label: "All", icon: "ALL" },
-      ...unique.map(p => ({ value: p, label: p.charAt(0).toUpperCase() + p.slice(1), icon: icons[p] || p.slice(0, 2).toUpperCase() })),
+      ...unique.map(p => ({ value: p, label: providerLabel(p), icon: providerIcon(p) })),
     ];
   });
 
@@ -153,20 +147,8 @@
     }
   }
 
-  function providerIcon(p: string): string {
-    const found = platforms.find(pl => pl.value === p);
-    return found?.icon || "•";
-  }
-
-  function providerColor(p: string): string {
-    const colors: Record<string, string> = {
-      x: 'text-gray-300', reddit: 'text-orange-400', linkedin: 'text-blue-400',
-      facebook: 'text-blue-500', instagram: 'text-pink-400', youtube: 'text-red-400',
-      bluesky: 'text-sky-400', mastodon: 'text-purple-400', pinterest: 'text-red-500',
-      tiktok: 'text-white', threads: 'text-gray-400',
-    };
-    return colors[p] || 'text-gray-400';
-  }
+  // Provider icon/color now come from the central $lib/providers module
+  // (R-8) — no more local duplicates.
 
   function formatTime(iso: string): string {
     // Render in the user's selected timezone (F-7) instead of the
@@ -322,7 +304,7 @@
               <img src={proxyMediaUrl(post.author_avatar)} alt="" class="w-10 h-10 rounded-full flex-shrink-0 object-cover" />
             {:else}
               <div class="w-10 h-10 rounded-full bg-line flex items-center justify-center flex-shrink-0">
-                <span class="text-sm {providerColor(post.provider)}">{providerIcon(post.provider)}</span>
+                <span class="text-sm" style="color: {providerColor(post.provider)}">{providerIcon(post.provider)}</span>
               </div>
             {/if}
 
@@ -333,7 +315,7 @@
                 {#if post.author_handle}
                   <span class="text-xs text-muted">@{post.author_handle}</span>
                 {/if}
-                <span class="text-xs {providerColor(post.provider)}">{providerIcon(post.provider)}</span>
+                <span class="text-xs" style="color: {providerColor(post.provider)}">{providerIcon(post.provider)}</span>
                 <span class="text-xs text-muted-dark ml-auto">{formatTime(post.created_at)}</span>
               </div>
 

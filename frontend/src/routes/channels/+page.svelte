@@ -24,23 +24,24 @@
     code?: string;
     instructions?: string;
   } | null>(null);
-  const providerLabels: Record<string, string> = {
-    x: "X (Twitter)", facebook: "Facebook", instagram: "Instagram",
-    "instagram-standalone": "Instagram (Standalone)", threads: "Threads",
-    linkedin: "LinkedIn", "linkedin-page": "LinkedIn Page",
-    google: "Google Suite", youtube: "YouTube", google_my_business: "Google Business",
-    reddit: "Reddit", bluesky: "Bluesky", discord: "Discord", pinterest: "Pinterest",
-    tiktok: "TikTok", vk: "VK", kick: "Kick", mastodon: "Mastodon",
-    "telegram-bot": "Telegram Bot", "telegram-user": "Telegram User",
-    whatsapp: "WhatsApp", slack: "Slack",
-    wordpress: "WordPress", medium: "Medium", devto: "Dev.to", hashnode: "Hashnode",
-    github: "GitHub", lemmy: "Lemmy", whop: "Whop",
-    farcaster: "Farcaster",
-    skool: "Skool",
-  };
 
+  // Provider labels come from the central $lib/providers module (R-8).
+  // The channels page overrides a few labels for the connect dialog
+  // (e.g. "X (Twitter)" instead of "X", "Instagram (Standalone)" instead
+  // of "Instagram") — those overrides live in PROVIDER_LABEL_OVERRIDES
+  // below so the central map stays generic.
+  import { providerLabel as centralProviderLabel } from "$lib/providers";
+  const PROVIDER_LABEL_OVERRIDES: Record<string, string> = {
+    x: "X (Twitter)",
+    "instagram-standalone": "Instagram (Standalone)",
+    "linkedin-page": "LinkedIn Page",
+    "telegram-bot": "Telegram Bot",
+    "telegram-user": "Telegram User",
+    "google-my-business": "Google Business",
+  };
   function providerLabel(provider: string): string {
-    return providerLabels[provider] ?? provider.replace(/_/g, " ");
+    if (PROVIDER_LABEL_OVERRIDES[provider]) return PROVIDER_LABEL_OVERRIDES[provider];
+    return centralProviderLabel(provider);
   }
 
   let availableProviders = $state([
