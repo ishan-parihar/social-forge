@@ -10,6 +10,8 @@
   import ModalManager from '$lib/components/ModalManager.svelte';
   import ShortcutsModal from '$lib/components/ShortcutsModal.svelte';
   import { modals } from '$lib/stores/modals.svelte';
+  import { composer } from '$lib/stores/composer.svelte';
+  import ComposerModal from '$lib/composer/ComposerModal.svelte';
   import NotificationBell from '$lib/notifications/NotificationBell.svelte';
   import StreakBadge from '$lib/streak/StreakBadge.svelte';
   import OnboardingModal from '$lib/onboarding/OnboardingModal.svelte';
@@ -77,7 +79,25 @@
     },
   ];
 
-  // Auto-close the mobile sidebar whenever the route changes —
+  // Phase 2: when the composer store opens, register the ComposerModal
+  // with the modal manager. Uses a guard to avoid re-opening on every
+  // reactivity tick. The composer store's `open` flag is the single
+  // source of truth; the modal id tracks the ModalManager entry.
+  let composerModalId: string | null = null;
+  $effect(() => {
+    if (composer.open && !composerModalId) {
+      composerModalId = modals.open(ComposerModal, {}, {
+        title: '',
+        closeOnClickOutside: false,
+        closeOnEscape: false,
+        withCloseButton: false,
+        fullScreen: true,
+      });
+    } else if (!composer.open && composerModalId) {
+      modals.close(composerModalId);
+      composerModalId = null;
+    }
+  });
   // prevents the sidebar from staying open after the user taps a
   // nav item on mobile.
   $effect(() => {

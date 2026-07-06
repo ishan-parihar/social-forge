@@ -3,7 +3,7 @@
 // and single-key shortcuts for common actions.
 //
 // Shortcuts:
-//   n       → new post (/posts/new)
+//   n       → open composer modal (Phase 2: was goto('/posts/new'))
 //   /       → focus search (or go to /search if not on a page with search)
 //   g c     → go to calendar
 //   g p     → go to posts
@@ -11,12 +11,13 @@
 //   g a     → go to analytics
 //   g m     → go to media
 //   ?       → show shortcut cheat-sheet
-//   Escape  → close any open modal/panel (handled by individual components)
+//   Escape  → close any open modal/panel (handled by ModalManager)
 //
 // Shortcuts are disabled when the user is typing in an input/textarea/contenteditable.
 
 import { goto } from '$app/navigation';
 import { browser } from '$app/environment';
+import { composer } from './composer.svelte';
 
 let gPressed = false;
 let gTimer: ReturnType<typeof setTimeout> | null = null;
@@ -81,7 +82,8 @@ function handleKeydown(e: KeyboardEvent) {
   // Single-key shortcuts
   switch (key) {
     case 'n':
-      goto('/posts/new');
+      // Phase 2: open the composer modal instead of navigating to /posts/new.
+      composer.openCreate();
       e.preventDefault();
       return;
     case '/':

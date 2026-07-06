@@ -4,6 +4,7 @@
   import { postsApi, type PostSummary } from "$lib/api/posts";
   import { realtime } from "$lib/stores/realtime";
   import { timezone } from "$lib/stores/timezone.svelte";
+  import { composer } from "$lib/stores/composer.svelte";
   import Badge from "$lib/ui/Badge.svelte";
   import Icon from "$lib/ui/Icon.svelte";
   import { goto } from "$app/navigation";
@@ -95,28 +96,14 @@
       }
       const post = detail.data;
 
-      const slot = await postsApi.findSlot(post.integration_id);
-      if (slot.error || !slot.data?.date) {
-        toast(`Failed to find slot: ${slot.error || 'unknown'}`, "error");
-        return;
-      }
-
-      await postsApi.create({
-        integration_ids: [post.integration_id],
-        content: post.content,
-        title: post.title,
-        scheduled_at: slot.data.date,
-        tag_ids: post.tags?.map(t => t.id) || [],
-        first_comment: post.first_comment || undefined,
-        media: (post.media || []).map(m => ({
-          id: crypto.randomUUID(),
-          url: m.url,
-          mime_type: m.mime_type,
-          alt: m.alt,
-        })),
-      });
-      toast("Post duplicated", "success");
-      load();
+      // Phase 2: open the composer modal with prefilled content so the
+      // user can review/edit before scheduling. Previously this created
+      // the duplicate directly without review.
+      composer.openCreate(
+        undefined,                                // no preset date
+        [post.integration_id],                    // same channel
+        post.content,                             // prefilled content
+      );
     } catch (e) {
       toast(`Failed to duplicate: ${e instanceof Error ? e.message : 'unknown'}`, "error");
     } finally {
@@ -249,7 +236,7 @@
           </div>
           {#each groupPosts as post (post.id)}
             <button
-              onclick={() => goto(`/posts/${post.id}`)}
+              onclick={() => composer.openEdit(post.id)}
               class="w-full flex items-center gap-3 px-4 py-3 border-b border-line last:border-0 hover:bg-surface-hover transition-colors text-left"
             >
               <div class="flex-1 min-w-0">
@@ -289,7 +276,7 @@
             aria-label="Select post"
           />
           <button
-            onclick={() => goto(`/posts/${post.id}`)}
+            onclick={() => composer.openEdit(post.id)}
             class="flex-1 flex items-center gap-4 text-left min-w-0"
           >
             <div class="flex-1 min-w-0">

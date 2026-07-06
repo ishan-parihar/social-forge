@@ -2,6 +2,7 @@
   import { tick } from "svelte";
   import { goto } from "$app/navigation";
   import Badge from "$lib/ui/Badge.svelte";
+  import { composer } from "$lib/stores/composer.svelte";
   import { engagementIcon, engagementLabel } from "./engagement";
   import type { CalendarEvent as CEvent } from "./types";
 
@@ -113,7 +114,7 @@
             📋 Duplicate
           {/if}
         </button>
-        <button onclick={() => goto(`/posts/${event.id}`)} class="w-full px-3 py-2 bg-[#1a1f2e] hover:bg-[#242b3d] border border-line rounded-lg text-sm text-indigo-400 transition-colors flex items-center justify-center gap-2">
+        <button onclick={() => { if (event) { composer.openEdit(event.id); onclose(); } }} class="w-full px-3 py-2 bg-[#1a1f2e] hover:bg-[#242b3d] border border-line rounded-lg text-sm text-indigo-400 transition-colors flex items-center justify-center gap-2">
           ✏️ Edit
         </button>
       </div>

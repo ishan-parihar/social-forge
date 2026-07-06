@@ -7,6 +7,7 @@
   import { toast } from "$lib/stores/toast";
   import { realtime } from "$lib/stores/realtime";
   import { confirmModal } from "$lib/stores/modals.svelte";
+  import { composer } from "$lib/stores/composer.svelte";
   import { toCalendarEvent, type CalendarEvent, type CalendarView } from "$lib/calendar/types";
   import { formatDateKey } from "$lib/calendar/utils";
   import CalendarHeader from "$lib/calendar/CalendarHeader.svelte";
@@ -260,7 +261,7 @@
 <div class="page-enter space-y-6">
   <div class="flex items-center justify-between">
     <h2 class="text-xl font-semibold">Content Calendar</h2>
-    <button onclick={() => goto("/posts/new")} class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm transition-colors">
+    <button onclick={() => composer.openCreate()} class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm transition-colors">
       + New Post
     </button>
   </div>
@@ -308,7 +309,7 @@
       events={filteredEvents}
       {selected}
       onEventClick={(id) => selectedEvent = events.find(e => e.id === id) || null}
-      onDateClick={(date) => goto(`/posts/new?date=${date}`)}
+      onDateClick={(date) => composer.openCreate(date)}
       onDrop={handleDrop}
       onDuplicate={handleDuplicate}
       onStats={handleStats}
@@ -321,7 +322,7 @@
       events={filteredEvents}
       {selected}
       onEventClick={(id) => selectedEvent = events.find(e => e.id === id) || null}
-      onDateClick={(date) => goto(`/posts/new?date=${date}`)}
+      onDateClick={(date) => composer.openCreate(date)}
       onDrop={handleDrop}
       onDuplicate={handleDuplicate}
       onStats={handleStats}
@@ -334,7 +335,7 @@
       events={filteredEvents}
       {selected}
       onEventClick={(id) => selectedEvent = events.find(e => e.id === id) || null}
-      onDateClick={(date) => goto(`/posts/new?date=${date}`)}
+      onDateClick={(date) => composer.openCreate(date)}
       onDrop={handleDrop}
       onDuplicate={handleDuplicate}
       onStats={handleStats}

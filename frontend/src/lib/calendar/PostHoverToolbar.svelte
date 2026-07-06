@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { goto } from "$app/navigation";
+  import { composer } from "$lib/stores/composer.svelte";
 
   let { eventId, onDuplicate, onStats, onDelete }: {
     eventId: string;
@@ -11,7 +11,7 @@
 
 <div class="absolute top-1 right-1 flex items-center gap-0.5 bg-[#1e2435]/95 rounded-md shadow-lg z-10">
   <button
-    onclick={() => goto(`/posts/${eventId}`)}
+    onclick={() => composer.openEdit(eventId)}
     class="text-[#9ca3af] hover:text-white px-1.5 py-0.5 rounded text-xs transition-colors"
     title="Edit"
     aria-label="Edit post"

@@ -11,6 +11,7 @@
   import { providerIcon, providerColor } from '$lib/providers';
   import Icon from '$lib/ui/Icon.svelte';
   import GettingStarted from '$lib/onboarding/GettingStarted.svelte';
+  import { composer } from '$lib/stores/composer.svelte';
 
   let upcoming = $state<PostSummary[]>([]);
   let recentPublished = $state<PostSummary[]>([]);
@@ -107,7 +108,7 @@
       <p class="text-sm text-muted mt-1">Your social media command center</p>
     </div>
     <div class="flex gap-2">
-      <button onclick={() => goto('/posts/new')} class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm font-medium transition-colors">
+      <button onclick={() => composer.openCreate()} class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm font-medium transition-colors">
         + New Post
       </button>
       <button onclick={() => goto('/analytics')} class="px-4 py-2 bg-surface-hover hover:bg-line border border-line rounded-lg text-sm transition-colors">
@@ -333,7 +334,7 @@
 
     <!-- Quick Actions -->
     <div class="flex gap-3 flex-wrap">
-      <button onclick={() => goto('/posts/new')} class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm font-medium transition-colors">
+      <button onclick={() => composer.openCreate()} class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm font-medium transition-colors">
         <Icon name="post" class="w-4 h-4 inline" /> Compose Post
       </button>
       <button onclick={() => goto('/feed')} class="px-4 py-2 bg-surface-hover hover:bg-line border border-line rounded-lg text-sm transition-colors">
