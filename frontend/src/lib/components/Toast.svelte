@@ -3,11 +3,18 @@
   import { onToast, type Toast } from '$lib/stores/toast';
 
   let toasts = $state<Toast[]>([]);
+  let unsubscribe: (() => void) | null = null;
 
-  onMount(() => onToast(t => {
-    if (t.message) toasts = [...toasts, t];
-    else toasts = toasts.filter(x => x.id !== t.id);
-  }));
+  onMount(() => {
+    unsubscribe = onToast(t => {
+      if (t.message) toasts = [...toasts, t];
+      else toasts = toasts.filter(x => x.id !== t.id);
+    });
+  });
+
+  onDestroy(() => {
+    if (unsubscribe) unsubscribe();
+  });
 </script>
 
 {#each toasts as t (t.id)}
