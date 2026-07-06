@@ -17,6 +17,7 @@
   import FirstComment from "$lib/composer/FirstComment.svelte";
   import AiAssistant from "$lib/composer/AiAssistant.svelte";
   import AiHashtagSuggestions from "$lib/composer/AiHashtagSuggestions.svelte";
+  import MusicPicker from "$lib/composer/MusicPicker.svelte";
   import type { MediaItem } from "$lib/api/media";
   import TargetPicker from "$lib/composer/TargetPicker.svelte";
   import type { TargetInfo } from "$lib/api/integrations";
@@ -38,6 +39,8 @@
   let error = $state<string | null>(null);
   let firstComment = $state("");
   let showAi = $state(false);
+  let showMusicPicker = $state(false);
+  let selectedMusic = $state<{ id: string; title: string; artist: string } | null>(null);
 
   // Draft auto-save state
   let draftSaved = $state(false);
@@ -52,6 +55,18 @@
   // Auto-detect if X/Twitter is selected (for thread mode)
   let hasXIntegration = $derived(
     selectedIntegrations.some(id => integrationProviders.get(id) === 'x')
+  );
+  let hasInstagramIntegration = $derived(
+    selectedIntegrations.some(id => {
+      const p = integrationProviders.get(id);
+      return p === 'instagram' || p === 'instagram-standalone';
+    })
+  );
+  let instagramIntegrationId = $derived(
+    selectedIntegrations.find(id => {
+      const p = integrationProviders.get(id);
+      return p === 'instagram' || p === 'instagram-standalone';
+    }) || ''
   );
 
   const DRAFT_KEY = 'social-forge-composer-draft';
@@ -250,7 +265,10 @@
         first_comment: firstComment || undefined,
         media: mediaItems.length > 0 ? mediaItems.map(m => ({ id: m.id, url: m.url, mime_type: m.mime_type, alt: undefined })) : undefined,
         overrides: Object.keys(overridesObj).length > 0 ? overridesObj : undefined,
-        settings: Object.keys(settings).length > 0 ? settings : undefined,
+        settings: {
+          ...settings,
+          ...(selectedMusic ? { audio_id: selectedMusic.id, audio_title: selectedMusic.title } : {}),
+        },
       };
 
       // ── Pre-submit validation ──────────────────────────────
@@ -312,7 +330,10 @@
         first_comment: firstComment || undefined,
         media: mediaItems.length > 0 ? mediaItems.map(m => ({ id: m.id, url: m.url, mime_type: m.mime_type, alt: undefined })) : undefined,
         overrides: Object.keys(overridesObj).length > 0 ? overridesObj : undefined,
-        settings: Object.keys(settings).length > 0 ? settings : undefined,
+        settings: {
+          ...settings,
+          ...(selectedMusic ? { audio_id: selectedMusic.id, audio_title: selectedMusic.title } : {}),
+        },
       };
 
       // Pre-submit validation
@@ -528,6 +549,38 @@
     />
   </div>
 
+  <!-- Music (Instagram only — uses IG Audio API) -->
+  {#if hasInstagramIntegration}
+    <div class="bg-surface border border-line rounded-xl p-4">
+      <div class="flex items-center justify-between mb-2">
+        <h3 class="text-sm font-semibold">🎵 Music</h3>
+        <button
+          onclick={() => showMusicPicker = true}
+          class="text-xs px-3 py-1.5 bg-surface-hover hover:bg-line-hover rounded-lg text-muted hover:text-white transition-colors"
+        >
+          {selectedMusic ? 'Change' : 'Browse'}
+        </button>
+      </div>
+      {#if selectedMusic}
+        <div class="flex items-center gap-3 bg-surface-hover rounded-lg p-2">
+          <div class="w-8 h-8 rounded bg-brand-500/20 flex items-center justify-center text-brand-400 text-sm">🎵</div>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-medium truncate">{selectedMusic.title}</p>
+            <p class="text-xs text-muted truncate">{selectedMusic.artist}</p>
+          </div>
+          <button
+            onclick={() => selectedMusic = null}
+            class="text-muted hover:text-red-400 text-sm"
+          >
+            &times;
+          </button>
+        </div>
+      {:else}
+        <p class="text-xs text-muted">Add trending music from Instagram's library to your Reel.</p>
+      {/if}
+    </div>
+  {/if}
+
   <!-- Scheduling -->
   <div class="bg-surface border border-line rounded-xl p-4">
     <h3 class="text-sm font-semibold mb-3">Schedule</h3>
@@ -561,3 +614,11 @@
   currentScheduleAt={scheduledAt}
   onLoad={handlePostSetLoad}
 />
+
+{#if showMusicPicker}
+  <MusicPicker
+    integrationId={instagramIntegrationId}
+    onSelect={(track) => selectedMusic = track}
+    onclose={() => showMusicPicker = false}
+  />
+{/if}
