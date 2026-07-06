@@ -10,6 +10,7 @@
   import { realtime } from '$lib/stores/realtime';
   import { providerIcon, providerColor } from '$lib/providers';
   import Icon from '$lib/ui/Icon.svelte';
+  import GettingStarted from '$lib/onboarding/GettingStarted.svelte';
 
   let upcoming = $state<PostSummary[]>([]);
   let recentPublished = $state<PostSummary[]>([]);
@@ -122,6 +123,10 @@
       {/each}
     </div>
   {:else}
+    <!-- Getting Started checklist (U-7): persistent widget that auto-tracks
+         onboarding progress. Dismissable; auto-hides when all items complete. -->
+    <GettingStarted />
+
     <!-- Post Stats Row -->
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
       {#each [{ label: 'Drafts', value: stats.draft, color: 'text-blue-400', bg: 'bg-blue-500/10' }, { label: 'Queued', value: stats.queued, color: 'text-yellow-400', bg: 'bg-yellow-500/10' }, { label: 'Published', value: stats.published, color: 'text-green-400', bg: 'bg-green-500/10' }, { label: 'Errors', value: stats.error, color: 'text-red-400', bg: 'bg-red-500/10' }] as s}

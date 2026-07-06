@@ -103,6 +103,9 @@
   let unsubscribers: (() => void)[] = [];
 
   onMount(() => {
+    // U-7: mark analytics as visited so the Getting Started checklist
+    // can check off "View your analytics".
+    try { localStorage.setItem('social-forge-analytics-visited', 'true'); } catch { /* ignore */ }
     const events = ['post_published', 'post_failed', 'post_deleted', 'post_created'];
     for (const evt of events) {
       unsubscribers.push(realtime.on(evt, () => fetchData()));
