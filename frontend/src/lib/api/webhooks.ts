@@ -26,8 +26,9 @@ export interface WebhookDelivery {
 export const webhooksApi = {
   list: () =>
     api.get<{ webhooks: Webhook[] }>('/api/webhooks'),
-  get: (id: string) =>
-    api.get<{ webhook: Webhook }>(`/api/webhooks/${id}`),
+  // Y-6: removed `get(id)` — never called anywhere in the codebase.
+  // The webhooks list page uses `list()` + client-side find for the
+  // edit modal. If a single-webhook GET is ever needed, re-add it.
   create: (data: { name: string; url: string; secret?: string; event_types: string[] }) =>
     api.post<{ webhook: Webhook }>('/api/webhooks', data),
   update: (id: string, updates: Partial<Webhook>) =>
