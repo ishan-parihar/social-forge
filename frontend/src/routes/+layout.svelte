@@ -18,6 +18,9 @@
   let { children, data } = $props();
   let showShortcuts = $state(false);
   let showOnboarding = $state(false);
+  // Mobile sidebar state (U-8): on screens < lg, the sidebar is hidden
+  // behind a hamburger toggle. State resets on navigation (route change).
+  let sidebarOpen = $state(false);
 
   const navSections = [
     {
@@ -72,6 +75,14 @@
     },
   ];
 
+  // Auto-close the mobile sidebar whenever the route changes —
+  // prevents the sidebar from staying open after the user taps a
+  // nav item on mobile.
+  $effect(() => {
+    $page.url.pathname;
+    sidebarOpen = false;
+  });
+
   onMount(() => {
     theme.init();
     if (data.authenticated) {
@@ -94,7 +105,18 @@
   {@render children()}
 {:else}
   <div class="flex h-screen overflow-hidden bg-background">
-    <aside class="w-56 bg-background border-r border-line flex flex-col flex-shrink-0 overflow-y-auto">
+    <!-- Mobile sidebar overlay: clicking outside the sidebar closes it -->
+    {#if sidebarOpen}
+      <div
+        class="fixed inset-0 bg-black/60 z-30 lg:hidden"
+        onclick={() => sidebarOpen = false}
+        role="presentation"
+      ></div>
+    {/if}
+    <aside
+      class="w-56 bg-background border-r border-line flex flex-col flex-shrink-0 overflow-y-auto fixed lg:static inset-y-0 left-0 z-40 transition-transform duration-200
+        {sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}"
+    >
       <div class="h-14 flex items-center justify-between px-5 border-b border-line sticky top-0 bg-background z-10">
         <span class="text-indigo-400 font-bold text-lg">Social Forge</span>
         <div class="flex items-center gap-2">
@@ -160,6 +182,27 @@
       </div>
     </aside>
     <main class="flex-1 overflow-auto">
+      <!-- Mobile top bar with hamburger toggle (visible only < lg) -->
+      <div class="lg:hidden sticky top-0 z-20 bg-background border-b border-line px-4 py-3 flex items-center justify-between">
+        <button
+          onclick={() => sidebarOpen = !sidebarOpen}
+          class="text-content hover:text-indigo-400 transition-colors p-1 -ml-1"
+          aria-label="Toggle navigation"
+        >
+          <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            {#if sidebarOpen}
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            {:else}
+              <line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/>
+            {/if}
+          </svg>
+        </button>
+        <span class="text-indigo-400 font-bold">Social Forge</span>
+        <div class="flex items-center gap-2">
+          <StreakBadge />
+          <NotificationBell />
+        </div>
+      </div>
       <div class="max-w-6xl mx-auto p-6">{@render children()}</div>
     </main>
   </div>

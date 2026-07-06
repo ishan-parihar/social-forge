@@ -7,14 +7,17 @@
     placeholder?: string;
   } = $props();
 
-  let text = $state(content.replace(/<[^>]*>/g, ""));
+  // Re-derive plain text from the content prop whenever it changes.
+  // Previously `text` was initialized once from `content` and never
+  // synced, so switching between global and per-channel mode left the
+  // editor showing stale text from the previous mode.
+  let text = $derived(content.replace(/<[^>]*>/g, ""));
   let charCount = $derived(text.length);
   let isOverLimit = $derived(charCount > charLimit);
   let isWarning = $derived(charCount > charLimit * 0.9 && !isOverLimit);
 
   function handleInput(e: Event) {
     const target = e.target as HTMLTextAreaElement;
-    text = target.value;
     onContentChange?.(`<p>${target.value}</p>`);
   }
 </script>

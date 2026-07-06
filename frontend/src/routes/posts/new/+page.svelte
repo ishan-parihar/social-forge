@@ -18,6 +18,7 @@
   import AiAssistant from "$lib/composer/AiAssistant.svelte";
   import AiHashtagSuggestions from "$lib/composer/AiHashtagSuggestions.svelte";
   import MusicPicker from "$lib/composer/MusicPicker.svelte";
+  import PerPlatformCharCount from "$lib/composer/PerPlatformCharCount.svelte";
   import type { MediaItem } from "$lib/api/media";
   import TargetPicker from "$lib/composer/TargetPicker.svelte";
   import type { TargetInfo } from "$lib/api/integrations";
@@ -103,6 +104,37 @@
     }
     const r = await integrationsApi.list();
     if (r.data) allIntegrations = r.data.integrations.filter(i => !i.disabled);
+
+    // Composer-specific keyboard shortcuts (U-4):
+    //   Cmd/Ctrl + Enter  → publish now (postNow)
+    //   Cmd/Ctrl + S      → save draft to localStorage (preventDefault
+    //                       so the browser's "Save Page" dialog doesn't fire)
+    // These are scoped to the composer page only and don't conflict with
+    // the global shortcuts (n, /, g c, etc.) which are single-key.
+    function onKeydown(e: KeyboardEvent) {
+      const isMod = e.metaKey || e.ctrlKey;
+      if (!isMod) return;
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        // Don't trigger if already submitting — postNow() guards too,
+        // but preventing the toast spam is nicer UX.
+        if (!submitting) postNow();
+      } else if (e.key === 's' || e.key === 'S') {
+        e.preventDefault();
+        // Force-save the draft immediately (bypass the 1500ms debounce).
+        if (content || title) {
+          localStorage.setItem(DRAFT_KEY, JSON.stringify({
+            content, title, selectedIntegrations, scheduledAt, firstComment
+          }));
+          draftSaved = true;
+          clearTimeout(draftTimer);
+          draftTimer = setTimeout(() => { draftSaved = false; }, 2000);
+          toast('Draft saved', 'success');
+        }
+      }
+    }
+    window.addEventListener('keydown', onKeydown);
+    unsubscribers.push(() => window.removeEventListener('keydown', onKeydown));
 
     // Realtime: if the user connects/disconnects an account in
     // another tab (or via the onboarding flow), refresh the channel
@@ -386,6 +418,10 @@
       {#if draftSaved}
         <span class="text-xs text-emerald-400 animate-pulse">✓ Draft saved</span>
       {/if}
+      <span class="hidden lg:inline text-[10px] text-muted-dark" title="Keyboard shortcuts">
+        <kbd class="px-1 py-0.5 bg-surface-hover rounded">⌘</kbd>+<kbd class="px-1 py-0.5 bg-surface-hover rounded">↵</kbd> post ·
+        <kbd class="px-1 py-0.5 bg-surface-hover rounded">⌘</kbd>+<kbd class="px-1 py-0.5 bg-surface-hover rounded">S</kbd> save
+      </span>
       <div class="flex gap-2">
       <button onclick={() => (showPostSets = true)} aria-label="Post Sets" class="px-3 py-1.5 text-sm text-muted hover:text-white border border-line rounded-lg transition-colors">Post Sets</button>
       <button onclick={() => showAi = !showAi} aria-label="AI Assistant"
@@ -518,6 +554,19 @@
     </h3>
     {#if editingMode === "global"}
       <RichTextEditor {content} onUpdate={(html) => content = html} />
+      <!-- Per-platform char counters: shows X=280, Threads=500, etc. for
+           each selected channel so the user knows when shared content
+           will exceed any platform's limit. -->
+      {#if selectedIntegrations.length > 0}
+        <div class="mt-3 pt-3 border-t border-line">
+          <PerPlatformCharCount
+            {content}
+            {selectedIntegrations}
+            {integrationProviders}
+            {integrationNames}
+          />
+        </div>
+      {/if}
     {:else}
       <RichTextEditor
         content={providerOverride.get(editingMode.split(":")[1]) || content}
@@ -527,6 +576,15 @@
           providerOverride = new Map(providerOverride); // trigger reactivity
         }}
       />
+      <!-- Per-platform char counter for the override content too -->
+      <div class="mt-3 pt-3 border-t border-line">
+        <PerPlatformCharCount
+          content={providerOverride.get(editingMode.split(":")[1]) || content}
+          selectedIntegrations={[editingMode.split(":")[1]]}
+          {integrationProviders}
+          {integrationNames}
+        />
+      </div>
     {/if}
   </div>
 
