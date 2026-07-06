@@ -73,7 +73,7 @@ pub fn start_feed_refresher(
                     // Refresh the comments cache on the same 30-min cycle.
                     // Comments change less frequently than posts, so this
                     // cadence is sufficient and keeps provider API usage low.
-                    if let Err(e) = refresh_all_comments(&db1, &providers, token_key).await {
+                    if let Err(e) = refresh_all_comments(&db1, &providers, &broadcaster, token_key).await {
                         tracing::error!("Comments refresh error: {e}");
                     }
                 }
@@ -452,6 +452,7 @@ async fn refresh_all_engagement(
 async fn refresh_all_comments(
     db: &PgPool,
     providers: &ProviderRegistry,
+    broadcaster: &Broadcaster,
     token_key: Option<[u8; 32]>,
 ) -> anyhow::Result<()> {
     let integrations = crate::db::queries::list_all_integrations_across_users(db).await?;
@@ -543,6 +544,11 @@ async fn refresh_all_comments(
 
     if total_cached > 0 {
         tracing::info!("Comments cache: refreshed {total_cached} comment(s)");
+        // Phase 4: broadcast so the comments page realtime subscription lights up.
+        broadcaster.send(
+            "comment_received",
+            &serde_json::json!({ "count": total_cached }),
+        );
     }
 
     Ok(())

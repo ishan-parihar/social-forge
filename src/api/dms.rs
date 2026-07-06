@@ -53,6 +53,7 @@ fn default_limit() -> u32 {
 #[derive(Debug, Serialize)]
 pub struct ConversationResponse {
     pub id: String,
+    pub platform: String,
     pub participant: String,
     pub participant_name: Option<String>,
     pub participant_avatar: Option<String>,
@@ -121,6 +122,7 @@ pub async fn list_conversations(
         .into_iter()
         .map(|c| ConversationResponse {
             id: c.id,
+            platform: integration.provider_identifier.clone(),
             participant: c.participant,
             participant_name: c.participant_name,
             participant_avatar: c.participant_avatar,

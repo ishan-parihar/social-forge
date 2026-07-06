@@ -8,6 +8,7 @@
   let comments = $state<Comment[]>([]);
   let connectedIntegrations = $state<Integration[]>([]);
   let filterPlatform = $state("all");
+  let filterStatus = $state("all");
   let loading = $state(true);
   let error = $state<string | null>(null);
   let replyModal = $state<{ comment: Comment; text: string } | null>(null);
@@ -29,6 +30,7 @@
     error = null;
     const r = await commentsApi.list({
       ...(filterPlatform !== "all" && { platform: filterPlatform }),
+      ...(filterStatus !== "all" && { status: filterStatus }),
     });
     if (r.data) {
       comments = r.data.comments;
@@ -92,13 +94,27 @@
   </div>
 
   <!-- Filters -->
-  <div class="flex gap-2 flex-wrap">
-    {#each platforms as p}
-      <button
-        onclick={() => { filterPlatform = p; load(); }}
-        class="px-3 py-1.5 text-xs capitalize rounded-lg transition-colors {filterPlatform === p ? 'bg-indigo-600 text-white' : 'bg-surface text-muted hover:text-white border border-line'}"
-      >{p}</button>
-    {/each}
+  <div class="flex items-center gap-4 flex-wrap">
+    <!-- Platform filter -->
+    <div class="flex gap-2 flex-wrap">
+      <span class="text-xs text-muted self-center">Platform:</span>
+      {#each platforms as p}
+        <button
+          onclick={() => { filterPlatform = p; load(); }}
+          class="px-3 py-1.5 text-xs capitalize rounded-lg transition-colors {filterPlatform === p ? 'bg-indigo-600 text-white' : 'bg-surface text-muted hover:text-white border border-line'}"
+        >{p}</button>
+      {/each}
+    </div>
+    <!-- Phase 4: Status filter (was declared but never rendered) -->
+    <div class="flex gap-2 flex-wrap">
+      <span class="text-xs text-muted self-center">Status:</span>
+      {#each statuses as s}
+        <button
+          onclick={() => { filterStatus = s; load(); }}
+          class="px-3 py-1.5 text-xs capitalize rounded-lg transition-colors {filterStatus === s ? 'bg-indigo-600 text-white' : 'bg-surface text-muted hover:text-white border border-line'}"
+        >{s}</button>
+      {/each}
+    </div>
   </div>
 
   <!-- Content -->

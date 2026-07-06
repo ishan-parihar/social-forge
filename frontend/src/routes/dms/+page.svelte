@@ -22,7 +22,15 @@
     if (r.data) {
       integrations = r.data.integrations.filter(i => !i.disabled);
       if (integrations.length > 0 && !selectedIntegrationId) {
-        selectedIntegrationId = integrations[0].id;
+        // Phase 5: filter to DM-capable providers instead of defaulting to
+        // integrations[0] which might be a non-DM provider (GitHub, YouTube, etc.)
+        const DM_CAPABLE = ['x', 'instagram', 'linkedin'];
+        const dmCapable = integrations.filter(i => DM_CAPABLE.includes(i.provider_identifier));
+        if (dmCapable.length > 0) {
+          selectedIntegrationId = dmCapable[0].id;
+        } else {
+          selectedIntegrationId = integrations[0].id;
+        }
       }
     }
   }
@@ -120,7 +128,7 @@
   {:else if conversations.length === 0}
     <div class="text-center py-12">
       <p class="text-sm text-muted mb-2">No conversations found</p>
-      <p class="text-xs text-muted-dark">DMs are available for X, Instagram, and LinkedIn integrations.</p>
+      <p class="text-xs text-muted-dark">DMs require a DM-capable provider (X, Instagram, or LinkedIn) with the appropriate API tier and permissions. Select a different channel above to try another provider.</p>
     </div>
   {:else}
     <div class="flex gap-4 h-[calc(100vh-200px)]">
