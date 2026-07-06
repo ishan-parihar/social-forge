@@ -2,7 +2,6 @@
   import { onMount } from "svelte";
   import { webhooksApi, type Webhook, type WebhookDelivery } from "$lib/api/webhooks";
   import { toast } from "$lib/stores/toast";
-  import SettingsBreadcrumb from "$lib/settings/SettingsBreadcrumb.svelte";
 
   let webhooks = $state<Webhook[]>([]);
   let loading = $state(true);
@@ -129,7 +128,6 @@
 </script>
 
 <div class="page-enter space-y-6">
-  <SettingsBreadcrumb title="Webhooks" />
   <div class="flex items-center justify-between">
     <h2 class="text-xl font-semibold">Webhooks</h2>
     <button onclick={openCreate} class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm transition-colors">

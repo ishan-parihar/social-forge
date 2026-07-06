@@ -5,7 +5,6 @@
   import Modal from '$lib/ui/Modal.svelte';
   import Spinner from '$lib/ui/Spinner.svelte';
   import { developerApi, type ApiKeySummary, type ApiKeyCreated } from '$lib/api/developer';
-  import SettingsBreadcrumb from "$lib/settings/SettingsBreadcrumb.svelte";
 
   // ── Tab state ────────────────────────────────────────────────
   let activeTab = $state<'keys'>('keys');
@@ -129,7 +128,6 @@
 </script>
 
 <div class="page-enter space-y-6">
-  <SettingsBreadcrumb title="Developer Portal" />
   <div>
     <h2 class="text-xl font-semibold">Developer Portal</h2>
     <p class="text-sm text-muted mt-1">Manage API keys for programmatic access and configure outgoing webhooks.</p>
