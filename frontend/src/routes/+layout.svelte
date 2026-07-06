@@ -7,6 +7,9 @@
   import { auth } from '$lib/api/auth';
   import { goto } from '$app/navigation';
   import Toast from '$lib/components/Toast.svelte';
+  import ModalManager from '$lib/components/ModalManager.svelte';
+  import ShortcutsModal from '$lib/components/ShortcutsModal.svelte';
+  import { modals } from '$lib/stores/modals.svelte';
   import NotificationBell from '$lib/notifications/NotificationBell.svelte';
   import StreakBadge from '$lib/streak/StreakBadge.svelte';
   import OnboardingModal from '$lib/onboarding/OnboardingModal.svelte';
@@ -16,7 +19,6 @@
   import { browser } from '$app/environment';
 
   let { children, data } = $props();
-  let showShortcuts = $state(false);
   let showOnboarding = $state(false);
   // Mobile sidebar state (U-8): on screens < lg, the sidebar is hidden
   // behind a hamburger toggle. State resets on navigation (route change).
@@ -87,7 +89,10 @@
     theme.init();
     if (data.authenticated) {
       realtime.connect();
-      initKeyboardShortcuts(() => showShortcuts = true);
+      initKeyboardShortcuts(() => modals.open(ShortcutsModal, {}, {
+        title: 'Keyboard Shortcuts',
+        size: 'max-w-md',
+      }));
       if (browser && !localStorage.getItem('social-forge-onboarded')) {
         showOnboarding = true;
       }
@@ -208,39 +213,12 @@
   </div>
 {/if}
 
-<!-- Keyboard shortcut cheat-sheet -->
-{#if showShortcuts}
-  <div
-    class="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
-    role="dialog"
-    onclick={() => showShortcuts = false}
-    onkeydown={(e) => { if (e.key === 'Escape') showShortcuts = false; }}
-  >
-    <div
-      class="bg-surface border border-line rounded-xl p-6 max-w-md w-full mx-4"
-      onclick={(e) => e.stopPropagation()}
-    >
-      <div class="flex items-center justify-between mb-4">
-        <h3 class="text-lg font-semibold">Keyboard Shortcuts</h3>
-        <button onclick={() => showShortcuts = false} class="text-muted hover:text-white text-xl">&times;</button>
-      </div>
-      <div class="space-y-2 text-sm">
-        <div class="flex justify-between"><span class="text-muted">New post</span><kbd class="px-2 py-0.5 bg-surface-hover rounded text-xs font-mono">n</kbd></div>
-        <div class="flex justify-between"><span class="text-muted">Search</span><kbd class="px-2 py-0.5 bg-surface-hover rounded text-xs font-mono">/</kbd></div>
-        <div class="flex justify-between"><span class="text-muted">Go to Calendar</span><kbd class="px-2 py-0.5 bg-surface-hover rounded text-xs font-mono">g c</kbd></div>
-        <div class="flex justify-between"><span class="text-muted">Go to Posts</span><kbd class="px-2 py-0.5 bg-surface-hover rounded text-xs font-mono">g p</kbd></div>
-        <div class="flex justify-between"><span class="text-muted">Go to Feed</span><kbd class="px-2 py-0.5 bg-surface-hover rounded text-xs font-mono">g f</kbd></div>
-        <div class="flex justify-between"><span class="text-muted">Go to Analytics</span><kbd class="px-2 py-0.5 bg-surface-hover rounded text-xs font-mono">g a</kbd></div>
-        <div class="flex justify-between"><span class="text-muted">Go to Media</span><kbd class="px-2 py-0.5 bg-surface-hover rounded text-xs font-mono">g m</kbd></div>
-        <div class="flex justify-between"><span class="text-muted">Show this help</span><kbd class="px-2 py-0.5 bg-surface-hover rounded text-xs font-mono">?</kbd></div>
-        <div class="flex justify-between"><span class="text-muted">Close modal</span><kbd class="px-2 py-0.5 bg-surface-hover rounded text-xs font-mono">Esc</kbd></div>
-      </div>
-      <p class="text-xs text-muted-dark mt-4 text-center">Shortcuts are disabled while typing in inputs.</p>
-    </div>
-  </div>
-{/if}
-
 <!-- First-run onboarding -->
 {#if showOnboarding}
   <OnboardingModal onClose={() => showOnboarding = false} />
 {/if}
+
+<!-- Global modal manager: renders the modal stack (Phase 0).
+     Mounted once at the layout level so any component can open
+     modals via the `modals` store. -->
+<ModalManager />
