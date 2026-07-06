@@ -67,6 +67,9 @@
   let providerOverride = $state<Map<string, string>>(new Map());
   let showPostSets = $state(false);
   let loading = $state(true);
+  // Phase 8: mobile preview toggle — on < lg screens, the preview pane
+  // is hidden by default and can be toggled with a button in the footer.
+  let showPreviewMobile = $state(false);
 
   // Draft auto-save (create mode only)
   let draftSaved = $state(false);
@@ -645,8 +648,13 @@
         />
       </div>
 
-      <!-- Right column: preview + schedule (fixed width on lg+) -->
-      <div class="lg:w-[400px] lg:border-l lg:border-line lg:bg-background/50 overflow-y-auto p-5 space-y-4">
+      <!-- Right column: preview + schedule (fixed width on lg+, toggleable on mobile) -->
+      <div class="lg:w-[400px] lg:border-l lg:border-line lg:bg-background/50 overflow-y-auto p-5 space-y-4
+        {showPreviewMobile ? 'block' : 'hidden lg:block'}">
+        <!-- Mobile: close preview button -->
+        <div class="lg:hidden flex justify-end">
+          <button onclick={() => showPreviewMobile = false} class="text-muted hover:text-content text-sm">✕ Close preview</button>
+        </div>
         <!-- Phase 4: per-platform live preview pane -->
         <PlatformPreviewPane
           content={editingMode === 'global' ? content : (providerOverride.get(editingMode.split(':')[1]) || content)}
@@ -684,26 +692,31 @@
           onclick={() => showAi = !showAi}
           class="px-3 py-1.5 text-sm border border-line rounded-lg transition-colors {showAi ? 'bg-indigo-600/20 text-indigo-400 border-indigo-500/30' : 'text-muted hover:text-white'}"
         >✨ AI</button>
+        <!-- Phase 8: mobile preview toggle -->
+        <button
+          onclick={() => showPreviewMobile = !showPreviewMobile}
+          class="lg:hidden px-3 py-1.5 text-sm border border-line rounded-lg transition-colors text-muted hover:text-white"
+        >{showPreviewMobile ? '✕ Preview' : '👁 Preview'}</button>
       </div>
-      <div class="flex items-center gap-2">
+      <div class="flex items-center gap-2 flex-wrap justify-end">
         {#if composer.mode === 'edit'}
           <!-- Edit mode: no "save draft" (post already exists) -->
         {:else}
           <button
             onclick={saveAsDraft}
             disabled={submitting}
-            class="px-4 py-1.5 text-sm text-muted hover:text-white border border-line rounded-lg disabled:opacity-50 transition-colors"
+            class="px-3 py-1.5 text-sm text-muted hover:text-white border border-line rounded-lg disabled:opacity-50 transition-colors"
           >Save Draft</button>
         {/if}
         <button
           onclick={postNow}
           disabled={submitting}
-          class="px-4 py-1.5 bg-green-600 hover:bg-green-500 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors"
+          class="px-3 py-1.5 bg-green-600 hover:bg-green-500 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors"
         >{submitting ? 'Posting...' : 'Post Now'}</button>
         <button
           onclick={submit}
           disabled={submitting}
-          class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors"
+          class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors"
         >{submitting ? 'Scheduling...' : 'Schedule'}</button>
       </div>
     </div>
