@@ -6,6 +6,7 @@
 use crate::api::AppState;
 use crate::cli::YoutubeAction;
 use crate::cli::platforms::emit_result;
+use crate::social::SocialProvider;
 
 pub async fn handle(action: YoutubeAction, state: &AppState) -> anyhow::Result<()> {
     let user_id = crate::cli::run::resolve_user(state).await?;

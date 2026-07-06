@@ -984,10 +984,8 @@ impl SocialProvider for LinkedInProvider {
     ) -> Result<PageInfo, ProviderError> {
         Err(ProviderError::Api("LinkedIn personal profile does not support page selection".into()))
     }
-}
 
-impl LinkedInProvider {
-    pub async fn reply_to_comment(
+    async fn reply_to_comment(
         &self,
         access_token: &str,
         comment_id: &str,
@@ -1058,7 +1056,7 @@ impl LinkedInProvider {
         Err(ProviderError::Api(msg))
     }
 
-    pub async fn send_dm(
+    async fn send_dm(
         &self,
         access_token: &str,
         recipient: &str,
@@ -1111,7 +1109,7 @@ impl LinkedInProvider {
         Err(ProviderError::Api(msg))
     }
 
-    pub async fn get_dm_conversations(
+    async fn get_dm_conversations(
         &self,
         access_token: &str,
         limit: u32,
@@ -1162,7 +1160,7 @@ impl LinkedInProvider {
         Ok(conversations)
     }
 
-    pub async fn get_dm_messages(
+    async fn get_dm_messages(
         &self,
         access_token: &str,
         conversation_id: &str,

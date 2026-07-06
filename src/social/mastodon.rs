@@ -728,10 +728,8 @@ impl SocialProvider for MastodonProvider {
         }
         None
     }
-}
 
-impl MastodonProvider {
-    pub async fn reply_to_comment(
+    async fn reply_to_comment(
         &self,
         access_token: &str,
         comment_id: &str,

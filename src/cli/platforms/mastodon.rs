@@ -4,6 +4,7 @@
 use crate::api::AppState;
 use crate::cli::MastodonAction;
 use crate::cli::platforms::emit_result;
+use crate::social::SocialProvider;
 
 pub async fn handle(action: MastodonAction, state: &AppState) -> anyhow::Result<()> {
     let user_id = crate::cli::run::resolve_user(state).await?;

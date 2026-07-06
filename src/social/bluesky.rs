@@ -405,47 +405,8 @@ impl SocialProvider for BlueskyProvider {
 
         Ok(None)
     }
-}
 
-impl BlueskyProvider {
-    async fn upload_and_embed(
-        &self,
-        access_token: &str,
-        media: &[MediaAttachment],
-    ) -> Result<serde_json::Value, ProviderError> {
-        // For MVP: return first image as an embed if it exists
-        for item in media {
-            if item.mime_type.starts_with("image/") {
-                // Download image and upload to Bluesky blob store
-                let img_resp = self.http.get(&item.url).send().await?;
-                let img_bytes = img_resp.bytes().await?;
-                let mime = &item.mime_type;
-
-                let blob_resp = self
-                    .http
-                    .post("https://bsky.social/xrpc/com.atproto.repo.uploadBlob")
-                    .header("Authorization", format!("Bearer {access_token}"))
-                    .header("Content-Type", mime)
-                    .body(img_bytes)
-                    .send()
-                    .await?;
-
-                let blob_json: serde_json::Value = blob_resp.json().await?;
-                let blob_ref = &blob_json["blob"];
-
-                return Ok(serde_json::json!({
-                    "$type": "app.bsky.embed.images",
-                    "images": [{
-                        "alt": item.alt.as_deref().unwrap_or(""),
-                        "image": blob_ref,
-                    }]
-                }));
-            }
-        }
-        Ok(serde_json::Value::Null)
-    }
-
-    pub async fn reply_to_comment(
+    async fn reply_to_comment(
         &self,
         access_token: &str,
         comment_id: &str,
@@ -495,5 +456,44 @@ impl BlueskyProvider {
                 .to_string();
             Err(ProviderError::Api(msg))
         }
+    }
+}
+
+impl BlueskyProvider {
+    async fn upload_and_embed(
+        &self,
+        access_token: &str,
+        media: &[MediaAttachment],
+    ) -> Result<serde_json::Value, ProviderError> {
+        // For MVP: return first image as an embed if it exists
+        for item in media {
+            if item.mime_type.starts_with("image/") {
+                // Download image and upload to Bluesky blob store
+                let img_resp = self.http.get(&item.url).send().await?;
+                let img_bytes = img_resp.bytes().await?;
+                let mime = &item.mime_type;
+
+                let blob_resp = self
+                    .http
+                    .post("https://bsky.social/xrpc/com.atproto.repo.uploadBlob")
+                    .header("Authorization", format!("Bearer {access_token}"))
+                    .header("Content-Type", mime)
+                    .body(img_bytes)
+                    .send()
+                    .await?;
+
+                let blob_json: serde_json::Value = blob_resp.json().await?;
+                let blob_ref = &blob_json["blob"];
+
+                return Ok(serde_json::json!({
+                    "$type": "app.bsky.embed.images",
+                    "images": [{
+                        "alt": item.alt.as_deref().unwrap_or(""),
+                        "image": blob_ref,
+                    }]
+                }));
+            }
+        }
+        Ok(serde_json::Value::Null)
     }
 }
