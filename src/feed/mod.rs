@@ -20,6 +20,12 @@ const DEFAULT_ENGAGEMENT_INTERVAL_SECS: u64 = 1800; // 30 minutes
 /// How many recent posts to fetch per integration per cycle
 const RECENT_POSTS_LIMIT: u32 = 200;
 
+/// How many recent posts to fetch comments for, per integration, per
+/// comment-refresh cycle. Capped to keep provider API usage reasonable —
+/// the comments cache only needs to cover posts the user is likely to
+/// be reading comments on, not the entire history.
+const COMMENTS_REFRESH_POST_LIMIT: i64 = 20;
+
 /// Start the feed refresher background task.
 /// Polls all integrations for new posts and periodically fetches engagement data.
 pub fn start_feed_refresher(
@@ -63,6 +69,12 @@ pub fn start_feed_refresher(
                 _ = engagement_interval.tick() => {
                     if let Err(e) = refresh_all_engagement(&db1, &providers, &broadcaster, token_key).await {
                         tracing::error!("Feed engagement refresh error: {e}");
+                    }
+                    // Refresh the comments cache on the same 30-min cycle.
+                    // Comments change less frequently than posts, so this
+                    // cadence is sufficient and keeps provider API usage low.
+                    if let Err(e) = refresh_all_comments(&db1, &providers, token_key).await {
+                        tracing::error!("Comments refresh error: {e}");
                     }
                 }
             }
@@ -422,6 +434,115 @@ async fn refresh_all_engagement(
             "feed:engagement",
             &serde_json::json!({ "updated": updated_count }),
         );
+    }
+
+    Ok(())
+}
+
+/// Refresh the cached_comments table for all integrations (B-3).
+///
+/// For each non-disabled integration, fetches the most recent
+/// `COMMENTS_REFRESH_POST_LIMIT` external posts from the DB, then calls
+/// `provider.get_post_comments()` for each and upserts the results into
+/// `cached_comments`. The comments list endpoint reads from this cache
+/// instead of doing 50 sequential API calls per page load.
+///
+/// Failures are logged and skipped — one provider being down shouldn't
+/// prevent the cache from being refreshed for other providers.
+async fn refresh_all_comments(
+    db: &PgPool,
+    providers: &ProviderRegistry,
+    token_key: Option<[u8; 32]>,
+) -> anyhow::Result<()> {
+    let integrations = crate::db::queries::list_all_integrations_across_users(db).await?;
+    let mut total_cached = 0u32;
+
+    for integration in &integrations {
+        if integration.disabled {
+            continue;
+        }
+
+        let provider = match providers.get(&integration.provider_identifier) {
+            Some(p) => p,
+            None => continue,
+        };
+
+        let token = token_key
+            .as_ref()
+            .and_then(|key| crypto::decrypt_string(&integration.access_token, key).ok())
+            .unwrap_or_else(|| integration.access_token.clone());
+
+        // Fetch the most recent N posts for this integration from the DB.
+        // We cache comments only for recent posts — older posts' comments
+        // are unlikely to be actively read.
+        let recent_posts = crate::db::queries::list_external_posts(
+            db,
+            integration.user_id,
+            &integration.provider_identifier,
+            COMMENTS_REFRESH_POST_LIMIT,
+        )
+        .await?;
+
+        for post in &recent_posts {
+            // Fetch comments from the provider.
+            let comments = match provider.get_post_comments(&token, &post.platform_post_id).await {
+                Ok(c) => c,
+                Err(e) => {
+                    // Don't log at warn for every post — many providers
+                    // don't implement get_post_comments (B-4) and return
+                    // an error. Debug level is enough.
+                    tracing::debug!(
+                        "Comment fetch failed for {} post {}: {e}",
+                        integration.provider_identifier,
+                        post.platform_post_id
+                    );
+                    continue;
+                }
+            };
+
+            if comments.is_empty() {
+                continue;
+            }
+
+            // Convert provider comments to the tuple shape upsert_cached_comments expects:
+            // (comment_id, text, author_name, author_handle, author_avatar, created_at)
+            // Note: CommentData doesn't have author_handle, so we pass None for that.
+            let batch: Vec<(String, String, Option<String>, Option<String>, Option<String>, chrono::DateTime<chrono::Utc>)> = comments
+                .into_iter()
+                .map(|c| {
+                    (
+                        c.id,
+                        c.text,
+                        c.author_name,
+                        None, // author_handle — provider CommentData doesn't expose it
+                        c.author_avatar,
+                        c.created_at,
+                    )
+                })
+                .collect();
+
+            match crate::db::queries::upsert_cached_comments(
+                db,
+                integration.user_id,
+                post.id,
+                &integration.provider_identifier,
+                &batch,
+            )
+            .await
+            {
+                Ok(_) => total_cached += batch.len() as u32,
+                Err(e) => {
+                    tracing::warn!(
+                        "Failed to upsert cached comments for post {}: {e}",
+                        post.id
+                    );
+                }
+            }
+        }
+    }
+
+    if total_cached > 0 {
+        tracing::info!("Comments cache: refreshed {total_cached} comment(s)");
     }
 
     Ok(())

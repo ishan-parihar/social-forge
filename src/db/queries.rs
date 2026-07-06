@@ -2325,3 +2325,127 @@ pub async fn list_resolved_comment_ids(
     .await?;
     Ok(rows.into_iter().map(|r| r.0).collect())
 }
+
+// ── Cached comments (B-3) ───────────────────────────────────────
+// Cache layer for platform comments. The comments list endpoint reads
+// from this table instead of doing 50 sequential provider API calls
+// per page load. The background feed refresher writes here.
+
+/// A cached comment row — shape matches the `cached_comments` table.
+/// `post_text` is joined in from external_posts so the comments list
+/// can show what each comment is replying to without a second query.
+#[derive(Debug, Clone, sqlx::FromRow, Serialize)]
+pub struct CachedComment {
+    pub id: i64,
+    pub user_id: Uuid,
+    pub comment_id: String,
+    pub post_id: Uuid,
+    pub provider: String,
+    pub author_name: Option<String>,
+    pub author_handle: Option<String>,
+    pub author_avatar: Option<String>,
+    pub text: String,
+    pub created_at: DateTime<Utc>,
+    pub fetched_at: DateTime<Utc>,
+    // Joined from external_posts — the text of the post this comment
+    // is replying to. Optional because the post may have been deleted
+    // (ON DELETE CASCADE on external_posts.id will remove the cached
+    // comment too, but defensively handle NULL here).
+    pub post_text: Option<String>,
+}
+
+/// Upsert a batch of comments for a single (user_id, post_id).
+/// Called by the background feed refresher after it pulls comments
+/// from a provider. Existing rows are touched (fetched_at updated)
+/// so we know the cache is fresh; new rows are inserted.
+///
+/// `fetched_at` is set to NOW() for all rows in this batch.
+pub async fn upsert_cached_comments(
+    pool: &PgPool,
+    user_id: Uuid,
+    post_id: Uuid,
+    provider: &str,
+    comments: &[(String, String, Option<String>, Option<String>, Option<String>, DateTime<Utc>)],
+) -> Result<(), sqlx::Error> {
+    // (comment_id, text, author_name, author_handle, author_avatar, created_at)
+    if comments.is_empty() {
+        return Ok(());
+    }
+
+    let mut tx = pool.begin().await?;
+    for (comment_id, text, author_name, author_handle, author_avatar, created_at) in comments {
+        sqlx::query(
+            r#"INSERT INTO cached_comments
+                 (user_id, comment_id, post_id, provider,
+                  author_name, author_handle, author_avatar,
+                  text, created_at, fetched_at)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+               ON CONFLICT (user_id, comment_id) DO UPDATE SET
+                 post_id = EXCLUDED.post_id,
+                 provider = EXCLUDED.provider,
+                 author_name = EXCLUDED.author_name,
+                 author_handle = EXCLUDED.author_handle,
+                 author_avatar = EXCLUDED.author_avatar,
+                 text = EXCLUDED.text,
+                 created_at = EXCLUDED.created_at,
+                 fetched_at = NOW()"#,
+        )
+        .bind(user_id)
+        .bind(comment_id)
+        .bind(post_id)
+        .bind(provider)
+        .bind(author_name)
+        .bind(author_handle)
+        .bind(author_avatar)
+        .bind(text)
+        .bind(created_at)
+        .execute(&mut *tx)
+        .await?;
+    }
+    tx.commit().await?;
+    Ok(())
+}
+
+/// List cached comments for a user, newest first, with the post text
+/// joined in. Optional provider filter. Limited to `limit` rows.
+pub async fn list_cached_comments(
+    pool: &PgPool,
+    user_id: Uuid,
+    provider: Option<&str>,
+    limit: i64,
+) -> Result<Vec<CachedComment>, sqlx::Error> {
+    if let Some(provider) = provider {
+        sqlx::query_as::<_, CachedComment>(
+            r#"SELECT cc.id, cc.user_id, cc.comment_id, cc.post_id, cc.provider,
+                      cc.author_name, cc.author_handle, cc.author_avatar,
+                      cc.text, cc.created_at, cc.fetched_at,
+                      ep.text AS post_text
+               FROM cached_comments cc
+               LEFT JOIN external_posts ep ON ep.id = cc.post_id
+               WHERE cc.user_id = $1 AND cc.provider = $2
+               ORDER BY cc.created_at DESC
+               LIMIT $3"#,
+        )
+        .bind(user_id)
+        .bind(provider)
+        .bind(limit)
+        .fetch_all(pool)
+        .await
+    } else {
+        sqlx::query_as::<_, CachedComment>(
+            r#"SELECT cc.id, cc.user_id, cc.comment_id, cc.post_id, cc.provider,
+                      cc.author_name, cc.author_handle, cc.author_avatar,
+                      cc.text, cc.created_at, cc.fetched_at,
+                      ep.text AS post_text
+               FROM cached_comments cc
+               LEFT JOIN external_posts ep ON ep.id = cc.post_id
+               WHERE cc.user_id = $1
+               ORDER BY cc.created_at DESC
+               LIMIT $2"#,
+        )
+        .bind(user_id)
+        .bind(limit)
+        .fetch_all(pool)
+        .await
+    }
+}
