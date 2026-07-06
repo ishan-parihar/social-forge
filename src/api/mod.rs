@@ -47,6 +47,7 @@ mod developer;
 mod webhooks;
 mod dms;
 mod automation;
+mod campaigns;
 
 /// Shared application state available to all handlers
 #[derive(Clone)]
@@ -140,7 +141,11 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/posts/{id}/publish", axum::routing::post(posts::publish_post))
         .route("/api/posts/{id}/repeat", axum::routing::post(posts::repeat_post))
         .route("/api/posts/{id}/tags", axum::routing::put(posts::set_post_tags))
+        .route("/api/posts/{id}/stage", axum::routing::patch(campaigns::update_stage))
         .route("/api/posts/find-slot", axum::routing::get(posts::find_slot))
+        // Phase 7: Campaigns + Kanban
+        .route("/api/campaigns", axum::routing::get(campaigns::list).post(campaigns::create))
+        .route("/api/campaigns/{id}", axum::routing::put(campaigns::update).delete(campaigns::delete))
         .route("/api/integrations", axum::routing::get(integrations::list))
         .route("/api/integrations/connect/{provider}", axum::routing::get(integrations::connect))
         .route("/api/integrations/connect/{provider}/verify", axum::routing::post(integrations::verify_one_time_token))

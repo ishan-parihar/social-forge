@@ -37,6 +37,7 @@
       title: 'Publish',
       items: [
         { href: '/calendar', label: 'Calendar', icon: 'calendar' },
+        { href: '/kanban', label: 'Pipeline', icon: 'analytics' },
         { href: '/posts', label: 'Posts', icon: 'post' },
         { href: '/media', label: 'Media', icon: 'media' },
         { href: '/tags', label: 'Tags', icon: 'tag' },

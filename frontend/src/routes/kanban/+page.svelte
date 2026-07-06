@@ -1,0 +1,295 @@
+<script lang="ts">
+  // Kanban board — content pipeline view (Phase 7, v20).
+  //
+  // Shows posts grouped by state (Ideas → Drafts → Scheduled → Published)
+  // with drag-and-drop between columns. Optionally filter by campaign.
+  //
+  // Inspired by postiz-app's calendar list view but reimagined as a
+  // kanban board for content ideation and pipeline management.
+
+  import { onMount, onDestroy } from 'svelte';
+  import { postsApi, type PostSummary } from '$lib/api/posts';
+  import { campaignsApi, type Campaign } from '$lib/api/campaigns';
+  import { composer } from '$lib/stores/composer.svelte';
+  import { modals } from '$lib/stores/modals.svelte';
+  import { toast } from '$lib/stores/toast';
+  import { realtime } from '$lib/stores/realtime';
+  import { providerIcon, providerColor } from '$lib/providers';
+  import Badge from '$lib/ui/Badge.svelte';
+  import { goto } from '$app/navigation';
+
+  let posts = $state<PostSummary[]>([]);
+  let campaigns = $state<Campaign[]>([]);
+  let selectedCampaign = $state<string | null>(null);
+  let loading = $state(true);
+  let draggingId = $state<string | null>(null);
+
+  // Kanban columns — map post_state to display config.
+  const columns = [
+    { state: 'idea', label: '💡 Ideas', color: 'border-t-purple-500', emptyMsg: 'No ideas yet. Quick-add one below!' },
+    { state: 'draft', label: '📝 Drafts', color: 'border-t-blue-500', emptyMsg: 'No drafts. Create a post to start.' },
+    { state: 'queued', label: '📅 Scheduled', color: 'border-t-indigo-500', emptyMsg: 'No scheduled posts.' },
+    { state: 'published', label: '✅ Published', color: 'border-t-green-500', emptyMsg: 'No published posts yet.' },
+  ];
+
+  let unsubscribers: (() => void)[] = [];
+
+  async function load() {
+    loading = true;
+    const [postsRes, campRes] = await Promise.all([
+      postsApi.list({ limit: 200 }),
+      campaignsApi.list(),
+    ]);
+    if (postsRes.data) posts = postsRes.data.posts;
+    if (campRes.data) campaigns = campRes.data;
+    loading = false;
+  }
+
+  onMount(() => {
+    load();
+    const events = ['post_created', 'post_scheduled', 'post_published', 'post_failed', 'post_deleted'];
+    for (const evt of events) {
+      unsubscribers.push(realtime.on(evt, () => load()));
+    }
+  });
+
+  onDestroy(() => {
+    unsubscribers.forEach(fn => fn());
+  });
+
+  // Filter posts by campaign + group by state.
+  let filteredPosts = $derived(
+    selectedCampaign
+      ? posts.filter(p => (p as any).campaign_id === selectedCampaign || p.group_id === selectedCampaign)
+      : posts
+  );
+
+  let postsByState = $derived.by(() => {
+    const map: Record<string, PostSummary[]> = {};
+    for (const col of columns) {
+      map[col.state] = filteredPosts.filter(p => p.state === col.state);
+    }
+    // Also include 'error' posts in the draft column.
+    map['draft'] = [...map['draft'], ...filteredPosts.filter(p => p.state === 'error')];
+    return map;
+  });
+
+  // Quick-add idea: create a post with state='idea' and minimal content.
+  let quickIdeaText = $state('');
+  async function quickAddIdea() {
+    if (!quickIdeaText.trim()) return;
+    // Create a post with no integration — it's just an idea.
+    // We'll use the first integration if available, or create with empty content.
+    const r = await postsApi.create({
+      integration_ids: [],
+      content: quickIdeaText.trim(),
+      title: undefined,
+    });
+    if (r.error) {
+      toast(`Failed to save idea: ${r.error}`, 'error');
+      return;
+    }
+    // If created successfully, update its stage to 'idea'.
+    if (r.data?.posts?.[0]?.id) {
+      await campaignsApi.updateStage(r.data.posts[0].id, 'idea');
+    }
+    quickIdeaText = '';
+    toast('Idea saved', 'success');
+    load();
+  }
+
+  // Drag-and-drop: move post to a new column.
+  function onDragStart(e: DragEvent, postId: string) {
+    draggingId = postId;
+    e.dataTransfer?.setData('text/plain', `kanban:${postId}`);
+    e.dataTransfer!.effectAllowed = 'move';
+  }
+
+  async function onDrop(e: DragEvent, newState: string) {
+    e.preventDefault();
+    const postId = draggingId;
+    if (!postId) return;
+    draggingId = null;
+
+    // Optimistic update: move the post to the new column immediately.
+    const post = posts.find(p => p.id === postId);
+    if (post) {
+      post.state = newState;
+      posts = [...posts];
+    }
+
+    // Persist the stage change.
+    const r = await campaignsApi.updateStage(postId, newState, selectedCampaign || undefined);
+    if (r.error) {
+      toast(`Failed to move: ${r.error}`, 'error');
+      load(); // revert
+    } else {
+      toast(`Moved to ${newState}`, 'success');
+    }
+  }
+
+  function onDragOver(e: DragEvent) {
+    e.preventDefault();
+  }
+
+  function onDragEnd() {
+    draggingId = null;
+  }
+
+  // Create a new campaign.
+  async function createCampaign() {
+    const name = prompt('Campaign name:');
+    if (!name) return;
+    const r = await campaignsApi.create({ name, color: '#6366f1' });
+    if (r.error) {
+      toast(`Failed: ${r.error}`, 'error');
+    } else {
+      toast('Campaign created', 'success');
+      load();
+    }
+  }
+
+  // Delete a campaign.
+  async function deleteCampaign(id: string) {
+    if (!confirm('Delete this campaign? Posts will be unassigned.')) return;
+    const r = await campaignsApi.delete(id);
+    if (r.error) {
+      toast(`Failed: ${r.error}`, 'error');
+    } else {
+      selectedCampaign = null;
+      toast('Campaign deleted', 'success');
+      load();
+    }
+  }
+
+  // Format date for display.
+  function formatDate(iso?: string): string {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
+</script>
+
+<div class="page-enter space-y-6">
+  <!-- Header -->
+  <div class="flex items-center justify-between">
+    <div>
+      <h2 class="text-xl font-semibold">Content Pipeline</h2>
+      <p class="text-sm text-muted mt-1">Drag posts between columns to move them through your content pipeline.</p>
+    </div>
+    <div class="flex gap-2">
+      <button onclick={createCampaign} class="px-3 py-1.5 text-sm border border-line rounded-lg text-muted hover:text-white hover:bg-surface-hover transition-colors">
+        + Campaign
+      </button>
+    </div>
+  </div>
+
+  <!-- Campaign filter -->
+  {#if campaigns.length > 0}
+    <div class="flex items-center gap-2 flex-wrap">
+      <span class="text-xs text-muted">Campaign:</span>
+      <button
+        onclick={() => selectedCampaign = null}
+        class="px-3 py-1 text-xs rounded-lg transition-colors {!selectedCampaign ? 'bg-indigo-600 text-white' : 'text-muted hover:bg-surface-hover border border-line'}"
+      >All</button>
+      {#each campaigns as c (c.id)}
+        <div class="flex items-center gap-1">
+          <button
+            onclick={() => selectedCampaign = selectedCampaign === c.id ? null : c.id}
+            class="px-3 py-1 text-xs rounded-lg transition-colors flex items-center gap-1.5 {selectedCampaign === c.id ? 'bg-indigo-600 text-white' : 'text-muted hover:bg-surface-hover border border-line'}"
+          >
+            <span class="w-2 h-2 rounded-full" style="background: {c.color}"></span>
+            {c.name}
+            {#if c.post_count}
+              <span class="text-[10px] opacity-60">({c.post_count})</span>
+            {/if}
+          </button>
+          {#if selectedCampaign === c.id}
+            <button onclick={() => deleteCampaign(c.id)} class="text-muted hover:text-red-400 text-xs" title="Delete campaign">✕</button>
+          {/if}
+        </div>
+      {/each}
+    </div>
+  {/if}
+
+  <!-- Kanban board -->
+  {#if loading}
+    <div class="text-center py-12 text-sm text-muted">Loading...</div>
+  {:else}
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      {#each columns as col (col.state)}
+        <div
+          class="bg-surface border border-line rounded-xl overflow-hidden {col.color} border-t-4"
+          ondragover={onDragOver}
+          ondrop={(e) => onDrop(e, col.state)}
+          role="region"
+          aria-label="{col.label} column"
+        >
+          <!-- Column header -->
+          <div class="px-4 py-3 border-b border-line flex items-center justify-between">
+            <span class="text-sm font-semibold">{col.label}</span>
+            <span class="text-xs text-muted">{postsByState[col.state]?.length || 0}</span>
+          </div>
+
+          <!-- Cards -->
+          <div class="p-2 space-y-2 min-h-[200px] max-h-[600px] overflow-y-auto">
+            {#each postsByState[col.state] || [] as post (post.id)}
+              <div
+                class="bg-background-input border border-line rounded-lg p-3 cursor-grab active:cursor-grabbing hover:border-indigo-500/50 transition-colors {draggingId === post.id ? 'opacity-50' : ''}"
+                draggable={true}
+                ondragstart={(e) => onDragStart(e, post.id)}
+                ondragend={onDragEnd}
+                onclick={() => composer.openEdit(post.id)}
+                role="button"
+                tabindex="0"
+                onkeydown={(e) => { if (e.key === 'Enter') composer.openEdit(post.id); }}
+              >
+                <!-- Card content -->
+                <div class="text-sm text-content line-clamp-2 mb-2">{post.content || post.title || '(no content)'}</div>
+                <div class="flex items-center justify-between text-xs text-muted">
+                  <span class="flex items-center gap-1">
+                    {#if post.integration_name}
+                      <span style="color: {providerColor(post.integration_name?.toLowerCase() || '')}">{providerIcon(post.integration_name?.toLowerCase() || '')}</span>
+                      <span class="truncate max-w-[80px]">{post.integration_name}</span>
+                    {/if}
+                  </span>
+                  {#if post.scheduled_at}
+                    <span>{formatDate(post.scheduled_at)}</span>
+                  {/if}
+                </div>
+                {#if post.error_message}
+                  <div class="mt-1 text-[10px] text-red-400 truncate" title={post.error_message}>⚠ {post.error_message}</div>
+                {/if}
+              </div>
+            {/each}
+
+            <!-- Empty state -->
+            {#if !postsByState[col.state] || postsByState[col.state].length === 0}
+              <div class="text-center py-8 text-xs text-muted">{col.emptyMsg}</div>
+            {/if}
+          </div>
+
+          <!-- Quick-add idea (only in Ideas column) -->
+          {#if col.state === 'idea'}
+            <div class="p-2 border-t border-line">
+              <div class="flex gap-1">
+                <input
+                  type="text"
+                  bind:value={quickIdeaText}
+                  onkeydown={(e) => { if (e.key === 'Enter') quickAddIdea(); }}
+                  placeholder="Quick add idea..."
+                  class="flex-1 px-2 py-1 text-xs bg-background-input border border-line rounded focus:border-indigo-500 outline-none"
+                />
+                <button
+                  onclick={quickAddIdea}
+                  disabled={!quickIdeaText.trim()}
+                  class="px-2 py-1 text-xs bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded transition-colors"
+                >+</button>
+              </div>
+            </div>
+          {/if}
+        </div>
+      {/each}
+    </div>
+  {/if}
+</div>
