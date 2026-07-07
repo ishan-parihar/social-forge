@@ -99,3 +99,64 @@ export function providerIcon(provider: string): string {
 export function providerCharLimit(provider: string): number {
   return providerMeta(provider).charLimit;
 }
+
+/**
+ * v23-6: Construct a "manage on platform" URL for a published post.
+ *
+ * Given a provider identifier (e.g. "x", "linkedin", "reddit") and the
+ * platform's post ID, returns the URL where the user can view/manage
+ * the post on the platform's own UI. Returns null if the provider is
+ * unknown or the platform_post_id is missing.
+ *
+ * For providers where the URL pattern isn't known, returns null (the
+ * caller can fall back to the post.url field if available).
+ */
+export function platformPostUrl(provider: string, platformPostId: string | null | undefined): string | null {
+  if (!platformPostId) return null;
+  const p = provider.toLowerCase();
+  switch (p) {
+    case 'x':
+    case 'twitter':
+      // X post URLs use the numeric ID: https://x.com/i/status/{id}
+      return `https://x.com/i/status/${platformPostId}`;
+    case 'linkedin':
+    case 'linkedin-page':
+      // LinkedIn UGC posts: https://www.linkedin.com/feed/update/{ugcPostId}/
+      return `https://www.linkedin.com/feed/update/${platformPostId}/`;
+    case 'reddit':
+      // Reddit post URLs: https://www.reddit.com/comments/{id}
+      return `https://www.reddit.com/comments/${platformPostId}`;
+    case 'facebook':
+      // Facebook post URLs: https://www.facebook.com/{pageId}/posts/{postId}
+      // We only have the post ID, so use the permalink pattern.
+      return `https://www.facebook.com/${platformPostId}`;
+    case 'instagram':
+      // Instagram doesn't expose a public post URL by ID alone; the
+      // permalink requires the shortcode. Return null and fall back to
+      // post.url if available.
+      return null;
+    case 'threads':
+      return `https://www.threads.net/post/${platformPostId}`;
+    case 'bluesky':
+      return `https://bsky.app/profile/post/${platformPostId}`;
+    case 'mastodon':
+      // Mastodon URLs are instance-specific; can't construct without
+      // the instance URL. Fall back to post.url.
+      return null;
+    case 'youtube':
+      return `https://www.youtube.com/watch?v=${platformPostId}`;
+    case 'pinterest':
+      return `https://www.pinterest.com/pin/${platformPostId}/`;
+    case 'tiktok':
+      return `https://www.tiktok.com/@user/video/${platformPostId}`;
+    case 'discord':
+      // Discord message URLs require channel + guild IDs; can't construct.
+      return null;
+    case 'telegram-bot':
+    case 'telegram-user':
+      // Telegram message URLs require the chat ID; can't construct.
+      return null;
+    default:
+      return null;
+  }
+}

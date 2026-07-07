@@ -9,7 +9,7 @@
   import { realtime } from "$lib/stores/realtime";
   import { composer } from "$lib/stores/composer.svelte";
   import { modals } from "$lib/stores/modals.svelte";
-  import { providerMeta as centralProviderMeta } from "$lib/providers";
+  import { providerMeta as centralProviderMeta, platformPostUrl } from "$lib/providers";
 
   let posts = $state<FeedPost[]>([]);
   let loading = $state(false);
@@ -761,22 +761,39 @@
 
             <!-- Footer: link + repurpose + hide -->
             <div class="mt-3 pt-3 border-t border-line flex items-center justify-between">
-              {#if post.url}
-                <a
-                  href={post.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="inline-flex items-center gap-1.5 text-xs font-medium transition-colors duration-150"
-                  style="color: {meta.color}"
-                >
-                  View original
-                  <svg class="w-3 h-3" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-                    <path d="M6 3l5 5-5 5" stroke-linecap="round" stroke-linejoin="round" />
-                  </svg>
-                </a>
-              {:else}
-                <span></span>
-              {/if}
+              <div class="flex items-center gap-4">
+                {#if post.url}
+                  <a
+                    href={post.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="inline-flex items-center gap-1.5 text-xs font-medium transition-colors duration-150"
+                    style="color: {meta.color}"
+                  >
+                    View original
+                    <svg class="w-3 h-3" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                      <path d="M6 3l5 5-5 5" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                  </a>
+                {/if}
+                <!-- v23-6: "Manage on platform" link — lets the user
+                     edit/delete the post on the platform's own UI.
+                     Constructed from provider + platform_post_id. -->
+                {#if platformPostUrl(post.provider, post.platform_post_id) && platformPostUrl(post.provider, post.platform_post_id) !== post.url}
+                  <a
+                    href={platformPostUrl(post.provider, post.platform_post_id)!}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="inline-flex items-center gap-1.5 text-xs font-medium text-muted hover:text-content transition-colors duration-150"
+                    title="Open this post on {meta.label} to edit or delete it"
+                  >
+                    Manage on {meta.label}
+                    <svg class="w-3 h-3" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                      <path d="M10 2h4v4M14 2l-7 7M8 4H4a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V9" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                  </a>
+                {/if}
+              </div>
               <div class="flex items-center gap-3">
                 <!-- Phase v21: Repurpose — now calls the real backend
                      endpoint POST /api/feed/{id}/repurpose which creates
