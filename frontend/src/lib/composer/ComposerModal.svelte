@@ -819,7 +819,7 @@
             {/if}
           </h3>
           {#if editingMode === 'global'}
-            <RichTextEditor {content} onUpdate={(html) => content = html} />
+            <RichTextEditor {content} onUpdate={(html) => content = html} integrationId={selectedIntegrations[0]} />
             {#if selectedIntegrations.length > 0}
               <div class="mt-3 pt-3 border-t border-line">
                 <PerPlatformCharCount
@@ -838,6 +838,7 @@
                 providerOverride.set(intId, html);
                 providerOverride = new Map(providerOverride);
               }}
+              integrationId={editingMode.split(':')[1]}
             />
             <div class="mt-3 pt-3 border-t border-line">
               <PerPlatformCharCount

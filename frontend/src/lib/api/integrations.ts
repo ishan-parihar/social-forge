@@ -91,4 +91,9 @@ export const integrationsApi = {
     api.get<{ targets: TargetInfo[]; integration_id: string; provider: string }>(
       `/api/integrations/${integrationId}/targets`
     ),
+  /** v26-5: Search for users/accounts to @mention on a platform. */
+  searchMentions: (integrationId: string, q: string) =>
+    api.get<{ results: Array<{ id: string; label: string; formatted: string; image?: string | null; provider: string }> }>(
+      `/api/integrations/${integrationId}/mentions?q=${encodeURIComponent(q)}`
+    ),
 };

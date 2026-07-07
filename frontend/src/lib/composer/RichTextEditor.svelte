@@ -8,11 +8,15 @@
   import { ImageExtension } from './extensions/ImageExtension';
   import LinkEditor from './extensions/LinkEditor.svelte';
   import EmojiPicker from './extensions/EmojiPicker.svelte';
+  import MentionPicker from './extensions/MentionPicker.svelte';
   import SignatureEditor from './SignatureEditor.svelte';
 
-  let { content = "", placeholder = "Write your post...", onUpdate }: {
+  let { content = "", placeholder = "Write your post...", onUpdate, integrationId }: {
     content?: string; placeholder?: string;
     onUpdate?: (html: string) => void;
+    /** v26-5: integration ID for @mention suggestions. Optional — if omitted,
+     *  the MentionPicker won't activate. */
+    integrationId?: string;
   } = $props();
 
   let editor = $state<Editor | null>(null);
@@ -183,6 +187,11 @@
   {#if showEmojiPicker}
     <EmojiPicker onSelect={insertEmoji} onClose={() => showEmojiPicker = false} />
   {/if}
+
+  <!-- v26-5: @mention suggestion popup. Renders above everything; positions
+       itself at the cursor via fixed positioning. Only active when
+       integrationId is provided. -->
+  <MentionPicker {editor} {integrationId} />
 
   <div class="p-3 min-h-[200px] prose prose-invert max-w-none">
     {#if editor}
