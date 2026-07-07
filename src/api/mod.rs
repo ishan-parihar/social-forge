@@ -38,6 +38,7 @@ mod music;
 mod notifications;
 mod onboard;
 mod posts;
+mod profile;
 mod rss;
 mod sse;
 mod sets;
@@ -197,6 +198,8 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/analytics/cadence", axum::routing::get(analytics::get_cadence))
         .route("/api/analytics/post/{id}", axum::routing::get(analytics::get_post))
         .route("/api/events/recent", axum::routing::get(analytics::get_recent_events))
+        // v24-4: Brand profile (upsert + get).
+        .route("/api/profile", axum::routing::get(profile::get_profile).put(profile::update_profile))
         .route("/api/tags", axum::routing::get(tags::list).post(tags::create))
         .route("/api/tags/{id}", axum::routing::get(tags::get).put(tags::update).delete(tags::delete))
         .route("/api/signatures", axum::routing::get(signatures::list).post(signatures::create))

@@ -1,5 +1,7 @@
 <script lang="ts">
   import { ai } from "$lib/api/ai";
+  import { profileApi, type BrandProfile } from "$lib/api/profile";
+  import { onMount } from "svelte";
 
   let { content = "", onInsert }: {
     content?: string;
@@ -14,9 +16,40 @@
   let tone = $state("professional");
   let length = $state("medium");
 
+  // v24-4: load the brand profile so AI requests include brand context.
+  let brandProfile = $state<BrandProfile | null>(null);
+
   const tasks = ["generate", "improve", "hashtags", "tone", "summarize"] as const;
   const tones = ["professional", "casual", "humorous", "inspirational"];
   const lengths = ["short", "medium", "long"];
+
+  onMount(async () => {
+    const r = await profileApi.get();
+    if (r.data) brandProfile = r.data;
+  });
+
+  // v24-4: build a context string from the brand profile to prepend to
+  // AI requests. This gives the AI the brand's voice, audience, pillars,
+  // keywords, and avoid-topics so generated content matches the brand.
+  function brandContext(): string {
+    if (!brandProfile) return "";
+    const parts: string[] = [];
+    if (brandProfile.brand_name) parts.push(`Brand: ${brandProfile.brand_name}`);
+    if (brandProfile.description) parts.push(`Mission: ${brandProfile.description}`);
+    if (brandProfile.tone_of_voice) parts.push(`Tone: ${brandProfile.tone_of_voice}`);
+    if (brandProfile.audience) parts.push(`Audience: ${brandProfile.audience}`);
+    if (Array.isArray(brandProfile.content_pillars) && brandProfile.content_pillars.length > 0) {
+      parts.push(`Content pillars: ${brandProfile.content_pillars.map(p => p.title).join(', ')}`);
+    }
+    if (Array.isArray(brandProfile.keywords) && brandProfile.keywords.length > 0) {
+      parts.push(`Keywords: ${brandProfile.keywords.join(', ')}`);
+    }
+    if (Array.isArray(brandProfile.avoid_topics) && brandProfile.avoid_topics.length > 0) {
+      parts.push(`Avoid: ${brandProfile.avoid_topics.join(', ')}`);
+    }
+    if (parts.length === 0) return "";
+    return `\n\n[Brand context: ${parts.join(' | ')}]`;
+  }
 
   async function handleGenerate() {
     if (aiLoading) return;
@@ -25,14 +58,15 @@
     aiResult = null;
     try {
       let result = "";
+      const ctx = brandContext();
       switch (selectedTask) {
         case "generate":
           if (!topic.trim()) { aiError = "Please enter a topic"; aiLoading = false; return; }
-          result = await ai.generatePost(topic, tone, length);
+          result = await ai.generatePost(topic + ctx, tone, length);
           break;
         case "improve":
           if (!content.trim()) { aiError = "Please write some content first"; aiLoading = false; return; }
-          result = await ai.improveWriting(content);
+          result = await ai.improveWriting(content + ctx);
           break;
         case "hashtags":
           if (!content.trim()) { aiError = "Please write some content first"; aiLoading = false; return; }
@@ -40,7 +74,7 @@
           break;
         case "tone":
           if (!content.trim()) { aiError = "Please write some content first"; aiLoading = false; return; }
-          result = await ai.changeTone(content, tone);
+          result = await ai.changeTone(content + ctx, tone);
           break;
         case "summarize":
           if (!content.trim()) { aiError = "Please write some content first"; aiLoading = false; return; }
