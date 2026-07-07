@@ -43,12 +43,27 @@ class ComposerStore {
   /** For create mode: optional prefilled content (from "duplicate" flow). */
   prefilledContent = $state<string | null>(null);
 
+  /**
+   * Phase v21/5.7: optional prefilled media items (from repurpose flow).
+   * Each item has {url, mime_type, original_name} — the composer wraps
+   * them with a generated id + file_size=0 when loading. The media is
+   * already uploaded (these are URLs to existing media), so no upload
+   * progress is needed.
+   */
+  prefilledMedia = $state<Array<{ url: string; mime_type: string; original_name?: string }> | null>(null);
+
   /** Open the composer in create mode. */
-  openCreate(presetDate?: string | null, presetIntegrationIds?: string[], prefilledContent?: string) {
+  openCreate(
+    presetDate?: string | null,
+    presetIntegrationIds?: string[],
+    prefilledContent?: string,
+    prefilledMedia?: Array<{ url: string; mime_type: string; original_name?: string }>,
+  ) {
     this.mode = 'create';
     this.presetDate = presetDate ?? null;
     this.presetIntegrationIds = presetIntegrationIds ?? [];
     this.prefilledContent = prefilledContent ?? null;
+    this.prefilledMedia = prefilledMedia ?? null;
     this.editingPostId = null;
     this.open = true;
   }
@@ -60,6 +75,7 @@ class ComposerStore {
     this.presetDate = null;
     this.presetIntegrationIds = [];
     this.prefilledContent = null;
+    this.prefilledMedia = null;
     this.open = true;
   }
 
@@ -72,6 +88,7 @@ class ComposerStore {
       this.presetIntegrationIds = [];
       this.editingPostId = null;
       this.prefilledContent = null;
+      this.prefilledMedia = null;
     }, 100);
   }
 }

@@ -218,6 +218,18 @@
     if (composer.prefilledContent) {
       content = composer.prefilledContent;
     }
+    // Phase v21/5.7: load prefilled media items (from repurpose flow).
+    // The media URLs already point to uploaded/proxied assets, so we just
+    // wrap them in MediaItem-shaped objects — no upload needed.
+    if (composer.prefilledMedia && composer.prefilledMedia.length > 0) {
+      mediaItems = composer.prefilledMedia.map(m => ({
+        id: crypto.randomUUID(),
+        url: m.url,
+        mime_type: m.mime_type,
+        original_name: m.original_name || m.url.split('/').pop() || 'media',
+        file_size: 0,
+      }));
+    }
     // Phase v21/v22: auto-append the user's default signature when
     // creating a new post (postiz-app pattern). Only fires if:
     //   - we're in create mode (not edit — editing shouldn't re-append)
