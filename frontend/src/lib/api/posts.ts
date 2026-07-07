@@ -69,10 +69,14 @@ export const postsApi = {
   update: (id: string, d: { content: string; title?: string; media?: { id: string; url: string; mime_type: string; alt?: string }[]; settings?: Record<string, unknown> }) =>
     api.put<PostDetail>(`/api/posts/${id}`, d),
   schedule: (id: string, at: string) => api.post<PostDetail>(`/api/posts/${id}/schedule`, { scheduled_at: at }),
-  reschedule: (id: string, scheduledAt: string, moveGroup?: boolean) =>
-    api.put<{ rescheduled: boolean; post?: PostDetail; group_id?: string; count?: number }>(
+  reschedule: (id: string, scheduledAt: string, moveGroup?: boolean, action?: 'schedule' | 'update') =>
+    api.put<{ rescheduled: boolean; post?: PostDetail; group_id?: string; count?: number; action?: string }>(
       `/api/posts/${id}/date`,
-      { scheduled_at: scheduledAt, move_group: moveGroup || false }
+      {
+        scheduled_at: scheduledAt,
+        move_group: moveGroup || false,
+        ...(action ? { action } : {}),
+      }
     ),
   delete: (id: string) => api.del<{ deleted: boolean }>(`/api/posts/${id}`),
   setTags: (id: string, tagIds: string[]) =>

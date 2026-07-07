@@ -192,8 +192,15 @@
     const event = events.find(e => e.id === eventId);
     if (!event) return;
 
-    // Phase 1: published-post safety modal.
-    // Instead of blocking with a toast, ask the user what they want to do.
+    // Phase v21: published-post safety modal (postiz-inspired).
+    // When the user drags a published post, ask what they want:
+    //   - "Reschedule the post" → action: 'schedule' → backend resets
+    //     state to queued + clears release fields → scheduler re-publishes
+    //     at the new time (creates a NEW post on the platform).
+    //   - "Just update the post details" → action: 'update' → backend
+    //     changes scheduled_at only, leaves state + release fields alone
+    //     (archive-style re-date, no re-publish).
+    let action: 'schedule' | 'update' | undefined;
     if (event.state === 'published') {
       const choice = await confirmModal({
         title: 'This post is already published',
@@ -204,10 +211,7 @@
       });
       // choice === true  → reschedule (re-publish at new time)
       // choice === false → just update (change scheduled_at without re-publishing)
-      // Either way we proceed with the reschedule API call; the backend
-      // PUT /api/posts/{id}/date will accept an `action` param in a
-      // future iteration. For now, both paths do the same thing.
-      // (The modal is the UX win; the backend distinction is deferred.)
+      action = choice ? 'schedule' : 'update';
     }
 
     // Phase 1: hour-precision. If a newHour was passed (from WeekView),
@@ -225,13 +229,17 @@
       });
     }
 
-    const r = await postsApi.reschedule(eventId, dateObj.toISOString(), moveGroup);
+    const r = await postsApi.reschedule(eventId, dateObj.toISOString(), moveGroup, action);
     if (r.error) {
-      toast("Failed to reschedule", "error");
+      toast("Failed to reschedule: " + r.error, "error");
     } else {
       const count = r.data?.count;
       if (moveGroup && count) {
         toast("Rescheduled " + count + " posts in group", "success");
+      } else if (action === 'schedule') {
+        toast("Post re-scheduled for re-publishing", "success");
+      } else if (action === 'update') {
+        toast("Post date updated (no re-publish)", "success");
       } else {
         toast("Post rescheduled", "success");
       }

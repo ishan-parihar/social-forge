@@ -769,6 +769,82 @@ pub async fn count_posts_search(
       .await
   }
 
+  /// Phase v21: reset a published post for re-publishing.
+  ///
+  /// Sets `state = 'queued'`, updates `scheduled_at` to the new time,
+  /// and CLEARS `platform_post_id`, `platform_post_url`, `published_at`,
+  /// `error_message`, `retry_count`, `next_retry_at`. The scheduler will
+  /// then pick it up at the new time and publish a NEW post to the
+  /// platform (creating a fresh platform_post_id).
+  ///
+  /// This is the "Reschedule the post" path of the postiz-inspired
+  /// drag-published-post modal.
+  ///
+  /// Uses a runtime query (not query_as!) because we don't have a live
+  /// Postgres to regenerate the .sqlx offline cache with this new SQL.
+  pub async fn reset_post_for_republish(
+      pool: &PgPool,
+      id: Uuid,
+      user_id: Uuid,
+      scheduled_at: DateTime<Utc>,
+  ) -> Result<Option<Post>, sqlx::Error> {
+      sqlx::query_as::<_, Post>(
+          r#"UPDATE posts SET
+              scheduled_at = $1,
+              state = 'queued',
+              platform_post_id = NULL,
+              platform_post_url = NULL,
+              published_at = NULL,
+              error_message = NULL,
+              retry_count = 0,
+              next_retry_at = NULL,
+              updated_at = now()
+             WHERE id = $2 AND user_id = $3
+             RETURNING id, user_id, integration_id, state as "state: PostState",
+               content, title, media, settings, scheduled_at, published_at,
+               platform_post_id, platform_post_url, error_message,
+               created_at, updated_at,
+               repeat_interval_days, repeat_end_date, group_id,
+               first_comment, sequence"#,
+      )
+      .bind(scheduled_at)
+      .bind(id)
+      .bind(user_id)
+      .fetch_optional(pool)
+      .await
+  }
+
+  /// Phase v21: change a post's scheduled_at WITHOUT touching its state
+  /// or release fields. Used for the "Just update the post details" path
+  /// of the postiz-inspired drag-published-post modal — the user wants
+  /// to re-date a published post for archival purposes without triggering
+  /// a re-publish.
+  ///
+  /// Leaves `state`, `platform_post_id`, `platform_post_url`,
+  /// `published_at` untouched. Only `scheduled_at` and `updated_at` change.
+  pub async fn update_post_date_only(
+      pool: &PgPool,
+      id: Uuid,
+      user_id: Uuid,
+      scheduled_at: DateTime<Utc>,
+  ) -> Result<Option<Post>, sqlx::Error> {
+      sqlx::query_as::<_, Post>(
+          r#"UPDATE posts SET scheduled_at = $1, updated_at = now()
+             WHERE id = $2 AND user_id = $3
+             RETURNING id, user_id, integration_id, state as "state: PostState",
+               content, title, media, settings, scheduled_at, published_at,
+               platform_post_id, platform_post_url, error_message,
+               created_at, updated_at,
+               repeat_interval_days, repeat_end_date, group_id,
+               first_comment, sequence"#,
+      )
+      .bind(scheduled_at)
+      .bind(id)
+      .bind(user_id)
+      .fetch_optional(pool)
+      .await
+  }
+
   pub async fn update_post_state(
     pool: &PgPool,
     id: Uuid,
