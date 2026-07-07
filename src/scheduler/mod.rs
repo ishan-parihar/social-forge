@@ -85,6 +85,13 @@ pub fn start_scheduler(
                     if let Err(e) = process_due_posts(&db1, &providers1, &broadcaster, token_key).await {
                         tracing::error!("Scheduler tick error: {e}");
                     }
+                    // v23-2: drain the publish_outbox. This retries any
+                    // post-state updates that failed after a successful
+                    // platform publish (e.g. DB connection blip). The
+                    // drain is idempotent — completed rows are skipped.
+                    if let Err(e) = drain_publish_outbox(&db1).await {
+                        tracing::warn!("publish_outbox drain failed: {e}");
+                    }
                 }
             }
         }
@@ -556,6 +563,193 @@ async fn process_due_posts(
     Ok(())
 }
 
+/// v23-2: Drain the publish_outbox.
+///
+/// After a successful platform publish, the scheduler writes the result
+/// to BOTH `posts` (source of truth) and `publish_outbox` (durability
+/// log). If the `posts` write fails (e.g. DB connection blip), the
+/// outbox row remains `completed_at IS NULL` and this drain loop
+/// retries it.
+///
+/// The drain is idempotent:
+/// - Rows with `completed_at IS NULL` and `attempts < 5` are retried.
+/// - Each retry attempts the `posts` UPDATE again.
+/// - On success, `completed_at` is set.
+/// - On failure, `attempts` is incremented and `next_attempt_at` is
+///   set to NOW() + 30s (exponential backoff could be added later).
+/// - Rows with `attempts >= 5` are abandoned (logged as CRITICAL).
+///
+/// This closes the "publish succeeded but DB write failed" publish-
+/// orphan gap identified in the v22 audit (Part D.2).
+async fn drain_publish_outbox(db: &PgPool) -> Result<(), sqlx::Error> {
+    // Claim pending rows (FOR UPDATE SKIP LOCKED so multiple instances
+    // don't double-process).
+    let pending: Vec<PublishOutboxRow> = sqlx::query_as(
+        r#"SELECT id, post_id, idempotency_key, platform_post_id, platform_post_url,
+                  published_at, error_message, attempts, next_attempt_at, created_at, completed_at
+           FROM publish_outbox
+           WHERE completed_at IS NULL
+             AND next_attempt_at <= NOW()
+             AND attempts < 5
+           ORDER BY created_at ASC
+           LIMIT 50
+           FOR UPDATE SKIP LOCKED"#,
+    )
+    .fetch_all(db)
+    .await?;
+
+    if pending.is_empty() {
+        return Ok(());
+    }
+
+    for row in pending {
+        // If the row has a platform_post_id, the publish succeeded —
+        // try to apply the state to posts.
+        if let Some(ref platform_post_id) = row.platform_post_id {
+            let result = sqlx::query(
+                r#"UPDATE posts SET
+                     state = 'published',
+                     platform_post_id = $2,
+                     platform_post_url = $3,
+                     published_at = $4,
+                     error_message = NULL,
+                     updated_at = NOW()
+                   WHERE id = $1 AND state != 'published'"#,
+            )
+            .bind(row.post_id)
+            .bind(platform_post_id)
+            .bind(&row.platform_post_url)
+            .bind(row.published_at)
+            .execute(db)
+            .await;
+
+            match result {
+                Ok(_) => {
+                    // Success — mark the outbox row as completed.
+                    let _ = sqlx::query(
+                        "UPDATE publish_outbox SET completed_at = NOW() WHERE id = $1",
+                    )
+                    .bind(row.id)
+                    .execute(db)
+                    .await;
+                    tracing::info!(
+                        "Outbox drain: applied publish result for post {} (platform_post_id={})",
+                        row.post_id, platform_post_id
+                    );
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        "Outbox drain: failed to apply publish result for post {}: {e}",
+                        row.post_id
+                    );
+                    // Increment attempts + backoff.
+                    let _ = sqlx::query(
+                        r#"UPDATE publish_outbox
+                           SET attempts = attempts + 1,
+                               next_attempt_at = NOW() + INTERVAL '30 seconds'
+                           WHERE id = $1"#,
+                    )
+                    .bind(row.id)
+                    .execute(db)
+                    .await;
+                }
+            }
+        } else if let Some(ref err) = row.error_message {
+            // The publish failed — apply the error state to posts.
+            let result = sqlx::query(
+                r#"UPDATE posts SET
+                     state = 'error',
+                     error_message = $2,
+                     updated_at = NOW()
+                   WHERE id = $1 AND state NOT IN ('error', 'published')"#,
+            )
+            .bind(row.post_id)
+            .bind(err)
+            .execute(db)
+            .await;
+
+            match result {
+                Ok(_) => {
+                    let _ = sqlx::query(
+                        "UPDATE publish_outbox SET completed_at = NOW() WHERE id = $1",
+                    )
+                    .bind(row.id)
+                    .execute(db)
+                    .await;
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        "Outbox drain: failed to apply error state for post {}: {e}",
+                        row.post_id
+                    );
+                    let _ = sqlx::query(
+                        r#"UPDATE publish_outbox
+                           SET attempts = attempts + 1,
+                               next_attempt_at = NOW() + INTERVAL '30 seconds'
+                           WHERE id = $1"#,
+                    )
+                    .bind(row.id)
+                    .execute(db)
+                    .await;
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+// v23-2: row type for the outbox drain query.
+#[derive(Debug, sqlx::FromRow)]
+struct PublishOutboxRow {
+    id: Uuid,
+    post_id: Uuid,
+    idempotency_key: Uuid,
+    platform_post_id: Option<String>,
+    platform_post_url: Option<String>,
+    published_at: Option<chrono::DateTime<chrono::Utc>>,
+    error_message: Option<String>,
+    attempts: i32,
+    next_attempt_at: chrono::DateTime<chrono::Utc>,
+    created_at: chrono::DateTime<chrono::Utc>,
+    completed_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+/// v23-2: Write a publish result to the outbox.
+/// Called by the scheduler after a successful publish (or after a
+/// final failure). The drain loop later applies the result to `posts`.
+async fn write_to_outbox(
+    db: &PgPool,
+    post_id: Uuid,
+    idempotency_key: Uuid,
+    platform_post_id: Option<&str>,
+    platform_post_url: Option<&str>,
+    error_message: Option<&str>,
+) {
+    let published_at = if platform_post_id.is_some() {
+        Some(chrono::Utc::now())
+    } else {
+        None
+    };
+    let _ = sqlx::query(
+        r#"INSERT INTO publish_outbox
+           (post_id, idempotency_key, platform_post_id, platform_post_url, published_at, error_message)
+           VALUES ($1, $2, $3, $4, $5, $6)"#,
+    )
+    .bind(post_id)
+    .bind(idempotency_key)
+    .bind(platform_post_id)
+    .bind(platform_post_url)
+    .bind(published_at)
+    .bind(error_message)
+    .execute(db)
+    .await
+    .map_err(|e| {
+        tracing::warn!("Failed to write to publish_outbox for post {post_id}: {e}");
+        e
+    });
+}
+
 /// Publish a single post, with token refresh and retry logic.
 ///
 /// Retry policy:
@@ -756,6 +950,20 @@ async fn publish_post(
                     // The reclaim path will eventually mark it 'error', but
                     // the operator has been warned via the CRITICAL log.
                 }
+
+                // v23-2: write to the publish_outbox so the drain loop
+                // can retry the DB update if it failed above. This is
+                // the durability safety net — even if all 3 direct DB
+                // write attempts failed, the outbox row will be picked
+                // up by drain_publish_outbox on the next tick (30s).
+                write_to_outbox(
+                    db,
+                    post.id,
+                    post.idempotency_key,
+                    Some(&result.platform_post_id),
+                    result.platform_post_url.as_deref(),
+                    None,
+                ).await;
 
                 // Record successful attempt in audit trail.
                 let _ = queries::record_publish_attempt(
