@@ -609,9 +609,22 @@ async fn csrf_origin_check(
 
     let request_origin = origin.clone().or(referer_origin.clone());
 
+    // v23-9: support comma-separated allowed origins. Previously the
+    // operator could only set a single origin, so a deployment reachable
+    // via multiple origins (e.g. https://social-forge.example.com AND
+    // http://localhost:6543 for local dev) had to set CSRF_ALLOWED_ORIGIN=*
+    // (disabling the check entirely). Now the operator can set
+    // FRONTEND_URL=https://a.com,http://localhost:6543 and each is checked.
+    let allowed_origins: Vec<&str> = csrf.allowed_origin
+        .split(',')
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .collect();
+
     let allowed = match request_origin.as_deref() {
-        Some(o) => o == csrf.allowed_origin
-            || o == csrf.allowed_origin.trim_end_matches('/'),
+        Some(o) => allowed_origins.iter().any(|&allowed| {
+            o == allowed || o == allowed.trim_end_matches('/')
+        }),
         None => false,
     };
 
