@@ -28,6 +28,21 @@ export default {
         "muted-dark": "var(--text-muted-dark)",
         content: "var(--text)",
         "content-secondary": "var(--text-secondary)",
+        // v22 Phase 3: semantic status colors (success/warning/error/info).
+        // Exposed as Tailwind colors so components can use `bg-success/20`,
+        // `text-error`, `border-warning`, etc. The CSS variables are
+        // defined per-theme in app.css.
+        success: "rgb(var(--success-rgb) / <alpha-value>)",
+        warning: "rgb(var(--warning-rgb) / <alpha-value>)",
+        error: "rgb(var(--error-rgb) / <alpha-value>)",
+        info: "rgb(var(--info-rgb) / <alpha-value>)",
+      },
+      borderRadius: {
+        // v22 Phase 3: radius scale tokens. Use `rounded-sm`, `rounded-md`,
+        // `rounded-lg` instead of hardcoded `rounded-[8px]` etc.
+        sm: "var(--radius-sm)",
+        md: "var(--radius-md)",
+        lg: "var(--radius-lg)",
       },
     },
   },

@@ -96,7 +96,7 @@
     </div>
 
     <button onclick={autoSchedule} disabled={autoScheduling}
-      class="w-full px-3 py-2 bg-[#1a1f2e] hover:bg-[#242b3d] border border-line rounded-lg text-sm text-indigo-400 transition-colors flex items-center justify-center gap-2">
+      class="w-full px-3 py-2 bg-surface-hover hover:bg-line-hover border border-line rounded-lg text-sm text-indigo-400 transition-colors flex items-center justify-center gap-2">
       {#if autoScheduling}
         <span class="animate-spin">⏳</span> Finding best time...
       {:else}
@@ -113,12 +113,12 @@
       {#if repeatEnabled}
         <div class="flex gap-2 mt-2">
           <div class="flex-1">
-            <label class="text-xs text-[#9ca3af] mb-1 block">Every X days</label>
+            <label class="text-xs text-muted mb-1 block">Every X days</label>
             <input type="number" bind:value={intervalDays} onchange={updateRepeat} min="1" max="365"
               class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-content-secondary" />
           </div>
           <div class="flex-1">
-            <label class="text-xs text-[#9ca3af] mb-1 block">Until</label>
+            <label class="text-xs text-muted mb-1 block">Until</label>
             <input type="date" bind:value={endDateStr} onchange={updateRepeat}
               class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-content-secondary" />
           </div>

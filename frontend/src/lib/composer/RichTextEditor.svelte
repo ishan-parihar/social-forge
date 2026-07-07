@@ -131,11 +131,11 @@
     <button aria-label="Heading 2" onmousedown={(e) => { e.preventDefault(); editor?.chain().focus().toggleHeading({ level: 2 }).run(); }} class="toolbar-btn" class:active={editor?.isActive("heading", { level: 2 })}>H2</button>
     <button aria-label="Bullet list" onmousedown={(e) => { e.preventDefault(); editor?.chain().focus().toggleBulletList().run(); }} class="toolbar-btn" class:active={editor?.isActive("bulletList")}>• List</button>
     <button aria-label="Ordered list" onmousedown={(e) => { e.preventDefault(); editor?.chain().focus().toggleOrderedList().run(); }} class="toolbar-btn" class:active={editor?.isActive("orderedList")}>1. List</button>
-    <span class="text-[#2a3045] mx-1">|</span>
+    <span class="text-line-hover mx-1">|</span>
     <button aria-label="Insert image" onmousedown={(e) => { e.preventDefault(); toggleImageInput(); }} class="toolbar-btn" class:active={showImageInput}>🖼️</button>
     <button aria-label="Insert or edit link" onmousedown={(e) => { e.preventDefault(); toggleLinkEditor(); }} class="toolbar-btn" class:active={showLinkEditor || editor?.isActive("link")}>🔗</button>
     <button aria-label="Insert emoji" onmousedown={(e) => { e.preventDefault(); toggleEmojiPicker(); }} class="toolbar-btn" class:active={showEmojiPicker}>😊</button>
-    <span class="text-[#2a3045] mx-1">|</span>
+    <span class="text-line-hover mx-1">|</span>
     <SignatureEditor onInsert={(content) => editor?.chain().focus().insertContent(content).run()} />
 
     <span class="text-xs text-muted ml-auto">{charCount} chars</span>
@@ -151,7 +151,7 @@
         tabindex="-1"
         onclick={(e) => e.stopPropagation()}
       >
-        <label for="img-url" class="block text-xs text-[#9ca3af] mb-1">Image URL</label>
+        <label for="img-url" class="block text-xs text-muted mb-1">Image URL</label>
         <div class="flex items-center gap-2">
           <input
             id="img-url"
@@ -159,12 +159,12 @@
             placeholder="https://example.com/image.png"
             bind:value={imageUrl}
             onkeydown={handleImageKeydown}
-            class="flex-1 px-3 py-2 rounded text-sm bg-background-input border border-line text-content-secondary placeholder:text-[#4a5568] outline-none focus:border-[#6366f1] transition-colors"
+            class="flex-1 px-3 py-2 rounded text-sm bg-background-input border border-line text-content-secondary placeholder:text-muted-dark outline-none focus:border-brand-500 transition-colors"
           />
           <button
             onclick={insertImage}
             disabled={!imageUrl.trim()}
-            class="px-3 py-2 rounded text-xs font-medium bg-[#6366f1] text-white hover:bg-[#5558e6] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            class="px-3 py-2 rounded text-xs font-medium bg-brand-500 text-white hover:bg-brand-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             aria-label="Insert image"
           >
             Insert

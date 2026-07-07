@@ -73,7 +73,7 @@
 
 <Modal open={show} title="Connect via Browser Extension" onclose={onClose}>
   <div class="space-y-4">
-    <div class="text-sm text-[#9ca3af] leading-relaxed">
+    <div class="text-sm text-muted leading-relaxed">
       <p>
         This provider requires a browser extension to connect your account.
       </p>
@@ -109,7 +109,7 @@
           type="text"
           bind:value={label}
           placeholder="e.g. My Skool Community"
-          class="w-full bg-[#030712] border border-line rounded-lg px-3 py-2 text-sm text-white placeholder-[#4b5563] focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          class="w-full bg-background border border-line rounded-lg px-3 py-2 text-sm text-white placeholder:text-muted-dark focus:outline-none focus:ring-1 focus:ring-indigo-500"
         />
       </div>
 
@@ -121,7 +121,7 @@
           bind:value={userCode}
           placeholder="Enter the 6-character code"
           maxlength="6"
-          class="w-full bg-[#030712] border border-line rounded-lg px-3 py-2 text-sm text-white placeholder-[#4b5563] font-mono tracking-widest text-center focus:outline-none focus:ring-1 focus:ring-indigo-500 uppercase"
+          class="w-full bg-background border border-line rounded-lg px-3 py-2 text-sm text-white placeholder:text-muted-dark font-mono tracking-widest text-center focus:outline-none focus:ring-1 focus:ring-indigo-500 uppercase"
           style="text-transform: uppercase;"
         />
       </div>

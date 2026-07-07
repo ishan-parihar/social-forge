@@ -76,7 +76,7 @@
   <!-- Carousel container -->
   <div
     bind:this={containerEl}
-    class="group relative rounded-xl overflow-hidden bg-[#0d121e] ring-1 ring-[#1e2435]"
+    class="group relative rounded-xl overflow-hidden bg-background-input ring-1 ring-surface-hover"
     role="region"
     aria-label="Media carousel"
     aria-roledescription="carousel"
@@ -188,10 +188,10 @@
 
     <!-- Dot indicators + counter -->
     {#if items.length > 1}
-      <div class="flex items-center justify-center gap-1.5 px-4 py-2.5 bg-[#0d121e]/90 border-t border-line">
+      <div class="flex items-center justify-center gap-1.5 px-4 py-2.5 bg-background-input/90 border-t border-line">
         <button
           onclick={prev}
-          class="p-1 text-[#4a5060] hover:text-[#9ca3af] transition-colors"
+          class="p-1 text-muted-dark hover:text-muted transition-colors"
           aria-label="Previous slide"
         >
           <svg class="w-3 h-3" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
@@ -209,7 +209,7 @@
               class:h-2.5={i === current}
               class:h-2={i !== current}
               class:bg-indigo-400={i === current}
-              class:bg-[#2a3045]={i !== current}
+              class:bg-line-hover={i !== current}
               class:shadow-[0_0_6px_rgba(99,102,241,0.3)]={i === current}
               aria-label={`Go to slide ${i + 1}`}
               aria-current={i === current ? 'true' : undefined}
@@ -219,7 +219,7 @@
 
         <button
           onclick={next}
-          class="p-1 text-[#4a5060] hover:text-[#9ca3af] transition-colors"
+          class="p-1 text-muted-dark hover:text-muted transition-colors"
           aria-label="Next slide"
         >
           <svg class="w-3 h-3" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
@@ -227,7 +227,7 @@
           </svg>
         </button>
 
-        <span class="ml-2 text-[10px] text-[#5a6070] font-mono tabular-nums">
+        <span class="ml-2 text-[10px] text-muted font-mono tabular-nums">
           {current + 1}/{items.length}
         </span>
       </div>

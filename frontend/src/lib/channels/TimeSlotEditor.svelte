@@ -84,7 +84,7 @@
             <div class="text-sm text-green-400 bg-green-400/10 rounded-md px-3 py-2">Saved successfully!</div>
         {/if}
 
-        <p class="text-sm text-[#9ca3af]">Set up to 3 preferred posting times per day for this channel.</p>
+        <p class="text-sm text-muted">Set up to 3 preferred posting times per day for this channel.</p>
 
         <div class="space-y-2">
             {#each timeslots as slot, i (i)}
@@ -93,7 +93,7 @@
                         type="time"
                         value={minToTime(slot.time)}
                         oninput={(e) => updateSlot(i, e.currentTarget.value)}
-                        class="bg-[#1a1f2e] border border-line rounded-md px-3 py-1.5 text-sm text-content-secondary focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        class="bg-surface-hover border border-line rounded-md px-3 py-1.5 text-sm text-content-secondary focus:outline-none focus:ring-1 focus:ring-indigo-500"
                     />
                     <button
                         onclick={() => removeSlot(i)}
@@ -116,7 +116,7 @@
         <div class="flex justify-end gap-2 pt-2 border-t border-line">
             <button
                 onclick={onclose}
-                class="px-3 py-1.5 text-sm text-[#9ca3af] hover:text-white transition-colors"
+                class="px-3 py-1.5 text-sm text-muted hover:text-white transition-colors"
                 disabled={saving}
             >Cancel</button>
             <button

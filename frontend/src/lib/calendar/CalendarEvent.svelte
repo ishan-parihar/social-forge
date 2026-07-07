@@ -96,10 +96,13 @@
     padding: 0.125rem 0.375rem; border-radius: 0.25rem;
     font-size: 0.6875rem; cursor: grab; white-space: nowrap; overflow: hidden;
   }
-  .event-chip.draft { background: rgba(107,114,128,0.15); color: #9ca3af; }
-  .event-chip.queued { background: rgba(99,102,241,0.15); color: #818cf8; }
-  .event-chip.published { background: rgba(34,197,94,0.15); color: #4ade80; }
-  .event-chip.error { background: rgba(239,68,68,0.15); color: #f87171; }
+  /* v22 Phase 3: use CSS variables for state colors so the calendar
+     chips retheme correctly in light mode. Previously these hardcoded
+     dark-mode hex values. */
+  .event-chip.draft { background: rgb(var(--info-rgb) / 0.15); color: rgb(var(--info-rgb)); }
+  .event-chip.queued { background: rgb(var(--warning-rgb) / 0.15); color: rgb(var(--warning-rgb)); }
+  .event-chip.published { background: rgb(var(--success-rgb) / 0.15); color: rgb(var(--success-rgb)); }
+  .event-chip.error { background: rgb(var(--error-rgb) / 0.15); color: rgb(var(--error-rgb)); }
   .event-tags { display: flex; align-items: center; gap: 1px; flex-shrink: 0; }
   .tag-dot { width: 3px; height: 3px; border-radius: 50%; flex-shrink: 0; }
   .tag-overflow { font-size: 0.5625rem; opacity: 0.6; margin-left: 1px; }

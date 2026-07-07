@@ -71,10 +71,10 @@
   <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
     {#each Array(10) as _, i (i)}
       <div class="bg-surface border border-line rounded-xl overflow-hidden animate-pulse">
-        <div class="w-full aspect-square bg-[#1a1f2e]"></div>
+        <div class="w-full aspect-square bg-surface-hover"></div>
         <div class="p-2 space-y-1.5">
-          <div class="h-3 bg-[#1a1f2e] rounded w-3/4"></div>
-          <div class="h-2.5 bg-[#1a1f2e] rounded w-1/2"></div>
+          <div class="h-3 bg-surface-hover rounded w-3/4"></div>
+          <div class="h-2.5 bg-surface-hover rounded w-1/2"></div>
         </div>
       </div>
     {/each}
@@ -108,7 +108,7 @@
             loading="lazy"
           />
         {:else}
-          <div class="w-full aspect-square bg-[#1a1f2e] flex items-center justify-center text-3xl">
+          <div class="w-full aspect-square bg-surface-hover flex items-center justify-center text-3xl">
             {fileIcon(item.mime_type)}
           </div>
         {/if}

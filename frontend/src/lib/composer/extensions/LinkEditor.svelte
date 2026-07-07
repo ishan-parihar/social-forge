@@ -78,19 +78,19 @@
     onclick={(e) => e.stopPropagation()}
   >
     {#if linkText}
-      <p class="text-xs text-[#9ca3af] mb-2 truncate">
+      <p class="text-xs text-muted mb-2 truncate">
         Text: <span class="text-content-secondary">{linkText}</span>
       </p>
     {/if}
 
-    <label for="link-url" class="block text-xs text-[#9ca3af] mb-1">URL</label>
+    <label for="link-url" class="block text-xs text-muted mb-1">URL</label>
     <input
       id="link-url"
       type="text"
       placeholder="https://example.com"
       bind:this={urlInput}
       bind:value={url}
-      class="w-full px-3 py-2 rounded text-sm bg-background-input border border-line text-content-secondary placeholder:text-[#4a5568] outline-none focus:border-[#6366f1] transition-colors"
+      class="w-full px-3 py-2 rounded text-sm bg-background-input border border-line text-content-secondary placeholder:text-muted-dark outline-none focus:border-brand-500 transition-colors"
     />
 
     <label class="flex items-center gap-2 mt-2 cursor-pointer select-none">
@@ -99,13 +99,13 @@
         bind:checked={newTab}
         class="accent-[#6366f1] w-4 h-4"
       />
-      <span class="text-xs text-[#9ca3af]">Open in new tab</span>
+      <span class="text-xs text-muted">Open in new tab</span>
     </label>
 
     <div class="flex items-center gap-2 mt-3">
       <button
         onclick={applyLink}
-        class="flex-1 px-3 py-1.5 rounded text-xs font-medium bg-[#6366f1] text-white hover:bg-[#5558e6] transition-colors"
+        class="flex-1 px-3 py-1.5 rounded text-xs font-medium bg-brand-500 text-white hover:bg-brand-600 transition-colors"
         aria-label="Apply link"
       >
         Apply

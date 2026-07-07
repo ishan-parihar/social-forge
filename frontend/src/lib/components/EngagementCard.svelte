@@ -85,8 +85,8 @@
     {#each (compact ? metrics.slice(0, 3) : metrics) as m}
       <span
         class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium
-          bg-[#0d121e] text-[#9ca3af] border border-line
-          group-hover:border-[#222a45] transition-colors"
+          bg-background-input text-muted border border-line
+          group-hover:border-line-hover transition-colors"
         title={m.label}
       >
         <!-- Icon -->
@@ -129,8 +129,8 @@
     {#if reactions}
       <span
         class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium
-          bg-[#0d121e] text-[#9ca3af] border border-line
-          group-hover:border-[#222a45] transition-colors"
+          bg-background-input text-muted border border-line
+          group-hover:border-line-hover transition-colors"
         title="Reactions"
       >
         {#each Object.entries(reactions.breakdown) as [type, count]}
@@ -139,7 +139,7 @@
             <span class="text-[10px]">{count}</span>
           </span>
         {/each}
-        <span class="text-[#5a6070] ml-0.5">{fmt(reactions.total)}</span>
+        <span class="text-muted ml-0.5">{fmt(reactions.total)}</span>
       </span>
     {/if}
   </div>

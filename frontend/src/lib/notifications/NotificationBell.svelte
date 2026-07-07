@@ -47,7 +47,7 @@
 <div class="relative" bind:this={containerEl}>
   <button
     onclick={togglePanel}
-    class="relative p-1.5 rounded-lg text-[#9ca3af] hover:text-white transition-colors duration-150"
+    class="relative p-1.5 rounded-lg text-muted hover:text-white transition-colors duration-150"
     aria-label="Notifications"
   >
     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">

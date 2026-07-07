@@ -198,7 +198,7 @@
           {#if item.mime_type.startsWith("image/")}
             <img src={item.url} alt={item.original_name} class="w-full h-20 object-cover rounded-lg" />
           {:else}
-            <div class="w-full h-20 bg-[#1e2435] rounded-lg flex items-center justify-center text-xs text-muted">
+            <div class="w-full h-20 bg-surface-hover rounded-lg flex items-center justify-center text-xs text-muted">
               {item.original_name}
             </div>
           {/if}
@@ -244,7 +244,7 @@
         <input type="file" multiple accept="image/*,video/*" onchange={handleUpload} class="hidden" />
         {items.length > 0 ? "Add more media" : "Drop, paste, or click to upload"}
       </label>
-      <span class="text-[#1e2435]">|</span>
+      <span class="text-surface-hover">|</span>
       <button
         onclick={() => mediaPopoverOpen = true}
         class="text-sm text-indigo-400 hover:text-indigo-300 cursor-pointer"

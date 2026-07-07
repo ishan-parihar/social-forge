@@ -18,10 +18,17 @@
         --text-secondary: #d1d5db;
         --brand: #6366f1;
         --brand-hover: #4f46e5;
-        --success: #22c55e;
-        --warning: #eab308;
-        --error: #ef4444;
+        /* v22 Phase 3: semantic status colors as space-separated RGB triplets
+           so Tailwind's `rgb(var(--success-rgb) / <alpha-value>)` syntax works
+           for arbitrary opacity (bg-success/20, text-error, border-warning). */
+        --success-rgb: 34 197 94;   /* green-500 */
+        --warning-rgb: 234 179 8;   /* yellow-500 */
+        --error-rgb: 239 68 68;     /* red-500 */
+        --info-rgb: 59 130 246;     /* blue-500 */
         --radius: 12px;
+        --radius-sm: 6px;
+        --radius-md: 8px;
+        --radius-lg: 12px;
         --skeleton-from: #1a1f2e;
         --skeleton-to: #1e2435;
 }
@@ -41,10 +48,15 @@
         --text-secondary: #334155;
         --brand: #6366f1;
         --brand-hover: #4f46e5;
-        --success: #16a34a;
-        --warning: #ca8a04;
-        --error: #dc2626;
+        /* v22 Phase 3: light-mode status colors (slightly darker for contrast). */
+        --success-rgb: 22 163 74;   /* green-600 */
+        --warning-rgb: 202 138 4;   /* yellow-600 */
+        --error-rgb: 220 38 38;     /* red-600 */
+        --info-rgb: 37 99 235;      /* blue-600 */
         --radius: 12px;
+        --radius-sm: 6px;
+        --radius-md: 8px;
+        --radius-lg: 12px;
         --skeleton-from: #f1f5f9;
         --skeleton-to: #e2e8f0;
 }
@@ -128,22 +140,28 @@ button:focus-visible,
         padding: 20px;
 }
 
-/* Badge colors */
+/* Badge colors — v22 Phase 3: use semantic status tokens so badges
+   retheme correctly in light mode. Previously these hardcoded hex
+   values that only worked in dark mode. */
 .badge-draft {
-        background: #1e3a5f;
-        color: #60a5fa;
+        background: rgb(var(--info-rgb) / 0.15);
+        color: rgb(var(--info-rgb));
 }
 .badge-queued {
-        background: #3b3a1e;
-        color: #facc15;
+        background: rgb(var(--warning-rgb) / 0.15);
+        color: rgb(var(--warning-rgb));
 }
 .badge-published {
-        background: #143d1e;
-        color: #4ade80;
+        background: rgb(var(--success-rgb) / 0.15);
+        color: rgb(var(--success-rgb));
 }
 .badge-error {
-        background: #3d1414;
-        color: #f87171;
+        background: rgb(var(--error-rgb) / 0.15);
+        color: rgb(var(--error-rgb));
+}
+.badge-idea {
+        background: rgb(168 85 247 / 0.15);  /* purple-500 */
+        color: rgb(192 132 252);             /* purple-400 */
 }
 
 /* Stat card hover */

@@ -79,7 +79,7 @@
         class="px-3 py-1.5 text-xs rounded-lg border transition-colors
           {selectedTask === task
             ? 'bg-indigo-600/20 text-indigo-400 border-indigo-500/30'
-            : 'text-muted border-line hover:text-white hover:border-[#374151]'}"
+            : 'text-muted border-line hover:text-white hover:border-line-hover'}"
       >
         {task === "generate" ? "Generate" : task === "improve" ? "Improve" : task === "hashtags" ? "Hashtags" : task === "tone" ? "Tone" : "Summarize"}
       </button>

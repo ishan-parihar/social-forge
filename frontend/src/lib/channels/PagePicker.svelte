@@ -97,12 +97,12 @@
               type="checkbox"
               checked={selected.has(page.id)}
               onchange={() => togglePage(page.id)}
-              class="w-4 h-4 rounded border-line bg-[#1a1f2e] text-indigo-500 focus:ring-indigo-500 focus:ring-offset-0"
+              class="w-4 h-4 rounded border-line bg-surface-hover text-indigo-500 focus:ring-indigo-500 focus:ring-offset-0"
             />
             {#if page.picture}
               <img src={page.picture} alt="" class="w-8 h-8 rounded-full" />
             {:else}
-              <div class="w-8 h-8 rounded-full bg-[#1e2435] flex items-center justify-center text-xs">📄</div>
+              <div class="w-8 h-8 rounded-full bg-surface-hover flex items-center justify-center text-xs">📄</div>
             {/if}
             <div class="flex-1 min-w-0">
               <div class="text-sm text-white truncate">{page.name}</div>

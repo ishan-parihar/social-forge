@@ -54,7 +54,7 @@
       case "peer": return "bg-green-500/20 text-green-400 border-green-500/30";
       case "blog": return "bg-yellow-500/20 text-yellow-400 border-yellow-500/30";
       case "community": return "bg-teal-500/20 text-teal-400 border-teal-500/30";
-      default: return "bg-[#1e2435] text-muted border-line";
+      default: return "bg-surface-hover text-muted border-line";
     }
   }
 </script>
@@ -100,7 +100,7 @@
             <span class="flex-shrink-0 w-4 h-4 rounded border flex items-center justify-center transition-colors
               {isSelected
                 ? 'border-indigo-500 bg-indigo-500 text-white'
-                : 'border-[#374151] bg-transparent'}">
+                : 'border-line-hover bg-transparent'}">
               {#if isSelected}
                 <svg class="w-3 h-3" viewBox="0 0 12 12" fill="none">
                   <path d="M2 6L5 9L10 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -112,7 +112,7 @@
             {#if target.picture}
               <img src={target.picture} alt="" class="w-6 h-6 rounded-full flex-shrink-0 object-cover" />
             {:else}
-              <span class="w-6 h-6 rounded-full bg-[#1e2435] flex items-center justify-center text-xs flex-shrink-0">
+              <span class="w-6 h-6 rounded-full bg-surface-hover flex items-center justify-center text-xs flex-shrink-0">
                 {targetTypeIcon(target.target_type)}
               </span>
             {/if}
