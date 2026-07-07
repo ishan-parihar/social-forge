@@ -49,3 +49,4 @@ PROVIDER_AUDIT.md
 # Release artifacts (built locally, uploaded via gh release)
 dist/
 frontend/package-lock.json
+.gstack/

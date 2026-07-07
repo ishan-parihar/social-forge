@@ -18,8 +18,10 @@
 -- re-add the schema (the v15 frontend removal means there's no UI for
 -- it anyway, so re-adding would be a fresh feature, not a restore).
 
--- Drop FK constraints first (if any reference these tables).
--- (No FKs reference teams — confirmed by checking the schema.)
+-- Drop FK constraints that reference teams before dropping it.
+ALTER TABLE posts DROP CONSTRAINT IF EXISTS posts_team_id_fkey;
+ALTER TABLE integrations DROP CONSTRAINT IF EXISTS integrations_team_id_fkey;
+ALTER TABLE media DROP CONSTRAINT IF EXISTS media_team_id_fkey;
 
 -- Drop the orphaned tables.
 DROP TABLE IF EXISTS team_invitations;
