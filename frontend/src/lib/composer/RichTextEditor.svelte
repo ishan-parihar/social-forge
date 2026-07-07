@@ -128,6 +128,8 @@
   <div class="flex items-center gap-1 p-2 border-b border-line flex-wrap">
     <button aria-label="Bold" onmousedown={(e) => { e.preventDefault(); editor?.chain().focus().toggleBold().run(); }} class="toolbar-btn" class:active={editor?.isActive("bold")}>B</button>
     <button aria-label="Italic" onmousedown={(e) => { e.preventDefault(); editor?.chain().focus().toggleItalic().run(); }} class="toolbar-btn italic" class:active={editor?.isActive("italic")}>I</button>
+    <!-- v24-6: Underline button (TipTap 3.x includes Underline in StarterKit) -->
+    <button aria-label="Underline" onmousedown={(e) => { e.preventDefault(); editor?.chain().focus().toggleUnderline().run(); }} class="toolbar-btn underline" class:active={editor?.isActive("underline")}>U</button>
     <button aria-label="Heading 2" onmousedown={(e) => { e.preventDefault(); editor?.chain().focus().toggleHeading({ level: 2 }).run(); }} class="toolbar-btn" class:active={editor?.isActive("heading", { level: 2 })}>H2</button>
     <button aria-label="Bullet list" onmousedown={(e) => { e.preventDefault(); editor?.chain().focus().toggleBulletList().run(); }} class="toolbar-btn" class:active={editor?.isActive("bulletList")}>• List</button>
     <button aria-label="Ordered list" onmousedown={(e) => { e.preventDefault(); editor?.chain().focus().toggleOrderedList().run(); }} class="toolbar-btn" class:active={editor?.isActive("orderedList")}>1. List</button>
@@ -190,22 +192,24 @@
 </div>
 
 <style>
+  /* v24-6: use CSS variables so the editor rethemes in light mode. */
   .toolbar-btn {
     padding: 0.25rem 0.5rem; font-size: 0.8rem; background: transparent;
     border: 1px solid transparent; border-radius: 0.25rem; cursor: pointer;
-    color: #9ca3af; font-weight: 500;
+    color: var(--text-muted); font-weight: 500;
   }
-  .toolbar-btn:hover { background: #1a1f2e; color: #e5e7eb; }
-  .toolbar-btn.active { background: #6366f1; color: white; border-color: #6366f1; }
+  .toolbar-btn:hover { background: var(--bg-hover); color: var(--text-secondary); }
+  .toolbar-btn.active { background: var(--brand); color: white; border-color: var(--brand); }
   .italic { font-style: italic; }
+  .underline { text-decoration: underline; }
 
   .img-input-popover {
     position: absolute;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    background: #131720;
-    border: 1px solid #1e2435;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
     border-radius: 0.5rem;
     padding: 0.875rem;
     width: 24rem;
