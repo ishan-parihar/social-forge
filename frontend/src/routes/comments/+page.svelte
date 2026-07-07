@@ -101,7 +101,7 @@
       {#each platforms as p}
         <button
           onclick={() => { filterPlatform = p; load(); }}
-          class="px-3 py-1.5 text-xs capitalize rounded-lg transition-colors {filterPlatform === p ? 'bg-indigo-600 text-white' : 'bg-surface text-muted hover:text-white border border-line'}"
+          class="px-3 py-1.5 text-xs capitalize rounded-lg transition-colors {filterPlatform === p ? 'bg-brand-600 text-white' : 'bg-surface text-muted hover:text-white border border-line'}"
         >{p}</button>
       {/each}
     </div>
@@ -111,7 +111,7 @@
       {#each statuses as s}
         <button
           onclick={() => { filterStatus = s; load(); }}
-          class="px-3 py-1.5 text-xs capitalize rounded-lg transition-colors {filterStatus === s ? 'bg-indigo-600 text-white' : 'bg-surface text-muted hover:text-white border border-line'}"
+          class="px-3 py-1.5 text-xs capitalize rounded-lg transition-colors {filterStatus === s ? 'bg-brand-600 text-white' : 'bg-surface text-muted hover:text-white border border-line'}"
         >{s}</button>
       {/each}
     </div>
@@ -119,7 +119,7 @@
 
   <!-- Content -->
   {#if error}
-    <div class="text-center py-12 text-sm text-red-400">{error}</div>
+    <div class="text-center py-12 text-sm text-error">{error}</div>
   {:else if loading}
     <div class="text-center py-12 text-sm text-muted">Loading comments...</div>
   {:else if comments.length === 0}
@@ -134,18 +134,18 @@
       </div>
       {#each comments as c (c.id)}
         <div class="grid grid-cols-[40px_1fr_1.5fr_100px_100px_90px] gap-3 px-4 py-3 border-b border-line last:border-0 hover:bg-surface-hover transition-colors items-center">
-          <span class="text-sm text-indigo-400">{platformIcon(c.platform)}</span>
+          <span class="text-sm text-brand-400">{platformIcon(c.platform)}</span>
           <span class="text-sm truncate text-muted" title={c.post_content}>{c.post_content?.slice(0, 50) || c.post_id}</span>
           <span class="text-sm text-content-secondary truncate">{c.content}</span>
           <span class="text-xs text-muted truncate">{c.author || 'Unknown'}</span>
           <span class="text-xs text-muted">{new Date(c.created_at).toLocaleDateString()}</span>
           <div class="flex items-center gap-2">
             {#if c.status !== 'resolved'}
-              <span class="px-2 py-0.5 text-xs rounded bg-yellow-500/20 text-yellow-400">New</span>
-              <button onclick={() => resolveComment(c.id)} class="text-xs text-muted hover:text-green-400" title="Resolve">✓</button>
-              <button onclick={() => replyModal = { comment: c, text: "" }} class="text-xs text-muted hover:text-indigo-400" title="Reply">↩</button>
+              <span class="px-2 py-0.5 text-xs rounded bg-warning/20 text-warning">New</span>
+              <button onclick={() => resolveComment(c.id)} class="text-xs text-muted hover:text-success" title="Resolve">✓</button>
+              <button onclick={() => replyModal = { comment: c, text: "" }} class="text-xs text-muted hover:text-brand-400" title="Reply">↩</button>
             {:else}
-              <span class="px-2 py-0.5 text-xs rounded bg-green-500/20 text-green-400">Resolved</span>
+              <span class="px-2 py-0.5 text-xs rounded bg-success/20 text-success">Resolved</span>
             {/if}
           </div>
         </div>
@@ -168,7 +168,7 @@
       ></textarea>
       <div class="flex gap-3 justify-end">
         <button onclick={() => replyModal = null} class="px-4 py-2 text-sm text-muted hover:text-white">Cancel</button>
-        <button onclick={sendReply} disabled={sending || !replyModal.text.trim()} class="px-4 py-2 text-sm bg-indigo-600 hover:bg-indigo-500 rounded disabled:opacity-50">
+        <button onclick={sendReply} disabled={sending || !replyModal.text.trim()} class="px-4 py-2 text-sm bg-brand-600 hover:bg-brand-500 rounded disabled:opacity-50">
           {sending ? "Sending..." : "Reply"}
         </button>
       </div>

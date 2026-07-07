@@ -96,7 +96,7 @@
       <button
         onclick={handleMarkAllRead}
         disabled={markingAll}
-        class="text-xs text-indigo-400 hover:text-indigo-300 transition-colors disabled:opacity-40"
+        class="text-xs text-brand-400 hover:text-brand-300 transition-colors disabled:opacity-40"
       >
         {markingAll ? 'Marking...' : 'Mark all read'}
       </button>
@@ -105,13 +105,13 @@
     <div class="max-h-96 overflow-y-auto">
       {#if loading}
         <div class="flex justify-center py-8">
-          <svg class="animate-spin h-5 w-5 text-indigo-500" fill="none" viewBox="0 0 24 24">
+          <svg class="animate-spin h-5 w-5 text-brand-500" fill="none" viewBox="0 0 24 24">
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
           </svg>
         </div>
       {:else if loadError}
-        <div class="px-4 py-8 text-center text-sm text-red-400">Failed to load notifications</div>
+        <div class="px-4 py-8 text-center text-sm text-error">Failed to load notifications</div>
       {:else if notifications.length === 0}
         <div class="px-4 py-8 text-center text-sm text-muted">No notifications yet</div>
       {:else}
@@ -124,7 +124,7 @@
               <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-2">
                   {#if !n.is_read}
-                    <span class="w-2 h-2 rounded-full bg-indigo-500 flex-shrink-0"></span>
+                    <span class="w-2 h-2 rounded-full bg-brand-500 flex-shrink-0"></span>
                   {/if}
                   <span class="text-sm font-medium text-content-secondary {n.is_read ? 'ml-4' : ''}">{n.title}</span>
                 </div>

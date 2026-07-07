@@ -468,11 +468,11 @@
 
   {#if fetchError}
     <!-- Phase v21: postiz-style full-card error state with Retry button.
-         Previously this was a tiny red <div class="text-center py-4 text-sm text-red-400">
+         Previously this was a tiny red <div class="text-center py-4 text-sm text-error">
          that was easy to miss and offered no recovery path. -->
     <div class="flex flex-col items-center justify-center py-16 px-4 text-center">
-      <div class="w-12 h-12 rounded-full bg-red-500/10 border border-red-500/30 flex items-center justify-center mb-3">
-        <svg class="w-6 h-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+      <div class="w-12 h-12 rounded-full bg-error/10 border border-error/30 flex items-center justify-center mb-3">
+        <svg class="w-6 h-6 text-error" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
           <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
       </div>

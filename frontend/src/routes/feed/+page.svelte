@@ -395,12 +395,12 @@
       {#if activeFilterLabel}
         {@const chipMeta = selectedProvider ? providerMeta(selectedProvider) : null}
         <span class="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-medium rounded-lg
-          bg-indigo-500/15 text-indigo-300 border border-indigo-500/25">
+          bg-brand-500/15 text-brand-300 border border-brand-500/25">
           {#if chipMeta}
             <span class="w-1.5 h-1.5 rounded-full" style="background: {chipMeta.dot}" />
           {/if}
           {activeFilterLabel}
-          <button onclick={clearFilter} class="ml-0.5 hover:text-indigo-200 transition-colors">
+          <button onclick={clearFilter} class="ml-0.5 hover:text-brand-200 transition-colors">
             <svg class="w-3 h-3" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M3 3l6 6M9 3l-6 6" stroke-linecap="round" />
             </svg>
@@ -415,7 +415,7 @@
             onclick={() => showFilter = !showFilter}
             class="flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-lg transition-all duration-200
               {showFilter || activeFilterLabel
-                ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 shadow-[0_0_12px_rgba(99,102,241,0.1)]'
+                ? 'bg-brand-500/20 text-brand-300 border border-brand-500/30 shadow-[0_0_12px_rgba(99,102,241,0.1)]'
                 : 'bg-surface-hover text-muted border border-line hover:border-line hover:text-content'}"
           >
             <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -442,7 +442,7 @@
                 onclick={() => clearFilter()}
                 class="w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors duration-150 border-b border-line
                   {!selectedAccountHandle && !selectedProvider
-                    ? 'bg-indigo-500/10 text-content'
+                    ? 'bg-brand-500/10 text-content'
                     : 'text-muted hover:text-muted hover:bg-background-input'}"
               >
                 <svg class="w-4 h-4 flex-shrink-0" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -450,7 +450,7 @@
                 </svg>
                 <span class="text-sm font-medium">All channels</span>
                 {#if !selectedAccountHandle && !selectedProvider}
-                  <span class="ml-auto w-1.5 h-1.5 rounded-full bg-indigo-400" />
+                  <span class="ml-auto w-1.5 h-1.5 rounded-full bg-brand-400" />
                 {/if}
               </button>
 
@@ -470,7 +470,7 @@
                       onclick={() => selectAccount(acct.author_handle, acct.provider)}
                       class="w-full flex items-center gap-3 px-4 py-2 text-left transition-colors duration-150
                         {selectedAccountHandle === acct.author_handle
-                          ? 'bg-indigo-500/10 text-content'
+                          ? 'bg-brand-500/10 text-content'
                           : 'text-muted hover:text-content hover:bg-background-input'}"
                     >
                       {#if acct.author_avatar}
@@ -493,7 +493,7 @@
                         {/if}
                       </div>
                       {#if selectedAccountHandle === acct.author_handle}
-                        <span class="ml-auto w-1.5 h-1.5 rounded-full bg-indigo-400 flex-shrink-0" />
+                        <span class="ml-auto w-1.5 h-1.5 rounded-full bg-brand-400 flex-shrink-0" />
                       {/if}
                     </button>
                   {/each}
@@ -509,7 +509,7 @@
   <!-- Error state -->
   {#if fetchError}
     <div class="text-center py-12">
-      <div class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-red-900/15 border border-red-800/30 text-sm text-red-400">
+      <div class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-error/15 border border-error/30 text-sm text-error">
         <svg class="w-4 h-4 flex-shrink-0" viewBox="0 0 16 16" fill="currentColor">
           <path d="M8 1a7 7 0 110 14A7 7 0 018 1zm0 9.5a.75.75 0 100 1.5.75.75 0 000-1.5zM8.75 4.5a.75.75 0 00-1.5 0v4a.75.75 0 001.5 0v-4z"/>
         </svg>
@@ -546,14 +546,14 @@
   {:else if importing}
     <div class="text-center py-20">
       <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-surface border border-line flex items-center justify-center">
-        <svg class="w-7 h-7 text-indigo-400 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <svg class="w-7 h-7 text-brand-400 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" stroke-linecap="round" />
         </svg>
       </div>
       <p class="text-sm font-medium text-content">Importing your posts…</p>
       <p class="text-xs text-muted mt-1">Fetching recent posts from all your connected providers</p>
       <div class="mt-6 w-48 h-1 mx-auto bg-line rounded-full overflow-hidden">
-        <div class="h-full bg-indigo-500/50 rounded-full animate-pulse" style="width: 60%" />
+        <div class="h-full bg-brand-500/50 rounded-full animate-pulse" style="width: 60%" />
       </div>
     </div>
 
@@ -590,7 +590,7 @@
         </svg>
       </div>
       <p class="text-sm font-medium text-muted">No posts match your filters</p>
-      <button onclick={clearFilter} class="mt-3 text-xs text-indigo-400 hover:text-indigo-300 transition-colors">
+      <button onclick={clearFilter} class="mt-3 text-xs text-brand-400 hover:text-brand-300 transition-colors">
         Clear filters
       </button>
     </div>
@@ -644,7 +644,7 @@
 
             <!-- Content -->
             <p class="text-sm text-content-secondary leading-relaxed whitespace-pre-wrap break-words
-              selection:bg-indigo-500/20 selection:text-indigo-200">
+              selection:bg-brand-500/20 selection:text-brand-200">
               {post.text}
             </p>
 
@@ -693,7 +693,7 @@
                           poster={item.poster_url ? proxyMediaUrl(item.poster_url) : ''}
                         >
                           <a href={item.url} target="_blank" rel="noopener noreferrer"
-                            class="text-xs text-indigo-400 hover:text-indigo-300 underline p-2 block">
+                            class="text-xs text-brand-400 hover:text-brand-300 underline p-2 block">
                             Download video
                           </a>
                         </video>
@@ -745,7 +745,7 @@
                 onclick={() => commentsOpenFor = commentsOpenFor === post.id ? null : post.id}
                 class="inline-flex items-center gap-1.5 text-xs font-medium transition-colors duration-150 px-2.5 py-1 rounded-lg
                   {commentsOpenFor === post.id
-                    ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/25'
+                    ? 'bg-brand-500/15 text-brand-300 border border-brand-500/25'
                     : 'text-muted hover:text-muted hover:bg-background-input border border-transparent'}"
               >
                 <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -803,7 +803,7 @@
                      and made zero backend calls. -->
                 <button
                   onclick={() => openRepurposeModal(post)}
-                  class="text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
+                  class="text-xs text-brand-400 hover:text-brand-300 transition-colors"
                   title="Create a new Social Forge post from this content"
                 >
                   ✏️ Repurpose
@@ -828,14 +828,14 @@
                       toast("Post saved", "success");
                     }
                   }}
-                  class="text-xs text-muted hover:text-yellow-400 transition-colors"
+                  class="text-xs text-muted hover:text-warning transition-colors"
                   title="Save for later"
                 >
                   🔖 Save
                 </button>
                 <button
                   onclick={() => hidePost(post)}
-                  class="text-xs text-muted hover:text-red-400 transition-colors"
+                  class="text-xs text-muted hover:text-error transition-colors"
                   title="Hide from feed (does not delete on platform)"
                 >
                   Hide
@@ -852,7 +852,7 @@
       {#if hasMore}
         {#if loadingMore}
           <div class="flex items-center justify-center gap-2.5 py-4">
-            <div class="w-5 h-5 rounded-full border-2 border-indigo-400/30 border-t-indigo-400 animate-spin" />
+            <div class="w-5 h-5 rounded-full border-2 border-brand-400/30 border-t-brand-400 animate-spin" />
             <span class="text-xs text-muted font-mono">Loading more…</span>
           </div>
         {:else if nearBottom}
@@ -861,7 +861,7 @@
               onclick={loadMore}
               class="group flex items-center gap-2.5 px-6 py-3 text-sm font-medium rounded-xl
                 bg-surface-hover border border-line-hover text-content-secondary
-                hover:bg-line-hover hover:border-indigo-500/30 hover:text-content
+                hover:bg-line-hover hover:border-brand-500/30 hover:text-content
                 transition-all duration-200 shadow-sm hover:shadow-[0_0_20px_rgba(99,102,241,0.08)]"
             >
               <svg class="w-4 h-4 transition-transform group-hover:rotate-180 duration-300" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -913,7 +913,7 @@
       <select
         bind:value={repurposeTargetIntegration}
         disabled={repurposeSubmitting}
-        class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-indigo-500 outline-none mb-4"
+        class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-brand-500 outline-none mb-4"
       >
         <option value="">Select a channel…</option>
         {#each allIntegrations as int (int.id)}
@@ -929,7 +929,7 @@
         <button
           onclick={submitRepurpose}
           disabled={repurposeSubmitting || !repurposeTargetIntegration}
-          class="px-3 py-1.5 text-sm bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-lg transition-colors flex items-center gap-2"
+          class="px-3 py-1.5 text-sm bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white rounded-lg transition-colors flex items-center gap-2"
         >
           {#if repurposeSubmitting}
             <div class="w-3 h-3 rounded-full border-2 border-white/30 border-t-white animate-spin"></div>
@@ -965,7 +965,7 @@
         bind:value={editText}
         disabled={editSubmitting}
         rows="6"
-        class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-indigo-500 outline-none mb-4 resize-y"
+        class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-brand-500 outline-none mb-4 resize-y"
       ></textarea>
       <div class="flex items-center justify-end gap-2">
         <button

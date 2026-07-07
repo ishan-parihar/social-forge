@@ -120,10 +120,10 @@
     <button
       onclick={() => (tab = 'save')}
       class="pb-2 text-sm font-medium transition-colors"
-      class:text-indigo-400={tab === 'save'}
+      class:text-brand-400={tab === 'save'}
       class:text-muted={tab !== 'save'}
       class:border-b-2={tab === 'save'}
-      class:border-indigo-500={tab === 'save'}
+      class:border-brand-500={tab === 'save'}
       class:border-transparent={tab !== 'save'}
     >
       Save
@@ -131,10 +131,10 @@
     <button
       onclick={() => (tab = 'load')}
       class="pb-2 text-sm font-medium transition-colors"
-      class:text-indigo-400={tab === 'load'}
+      class:text-brand-400={tab === 'load'}
       class:text-muted={tab !== 'load'}
       class:border-b-2={tab === 'load'}
-      class:border-indigo-500={tab === 'load'}
+      class:border-brand-500={tab === 'load'}
       class:border-transparent={tab !== 'load'}
     >
       Load
@@ -144,7 +144,7 @@
   {#if tab === 'save'}
     <div class="space-y-3">
       {#if saveError}
-        <div class="text-sm text-red-400">{saveError}</div>
+        <div class="text-sm text-error">{saveError}</div>
       {/if}
       <div>
         <label for="ps-name" class="text-xs text-muted block mb-1">Name</label>
@@ -153,7 +153,7 @@
           type="text"
           bind:value={saveName}
           placeholder="e.g. Weekly promotion"
-          class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-indigo-500 outline-none"
+          class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-brand-500 outline-none"
         />
       </div>
       <div>
@@ -163,7 +163,7 @@
           bind:value={saveDescription}
           placeholder="Describe this post set..."
           rows="2"
-          class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-indigo-500 outline-none resize-y"
+          class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-brand-500 outline-none resize-y"
         ></textarea>
       </div>
       <div class="text-xs text-muted">
@@ -205,7 +205,7 @@
               <button
                 onclick={(e) => handleDelete(e, set.id)}
                 aria-label="Delete set"
-                class="text-muted hover:text-red-400 transition-colors text-sm flex-shrink-0"
+                class="text-muted hover:text-error transition-colors text-sm flex-shrink-0"
               >
                 &times;
               </button>

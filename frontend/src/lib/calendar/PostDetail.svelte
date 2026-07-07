@@ -56,8 +56,8 @@
         </div>
         {#if event.error}
           <div>
-            <div class="text-xs text-red-400 mb-1">Error</div>
-            <div class="text-sm text-red-300">{event.error}</div>
+            <div class="text-xs text-error mb-1">Error</div>
+            <div class="text-sm text-error">{event.error}</div>
           </div>
         {/if}
         {#if event.likes != null || event.comments != null || event.shares != null || event.impressions != null}
@@ -75,7 +75,7 @@
               <!-- Comments/replies unified -->
               {#if event.comments != null}
                 <div class="bg-background-input border border-line rounded-lg p-2 text-center" title="{engagementLabel('comments', event.platform)}">
-                  <div class="text-xs text-yellow-400">{engagementIcon('comments', event.platform)}</div>
+                  <div class="text-xs text-warning">{engagementIcon('comments', event.platform)}</div>
                   <div class="text-sm font-semibold">{event.comments.toLocaleString()}</div>
                   <div class="text-[10px] text-muted">{engagementLabel('comments', event.platform)}</div>
                 </div>
@@ -83,7 +83,7 @@
               <!-- Shares/reposts/quotes unified -->
               {#if event.shares != null}
                 <div class="bg-background-input border border-line rounded-lg p-2 text-center" title="{engagementLabel('shares', event.platform)}">
-                  <div class="text-xs text-green-400">{engagementIcon('shares', event.platform)}</div>
+                  <div class="text-xs text-success">{engagementIcon('shares', event.platform)}</div>
                   <div class="text-sm font-semibold">{event.shares.toLocaleString()}</div>
                   <div class="text-[10px] text-muted">{engagementLabel('shares', event.platform)}</div>
                 </div>
@@ -91,7 +91,7 @@
               <!-- Views/impressions unified -->
               {#if event.impressions != null}
                 <div class="bg-background-input border border-line rounded-lg p-2 text-center" title="{engagementLabel('impressions', event.platform)}">
-                  <div class="text-xs text-indigo-400">{engagementIcon('impressions', event.platform)}</div>
+                  <div class="text-xs text-brand-400">{engagementIcon('impressions', event.platform)}</div>
                   <div class="text-sm font-semibold">{event.impressions.toLocaleString()}</div>
                   <div class="text-[10px] text-muted">{engagementLabel('impressions', event.platform)}</div>
                 </div>
@@ -100,7 +100,7 @@
           </div>
         {/if}
         {#if event.postUrl}
-          <a href={event.postUrl} target="_blank" class="inline-flex items-center gap-1.5 text-indigo-400 text-sm hover:text-indigo-300 hover:underline transition-colors">
+          <a href={event.postUrl} target="_blank" class="inline-flex items-center gap-1.5 text-brand-400 text-sm hover:text-brand-300 hover:underline transition-colors">
             <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
               <path d="M6 3l5 5-5 5" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>

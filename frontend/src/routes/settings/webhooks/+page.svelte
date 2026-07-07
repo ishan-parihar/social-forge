@@ -137,7 +137,7 @@
 <div class="page-enter space-y-6">
   <div class="flex items-center justify-between">
     <h2 class="text-xl font-semibold">Webhooks</h2>
-    <button onclick={openCreate} class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm transition-colors">
+    <button onclick={openCreate} class="px-4 py-2 bg-brand-600 hover:bg-brand-500 rounded-lg text-sm transition-colors">
       + Add Webhook
     </button>
   </div>
@@ -156,22 +156,22 @@
             <div class="flex items-center gap-2">
               <span class="font-medium text-sm">{wh.name}</span>
               {#if wh.is_active}
-                <span class="px-2 py-0.5 text-xs rounded bg-green-500/20 text-green-400">Active</span>
+                <span class="px-2 py-0.5 text-xs rounded bg-success/20 text-success">Active</span>
               {:else}
                 <span class="px-2 py-0.5 text-xs rounded bg-gray-500/20 text-gray-400">Inactive</span>
               {/if}
             </div>
             <div class="flex gap-2">
-              <button onclick={() => testWebhook(wh.id)} class="text-xs px-2 py-1 text-muted hover:text-indigo-400 border border-line rounded">Test</button>
-              <button onclick={() => viewDeliveries(wh.id)} class="text-xs px-2 py-1 text-muted hover:text-indigo-400 border border-line rounded">Deliveries</button>
-              <button onclick={() => openEdit(wh)} class="text-xs px-2 py-1 text-muted hover:text-indigo-400 border border-line rounded">Edit</button>
-              <button onclick={() => deleteWebhook(wh.id)} class="text-xs px-2 py-1 text-muted hover:text-red-400 border border-line rounded">Delete</button>
+              <button onclick={() => testWebhook(wh.id)} class="text-xs px-2 py-1 text-muted hover:text-brand-400 border border-line rounded">Test</button>
+              <button onclick={() => viewDeliveries(wh.id)} class="text-xs px-2 py-1 text-muted hover:text-brand-400 border border-line rounded">Deliveries</button>
+              <button onclick={() => openEdit(wh)} class="text-xs px-2 py-1 text-muted hover:text-brand-400 border border-line rounded">Edit</button>
+              <button onclick={() => deleteWebhook(wh.id)} class="text-xs px-2 py-1 text-muted hover:text-error border border-line rounded">Delete</button>
             </div>
           </div>
           <p class="text-xs text-muted truncate mb-2">{wh.url}</p>
           <div class="flex gap-1 flex-wrap">
             {#each wh.event_types as et}
-              <span class="px-2 py-0.5 text-[10px] rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">{et}</span>
+              <span class="px-2 py-0.5 text-[10px] rounded bg-brand-500/10 text-brand-400 border border-brand-500/20">{et}</span>
             {/each}
           </div>
           {#if wh.last_triggered_at}
@@ -219,7 +219,7 @@
       </div>
       <div class="flex gap-3 justify-end mt-6">
         <button onclick={() => showModal = null} class="px-4 py-2 text-sm text-muted hover:text-white">Cancel</button>
-        <button onclick={saveWebhook} disabled={saving || !formName.trim() || !formUrl.trim()} class="px-4 py-2 text-sm bg-indigo-600 hover:bg-indigo-500 rounded disabled:opacity-50">
+        <button onclick={saveWebhook} disabled={saving || !formName.trim() || !formUrl.trim()} class="px-4 py-2 text-sm bg-brand-600 hover:bg-brand-500 rounded disabled:opacity-50">
           {saving ? "Saving..." : "Save"}
         </button>
       </div>
@@ -244,7 +244,7 @@
           {#each deliveries as d (d.id)}
             <div class="bg-surface border border-line rounded-lg p-3">
               <div class="flex items-center justify-between mb-1">
-                <span class="text-xs font-medium px-2 py-0.5 rounded {d.status_code && d.status_code >= 200 && d.status_code < 300 ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}">{d.status_code || 'Pending'}</span>
+                <span class="text-xs font-medium px-2 py-0.5 rounded {d.status_code && d.status_code >= 200 && d.status_code < 300 ? 'bg-success/20 text-success' : 'bg-error/20 text-error'}">{d.status_code || 'Pending'}</span>
                 <span class="text-xs text-muted">{d.event_type}</span>
               </div>
               <p class="text-xs text-muted">{new Date(d.attempted_at).toLocaleString()}</p>

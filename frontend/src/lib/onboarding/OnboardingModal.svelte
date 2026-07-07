@@ -80,7 +80,7 @@
     <!-- Header with step indicator -->
     <div class="px-6 py-5 border-b border-line">
       <div class="flex items-center justify-between">
-        <h2 class="text-xl font-bold text-indigo-400">
+        <h2 class="text-xl font-bold text-brand-400">
           {#if step === 1}
             Welcome to Social Forge
           {:else}
@@ -92,12 +92,12 @@
       <!-- Step indicator -->
       <div class="flex items-center gap-2 mt-4">
         <div class="flex items-center gap-1.5">
-          <div class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold {step >= 1 ? 'bg-indigo-500 text-white' : 'bg-surface-hover text-muted'}">1</div>
+          <div class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold {step >= 1 ? 'bg-brand-500 text-white' : 'bg-surface-hover text-muted'}">1</div>
           <span class="text-xs {step >= 1 ? 'text-content' : 'text-muted'}">Connect Channels</span>
         </div>
         <div class="flex-1 h-px bg-line"></div>
         <div class="flex items-center gap-1.5">
-          <div class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold {step >= 2 ? 'bg-indigo-500 text-white' : 'bg-surface-hover text-muted'}">2</div>
+          <div class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold {step >= 2 ? 'bg-brand-500 text-white' : 'bg-surface-hover text-muted'}">2</div>
           <span class="text-xs {step >= 2 ? 'text-content' : 'text-muted'}">Quick Tour</span>
         </div>
       </div>
@@ -148,7 +148,7 @@
           <a
             href="/channels"
             onclick={skip}
-            class="block w-full text-center px-4 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium text-sm transition-colors"
+            class="block w-full text-center px-4 py-3 bg-brand-600 hover:bg-brand-500 text-white rounded-lg font-medium text-sm transition-colors"
           >
             Connect a Channel
           </a>
@@ -171,7 +171,7 @@
           </p>
           {#each tourSteps as item, i}
             <div class="flex items-start gap-3 p-3 bg-surface-hover rounded-lg">
-              <div class="w-10 h-10 rounded-lg bg-indigo-500/20 flex items-center justify-center text-xl shrink-0">
+              <div class="w-10 h-10 rounded-lg bg-brand-500/20 flex items-center justify-center text-xl shrink-0">
                 {item.icon}
               </div>
               <div class="flex-1">
@@ -183,7 +183,7 @@
         </div>
         <button
           onclick={finish}
-          class="block w-full text-center px-4 py-3 mt-5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium text-sm transition-colors"
+          class="block w-full text-center px-4 py-3 mt-5 bg-brand-600 hover:bg-brand-500 text-white rounded-lg font-medium text-sm transition-colors"
         >
           Get Started
         </button>

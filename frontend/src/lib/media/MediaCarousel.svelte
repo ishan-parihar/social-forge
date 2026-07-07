@@ -120,7 +120,7 @@
                 poster={item.poster_url ? proxyMediaUrl(item.poster_url) : ''}
               >
                 <a href={item.url} target="_blank" rel="noopener noreferrer"
-                  class="text-xs text-indigo-400 hover:text-indigo-300 underline p-2 block">
+                  class="text-xs text-brand-400 hover:text-brand-300 underline p-2 block">
                   Download video
                 </a>
               </video>
@@ -163,7 +163,7 @@
             bg-black/50 hover:bg-black/70 text-white flex items-center justify-center
             opacity-0 group-hover:opacity-100 transition-all duration-200
             backdrop-blur-sm ring-1 ring-white/10
-            focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-brand-400"
           aria-label="Previous slide"
         >
           <svg class="w-4 h-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
@@ -176,7 +176,7 @@
             bg-black/50 hover:bg-black/70 text-white flex items-center justify-center
             opacity-0 group-hover:opacity-100 transition-all duration-200
             backdrop-blur-sm ring-1 ring-white/10
-            focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-brand-400"
           aria-label="Next slide"
         >
           <svg class="w-4 h-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
@@ -208,7 +208,7 @@
               class:w-2={i !== current}
               class:h-2.5={i === current}
               class:h-2={i !== current}
-              class:bg-indigo-400={i === current}
+              class:bg-brand-400={i === current}
               class:bg-line-hover={i !== current}
               class:shadow-[0_0_6px_rgba(99,102,241,0.3)]={i === current}
               aria-label={`Go to slide ${i + 1}`}

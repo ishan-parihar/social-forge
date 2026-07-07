@@ -92,12 +92,12 @@
       <p class="text-xs text-muted">Select the pages you want to connect. You can always add more later.</p>
       <div class="space-y-2 max-h-64 overflow-y-auto">
         {#each pages as page (page.id)}
-          <label class="flex items-center gap-3 p-3 bg-background-input border border-line rounded-lg cursor-pointer hover:border-indigo-500/50 transition-colors">
+          <label class="flex items-center gap-3 p-3 bg-background-input border border-line rounded-lg cursor-pointer hover:border-brand-500/50 transition-colors">
             <input
               type="checkbox"
               checked={selected.has(page.id)}
               onchange={() => togglePage(page.id)}
-              class="w-4 h-4 rounded border-line bg-surface-hover text-indigo-500 focus:ring-indigo-500 focus:ring-offset-0"
+              class="w-4 h-4 rounded border-line bg-surface-hover text-brand-500 focus:ring-brand-500 focus:ring-offset-0"
             />
             {#if page.picture}
               <img src={page.picture} alt="" class="w-8 h-8 rounded-full" />
@@ -116,13 +116,13 @@
     {/if}
 
     {#if errorMsg}
-      <div class="text-sm text-red-400 bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">
+      <div class="text-sm text-error bg-error/10 border border-error/20 rounded-lg px-3 py-2">
         {errorMsg}
       </div>
     {/if}
 
     {#if connectedCount > 0}
-      <div class="text-sm text-green-400">
+      <div class="text-sm text-success">
         Connected {connectedCount} page{connectedCount > 1 ? 's' : ''}!
       </div>
     {/if}

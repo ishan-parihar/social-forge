@@ -59,7 +59,7 @@
           href={tab.href}
           class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors
             {isActive(tab.href, tab.exact)
-              ? 'bg-surface-hover text-indigo-400 font-medium'
+              ? 'bg-surface-hover text-brand-400 font-medium'
               : 'text-muted hover:text-content hover:bg-surface-hover'}"
         >
           <Icon name={tab.icon} class="w-4 h-4 flex-shrink-0" />
@@ -77,7 +77,7 @@
             onclick={() => mobileSidebarOpen = false}
             class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors
               {isActive(tab.href, tab.exact)
-                ? 'bg-surface-hover text-indigo-400 font-medium'
+                ? 'bg-surface-hover text-brand-400 font-medium'
                 : 'text-muted hover:text-content hover:bg-surface-hover'}"
           >
             <Icon name={tab.icon} class="w-4 h-4 flex-shrink-0" />

@@ -66,7 +66,7 @@
         type="url"
         bind:value={feedUrl}
         placeholder="https://example.com/rss"
-        class="w-full bg-background border border-line rounded-lg px-3 py-2 text-sm text-content placeholder:text-muted-dark focus:outline-none focus:border-indigo-500"
+        class="w-full bg-background border border-line rounded-lg px-3 py-2 text-sm text-content placeholder:text-muted-dark focus:outline-none focus:border-brand-500"
         required
       />
     </div>
@@ -81,7 +81,7 @@
         <select
           id="integration"
           bind:value={integrationId}
-          class="w-full bg-background border border-line rounded-lg px-3 py-2 text-sm text-content focus:outline-none focus:border-indigo-500"
+          class="w-full bg-background border border-line rounded-lg px-3 py-2 text-sm text-content focus:outline-none focus:border-brand-500"
           required
         >
           <option value="" disabled>Select integration</option>
@@ -101,7 +101,7 @@
         type="text"
         bind:value={title}
         placeholder="My RSS Feed"
-        class="w-full bg-background border border-line rounded-lg px-3 py-2 text-sm text-content placeholder:text-muted-dark focus:outline-none focus:border-indigo-500"
+        class="w-full bg-background border border-line rounded-lg px-3 py-2 text-sm text-content placeholder:text-muted-dark focus:outline-none focus:border-brand-500"
       />
     </div>
 
@@ -111,7 +111,7 @@
     </label>
 
     {#if error}
-      <div class="text-xs text-red-400">{error}</div>
+      <div class="text-xs text-error">{error}</div>
     {/if}
 
     <button type="submit" disabled={saving || loadingIntegrations}

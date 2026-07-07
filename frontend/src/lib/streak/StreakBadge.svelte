@@ -26,7 +26,7 @@
 
 {#if !loading && streak > 0}
   <div
-    class="flex items-center gap-1 px-2 py-1 rounded-lg bg-orange-500/10 text-orange-400"
+    class="flex items-center gap-1 px-2 py-1 rounded-lg bg-warning/10 text-warning"
     title={"You're on a " + streak + " day posting streak! Keep it going!"}
   >
     <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">

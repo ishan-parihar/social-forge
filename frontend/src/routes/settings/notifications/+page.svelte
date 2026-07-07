@@ -70,18 +70,18 @@
 
   {#if loading}
     <div class="flex justify-center py-12">
-      <svg class="animate-spin h-6 w-6 text-indigo-500" fill="none" viewBox="0 0 24 24">
+      <svg class="animate-spin h-6 w-6 text-brand-500" fill="none" viewBox="0 0 24 24">
         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
       </svg>
     </div>
   {:else if error}
-    <div class="bg-surface border border-red-500/30 rounded-xl p-5 text-center space-y-3">
-      <p class="text-sm text-red-400">Failed to load notification preferences</p>
+    <div class="bg-surface border border-error/30 rounded-xl p-5 text-center space-y-3">
+      <p class="text-sm text-error">Failed to load notification preferences</p>
       <p class="text-xs text-muted">{error}</p>
       <button
         onclick={handleRetry}
-        class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm rounded-lg transition-colors"
+        class="px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white text-sm rounded-lg transition-colors"
       >
         Retry
       </button>
@@ -98,7 +98,7 @@
             </div>
             <select
               bind:value={prefs[nt.key]}
-              class="bg-line text-content-secondary border border-line rounded px-3 py-1.5 text-sm focus:outline-none focus:border-indigo-500/50 transition-colors"
+              class="bg-line text-content-secondary border border-line rounded px-3 py-1.5 text-sm focus:outline-none focus:border-brand-500/50 transition-colors"
             >
               <option value="push">Push</option>
               <option value="email">Email</option>
@@ -114,7 +114,7 @@
         <h3 class="text-sm font-medium text-content">Quiet Hours</h3>
         <label class="relative inline-flex items-center cursor-pointer">
           <input type="checkbox" bind:checked={quietHoursEnabled} class="sr-only peer" />
-          <div class="w-9 h-5 bg-line rounded-full peer peer-checked:bg-indigo-600 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
+          <div class="w-9 h-5 bg-line rounded-full peer peer-checked:bg-brand-600 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
         </label>
       </div>
       {#if quietHoursEnabled}
@@ -125,7 +125,7 @@
               id="quiet-start"
               type="time"
               bind:value={prefs.quiet_hours_start}
-              class="w-full bg-line text-content-secondary border border-line rounded px-3 py-1.5 text-sm focus:outline-none focus:border-indigo-500/50 transition-colors"
+              class="w-full bg-line text-content-secondary border border-line rounded px-3 py-1.5 text-sm focus:outline-none focus:border-brand-500/50 transition-colors"
             />
           </div>
           <div>
@@ -134,7 +134,7 @@
               id="quiet-end"
               type="time"
               bind:value={prefs.quiet_hours_end}
-              class="w-full bg-line text-content-secondary border border-line rounded px-3 py-1.5 text-sm focus:outline-none focus:border-indigo-500/50 transition-colors"
+              class="w-full bg-line text-content-secondary border border-line rounded px-3 py-1.5 text-sm focus:outline-none focus:border-brand-500/50 transition-colors"
             />
           </div>
         </div>
@@ -145,7 +145,7 @@
       <button
         onclick={handleSave}
         disabled={saving}
-        class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-800 disabled:text-muted text-white text-sm rounded-lg transition-colors duration-150"
+        class="px-5 py-2 bg-brand-600 hover:bg-brand-500 disabled:bg-brand-800 disabled:text-muted text-white text-sm rounded-lg transition-colors duration-150"
       >
         {saving ? 'Saving...' : 'Save Preferences'}
       </button>

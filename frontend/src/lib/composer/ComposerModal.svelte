@@ -660,7 +660,7 @@
         {composer.mode === 'edit' ? 'Edit Post' : 'Create Post'}
       </h2>
       {#if composer.mode === 'edit'}
-        <span class="text-xs px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-400">Editing</span>
+        <span class="text-xs px-2 py-0.5 rounded-full bg-brand-500/20 text-brand-400">Editing</span>
       {/if}
       {#if draftSaved}
         <span class="text-xs text-emerald-400 animate-pulse">✓ Draft saved</span>
@@ -689,7 +689,7 @@
       <!-- Left column: editor (scrollable) -->
       <div class="flex-1 overflow-y-auto p-5 space-y-4">
         {#if error}
-          <div class="bg-red-500/10 border border-red-500/30 text-red-400 text-sm rounded-lg p-3">{error}</div>
+          <div class="bg-error/10 border border-error/30 text-error text-sm rounded-lg p-3">{error}</div>
         {/if}
 
         <!-- Phase v21: group/thread tab strip. Shows one tab per post in
@@ -702,7 +702,7 @@
               {#each groupPosts as part, i (part.id)}
                 <button
                   onclick={() => switchGroupPart(part.id)}
-                  class="px-2.5 py-1 text-xs rounded-lg transition-colors {part.id === editingGroupPostId ? 'bg-indigo-600 text-white' : 'bg-surface-hover text-muted hover:text-content'}"
+                  class="px-2.5 py-1 text-xs rounded-lg transition-colors {part.id === editingGroupPostId ? 'bg-brand-600 text-white' : 'bg-surface-hover text-muted hover:text-content'}"
                   title={part.content ? (part.content.slice(0, 80) + (part.content.length > 80 ? '…' : '')) : `Part ${i + 1}`}
                 >
                   {i === 0 ? 'Main post' : `Part ${i + 1}`}
@@ -717,7 +717,7 @@
         <div>
           <label class="text-sm text-muted block mb-1">Title (optional)</label>
           <input type="text" bind:value={title} placeholder="Post title..."
-            class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-indigo-500 outline-none" />
+            class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-brand-500 outline-none" />
         </div>
 
         <!-- Channel Selection -->
@@ -776,7 +776,7 @@
             <select
               value={selectedCampaignId || ''}
               onchange={(e) => selectedCampaignId = e.currentTarget.value || null}
-              class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-indigo-500 outline-none"
+              class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-brand-500 outline-none"
             >
               <option value="">No campaign</option>
               {#each allCampaigns as c (c.id)}
@@ -879,7 +879,7 @@
                   <p class="text-sm font-medium truncate">{selectedMusic.title}</p>
                   <p class="text-xs text-muted truncate">{selectedMusic.artist}</p>
                 </div>
-                <button onclick={() => selectedMusic = null} class="text-muted hover:text-red-400 text-sm">&times;</button>
+                <button onclick={() => selectedMusic = null} class="text-muted hover:text-error text-sm">&times;</button>
               </div>
             {:else}
               <p class="text-xs text-muted">Add trending music from Instagram's library to your Reel.</p>
@@ -963,7 +963,7 @@
       <div class="flex items-center gap-2">
         <button
           onclick={() => showAi = !showAi}
-          class="px-3 py-1.5 text-sm border border-line rounded-lg transition-colors {showAi ? 'bg-indigo-600/20 text-indigo-400 border-indigo-500/30' : 'text-muted hover:text-white'}"
+          class="px-3 py-1.5 text-sm border border-line rounded-lg transition-colors {showAi ? 'bg-brand-600/20 text-brand-400 border-brand-500/30' : 'text-muted hover:text-white'}"
         >✨ AI</button>
         <!-- Phase 8: mobile preview toggle -->
         <button
@@ -984,12 +984,12 @@
         <button
           onclick={postNow}
           disabled={submitting}
-          class="px-3 py-1.5 bg-green-600 hover:bg-green-500 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors"
+          class="px-3 py-1.5 bg-success hover:bg-success disabled:opacity-50 rounded-lg text-sm font-medium transition-colors"
         >{submitting ? 'Posting...' : 'Post Now'}</button>
         <button
           onclick={submit}
           disabled={submitting}
-          class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors"
+          class="px-3 py-1.5 bg-brand-600 hover:bg-brand-500 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors"
         >{submitting ? 'Scheduling...' : 'Schedule'}</button>
       </div>
     </div>

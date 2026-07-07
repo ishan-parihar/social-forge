@@ -90,7 +90,7 @@
 <div class="page-enter space-y-6">
   <div class="flex items-center justify-between">
     <h2 class="text-xl font-semibold text-content">Media Library</h2>
-    <label class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm cursor-pointer transition-colors disabled:opacity-50" class:opacity-50={uploading}>
+    <label class="px-3 py-1.5 bg-brand-600 hover:bg-brand-500 rounded-lg text-sm cursor-pointer transition-colors disabled:opacity-50" class:opacity-50={uploading}>
       {uploading ? "Uploading..." : "+ Upload"}
       <input type="file" multiple accept="image/*,video/*,audio/*,.pdf" onchange={handleUpload} class="hidden" disabled={uploading} />
     </label>
@@ -101,15 +101,15 @@
       type="text"
       placeholder="Search media by name..."
       bind:value={search}
-      class="w-full px-3 py-2 pl-9 bg-background-input border border-line rounded-lg text-sm text-content-secondary placeholder-muted focus:border-indigo-500 outline-none transition-colors"
+      class="w-full px-3 py-2 pl-9 bg-background-input border border-line rounded-lg text-sm text-content-secondary placeholder-muted focus:border-brand-500 outline-none transition-colors"
     />
     <span class="absolute left-3 top-1/2 -translate-y-1/2 text-muted"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></span>
   </div>
 
   {#if error && !loading}
-    <div class="bg-red-500/10 border border-red-500/30 text-red-400 text-sm rounded-lg p-4 text-center">
+    <div class="bg-error/10 border border-error/30 text-error text-sm rounded-lg p-4 text-center">
       <p class="mb-2">{error}</p>
-      <button onclick={fetchMedia} class="text-indigo-400 hover:text-indigo-300 underline">Retry</button>
+      <button onclick={fetchMedia} class="text-brand-400 hover:text-brand-300 underline">Retry</button>
     </div>
   {:else}
     <MediaGrid {items} {loading} onDelete={handleDelete} />

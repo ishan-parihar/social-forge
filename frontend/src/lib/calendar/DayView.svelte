@@ -128,16 +128,16 @@
     <div class="flex items-center justify-center gap-3 mt-1 text-xs">
       <span class="text-muted">{dayEvents.length} total</span>
       {#if stateSummary.queued > 0}
-        <span class="text-indigo-400">{stateSummary.queued} scheduled</span>
+        <span class="text-brand-400">{stateSummary.queued} scheduled</span>
       {/if}
       {#if stateSummary.published > 0}
-        <span class="text-green-400">{stateSummary.published} published</span>
+        <span class="text-success">{stateSummary.published} published</span>
       {/if}
       {#if stateSummary.draft > 0}
         <span class="text-muted">{stateSummary.draft} drafts</span>
       {/if}
       {#if stateSummary.error > 0}
-        <span class="text-red-400">{stateSummary.error} failed</span>
+        <span class="text-error">{stateSummary.error} failed</span>
       {/if}
     </div>
   </div>
@@ -152,7 +152,7 @@
           data-drop-date={key}
           data-drop-hour={hourStr}
           class="flex-1 px-2 py-1 space-y-0.5 cursor-pointer hover:bg-surface-hover transition-colors
-            {isDragOver ? 'ring-2 ring-indigo-500 ring-inset bg-indigo-500/5' : ''}"
+            {isDragOver ? 'ring-2 ring-brand-500 ring-inset bg-brand-500/5' : ''}"
           onclick={() => onDateClick?.(key)}
           ondragover={(e) => { e.preventDefault(); dragOverHour = hourStr; }}
           ondragleave={() => { if (dragOverHour === hourStr) dragOverHour = null; }}

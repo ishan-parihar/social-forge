@@ -163,14 +163,14 @@
   </div>
 
   {#if error}
-    <div class="bg-surface border border-red-500/30 rounded-xl p-4 text-sm text-red-400">
+    <div class="bg-surface border border-error/30 rounded-xl p-4 text-sm text-error">
       {error}
       <button onclick={load} class="ml-2 underline">Retry</button>
     </div>
   {/if}
 
   {#if formError}
-    <div class="text-sm text-red-400">{formError}</div>
+    <div class="text-sm text-error">{formError}</div>
   {/if}
 
   <!-- Create form -->
@@ -189,7 +189,7 @@
           type="text"
           bind:value={newName}
           placeholder="e.g. Standard CTA"
-          class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-indigo-500 outline-none"
+          class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-brand-500 outline-none"
         />
       </div>
       <div>
@@ -199,7 +199,7 @@
           bind:value={newContent}
           placeholder="Signature text (HTML supported)..."
           rows="4"
-          class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-indigo-500 outline-none resize-y"
+          class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-brand-500 outline-none resize-y"
         ></textarea>
       </div>
       <div>
@@ -209,7 +209,7 @@
           type="text"
           bind:value={newProvider}
           placeholder="e.g. x, linkedin, bluesky"
-          class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-indigo-500 outline-none"
+          class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-brand-500 outline-none"
         />
       </div>
       <Button onclick={handleCreate} disabled={creating}>
@@ -240,7 +240,7 @@
                   id="edit-name-{sig.id}"
                   type="text"
                   bind:value={editName}
-                  class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-indigo-500 outline-none"
+                  class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-brand-500 outline-none"
                 />
               </div>
               <div>
@@ -249,7 +249,7 @@
                   id="edit-content-{sig.id}"
                   bind:value={editContent}
                   rows="3"
-                  class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-indigo-500 outline-none resize-y"
+                  class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-brand-500 outline-none resize-y"
                 ></textarea>
               </div>
               <div>
@@ -259,7 +259,7 @@
                   type="text"
                   bind:value={editProvider}
                   placeholder="Global"
-                  class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-indigo-500 outline-none"
+                  class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-brand-500 outline-none"
                 />
               </div>
               <div class="flex gap-2">
@@ -276,7 +276,7 @@
                 <div class="flex items-center gap-2 flex-wrap">
                   <h4 class="text-sm font-medium">{sig.name}</h4>
                   {#if sig.provider}
-                    <span class="text-xs px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">{sig.provider}</span>
+                    <span class="text-xs px-2 py-0.5 rounded-full bg-brand-500/10 text-brand-400 border border-brand-500/20">{sig.provider}</span>
                   {:else}
                     <span class="text-xs px-2 py-0.5 rounded-full bg-line text-muted">Global</span>
                   {/if}

@@ -121,7 +121,7 @@
     </div>
 
     <button onclick={autoSchedule} disabled={autoScheduling}
-      class="w-full px-3 py-2 bg-surface-hover hover:bg-line-hover border border-line rounded-lg text-sm text-indigo-400 transition-colors flex items-center justify-center gap-2">
+      class="w-full px-3 py-2 bg-surface-hover hover:bg-line-hover border border-line rounded-lg text-sm text-brand-400 transition-colors flex items-center justify-center gap-2">
       {#if autoScheduling}
         <span class="animate-spin">⏳</span> Finding best time...
       {:else}
@@ -132,7 +132,7 @@
     <div class="border-t border-line pt-2 mt-2">
       <label class="flex items-center gap-2 text-sm cursor-pointer">
         <input type="checkbox" bind:checked={repeatEnabled} onchange={updateRepeat} class="rounded" />
-        <span class="text-indigo-400 font-medium">Repeat</span>
+        <span class="text-brand-400 font-medium">Repeat</span>
       </label>
 
       {#if repeatEnabled}

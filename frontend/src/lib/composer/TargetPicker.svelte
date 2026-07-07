@@ -48,11 +48,11 @@
   // Target type badge color
   function targetTypeColor(type: string): string {
     switch (type.toLowerCase()) {
-      case "subreddit": return "bg-orange-500/20 text-orange-400 border-orange-500/30";
+      case "subreddit": return "bg-warning/20 text-warning border-warning/30";
       case "channel": return "bg-blue-500/20 text-blue-400 border-blue-500/30";
       case "group": return "bg-purple-500/20 text-purple-400 border-purple-500/30";
-      case "peer": return "bg-green-500/20 text-green-400 border-green-500/30";
-      case "blog": return "bg-yellow-500/20 text-yellow-400 border-yellow-500/30";
+      case "peer": return "bg-success/20 text-success border-success/30";
+      case "blog": return "bg-warning/20 text-warning border-warning/30";
       case "community": return "bg-teal-500/20 text-teal-400 border-teal-500/30";
       default: return "bg-surface-hover text-muted border-line";
     }
@@ -68,11 +68,11 @@
         type="text"
         bind:value={searchQuery}
         placeholder={placeholder}
-        class="w-full pl-8 pr-3 py-1.5 bg-background-input border border-line rounded-lg text-sm focus:border-indigo-500 outline-none placeholder:text-muted-dark"
+        class="w-full pl-8 pr-3 py-1.5 bg-background-input border border-line rounded-lg text-sm focus:border-brand-500 outline-none placeholder:text-muted-dark"
       />
     </div>
     {#if selectedCount > 0}
-      <span class="inline-flex items-center gap-1 px-2 py-1 bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 rounded-full text-xs font-medium whitespace-nowrap">
+      <span class="inline-flex items-center gap-1 px-2 py-1 bg-brand-500/20 text-brand-400 border border-brand-500/30 rounded-full text-xs font-medium whitespace-nowrap">
         {selectedCount} selected
       </span>
     {/if}
@@ -93,13 +93,13 @@
           {@const isSelected = selectedTargets.includes(target.id)}
           <button
             onclick={() => toggleTarget(target.id)}
-            class="w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-surface-hover {isSelected ? 'bg-indigo-500/5' : ''}"
+            class="w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-surface-hover {isSelected ? 'bg-brand-500/5' : ''}"
             aria-label="{isSelected ? 'Deselect' : 'Select'} {target.name}"
           >
             <!-- Checkbox -->
             <span class="flex-shrink-0 w-4 h-4 rounded border flex items-center justify-center transition-colors
               {isSelected
-                ? 'border-indigo-500 bg-indigo-500 text-white'
+                ? 'border-brand-500 bg-brand-500 text-white'
                 : 'border-line-hover bg-transparent'}">
               {#if isSelected}
                 <svg class="w-3 h-3" viewBox="0 0 12 12" fill="none">

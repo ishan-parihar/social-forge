@@ -116,12 +116,12 @@
   <!-- Loading -->
   {#if loading}
     <div class="flex items-center justify-center py-6">
-      <div class="w-4 h-4 rounded-full border-2 border-indigo-400/30 border-t-indigo-400 animate-spin" />
+      <div class="w-4 h-4 rounded-full border-2 border-brand-400/30 border-t-brand-400 animate-spin" />
     </div>
 
   <!-- Error -->
   {:else if error}
-    <div class="text-xs text-red-400 text-center py-4">{error}</div>
+    <div class="text-xs text-error text-center py-4">{error}</div>
 
   <!-- Empty -->
   {:else if comments.length === 0}
@@ -159,7 +159,7 @@
                 {#if comment.replies.length > 0}
                   <button
                     onclick={() => toggleThread(comment.id)}
-                    class="text-[10px] text-indigo-400 hover:text-indigo-300 transition-colors"
+                    class="text-[10px] text-brand-400 hover:text-brand-300 transition-colors"
                   >
                     {expandedThreads.has(comment.id) ? 'Hide replies' : `${comment.replies.length} ${comment.replies.length === 1 ? 'reply' : 'replies'}`}
                   </button>

@@ -66,7 +66,7 @@
         class:cursor-not-allowed={past}
       >
         <span class="text-xs w-6 h-6 flex items-center justify-center rounded-full mb-0.5"
-          class:bg-indigo-600!={isToday(date)}
+          class:bg-brand-500!={isToday(date)}
           class:text-white!={isToday(date)}
           class:text-muted={!isToday(date)}
         >{date.getDate()}</span>

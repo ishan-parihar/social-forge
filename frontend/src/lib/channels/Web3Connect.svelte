@@ -94,14 +94,14 @@
 
     <div>
       <label for="address" class="block text-xs font-medium text-muted mb-1">
-        Address / Public Key <span class="text-red-400">*</span>
+        Address / Public Key <span class="text-error">*</span>
       </label>
       <input
         id="address"
         type="text"
         bind:value={address}
         {placeholder}
-        class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-white placeholder:text-muted-dark focus:outline-none focus:border-indigo-500 transition-colors"
+        class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-white placeholder:text-muted-dark focus:outline-none focus:border-brand-500 transition-colors"
       />
     </div>
 
@@ -114,12 +114,12 @@
         type="text"
         bind:value={label}
         placeholder="e.g. My {provider} identity"
-        class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-white placeholder:text-muted-dark focus:outline-none focus:border-indigo-500 transition-colors"
+        class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-white placeholder:text-muted-dark focus:outline-none focus:border-brand-500 transition-colors"
       />
     </div>
 
     {#if errorMsg}
-      <div class="text-sm text-red-400 bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">
+      <div class="text-sm text-error bg-error/10 border border-error/20 rounded-lg px-3 py-2">
         {errorMsg}
       </div>
     {/if}

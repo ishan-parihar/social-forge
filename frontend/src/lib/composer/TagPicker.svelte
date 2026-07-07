@@ -27,11 +27,11 @@
   {#if loading}
     <div class="text-sm text-muted py-2">Loading tags...</div>
   {:else if error}
-    <div class="text-sm text-red-400 py-2">{error}</div>
+    <div class="text-sm text-error py-2">{error}</div>
   {:else if tags.length === 0}
     <div class="text-sm text-muted py-2">
       No tags yet.
-      <a href="/tags" class="text-indigo-400 hover:underline">Create some in the Tags page.</a>
+      <a href="/tags" class="text-brand-400 hover:underline">Create some in the Tags page.</a>
     </div>
   {:else}
     <div class="flex flex-wrap gap-2">

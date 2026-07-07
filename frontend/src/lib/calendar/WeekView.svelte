@@ -138,12 +138,12 @@
   <div class="grid grid-cols-8 text-center border-b border-line">
     <div class="py-2 text-xs text-muted border-r border-line">{tzLabel}</div>
     {#each weekDays as wd (wd.dateStr)}
-      <div class="py-2 text-xs {wd.isToday ? 'text-indigo-400' : 'text-muted'} relative">
+      <div class="py-2 text-xs {wd.isToday ? 'text-brand-400' : 'text-muted'} relative">
         <div>{wd.date.toLocaleDateString("en-US", { weekday: "short" })}</div>
         <div class="font-semibold">{wd.date.getDate()}</div>
         {#if wd.isToday}
           <!-- Phase 7: today indicator — a small dot under the date -->
-          <div class="absolute bottom-0 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-indigo-400"></div>
+          <div class="absolute bottom-0 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-brand-400"></div>
         {/if}
       </div>
     {/each}
@@ -161,8 +161,8 @@
             data-drop-date={wd.dateStr}
             data-drop-hour={hour.slice(0, 2)}
             class="relative px-1 py-1 border-r border-line min-h-[48px] cursor-pointer hover:bg-surface-hover transition-colors
-              {isDragOver ? 'ring-2 ring-indigo-500 ring-inset bg-indigo-500/5' : ''}
-              {wd.isToday ? 'bg-indigo-500/5' : ''}
+              {isDragOver ? 'ring-2 ring-brand-500 ring-inset bg-brand-500/5' : ''}
+              {wd.isToday ? 'bg-brand-500/5' : ''}
               {past ? 'opacity-40 cursor-not-allowed' : ''}"
             ondragover={(e) => { if (!past) { e.preventDefault(); handleDragEnter(wd.dateStr, hour); } }}
             ondragleave={() => handleDragLeave(wd.dateStr, hour)}

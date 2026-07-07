@@ -109,7 +109,7 @@
       <button
         onclick={() => days = d as 7 | 30 | 90}
         class="flex-1 px-3 py-1.5 text-xs font-medium transition-colors
-          {days === d ? 'bg-indigo-600 text-white' : 'text-muted hover:text-white hover:bg-surface-hover'}"
+          {days === d ? 'bg-brand-600 text-white' : 'text-muted hover:text-white hover:bg-surface-hover'}"
       >{d}d</button>
     {/each}
   </div>
@@ -119,7 +119,7 @@
       <span class="animate-spin text-muted text-2xl">⏳</span>
     </div>
   {:else if error && !analyticsData}
-    <div class="text-center py-8 text-sm text-red-400">{error}</div>
+    <div class="text-center py-8 text-sm text-error">{error}</div>
   {:else if analyticsData && analyticsData.length === 0}
     <div class="text-center py-8 text-sm text-muted">
       No analytics data available yet.
@@ -136,7 +136,7 @@
           {#if analyticsData.length >= 2}
             {@const first = analyticsData[0][card.key] as number}
             {@const last = analyticsData[analyticsData.length - 1][card.key] as number}
-            <div class="text-xs mt-1 {last >= first ? 'text-green-400' : 'text-red-400'}">
+            <div class="text-xs mt-1 {last >= first ? 'text-success' : 'text-error'}">
               {last >= first ? '↑' : '↓'} {Math.abs(last - first).toLocaleString()}
             </div>
           {/if}

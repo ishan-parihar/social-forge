@@ -95,10 +95,10 @@
         onkeydown={selectable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect?.(item); } } : undefined}
         class="relative group bg-surface border rounded-xl overflow-hidden transition-all duration-150"
         class:cursor-pointer={selectable}
-        class:border-indigo-400={selectable && isSelected(item.id)}
+        class:border-brand-400={selectable && isSelected(item.id)}
         class:border-line={!selectable || !isSelected(item.id)}
         class:ring-1={selectable && isSelected(item.id)}
-        class:ring-indigo-400={selectable && isSelected(item.id)}
+        class:ring-brand-400={selectable && isSelected(item.id)}
       >
         {#if item.mime_type.startsWith("image/")}
           <img
@@ -122,19 +122,14 @@
           <button
             aria-label="Delete media"
             onclick={(e) => { e.stopPropagation(); confirmDelete(item.id); }}
-            class="absolute top-1.5 right-1.5 w-6 h-6 rounded-full flex items-center justify-center text-xs transition-all duration-150"
-            class:bg-red-500={deleting !== item.id}
-            class:bg-red-600={deleting === item.id}
-            class:opacity-0={deleting !== item.id}
-            class:group-hover:opacity-100={deleting !== item.id}
-            class:opacity-100={deleting === item.id}
+            class="absolute top-1.5 right-1.5 w-6 h-6 rounded-full flex items-center justify-center text-xs transition-all duration-150 {deleting === item.id ? 'bg-error/80 opacity-100' : 'bg-error opacity-0 group-hover:opacity-100'}"
           >
             {deleting === item.id ? "✓" : "×"}
           </button>
         {/if}
 
         {#if selectable && isSelected(item.id)}
-          <div class="absolute top-1.5 left-1.5 w-5 h-5 bg-indigo-500 rounded-full flex items-center justify-center">
+          <div class="absolute top-1.5 left-1.5 w-5 h-5 bg-brand-500 rounded-full flex items-center justify-center">
             <span class="text-white text-[10px]">✓</span>
           </div>
         {/if}

@@ -182,11 +182,11 @@
 <div class="page-enter space-y-6">
   <div class="flex items-center justify-between">
     <h2 class="text-xl font-semibold">Automation Rules</h2>
-    <button onclick={openCreate} class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm transition-colors">+ New Rule</button>
+    <button onclick={openCreate} class="px-3 py-1.5 bg-brand-600 hover:bg-brand-500 rounded-lg text-sm transition-colors">+ New Rule</button>
   </div>
 
   {#if error}
-    <div class="text-center py-12 text-sm text-red-400">{error}</div>
+    <div class="text-center py-12 text-sm text-error">{error}</div>
   {:else if loading}
     <div class="text-center py-12 text-sm text-muted">Loading...</div>
   {:else if rules.length === 0}
@@ -204,20 +204,20 @@
               <div class="text-[10px] text-muted">Last: {new Date(rule.last_triggered).toLocaleDateString()}</div>
             {/if}
           </div>
-          <span class="text-xs text-indigo-400 capitalize">{rule.platform}</span>
+          <span class="text-xs text-brand-400 capitalize">{rule.platform}</span>
           <span class="text-xs text-muted capitalize">{rule.trigger_type}</span>
           <span class="text-xs text-muted capitalize">{rule.response_type.replace("_", " ")}</span>
           <button onclick={() => toggleActive(rule)} class="w-fit">
             {#if rule.is_active}
-              <span class="px-2 py-0.5 text-xs rounded bg-green-500/20 text-green-400">Active</span>
+              <span class="px-2 py-0.5 text-xs rounded bg-success/20 text-success">Active</span>
             {:else}
               <span class="px-2 py-0.5 text-xs rounded bg-muted/20 text-muted">Inactive</span>
             {/if}
           </button>
           <div class="flex items-center gap-2">
-            <button onclick={() => openEdit(rule)} class="text-xs text-muted hover:text-indigo-400">Edit</button>
-            <button onclick={() => viewLogs(rule.id)} class="text-xs text-muted hover:text-indigo-400">Logs</button>
-            <button onclick={() => deleteRule(rule.id)} class="text-xs text-muted hover:text-red-400">Del</button>
+            <button onclick={() => openEdit(rule)} class="text-xs text-muted hover:text-brand-400">Edit</button>
+            <button onclick={() => viewLogs(rule.id)} class="text-xs text-muted hover:text-brand-400">Logs</button>
+            <button onclick={() => deleteRule(rule.id)} class="text-xs text-muted hover:text-error">Del</button>
           </div>
         </div>
       {/each}
@@ -243,7 +243,7 @@
 
       <label class="block text-sm text-muted mb-1">Channel (connected account)</label>
       {#if platformIntegrations.length === 0}
-        <div class="w-full mb-3 px-3 py-2 bg-surface-hover border border-line rounded text-sm text-red-400">
+        <div class="w-full mb-3 px-3 py-2 bg-surface-hover border border-line rounded text-sm text-error">
           No connected {formPlatform} accounts. Connect one in the <a href="/channels" class="underline">Channels</a> page.
         </div>
       {:else}
@@ -271,11 +271,11 @@
       <label class="block text-sm text-muted mb-1">Response Template</label>
       <textarea bind:value={formTemplate} placeholder="Thanks for your comment! {'{user}'} said: {'{comment}'}" rows="4" class="w-full mb-4 px-3 py-2 bg-surface-hover border border-line rounded text-sm font-mono"></textarea>
 
-      {#if error}<p class="text-red-400 text-sm mb-3">{error}</p>{/if}
+      {#if error}<p class="text-error text-sm mb-3">{error}</p>{/if}
 
       <div class="flex gap-3 justify-end">
         <button onclick={() => showModal = false} class="px-4 py-2 text-sm text-muted hover:text-white">Cancel</button>
-        <button onclick={saveRule} disabled={saving || !formName.trim()} class="px-4 py-2 text-sm bg-indigo-600 hover:bg-indigo-500 rounded disabled:opacity-50">
+        <button onclick={saveRule} disabled={saving || !formName.trim()} class="px-4 py-2 text-sm bg-brand-600 hover:bg-brand-500 rounded disabled:opacity-50">
           {saving ? "Saving..." : editingRule ? "Update" : "Create"}
         </button>
       </div>
@@ -301,7 +301,7 @@
             <div class="bg-surface-hover border border-line rounded-lg p-3">
               <div class="flex items-center gap-2 mb-1">
                 <span class="text-xs text-muted">{new Date(log.created_at).toLocaleString()}</span>
-                <span class="px-1.5 py-0.5 text-[10px] rounded {log.status === 'success' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}">{log.status}</span>
+                <span class="px-1.5 py-0.5 text-[10px] rounded {log.status === 'success' ? 'bg-success/20 text-success' : 'bg-error/20 text-error'}">{log.status}</span>
               </div>
               <div class="text-xs text-muted mb-1">Input: {log.input_text}</div>
               <div class="text-xs text-content-secondary">Output: {log.output_text}</div>

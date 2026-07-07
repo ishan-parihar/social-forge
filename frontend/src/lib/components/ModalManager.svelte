@@ -174,7 +174,7 @@
         </button>
         <button
           onclick={() => resolveConfirm(true)}
-          class="px-4 py-2 text-sm text-white rounded-lg transition-colors {pc.opts.danger ? 'bg-red-600 hover:bg-red-500' : 'bg-indigo-600 hover:bg-indigo-500'}"
+          class="px-4 py-2 text-sm text-white rounded-lg transition-colors {pc.opts.danger ? 'bg-error hover:bg-error' : 'bg-brand-600 hover:bg-brand-500'}"
         >
           {pc.opts.confirmLabel || 'Confirm'}
         </button>

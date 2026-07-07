@@ -19,9 +19,9 @@
 
 {#each toasts as t (t.id)}
   <div class="fixed bottom-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg text-sm max-w-sm animate-slide-up
-    {t.type === 'success' ? 'bg-green-900 text-green-200' : ''}
-    {t.type === 'error' ? 'bg-red-900 text-red-200' : ''}
-    {t.type === 'warning' ? 'bg-yellow-900 text-yellow-200' : ''}
+    {t.type === 'success' ? 'bg-success text-success' : ''}
+    {t.type === 'error' ? 'bg-error text-error' : ''}
+    {t.type === 'warning' ? 'bg-warning text-warning' : ''}
     {t.type === 'info' ? 'bg-blue-900 text-blue-200' : ''}"
   >
     {t.type === 'success' && '✅ '}{t.type === 'error' && '❌ '}{t.type === 'warning' && '⚠️ '}{t.type === 'info' && 'ℹ️ '}

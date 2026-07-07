@@ -57,7 +57,7 @@
     {#if tweetCount === 0}
       <p class="text-xs text-muted">Add content with paragraph breaks to create a thread.</p>
     {:else if exceedsMax}
-      <p class="text-xs text-amber-400">Thread exceeds max of {maxTweets} tweets ({tweetCount} parts). Only first {maxTweets} will be posted.</p>
+      <p class="text-xs text-warning">Thread exceeds max of {maxTweets} tweets ({tweetCount} parts). Only first {maxTweets} will be posted.</p>
     {/if}
 
     {#if tweetCount > 0}
@@ -65,8 +65,8 @@
         {#each tweets as tweet, i}
           <div class="border border-line rounded-lg p-3 text-sm space-y-1">
             <div class="flex items-center justify-between">
-              <span class="text-xs font-medium text-indigo-400">Tweet {i + 1}</span>
-              <span class="text-xs {tweet.length > 280 ? 'text-red-400' : 'text-muted'}">
+              <span class="text-xs font-medium text-brand-400">Tweet {i + 1}</span>
+              <span class="text-xs {tweet.length > 280 ? 'text-error' : 'text-muted'}">
                 {tweet.length} / 280
               </span>
             </div>
@@ -78,7 +78,7 @@
       <button
         onclick={handlePostThread}
         disabled={submitting}
-        class="w-full px-3 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 rounded-lg text-sm transition-colors"
+        class="w-full px-3 py-2 bg-brand-600 hover:bg-brand-500 disabled:opacity-50 rounded-lg text-sm transition-colors"
       >
         {submitting ? "Posting..." : `Post Thread (${tweetCount} tweets)`}
       </button>

@@ -39,7 +39,7 @@
     onclick={() => onCurrentChange('global')}
     class="px-3 py-1.5 text-xs rounded-lg transition-colors flex items-center gap-1.5
       {current === 'global'
-        ? 'bg-indigo-600 text-white'
+        ? 'bg-brand-600 text-white'
         : 'text-muted hover:bg-surface-hover border border-line'}"
     title="Shared content for all channels"
   >
@@ -56,7 +56,7 @@
       onclick={() => onCurrentChange(intId)}
       class="px-3 py-1.5 text-xs rounded-lg transition-colors flex items-center gap-1.5 relative
         {isActive
-          ? 'bg-indigo-600 text-white'
+          ? 'bg-brand-600 text-white'
           : 'text-muted hover:bg-surface-hover border border-line'}"
       title={isDiverged ? 'Has per-channel override (diverged from global)' : 'Same as global'}
     >
@@ -71,7 +71,7 @@
           tabindex="0"
           onclick={(e) => { e.stopPropagation(); onRemoveIntegration(intId); }}
           onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); onRemoveIntegration(intId); } }}
-          class="ml-1 text-muted-dark hover:text-red-400 text-sm leading-none"
+          class="ml-1 text-muted-dark hover:text-error text-sm leading-none"
           title="Remove channel"
           aria-label="Remove channel"
         >&times;</span>

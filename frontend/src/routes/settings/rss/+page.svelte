@@ -113,7 +113,7 @@
       <Spinner size="lg" />
     </div>
   {:else if error}
-    <div class="bg-surface border border-red-500/30 rounded-xl p-5 text-sm text-red-400">
+    <div class="bg-surface border border-error/30 rounded-xl p-5 text-sm text-error">
       {error}
       <button onclick={loadFeeds} class="ml-2 underline">Retry</button>
     </div>
@@ -143,7 +143,7 @@
       <Spinner />
     </div>
   {:else if itemsError}
-    <div class="text-sm text-red-400">{itemsError}</div>
+    <div class="text-sm text-error">{itemsError}</div>
   {:else if items.length === 0}
     <p class="text-sm text-muted">No items found for this feed.</p>
   {:else}
@@ -158,7 +158,7 @@
             </div>
             <div class="flex-shrink-0">
               {#if item.is_imported}
-                <span class="text-xs text-green-400">Imported</span>
+                <span class="text-xs text-success">Imported</span>
               {:else}
                 <Button
                   size="sm"

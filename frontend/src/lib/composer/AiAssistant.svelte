@@ -100,7 +100,7 @@
 <div class="bg-surface border border-line rounded-xl p-4 space-y-4">
   <div class="flex items-center justify-between">
     <h3 class="text-sm font-semibold flex items-center gap-2">
-      <span class="text-indigo-400">✨</span>
+      <span class="text-brand-400">✨</span>
       AI Assistant
     </h3>
   </div>
@@ -112,7 +112,7 @@
         onclick={() => { selectedTask = task; aiResult = null; aiError = null; }}
         class="px-3 py-1.5 text-xs rounded-lg border transition-colors
           {selectedTask === task
-            ? 'bg-indigo-600/20 text-indigo-400 border-indigo-500/30'
+            ? 'bg-brand-600/20 text-brand-400 border-brand-500/30'
             : 'text-muted border-line hover:text-white hover:border-line-hover'}"
       >
         {task === "generate" ? "Generate" : task === "improve" ? "Improve" : task === "hashtags" ? "Hashtags" : task === "tone" ? "Tone" : "Summarize"}
@@ -130,7 +130,7 @@
           type="text"
           bind:value={topic}
           placeholder="e.g. Our new product launch..."
-          class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-content-secondary focus:border-indigo-500 outline-none"
+          class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-content-secondary focus:border-brand-500 outline-none"
         />
       </div>
       <div class="flex gap-3">
@@ -139,7 +139,7 @@
           <select
             id="ai-tone"
             bind:value={tone}
-            class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-content-secondary focus:border-indigo-500 outline-none"
+            class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-content-secondary focus:border-brand-500 outline-none"
           >
             {#each tones as t (t)}
               <option value={t}>{t}</option>
@@ -151,7 +151,7 @@
           <select
             id="ai-length"
             bind:value={length}
-            class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-content-secondary focus:border-indigo-500 outline-none"
+            class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-content-secondary focus:border-brand-500 outline-none"
           >
             {#each lengths as l (l)}
               <option value={l}>{l}</option>
@@ -165,7 +165,7 @@
         <select
           id="ai-target-tone"
           bind:value={tone}
-          class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-content-secondary focus:border-indigo-500 outline-none"
+          class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-content-secondary focus:border-brand-500 outline-none"
         >
           {#each tones as t (t)}
             <option value={t}>{t}</option>
@@ -183,7 +183,7 @@
   <button
     onclick={handleGenerate}
     disabled={aiLoading}
-    class="w-full px-3 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
+    class="w-full px-3 py-2 bg-brand-600 hover:bg-brand-500 disabled:opacity-50 rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
   >
     {#if aiLoading}
       <span class="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
@@ -195,7 +195,7 @@
 
   <!-- Error -->
   {#if aiError}
-    <div class="bg-red-500/10 border border-red-500/30 text-red-400 text-sm rounded-lg p-3">{aiError}</div>
+    <div class="bg-error/10 border border-error/30 text-error text-sm rounded-lg p-3">{aiError}</div>
   {/if}
 
   <!-- Result -->
@@ -207,7 +207,7 @@
       <div class="flex gap-2">
         <button
           onclick={handleInsert}
-          class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-xs transition-colors"
+          class="px-3 py-1.5 bg-brand-600 hover:bg-brand-500 rounded-lg text-xs transition-colors"
         >
           Insert
         </button>

@@ -91,7 +91,7 @@
       >
         <!-- Icon -->
         {#if m.icon === 'heart'}
-          <svg class="w-3 h-3 text-red-400" viewBox="0 0 16 16" fill="currentColor">
+          <svg class="w-3 h-3 text-error" viewBox="0 0 16 16" fill="currentColor">
             <path d="M8 3.5C6.5 1.5 3.5 1.5 2 3.5s-1 5 2 8l4 2.5 4-2.5c3-3 3.5-6 2-8s-4.5-2-6 0z"/>
           </svg>
         {:else if m.icon === 'comment'}
@@ -109,7 +109,7 @@
             <circle cx="8" cy="8" r="2" stroke-linecap="round"/>
           </svg>
         {:else if m.icon === 'bookmark'}
-          <svg class="w-3 h-3 text-amber-400" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+          <svg class="w-3 h-3 text-warning" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
             <path d="M4 2v12l4-3 4 3V2a1 1 0 00-1-1H5a1 1 0 00-1 1z" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         {:else if m.icon === 'quote'}
@@ -117,7 +117,7 @@
             <path d="M3.5 4.5A1.5 1.5 0 005 3h2v2c0 2.5-1 4-2.5 5l-1.4-.8C4.7 8.2 5 7 5 6H3.5V4.5zM9.5 4.5A1.5 1.5 0 0011 3h2v2c0 2.5-1 4-2.5 5l-1.4-.8C10.7 8.2 11 7 11 6H9.5V4.5z"/>
           </svg>
         {:else if m.icon === 'upvote'}
-          <svg class="w-3 h-3 text-orange-400" viewBox="0 0 16 16" fill="currentColor">
+          <svg class="w-3 h-3 text-warning" viewBox="0 0 16 16" fill="currentColor">
             <path d="M8 1l6 6h-4v6H6V7H2l6-6z"/>
           </svg>
         {/if}

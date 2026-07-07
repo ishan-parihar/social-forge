@@ -128,6 +128,6 @@
   </div>
 
   {#if error}
-    <div class="text-xs text-red-400">{error}</div>
+    <div class="text-xs text-error">{error}</div>
   {/if}
 </div>

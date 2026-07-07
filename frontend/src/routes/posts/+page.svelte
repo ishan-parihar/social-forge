@@ -306,12 +306,12 @@
     <div class="flex gap-2 items-center">
       <button
         onclick={() => groupByCampaign = !groupByCampaign}
-        class="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-line rounded-lg transition-colors {groupByCampaign ? 'bg-indigo-600 text-white' : 'text-muted hover:bg-surface-hover'}"
+        class="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-line rounded-lg transition-colors {groupByCampaign ? 'bg-brand-600 text-white' : 'text-muted hover:bg-surface-hover'}"
       >
         <Icon name="analytics" class="w-3.5 h-3.5" />
         {groupByCampaign ? 'Grouped' : 'Group by Campaign'}
       </button>
-      <button onclick={() => composer.openCreate()} class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm transition-colors">+ New Post</button>
+      <button onclick={() => composer.openCreate()} class="px-3 py-1.5 bg-brand-600 hover:bg-brand-500 rounded-lg text-sm transition-colors">+ New Post</button>
     </div>
   </div>
 
@@ -323,7 +323,7 @@
         bind:value={searchQuery}
         oninput={onSearchInput}
         placeholder="Search posts by content or title..."
-        class="w-full px-3 py-2 pl-9 bg-background-input border border-line rounded-lg text-sm focus:border-indigo-500 outline-none"
+        class="w-full px-3 py-2 pl-9 bg-background-input border border-line rounded-lg text-sm focus:border-brand-500 outline-none"
       />
       <span class="absolute left-3 top-1/2 -translate-y-1/2 text-muted">
         <Icon name="search" class="w-4 h-4" />
@@ -332,7 +332,7 @@
     <select
       value={sortBy}
       onchange={handleSortChange}
-      class="px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-indigo-500 outline-none"
+      class="px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-brand-500 outline-none"
       title="Sort by"
     >
       <option value="scheduled_date">Sort: Scheduled date</option>
@@ -347,12 +347,12 @@
       <span class="text-xs text-muted mr-1">Channels:</span>
       <button
         onclick={() => { filterIntegrationIds = []; currentPage = 1; load(); }}
-        class="px-2 py-1 text-[10px] rounded-md transition-colors {filterIntegrationIds.length === 0 ? 'bg-indigo-600 text-white' : 'text-muted hover:bg-surface-hover border border-line'}"
+        class="px-2 py-1 text-[10px] rounded-md transition-colors {filterIntegrationIds.length === 0 ? 'bg-brand-600 text-white' : 'text-muted hover:bg-surface-hover border border-line'}"
       >All</button>
       {#each allIntegrations as int (int.id)}
         <button
           onclick={() => toggleIntegrationFilter(int.id)}
-          class="px-2 py-1 text-[10px] rounded-md transition-colors {filterIntegrationIds.includes(int.id) ? 'bg-indigo-600 text-white' : 'text-muted hover:bg-surface-hover border border-line'}"
+          class="px-2 py-1 text-[10px] rounded-md transition-colors {filterIntegrationIds.includes(int.id) ? 'bg-brand-600 text-white' : 'text-muted hover:bg-surface-hover border border-line'}"
         >{int.provider_name}</button>
       {/each}
     </div>
@@ -363,16 +363,16 @@
     {#each filters as f}
       <button
         onclick={() => toggleFilter(f)}
-        class="px-3 py-1.5 text-xs capitalize rounded-md transition-colors {filter === f ? 'bg-indigo-600 text-white' : 'text-muted hover:bg-surface-hover'}"
+        class="px-3 py-1.5 text-xs capitalize rounded-md transition-colors {filter === f ? 'bg-brand-600 text-white' : 'text-muted hover:bg-surface-hover'}"
       >{f}</button>
     {/each}
   </div>
 
   <!-- Bulk action bar (visible when one or more posts are checked) -->
   {#if hasSelection}
-    <div class="flex items-center justify-between bg-indigo-500/10 border border-indigo-500/30 rounded-lg px-4 py-2">
+    <div class="flex items-center justify-between bg-brand-500/10 border border-brand-500/30 rounded-lg px-4 py-2">
       <div class="flex items-center gap-3">
-        <span class="text-sm text-indigo-300">{selectedIds.size} selected</span>
+        <span class="text-sm text-brand-300">{selectedIds.size} selected</span>
         <button onclick={clearSelection} class="text-xs text-muted hover:text-white">Clear</button>
       </div>
       <div class="flex items-center gap-2">
@@ -393,7 +393,7 @@
         <button
           onclick={handleBulkDelete}
           disabled={bulkActionLoading}
-          class="px-3 py-1.5 text-xs bg-red-600 hover:bg-red-500 text-white rounded-lg disabled:opacity-50 transition-colors"
+          class="px-3 py-1.5 text-xs bg-error hover:bg-error text-white rounded-lg disabled:opacity-50 transition-colors"
         >
           {bulkActionLoading ? 'Deleting...' : 'Delete'}
         </button>
@@ -403,13 +403,13 @@
 
   <!-- Post list -->
   {#if error}
-    <div class="text-center py-12 text-sm text-red-400">{error}</div>
+    <div class="text-center py-12 text-sm text-error">{error}</div>
   {:else if loading}
     <div class="text-center py-12 text-sm text-muted">Loading...</div>
   {:else if posts.length === 0}
     <div class="text-center py-12">
       <p class="text-sm text-muted mb-3">No posts found</p>
-      <button onclick={() => goto("/posts/new")} class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm transition-colors">
+      <button onclick={() => goto("/posts/new")} class="px-4 py-2 bg-brand-600 hover:bg-brand-500 rounded-lg text-sm transition-colors">
         Create your first post
       </button>
     </div>
@@ -419,7 +419,7 @@
       {#each campaignGroups as [gid, groupPosts] (gid)}
         <div class="bg-surface border border-line rounded-xl overflow-hidden">
           <div class="px-4 py-2.5 bg-surface-hover border-b border-line flex items-center gap-2">
-            <Icon name="analytics" class="w-3.5 h-3.5 text-indigo-400" />
+            <Icon name="analytics" class="w-3.5 h-3.5 text-brand-400" />
             <span class="text-sm font-medium">
               {gid === 'single' ? 'Individual Posts' : `Campaign ${gid.slice(0, 8)}`}
             </span>
@@ -475,7 +475,7 @@
               <div class="text-xs text-muted mt-0.5 flex items-center gap-2">
                 {post.integration_name}
                 {#if post.group_id}
-                  <span class="text-indigo-400">Campaign {post.group_id.slice(0, 8)}</span>
+                  <span class="text-brand-400">Campaign {post.group_id.slice(0, 8)}</span>
                 {/if}
               </div>
             </div>
@@ -484,14 +484,14 @@
             </div>
             <Badge state={post.state as "draft" | "queued" | "published" | "error"} />
             {#if post.error_message}
-              <span class="text-xs text-red-400" title={post.error_message}>!</span>
+              <span class="text-xs text-error" title={post.error_message}>!</span>
             {/if}
           </button>
           <!-- Per-row duplicate button (R-14 / U-5) -->
           <button
             onclick={() => handleDuplicate(post.id)}
             disabled={duplicatingId === post.id}
-            class="text-xs text-muted hover:text-indigo-400 disabled:opacity-50 transition-colors px-2 py-1 rounded"
+            class="text-xs text-muted hover:text-brand-400 disabled:opacity-50 transition-colors px-2 py-1 rounded"
             title="Duplicate post"
             aria-label="Duplicate post"
           >
@@ -553,7 +553,7 @@
           <input
             type="date"
             bind:value={bulkRescheduleDate}
-            class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-indigo-500 outline-none"
+            class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-brand-500 outline-none"
           />
         </div>
         <div>
@@ -561,7 +561,7 @@
           <input
             type="time"
             bind:value={bulkRescheduleTime}
-            class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-indigo-500 outline-none"
+            class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-brand-500 outline-none"
           />
         </div>
         <div>
@@ -571,7 +571,7 @@
             min="0"
             step="5"
             bind:value={bulkRescheduleSpread}
-            class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-indigo-500 outline-none"
+            class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-brand-500 outline-none"
           />
           <p class="text-[10px] text-muted-dark mt-1">0 = all at the same time. 30 = first at base, second at base+30min, etc.</p>
         </div>
@@ -584,7 +584,7 @@
         <button
           onclick={confirmBulkReschedule}
           disabled={!bulkRescheduleDate}
-          class="px-3 py-1.5 text-sm bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-lg transition-colors"
+          class="px-3 py-1.5 text-sm bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white rounded-lg transition-colors"
         >Reschedule</button>
       </div>
     </div>

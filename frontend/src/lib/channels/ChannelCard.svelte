@@ -36,11 +36,11 @@
 
   let authTypeColor = $derived.by(() => {
     const m = integration.auth_method;
-    if (m === "cookie") return "text-orange-400 border-orange-400/30 bg-orange-400/10";
-    if (m === "pat") return "text-emerald-400 border-emerald-400/30 bg-emerald-400/10";
-    if (m === "api_key") return "text-amber-400 border-amber-400/30 bg-amber-400/10";
+    if (m === "cookie") return "text-warning border-warning/30 bg-warning/10";
+    if (m === "pat") return "text-success border-success/30 bg-success/10";
+    if (m === "api_key") return "text-warning border-warning/30 bg-warning/10";
     switch (authType) {
-      case "api_key": return "text-amber-400 border-amber-400/30 bg-amber-400/10";
+      case "api_key": return "text-warning border-warning/30 bg-warning/10";
       case "web3": return "text-purple-400 border-purple-400/30 bg-purple-400/10";
       case "extension": return "text-cyan-400 border-cyan-400/30 bg-cyan-400/10";
       default: return "";
@@ -86,7 +86,7 @@
     <div class="text-sm truncate flex items-center gap-2">
       {integration.profile_name || integration.provider_name}
       {#if integration.root_internal_id}
-        <span class="text-[10px] px-1.5 py-0.5 rounded border text-indigo-400 border-indigo-400/30 bg-indigo-400/10">Page</span>
+        <span class="text-[10px] px-1.5 py-0.5 rounded border text-brand-400 border-brand-400/30 bg-brand-400/10">Page</span>
       {/if}
       {#if authTypeLabel}
         <span class="text-[10px] px-1.5 py-0.5 rounded border {authTypeColor}">{authTypeLabel}</span>
@@ -104,14 +104,14 @@
   </div>
   <div class="shrink-0 flex items-center gap-2">
     {#if integration.disabled}
-      <span class="w-2 h-2 rounded-full bg-red-500" title="Disabled"></span>
+      <span class="w-2 h-2 rounded-full bg-error" title="Disabled"></span>
     {:else if integration.refresh_needed}
       <div class="flex items-center gap-1.5">
-        <span class="w-2 h-2 rounded-full bg-yellow-500" title="Refresh needed"></span>
-        <span class="text-[10px] text-yellow-400 hidden sm:inline">Token needs refresh</span>
+        <span class="w-2 h-2 rounded-full bg-warning" title="Refresh needed"></span>
+        <span class="text-[10px] text-warning hidden sm:inline">Token needs refresh</span>
       </div>
     {:else}
-      <span class="w-2 h-2 rounded-full bg-green-500" title="Connected"></span>
+      <span class="w-2 h-2 rounded-full bg-success" title="Connected"></span>
     {/if}
     <ChannelContextMenu
       integrationId={integration.id}

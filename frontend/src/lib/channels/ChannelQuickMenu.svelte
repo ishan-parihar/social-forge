@@ -121,7 +121,7 @@
   {#if integration.refresh_needed}
     <button
       onclick={reconnect}
-      class="w-full text-left px-3 py-2 hover:bg-surface-hover transition-colors flex items-center gap-2 text-orange-400"
+      class="w-full text-left px-3 py-2 hover:bg-surface-hover transition-colors flex items-center gap-2 text-warning"
     >
       <span>🔄</span> Reconnect
     </button>
@@ -139,7 +139,7 @@
 
   <button
     onclick={deleteChannel}
-    class="w-full text-left px-3 py-2 hover:bg-surface-hover transition-colors flex items-center gap-2 text-red-400"
+    class="w-full text-left px-3 py-2 hover:bg-surface-hover transition-colors flex items-center gap-2 text-error"
   >
     <span>🗑️</span> Delete
   </button>

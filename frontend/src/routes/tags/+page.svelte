@@ -118,9 +118,9 @@
   <h2 class="text-xl font-semibold">Manage Tags</h2>
 
   {#if error}
-    <div class="bg-red-500/10 border border-red-500/30 text-red-400 text-sm rounded-lg p-3 flex items-center justify-between">
+    <div class="bg-error/10 border border-error/30 text-error text-sm rounded-lg p-3 flex items-center justify-between">
       <span>{error}</span>
-      <button onclick={() => error = null} class="text-red-400/70 hover:text-red-400">&times;</button>
+      <button onclick={() => error = null} class="text-error/70 hover:text-error">&times;</button>
     </div>
   {/if}
 
@@ -135,7 +135,7 @@
           bind:value={newName}
           placeholder="e.g. urgent, client, idea"
           onkeydown={(e) => e.key === 'Enter' && createTag()}
-          class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-indigo-500 outline-none"
+          class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-brand-500 outline-none"
         />
       </div>
       <div>
@@ -150,7 +150,7 @@
             {#each presetColors as c}
               <button
                 onclick={() => newColor = c}
-                class="w-5 h-5 rounded-full border border-line {newColor === c ? 'ring-2 ring-indigo-400' : ''}"
+                class="w-5 h-5 rounded-full border border-line {newColor === c ? 'ring-2 ring-brand-400' : ''}"
                 style="background: {c}"
                 title={c}
                 aria-label="Select color {c}"
@@ -162,7 +162,7 @@
       <button
         onclick={createTag}
         disabled={creating || !newName.trim()}
-        class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 rounded-lg text-sm transition-colors"
+        class="px-4 py-2 bg-brand-600 hover:bg-brand-500 disabled:opacity-50 rounded-lg text-sm transition-colors"
       >
         {creating ? '...' : 'Add'}
       </button>
@@ -188,32 +188,32 @@
               <input
                 type="text"
                 bind:value={editName}
-                class="flex-1 px-2 py-1 bg-background-input border border-line rounded text-sm focus:border-indigo-500 outline-none"
+                class="flex-1 px-2 py-1 bg-background-input border border-line rounded text-sm focus:border-brand-500 outline-none"
               />
               <div class="flex items-center gap-1">
                 <input type="color" bind:value={editColor} class="w-7 h-7 rounded cursor-pointer bg-transparent border-0" />
                 {#each presetColors as c}
                   <button
                     onclick={() => editColor = c}
-                    class="w-4 h-4 rounded-full border border-line {editColor === c ? 'ring-2 ring-indigo-400' : ''}"
+                    class="w-4 h-4 rounded-full border border-line {editColor === c ? 'ring-2 ring-brand-400' : ''}"
                     style="background: {c}"
                     aria-label="Select color {c}"
                   ></button>
                 {/each}
               </div>
-              <button onclick={saveEdit} disabled={savingEdit || !editName.trim()} class="text-xs text-green-400 hover:underline px-1">Save</button>
+              <button onclick={saveEdit} disabled={savingEdit || !editName.trim()} class="text-xs text-success hover:underline px-1">Save</button>
               <button onclick={cancelEdit} class="text-xs text-muted hover:underline px-1">Cancel</button>
             {:else}
               <!-- Display -->
               <span class="w-3 h-3 rounded-full flex-shrink-0" style="background: {tag.color}"></span>
               <span class="flex-1 text-sm">{tag.name}</span>
-              <button onclick={() => startEdit(tag)} class="text-xs text-muted hover:text-indigo-400 px-1" title="Edit" aria-label="Edit tag">&#9998;</button>
+              <button onclick={() => startEdit(tag)} class="text-xs text-muted hover:text-brand-400 px-1" title="Edit" aria-label="Edit tag">&#9998;</button>
               {#if deletingId === tag.id}
                 <span class="text-xs text-muted">Delete?</span>
-                <button onclick={() => confirmDelete(tag.id)} class="text-xs text-red-400 hover:underline px-1">Yes</button>
+                <button onclick={() => confirmDelete(tag.id)} class="text-xs text-error hover:underline px-1">Yes</button>
                 <button onclick={() => deletingId = null} class="text-xs text-muted hover:underline px-1">No</button>
               {:else}
-                <button onclick={() => deletingId = tag.id} class="text-xs text-muted hover:text-red-400 px-1" title="Delete" aria-label="Delete tag">&#128465;</button>
+                <button onclick={() => deletingId = tag.id} class="text-xs text-muted hover:text-error px-1" title="Delete" aria-label="Delete tag">&#128465;</button>
               {/if}
             {/if}
           </div>

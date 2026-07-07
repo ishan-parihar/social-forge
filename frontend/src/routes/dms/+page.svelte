@@ -122,7 +122,7 @@
   </div>
 
   {#if error}
-    <div class="text-center py-12 text-sm text-red-400">{error}</div>
+    <div class="text-center py-12 text-sm text-error">{error}</div>
   {:else if loading}
     <div class="text-center py-12 text-sm text-muted">Loading...</div>
   {:else if conversations.length === 0}
@@ -144,10 +144,10 @@
               class="w-full px-3 py-3 border-b border-line hover:bg-surface-hover transition-colors text-left {selectedId === conv.id ? 'bg-surface-hover' : ''}"
             >
               <div class="flex items-center gap-2 mb-1">
-                <span class="text-xs text-indigo-400">{platformIcon(conv.platform)}</span>
+                <span class="text-xs text-brand-400">{platformIcon(conv.platform)}</span>
                 <span class="text-sm font-medium truncate">{conv.participant_name || conv.participant}</span>
                 {#if conv.unread_count > 0}
-                  <span class="ml-auto px-1.5 py-0.5 text-[10px] bg-indigo-600 text-white rounded-full">{conv.unread_count}</span>
+                  <span class="ml-auto px-1.5 py-0.5 text-[10px] bg-brand-600 text-white rounded-full">{conv.unread_count}</span>
                 {/if}
               </div>
               <div class="flex items-center gap-2">
@@ -166,7 +166,7 @@
         {#if selected}
           <div class="px-4 py-3 border-b border-line">
             <div class="flex items-center gap-2">
-              <span class="text-xs text-indigo-400">{platformIcon(selected.platform)}</span>
+              <span class="text-xs text-brand-400">{platformIcon(selected.platform)}</span>
               <span class="text-sm font-medium">{selected.participant_name || selected.participant}</span>
             </div>
           </div>
@@ -174,7 +174,7 @@
           <div class="flex-1 overflow-y-auto p-4 space-y-3">
             {#each messages as msg (msg.id)}
               <div class="flex {msg.read ? 'justify-end' : 'justify-start'}">
-                <div class="page-enter max-w-[70%] {msg.read ? 'bg-indigo-600/30' : 'bg-line'} rounded-xl px-3 py-2">
+                <div class="page-enter max-w-[70%] {msg.read ? 'bg-brand-600/30' : 'bg-line'} rounded-xl px-3 py-2">
                   <p class="text-sm">{msg.content}</p>
                   <span class="text-[10px] text-muted">{new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
                 </div>
@@ -194,7 +194,7 @@
               <button
                 onclick={sendMessage}
                 disabled={sending || !newMessage.trim()}
-                class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm disabled:opacity-50 transition-colors"
+                class="px-4 py-2 bg-brand-600 hover:bg-brand-500 rounded-lg text-sm disabled:opacity-50 transition-colors"
               >
                 {sending ? "..." : "Send"}
               </button>

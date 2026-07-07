@@ -376,8 +376,8 @@
             {/if}
             {#if integrations.filter(i => i.refresh_needed).length > 0}
               <a href="/channels" class="flex items-center gap-2 p-2 rounded-lg hover:bg-surface-hover transition-colors">
-                <span class="w-2 h-2 rounded-full bg-orange-400"></span>
-                <span class="text-xs text-orange-400">{integrations.filter(i => i.refresh_needed).length} channel{integrations.filter(i => i.refresh_needed).length > 1 ? 's' : ''} need{integrations.filter(i => i.refresh_needed).length === 1 ? 's' : ''} reconnect</span>
+                <span class="w-2 h-2 rounded-full bg-warning"></span>
+                <span class="text-xs text-warning">{integrations.filter(i => i.refresh_needed).length} channel{integrations.filter(i => i.refresh_needed).length > 1 ? 's' : ''} need{integrations.filter(i => i.refresh_needed).length === 1 ? 's' : ''} reconnect</span>
               </a>
             {/if}
           </div>
@@ -415,8 +415,8 @@
           {/if}
           {#each integrations.filter(i => i.refresh_needed).slice(0, 3) as int (int.id)}
             <a href="/channels" class="flex items-center gap-2 py-1.5 px-2 -mx-2 rounded-lg hover:bg-surface-hover transition-colors group">
-              <span class="w-1.5 h-1.5 rounded-full bg-orange-400 shrink-0"></span>
-              <span class="flex-1 text-xs text-orange-400 truncate">{int.provider_name} token expiring</span>
+              <span class="w-1.5 h-1.5 rounded-full bg-warning shrink-0"></span>
+              <span class="flex-1 text-xs text-warning truncate">{int.provider_name} token expiring</span>
               <span class="text-[10px] text-muted-dark">→</span>
             </a>
           {/each}

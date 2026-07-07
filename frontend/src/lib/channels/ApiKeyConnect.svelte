@@ -80,14 +80,14 @@
 
     <div>
       <label for="api-key" class="block text-xs font-medium text-muted mb-1">
-        API Key <span class="text-red-400">*</span>
+        API Key <span class="text-error">*</span>
       </label>
       <input
         id="api-key"
         type="password"
         bind:value={apiKey}
         placeholder="Enter your API key"
-        class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-white placeholder:text-muted-dark focus:outline-none focus:border-indigo-500 transition-colors"
+        class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-white placeholder:text-muted-dark focus:outline-none focus:border-brand-500 transition-colors"
       />
     </div>
 
@@ -100,7 +100,7 @@
         type="text"
         bind:value={instanceUrl}
         placeholder="https://lemmy.world"
-        class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-white placeholder:text-muted-dark focus:outline-none focus:border-indigo-500 transition-colors"
+        class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-white placeholder:text-muted-dark focus:outline-none focus:border-brand-500 transition-colors"
       />
     </div>
 
@@ -113,12 +113,12 @@
         type="text"
         bind:value={label}
         placeholder="e.g. My Lemmy Account"
-        class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-white placeholder:text-muted-dark focus:outline-none focus:border-indigo-500 transition-colors"
+        class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-white placeholder:text-muted-dark focus:outline-none focus:border-brand-500 transition-colors"
       />
     </div>
 
     {#if errorMsg}
-      <div class="text-sm text-red-400 bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">
+      <div class="text-sm text-error bg-error/10 border border-error/20 rounded-lg px-3 py-2">
         {errorMsg}
       </div>
     {/if}

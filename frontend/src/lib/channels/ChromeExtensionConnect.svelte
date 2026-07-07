@@ -83,7 +83,7 @@
       href="https://chrome.google.com/webstore"
       target="_blank"
       rel="noopener noreferrer"
-      class="inline-flex items-center justify-center w-full gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg transition-colors"
+      class="inline-flex items-center justify-center w-full gap-2 px-4 py-2.5 bg-brand-600 hover:bg-brand-500 text-white text-sm font-medium rounded-lg transition-colors"
     >
       <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
         <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -94,7 +94,7 @@
     {#if verificationCode}
       <div class="bg-background-input border border-line rounded-lg p-4 text-center space-y-2">
         <p class="text-xs text-muted uppercase tracking-wider font-medium">Your verification code</p>
-        <p class="text-2xl font-mono font-bold tracking-[0.25em] text-indigo-400 select-all">{verificationCode}</p>
+        <p class="text-2xl font-mono font-bold tracking-[0.25em] text-brand-400 select-all">{verificationCode}</p>
         <p class="text-xs text-muted">Enter this code below to verify the extension is installed.</p>
       </div>
     {/if}
@@ -109,7 +109,7 @@
           type="text"
           bind:value={label}
           placeholder="e.g. My Skool Community"
-          class="w-full bg-background border border-line rounded-lg px-3 py-2 text-sm text-white placeholder:text-muted-dark focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          class="w-full bg-background border border-line rounded-lg px-3 py-2 text-sm text-white placeholder:text-muted-dark focus:outline-none focus:ring-1 focus:ring-brand-500"
         />
       </div>
 
@@ -121,13 +121,13 @@
           bind:value={userCode}
           placeholder="Enter the 6-character code"
           maxlength="6"
-          class="w-full bg-background border border-line rounded-lg px-3 py-2 text-sm text-white placeholder:text-muted-dark font-mono tracking-widest text-center focus:outline-none focus:ring-1 focus:ring-indigo-500 uppercase"
+          class="w-full bg-background border border-line rounded-lg px-3 py-2 text-sm text-white placeholder:text-muted-dark font-mono tracking-widest text-center focus:outline-none focus:ring-1 focus:ring-brand-500 uppercase"
           style="text-transform: uppercase;"
         />
       </div>
 
       {#if error}
-        <p class="text-xs text-red-400">{error}</p>
+        <p class="text-xs text-error">{error}</p>
       {/if}
 
       <div class="flex justify-end gap-2 pt-1">

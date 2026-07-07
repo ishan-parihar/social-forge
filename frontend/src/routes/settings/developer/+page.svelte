@@ -151,7 +151,7 @@
     <button
       onclick={() => (activeTab = 'keys')}
       class="px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px
-        {activeTab === 'keys' ? 'text-indigo-400 border-indigo-500' : 'text-muted border-transparent hover:text-content-secondary'}"
+        {activeTab === 'keys' ? 'text-brand-400 border-brand-500' : 'text-muted border-transparent hover:text-content-secondary'}"
     >
       API Keys
     </button>
@@ -168,23 +168,23 @@
     <!-- ═══════ API KEYS TAB ═══════ -->
     <div class="page-enter space-y-6">
       {#if keysError}
-        <div class="bg-surface border border-red-500/30 rounded-xl p-4 text-sm text-red-400">
+        <div class="bg-surface border border-error/30 rounded-xl p-4 text-sm text-error">
           {keysError}
           <button onclick={loadKeys} class="ml-2 underline">Retry</button>
         </div>
       {/if}
 
       {#if justCreatedKey}
-        <div class="bg-indigo-500/10 border border-indigo-500/30 rounded-xl p-4 space-y-2">
+        <div class="bg-brand-500/10 border border-brand-500/30 rounded-xl p-4 space-y-2">
           <div class="flex items-start justify-between">
             <div>
-              <p class="text-sm font-medium text-indigo-400">API Key Created</p>
+              <p class="text-sm font-medium text-brand-400">API Key Created</p>
               <p class="text-xs text-muted mt-1">Copy this key now — you won't be able to see it again.</p>
             </div>
             <button onclick={dismissKeyAlert} aria-label="Dismiss" class="text-muted hover:text-white text-sm">&times;</button>
           </div>
           <div class="flex items-center gap-2">
-            <code class="flex-1 px-3 py-2 bg-background-input border border-line rounded-lg text-sm font-mono text-indigo-300 break-all">
+            <code class="flex-1 px-3 py-2 bg-background-input border border-line rounded-lg text-sm font-mono text-brand-300 break-all">
               {justCreatedKey.full_key}
             </code>
             <Button size="sm" onclick={() => copyToClipboard(justCreatedKey.full_key)}>
@@ -203,7 +203,7 @@
 
       {#if showKeyForm}
         {#if keyFormError}
-          <div class="text-sm text-red-400 mb-2">{keyFormError}</div>
+          <div class="text-sm text-error mb-2">{keyFormError}</div>
         {/if}
         <div class="bg-surface border border-line rounded-xl p-5 space-y-4">
           <div>
@@ -213,7 +213,7 @@
               type="text"
               bind:value={newKeyName}
               placeholder="e.g. CI/CD Pipeline"
-              class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-indigo-500 outline-none"
+              class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-brand-500 outline-none"
             />
           </div>
           <div>
@@ -223,7 +223,7 @@
               type="text"
               bind:value={newKeyExpiry}
               placeholder="e.g. 2027-01-01T00:00:00Z"
-              class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-indigo-500 outline-none"
+              class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-brand-500 outline-none"
             />
           </div>
           <Button onclick={handleCreateKey} disabled={creatingKey}>
@@ -265,9 +265,9 @@
                   <td class="px-4 py-3 text-muted text-xs">{key.last_used_at ? formatDate(key.last_used_at) : 'Never'}</td>
                   <td class="px-4 py-3">
                     {#if key.is_active}
-                      <span class="px-2 py-0.5 rounded text-xs font-medium bg-green-500/20 text-green-400">Active</span>
+                      <span class="px-2 py-0.5 rounded text-xs font-medium bg-success/20 text-success">Active</span>
                     {:else}
-                      <span class="px-2 py-0.5 rounded text-xs font-medium bg-red-500/20 text-red-400">Revoked</span>
+                      <span class="px-2 py-0.5 rounded text-xs font-medium bg-error/20 text-error">Revoked</span>
                     {/if}
                   </td>
                   <td class="px-4 py-3 text-right">

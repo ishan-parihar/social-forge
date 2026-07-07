@@ -216,7 +216,7 @@
         bind:value={searchQuery}
         oninput={onSearchInput}
         placeholder="Search posts, authors, hashtags..."
-        class="w-full px-4 py-2.5 pl-10 bg-background-input border border-line rounded-lg text-sm text-content-secondary placeholder-muted focus:border-indigo-500 outline-none transition-colors"
+        class="w-full px-4 py-2.5 pl-10 bg-background-input border border-line rounded-lg text-sm text-content-secondary placeholder-muted focus:border-brand-500 outline-none transition-colors"
       />
       <span class="absolute left-3 top-1/2 -translate-y-1/2 text-muted"><Icon name="search" class="w-4 h-4" /></span>
     </div>
@@ -235,10 +235,10 @@
     <div class="flex gap-2 flex-wrap">
       {#each savedSearches as term}
         <div class="flex items-center gap-1 px-3 py-1 bg-surface border border-line rounded-full text-xs">
-          <button onclick={() => { searchQuery = term; onSearchInput(); }} class="text-muted hover:text-indigo-400 transition-colors">
+          <button onclick={() => { searchQuery = term; onSearchInput(); }} class="text-muted hover:text-brand-400 transition-colors">
             {term}
           </button>
-          <button onclick={() => removeSearch(term)} class="text-muted-dark hover:text-red-400 transition-colors ml-1">
+          <button onclick={() => removeSearch(term)} class="text-muted-dark hover:text-error transition-colors ml-1">
             ✕
           </button>
         </div>
@@ -252,7 +252,7 @@
       <button
         onclick={() => selectedProvider = p.value}
         class="px-3 py-1.5 text-xs rounded-md transition-colors whitespace-nowrap flex items-center gap-1.5
-          {selectedProvider === p.value ? 'bg-indigo-600 text-white' : 'text-muted hover:bg-surface-hover'}"
+          {selectedProvider === p.value ? 'bg-brand-600 text-white' : 'text-muted hover:bg-surface-hover'}"
       >
         <span>{p.icon}</span>
         {p.label}
@@ -289,7 +289,7 @@
         {/if}
       </p>
       {#if posts.length === 0}
-        <button onclick={importFeed} disabled={importing} class="mt-3 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm transition-colors disabled:opacity-50">
+        <button onclick={importFeed} disabled={importing} class="mt-3 px-4 py-2 bg-brand-600 hover:bg-brand-500 rounded-lg text-sm transition-colors disabled:opacity-50">
           {importing ? "Importing..." : "Import Feed"}
         </button>
       {/if}
@@ -335,7 +335,7 @@
                   <EngagementCard engagement={post.engagement} provider={post.provider} compact={true} />
                 {/if}
                 {#if post.url}
-                  <a href={post.url} target="_blank" rel="noopener" class="text-xs text-indigo-400 hover:text-indigo-300 transition-colors ml-auto">
+                  <a href={post.url} target="_blank" rel="noopener" class="text-xs text-brand-400 hover:text-brand-300 transition-colors ml-auto">
                     View original →
                   </a>
                 {/if}
@@ -365,7 +365,7 @@
       <p class="text-sm text-muted mb-4">Save "{searchQuery}" for quick access later</p>
       <div class="flex gap-3 justify-end">
         <button onclick={() => showSaveDialog = false} class="px-4 py-2 text-sm text-muted hover:text-white">Cancel</button>
-        <button onclick={saveSearch} class="px-4 py-2 text-sm bg-indigo-600 hover:bg-indigo-500 rounded-lg">Save</button>
+        <button onclick={saveSearch} class="px-4 py-2 text-sm bg-brand-600 hover:bg-brand-500 rounded-lg">Save</button>
       </div>
     </div>
   </div>

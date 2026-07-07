@@ -17,7 +17,7 @@
 {#if supportsFirstComment}
   <div class="bg-surface border border-line rounded-xl p-4 space-y-3">
     <h3 class="text-sm font-semibold flex items-center gap-2">
-      <span class="text-indigo-400">💬</span>
+      <span class="text-brand-400">💬</span>
       First Comment
     </h3>
     <p class="text-xs text-muted">A comment will be posted right after publishing (LinkedIn/Facebook only).</p>
@@ -26,7 +26,7 @@
       oninput={(e) => onFirstCommentChange?.((e.target as HTMLTextAreaElement).value)}
       placeholder="Write a first comment..."
       rows="3"
-      class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-content-secondary focus:border-indigo-500 outline-none resize-none"
+      class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-content-secondary focus:border-brand-500 outline-none resize-none"
     ></textarea>
     <div class="text-xs text-muted text-right">{firstComment.length} chars</div>
   </div>

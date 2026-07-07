@@ -54,7 +54,7 @@
            The chip itself also gets ring-2 ring-error (above) and
            the title attribute shows the error message on hover. -->
       <span
-        class="absolute -top-1 -left-1 w-3.5 h-3.5 rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center shadow-sm z-10"
+        class="absolute -top-1 -left-1 w-3.5 h-3.5 rounded-full bg-error text-white text-[8px] font-bold flex items-center justify-center shadow-sm z-10"
         title={`Publishing failed: ${event.error}`}
       >!</span>
     {/if}
@@ -95,7 +95,7 @@
     <div class="opacity-0 group-hover:opacity-100 transition-opacity duration-150 flex items-center gap-1">
       {#if event.state === 'published' && event.postUrl}
         <a href={event.postUrl} target="_blank" rel="noopener noreferrer"
-           class="text-[8px] text-indigo-400/60 hover:text-indigo-300 px-1 py-0.5 rounded transition-colors"
+           class="text-[8px] text-brand-400/60 hover:text-brand-300 px-1 py-0.5 rounded transition-colors"
            title="View original post" onclick={(e) => e.stopPropagation()}>
           🔗
         </a>

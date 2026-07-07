@@ -169,9 +169,9 @@
   </div>
 
   {#if error}
-    <div class="bg-red-900/20 border border-red-800/40 rounded-lg p-4">
-      <p class="text-red-400 text-sm">{error}</p>
-      <button onclick={() => fetchData()} class="mt-2 text-sm text-indigo-400 hover:text-indigo-300">Retry</button>
+    <div class="bg-error/20 border border-error/40 rounded-lg p-4">
+      <p class="text-error text-sm">{error}</p>
+      <button onclick={() => fetchData()} class="mt-2 text-sm text-brand-400 hover:text-brand-300">Retry</button>
     </div>
   {:else if loading}
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -187,7 +187,7 @@
         <a href="/feed" class="inline-flex items-center gap-2 px-4 py-2 bg-surface-hover text-content rounded-lg hover:bg-line-hover transition-colors text-sm">
           Import Feed
         </a>
-        <a href="/posts/new" class="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 transition-colors text-sm">
+        <a href="/posts/new" class="inline-flex items-center gap-2 px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-500 transition-colors text-sm">
           Create Post
         </a>
       </div>
@@ -199,11 +199,11 @@
         <h3 class="text-sm font-semibold mb-3">Imported Post Engagement ({days}d)</h3>
         <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
           <div>
-            <div class="text-xl font-bold text-indigo-400">{feedEngagement.posts_with_engagement}</div>
+            <div class="text-xl font-bold text-brand-400">{feedEngagement.posts_with_engagement}</div>
             <div class="text-xs text-muted">Posts w/ Engagement</div>
           </div>
           <div>
-            <div class="text-xl font-bold text-green-400">{feedEngagement.total_likes?.toLocaleString() ?? 0}</div>
+            <div class="text-xl font-bold text-success">{feedEngagement.total_likes?.toLocaleString() ?? 0}</div>
             <div class="text-xs text-muted">Total Likes</div>
           </div>
           <div>
@@ -211,7 +211,7 @@
             <div class="text-xs text-muted">Total Comments</div>
           </div>
           <div>
-            <div class="text-xl font-bold text-orange-400">{feedEngagement.total_shares?.toLocaleString() ?? 0}</div>
+            <div class="text-xl font-bold text-warning">{feedEngagement.total_shares?.toLocaleString() ?? 0}</div>
             <div class="text-xs text-muted">Total Shares</div>
           </div>
           <div>
@@ -225,19 +225,19 @@
     <!-- Summary Cards -->
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
       <div class="stat-card bg-surface border border-line rounded-xl p-4">
-        <div class="text-2xl font-bold text-indigo-400">{data.total_posts}</div>
+        <div class="text-2xl font-bold text-brand-400">{data.total_posts}</div>
         <div class="text-xs text-muted mt-1 uppercase tracking-wider">Scheduled Posts</div>
       </div>
       <div class="stat-card bg-surface border border-line rounded-xl p-4">
-        <div class="text-2xl font-bold text-green-400">{data.published}</div>
+        <div class="text-2xl font-bold text-success">{data.published}</div>
         <div class="text-xs text-muted mt-1 uppercase tracking-wider">Published</div>
       </div>
       <div class="stat-card bg-surface border border-line rounded-xl p-4">
-        <div class="text-2xl font-bold text-red-400">{data.failed}</div>
+        <div class="text-2xl font-bold text-error">{data.failed}</div>
         <div class="text-xs text-muted mt-1 uppercase tracking-wider">Failed</div>
       </div>
       <div class="stat-card bg-surface border border-line rounded-xl p-4">
-        <div class="text-2xl font-bold text-amber-400">{data.best_provider?.count ?? 0}</div>
+        <div class="text-2xl font-bold text-warning">{data.best_provider?.count ?? 0}</div>
         <div class="text-xs text-muted mt-1 uppercase tracking-wider">Best: {data.best_provider?.provider ?? '—'}</div>
       </div>
     </div>
@@ -263,11 +263,11 @@
             </div>
           </div>
         </div>
-        <div class="stat-card bg-surface border border-line rounded-xl p-4 bg-green-500/5">
+        <div class="stat-card bg-surface border border-line rounded-xl p-4 bg-success/5">
           <div class="flex items-center gap-2">
-            <Icon name="share" class="w-4 h-4 text-green-400" />
+            <Icon name="share" class="w-4 h-4 text-success" />
             <div>
-              <div class="text-xl font-bold text-green-400">{totalEngagement.shares.toLocaleString()}</div>
+              <div class="text-xl font-bold text-success">{totalEngagement.shares.toLocaleString()}</div>
               <div class="text-[10px] text-muted uppercase tracking-wider">Total Shares</div>
             </div>
           </div>
@@ -285,7 +285,7 @@
           {#each data.posts_by_day as day (day.date)}
             <div class="flex-1 flex flex-col items-center justify-end h-full">
               <div
-                class="w-full bg-indigo-500/80 rounded-t hover:bg-indigo-400 transition-colors min-h-[4px]"
+                class="w-full bg-brand-500/80 rounded-t hover:bg-brand-400 transition-colors min-h-[4px]"
                 style="height: {(day.count / maxCount) * 100}%"
                 title="{day.date}: {day.count} posts"
               ></div>
@@ -312,7 +312,7 @@
               <div class="flex items-center justify-between mb-1">
                 <span class="text-xs text-muted capitalize">{metric.label}</span>
                 {#if metric.percentage_change !== 0}
-                  <span class="text-xs {metric.percentage_change > 0 ? 'text-green-400' : 'text-red-400'}">
+                  <span class="text-xs {metric.percentage_change > 0 ? 'text-success' : 'text-error'}">
                     {metric.percentage_change > 0 ? '+' : ''}{metric.percentage_change.toFixed(1)}%
                   </span>
                 {/if}
@@ -321,7 +321,7 @@
                 {#each metric.data.slice(-14) as point}
                   <div class="flex-1 flex flex-col items-center justify-end h-full">
                     <div
-                      class="w-full bg-indigo-500/60 rounded-t hover:bg-indigo-400 transition-colors min-h-[2px]"
+                      class="w-full bg-brand-500/60 rounded-t hover:bg-brand-400 transition-colors min-h-[2px]"
                       style="height: {Math.max((parseFloat(point.total) || 0) / Math.max(...metric.data.map(d => parseFloat(d.total) || 0), 1)) * 100}%"
                       title="{point.date}: {point.total}"
                     ></div>
@@ -351,7 +351,7 @@
                 <span class="text-xs text-muted w-24 truncate">{prov.provider}</span>
                 <div class="flex-1 bg-background-input rounded-full h-6 overflow-hidden">
                   <div
-                    class="h-full bg-indigo-500/60 rounded-full transition-all duration-500 flex items-center justify-end px-2"
+                    class="h-full bg-brand-500/60 rounded-full transition-all duration-500 flex items-center justify-end px-2"
                     style="width: {(prov.count / maxProviderCount) * 100}%"
                   >
                     <span class="text-[10px] font-medium text-white">{prov.count}</span>
@@ -384,7 +384,7 @@
                       <span class="flex items-center gap-0.5 text-blue-400"><Icon name="comment-bubble" class="w-3 h-3" /> {post.comments}</span>
                     {/if}
                     {#if post.shares != null && post.shares > 0}
-                      <span class="flex items-center gap-0.5 text-green-400"><Icon name="share" class="w-3 h-3" /> {post.shares}</span>
+                      <span class="flex items-center gap-0.5 text-success"><Icon name="share" class="w-3 h-3" /> {post.shares}</span>
                     {/if}
                   </div>
                 </div>

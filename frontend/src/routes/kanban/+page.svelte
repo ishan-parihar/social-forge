@@ -53,9 +53,9 @@
   // Kanban columns — map post_state to display config.
   const columns = [
     { state: 'idea', label: '💡 Ideas', color: 'border-t-purple-500', emptyMsg: 'No ideas yet. Quick-add one below!' },
-    { state: 'draft', label: '📝 Drafts', color: 'border-t-blue-500', emptyMsg: 'No drafts. Create a post to start.' },
-    { state: 'queued', label: '📅 Scheduled', color: 'border-t-indigo-500', emptyMsg: 'No scheduled posts.' },
-    { state: 'published', label: '✅ Published', color: 'border-t-green-500', emptyMsg: 'No published posts yet.' },
+    { state: 'draft', label: '📝 Drafts', color: 'border-t-info', emptyMsg: 'No drafts. Create a post to start.' },
+    { state: 'queued', label: '📅 Scheduled', color: 'border-t-brand-500', emptyMsg: 'No scheduled posts.' },
+    { state: 'published', label: '✅ Published', color: 'border-t-success', emptyMsg: 'No published posts yet.' },
   ];
 
   let unsubscribers: (() => void)[] = [];
@@ -508,13 +508,13 @@
       <span class="text-xs text-muted">Campaign:</span>
       <button
         onclick={() => selectedCampaign = null}
-        class="px-3 py-1 text-xs rounded-lg transition-colors {!selectedCampaign ? 'bg-indigo-600 text-white' : 'text-muted hover:bg-surface-hover border border-line'}"
+        class="px-3 py-1 text-xs rounded-lg transition-colors {!selectedCampaign ? 'bg-brand-600 text-white' : 'text-muted hover:bg-surface-hover border border-line'}"
       >All</button>
       {#each campaigns as c (c.id)}
         <div class="flex items-center gap-1">
           <button
             onclick={() => selectedCampaign = selectedCampaign === c.id ? null : c.id}
-            class="px-3 py-1 text-xs rounded-lg transition-colors flex items-center gap-1.5 {selectedCampaign === c.id ? 'bg-indigo-600 text-white' : 'text-muted hover:bg-surface-hover border border-line'}"
+            class="px-3 py-1 text-xs rounded-lg transition-colors flex items-center gap-1.5 {selectedCampaign === c.id ? 'bg-brand-600 text-white' : 'text-muted hover:bg-surface-hover border border-line'}"
           >
             <span class="w-2 h-2 rounded-full" style="background: {c.color}"></span>
             {c.name}
@@ -523,7 +523,7 @@
             {/if}
           </button>
           {#if selectedCampaign === c.id}
-            <button onclick={() => deleteCampaign(c.id)} class="text-muted hover:text-red-400 text-xs" title="Delete campaign">✕</button>
+            <button onclick={() => deleteCampaign(c.id)} class="text-muted hover:text-error text-xs" title="Delete campaign">✕</button>
           {/if}
         </div>
       {/each}
@@ -815,7 +815,7 @@
         bind:value={newCampaignName}
         placeholder="e.g. Product launch Q3"
         autofocus
-        class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-indigo-500 outline-none mb-4"
+        class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-brand-500 outline-none mb-4"
         onkeydown={(e) => { if (e.key === 'Enter') confirmCreateCampaign(); if (e.key === 'Escape') createCampaignModalOpen = false; }}
       />
       <div class="flex items-center justify-end gap-2">
@@ -826,7 +826,7 @@
         <button
           onclick={confirmCreateCampaign}
           disabled={!newCampaignName.trim()}
-          class="px-3 py-1.5 text-sm bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-lg transition-colors"
+          class="px-3 py-1.5 text-sm bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white rounded-lg transition-colors"
         >Create</button>
       </div>
     </div>

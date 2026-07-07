@@ -88,7 +88,7 @@
         <textarea
           bind:value={topic}
           placeholder="e.g., 'Tips for indie hackers launching their first product' or 'The future of AI in content creation'"
-          class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-indigo-500 outline-none resize-none"
+          class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-brand-500 outline-none resize-none"
           rows="3"
         ></textarea>
       </div>
@@ -96,7 +96,7 @@
       <div class="grid grid-cols-2 gap-3">
         <div>
           <label class="text-xs text-muted block mb-1">Format</label>
-          <select bind:value={format} class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-indigo-500 outline-none">
+          <select bind:value={format} class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-brand-500 outline-none">
             <option value="one_short">Single short post</option>
             <option value="one_long">Single long post</option>
             <option value="thread_short">Short thread (3 tweets)</option>
@@ -105,7 +105,7 @@
         </div>
         <div>
           <label class="text-xs text-muted block mb-1">Tone</label>
-          <select bind:value={tone} class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-indigo-500 outline-none">
+          <select bind:value={tone} class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-brand-500 outline-none">
             <option value="personal">Personal</option>
             <option value="company">Company</option>
           </select>
@@ -118,13 +118,13 @@
       </div>
 
       {#if error}
-        <div class="text-sm text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg p-2">{error}</div>
+        <div class="text-sm text-error bg-error/10 border border-error/30 rounded-lg p-2">{error}</div>
       {/if}
 
       <button
         onclick={generate}
         disabled={!topic.trim()}
-        class="w-full px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors"
+        class="w-full px-4 py-2.5 bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors"
       >✨ Generate {count} Post{count > 1 ? 's' : ''}</button>
     </div>
   {:else if loading}
@@ -155,7 +155,7 @@
           <div class="flex gap-2">
             <button
               onclick={() => usePost(post, results.suggested_dates[i])}
-              class="px-3 py-1 text-xs bg-indigo-600 hover:bg-indigo-500 text-white rounded transition-colors"
+              class="px-3 py-1 text-xs bg-brand-600 hover:bg-brand-500 text-white rounded transition-colors"
             >Use this</button>
           </div>
         </div>
@@ -163,7 +163,7 @@
 
       <button
         onclick={useAll}
-        class="w-full px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-medium transition-colors"
+        class="w-full px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-lg text-sm font-medium transition-colors"
       >Use first post → schedule rest manually</button>
     </div>
   {/if}

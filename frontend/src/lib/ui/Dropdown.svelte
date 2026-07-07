@@ -35,7 +35,7 @@
           role="menuitem"
           onclick={() => handleClick(item.onclick)}
           disabled={item.disabled}
-          class="dropdown-item {item.variant === 'danger' ? 'text-red-400' : ''} {item.disabled ? 'opacity-50 cursor-not-allowed' : ''}"
+          class="dropdown-item {item.variant === 'danger' ? 'text-error' : ''} {item.disabled ? 'opacity-50 cursor-not-allowed' : ''}"
         >
           {item.label}
         </button>

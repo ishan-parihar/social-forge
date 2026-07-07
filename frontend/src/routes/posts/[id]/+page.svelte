@@ -82,11 +82,11 @@
       <div class="flex gap-2">
         <button
           onclick={() => composer.openEdit(post.id)}
-          class="px-3 py-1.5 text-sm bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-colors"
+          class="px-3 py-1.5 text-sm bg-brand-600 hover:bg-brand-500 rounded-lg transition-colors"
         >✏️ Edit</button>
         <button
           onclick={handleDelete}
-          class="px-3 py-1.5 text-sm text-red-400 hover:text-red-300 border border-line rounded-lg transition-colors"
+          class="px-3 py-1.5 text-sm text-error hover:text-error border border-line rounded-lg transition-colors"
         >🗑️ Delete</button>
       </div>
     {/if}
@@ -95,7 +95,7 @@
   {#if loading}
     <div class="text-center py-12 text-sm text-muted">Loading...</div>
   {:else if error}
-    <div class="text-center py-12 text-sm text-red-400">{error}</div>
+    <div class="text-center py-12 text-sm text-error">{error}</div>
   {:else if post}
     <div class="bg-surface border border-line rounded-xl p-5 space-y-4">
       <div class="flex items-center justify-between">
@@ -133,7 +133,7 @@
 
       {#if post.platform_post_url}
         <div class="border-t border-line pt-3">
-          <a href={post.platform_post_url} target="_blank" rel="noopener" class="text-xs text-indigo-400 hover:underline">
+          <a href={post.platform_post_url} target="_blank" rel="noopener" class="text-xs text-brand-400 hover:underline">
             View original post →
           </a>
         </div>
@@ -141,7 +141,7 @@
 
       {#if post.error_message}
         <div class="border-t border-line pt-3">
-          <div class="text-xs text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg p-2">
+          <div class="text-xs text-error bg-error/10 border border-error/30 rounded-lg p-2">
             {post.error_message}
           </div>
         </div>

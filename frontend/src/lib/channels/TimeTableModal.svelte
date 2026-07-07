@@ -99,7 +99,7 @@
             <span class="text-sm font-mono">{formatTime(slot.time)}</span>
             <button
               onclick={() => removeSlot(slot.time)}
-              class="text-muted hover:text-red-400 text-sm"
+              class="text-muted hover:text-error text-sm"
               aria-label="Remove time slot"
             >&times;</button>
           </div>
@@ -135,7 +135,7 @@
         </select>
         <button
           onclick={addSlot}
-          class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm transition-colors"
+          class="px-3 py-1.5 bg-brand-600 hover:bg-brand-500 text-white rounded-lg text-sm transition-colors"
         >Add</button>
       </div>
       <p class="text-xs text-muted mt-2">Preview: {formatTime(newHour * 60 + newMinute)}</p>
@@ -150,7 +150,7 @@
       <button
         onclick={save}
         disabled={saving}
-        class="px-4 py-2 text-sm bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-lg transition-colors"
+        class="px-4 py-2 text-sm bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white rounded-lg transition-colors"
       >{saving ? 'Saving...' : 'Save'}</button>
     </div>
   {/if}

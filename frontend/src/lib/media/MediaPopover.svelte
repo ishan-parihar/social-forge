@@ -110,8 +110,8 @@
       <div class="flex-1 overflow-y-auto p-5">
         {#if error}
           <div class="text-center py-12">
-            <p class="text-sm text-red-400 mb-3">{error}</p>
-            <button onclick={fetchMedia} class="text-sm text-indigo-400 hover:text-indigo-300">Retry</button>
+            <p class="text-sm text-error mb-3">{error}</p>
+            <button onclick={fetchMedia} class="text-sm text-brand-400 hover:text-brand-300">Retry</button>
           </div>
         {:else}
           <MediaGrid {items} {loading} selectable={true} onSelect={handleSelect} />

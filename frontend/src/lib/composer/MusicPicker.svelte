@@ -73,11 +73,11 @@
         bind:value={query}
         oninput={handleInput}
         placeholder="Search trending music..."
-        class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-indigo-500 outline-none"
+        class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-brand-500 outline-none"
       />
 
       {#if error}
-        <div class="text-xs text-red-400 bg-red-500/10 rounded-lg p-2">
+        <div class="text-xs text-error bg-error/10 rounded-lg p-2">
           {error}
           <br>
           <span class="text-muted">Note: Music search requires an Instagram Business/Creator account with the Facebook Login flow.</span>

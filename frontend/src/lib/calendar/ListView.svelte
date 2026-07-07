@@ -110,7 +110,7 @@
       {#each stateFilters as f}
         <button
           onclick={() => calendarState.setListState(f.value)}
-          class="px-2.5 py-1 text-[11px] rounded-md transition-colors {calendarState.state.listState === f.value ? 'bg-indigo-600 text-white' : 'text-muted hover:bg-surface-hover'}"
+          class="px-2.5 py-1 text-[11px] rounded-md transition-colors {calendarState.state.listState === f.value ? 'bg-brand-600 text-white' : 'text-muted hover:bg-surface-hover'}"
         >{f.label}</button>
       {/each}
     </div>
@@ -163,7 +163,7 @@
           <button onclick={() => onEventClick?.(event.id)} class="flex-1 flex items-center gap-4 text-left min-w-0">
             <div class="text-xs text-muted w-20 shrink-0">
               {#if event.time}
-                <span class="text-indigo-400 font-mono">{event.time}</span>
+                <span class="text-brand-400 font-mono">{event.time}</span>
               {:else if dateStr !== '__no_date__'}
                 <span class="text-muted-dark">—</span>
               {/if}
@@ -174,20 +174,20 @@
               {#if event.likes != null || event.comments != null || event.impressions != null}
                 <div class="flex gap-2 mt-0.5">
                   {#if event.likes != null}<span class="text-[10px] text-pink-400/60" title="{engagementLabel('likes', event.platform)}">{engagementIcon('likes', event.platform)} {formatMetricCount(event.likes)}</span>{/if}
-                  {#if event.comments != null}<span class="text-[10px] text-yellow-400/60" title="{engagementLabel('comments', event.platform)}">{engagementIcon('comments', event.platform)} {formatMetricCount(event.comments)}</span>{/if}
-                  {#if event.impressions != null}<span class="text-[10px] text-indigo-400/60" title="{engagementLabel('impressions', event.platform)}">{engagementIcon('impressions', event.platform)} {formatMetricCount(event.impressions)}</span>{/if}
+                  {#if event.comments != null}<span class="text-[10px] text-warning/60" title="{engagementLabel('comments', event.platform)}">{engagementIcon('comments', event.platform)} {formatMetricCount(event.comments)}</span>{/if}
+                  {#if event.impressions != null}<span class="text-[10px] text-brand-400/60" title="{engagementLabel('impressions', event.platform)}">{engagementIcon('impressions', event.platform)} {formatMetricCount(event.impressions)}</span>{/if}
                 </div>
               {/if}
             </div>
             <Badge state={event.state as "draft" | "queued" | "published" | "error"} />
             {#if event.error}
-              <span class="text-xs text-red-400" title={event.error}>⚠</span>
+              <span class="text-xs text-error" title={event.error}>⚠</span>
             {/if}
           </button>
           <div class="invisible group-hover:visible group-focus-within:visible transition-all duration-150 flex items-center gap-1 shrink-0">
             {#if event.state === 'published' && event.postUrl}
               <a href={event.postUrl} target="_blank" rel="noopener noreferrer"
-                 class="text-indigo-400 hover:text-indigo-300 px-1.5 py-0.5 rounded text-xs"
+                 class="text-brand-400 hover:text-brand-300 px-1.5 py-0.5 rounded text-xs"
                  title="View original post">🔗</a>
             {/if}
             <button onclick={() => onDuplicate?.(event.id)} class="text-muted hover:text-content px-1.5 py-0.5 rounded text-xs" title="Duplicate" aria-label="Duplicate post">📋</button>

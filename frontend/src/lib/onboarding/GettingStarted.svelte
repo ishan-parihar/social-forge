@@ -101,10 +101,10 @@
 </script>
 
 {#if !loading && !dismissed && !allDone}
-  <div class="bg-gradient-to-br from-indigo-500/10 to-purple-500/10 border border-indigo-500/30 rounded-xl p-5">
+  <div class="bg-gradient-to-br from-brand-500/10 to-purple-500/10 border border-brand-500/30 rounded-xl p-5">
     <div class="flex items-start justify-between mb-3">
       <div>
-        <h3 class="text-sm font-semibold text-indigo-300">Getting Started</h3>
+        <h3 class="text-sm font-semibold text-brand-300">Getting Started</h3>
         <p class="text-xs text-muted mt-0.5">{completedCount} of {checklist.length} complete</p>
       </div>
       <button
@@ -119,7 +119,7 @@
     <!-- Progress bar -->
     <div class="h-1.5 bg-background-input rounded-full overflow-hidden mb-4">
       <div
-        class="h-full bg-indigo-500 rounded-full transition-all duration-500"
+        class="h-full bg-brand-500 rounded-full transition-all duration-500"
         style="width: {(completedCount / checklist.length) * 100}%"
       ></div>
     </div>

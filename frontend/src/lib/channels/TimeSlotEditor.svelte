@@ -78,10 +78,10 @@
 <Modal open={show} title="Posting Time Slots" {onclose}>
     <div class="space-y-4">
         {#if error}
-            <div class="text-sm text-red-400 bg-red-400/10 rounded-md px-3 py-2">{error}</div>
+            <div class="text-sm text-error bg-error/10 rounded-md px-3 py-2">{error}</div>
         {/if}
         {#if success}
-            <div class="text-sm text-green-400 bg-green-400/10 rounded-md px-3 py-2">Saved successfully!</div>
+            <div class="text-sm text-success bg-success/10 rounded-md px-3 py-2">Saved successfully!</div>
         {/if}
 
         <p class="text-sm text-muted">Set up to 3 preferred posting times per day for this channel.</p>
@@ -93,11 +93,11 @@
                         type="time"
                         value={minToTime(slot.time)}
                         oninput={(e) => updateSlot(i, e.currentTarget.value)}
-                        class="bg-surface-hover border border-line rounded-md px-3 py-1.5 text-sm text-content-secondary focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        class="bg-surface-hover border border-line rounded-md px-3 py-1.5 text-sm text-content-secondary focus:outline-none focus:ring-1 focus:ring-brand-500"
                     />
                     <button
                         onclick={() => removeSlot(i)}
-                        class="text-muted hover:text-red-400 transition-colors text-sm"
+                        class="text-muted hover:text-error transition-colors text-sm"
                         aria-label="Remove time slot"
                     >✕</button>
                 </div>
@@ -107,7 +107,7 @@
         {#if timeslots.length < 3}
             <button
                 onclick={addSlot}
-                class="text-sm text-indigo-400 hover:text-indigo-300 transition-colors"
+                class="text-sm text-brand-400 hover:text-brand-300 transition-colors"
             >+ Add slot</button>
         {:else}
             <p class="text-xs text-muted">Maximum 3 slots reached.</p>
@@ -122,7 +122,7 @@
             <button
                 onclick={save}
                 disabled={saving}
-                class="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-md hover:bg-indigo-500 disabled:opacity-50 transition-colors"
+                class="px-3 py-1.5 text-sm bg-brand-600 text-white rounded-md hover:bg-brand-500 disabled:opacity-50 transition-colors"
             >
                 {#if saving}
                     <Spinner size="sm" />
