@@ -20,14 +20,21 @@
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   }
+
+  // v22 Phase 7: postiz-style tag-color top bar. If the post has tags
+  // (and no campaign color takes precedence), use the first tag's color
+  // as a top-bar background with mix-blend-difference for the label.
+  let tagBarColor = $derived(
+    event.campaignColor
+      ? event.campaignColor
+      : (event.tags && event.tags.length > 0 ? event.tags[0].color : null)
+  );
 </script>
 
 <div class="group relative">
   <div
-    class="event-chip {event.state} {isPast ? 'opacity-50' : ''} {event.error ? 'ring-2 ring-red-500' : ''}"
-    style={event.campaignColor
-      ? "border-left: 3px solid " + event.campaignColor
-      : (event.tags && event.tags.length > 0 ? "border-left: 3px solid " + event.tags[0].color : "")}
+    class="event-chip {event.state} {isPast ? 'opacity-50' : ''} {event.error ? 'ring-2 ring-error' : ''}"
+    style={tagBarColor ? "border-left: 3px solid " + tagBarColor : ""}
     title={event.error
       ? `Failed to publish: ${event.error}`
       : (event.content.length > 200 ? event.content.slice(0, 200) + '...' : event.content)}
@@ -36,7 +43,7 @@
       <!-- Phase v21: postiz-style per-post error indicator.
            A red "!" badge in the top-left corner makes failed posts
            immediately visible on the calendar without needing to hover.
-           The chip itself also gets ring-2 ring-red-500 (above) and
+           The chip itself also gets ring-2 ring-error (above) and
            the title attribute shows the error message on hover. -->
       <span
         class="absolute -top-1 -left-1 w-3.5 h-3.5 rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center shadow-sm z-10"

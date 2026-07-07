@@ -4,13 +4,18 @@ export function getMonthDays(year: number, month: number): Date[] {
   const first = new Date(year, month, 1);
   const last = new Date(year, month + 1, 0);
   const days: Date[] = [];
-  // Leading days (from previous month)
-  // Sunday-start grid (matches MonthView day headers)
-  const leadingDays = first.getDay(); // 0=Sun..6=Sat → how many prev-month days to fill
-  for (let i = leadingDays; i > 0; i--) days.push(new Date(year, month, 1 - i));
+  // v22 Phase 7: Monday-start grid (matches getWeekDays + postiz).
+  // Previously this was Sunday-start, which meant switching from week
+  // view (Monday-start) to month view (Sunday-start) shifted the grid
+  // by one column — confusing.
+  // getDay() returns 0=Sun..6=Sat. Convert to 0=Mon..6=Sun:
+  //   Mon=0, Tue=1, Wed=2, Thu=3, Fri=4, Sat=5, Sun=6
+  const firstDayMon = (first.getDay() + 6) % 7;
+  for (let i = firstDayMon; i > 0; i--) days.push(new Date(year, month, 1 - i));
   for (let d = 1; d <= last.getDate(); d++) days.push(new Date(year, month, d));
-  // Trailing days (from next month)
-  const trailingDays = 6 - last.getDay();
+  // Trailing days to fill the last row (Monday-start).
+  const lastDayMon = (last.getDay() + 6) % 7;
+  const trailingDays = 6 - lastDayMon;
   for (let i = 1; i <= trailingDays; i++) days.push(new Date(year, month + 1, i));
   return days;
 }
@@ -83,7 +88,9 @@ export function buildWeekDays(referenceDate: Date, events: CalendarEvent[]): Wee
 }
 
 export const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-export const days = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+// v22 Phase 7: Monday-start day labels (matches getMonthDays +
+// getWeekDays, both of which now produce Monday-start grids).
+export const days = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 export const monthsFull = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
 export function formatDateTime(iso: string): string {

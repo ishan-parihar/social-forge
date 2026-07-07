@@ -235,11 +235,15 @@
       toast('Spread must be a non-negative number', 'error');
       return;
     }
-    const baseIso = `${bulkRescheduleDate}T${bulkRescheduleTime}:00.000Z`;
-    if (isNaN(new Date(baseIso).getTime())) {
+    // v22 Phase 7: timezone-aware construction (was always-UTC Z suffix).
+    // Construct as local datetime, convert to ISO. The user types "09:00"
+    // meaning their local time, not UTC.
+    const localBase = new Date(`${bulkRescheduleDate}T${bulkRescheduleTime}:00`);
+    if (isNaN(localBase.getTime())) {
       toast('Invalid date/time', 'error');
       return;
     }
+    const baseIso = localBase.toISOString();
     bulkRescheduleModalOpen = false;
     bulkActionLoading = true;
     let failures = 0;

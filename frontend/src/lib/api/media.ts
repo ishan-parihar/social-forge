@@ -3,6 +3,11 @@ import { api } from './client';
 export interface MediaItem {
   id: string; original_name: string; url: string;
   mime_type: string; file_size: number; width?: number; height?: number;
+  // v22 Phase 7: alt text for accessibility. Previously MediaUpload
+  // saved alt text to original_name (conflating filename + alt), and
+  // ComposerModal.buildPayload read m.alt (which never existed) — so
+  // alt text was silently dropped on submit. Now it's a proper field.
+  alt?: string;
   created_at?: string;
 }
 

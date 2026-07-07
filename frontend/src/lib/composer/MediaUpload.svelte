@@ -138,14 +138,17 @@
   // Alt text editing.
   function startEditAlt(item: MediaItem) {
     editingAlt = item.id;
-    altTextDraft = item.original_name || '';
+    // v22 Phase 7: load the existing alt text (not the filename).
+    altTextDraft = item.alt || '';
   }
   function saveAlt() {
     if (editingAlt) {
-      // Find the item and update its alt text (original_name used as alt).
+      // v22 Phase 7: write alt text to item.alt (was item.original_name,
+      // which conflated filename + alt and caused ComposerModal.buildPayload
+      // to read a non-existent m.alt field — silently dropping the text).
       const item = items.find(i => i.id === editingAlt);
       if (item) {
-        item.original_name = altTextDraft;
+        item.alt = altTextDraft;
         // Trigger reactivity by creating a new array.
         onReorder?.([...items]);
       }
@@ -196,7 +199,7 @@
             </div>
           {/if}
           {#if item.mime_type.startsWith("image/")}
-            <img src={item.url} alt={item.original_name} class="w-full h-20 object-cover rounded-lg" />
+            <img src={item.url} alt={item.alt || item.original_name} class="w-full h-20 object-cover rounded-lg" />
           {:else}
             <div class="w-full h-20 bg-surface-hover rounded-lg flex items-center justify-center text-xs text-muted">
               {item.original_name}

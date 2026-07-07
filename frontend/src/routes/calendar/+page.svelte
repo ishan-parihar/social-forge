@@ -78,7 +78,11 @@
   async function bulkReschedule() {
     if (!bulkScheduleDate) return;
     bulkProcessing = true;
-    const iso = `${bulkScheduleDate}T${bulkScheduleTime}:00.000Z`;
+    // v22 Phase 7: timezone-aware construction (was always-UTC Z suffix).
+    // Construct as local datetime, convert to ISO. The user types "09:00"
+    // meaning their local time, not UTC.
+    const localDate = new Date(`${bulkScheduleDate}T${bulkScheduleTime}:00`);
+    const iso = isNaN(localDate.getTime()) ? `${bulkScheduleDate}T${bulkScheduleTime}:00.000Z` : localDate.toISOString();
     for (const id of selected) { await postsApi.schedule(id, iso); }
     selected = new Set();
     showBulkSchedule = false;
@@ -217,7 +221,9 @@
     // Phase 1: hour-precision. If a newHour was passed (from WeekView),
     // use it; otherwise fall back to the event's existing time.
     const time = newHour || event.time || "09:00";
-    const dateObj = new Date(`${newDate}T${time}:00.000Z`);
+    // v22 Phase 7: timezone-aware construction (was always-UTC Z suffix).
+    const localDate = new Date(`${newDate}T${time}:00`);
+    const dateObj = isNaN(localDate.getTime()) ? new Date(`${newDate}T${time}:00.000Z`) : localDate;
 
     let moveGroup = false;
     if (event.groupId) {

@@ -375,7 +375,9 @@
       scheduled_at: scheduledAt || undefined,
       tag_ids: selectedTagIds,
       first_comment: firstComment || undefined,
-      media: mediaItems.length > 0 ? mediaItems.map(m => ({ id: m.id, url: m.url, mime_type: m.mime_type, alt: undefined })) : undefined,
+      // v22 Phase 7: include alt text in the payload (was `alt: undefined`
+      // — a no-op that silently dropped all alt text on submit).
+      media: mediaItems.length > 0 ? mediaItems.map(m => ({ id: m.id, url: m.url, mime_type: m.mime_type, alt: m.alt })) : undefined,
       overrides: Object.keys(overridesObj).length > 0 ? overridesObj : undefined,
       settings: {
         ...settings,
