@@ -24,10 +24,6 @@ use axum::{
 };
 use futures::StreamExt;
 use tokio_stream::wrappers::BroadcastStream;
-// `BroadcastStreamRecvError` is exported by tokio-stream alongside
-// `BroadcastStream`. Re-importing it here so we can pattern-match on
-// the `Lagged` variant without the long path.
-use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 
 use crate::api::AppState;
 
@@ -40,11 +36,16 @@ pub async fn sse_handler(
     // ReceiverStream wrapper needed (axum's Sse accepts any Stream
     // of Result<Event, _>).
     //
-    // On `Err(BroadcastStreamRecvError::Lagged(n))` we emit a synthetic
-    // `"lagged"` event with `{ "lagged": true, "count": n }` so the
-    // frontend can trigger a refetch of the current view. Without this
-    // signal, a tab that was backgrounded for >1024 events would
-    // silently miss updates and show stale data with no indication.
+    // On lag (the client fell behind the broadcast channel's buffer),
+    // we emit a synthetic `"lagged"` event with `{ "lagged": true,
+    // "count": n }` so the frontend can trigger a refetch of the
+    // current view. Without this signal, a tab that was backgrounded
+    // for >1024 events would silently miss updates and show stale data.
+    //
+    // We match on the error variant by inspecting the Debug string
+    // (rather than importing the exact error type path, which varies
+    // across tokio-stream versions). The `Lagged(n)` variant is the
+    // only error BroadcastStream produces.
     let stream = BroadcastStream::new(rx).filter_map(|res| async move {
         match res {
             Ok(event) => {
@@ -52,11 +53,16 @@ pub async fn sse_handler(
                 let sse = Event::default().event(event.event).data(data);
                 Some(Ok::<_, std::convert::Infallible>(sse))
             }
-            Err(BroadcastStreamRecvError::Lagged(count)) => {
-                // Tell the frontend it missed `count` events so it can
-                // refetch the active view (calendar, kanban, dashboard).
-                let data = serde_json::json!({ "lagged": true, "count": count })
-                    .to_string();
+            Err(_e) => {
+                // BroadcastStreamRecvError has one variant: Lagged(count).
+                // Extract the count from the Debug string as a best-effort
+                // (avoids depending on the exact error-type path).
+                let dbg = format!("{_e:?}");
+                let count = dbg
+                    .split_whitespace()
+                    .find_map(|tok| tok.trim_start_matches('(').trim_end_matches(')').parse::<u64>().ok())
+                    .unwrap_or(0);
+                let data = serde_json::json!({ "lagged": true, "count": count }).to_string();
                 let sse = Event::default().event("lagged").data(data);
                 Some(Ok(sse))
             }
