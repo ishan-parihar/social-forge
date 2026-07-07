@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { postsApi, type PostSummary } from '$lib/api/posts';
-  import { analyticsApi, type AnalyticsSummary } from '$lib/api/analytics';
+  import { analyticsApi, type AnalyticsSummary, type EngagementResponse, type AdherenceResponse, type CadenceResponse, type EventLogEntry } from '$lib/api/analytics';
   import { feedApi } from '$lib/api/feed';
   import { integrationsApi, type Integration } from '$lib/api/integrations';
   import { auth } from '$lib/api/auth';
@@ -28,6 +28,12 @@
   let integrations = $state<Integration[]>([]);
   let loading = $state(true);
 
+  // v24-3: new analytics data from the v23-1 endpoints.
+  let engagementData = $state<EngagementResponse | null>(null);
+  let adherenceData = $state<AdherenceResponse | null>(null);
+  let cadenceData = $state<CadenceResponse | null>(null);
+  let recentEvents = $state<EventLogEntry[]>([]);
+
   // Engagement totals from real feed analytics data (7d)
   let totalEngagement = $derived({
     likes: feedEngagement?.total_likes ?? 0,
@@ -39,16 +45,25 @@
 
   async function load() {
     loading = true;
-    const [postsRes, summaryRes, integRes, feedRes] = await Promise.all([
+    // v24-3: fetch the new analytics endpoints in parallel with the existing ones.
+    const [postsRes, summaryRes, integRes, feedRes, engagementRes, adherenceRes, cadenceRes, eventsRes] = await Promise.all([
       postsApi.list({ limit: 100 }),
       analyticsApi.getSummary(7),
       integrationsApi.list(),
       feedApi.analytics(7),
+      analyticsApi.getEngagement(7),
+      analyticsApi.getAdherence(7),
+      analyticsApi.getCadence(30),
+      analyticsApi.getRecentEvents(10),
     ]);
 
     if (feedRes.data) {
       feedEngagement = feedRes.data;
     }
+    if (engagementRes.data) engagementData = engagementRes.data;
+    if (adherenceRes.data) adherenceData = adherenceRes.data;
+    if (cadenceRes.data) cadenceData = cadenceRes.data;
+    if (eventsRes.data) recentEvents = eventsRes.data;
 
     if (postsRes.data) {
       const all = postsRes.data.posts;
@@ -208,6 +223,67 @@
             </div>
           </div>
         </div>
+      </div>
+    {/if}
+
+    <!-- v24-3: Adherence + Cadence widgets (from v23-1 endpoints) -->
+    {#if adherenceData || cadenceData}
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {#if adherenceData}
+          <div class="bg-surface border border-line rounded-xl p-5">
+            <h3 class="font-medium text-sm mb-3">Scheduled vs Actual (7d)</h3>
+            <div class="grid grid-cols-3 gap-3 mb-3">
+              <div class="text-center">
+                <div class="text-2xl font-bold text-warning">{adherenceData.scheduled}</div>
+                <div class="text-[10px] text-muted uppercase tracking-wider">Scheduled</div>
+              </div>
+              <div class="text-center">
+                <div class="text-2xl font-bold text-success">{adherenceData.published}</div>
+                <div class="text-[10px] text-muted uppercase tracking-wider">Published</div>
+              </div>
+              <div class="text-center">
+                <div class="text-2xl font-bold text-error">{adherenceData.failed}</div>
+                <div class="text-[10px] text-muted uppercase tracking-wider">Failed</div>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <div class="flex-1 bg-background-input rounded-full h-2 overflow-hidden">
+                <div class="h-full bg-success rounded-full transition-all duration-500" style="width: {adherenceData.adherence_rate}%"></div>
+              </div>
+              <span class="text-sm font-medium text-success">{Math.round(adherenceData.adherence_rate)}%</span>
+            </div>
+            <p class="text-[10px] text-muted-dark mt-2">Adherence rate: published / scheduled × 100</p>
+          </div>
+        {/if}
+        {#if cadenceData}
+          <div class="bg-surface border border-line rounded-xl p-5">
+            <h3 class="font-medium text-sm mb-3">Posting Cadence (30d)</h3>
+            <div class="grid grid-cols-3 gap-3 mb-3">
+              <div class="text-center">
+                <div class="text-2xl font-bold text-brand-400">{cadenceData.actual_per_day.toFixed(1)}</div>
+                <div class="text-[10px] text-muted uppercase tracking-wider">Posts/day</div>
+              </div>
+              <div class="text-center">
+                <div class="text-2xl font-bold text-warning">{cadenceData.streak_days}</div>
+                <div class="text-[10px] text-muted uppercase tracking-wider">Day streak</div>
+              </div>
+              <div class="text-center">
+                <div class="text-2xl font-bold text-info">{cadenceData.total_posts}</div>
+                <div class="text-[10px] text-muted uppercase tracking-wider">Total (30d)</div>
+              </div>
+            </div>
+            {#if cadenceData.goal_per_day !== null}
+              <div class="flex items-center gap-2">
+                <div class="flex-1 bg-background-input rounded-full h-2 overflow-hidden">
+                  <div class="h-full bg-brand-500 rounded-full transition-all duration-500" style="width: {Math.min(100, (cadenceData.actual_per_day / cadenceData.goal_per_day) * 100)}%"></div>
+                </div>
+                <span class="text-xs text-muted">Goal: {cadenceData.goal_per_day}/day</span>
+              </div>
+            {:else}
+              <p class="text-[10px] text-muted-dark">Set a posting-frequency goal in Brand Profile to track progress.</p>
+            {/if}
+          </div>
+        {/if}
       </div>
     {/if}
 
@@ -371,6 +447,38 @@
         {/if}
       </div>
     </div>
+
+    <!-- v24-3: Recent Events widget (from events_log via v23-1 endpoint) -->
+    {#if recentEvents.length > 0}
+      <div class="bg-surface border border-line rounded-xl p-5">
+        <h3 class="font-medium text-sm mb-3">Recent Events</h3>
+        <div class="space-y-1">
+          {#each recentEvents as evt (evt.id)}
+            <div class="flex items-center gap-3 py-1.5 border-b border-line last:border-0">
+              <span class="w-1.5 h-1.5 rounded-full shrink-0 {evt.event_type === 'post_published' ? 'bg-success' : evt.event_type === 'post_failed' ? 'bg-error' : 'bg-info'}"></span>
+              <span class="flex-1 text-xs text-content-secondary">
+                {#if evt.event_type === 'post_published'}
+                  Post published
+                {:else if evt.event_type === 'post_failed'}
+                  Post failed: {evt.payload?.error ?? 'unknown error'}
+                {:else if evt.event_type === 'post_scheduled'}
+                  Post scheduled
+                {:else if evt.event_type === 'post_created'}
+                  Post created
+                {:else if evt.event_type === 'post_deleted'}
+                  Post deleted
+                {:else if evt.event_type === 'post_stage_changed'}
+                  Post moved to {evt.payload?.state ?? 'new state'}
+                {:else}
+                  {evt.event_type}
+                {/if}
+              </span>
+              <span class="text-[10px] text-muted-dark">{new Date(evt.created_at).toLocaleTimeString()}</span>
+            </div>
+          {/each}
+        </div>
+      </div>
+    {/if}
 
     <!-- Quick Actions -->
     <div class="flex gap-3 flex-wrap">
