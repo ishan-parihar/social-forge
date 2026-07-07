@@ -1131,7 +1131,27 @@ impl SocialProvider for XProvider {
                 body["media"] = serde_json::json!({ "media_ids": media_ids });
             }
         }
-        let json = self.v2_post("https://api.twitter.com/2/tweets", access_token, &body).await?;
+        // v22 Phase 2 (D.1): Send Idempotency-Key header on X v2 POST
+        // /2/tweets. X deduplicates requests with the same key for 24h,
+        // which prevents double-publish when a retry happens after a
+        // crash that left the post in `publishing` state. The key is
+        // generated per-post (posts.idempotency_key column) and
+        // regenerated on `reset_post_for_republish`.
+        let mut req = self
+            .http
+            .post("https://api.twitter.com/2/tweets")
+            .header(header::AUTHORIZATION, format!("Bearer {access_token}"))
+            .json(&body);
+        if let Some(ref key) = post.idempotency_key {
+            req = req.header("Idempotency-Key", key);
+        }
+        let resp = req
+            .send()
+            .await
+            .map_err(|e| ProviderError::Api(format!("X v2 POST error: {e}")))?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await.map_err(|e| ProviderError::Api(e.to_string()))?;
+        self.check_v2_response(status, &json)?;
         let post_id = json["data"]["id"].as_str().unwrap_or("").to_string();
         Ok(PublishResult {
             platform_post_url: Some(format!("https://twitter.com/user/status/{post_id}")),

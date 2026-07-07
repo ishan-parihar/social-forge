@@ -375,6 +375,12 @@ async fn process_due_posts(
     // Tracked task set — we await all of these before returning.
     let mut join_set: tokio::task::JoinSet<()> = tokio::task::JoinSet::new();
 
+    // v22 Phase 2 (BUG #1): track post IDs that are still in-flight so
+    // that on scheduler timeout we can abort the JoinSet AND mark the
+    // remaining posts as `error` (instead of leaving them detached in
+    // `publishing` state until the next process restart).
+    let mut inflight_post_ids: Vec<uuid::Uuid> = Vec::with_capacity(posts_to_publish.len());
+
     for post in &posts_to_publish {
         let provider = match providers.get(&post.provider_identifier) {
             Some(p) => p,
@@ -388,18 +394,18 @@ async fn process_due_posts(
             }
         };
 
-        // Acquire the per-provider concurrency permit BEFORE spawning
-        // so that we serialize same-platform publishes. The permit is
-        // moved into the task and released when the task completes.
-        let semaphore = providers.concurrency(&post.provider_identifier);
-        let permit = match semaphore.as_ref() {
-            Some(sem) => match sem.clone().acquire_owned().await {
-                Ok(p) => Some(p),
-                // Semaphore closed — shouldn't happen, but proceed without throttling.
-                Err(_) => None,
-            },
-            None => None,
-        };
+        // v22 Phase 2 (BUG #2): clone the Semaphore Arc and move it
+        // into the spawned task instead of acquiring the permit
+        // serially here. Previously `acquire_owned().await` happened
+        // in the main scheduler task BEFORE `join_set.spawn`, so if
+        // one provider's semaphore was exhausted (limit=1, in-flight
+        // publish slow), the scheduler BLOCKED on that single acquire
+        // and never spawned the other providers' publishes. For 30
+        // queued posts across 3 providers, if X's permit was held for
+        // 60s, the Reddit/LinkedIn posts waited 60s before they even
+        // started. Now each task acquires its own permit inside the
+        // spawned future, so all providers make progress in parallel.
+        let semaphore = providers.concurrency(&post.provider_identifier).cloned();
 
         let db_clone = db.clone();
         let provider_clone = provider.clone();
@@ -407,10 +413,21 @@ async fn process_due_posts(
         let bcast = broadcaster.clone();
         let tk = token_key; // Copy (Option<[u8; 32]> implements Copy)
         let cb = providers.circuit_breaker(&post.provider_identifier);
+        inflight_post_ids.push(post.id);
         join_set.spawn(async move {
-            // `_permit` is held for the duration of the publish call,
-            // then dropped automatically when the task exits.
-            let _permit = permit;
+            // Acquire the per-provider concurrency permit INSIDE the
+            // spawned task so the scheduler doesn't block on a slow
+            // provider. The permit is released automatically when the
+            // task exits (success or failure).
+            let _permit = match semaphore.as_ref() {
+                Some(sem) => match sem.acquire_owned().await {
+                    Ok(p) => Some(p),
+                    // Semaphore closed — shouldn't happen, but proceed
+                    // without throttling rather than skipping the post.
+                    Err(_) => None,
+                },
+                None => None,
+            };
 
             match publish_post(&db_clone, provider_clone.as_ref(), &post_clone, &bcast, tk).await {
                 Ok(()) => {
@@ -457,7 +474,36 @@ async fn process_due_posts(
             Ok(Some(Ok(()))) => { /* task completed normally */ }
             Ok(None) => break, // JoinSet empty
             Err(_) => {
-                tracing::warn!("Publish task timed out after 300s — leaving it detached");
+                // v22 Phase 2 (BUG #1): on timeout, ABORT all remaining
+                // tasks (don't leave them detached) and mark their posts
+                // as `error`. Previously the code just `break`ed, leaving
+                // the still-running tasks detached — they'd eventually
+                // write `published`/`error` from a context the operator
+                // had no visibility into, and the posts sat in
+                // `publishing` until the next process restart.
+                tracing::warn!(
+                    "Scheduler drain timed out after 300s — aborting {} remaining publish task(s)",
+                    join_set.len()
+                );
+                join_set.abort_all();
+                // Mark the posts we know are still in-flight as error.
+                // (Tasks that completed normally already wrote their own
+                // state; the abort_all above stops the rest.)
+                for pid in &inflight_post_ids {
+                    let _ = mark_post_error(
+                        db,
+                        *pid,
+                        "Publish timed out after 300s — aborted by scheduler",
+                    )
+                    .await;
+                    broadcaster.send(
+                        "post_failed",
+                        &serde_json::json!({
+                            "id": pid.to_string(),
+                            "error": "Publish timed out after 300s — aborted by scheduler",
+                        }),
+                    );
+                }
                 break;
             }
         }

@@ -105,26 +105,70 @@ impl CircuitBreaker {
     ///
     /// If the circuit is open but the cooldown has elapsed, this
     /// transitions to half-open and allows one request through.
+    ///
+    /// v22 Phase 2 (BUG #3): Half-open now admits exactly ONE request.
+    /// Previously `allow_request()` returned `true` unconditionally for
+    /// half-open, so if 5 posts for the same provider were claimed in
+    /// one tick and the circuit just transitioned to half-open, all 5
+    /// were spawned, all 5 hit the platform, and 5 failures re-opened
+    /// the circuit — defeating the purpose of half-open. Now we
+    /// atomically transition half-open → open on first admission using
+    /// `compare_exchange`, so subsequent callers in the same tick see
+    /// `open` and are rejected.
     pub fn allow_request(&self) -> bool {
         use std::sync::atomic::Ordering;
         let state = self.state.load(Ordering::SeqCst);
         match state {
-            0 => true, // closed
+            0 => true, // closed — all requests pass
             1 => {
                 // open — check if cooldown elapsed
                 let now = chrono::Utc::now().timestamp();
                 let opened = self.opened_at.load(Ordering::SeqCst);
                 if now - opened >= self.cooldown_secs {
-                    // transition to half-open
-                    self.state.store(2, Ordering::SeqCst);
+                    // Attempt to transition open → half-open atomically.
+                    // If another thread beat us to it, we'll see the
+                    // updated state and fall through to the half-open
+                    // branch below.
+                    let _ = self.state.compare_exchange(1, 2, Ordering::SeqCst, Ordering::SeqCst);
                     tracing::info!("Circuit breaker → half-open (cooldown elapsed)");
-                    true
+                    // Fall through to half-open handling: admit exactly one.
+                    self.admit_one_from_half_open()
                 } else {
                     false
                 }
             }
-            2 => true, // half-open — allow one request
+            2 => {
+                // half-open — admit exactly one request, then flip back
+                // to open so concurrent callers in the same tick are
+                // rejected. The single admitted request will either
+                // record_success (→ closed) or record_failure (→ open
+                // with full cooldown).
+                self.admit_one_from_half_open()
+            }
             _ => true,
+        }
+    }
+
+    /// Atomically admit one request from the half-open state by
+    /// transitioning half-open → open. The admitted request's outcome
+    /// (record_success / record_failure) will then determine the next
+    /// transition. Returns `true` if this caller won the admission
+    /// race, `false` if another caller already won it.
+    fn admit_one_from_half_open(&self) -> bool {
+        use std::sync::atomic::Ordering;
+        // Try to flip 2 (half-open) → 1 (open). If we succeed, we're
+        // the one admitted request. If we fail, someone else already
+        // claimed the slot — reject.
+        match self.state.compare_exchange(2, 1, Ordering::SeqCst, Ordering::SeqCst) {
+            Ok(_) => {
+                // We won the admission race. Set opened_at so the
+                // cooldown for the NEXT half-open attempt starts now
+                // (in case record_success/record_failure never fires,
+                // e.g. the task panics).
+                self.opened_at.store(chrono::Utc::now().timestamp(), Ordering::SeqCst);
+                true
+            }
+            Err(_) => false, // someone else was admitted; reject
         }
     }
 
