@@ -47,12 +47,11 @@
     }
   });
 
-  function handleRename() {
-    const newName = prompt("Rename channel:", integration.profile_name || integration.provider_name || "");
-    if (newName && newName !== (integration.profile_name || integration.provider_name)) {
-      // Rename not yet implemented
-    }
-  }
+  // Phase v21: handleRename removed. The function was a stub that called
+  // native prompt() but then did nothing ("Rename not yet implemented").
+  // Removing dead code per YAGNI. When channel rename is actually
+  // implemented, it should use a proper modal + a PUT /api/integrations/{id}
+  // endpoint (which also doesn't exist yet).
 
   function handleCopyId() {
     navigator.clipboard.writeText(integration.id);
@@ -122,7 +121,7 @@
       isRefreshing={isRefreshing}
       onRefreshToken={integration.refresh_needed || authType === "oauth" ? () => onRefresh?.(integration.id) : undefined}
       onReconnect={onReconnect ? () => onReconnect(integration.id) : undefined}
-      onRename={handleRename}
+      onRename={undefined}
       onToggleDisable={handleToggleDisable}
       onCopyId={handleCopyId}
       onDelete={handleDelete}

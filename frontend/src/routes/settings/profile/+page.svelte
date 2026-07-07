@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { toast } from "$lib/stores/toast";
+  import { modals } from '$lib/stores/modals.svelte';
 
   // Brand profile stored in localStorage — used by AI assistant for
   // content generation context. No backend changes needed.
@@ -73,8 +74,14 @@
     saving = false;
   }
 
-  function clearProfile() {
-    if (!confirm("Clear all brand profile data?")) return;
+  async function clearProfile() {
+    if (!(await modals.areYouSure({
+      title: 'Clear all brand profile data?',
+      message: 'This will reset brand name, description, tone of voice, and topics to their defaults.',
+      confirmLabel: 'Clear',
+      cancelLabel: 'Cancel',
+      danger: true,
+    }))) return;
     localStorage.removeItem("sf_brand_profile");
     brandName = "";
     brandDescription = "";

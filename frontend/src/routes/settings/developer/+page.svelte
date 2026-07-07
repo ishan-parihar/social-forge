@@ -5,6 +5,7 @@
   import Modal from '$lib/ui/Modal.svelte';
   import Spinner from '$lib/ui/Spinner.svelte';
   import { developerApi, type ApiKeySummary, type ApiKeyCreated } from '$lib/api/developer';
+  import { modals } from '$lib/stores/modals.svelte';
 
   // ── Tab state ────────────────────────────────────────────────
   let activeTab = $state<'keys'>('keys');
@@ -67,7 +68,13 @@
   }
 
   async function handleRevokeKey(id: string) {
-    if (!confirm('Revoke this API key? This action cannot be undone.')) return;
+    if (!(await modals.areYouSure({
+      title: 'Revoke this API key?',
+      message: 'This action cannot be undone. Any application using this key will immediately lose access.',
+      confirmLabel: 'Revoke',
+      cancelLabel: 'Cancel',
+      danger: true,
+    }))) return;
     revivingKey = id;
     try {
       const r = await developerApi.revokeKey(id);
@@ -81,7 +88,13 @@
   }
 
   async function handleRegenerateKey(id: string) {
-    if (!confirm('Regenerate this API key? The old key will stop working immediately.')) return;
+    if (!(await modals.areYouSure({
+      title: 'Regenerate this API key?',
+      message: 'The old key will stop working immediately. Copy the new key — you won\'t be able to see it again after closing this page.',
+      confirmLabel: 'Regenerate',
+      cancelLabel: 'Cancel',
+      danger: true,
+    }))) return;
     regeneratingKey = id;
     justCreatedKey = null;
     try {

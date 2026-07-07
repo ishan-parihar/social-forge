@@ -1,6 +1,7 @@
 <script lang="ts">
   import Modal from '$lib/ui/Modal.svelte';
   import Button from '$lib/ui/Button.svelte';
+  import { modals } from '$lib/stores/modals.svelte';
 
   export interface PostSet {
     id: string;
@@ -98,7 +99,13 @@
 
   async function handleDelete(e: MouseEvent, id: string) {
     e.stopPropagation();
-    if (!confirm('Delete this post set?')) return;
+    if (!(await modals.areYouSure({
+      title: 'Delete this post set?',
+      message: 'The template will be permanently deleted. Posts already created from it are unaffected.',
+      confirmLabel: 'Delete',
+      cancelLabel: 'Cancel',
+      danger: true,
+    }))) return;
     try {
       await fetch(`/api/sets/${id}`, { method: 'DELETE', credentials: 'include' });
       savedSets = savedSets.filter(s => s.id !== id);

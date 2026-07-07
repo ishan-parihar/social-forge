@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { webhooksApi, type Webhook, type WebhookDelivery } from "$lib/api/webhooks";
   import { toast } from "$lib/stores/toast";
+  import { modals } from '$lib/stores/modals.svelte';
 
   let webhooks = $state<Webhook[]>([]);
   let loading = $state(true);
@@ -85,7 +86,13 @@
   }
 
   async function deleteWebhook(id: string) {
-    if (!confirm("Delete this webhook?")) return;
+    if (!(await modals.areYouSure({
+      title: 'Delete this webhook?',
+      message: 'The webhook will be permanently deleted. Any pending deliveries will be cancelled.',
+      confirmLabel: 'Delete',
+      cancelLabel: 'Cancel',
+      danger: true,
+    }))) return;
     const r = await webhooksApi.delete(id);
     if (r.error) {
       toast(`Delete failed: ${r.error}`, "error");

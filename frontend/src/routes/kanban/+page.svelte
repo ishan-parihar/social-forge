@@ -24,6 +24,12 @@
   let loading = $state(true);
   let draggingId = $state<string | null>(null);
 
+  // Phase v21: campaign-create modal state. Previously used native
+  // prompt() which is jarring and can't be styled. Now we render a
+  // small inline modal with a text input + Create/Cancel buttons.
+  let createCampaignModalOpen = $state(false);
+  let newCampaignName = $state('');
+
   // Kanban columns — map post_state to display config.
   const columns = [
     { state: 'idea', label: '💡 Ideas', color: 'border-t-purple-500', emptyMsg: 'No ideas yet. Quick-add one below!' },
@@ -137,9 +143,19 @@
   }
 
   // Create a new campaign.
-  async function createCampaign() {
-    const name = prompt('Campaign name:');
+  // Phase v21: replaced native prompt() with an inline modal
+  // (createCampaignModalOpen + newCampaignName state). The modal markup
+  // is at the bottom of the file. confirmCreateCampaign() does the
+  // actual API call after the user types a name and clicks Create.
+  function openCreateCampaignModal() {
+    newCampaignName = '';
+    createCampaignModalOpen = true;
+  }
+
+  async function confirmCreateCampaign() {
+    const name = newCampaignName.trim();
     if (!name) return;
+    createCampaignModalOpen = false;
     const r = await campaignsApi.create({ name, color: '#6366f1' });
     if (r.error) {
       toast(`Failed: ${r.error}`, 'error');
@@ -150,8 +166,16 @@
   }
 
   // Delete a campaign.
+  // Phase v21: replaced native confirm() with modals.areYouSure.
   async function deleteCampaign(id: string) {
-    if (!confirm('Delete this campaign? Posts will be unassigned.')) return;
+    const ok = await modals.areYouSure({
+      title: 'Delete this campaign?',
+      message: 'Posts in this campaign will be unassigned (not deleted). You can re-assign them to another campaign later.',
+      confirmLabel: 'Delete',
+      cancelLabel: 'Cancel',
+      danger: true,
+    });
+    if (!ok) return;
     const r = await campaignsApi.delete(id);
     if (r.error) {
       toast(`Failed: ${r.error}`, 'error');
@@ -178,7 +202,7 @@
       <p class="text-sm text-muted mt-1">Drag posts between columns to move them through your content pipeline.</p>
     </div>
     <div class="flex gap-2">
-      <button onclick={createCampaign} class="px-3 py-1.5 text-sm border border-line rounded-lg text-muted hover:text-white hover:bg-surface-hover transition-colors">
+      <button onclick={openCreateCampaignModal} class="px-3 py-1.5 text-sm border border-line rounded-lg text-muted hover:text-white hover:bg-surface-hover transition-colors">
         + Campaign
       </button>
     </div>
@@ -293,3 +317,42 @@
     </div>
   {/if}
 </div>
+
+<!-- Phase v21: campaign-create modal — replaces native prompt(). -->
+{#if createCampaignModalOpen}
+  <div
+    class="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+    onclick={() => (createCampaignModalOpen = false)}
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="create-campaign-title"
+  >
+    <div
+      class="bg-surface border border-line rounded-xl shadow-2xl w-full max-w-md p-5"
+      onclick={(e) => e.stopPropagation()}
+    >
+      <h3 id="create-campaign-title" class="text-lg font-semibold mb-1">New campaign</h3>
+      <p class="text-xs text-muted mb-4">Campaigns group related posts together on the calendar.</p>
+      <label class="text-sm text-muted block mb-1.5">Name</label>
+      <input
+        type="text"
+        bind:value={newCampaignName}
+        placeholder="e.g. Product launch Q3"
+        autofocus
+        class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-indigo-500 outline-none mb-4"
+        onkeydown={(e) => { if (e.key === 'Enter') confirmCreateCampaign(); if (e.key === 'Escape') createCampaignModalOpen = false; }}
+      />
+      <div class="flex items-center justify-end gap-2">
+        <button
+          onclick={() => (createCampaignModalOpen = false)}
+          class="px-3 py-1.5 text-sm text-muted hover:text-content border border-line rounded-lg transition-colors"
+        >Cancel</button>
+        <button
+          onclick={confirmCreateCampaign}
+          disabled={!newCampaignName.trim()}
+          class="px-3 py-1.5 text-sm bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-lg transition-colors"
+        >Create</button>
+      </div>
+    </div>
+  </div>
+{/if}

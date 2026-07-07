@@ -4,6 +4,7 @@
   import Button from '$lib/ui/Button.svelte';
   import Spinner from '$lib/ui/Spinner.svelte';
   import { signaturesApi, type Signature } from '$lib/api/signatures';
+  import { modals } from '$lib/stores/modals.svelte';
 
   let signatures = $state<Signature[]>([]);
   let loading = $state(true);
@@ -109,7 +110,13 @@
   }
 
   async function handleDelete(id: string) {
-    if (!confirm('Delete this signature?')) return;
+    if (!(await modals.areYouSure({
+      title: 'Delete this signature?',
+      message: 'The signature will be permanently deleted. Posts that referenced it are unaffected.',
+      confirmLabel: 'Delete',
+      cancelLabel: 'Cancel',
+      danger: true,
+    }))) return;
     try {
       const r = await signaturesApi.delete(id);
       if (r.error) {

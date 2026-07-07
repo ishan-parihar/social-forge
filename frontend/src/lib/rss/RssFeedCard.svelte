@@ -1,6 +1,7 @@
 <script lang="ts">
   import Button from '$lib/ui/Button.svelte';
   import { rssApi, type RssFeed } from '$lib/api/rss';
+  import { modals } from '$lib/stores/modals.svelte';
 
   let {
     feed,
@@ -46,7 +47,13 @@
   }
 
   async function handleDelete() {
-    if (!confirm('Delete this RSS feed?')) return;
+    if (!(await modals.areYouSure({
+      title: 'Delete this RSS feed?',
+      message: 'The feed and its cached items will be permanently deleted. Posts already imported from it are unaffected.',
+      confirmLabel: 'Delete',
+      cancelLabel: 'Cancel',
+      danger: true,
+    }))) return;
     deleting = true;
     error = '';
     try {

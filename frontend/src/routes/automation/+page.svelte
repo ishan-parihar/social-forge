@@ -3,6 +3,7 @@
   import { automationApi, type AutomationRuleDisplay, type ExecutionLogDisplay, type CreateRulePayload } from "$lib/api/automation";
   import { toast } from "$lib/stores/toast";
   import { realtime } from "$lib/stores/realtime";
+  import { modals } from '$lib/stores/modals.svelte';
 
   let rules = $state<AutomationRuleDisplay[]>([]);
   let loading = $state(true);
@@ -80,7 +81,13 @@
   }
 
   async function deleteRule(id: string) {
-    if (!confirm("Delete this automation rule?")) return;
+    if (!(await modals.areYouSure({
+      title: 'Delete this automation rule?',
+      message: 'The rule will be permanently deleted. Posts already created by it are unaffected.',
+      confirmLabel: 'Delete',
+      cancelLabel: 'Cancel',
+      danger: true,
+    }))) return;
     const r = await automationApi.deleteRule(id);
     if (r.error) {
       error = r.error;
