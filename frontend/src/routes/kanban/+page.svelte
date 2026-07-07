@@ -34,6 +34,15 @@
   // is null, the drop goes to the end of the column.
   let dropTargetId = $state<string | null>(null);
   let dropPosition = $state<'before' | 'after'>('before');
+  // v25-5: which card's metadata popover is open. Only one at a time.
+  let editingCardId = $state<string | null>(null);
+  // v25-5: filter bar state. null = "all".
+  let priorityFilter = $state<string | null>(null);
+  let substateFilter = $state<string | null>(null);
+  // v25-5: local due-date input mirror so the native <input type="date">
+  // doesn't fight with the post.due_date ISO string. Set when the popover
+  // opens, sent on change.
+  let editingDueDate = $state<string>('');
 
   // Phase v21: campaign-create modal state. Previously used native
   // prompt() which is jarring and can't be styled. Now we render a
@@ -90,10 +99,17 @@
   // filter works correctly. The old `p.group_id === selectedCampaign`
   // fallback (which matched on thread/group ID, not campaign ID) is
   // removed — it was a bug that caused false positives.
+  //
+  // v25-5: also applies priority + substate filters from the filter bar.
   let filteredPosts = $derived(
-    selectedCampaign
-      ? posts.filter(p => p.campaign_id === selectedCampaign)
-      : posts
+    posts
+      .filter(p => !selectedCampaign || p.campaign_id === selectedCampaign)
+      .filter(p => !priorityFilter || (p.priority || 'medium') === priorityFilter)
+      .filter(p => {
+        if (!substateFilter) return true;
+        if (substateFilter === 'none') return !p.kanban_substate;
+        return p.kanban_substate === substateFilter;
+      })
   );
 
   let postsByState = $derived.by(() => {
@@ -389,6 +405,87 @@
       blocked: 'bg-error',
     } as Record<string, string>)[s] || 'bg-muted';
   }
+
+  // v25-5: per-card metadata editing. Each setter calls updateStage with
+  // the post's CURRENT state (no-op transition) + the new kanban metadata.
+  // The backend's no-op branch persists the metadata without changing state.
+  // Optimistic update: set the field locally first, then persist; revert on error.
+
+  function openCardMenu(post: PostSummary) {
+    editingCardId = post.id;
+    // Initialize the due-date input from the post's current value (date-only).
+    editingDueDate = post.due_date ? new Date(post.due_date).toISOString().slice(0, 10) : '';
+  }
+  function closeCardMenu() {
+    editingCardId = null;
+    editingDueDate = '';
+  }
+
+  async function setPriority(post: PostSummary, priority: string) {
+    const prev = post.priority;
+    post.priority = priority;
+    posts = [...posts];
+    const r = await campaignsApi.updateStage(post.id, post.state, post.campaign_id || undefined, { priority });
+    if (r.error) {
+      post.priority = prev;
+      posts = [...posts];
+      toast(`Failed to set priority: ${r.error}`, 'error');
+    }
+  }
+
+  async function setSubstate(post: PostSummary, kanban_substate: string | null) {
+    const prev = post.kanban_substate;
+    post.kanban_substate = kanban_substate;
+    posts = [...posts];
+    // For null (clearing), we need to send an empty string to the backend
+    // (which interprets None as "unchanged"). But the backend's COALESCE
+    // means we can't actually clear via update_stage — only set. To clear,
+    // we'd need a dedicated endpoint. For now, only allow SETTING a substate.
+    if (!kanban_substate) {
+      // Can't clear via update_stage; revert + inform.
+      post.kanban_substate = prev;
+      posts = [...posts];
+      toast('Clearing substate is not yet supported — set a different one instead.', 'info');
+      return;
+    }
+    const r = await campaignsApi.updateStage(post.id, post.state, post.campaign_id || undefined, { kanban_substate });
+    if (r.error) {
+      post.kanban_substate = prev;
+      posts = [...posts];
+      toast(`Failed to set substate: ${r.error}`, 'error');
+    }
+  }
+
+  async function setDueDate(post: PostSummary, dateStr: string) {
+    const prev = post.due_date;
+    // Convert the date input (YYYY-MM-DD) to an ISO datetime at noon UTC
+    // (noon avoids timezone midnight-shift issues in either direction).
+    const newIso = dateStr ? `${dateStr}T12:00:00Z` : '';
+    post.due_date = newIso || null;
+    posts = [...posts];
+    const r = await campaignsApi.updateStage(post.id, post.state, post.campaign_id || undefined, { due_date: newIso });
+    if (r.error) {
+      post.due_date = prev;
+      posts = [...posts];
+      toast(`Failed to set due date: ${r.error}`, 'error');
+    } else {
+      editingDueDate = dateStr;
+    }
+  }
+
+  // Click-outside handler for the card menu popover.
+  $effect(() => {
+    if (!editingCardId) return;
+    function onDocClick(e: MouseEvent) {
+      const target = e.target as HTMLElement;
+      // Only close if the click is outside any .kanban-card-menu element.
+      if (!target.closest('.kanban-card-menu') && !target.closest('.kanban-card-menu-trigger')) {
+        closeCardMenu();
+      }
+    }
+    document.addEventListener('click', onDocClick);
+    return () => document.removeEventListener('click', onDocClick);
+  });
 </script>
 
 <div class="page-enter space-y-6">
@@ -433,6 +530,38 @@
     </div>
   {/if}
 
+  <!-- v25-5: filter bar — priority + substate filters. Shown when there
+       are posts to filter. Compact pill-style selectors. -->
+  {#if !loading && posts.length > 0}
+    <div class="flex items-center gap-3 flex-wrap text-xs">
+      <span class="text-muted">Filter:</span>
+      <!-- Priority filter -->
+      <div class="flex items-center gap-1">
+        {#each [{ v: null, label: 'All' }, { v: 'urgent', label: 'Urgent' }, { v: 'high', label: 'High' }, { v: 'medium', label: 'Medium' }, { v: 'low', label: 'Low' }] as opt}
+          <button
+            onclick={() => priorityFilter = opt.v}
+            class="px-2 py-0.5 rounded transition-colors {priorityFilter === opt.v ? 'bg-brand-500 text-white' : 'text-muted hover:text-content hover:bg-surface-hover border border-line'}"
+          >{opt.label}</button>
+        {/each}
+      </div>
+      <span class="text-muted-dark">·</span>
+      <!-- Substate filter -->
+      <div class="flex items-center gap-1">
+        {#each [{ v: null, label: 'All' }, { v: 'ready_to_publish', label: 'Ready' }, { v: 'in_review', label: 'Review' }, { v: 'blocked', label: 'Blocked' }, { v: 'none', label: 'No substate' }] as opt}
+          <button
+            onclick={() => substateFilter = opt.v}
+            class="px-2 py-0.5 rounded transition-colors {substateFilter === opt.v ? 'bg-brand-500 text-white' : 'text-muted hover:text-content hover:bg-surface-hover border border-line'}"
+          >{opt.label}</button>
+        {/each}
+      </div>
+      {#if priorityFilter || substateFilter}
+        <button onclick={() => { priorityFilter = null; substateFilter = null; }} class="text-muted hover:text-error underline">
+          Clear filters
+        </button>
+      {/if}
+    </div>
+  {/if}
+
   <!-- Kanban board -->
   {#if loading}
     <div class="text-center py-12 text-sm text-muted">Loading...</div>
@@ -461,7 +590,7 @@
                 <div class="h-0.5 bg-brand-500 rounded-full -mx-2" aria-hidden="true"></div>
               {/if}
               <article
-                class="bg-background-input border border-line rounded-lg cursor-grab active:cursor-grabbing hover:border-brand-500/50 transition-colors overflow-hidden {draggingId === post.id ? 'opacity-50' : ''} {priorityBorderClass(post.priority || 'medium')} {dropTargetId === post.id ? 'ring-1 ring-brand-500/50' : ''}"
+                class="group bg-background-input border border-line rounded-lg cursor-grab active:cursor-grabbing hover:border-brand-500/50 transition-colors overflow-hidden {draggingId === post.id ? 'opacity-50' : ''} {priorityBorderClass(post.priority || 'medium')} {dropTargetId === post.id ? 'ring-1 ring-brand-500/50' : ''}"
                 draggable={true}
                 ondragstart={(e) => onDragStart(e, post.id)}
                 ondragover={(e) => onDragOverCard(e, post)}
@@ -472,9 +601,22 @@
                 onkeydown={(e) => { if (e.key === 'Enter') composer.openEdit(post.id); }}
                 aria-label="Post: {(post.content || post.title || '(no content)').slice(0, 80)}"
               >
-                <div class="p-3">
+                <div class="p-3 relative">
+                  <!-- v25-5: per-card metadata edit trigger. Visible on hover.
+                       stopPropagation prevents the card's onclick (open composer)
+                       from firing. draggable=false prevents the button from
+                       starting a card drag. -->
+                  <button
+                    type="button"
+                    class="kanban-card-menu-trigger absolute top-2 right-2 w-5 h-5 flex items-center justify-center rounded text-muted hover:text-content hover:bg-surface-hover opacity-0 group-hover:opacity-100 transition-opacity {editingCardId === post.id ? 'opacity-100 bg-surface-hover' : ''}"
+                    onclick={(e) => { e.stopPropagation(); editingCardId === post.id ? closeCardMenu() : openCardMenu(post); }}
+                    draggable={false}
+                    aria-label="Edit card metadata"
+                    aria-expanded={editingCardId === post.id}
+                  >⋯</button>
+
                   <!-- Content -->
-                  <div class="text-sm text-content line-clamp-2 mb-2">{post.content || post.title || '(no content)'}</div>
+                  <div class="text-sm text-content line-clamp-2 mb-2 pr-6">{post.content || post.title || '(no content)'}</div>
 
                   <!-- Tags (max 3 visible, +N for the rest) -->
                   {#if post.tags && post.tags.length > 0}
@@ -492,8 +634,70 @@
                     </div>
                   {/if}
 
-                  <!-- Metadata row: priority + due date + substate -->
-                  {#if (post.priority && post.priority !== 'medium') || post.due_date || post.kanban_substate}
+                  {#if editingCardId === post.id}
+                    <!-- v25-5: inline metadata editor. Renders in-place
+                         (avoids popover clipping by the column's overflow-y-auto).
+                         Each control calls the corresponding setter which
+                         optimistically updates + persists via updateStage. -->
+                    <div class="kanban-card-menu space-y-2 mb-2 p-2 -mx-1 bg-background rounded border border-line">
+                      <!-- Priority selector -->
+                      <div>
+                        <div class="text-[10px] text-muted uppercase tracking-wider mb-1">Priority</div>
+                        <div class="flex gap-1">
+                          {#each ['low', 'medium', 'high', 'urgent'] as p}
+                            <button
+                              type="button"
+                              onclick={(e) => { e.stopPropagation(); setPriority(post, p); }}
+                              class="flex-1 px-1.5 py-1 rounded text-[10px] font-medium transition-colors {(post.priority || 'medium') === p ? priorityChipClass(p) : 'text-muted bg-line/30 hover:bg-line/50'}"
+                            >{priorityLabel(p)}</button>
+                          {/each}
+                        </div>
+                      </div>
+                      <!-- Substate selector -->
+                      <div>
+                        <div class="text-[10px] text-muted uppercase tracking-wider mb-1">Substate</div>
+                        <div class="flex gap-1">
+                          {#each [{ v: 'ready_to_publish', l: 'Ready' }, { v: 'in_review', l: 'Review' }, { v: 'blocked', l: 'Blocked' }] as opt}
+                            <button
+                              type="button"
+                              onclick={(e) => { e.stopPropagation(); setSubstate(post, opt.v); }}
+                              class="flex-1 px-1.5 py-1 rounded text-[10px] font-medium transition-colors {post.kanban_substate === opt.v ? `${substateTextClass(opt.v)} bg-line/40` : 'text-muted bg-line/30 hover:bg-line/50'}"
+                            >{opt.l}</button>
+                          {/each}
+                        </div>
+                      </div>
+                      <!-- Due date -->
+                      <div>
+                        <div class="text-[10px] text-muted uppercase tracking-wider mb-1">Due date</div>
+                        <div class="flex gap-1">
+                          <input
+                            type="date"
+                            value={editingDueDate}
+                            onclick={(e) => e.stopPropagation()}
+                            onchange={(e) => { e.stopPropagation(); setDueDate(post, (e.target as HTMLInputElement).value); }}
+                            onkeydown={(e) => e.stopPropagation()}
+                            class="flex-1 px-1.5 py-1 text-xs bg-background-input border border-line rounded focus:border-brand-500 outline-none"
+                            draggable={false}
+                          />
+                          {#if post.due_date}
+                            <button
+                              type="button"
+                              onclick={(e) => { e.stopPropagation(); setDueDate(post, ''); }}
+                              class="px-1.5 py-1 text-[10px] text-muted hover:text-error bg-line/30 hover:bg-error/10 rounded transition-colors"
+                              title="Clear due date"
+                            >✕</button>
+                          {/if}
+                        </div>
+                      </div>
+                      <!-- Done button -->
+                      <button
+                        type="button"
+                        onclick={(e) => { e.stopPropagation(); closeCardMenu(); }}
+                        class="w-full px-2 py-1 text-[10px] text-center text-muted hover:text-content bg-line/30 hover:bg-line/50 rounded transition-colors"
+                      >Done</button>
+                    </div>
+                  {:else if (post.priority && post.priority !== 'medium') || post.due_date || post.kanban_substate}
+                    <!-- Metadata row: priority + due date + substate (display only) -->
                     <div class="flex flex-wrap items-center gap-1.5 mb-2 text-[10px] leading-none">
                       {#if post.priority && post.priority !== 'medium'}
                         <span class="px-1.5 py-0.5 rounded font-medium {priorityChipClass(post.priority)}">
