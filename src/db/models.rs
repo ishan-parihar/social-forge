@@ -155,6 +155,10 @@ pub struct Post {
     pub group_id: Option<Uuid>,
     pub first_comment: Option<String>,
     pub sequence: i32,
+    /// Phase v22: stable UUID sent to the provider on every publish
+    /// attempt. Providers that support idempotency deduplicate on this
+    /// key — prevents double-publish after crash-recovery retries.
+    pub idempotency_key: Uuid,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -226,6 +230,8 @@ pub struct PostWithIntegration {
     pub group_id: Option<Uuid>,
     pub first_comment: Option<String>,
     pub sequence: i32,
+    /// Phase v22: stable idempotency key for provider deduplication.
+    pub idempotency_key: Uuid,
     // Joined from integrations
     pub provider_identifier: String,
     pub access_token: String,

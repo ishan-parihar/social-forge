@@ -214,6 +214,7 @@ pub async fn send_dm(
         media: request.media,
         settings: serde_json::json!({}),
     in_reply_to: None,
+    idempotency_key: None,
     };
 
     let result = provider

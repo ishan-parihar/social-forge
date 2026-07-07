@@ -93,6 +93,7 @@ pub async fn handle_wp_create_post(
         media: vec![],
         settings,
     in_reply_to: None,
+    idempotency_key: None,
     };
 
     let result = provider

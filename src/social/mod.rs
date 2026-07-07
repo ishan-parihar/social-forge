@@ -77,6 +77,17 @@ pub struct PostContent {
     /// can link them. Providers that don't support threading ignore this.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub in_reply_to: Option<String>,
+    /// Phase v22: idempotency key for the publish attempt. Stable across
+    /// retries (same post = same key). Providers that support idempotency
+    /// (X, LinkedIn, etc.) deduplicate on this key — if the same key is
+    /// sent twice, the second request is a no-op returning the original
+    /// post's platform_post_id, preventing duplicate posts after
+    /// crash-recovery retries.
+    ///
+    /// Providers that don't support idempotency simply ignore this field.
+    /// The key is a UUID v4 string.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub idempotency_key: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]

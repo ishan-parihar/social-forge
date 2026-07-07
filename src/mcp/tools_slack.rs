@@ -82,6 +82,7 @@ pub async fn handle_sl_send_message(
             "channel": input.channel,
         }),
     in_reply_to: None,
+    idempotency_key: None,
     };
 
     let result = provider

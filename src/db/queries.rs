@@ -291,7 +291,7 @@ pub async fn create_posts_for_integrations(
                  platform_post_id, platform_post_url, error_message,
                  created_at, updated_at,
                  repeat_interval_days, repeat_end_date, group_id,
-                 first_comment, sequence"#,
+                 first_comment, sequence, idempotency_key"#,
         )
         .bind(user_id)
         .bind(integration_id)
@@ -326,8 +326,9 @@ pub async fn create_post(
     sequence: i32,
 ) -> Result<Post, sqlx::Error> {
     let st = state.unwrap_or(PostState::Draft);
-    sqlx::query_as!(
-        Post,
+    // Runtime query (Phase v22 — idempotency_key column added, can't
+    // regenerate .sqlx offline cache without a live Postgres).
+    sqlx::query_as::<_, Post>(
         r#"INSERT INTO posts
            (user_id, integration_id, content, title, media, settings, scheduled_at, state, first_comment, sequence)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
@@ -336,21 +337,21 @@ pub async fn create_post(
               platform_post_id, platform_post_url, error_message,
               created_at, updated_at,
               repeat_interval_days, repeat_end_date, group_id,
-              first_comment, sequence"#,
-         user_id,
-         integration_id,
-         content,
-         title,
-         media,
-         settings,
-         scheduled_at,
-         st as PostState,
-         first_comment,
-         sequence,
-     )
-     .fetch_one(pool)
-     .await
- }
+              first_comment, sequence, idempotency_key"#,
+    )
+    .bind(user_id)
+    .bind(integration_id)
+    .bind(content)
+    .bind(title)
+    .bind(media)
+    .bind(settings)
+    .bind(scheduled_at)
+    .bind(st)
+    .bind(first_comment)
+    .bind(sequence)
+    .fetch_one(pool)
+    .await
+}
 
 /// Create thread posts (multiple content parts sharing a group_id)
 pub async fn create_thread_posts(
@@ -394,7 +395,7 @@ pub async fn create_thread_posts(
                      platform_post_id, platform_post_url, error_message,
                      created_at, updated_at,
                      repeat_interval_days, repeat_end_date, group_id,
-                     first_comment, sequence"#,
+                     first_comment, sequence, idempotency_key"#,
             )
             .bind(user_id)
             .bind(integration_id)
@@ -424,19 +425,18 @@ pub async fn get_posts_by_group_id(
     user_id: Uuid,
     group_id: Uuid,
 ) -> Result<Vec<Post>, sqlx::Error> {
-    sqlx::query_as!(
-        Post,
+    sqlx::query_as::<_, Post>(
         r#"SELECT id, user_id, integration_id, state as "state: PostState",
            content, title, media, settings, scheduled_at, published_at,
            platform_post_id, platform_post_url, error_message,
            created_at, updated_at,
            repeat_interval_days, repeat_end_date, group_id,
-           first_comment, sequence
+           first_comment, sequence, idempotency_key
          FROM posts WHERE user_id = $1 AND group_id = $2
          ORDER BY sequence ASC, created_at ASC"#,
-        user_id,
-        group_id,
     )
+        .bind(user_id)
+        .bind(group_id)
     .fetch_all(pool)
     .await
 }
@@ -467,7 +467,7 @@ pub async fn list_posts(
                platform_post_id, platform_post_url, error_message,
                created_at, updated_at,
                repeat_interval_days, repeat_end_date, group_id,
-               first_comment, sequence
+               first_comment, sequence, idempotency_key
              FROM posts WHERE user_id = $1 AND state = $2 AND deleted_at IS NULL
              ORDER BY scheduled_at DESC NULLS LAST, created_at DESC
              LIMIT $3 OFFSET $4"#,
@@ -538,7 +538,7 @@ async fn list_posts_all(
             platform_post_id, platform_post_url, error_message,
             created_at, updated_at,
             repeat_interval_days, repeat_end_date, group_id,
-            first_comment, sequence
+            first_comment, sequence, idempotency_key
           FROM posts WHERE user_id = $1 AND deleted_at IS NULL
           ORDER BY scheduled_at DESC NULLS LAST, created_at DESC
           LIMIT $2 OFFSET $3"#,
@@ -607,7 +607,7 @@ pub async fn list_posts_search(
                   p.platform_post_id, p.platform_post_url, p.error_message,
                   p.created_at, p.updated_at,
                   p.repeat_interval_days, p.repeat_end_date, p.group_id,
-                  p.first_comment, p.sequence
+                  p.first_comment, p.sequence, p.idempotency_key
            FROM posts p
            LEFT JOIN post_engagement pe ON pe.post_id = p.id
            WHERE p.user_id = $1
@@ -626,7 +626,7 @@ pub async fn list_posts_search(
                   platform_post_id, platform_post_url, error_message,
                   created_at, updated_at,
                   repeat_interval_days, repeat_end_date, group_id,
-                  first_comment, sequence
+                  first_comment, sequence, idempotency_key
            FROM posts
            WHERE user_id = $1
              AND deleted_at IS NULL
@@ -704,7 +704,7 @@ pub async fn count_posts_search(
             platform_post_id, platform_post_url, error_message,
             created_at, updated_at,
             repeat_interval_days, repeat_end_date, group_id,
-            first_comment, sequence
+            first_comment, sequence, idempotency_key
           FROM posts WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL"#,
      )
      .bind(id)
@@ -722,9 +722,8 @@ pub async fn count_posts_search(
     media: &serde_json::Value,
     settings: &serde_json::Value,
 ) -> Result<Option<Post>, sqlx::Error> {
-    sqlx::query_as!(
-        Post,
-         r#"UPDATE posts SET content = $1, title = $2, media = $3, settings = $4,
+    sqlx::query_as::<_, Post>(
+        r#"UPDATE posts SET content = $1, title = $2, media = $3, settings = $4,
             updated_at = now()
             WHERE id = $5 AND user_id = $6
             RETURNING id, user_id, integration_id, state as "state: PostState",
@@ -732,14 +731,14 @@ pub async fn count_posts_search(
                platform_post_id, platform_post_url, error_message,
                created_at, updated_at,
                repeat_interval_days, repeat_end_date, group_id,
-               first_comment, sequence"#,
-          content,
-          title,
-          media,
-          settings,
-          id,
-          user_id,
-      )
+               first_comment, sequence, idempotency_key"#,
+    )
+        .bind(content)
+        .bind(title)
+        .bind(media)
+        .bind(settings)
+        .bind(id)
+        .bind(user_id)
       .fetch_optional(pool)
       .await
   }
@@ -750,9 +749,8 @@ pub async fn count_posts_search(
     user_id: Uuid,
     scheduled_at: DateTime<Utc>,
 ) -> Result<Option<Post>, sqlx::Error> {
-    sqlx::query_as!(
-        Post,
-         r#"UPDATE posts SET scheduled_at = $1, state = 'queued',
+    sqlx::query_as::<_, Post>(
+        r#"UPDATE posts SET scheduled_at = $1, state = 'queued',
             updated_at = now()
             WHERE id = $2 AND user_id = $3
             RETURNING id, user_id, integration_id, state as "state: PostState",
@@ -760,11 +758,11 @@ pub async fn count_posts_search(
                platform_post_id, platform_post_url, error_message,
                created_at, updated_at,
                repeat_interval_days, repeat_end_date, group_id,
-               first_comment, sequence"#,
-          scheduled_at,
-          id,
-          user_id,
-      )
+               first_comment, sequence, idempotency_key"#,
+    )
+        .bind(scheduled_at)
+        .bind(id)
+        .bind(user_id)
       .fetch_optional(pool)
       .await
   }
@@ -798,6 +796,12 @@ pub async fn count_posts_search(
               error_message = NULL,
               retry_count = 0,
               next_retry_at = NULL,
+              -- Phase v22: generate a NEW idempotency key on re-publish
+              -- so the provider treats it as a fresh post (not a retry
+              -- of the original publish). Without this, a re-publish
+              -- would be deduplicated by the provider and no new post
+              -- would be created.
+              idempotency_key = gen_random_uuid(),
               updated_at = now()
              WHERE id = $2 AND user_id = $3
              RETURNING id, user_id, integration_id, state as "state: PostState",
@@ -805,7 +809,7 @@ pub async fn count_posts_search(
                platform_post_id, platform_post_url, error_message,
                created_at, updated_at,
                repeat_interval_days, repeat_end_date, group_id,
-               first_comment, sequence"#,
+               first_comment, sequence, idempotency_key"#,
       )
       .bind(scheduled_at)
       .bind(id)
@@ -836,7 +840,7 @@ pub async fn count_posts_search(
                platform_post_id, platform_post_url, error_message,
                created_at, updated_at,
                repeat_interval_days, repeat_end_date, group_id,
-               first_comment, sequence"#,
+               first_comment, sequence, idempotency_key"#,
       )
       .bind(scheduled_at)
       .bind(id)
@@ -930,7 +934,7 @@ pub async fn list_posts_by_group(
            platform_post_id, platform_post_url, error_message,
            created_at, updated_at,
            repeat_interval_days, repeat_end_date, group_id,
-           first_comment, sequence
+           first_comment, sequence, idempotency_key
          FROM posts
          WHERE user_id = $1 AND group_id = $2 AND deleted_at IS NULL
          ORDER BY sequence ASC, created_at ASC"#,
@@ -947,16 +951,15 @@ pub async fn get_post_with_integration(
     post_id: Uuid,
     user_id: Uuid,
 ) -> Result<Option<PostWithIntegration>, sqlx::Error> {
-    sqlx::query_as!(
-         PostWithIntegration,
-          r#"SELECT p.id, p.user_id, p.integration_id,
+    sqlx::query_as::<_, PostWithIntegration>(
+        r#"SELECT p.id, p.user_id, p.integration_id,
              p.state as "state: PostState",
              p.content, p.title, p.media, p.settings,
              p.scheduled_at, p.published_at,
              p.platform_post_id, p.platform_post_url, p.error_message,
              p.created_at, p.updated_at,
              p.repeat_interval_days, p.repeat_end_date, p.group_id,
-             p.first_comment, p.sequence,
+             p.first_comment, p.sequence, p.idempotency_key,
              i.provider_identifier, i.access_token,
              i.refresh_token, i.token_expires_at,
              i.disabled as "integration_disabled",
@@ -964,9 +967,9 @@ pub async fn get_post_with_integration(
            FROM posts p
            JOIN integrations i ON p.integration_id = i.id
            WHERE p.id = $1 AND p.user_id = $2"#,
-        post_id,
-        user_id,
     )
+        .bind(post_id)
+        .bind(user_id)
     .fetch_optional(pool)
     .await
 }
@@ -1024,7 +1027,7 @@ pub async fn get_due_posts(
         p.platform_post_id, p.platform_post_url, p.error_message,
         p.created_at, p.updated_at,
         p.repeat_interval_days, p.repeat_end_date, p.group_id,
-        p.first_comment, p.sequence,
+        p.first_comment, p.sequence, p.idempotency_key,
         i.provider_identifier, i.access_token,
         i.refresh_token, i.token_expires_at,
         i.disabled as integration_disabled,
@@ -1158,24 +1161,23 @@ pub async fn get_posts_by_date_range(
     start: DateTime<Utc>,
     end: DateTime<Utc>,
 ) -> Result<Vec<Post>, sqlx::Error> {
-    sqlx::query_as!(
-         Post,
-         r#"SELECT id, user_id, integration_id, state as "state: PostState",
+    sqlx::query_as::<_, Post>(
+        r#"SELECT id, user_id, integration_id, state as "state: PostState",
             content, title, media, settings, scheduled_at, published_at,
             platform_post_id, platform_post_url, error_message,
             created_at, updated_at,
             repeat_interval_days, repeat_end_date, group_id,
-            first_comment, sequence
+            first_comment, sequence, idempotency_key
           FROM posts
           WHERE user_id = $1
             AND scheduled_at IS NOT NULL
             AND scheduled_at >= $2
             AND scheduled_at <= $3
           ORDER BY scheduled_at ASC"#,
-        user_id,
-        start,
-        end,
     )
+        .bind(user_id)
+        .bind(start)
+        .bind(end)
     .fetch_all(pool)
     .await
 }
@@ -1588,8 +1590,7 @@ pub async fn create_repeated_post(
     scheduled_at: &DateTime<Utc>,
     group_id: Uuid,
 ) -> Result<Post, sqlx::Error> {
-    sqlx::query_as!(
-        Post,
+    sqlx::query_as::<_, Post>(
         r#"INSERT INTO posts (user_id, integration_id, title, content, media, settings, scheduled_at, state, repeat_interval_days, repeat_end_date, group_id)
            SELECT p.user_id, p.integration_id, p.title, p.content, p.media, p.settings, $1, p.state, NULL::int4, NULL::timestamptz, $3
            FROM posts p WHERE p.id = $2 AND p.user_id = $4
@@ -1598,12 +1599,12 @@ pub async fn create_repeated_post(
              platform_post_id, platform_post_url, error_message,
              created_at, updated_at,
              repeat_interval_days, repeat_end_date, group_id,
-             first_comment, sequence"#,
-        scheduled_at,
-        original_id,
-        group_id,
-        user_id,
+             first_comment, sequence, idempotency_key"#,
     )
+        .bind(scheduled_at)
+        .bind(original_id)
+        .bind(group_id)
+        .bind(user_id)
     .fetch_one(pool)
     .await
 }
@@ -1616,9 +1617,8 @@ pub async fn set_post_recurring(
     end_date: &DateTime<Utc>,
     group_id: Uuid,
 ) -> Result<Option<Post>, sqlx::Error> {
-    sqlx::query_as!(
-        Post,
-         r#"UPDATE posts SET repeat_interval_days = $1, repeat_end_date = $2, group_id = $3,
+    sqlx::query_as::<_, Post>(
+        r#"UPDATE posts SET repeat_interval_days = $1, repeat_end_date = $2, group_id = $3,
             updated_at = now()
             WHERE id = $4 AND user_id = $5
             RETURNING id, user_id, integration_id, state as "state: PostState",
@@ -1626,13 +1626,13 @@ pub async fn set_post_recurring(
               platform_post_id, platform_post_url, error_message,
               created_at, updated_at,
               repeat_interval_days, repeat_end_date, group_id,
-              first_comment, sequence"#,
-        interval_days,
-        end_date,
-        group_id,
-        id,
-        user_id,
+              first_comment, sequence, idempotency_key"#,
     )
+        .bind(interval_days)
+        .bind(end_date)
+        .bind(group_id)
+        .bind(id)
+        .bind(user_id)
     .fetch_optional(pool)
     .await
 }
@@ -1648,8 +1648,7 @@ pub async fn set_post_recurring_with_copies(
 ) -> Result<(Vec<Uuid>, Vec<String>), sqlx::Error> {
     let mut tx = pool.begin().await?;
 
-    sqlx::query_as!(
-        Post,
+    sqlx::query_as::<_, Post>(
         r#"UPDATE posts SET repeat_interval_days = $1, repeat_end_date = $2, group_id = $3,
            updated_at = now()
            WHERE id = $4 AND user_id = $5
@@ -1658,13 +1657,13 @@ pub async fn set_post_recurring_with_copies(
               platform_post_id, platform_post_url, error_message,
               created_at, updated_at,
               repeat_interval_days, repeat_end_date, group_id,
-              first_comment, sequence"#,
-        interval_days,
-        end_date,
-        group_id,
-        id,
-        user_id,
+              first_comment, sequence, idempotency_key"#,
     )
+        .bind(interval_days)
+        .bind(end_date)
+        .bind(group_id)
+        .bind(id)
+        .bind(user_id)
     .fetch_optional(&mut *tx)
     .await?;
 
@@ -1674,8 +1673,8 @@ pub async fn set_post_recurring_with_copies(
     let mut scheduled_dates = Vec::new();
 
     while current <= *end_date {
-        let copy = sqlx::query_as!(
-            Post,
+        // Runtime query (Phase v22 — idempotency_key column added).
+        let copy = sqlx::query_as::<_, Post>(
             r#"INSERT INTO posts (user_id, integration_id, title, content, media, settings, scheduled_at, state, repeat_interval_days, repeat_end_date, group_id)
                SELECT p.user_id, p.integration_id, p.title, p.content, p.media, p.settings, $1, p.state, NULL::int4, NULL::timestamptz, $3
                FROM posts p WHERE p.id = $2 AND p.user_id = $4
@@ -1684,12 +1683,12 @@ pub async fn set_post_recurring_with_copies(
                  platform_post_id, platform_post_url, error_message,
                  created_at, updated_at,
                  repeat_interval_days, repeat_end_date, group_id,
-                 first_comment, sequence"#,
-            &current,
-            id,
-            group_id,
-            user_id,
+                 first_comment, sequence, idempotency_key"#,
         )
+        .bind(&current)
+        .bind(id)
+        .bind(group_id)
+        .bind(user_id)
         .fetch_one(&mut *tx)
         .await?;
 

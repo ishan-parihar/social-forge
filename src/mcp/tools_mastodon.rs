@@ -131,6 +131,7 @@ pub async fn handle_ms_create_post(
         media,
         settings,
     in_reply_to: None,
+    idempotency_key: None,
     };
 
     let provider = create_mastodon_provider(state);
@@ -221,6 +222,7 @@ pub async fn handle_ms_reply(
         media: vec![],
         settings: serde_json::json!({}),
     in_reply_to: None,
+    idempotency_key: None,
     };
     let result = provider
         .reply_to_comment(&token, &input.status_id, &post)

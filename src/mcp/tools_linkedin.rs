@@ -174,6 +174,7 @@ pub async fn handle_li_create_post(
         media: vec![],
         settings: serde_json::Value::Object(serde_json::Map::new()),
     in_reply_to: None,
+    idempotency_key: None,
     };
 
     let result = provider
@@ -315,6 +316,7 @@ pub async fn handle_li_reply_comment(
         media: vec![],
         settings: serde_json::json!({}),
     in_reply_to: None,
+    idempotency_key: None,
     };
     let result = provider.reply_to_comment(&token, &input.comment_id, &post).await
         .map_err(|e| format!("LinkedIn reply comment failed: {e}"))?;
@@ -346,6 +348,7 @@ pub async fn handle_li_send_dm(
         media: vec![],
         settings: serde_json::json!({}),
     in_reply_to: None,
+    idempotency_key: None,
     };
     let result = provider.send_dm(&token, &input.recipient_urn, &post).await
         .map_err(|e| format!("LinkedIn send DM failed: {e}"))?;

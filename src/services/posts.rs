@@ -320,6 +320,7 @@ impl PostService {
             media: resolved_media,
             settings: post.settings.clone(),
             in_reply_to,
+            idempotency_key: None,
         };
 
         // Validate
@@ -357,6 +358,7 @@ impl PostService {
                     media: vec![],
                     settings: serde_json::json!({}),
                 in_reply_to: None,
+                idempotency_key: None,
                 };
                 if let Err(e) = provider
                     .comment(

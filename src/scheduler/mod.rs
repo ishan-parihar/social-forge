@@ -575,6 +575,12 @@ async fn publish_post(
         media: resolved_media,
         settings: post.settings.clone(),
         in_reply_to,
+        // Phase v22: pass the post's stable idempotency key so providers
+        // can deduplicate retry attempts (prevents double-publish after
+        // crash-recovery). The key is generated when the post is created
+        // and stays stable across retries; only a re-publish (action=
+        // 'schedule' on reschedule) generates a new key.
+        idempotency_key: Some(post.idempotency_key.to_string()),
     };
 
     // Validate content against provider limits before publishing
@@ -646,6 +652,7 @@ async fn publish_post(
                             media: vec![],
                             settings: serde_json::json!({}),
                         in_reply_to: None,
+                        idempotency_key: None,
                         };
                         if let Err(e) = provider.comment(
                             &access_token,

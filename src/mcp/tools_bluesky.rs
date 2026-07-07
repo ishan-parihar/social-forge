@@ -152,6 +152,7 @@ pub async fn handle_bs_create_post(
         media,
         settings: json!({}),
     in_reply_to: None,
+    idempotency_key: None,
     };
 
     let result = provider

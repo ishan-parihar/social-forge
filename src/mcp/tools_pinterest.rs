@@ -253,6 +253,7 @@ pub async fn handle_pi_create_pin(
         media,
         settings,
     in_reply_to: None,
+    idempotency_key: None,
     };
 
     let result = provider

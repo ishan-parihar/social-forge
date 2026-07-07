@@ -64,6 +64,7 @@ pub async fn handle_sk_publish(
             "label": input.label.clone().unwrap_or_default(),
         }),
     in_reply_to: None,
+    idempotency_key: None,
     };
 
     let result = provider

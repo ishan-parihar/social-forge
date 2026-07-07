@@ -24,6 +24,7 @@ pub async fn handle(action: BlueskyAction, state: &AppState) -> anyhow::Result<(
                 media: vec![],
                 settings: serde_json::Value::Object(serde_json::Map::new()),
             in_reply_to: None,
+            idempotency_key: None,
             };
             provider.reply_to_comment(&token, &post_uri, &post).await
                 .map(|r| serde_json::json!({"id": r.platform_post_id, "url": r.platform_post_url, "status": r.status}))
@@ -71,6 +72,7 @@ pub async fn handle(action: BlueskyAction, state: &AppState) -> anyhow::Result<(
                 media: vec![],
                 settings: serde_json::Value::Object(serde_json::Map::new()),
             in_reply_to: None,
+            idempotency_key: None,
             };
             provider.publish(&token, &post).await
                 .map(|r| serde_json::json!({"id": r.platform_post_id, "url": r.platform_post_url, "status": r.status}))
