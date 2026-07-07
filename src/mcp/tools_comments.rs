@@ -110,6 +110,7 @@ pub async fn reply_to_comment(
         settings: serde_json::json!({}),
     in_reply_to: None,
     idempotency_key: None,
+    delay_minutes: None,
     };
 
     let result = provider.reply_to_comment(&token, &input.comment_id, &post_content)

@@ -13,6 +13,7 @@ use crate::realtime::Broadcaster;
 use crate::social::registry::ProviderRegistry;
 use crate::social::ProviderError;
 use crate::social::{PostContent, SocialProvider};
+use uuid::Uuid;
 
 use super::db::queries;
 /// How often to poll for due posts
@@ -456,7 +457,7 @@ async fn process_due_posts(
         // 60s, the Reddit/LinkedIn posts waited 60s before they even
         // started. Now each task acquires its own permit inside the
         // spawned future, so all providers make progress in parallel.
-        let semaphore = providers.concurrency(&post.provider_identifier).cloned();
+        let semaphore = providers.concurrency(&post.provider_identifier).clone();
 
         let db_clone = db.clone();
         let provider_clone = provider.clone();
@@ -471,7 +472,7 @@ async fn process_due_posts(
             // provider. The permit is released automatically when the
             // task exits (success or failure).
             let _permit = match semaphore.as_ref() {
-                Some(sem) => match sem.acquire_owned().await {
+                Some(sem) => match sem.clone().acquire_owned().await {
                     Ok(p) => Some(p),
                     // Semaphore closed — shouldn't happen, but proceed
                     // without throttling rather than skipping the post.

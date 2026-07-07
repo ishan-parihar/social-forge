@@ -89,6 +89,7 @@ pub async fn send_dm(
         settings: serde_json::json!({}),
     in_reply_to: None,
     idempotency_key: None,
+    delay_minutes: None,
     };
 
     let result = provider.send_dm(&token, &input.recipient, &post_content)

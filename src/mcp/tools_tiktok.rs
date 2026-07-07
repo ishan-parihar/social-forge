@@ -106,6 +106,7 @@ pub async fn handle_tt_create_post(
         settings: serde_json::json!({}),
     in_reply_to: None,
     idempotency_key: None,
+    delay_minutes: None,
     };
 
     let provider = create_tiktok_provider(state);

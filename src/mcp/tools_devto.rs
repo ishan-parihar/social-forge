@@ -82,6 +82,7 @@ pub async fn handle_dv_create_post(
         settings,
     in_reply_to: None,
     idempotency_key: None,
+    delay_minutes: None,
     };
 
     let result = provider

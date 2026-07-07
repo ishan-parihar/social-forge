@@ -65,6 +65,7 @@ pub async fn handle_sk_publish(
         }),
     in_reply_to: None,
     idempotency_key: None,
+    delay_minutes: None,
     };
 
     let result = provider

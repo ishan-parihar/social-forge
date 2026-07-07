@@ -92,6 +92,7 @@ pub async fn handle_hn_create_post(
         settings,
     in_reply_to: None,
     idempotency_key: None,
+    delay_minutes: None,
     };
 
     let result = provider

@@ -83,6 +83,7 @@ pub async fn handle_sl_send_message(
         }),
     in_reply_to: None,
     idempotency_key: None,
+    delay_minutes: None,
     };
 
     let result = provider

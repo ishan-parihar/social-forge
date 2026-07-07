@@ -202,6 +202,7 @@ pub async fn handle_th_create_thread(
         settings: serde_json::Value::Object(serde_json::Map::new()),
     in_reply_to: None,
     idempotency_key: None,
+    delay_minutes: None,
     };
 
     let result = provider
