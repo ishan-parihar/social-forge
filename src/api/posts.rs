@@ -639,6 +639,34 @@ pub async fn schedule(
     Ok(Json(public))
 }
 
+/// POST /api/posts/:id/unschedule — v24-1
+///
+/// Transitions a post back to draft state by clearing scheduled_at and
+/// setting state = 'draft'. Only works on posts in 'queued', 'draft',
+/// or 'error' state (not 'published' or 'publishing').
+///
+/// This closes the ComposerModal TODO at line 551 which used the
+/// "100 years in the future" hack to effectively unschedule. Now the
+/// composer's saveAsDraft edit-mode flow calls this endpoint to
+/// properly transition the post back to draft.
+pub async fn unschedule(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(id): Path<Uuid>,
+) -> Result<Json<PostPublic>, crate::error::AppError> {
+    let post = queries::unschedule_post(&state.db, id, auth.user_id)
+        .await?
+        .ok_or_else(|| crate::error::AppError::NotFound("Post not found or cannot be unscheduled (only queued/draft/error posts can be unscheduled)".into()))?;
+
+    // Broadcast the state change so the calendar/kanban update in real-time.
+    state.broadcast.send(
+        "post_scheduled",
+        &serde_json::json!({"id": id.to_string(), "unscheduled": true}),
+    );
+
+    Ok(Json(PostPublic::from(post)))
+}
+
 /// PUT /api/posts/:id/date — reschedule a post by dragging it on the calendar.
 ///
 /// Accepts `{ "scheduled_at": "<RFC3339>", "move_group": bool, "action": "schedule" | "update" }`.

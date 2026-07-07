@@ -806,6 +806,35 @@ pub async fn count_posts_search(
       .await
   }
 
+  /// v24-1: Unschedule a post — transition it back to draft state.
+  /// Sets scheduled_at = NULL and state = 'draft'. Only works on posts
+  /// that are currently 'queued' or 'draft' (not published/error/publishing).
+  /// Closes the ComposerModal TODO at line 551 which used the "100 years
+  /// in the future" hack to effectively unschedule.
+  pub async fn unschedule_post(
+    pool: &PgPool,
+    id: Uuid,
+    user_id: Uuid,
+) -> Result<Option<Post>, sqlx::Error> {
+    sqlx::query_as::<_, Post>(
+        r#"UPDATE posts SET scheduled_at = NULL, state = 'draft',
+            error_message = NULL,
+            updated_at = now()
+            WHERE id = $1 AND user_id = $2
+              AND state IN ('queued', 'draft', 'error')
+            RETURNING id, user_id, integration_id, state as "state: PostState",
+               content, title, media, settings, scheduled_at, published_at,
+               platform_post_id, platform_post_url, error_message,
+               created_at, updated_at,
+               repeat_interval_days, repeat_end_date, group_id,
+               first_comment, sequence, idempotency_key"#,
+    )
+        .bind(id)
+        .bind(user_id)
+      .fetch_optional(pool)
+      .await
+  }
+
   /// Phase v21: reset a published post for re-publishing.
   ///
   /// Sets `state = 'queued'`, updates `scheduled_at` to the new time,

@@ -545,19 +545,27 @@
       const payload = buildPayload();
       // Save as draft: no scheduled_at, state will default to draft
       if (composer.mode === 'edit' && composer.editingPostId) {
-        // Edit mode: update content + clear scheduled_at by transitioning
-        // back to draft state via reschedule (the backend's reschedule
-        // endpoint accepts a new scheduled_at; we set it to the current
-        // time + 100 years to effectively unschedule — TODO: add a
-        // dedicated "unchedule" endpoint in v22).
-        // For now, just update content; the state stays as-is.
-        const r = await postsApi.update(currentEditingPostId, {
+        // v24-1: edit-mode saveAsDraft now properly transitions the post
+        // back to draft state via the new /unschedule endpoint (was a
+        // TODO that used the "100 years in the future" hack). Also
+        // includes tag_ids + first_comment in the update (v23-5 fix).
+        const updateR = await postsApi.update(currentEditingPostId, {
           content: payload.content,
           title: payload.title,
           media: payload.media,
           settings: payload.settings,
+          tag_ids: payload.tag_ids,
+          first_comment: payload.first_comment,
         });
-        if (r.error) { error = r.error; return; }
+        if (updateR.error) { error = updateR.error; return; }
+        // If the post was scheduled (queued state), unschedule it back to draft.
+        if (updateR.data?.state === 'queued' || updateR.data?.scheduled_at) {
+          const unschedR = await postsApi.unschedule(currentEditingPostId);
+          if (unschedR.error) {
+            // Non-fatal — the content was updated; just warn.
+            console.warn('Failed to unschedule:', unschedR.error);
+          }
+        }
         localStorage.removeItem(DRAFT_KEY);
         composer.close();
         toast('Draft updated', 'success');

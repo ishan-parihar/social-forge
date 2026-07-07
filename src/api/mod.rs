@@ -140,6 +140,7 @@ pub fn build_router(state: AppState) -> Router {
                 .delete(posts::delete),
         )
         .route("/api/posts/{id}/schedule", axum::routing::post(posts::schedule))
+        .route("/api/posts/{id}/unschedule", axum::routing::post(posts::unschedule))
         .route("/api/posts/{id}/date", axum::routing::put(posts::reschedule))
         .route("/api/posts/{id}/publish", axum::routing::post(posts::publish_post))
         .route("/api/posts/{id}/repeat", axum::routing::post(posts::repeat_post))
