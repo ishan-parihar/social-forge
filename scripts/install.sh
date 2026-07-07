@@ -137,9 +137,11 @@ mkdir -p \
     "${INSTALL_DIR}" \
     "${INSTALL_DIR}/data/media" \
     "${INSTALL_DIR}/data/telegram" \
-    "${INSTALL_DIR}/data/whatsapp" \
-    "${INSTALL_DIR}/migrations"
+    "${INSTALL_DIR}/data/whatsapp"
 log "Created: ${INSTALL_DIR}"
+# Note: migrations are embedded in the binary at compile time via
+# sqlx::migrate!("./migrations"). No migration files need to be
+# downloaded — the binary applies them automatically on startup.
 
 # ── Download binary ───────────────────────────────────────────────────────────
 head "Downloading binary..."

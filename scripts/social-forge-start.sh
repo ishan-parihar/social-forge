@@ -129,7 +129,10 @@ fi
 
 # ── 8. Launch binary ─────────────────────────────────────────────────────────
 # Resolve binary location — checks common install locations in order.
-# Change to INSTALL_DIR so relative paths (migrations/, data/, etc.) resolve correctly.
+# Change to INSTALL_DIR so relative paths (data/, etc.) resolve correctly.
+# Note: migrations are embedded in the binary at compile time via
+# sqlx::migrate!("./migrations") and applied automatically on startup.
+# No manual psql or migration scripting is needed.
 echo "$TAG Starting social-forge serve..."
 cd "$INSTALL_DIR"
 
