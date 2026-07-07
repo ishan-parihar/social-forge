@@ -159,6 +159,22 @@ pub struct Post {
     /// attempt. Providers that support idempotency deduplicate on this
     /// key — prevents double-publish after crash-recovery retries.
     pub idempotency_key: Uuid,
+    // v25-3: campaign_id (migration 026) — was missing from the Post struct,
+    // which meant the /api/posts list response never included it and the
+    // kanban campaign filter (p.campaign_id === selectedCampaign) silently
+    // matched nothing. Now surfaced so the filter actually works.
+    pub campaign_id: Option<Uuid>,
+    // v25-3: kanban fields (migration 034). `#[sqlx(default)]` on the
+    // non-Option fields so queries that don't SELECT these columns
+    // (e.g. scheduler's get_post_for_publish) still deserialize — they
+    // just get 0 / "" which those code paths never read. The list/get
+    // queries that the kanban UI depends on DO select these columns.
+    #[sqlx(default)]
+    pub kanban_sort_order: i32,
+    pub kanban_substate: Option<String>,
+    pub due_date: Option<DateTime<Utc>>,
+    #[sqlx(default)]
+    pub priority: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]

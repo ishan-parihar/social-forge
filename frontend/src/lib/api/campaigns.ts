@@ -67,6 +67,24 @@ export const campaignsApi = {
   create: (data: CreateCampaignInput) => api.post<Campaign>('/api/campaigns', data),
   update: (id: string, data: UpdateCampaignInput) => api.put<Campaign>(`/api/campaigns/${id}`, data),
   delete: (id: string) => api.del<{ deleted: boolean }>(`/api/campaigns/${id}`),
-  updateStage: (postId: string, state: string, campaignId?: string) =>
-    api.patch<{ updated: boolean }>(`/api/posts/${postId}/stage`, { state, campaign_id: campaignId }),
+  updateStage: (
+    postId: string,
+    state: string,
+    campaignId?: string,
+    // v25-3: optional kanban metadata. When omitted, the existing value is
+    // preserved (COALESCE on the backend). Pass an empty string to
+    // `due_date` to explicitly clear it.
+    kanbanMeta?: {
+      kanban_substate?: string;
+      priority?: string;
+      due_date?: string;
+    },
+  ) =>
+    api.patch<{ updated: boolean }>(`/api/posts/${postId}/stage`, {
+      state,
+      campaign_id: campaignId,
+      kanban_substate: kanbanMeta?.kanban_substate,
+      priority: kanbanMeta?.priority,
+      due_date: kanbanMeta?.due_date,
+    }),
 };

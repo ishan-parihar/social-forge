@@ -473,7 +473,9 @@ pub async fn list_posts(
                platform_post_id, platform_post_url, error_message,
                created_at, updated_at,
                repeat_interval_days, repeat_end_date, group_id,
-               first_comment, sequence, idempotency_key
+               first_comment, sequence, idempotency_key,
+               campaign_id,
+               kanban_sort_order, kanban_substate, due_date, priority
              FROM posts WHERE user_id = $1 AND state = $2 AND deleted_at IS NULL
              ORDER BY scheduled_at DESC NULLS LAST, created_at DESC
              LIMIT $3 OFFSET $4"#,
@@ -544,7 +546,9 @@ async fn list_posts_all(
             platform_post_id, platform_post_url, error_message,
             created_at, updated_at,
             repeat_interval_days, repeat_end_date, group_id,
-            first_comment, sequence, idempotency_key
+            first_comment, sequence, idempotency_key,
+            campaign_id,
+            kanban_sort_order, kanban_substate, due_date, priority
           FROM posts WHERE user_id = $1 AND deleted_at IS NULL
           ORDER BY scheduled_at DESC NULLS LAST, created_at DESC
           LIMIT $2 OFFSET $3"#,
@@ -613,7 +617,9 @@ pub async fn list_posts_search(
                   p.platform_post_id, p.platform_post_url, p.error_message,
                   p.created_at, p.updated_at,
                   p.repeat_interval_days, p.repeat_end_date, p.group_id,
-                  p.first_comment, p.sequence, p.idempotency_key
+                  p.first_comment, p.sequence, p.idempotency_key,
+                  p.campaign_id,
+                  p.kanban_sort_order, p.kanban_substate, p.due_date, p.priority
            FROM posts p
            LEFT JOIN post_engagement pe ON pe.post_id = p.id
            WHERE p.user_id = $1
@@ -632,7 +638,9 @@ pub async fn list_posts_search(
                   platform_post_id, platform_post_url, error_message,
                   created_at, updated_at,
                   repeat_interval_days, repeat_end_date, group_id,
-                  first_comment, sequence, idempotency_key
+                  first_comment, sequence, idempotency_key,
+                  campaign_id,
+                  kanban_sort_order, kanban_substate, due_date, priority
            FROM posts
            WHERE user_id = $1
              AND deleted_at IS NULL
@@ -710,7 +718,9 @@ pub async fn count_posts_search(
             platform_post_id, platform_post_url, error_message,
             created_at, updated_at,
             repeat_interval_days, repeat_end_date, group_id,
-            first_comment, sequence, idempotency_key
+            first_comment, sequence, idempotency_key,
+            campaign_id,
+            kanban_sort_order, kanban_substate, due_date, priority
           FROM posts WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL"#,
      )
      .bind(id)

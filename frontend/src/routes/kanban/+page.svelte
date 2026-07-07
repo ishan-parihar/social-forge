@@ -93,10 +93,26 @@
   let postsByState = $derived.by(() => {
     const map: Record<string, PostSummary[]> = {};
     for (const col of columns) {
-      map[col.state] = filteredPosts.filter(p => p.state === col.state);
+      // v25-3: sort by kanban_sort_order (ascending, stable on created_at
+      // as tiebreaker) so drag-to-reorder (v25-4) has a deterministic
+      // order to mutate. Falls back to created_at desc when sort_order
+      // is 0 for all posts (the default until the user reorders).
+      const colPosts = filteredPosts.filter(p => p.state === col.state);
+      colPosts.sort((a, b) => {
+        const so = (a.kanban_sort_order ?? 0) - (b.kanban_sort_order ?? 0);
+        if (so !== 0) return so;
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      });
+      map[col.state] = colPosts;
     }
     // Also include 'error' posts in the draft column.
-    map['draft'] = [...map['draft'], ...filteredPosts.filter(p => p.state === 'error')];
+    const errPosts = filteredPosts.filter(p => p.state === 'error');
+    errPosts.sort((a, b) => {
+      const so = (a.kanban_sort_order ?? 0) - (b.kanban_sort_order ?? 0);
+      if (so !== 0) return so;
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
+    map['draft'] = [...map['draft'], ...errPosts];
     return map;
   });
 
@@ -233,6 +249,82 @@
     const d = new Date(iso);
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   }
+
+  // v25-3: kanban card metadata helpers. These render priority / due date /
+  // substate / tags on each card using semantic tokens so they retheme
+  // correctly in dark + light mode.
+
+  // Resolve the provider_identifier for a post — needed because
+  // providerColor/providerIcon key on the provider id (e.g. "x"), not the
+  // user-set account name. The dashboard had this same bug (fixed in v22
+  // Phase 5); the kanban had it too. Now both use the same lookup pattern.
+  function providerIdFor(post: PostSummary): string {
+    const match = integrations.find(i => i.id === post.integration_id);
+    return match?.provider_identifier || post.integration_name?.toLowerCase()?.split(/\s+/)[0] || '';
+  }
+
+  // Priority → display label + Tailwind classes. "medium" is the default
+  // and is NOT rendered as a chip (only deviations from default get visual
+  // emphasis, to keep the card scannable).
+  function priorityLabel(p: string): string {
+    return ({ low: 'Low', medium: 'Medium', high: 'High', urgent: 'Urgent' } as Record<string, string>)[p] || p;
+  }
+  function priorityChipClass(p: string): string {
+    return ({
+      low: 'text-muted bg-line/40',
+      medium: 'text-muted bg-line/40',
+      high: 'text-error bg-error/10',
+      urgent: 'text-error bg-error/20 font-bold',
+    } as Record<string, string>)[p] || 'text-muted bg-line/40';
+  }
+  // Left-border accent for the card itself — draws the eye to high/urgent.
+  function priorityBorderClass(p: string): string {
+    return ({
+      low: 'border-l-2 border-l-info/40',
+      medium: '',
+      high: 'border-l-2 border-l-error/70',
+      urgent: 'border-l-2 border-l-error',
+    } as Record<string, string>)[p] || '';
+  }
+
+  // Due date → color based on how far out it is. Overdue = red, today =
+  // yellow, soon (≤3d) = muted, future = muted-dark. Returns just the
+  // text color class; the caller wraps the icon + date.
+  function dueDateClass(iso: string): string {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return 'text-muted';
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const dueDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const diffDays = Math.round((dueDay.getTime() - today.getTime()) / 86_400_000);
+    if (diffDays < 0) return 'text-error font-medium';
+    if (diffDays === 0) return 'text-warning font-medium';
+    if (diffDays <= 3) return 'text-muted';
+    return 'text-muted-dark';
+  }
+
+  // Substate → label + text color + dot color.
+  function substateLabel(s: string): string {
+    return ({
+      ready_to_publish: 'Ready',
+      in_review: 'In review',
+      blocked: 'Blocked',
+    } as Record<string, string>)[s] || s;
+  }
+  function substateTextClass(s: string): string {
+    return ({
+      ready_to_publish: 'text-success',
+      in_review: 'text-warning',
+      blocked: 'text-error',
+    } as Record<string, string>)[s] || 'text-muted';
+  }
+  function substateDotClass(s: string): string {
+    return ({
+      ready_to_publish: 'bg-success',
+      in_review: 'bg-warning',
+      blocked: 'bg-error',
+    } as Record<string, string>)[s] || 'bg-muted';
+  }
 </script>
 
 <div class="page-enter space-y-6">
@@ -299,8 +391,8 @@
           <!-- Cards -->
           <div class="p-2 space-y-2 min-h-[200px] max-h-[600px] overflow-y-auto">
             {#each postsByState[col.state] || [] as post (post.id)}
-              <div
-                class="bg-background-input border border-line rounded-lg p-3 cursor-grab active:cursor-grabbing hover:border-indigo-500/50 transition-colors {draggingId === post.id ? 'opacity-50' : ''}"
+              <article
+                class="bg-background-input border border-line rounded-lg cursor-grab active:cursor-grabbing hover:border-brand-500/50 transition-colors overflow-hidden {draggingId === post.id ? 'opacity-50' : ''} {priorityBorderClass(post.priority || 'medium')}"
                 draggable={true}
                 ondragstart={(e) => onDragStart(e, post.id)}
                 ondragend={onDragEnd}
@@ -308,24 +400,68 @@
                 role="button"
                 tabindex="0"
                 onkeydown={(e) => { if (e.key === 'Enter') composer.openEdit(post.id); }}
+                aria-label="Post: {(post.content || post.title || '(no content)').slice(0, 80)}"
               >
-                <!-- Card content -->
-                <div class="text-sm text-content line-clamp-2 mb-2">{post.content || post.title || '(no content)'}</div>
-                <div class="flex items-center justify-between text-xs text-muted">
-                  <span class="flex items-center gap-1">
-                    {#if post.integration_name}
-                      <span style="color: {providerColor(post.integration_name?.toLowerCase() || '')}">{providerIcon(post.integration_name?.toLowerCase() || '')}</span>
-                      <span class="truncate max-w-[80px]">{post.integration_name}</span>
+                <div class="p-3">
+                  <!-- Content -->
+                  <div class="text-sm text-content line-clamp-2 mb-2">{post.content || post.title || '(no content)'}</div>
+
+                  <!-- Tags (max 3 visible, +N for the rest) -->
+                  {#if post.tags && post.tags.length > 0}
+                    <div class="flex flex-wrap gap-1 mb-2">
+                      {#each post.tags.slice(0, 3) as tag (tag.id)}
+                        <span
+                          class="px-1.5 py-0.5 rounded text-[10px] font-medium leading-none"
+                          style="background-color: {tag.color}22; color: {tag.color}"
+                          title={tag.name}
+                        >{tag.name}</span>
+                      {/each}
+                      {#if post.tags.length > 3}
+                        <span class="text-[10px] text-muted leading-none py-0.5" title="{post.tags.length - 3} more tags">+{post.tags.length - 3}</span>
+                      {/if}
+                    </div>
+                  {/if}
+
+                  <!-- Metadata row: priority + due date + substate -->
+                  {#if (post.priority && post.priority !== 'medium') || post.due_date || post.kanban_substate}
+                    <div class="flex flex-wrap items-center gap-1.5 mb-2 text-[10px] leading-none">
+                      {#if post.priority && post.priority !== 'medium'}
+                        <span class="px-1.5 py-0.5 rounded font-medium {priorityChipClass(post.priority)}">
+                          {priorityLabel(post.priority)}
+                        </span>
+                      {/if}
+                      {#if post.due_date}
+                        <span class="flex items-center gap-0.5 {dueDateClass(post.due_date)}" title="Due {new Date(post.due_date).toLocaleString()}">
+                          📅 {formatDate(post.due_date)}
+                        </span>
+                      {/if}
+                      {#if post.kanban_substate}
+                        <span class="flex items-center gap-0.5 {substateTextClass(post.kanban_substate)}">
+                          <span class="w-1.5 h-1.5 rounded-full {substateDotClass(post.kanban_substate)}"></span>
+                          {substateLabel(post.kanban_substate)}
+                        </span>
+                      {/if}
+                    </div>
+                  {/if}
+
+                  <!-- Footer: provider + scheduled date -->
+                  <div class="flex items-center justify-between text-xs text-muted">
+                    <span class="flex items-center gap-1 min-w-0">
+                      {#if post.integration_name}
+                        <span style="color: {providerColor(providerIdFor(post))}" class="shrink-0">{providerIcon(providerIdFor(post))}</span>
+                        <span class="truncate max-w-[80px]">{post.integration_name}</span>
+                      {/if}
+                    </span>
+                    {#if post.scheduled_at}
+                      <span class="shrink-0 ml-2">{formatDate(post.scheduled_at)}</span>
                     {/if}
-                  </span>
-                  {#if post.scheduled_at}
-                    <span>{formatDate(post.scheduled_at)}</span>
+                  </div>
+
+                  {#if post.error_message}
+                    <div class="mt-1 text-[10px] text-error truncate" title={post.error_message}>⚠ {post.error_message}</div>
                   {/if}
                 </div>
-                {#if post.error_message}
-                  <div class="mt-1 text-[10px] text-red-400 truncate" title={post.error_message}>⚠ {post.error_message}</div>
-                {/if}
-              </div>
+              </article>
             {/each}
 
             <!-- Empty state -->

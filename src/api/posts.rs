@@ -130,6 +130,18 @@ pub struct PostWithIntegrationName {
     pub group_id: Option<Uuid>,
     pub first_comment: Option<String>,
     pub sequence: i32,
+    // v25-3: kanban fields surfaced to the frontend so the kanban card UI
+    // can render priority / due date / substate / sort order without a
+    // second fetch. Backend writes them via update_stage (see campaigns.rs).
+    pub kanban_sort_order: i32,
+    pub kanban_substate: Option<String>,
+    pub due_date: Option<String>,
+    pub priority: String,
+    // v25-3: campaign_id is already on Post (column since v22 Phase 6) but
+    // wasn't being surfaced in the API response. The kanban filter relies
+    // on it (v22 Phase 6 fix in the frontend), so we add it here for
+    // completeness + to avoid a future round-trip.
+    pub campaign_id: Option<Uuid>,
 }
 
 #[derive(Debug, Serialize)]
@@ -301,6 +313,11 @@ pub async fn list(
              group_id: p.group_id,
              first_comment: p.first_comment.clone(),
              sequence: p.sequence,
+             kanban_sort_order: p.kanban_sort_order,
+             kanban_substate: p.kanban_substate.clone(),
+             due_date: p.due_date.map(|d| d.to_rfc3339()),
+             priority: p.priority.clone(),
+             campaign_id: p.campaign_id,
          });
     }
 

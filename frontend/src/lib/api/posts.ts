@@ -20,6 +20,10 @@ export interface PostSummary {
   kanban_substate?: string | null;
   priority?: string;
   due_date?: string | null;
+  // v25-3: kanban_sort_order is now surfaced by the backend (was DB-only).
+  // Used by the drag-to-reorder feature (v25-4) — included here for type
+  // completeness so future iterations don't need to touch this interface.
+  kanban_sort_order?: number;
   // Engagement metrics (optional — populated when analytics_cache available)
   likes?: number | null;
   comments?: number | null;

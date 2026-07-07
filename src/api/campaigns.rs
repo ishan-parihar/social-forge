@@ -300,6 +300,36 @@ pub async fn update_stage(
         return Err(AppError::BadRequest(format!("Invalid state: {}", body.state)));
     }
 
+    // v25-3: validate kanban metadata fields if provided. The DB has CHECK
+    // constraints (migration 034) but we want a friendly error before the
+    // UPDATE rather than a raw Postgres violation.
+    if let Some(ref sub) = body.kanban_substate {
+        if !["ready_to_publish", "in_review", "blocked"].contains(&sub.as_str()) {
+            return Err(AppError::BadRequest(format!(
+                "Invalid kanban_substate: {sub} (expected ready_to_publish | in_review | blocked)"
+            )));
+        }
+    }
+    if let Some(ref pri) = body.priority {
+        if !["low", "medium", "high", "urgent"].contains(&pri.as_str()) {
+            return Err(AppError::BadRequest(format!(
+                "Invalid priority: {pri} (expected low | medium | high | urgent)"
+            )));
+        }
+    }
+    // Parse due_date if provided (RFC3339 → DateTime<Utc>). An empty string
+    // is treated as "clear" (set to NULL).
+    let due_date_dt: Option<Option<chrono::DateTime<chrono::Utc>>> = match &body.due_date {
+        None => None, // don't touch the field
+        Some(s) if s.trim().is_empty() => Some(None), // explicit clear
+        Some(s) => {
+            let dt = chrono::DateTime::parse_from_rfc3339(s)
+                .map_err(|_| AppError::BadRequest("Invalid due_date format, use ISO8601/RFC3339".into()))?
+                .with_timezone(&chrono::Utc);
+            Some(Some(dt))
+        }
+    };
+
     // Fetch the current state to validate the transition.
     let current_state: Option<String> = sqlx::query_scalar(
         r#"SELECT state::text FROM posts WHERE id = $1 AND user_id = $2"#,
@@ -312,18 +342,53 @@ pub async fn update_stage(
 
     let current_state = current_state.ok_or_else(|| AppError::NotFound("Post not found".into()))?;
 
-    // No-op if the state isn't actually changing (but still update campaign_id).
+    // No-op if the state isn't actually changing (but still update campaign_id
+    // + any kanban metadata fields the caller passed).
     if current_state == body.state {
-        sqlx::query(
-            r#"UPDATE posts SET campaign_id = $3, updated_at = NOW()
-               WHERE id = $1 AND user_id = $2"#,
-        )
-        .bind(id)
-        .bind(auth.user_id)
-        .bind(body.campaign_id)
-        .execute(&state.db)
-        .await
-        .map_err(|e| AppError::Internal(format!("Failed to update campaign: {e}")))?;
+        // v25-3: persist kanban_substate / priority / due_date alongside
+        // campaign_id. COALESCE keeps the existing value when the field
+        // is None (caller didn't pass it). For due_date, we use a separate
+        // branch because "clear" (Some(None)) vs "unchanged" (None) vs
+        // "set" (Some(Some(dt))) are three distinct states.
+        if due_date_dt.is_some() {
+            // Explicit set or clear.
+            sqlx::query(
+                r#"UPDATE posts SET
+                     campaign_id = $3,
+                     kanban_substate = COALESCE($4, kanban_substate),
+                     priority = COALESCE($5, priority),
+                     due_date = $6,
+                     updated_at = NOW()
+                   WHERE id = $1 AND user_id = $2"#,
+            )
+            .bind(id)
+            .bind(auth.user_id)
+            .bind(body.campaign_id)
+            .bind(&body.kanban_substate)
+            .bind(&body.priority)
+            .bind(due_date_dt.unwrap())
+            .execute(&state.db)
+            .await
+            .map_err(|e| AppError::Internal(format!("Failed to update post: {e}")))?;
+        } else {
+            // Leave due_date unchanged.
+            sqlx::query(
+                r#"UPDATE posts SET
+                     campaign_id = $3,
+                     kanban_substate = COALESCE($4, kanban_substate),
+                     priority = COALESCE($5, priority),
+                     updated_at = NOW()
+                   WHERE id = $1 AND user_id = $2"#,
+            )
+            .bind(id)
+            .bind(auth.user_id)
+            .bind(body.campaign_id)
+            .bind(&body.kanban_substate)
+            .bind(&body.priority)
+            .execute(&state.db)
+            .await
+            .map_err(|e| AppError::Internal(format!("Failed to update post: {e}")))?;
+        }
 
         state.broadcast.send(
             "post_stage_changed",
@@ -373,20 +438,50 @@ pub async fn update_stage(
         )));
     }
 
-    sqlx::query(
-        r#"UPDATE posts SET
-             state = $3::post_state,
-             campaign_id = $4,
-             updated_at = NOW()
-           WHERE id = $1 AND user_id = $2"#,
-    )
-    .bind(id)
-    .bind(auth.user_id)
-    .bind(&body.state)
-    .bind(body.campaign_id)
-    .execute(&state.db)
-    .await
-    .map_err(|e| AppError::Internal(format!("Failed to update post stage: {e}")))?;
+    // v25-3: same kanban-metadata persistence as the no-op branch above,
+    // but the UPDATE also transitions state. Two branches for the same
+    // due_date three-state reason (set / clear / unchanged).
+    if due_date_dt.is_some() {
+        sqlx::query(
+            r#"UPDATE posts SET
+                 state = $3::post_state,
+                 campaign_id = $4,
+                 kanban_substate = COALESCE($5, kanban_substate),
+                 priority = COALESCE($6, priority),
+                 due_date = $7,
+                 updated_at = NOW()
+               WHERE id = $1 AND user_id = $2"#,
+        )
+        .bind(id)
+        .bind(auth.user_id)
+        .bind(&body.state)
+        .bind(body.campaign_id)
+        .bind(&body.kanban_substate)
+        .bind(&body.priority)
+        .bind(due_date_dt.unwrap())
+        .execute(&state.db)
+        .await
+        .map_err(|e| AppError::Internal(format!("Failed to update post stage: {e}")))?;
+    } else {
+        sqlx::query(
+            r#"UPDATE posts SET
+                 state = $3::post_state,
+                 campaign_id = $4,
+                 kanban_substate = COALESCE($5, kanban_substate),
+                 priority = COALESCE($6, priority),
+                 updated_at = NOW()
+               WHERE id = $1 AND user_id = $2"#,
+        )
+        .bind(id)
+        .bind(auth.user_id)
+        .bind(&body.state)
+        .bind(body.campaign_id)
+        .bind(&body.kanban_substate)
+        .bind(&body.priority)
+        .execute(&state.db)
+        .await
+        .map_err(|e| AppError::Internal(format!("Failed to update post stage: {e}")))?;
+    }
 
     // Broadcast so other tabs / the dashboard update in real-time.
     state.broadcast.send(
