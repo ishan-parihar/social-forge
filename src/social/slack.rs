@@ -279,14 +279,20 @@ impl SocialProvider for SlackProvider {
             "mrkdwn": true,
         });
 
-        let resp = self
-            .http
-            .post(format!("{SLACK_API_BASE}/chat.postMessage"))
-            .header("Authorization", format!("Bearer {access_token}"))
-            .header("Content-Type", "application/json")
-            .json(&body)
-            .send()
-            .await?;
+        let resp = {
+            // v23-7: send Idempotency-Key header so Slack deduplicates
+            // retries. Slack deduplicates for 5min on chat.postMessage.
+            let mut req = self
+                .http
+                .post(format!("{SLACK_API_BASE}/chat.postMessage"))
+                .header("Authorization", format!("Bearer {access_token}"))
+                .header("Content-Type", "application/json")
+                .json(&body);
+            if let Some(ref key) = post.idempotency_key {
+                req = req.header("Idempotency-Key", key);
+            }
+            req.send().await?
+        };
 
         let status = resp.status();
         let json: serde_json::Value = resp.json().await?;
@@ -349,14 +355,20 @@ impl SocialProvider for SlackProvider {
             body["thread_ts"] = serde_json::Value::String(thread_ts.to_string());
         }
 
-        let resp = self
-            .http
-            .post(format!("{SLACK_API_BASE}/chat.postMessage"))
-            .header("Authorization", format!("Bearer {access_token}"))
-            .header("Content-Type", "application/json")
-            .json(&body)
-            .send()
-            .await?;
+        let resp = {
+            // v23-7: send Idempotency-Key header so Slack deduplicates
+            // retries. Slack deduplicates for 5min on chat.postMessage.
+            let mut req = self
+                .http
+                .post(format!("{SLACK_API_BASE}/chat.postMessage"))
+                .header("Authorization", format!("Bearer {access_token}"))
+                .header("Content-Type", "application/json")
+                .json(&body);
+            if let Some(ref key) = post.idempotency_key {
+                req = req.header("Idempotency-Key", key);
+            }
+            req.send().await?
+        };
 
         let status = resp.status();
         let json: serde_json::Value = resp.json().await?;

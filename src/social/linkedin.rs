@@ -567,14 +567,20 @@ impl SocialProvider for LinkedInProvider {
             }
         });
 
-        let resp = self
-            .http
-            .post("https://api.linkedin.com/v2/ugcPosts")
-            .header("Authorization", format!("Bearer {access_token}"))
-            .header("X-Restli-Protocol-Version", "2.0.0")
-            .json(&body)
-            .send()
-            .await?;
+        let resp = {
+            // v23-7: send Idempotency-Key header so LinkedIn deduplicates
+            // retries after a crash. LinkedIn supports this on POST /v2/ugcPosts.
+            let mut req = self
+                .http
+                .post("https://api.linkedin.com/v2/ugcPosts")
+                .header("Authorization", format!("Bearer {access_token}"))
+                .header("X-Restli-Protocol-Version", "2.0.0")
+                .json(&body);
+            if let Some(ref key) = post.idempotency_key {
+                req = req.header("Idempotency-Key", key);
+            }
+            req.send().await?
+        };
 
         let status = resp.status();
 
@@ -1021,14 +1027,20 @@ impl SocialProvider for LinkedInProvider {
             }
         });
 
-        let resp = self
-            .http
-            .post("https://api.linkedin.com/v2/ugcPosts")
-            .header("Authorization", format!("Bearer {access_token}"))
-            .header("X-Restli-Protocol-Version", "2.0.0")
-            .json(&body)
-            .send()
-            .await?;
+        let resp = {
+            // v23-7: send Idempotency-Key header so LinkedIn deduplicates
+            // retries after a crash. LinkedIn supports this on POST /v2/ugcPosts.
+            let mut req = self
+                .http
+                .post("https://api.linkedin.com/v2/ugcPosts")
+                .header("Authorization", format!("Bearer {access_token}"))
+                .header("X-Restli-Protocol-Version", "2.0.0")
+                .json(&body);
+            if let Some(ref key) = post.idempotency_key {
+                req = req.header("Idempotency-Key", key);
+            }
+            req.send().await?
+        };
 
         let status = resp.status();
 

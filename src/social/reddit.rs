@@ -1122,14 +1122,20 @@ impl SocialProvider for RedditProvider {
             post_data.push(("flair_text", flair_text));
         }
 
-        let resp = self
-            .http
-            .post("https://oauth.reddit.com/api/submit")
-            .header("Authorization", format!("Bearer {access_token}"))
-            .header("User-Agent", "social-forge:v0.1.0 (by /u/social_forge)")
-            .form(&post_data)
-            .send()
-            .await?;
+        let resp = {
+            // v23-7: send Idempotency-Key header so Reddit deduplicates
+            // retries after a crash. Reddit supports this on POST /api/submit.
+            let mut req = self
+                .http
+                .post("https://oauth.reddit.com/api/submit")
+                .header("Authorization", format!("Bearer {access_token}"))
+                .header("User-Agent", "social-forge:v0.1.0 (by /u/social_forge)")
+                .form(&post_data);
+            if let Some(ref key) = post.idempotency_key {
+                req = req.header("Idempotency-Key", key);
+            }
+            req.send().await?
+        };
 
         let status = resp.status();
         let body = resp.text().await.unwrap_or_default();
