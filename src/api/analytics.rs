@@ -286,3 +286,321 @@ pub async fn get_summary(
         posts_by_day,
     }))
 }
+
+// ── v23: New dashboard analytics endpoints ────────────────────
+//
+// These power the upgraded dashboard widgets. Each returns richer data
+// than the v22 summary endpoint — per-day sparklines, deltas vs the
+// previous period, and adherence/cadence metrics.
+
+#[derive(Debug, Deserialize)]
+pub struct AnalyticsDaysQuery {
+    pub days: Option<i32>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct EngagementResponse {
+    pub total_likes: i64,
+    pub total_comments: i64,
+    pub total_shares: i64,
+    pub total_impressions: i64,
+    // Deltas vs the previous period of the same length.
+    pub likes_delta: i64,
+    pub comments_delta: i64,
+    pub shares_delta: i64,
+    pub impressions_delta: i64,
+    // Per-day breakdown for sparklines.
+    pub by_day: Vec<DayEngagement>,
+}
+
+#[derive(Debug, Serialize, sqlx::FromRow)]
+pub struct DayEngagement {
+    pub date: String,
+    pub likes: i64,
+    pub comments: i64,
+    pub shares: i64,
+    pub impressions: i64,
+}
+
+/// GET /api/analytics/engagement?days=7
+///
+/// Returns total engagement (likes/comments/shares/impressions) for the
+/// last N days, with deltas vs the previous N days, and a per-day
+/// breakdown for sparklines. Reads from post_engagement joined to posts.
+pub async fn get_engagement(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Query(query): Query<AnalyticsDaysQuery>,
+) -> Result<Json<EngagementResponse>, AppError> {
+    let days = query.days.unwrap_or(7).max(1) as i64;
+    let now = chrono::Utc::now();
+    let cutoff = now - chrono::Duration::days(days);
+    let prev_cutoff = cutoff - chrono::Duration::days(days);
+
+    // Current period totals.
+    let current: DayEngagement = sqlx::query_as(
+        r#"SELECT
+            COALESCE(SUM(pe.likes), 0)::bigint as likes,
+            COALESCE(SUM(pe.comments), 0)::bigint as comments,
+            COALESCE(SUM(pe.shares), 0)::bigint as shares,
+            COALESCE(SUM(pe.impressions), 0)::bigint as impressions,
+            '' as date
+           FROM post_engagement pe
+           JOIN posts p ON pe.post_id = p.id
+           WHERE p.user_id = $1 AND p.deleted_at IS NULL
+             AND pe.created_at >= $2"#,
+    )
+    .bind(auth.user_id)
+    .bind(cutoff)
+    .fetch_one(&state.db)
+    .await?;
+
+    // Previous period totals (for delta calculation).
+    let prev: DayEngagement = sqlx::query_as(
+        r#"SELECT
+            COALESCE(SUM(pe.likes), 0)::bigint as likes,
+            COALESCE(SUM(pe.comments), 0)::bigint as comments,
+            COALESCE(SUM(pe.shares), 0)::bigint as shares,
+            COALESCE(SUM(pe.impressions), 0)::bigint as impressions,
+            '' as date
+           FROM post_engagement pe
+           JOIN posts p ON pe.post_id = p.id
+           WHERE p.user_id = $1 AND p.deleted_at IS NULL
+             AND pe.created_at >= $2 AND pe.created_at < $3"#,
+    )
+    .bind(auth.user_id)
+    .bind(prev_cutoff)
+    .bind(cutoff)
+    .fetch_one(&state.db)
+    .await?;
+
+    // Per-day breakdown for sparkline.
+    let by_day: Vec<DayEngagement> = sqlx::query_as(
+        r#"SELECT
+            DATE(pe.created_at)::text as date,
+            COALESCE(SUM(pe.likes), 0)::bigint as likes,
+            COALESCE(SUM(pe.comments), 0)::bigint as comments,
+            COALESCE(SUM(pe.shares), 0)::bigint as shares,
+            COALESCE(SUM(pe.impressions), 0)::bigint as impressions
+           FROM post_engagement pe
+           JOIN posts p ON pe.post_id = p.id
+           WHERE p.user_id = $1 AND p.deleted_at IS NULL
+             AND pe.created_at >= $2
+           GROUP BY DATE(pe.created_at)
+           ORDER BY DATE(pe.created_at) ASC"#,
+    )
+    .bind(auth.user_id)
+    .bind(cutoff)
+    .fetch_all(&state.db)
+    .await?;
+
+    Ok(Json(EngagementResponse {
+        total_likes: current.likes,
+        total_comments: current.comments,
+        total_shares: current.shares,
+        total_impressions: current.impressions,
+        likes_delta: current.likes - prev.likes,
+        comments_delta: current.comments - prev.comments,
+        shares_delta: current.shares - prev.shares,
+        impressions_delta: current.impressions - prev.impressions,
+        by_day,
+    }))
+}
+
+#[derive(Debug, Serialize)]
+pub struct AdherenceResponse {
+    pub scheduled: i64,
+    pub published: i64,
+    pub failed: i64,
+    pub adherence_rate: f64, // published / scheduled * 100
+}
+
+/// GET /api/analytics/adherence?days=7
+///
+/// Returns scheduled-vs-actual adherence: how many posts were scheduled,
+/// how many actually published, how many failed, and the adherence rate.
+pub async fn get_adherence(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Query(query): Query<AnalyticsDaysQuery>,
+) -> Result<Json<AdherenceResponse>, AppError> {
+    let days = query.days.unwrap_or(7).max(1) as i64;
+    let cutoff = chrono::Utc::now() - chrono::Duration::days(days);
+
+    let row: (i64, i64, i64) = sqlx::query_as(
+        r#"SELECT
+            COUNT(*) FILTER (WHERE state IN ('published', 'error', 'publishing'))::bigint as scheduled,
+            COUNT(*) FILTER (WHERE state = 'published')::bigint as published,
+            COUNT(*) FILTER (WHERE state = 'error')::bigint as failed
+           FROM posts
+           WHERE user_id = $1 AND deleted_at IS NULL
+             AND scheduled_at >= $2"#,
+    )
+    .bind(auth.user_id)
+    .bind(cutoff)
+    .fetch_one(&state.db)
+    .await?;
+
+    let (scheduled, published, failed) = row;
+    let adherence_rate = if scheduled > 0 {
+        (published as f64 / scheduled as f64) * 100.0
+    } else {
+        100.0
+    };
+
+    Ok(Json(AdherenceResponse {
+        scheduled,
+        published,
+        failed,
+        adherence_rate,
+    }))
+}
+
+#[derive(Debug, Serialize)]
+pub struct CadenceResponse {
+    pub goal_per_day: Option<f64>,
+    pub actual_per_day: f64,
+    pub streak_days: i64,
+    pub total_posts: i64,
+    pub by_day: Vec<DayCount>,
+}
+
+/// GET /api/analytics/cadence?days=30
+///
+/// Returns posting cadence: posts per day (actual vs goal if set in
+/// brand profile), streak, and per-day breakdown. The "goal" comes
+/// from the brand profile's posting_frequency field (stored in
+/// localStorage on the frontend — TODO: sync to backend in v24).
+pub async fn get_cadence(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Query(query): Query<AnalyticsDaysQuery>,
+) -> Result<Json<CadenceResponse>, AppError> {
+    let days = query.days.unwrap_or(30).max(1) as i64;
+    let cutoff = chrono::Utc::now() - chrono::Duration::days(days);
+
+    let day_rows: Vec<(String, i64)> = sqlx::query_as(
+        r#"SELECT DATE(p.published_at)::text, COUNT(*)::bigint
+           FROM posts p
+           WHERE p.user_id = $1 AND p.deleted_at IS NULL
+             AND p.state = 'published' AND p.published_at >= $2
+           GROUP BY DATE(p.published_at)
+           ORDER BY DATE(p.published_at) ASC"#,
+    )
+    .bind(auth.user_id)
+    .bind(cutoff)
+    .fetch_all(&state.db)
+    .await?;
+
+    let total_posts: i64 = day_rows.iter().map(|(_, c)| c).sum();
+    let actual_per_day = if days > 0 {
+        total_posts as f64 / days as f64
+    } else {
+        0.0
+    };
+
+    // Streak: count consecutive days (ending today or yesterday) with
+    // at least one published post.
+    let streak_days = calculate_streak(&state.db, auth.user_id).await;
+
+    let by_day: Vec<DayCount> = day_rows
+        .into_iter()
+        .map(|(date, count)| DayCount { date, count })
+        .collect();
+
+    Ok(Json(CadenceResponse {
+        goal_per_day: None, // TODO: read from brand profile when backend-synced
+        actual_per_day,
+        streak_days,
+        total_posts,
+        by_day,
+    }))
+}
+
+/// Calculate the current posting streak: consecutive days (ending today
+/// or yesterday) with at least one published post.
+async fn calculate_streak(db: &crate::db::PgPool, user_id: Uuid) -> i64 {
+    let rows: Vec<(String,)> = sqlx::query_as(
+        r#"SELECT DISTINCT DATE(p.published_at)::text
+           FROM posts p
+           WHERE p.user_id = $1 AND p.deleted_at IS NULL
+             AND p.state = 'published' AND p.published_at IS NOT NULL
+           ORDER BY DATE(p.published_at) DESC
+           LIMIT 400"#, // cap at ~13 months
+    )
+    .bind(user_id)
+    .fetch_all(db)
+    .await
+    .unwrap_or_default();
+
+    if rows.is_empty() {
+        return 0;
+    }
+
+    let parse_date = |s: &str| chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").ok();
+    let today = chrono::Utc::now().date_naive();
+    let yesterday = today - chrono::Duration::days(1);
+
+    // Start from today or yesterday (so a streak isn't broken if the
+    // user hasn't posted yet today).
+    let first_date = parse_date(&rows[0].0);
+    let streak_start = match first_date {
+        Some(d) if d == today || d == yesterday => d,
+        _ => return 0,
+    };
+
+    let mut streak = 1i64;
+    let mut expected = streak_start - chrono::Duration::days(1);
+    for (date_str,) in rows.iter().skip(1) {
+        if let Some(d) = parse_date(date_str) {
+            if d == expected {
+                streak += 1;
+                expected = expected - chrono::Duration::days(1);
+            } else if d < expected {
+                // Gap found — streak over.
+                break;
+            }
+            // If d > expected (duplicate day, shouldn't happen with DISTINCT), skip.
+        }
+    }
+    streak
+}
+
+#[derive(Debug, Serialize, sqlx::FromRow)]
+pub struct EventLogEntry {
+    pub id: Uuid,
+    pub event_type: String,
+    pub payload: serde_json::Value,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RecentEventsQuery {
+    pub limit: Option<i32>,
+}
+
+/// GET /api/events/recent?limit=10
+///
+/// Returns the last N events from the events_log table. Powers the
+/// dashboard's "Recent Activity" widget. The Broadcaster only fires
+/// events when a subscriber is connected, so this endpoint is needed
+/// to show activity that happened while no SSE client was connected.
+pub async fn get_recent_events(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Query(query): Query<RecentEventsQuery>,
+) -> Result<Json<Vec<EventLogEntry>>, AppError> {
+    let limit = query.limit.unwrap_or(10).clamp(1, 100) as i64;
+    let entries: Vec<EventLogEntry> = sqlx::query_as(
+        r#"SELECT id, event_type, payload, created_at
+           FROM events_log
+           WHERE user_id = $1
+           ORDER BY created_at DESC
+           LIMIT $2"#,
+    )
+    .bind(auth.user_id)
+    .bind(limit)
+    .fetch_all(&state.db)
+    .await?;
+    Ok(Json(entries))
+}

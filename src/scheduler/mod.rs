@@ -143,6 +143,50 @@ pub fn start_scheduler(
             }
         }
     });
+
+    // v23: events_log cleanup task (runs every 6 hours).
+    // Trims events_log rows older than 7 days to prevent unbounded growth.
+    // The dashboard only queries the last 10-50 events, so 7 days is
+    // generous headroom.
+    let db_events = db.clone();
+    let mut shutdown_events = shutdown.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(Duration::from_secs(21600)); // 6 hours
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        loop {
+            tokio::select! {
+                _ = shutdown_events.changed() => {
+                    if *shutdown_events.borrow() {
+                        tracing::info!("Events log cleanup shutting down...");
+                        break;
+                    }
+                }
+                _ = interval.tick() => {
+                    let retention_days: i64 = std::env::var("EVENTS_LOG_RETENTION_DAYS")
+                        .ok()
+                        .and_then(|s| s.parse().ok())
+                        .unwrap_or(7);
+                    match sqlx::query(
+                        "DELETE FROM events_log WHERE created_at < NOW() - make_interval(days => $1)",
+                    )
+                    .bind(retention_days)
+                    .execute(&db_events)
+                    .await
+                    {
+                        Ok(res) => {
+                            let n = res.rows_affected();
+                            if n > 0 {
+                                tracing::debug!("Cleaned up {n} events_log rows older than {retention_days} days");
+                            }
+                        }
+                        Err(e) => {
+                            tracing::warn!("events_log cleanup failed: {e}");
+                        }
+                    }
+                }
+            }
+        }
+    });
 }
 
 /// Proactive token refresh: refreshes tokens expiring within 24h for providers that need cron refresh
@@ -440,13 +484,13 @@ async fn process_due_posts(
                     tracing::error!("Failed to publish post {}: {e}", post_clone.id);
                     let err_str = e.to_string();
                     mark_post_error(&db_clone, post_clone.id, &err_str).await;
-                    bcast.send(
-                        "post_failed",
-                        &serde_json::json!({
-                            "id": post_clone.id.to_string(),
-                            "error": err_str,
-                        }),
-                    );
+                    let fail_payload = serde_json::json!({
+                        "id": post_clone.id.to_string(),
+                        "error": err_str,
+                    });
+                    bcast.send("post_failed", &fail_payload);
+                    // v23: persist to events_log for the dashboard.
+                    let _ = bcast.send_and_log(&db_clone, post_clone.user_id, "post_failed", &fail_payload).await;
                     // Publish failed — record failure in circuit breaker.
                     // After N consecutive failures, the circuit opens and
                     // subsequent posts for this provider are skipped.
@@ -737,6 +781,10 @@ async fn publish_post(
                 });
 
                 broadcaster.send("post_published", &event_payload);
+                // v23: persist to events_log so the dashboard's "Recent
+                // Activity" widget shows publishes even if no SSE client
+                // was connected at the time.
+                let _ = broadcaster.send_and_log(db, post.user_id, "post_published", &event_payload).await;
 
                 // Fire webhooks for post.published event (best-effort,
                 // non-blocking — runs in a detached task so it doesn't
