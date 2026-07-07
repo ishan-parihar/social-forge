@@ -32,7 +32,7 @@
   import TagPicker from '$lib/composer/TagPicker.svelte';
   import { campaignsApi, type Campaign } from '$lib/api/campaigns';
   import PostSetModal from '$lib/composer/PostSetModal.svelte';
-  import ThreadFinisher from '$lib/composer/ThreadFinisher.svelte';
+  import ThreadBuilder from '$lib/composer/ThreadBuilder.svelte';
   import FirstComment from '$lib/composer/FirstComment.svelte';
   import AiAssistant from '$lib/composer/AiAssistant.svelte';
   import AiHashtagSuggestions from '$lib/composer/AiHashtagSuggestions.svelte';
@@ -100,6 +100,14 @@
 
   let hasXIntegration = $derived(
     selectedIntegrations.some(id => integrationProviders.get(id) === 'x')
+  );
+  // v26-4: primary provider for the ThreadBuilder's char limit display.
+  // Uses the first selected integration's provider. This is a best-effort
+  // UX hint — the actual per-platform validation happens on submit.
+  let primaryProvider = $derived(
+    selectedIntegrations.length > 0
+      ? (integrationProviders.get(selectedIntegrations[0]) || 'x')
+      : 'x'
   );
   let hasInstagramIntegration = $derived(
     selectedIntegrations.some(id => {
@@ -887,29 +895,37 @@
           </div>
         {/if}
 
-        <!-- Thread Finisher (X/Twitter only) -->
-        {#if hasXIntegration}
-          <ThreadFinisher {content} onCreateThread={async (parts) => {
-            if (submitting) return;
-            if (selectedIntegrations.length === 0) { error = 'Please select at least one channel'; return; }
-            submitting = true;
-            error = null;
-            try {
-              const r = await postsApi.createThread({
-                content_parts: parts,
-                integration_ids: selectedIntegrations,
-                scheduled_at: scheduledAt || undefined,
-              });
-              if (r.error) { error = r.error; return; }
-              localStorage.removeItem(DRAFT_KEY);
-              composer.close();
-              toast('Thread created', 'success');
-            } catch (e: unknown) {
-              error = (e instanceof Error ? e.message : String(e)) || 'Failed to create thread';
-            } finally {
-              submitting = false;
-            }
-          }} {submitting} />
+        <!-- v26-4: Thread Builder (generic — works for any provider, not just X).
+             Shows when at least 1 integration is selected. Per-row delay
+             (delay_minutes) is passed to the backend createThread API. -->
+        {#if selectedIntegrations.length > 0}
+          <ThreadBuilder
+            {content}
+            provider={primaryProvider}
+            onCreateThread={async (parts, delayMinutes) => {
+              if (submitting) return;
+              if (selectedIntegrations.length === 0) { error = 'Please select at least one channel'; return; }
+              submitting = true;
+              error = null;
+              try {
+                const r = await postsApi.createThread({
+                  content_parts: parts,
+                  integration_ids: selectedIntegrations,
+                  scheduled_at: scheduledAt || undefined,
+                  delay_minutes: delayMinutes,
+                });
+                if (r.error) { error = r.error; return; }
+                localStorage.removeItem(DRAFT_KEY);
+                composer.close();
+                toast('Thread created', 'success');
+              } catch (e: unknown) {
+                error = (e instanceof Error ? e.message : String(e)) || 'Failed to create thread';
+              } finally {
+                submitting = false;
+              }
+            }}
+            {submitting}
+          />
         {/if}
 
         <!-- First Comment (LinkedIn/Facebook only) -->
