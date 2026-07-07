@@ -6,14 +6,13 @@
 // (idea, draft, queued, published) and optionally by campaign.
 
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Path, State},
     Json,
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::auth::middleware::AuthenticatedUser;
-use crate::db::PgPool;
 use crate::error::AppError;
 
 use super::AppState;

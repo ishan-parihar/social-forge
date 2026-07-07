@@ -138,7 +138,7 @@ pub async fn handle_wh_create(
 
 pub async fn handle_wh_list(
     state: &AppState,
-    input: &WhListInput,
+    _input: &WhListInput,
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = resolve_user("", state)?;
 

@@ -96,7 +96,7 @@ pub async fn handle_sl_send_message(
 
 pub async fn handle_sl_list_channels(
     state: &AppState,
-    input: &SlListChannelsInput,
+    _input: &SlListChannelsInput,
 ) -> Result<Json<Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let stored_token = find_slack_token(state, user_id).await?;
@@ -131,7 +131,7 @@ pub async fn handle_sl_channel_history(
 
 pub async fn handle_sl_list_users(
     state: &AppState,
-    input: &SlListUsersInput,
+    _input: &SlListUsersInput,
 ) -> Result<Json<Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let stored_token = find_slack_token(state, user_id).await?;

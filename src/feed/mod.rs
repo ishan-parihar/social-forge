@@ -275,7 +275,7 @@ async fn refresh_all_posts(
             .unwrap_or_else(|| integration.access_token.clone());
 
         // Fetch recent posts from provider
-        let mut posts = match provider
+        let posts = match provider
             .get_recent_posts(&token, &integration.internal_id, RECENT_POSTS_LIMIT)
             .await
         {

@@ -38,7 +38,7 @@ pub fn start_scheduler(
     providers: Arc<ProviderRegistry>,
     broadcaster: Broadcaster,
     token_key: Option<[u8; 32]>,
-    mut shutdown: tokio::sync::watch::Receiver<bool>,
+    shutdown: tokio::sync::watch::Receiver<bool>,
 ) {
     // Main post publishing scheduler
     let db1 = db.clone();

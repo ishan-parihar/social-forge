@@ -5,7 +5,6 @@ use crate::api::AppState;
 use crate::cli::{RedditAction, RedditModAction};
 use crate::cli::platforms::emit_result;
 use crate::cli::run::{find_reddit_token, resolve_user, find_integration, fetch_targets, pick_target_interactive};
-use crate::social::SocialProvider;
 
 pub async fn handle(action: RedditAction, state: &AppState) -> anyhow::Result<()> {
     let user_id = resolve_user(state).await?;

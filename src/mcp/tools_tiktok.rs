@@ -64,7 +64,7 @@ fn create_tiktok_provider(state: &AppState) -> TikTokProvider {
 
 pub async fn handle_tt_profile(
     state: &AppState,
-    input: &TtProfileInput,
+    _input: &TtProfileInput,
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let (stored_token, _) = find_tiktok_integration(state, user_id).await?;

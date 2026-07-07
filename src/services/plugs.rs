@@ -202,7 +202,7 @@ async fn execute_plug(
                 // For X: retweet using the XProvider's retweet method
                 if provider_id == "x" {
                     let x_provider = crate::social::x::XProvider::new(&crate::config::Config::from_env().map_err(|e| format!("Config error: {e}"))?);
-                    let user_id_str = crate::auth::middleware::DEFAULT_USER_ID.to_string();
+                    let _user_id_str = crate::auth::middleware::DEFAULT_USER_ID.to_string();
                     // XProvider::retweet needs the X user ID, not our internal UUID.
                     // We'll use the integration's internal_id which is the X user ID.
                     let internal_id_row = sqlx::query("SELECT internal_id FROM integrations WHERE id = $1")

@@ -895,7 +895,7 @@ pub async fn import_cookies(
 /// Set a configuration value in ~/.social-forge/.env.
 /// Creates the file if it doesn't exist. Overwrites existing values for the same key.
 pub fn config_set(
-    state: &AppState,
+    _state: &AppState,
     input: &ConfigSetInput,
 ) -> Result<Json<serde_json::Value>, String> {
     let dir = crate::config::config_dir();
