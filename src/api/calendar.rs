@@ -19,6 +19,10 @@ use super::AppState;
 pub struct CalendarQuery {
     pub start: String, // ISO8601 date or datetime
     pub end: String,
+    // v23-4: optional filters. Comma-separated integration_ids + single
+    // campaign_id. When provided, the query narrows to matching posts.
+    pub integration_ids: Option<String>, // comma-separated UUIDs
+    pub campaign_id: Option<Uuid>,
 }
 
 #[derive(Debug, Serialize)]
@@ -41,6 +45,8 @@ pub struct CalendarPost {
     pub group_id: Option<Uuid>,
     pub first_comment: Option<String>,
     pub sequence: i32,
+    // v23-4: campaign_id for chip coloring + filtering.
+    pub campaign_id: Option<Uuid>,
     // Engagement metrics (optional — only populated when analytics_cache has data)
     pub likes: Option<i64>,
     pub comments: Option<i64>,
@@ -62,6 +68,7 @@ pub struct CalendarResponse {
 }
 
 /// GET /api/calendar?start=2026-05-01&end=2026-05-31
+/// v23-4: optional filters via integration_ids (comma-separated) + campaign_id.
 pub async fn get(
     State(state): State<AppState>,
     auth: AuthenticatedUser,
@@ -73,7 +80,19 @@ pub async fn get(
     let end = parse_date_or_datetime(&query.end)
         .ok_or_else(|| AppError::BadRequest("Invalid end date".into()))?;
 
-    let posts = queries::get_calendar_posts_with_metrics(&state.db, auth.user_id, start, end).await?;
+    // v23-4: parse optional integration_ids filter (comma-separated UUIDs).
+    let integration_ids: Option<Vec<Uuid>> = query.integration_ids.as_deref().map(|s| {
+        s.split(',')
+            .filter_map(|id| Uuid::parse_str(id.trim()).ok())
+            .collect::<Vec<_>>()
+    }).filter(|v| !v.is_empty());
+    let integration_ids_ref = integration_ids.as_deref();
+
+    let posts = queries::get_calendar_posts_with_metrics(
+        &state.db, auth.user_id, start, end,
+        integration_ids_ref,
+        query.campaign_id,
+    ).await?;
 
     let mut day_map: std::collections::BTreeMap<String, Vec<CalendarPost>> = std::collections::BTreeMap::new();
     for p in posts {
@@ -118,6 +137,7 @@ pub async fn get(
             group_id: p.group_id,
             first_comment: p.first_comment,
             sequence: p.sequence,
+            campaign_id: p.campaign_id,
             likes: p.likes,
             comments: p.comments,
             shares: p.shares,

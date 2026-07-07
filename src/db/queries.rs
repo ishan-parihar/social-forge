@@ -1188,8 +1188,40 @@ pub async fn get_calendar_posts_with_metrics(
     user_id: Uuid,
     start_date: DateTime<Utc>,
     end_date: DateTime<Utc>,
+    // v23-4: optional filters. When Some, the query adds a WHERE clause.
+    integration_ids: Option<&[Uuid]>,
+    campaign_id: Option<Uuid>,
 ) -> Result<Vec<CalendarPostWithMetrics>, sqlx::Error> {
-    sqlx::query_as::<_, CalendarPostWithMetrics>(
+    // v23-4: build the query dynamically based on filters. We use
+    // runtime query_as (not the query! macro) so we can conditionally
+    // add WHERE clauses without regenerating the .sqlx cache.
+    //
+    // The filter parameters are appended after the existing $1/$2/$3
+    // (user_id, start_date, end_date). We build a parameter list and
+    // bind them in order.
+    let mut where_clauses: Vec<String> = vec![
+        "p.user_id = $1".into(),
+        "p.deleted_at IS NULL".into(),
+        "(p.state != 'published' AND p.scheduled_at >= $2 AND p.scheduled_at <= $3) \
+         OR (p.state = 'published' AND p.published_at >= $2 AND p.published_at <= $3)".into(),
+    ];
+    let mut param_idx = 4usize; // next param index after $1/$2/$3
+
+    if let Some(ref ids) = integration_ids {
+        if !ids.is_empty() {
+            where_clauses.push(format!("p.integration_id = ANY(${param_idx})"));
+            param_idx += 1;
+        }
+    }
+    if let Some(cid) = campaign_id {
+        let _ = cid; // suppress unused warning; bound below
+        where_clauses.push(format!("p.campaign_id = ${param_idx}"));
+        param_idx += 1;
+    }
+
+    let where_sql = where_clauses.join(" AND ");
+
+    let sql = format!(
         r#"SELECT
            p.id, p.user_id, p.integration_id,
            p.state::text as state,
@@ -1200,6 +1232,7 @@ pub async fn get_calendar_posts_with_metrics(
            p.created_at,
            p.repeat_interval_days, p.repeat_end_date,
            p.group_id, p.first_comment, p.sequence,
+           p.campaign_id,
            i.provider_name as integration_name,
            NULL::bigint as likes,
            NULL::bigint as comments,
@@ -1207,23 +1240,26 @@ pub async fn get_calendar_posts_with_metrics(
            NULL::bigint as impressions
          FROM posts p
          LEFT JOIN integrations i ON p.integration_id = i.id
-         WHERE p.user_id = $1
-           AND p.deleted_at IS NULL
-           AND (
-             -- Queued/draft posts: filter by scheduled_at
-             (p.state != 'published' AND p.scheduled_at >= $2 AND p.scheduled_at <= $3)
-             OR
-             -- Published posts: filter by published_at
-             (p.state = 'published' AND p.published_at >= $2 AND p.published_at <= $3)
-           )
+         WHERE {where_sql}
          ORDER BY
            CASE WHEN p.state = 'published' THEN p.published_at ELSE p.scheduled_at END ASC"#,
-    )
-    .bind(user_id)
-    .bind(start_date)
-    .bind(end_date)
-    .fetch_all(pool)
-    .await
+    );
+
+    let mut q = sqlx::query_as::<_, CalendarPostWithMetrics>(&sql)
+        .bind(user_id)
+        .bind(start_date)
+        .bind(end_date);
+
+    if let Some(ids) = integration_ids {
+        if !ids.is_empty() {
+            q = q.bind(ids);
+        }
+    }
+    if let Some(cid) = campaign_id {
+        q = q.bind(cid);
+    }
+
+    q.fetch_all(pool).await
 }
 
 /// Find next free time slot for scheduling

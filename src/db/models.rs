@@ -264,6 +264,8 @@ pub struct CalendarPostWithMetrics {
     pub group_id: Option<Uuid>,
     pub first_comment: Option<String>,
     pub sequence: i32,
+    // v23-4: campaign_id for calendar filtering + chip coloring.
+    pub campaign_id: Option<Uuid>,
     // Engagement metrics from analytics_cache LEFT JOIN
     pub likes: Option<i64>,
     pub comments: Option<i64>,
