@@ -15,7 +15,11 @@ import type { LayoutLoad } from './$types';
  * probe avoids a race during the OAuth redirect dance.
  */
 export const load: LayoutLoad = async ({ url, fetch }) => {
-  if (url.pathname === '/login' || url.pathname.startsWith('/auth/callback')) {
+  const isLogin = url.pathname === '/login';
+  const isCallback = url.pathname.startsWith('/auth/callback');
+
+  // Callback pages never need auth checks (OAuth popup target).
+  if (isCallback) {
     return { authenticated: false, userId: null };
   }
 
@@ -23,10 +27,17 @@ export const load: LayoutLoad = async ({ url, fetch }) => {
     const res = await fetch('/api/auth/me', { credentials: 'include' });
     if (res.ok) {
       const data = await res.json();
+      // Already logged in but still on /login — send to dashboard.
+      if (isLogin) throw redirect(303, '/');
       return { authenticated: true, userId: data.user_id as string };
     }
-  } catch {
-    // network error — fall through to redirect
+  } catch (e) {
+    // Redirect objects from `throw redirect(...)` must propagate.
+    if (e instanceof redirect) throw e;
+    // Other errors fall through to the redirect below.
   }
-  throw redirect(303, '/login');
+
+  // Not authenticated — redirect to login (unless already there).
+  if (!isLogin) throw redirect(303, '/login');
+  return { authenticated: false, userId: null };
 };
