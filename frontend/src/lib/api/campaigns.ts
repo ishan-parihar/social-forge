@@ -1,5 +1,6 @@
 // Campaigns API — CRUD for campaign entities + post stage management.
-// Phase 7, v20.
+// Phase 7, v20. v22 Phase 6: expanded with status, progress_metric,
+// audience_persona, content_pillars, budget_cents, kpi_targets.
 
 import { api } from './client';
 
@@ -12,6 +13,16 @@ export interface Campaign {
   start_date: string | null;
   end_date: string | null;
   goal: string | null;
+  // v22 Phase 6: expanded fields.
+  status: 'active' | 'paused' | 'archived' | 'completed';
+  progress_metric: 'posts' | 'engagement' | 'reach' | 'followers' | 'custom' | null;
+  progress_target: number | null;
+  audience_persona: Record<string, unknown> | null;
+  content_pillars: Array<{ title: string; description?: string; tags?: string[] }> | null;
+  budget_cents: number | null;
+  kpi_targets: Record<string, unknown> | null;
+  sort_order: number;
+  deleted_at: string | null;
   created_at: string;
   updated_at: string;
   post_count: number | null;
@@ -24,6 +35,14 @@ export interface CreateCampaignInput {
   start_date?: string;
   end_date?: string;
   goal?: string;
+  // v22 Phase 6: optional expanded fields.
+  status?: 'active' | 'paused' | 'archived' | 'completed';
+  progress_metric?: 'posts' | 'engagement' | 'reach' | 'followers' | 'custom';
+  progress_target?: number;
+  audience_persona?: Record<string, unknown>;
+  content_pillars?: Array<{ title: string; description?: string; tags?: string[] }>;
+  budget_cents?: number;
+  kpi_targets?: Record<string, unknown>;
 }
 
 export interface UpdateCampaignInput {
@@ -33,6 +52,14 @@ export interface UpdateCampaignInput {
   start_date?: string;
   end_date?: string;
   goal?: string;
+  // v22 Phase 6: expanded fields.
+  status?: 'active' | 'paused' | 'archived' | 'completed';
+  progress_metric?: 'posts' | 'engagement' | 'reach' | 'followers' | 'custom';
+  progress_target?: number;
+  audience_persona?: Record<string, unknown>;
+  content_pillars?: Array<{ title: string; description?: string; tags?: string[] }>;
+  budget_cents?: number;
+  kpi_targets?: Record<string, unknown>;
 }
 
 export const campaignsApi = {

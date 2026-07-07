@@ -105,7 +105,7 @@
     }
   }
 
-  let unsubscribers: (() => void) = [];
+  let unsubscribers: (() => void)[] = [];
 
   onMount(() => {
     load();

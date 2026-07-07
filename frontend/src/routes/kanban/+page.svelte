@@ -10,6 +10,7 @@
   import { onMount, onDestroy } from 'svelte';
   import { postsApi, type PostSummary } from '$lib/api/posts';
   import { campaignsApi, type Campaign } from '$lib/api/campaigns';
+  import { integrationsApi, type Integration } from '$lib/api/integrations';
   import { composer } from '$lib/stores/composer.svelte';
   import { modals } from '$lib/stores/modals.svelte';
   import { toast } from '$lib/stores/toast';
@@ -20,6 +21,10 @@
 
   let posts = $state<PostSummary[]>([]);
   let campaigns = $state<Campaign[]>([]);
+  // v22 Phase 6: load integrations so quick-add can require a channel
+  // (previously created posts with integration_ids: [] which the
+  // backend rejects).
+  let integrations = $state<Integration[]>([]);
   let selectedCampaign = $state<string | null>(null);
   let loading = $state(true);
   let draggingId = $state<string | null>(null);
@@ -42,12 +47,14 @@
 
   async function load() {
     loading = true;
-    const [postsRes, campRes] = await Promise.all([
+    const [postsRes, campRes, integRes] = await Promise.all([
       postsApi.list({ limit: 200 }),
       campaignsApi.list(),
+      integrationsApi.list(),
     ]);
     if (postsRes.data) posts = postsRes.data.posts;
     if (campRes.data) campaigns = campRes.data;
+    if (integRes.data) integrations = integRes.data.integrations.filter(i => !i.disabled);
     loading = false;
   }
 
@@ -56,7 +63,12 @@
     // v22 Phase 1: subscribe to post lifecycle events + the new
     // `post_stage_changed` (kanban drag in another tab) + `lagged`
     // (SSE missed events → refetch).
-    const events = ['post_created', 'post_scheduled', 'post_published', 'post_failed', 'post_deleted', 'post_stage_changed', 'lagged'];
+    // v22 Phase 6: also subscribe to campaign_created/updated/deleted.
+    const events = [
+      'post_created', 'post_scheduled', 'post_published', 'post_failed',
+      'post_deleted', 'post_stage_changed', 'lagged',
+      'campaign_created', 'campaign_updated', 'campaign_deleted',
+    ];
     for (const evt of events) {
       unsubscribers.push(realtime.on(evt, () => load()));
     }
@@ -66,10 +78,15 @@
     unsubscribers.forEach(fn => fn());
   });
 
-  // Filter posts by campaign + group by state.
+  // v22 Phase 6: fixed campaign filter. Previously accessed
+  // `(p as any).campaign_id` because PostSummary didn't have the field.
+  // Now PostSummary has campaign_id as a proper optional field, so the
+  // filter works correctly. The old `p.group_id === selectedCampaign`
+  // fallback (which matched on thread/group ID, not campaign ID) is
+  // removed — it was a bug that caused false positives.
   let filteredPosts = $derived(
     selectedCampaign
-      ? posts.filter(p => (p as any).campaign_id === selectedCampaign || p.group_id === selectedCampaign)
+      ? posts.filter(p => p.campaign_id === selectedCampaign)
       : posts
   );
 
@@ -84,13 +101,33 @@
   });
 
   // Quick-add idea: create a post with state='idea' and minimal content.
+  // v22 Phase 6: fixed the integration_ids: [] bug. Previously quick-add
+  // created posts with no integration, which the backend rejects (the
+  // composer requires at least one integration). Now we require a
+  // channel to be selected via the quick-add-integration dropdown. If
+  // the user has no connected channels, we show a helpful message
+  // directing them to the Channels page.
   let quickIdeaText = $state('');
+  let quickIdeaIntegrationId = $state<string>('');
+  let showQuickAddIntegSelect = $state(false);
+
+  // Auto-select the first integration when the dropdown opens.
+  $effect(() => {
+    if (showQuickAddIntegSelect && !quickIdeaIntegrationId && integrations.length > 0) {
+      quickIdeaIntegrationId = integrations[0].id;
+    }
+  });
+
   async function quickAddIdea() {
     if (!quickIdeaText.trim()) return;
-    // Create a post with no integration — it's just an idea.
-    // We'll use the first integration if available, or create with empty content.
+    if (!quickIdeaIntegrationId) {
+      toast('Please select a channel for this idea, or connect one in the Channels page first.', 'error');
+      showQuickAddIntegSelect = true;
+      return;
+    }
+    // Create a post with the selected integration.
     const r = await postsApi.create({
-      integration_ids: [],
+      integration_ids: [quickIdeaIntegrationId],
       content: quickIdeaText.trim(),
       title: undefined,
     });
@@ -103,6 +140,7 @@
       await campaignsApi.updateStage(r.data.posts[0].id, 'idea');
     }
     quickIdeaText = '';
+    showQuickAddIntegSelect = false;
     toast('Idea saved', 'success');
     load();
   }
@@ -298,21 +336,41 @@
 
           <!-- Quick-add idea (only in Ideas column) -->
           {#if col.state === 'idea'}
-            <div class="p-2 border-t border-line">
+            <div class="p-2 border-t border-line space-y-1">
               <div class="flex gap-1">
                 <input
                   type="text"
                   bind:value={quickIdeaText}
                   onkeydown={(e) => { if (e.key === 'Enter') quickAddIdea(); }}
+                  onfocus={() => { if (!showQuickAddIntegSelect) showQuickAddIntegSelect = true; }}
                   placeholder="Quick add idea..."
-                  class="flex-1 px-2 py-1 text-xs bg-background-input border border-line rounded focus:border-indigo-500 outline-none"
+                  class="flex-1 px-2 py-1 text-xs bg-background-input border border-line rounded focus:border-brand-500 outline-none"
                 />
                 <button
                   onclick={quickAddIdea}
                   disabled={!quickIdeaText.trim()}
-                  class="px-2 py-1 text-xs bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded transition-colors"
+                  class="px-2 py-1 text-xs bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white rounded transition-colors"
                 >+</button>
               </div>
+              <!-- v22 Phase 6: channel selector for quick-add. Previously
+                   quick-add created posts with integration_ids: [] which
+                   the backend rejects. Now the user must pick a channel. -->
+              {#if showQuickAddIntegSelect}
+                {#if integrations.length === 0}
+                  <p class="text-[10px] text-warning px-1">
+                    No channels connected. <a href="/channels" class="underline">Connect one</a> to add ideas.
+                  </p>
+                {:else}
+                  <select
+                    bind:value={quickIdeaIntegrationId}
+                    class="w-full px-2 py-1 text-xs bg-background-input border border-line rounded focus:border-brand-500 outline-none"
+                  >
+                    {#each integrations as int (int.id)}
+                      <option value={int.id}>{int.provider_name || int.provider_identifier}</option>
+                    {/each}
+                  </select>
+                {/if}
+              {/if}
             </div>
           {/if}
         </div>

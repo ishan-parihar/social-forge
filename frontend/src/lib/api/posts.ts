@@ -2,7 +2,7 @@ import { api } from './client';
 import type { Tag } from './tags';
 
 export interface PostSummary {
-  id: string; integration_name: string; state: string;
+  id: string; integration_id?: string; integration_name: string; state: string;
   content: string; title?: string; scheduled_at?: string;
   published_at?: string | null;
   platform_post_url?: string; error_message?: string; created_at: string;
@@ -12,6 +12,14 @@ export interface PostSummary {
   group_id?: string | null;
   first_comment?: string | null;
   sequence?: number;
+  // v22 Phase 6: campaign_id for kanban filtering. Previously the
+  // kanban accessed this via `as any` because the field didn't exist
+  // on the type. Now it's a proper optional field.
+  campaign_id?: string | null;
+  // v22 Phase 6: kanban fields.
+  kanban_substate?: string | null;
+  priority?: string;
+  due_date?: string | null;
   // Engagement metrics (optional — populated when analytics_cache available)
   likes?: number | null;
   comments?: number | null;
