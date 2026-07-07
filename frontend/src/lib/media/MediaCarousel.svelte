@@ -203,14 +203,7 @@
           {#each items as _, i (i)}
             <button
               onclick={() => goTo(i)}
-              class="rounded-full transition-all duration-300"
-              class:w-2.5={i === current}
-              class:w-2={i !== current}
-              class:h-2.5={i === current}
-              class:h-2={i !== current}
-              class:bg-brand-400={i === current}
-              class:bg-line-hover={i !== current}
-              class:shadow-[0_0_6px_rgba(99,102,241,0.3)]={i === current}
+              class="rounded-full transition-all duration-300 {i === current ? 'w-2.5 h-2.5 bg-brand-400 shadow-[0_0_6px_rgb(var(--brand-rgb)/0.3)]' : 'w-2 h-2 bg-line-hover'}"
               aria-label={`Go to slide ${i + 1}`}
               aria-current={i === current ? 'true' : undefined}
             />

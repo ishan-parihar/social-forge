@@ -48,13 +48,13 @@
   .dropdown-trigger { background: none; border: none; cursor: pointer; padding: 0; color: inherit; }
   .dropdown-menu {
     position: absolute; top: 100%; margin-top: 0.25rem; z-index: 50;
-    min-width: 10rem; background: #1a1f2e; border: 1px solid #2a3045;
+    min-width: 10rem; background: var(--bg-card); border: 1px solid var(--border);
     border-radius: 0.5rem; box-shadow: 0 10px 25px rgba(0,0,0,0.3); padding: 0.25rem;
   }
   .dropdown-item {
     display: block; width: 100%; text-align: left; padding: 0.5rem 0.75rem;
-    font-size: 0.875rem; color: #d1d5db; background: none; border: none;
+    font-size: 0.875rem; color: var(--text-secondary); background: none; border: none;
     border-radius: 0.375rem; cursor: pointer;
   }
-  .dropdown-item:hover { background: #2a3045; }
+  .dropdown-item:hover { background: var(--bg-hover); }
 </style>

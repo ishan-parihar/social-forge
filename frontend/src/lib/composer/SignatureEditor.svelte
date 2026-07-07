@@ -132,8 +132,8 @@
   .toolbar-btn {
     padding: 0.25rem 0.5rem; font-size: 0.8rem; background: transparent;
     border: 1px solid transparent; border-radius: 0.25rem; cursor: pointer;
-    color: #9ca3af; font-weight: 500;
+    color: var(--text-muted); font-weight: 500;
   }
-  .toolbar-btn:hover { background: #1a1f2e; color: #e5e7eb; }
-  .toolbar-btn.active { background: #6366f1; color: white; border-color: #6366f1; }
+  .toolbar-btn:hover { background: var(--bg-hover); color: var(--text-secondary); }
+  .toolbar-btn.active { background: var(--brand); color: white; border-color: var(--brand); }
 </style>

@@ -102,8 +102,8 @@
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    background: #131720;
-    border: 1px solid #1e2435;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
     border-radius: 0.5rem;
     padding: 0.75rem;
     width: 20rem;
@@ -128,7 +128,7 @@
   }
 
   .emoji-btn:hover {
-    background: #1e2435;
+    background: var(--bg-hover);
   }
 
   .emoji-backdrop {
@@ -143,7 +143,7 @@
     background: transparent;
   }
   .emoji-popover::-webkit-scrollbar-thumb {
-    background: #1e2435;
+    background: var(--border);
     border-radius: 2px;
   }
 </style>

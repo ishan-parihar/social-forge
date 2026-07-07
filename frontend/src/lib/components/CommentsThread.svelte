@@ -217,6 +217,6 @@
     top: 0;
     bottom: 0;
     width: 1px;
-    background: #1a2035;
+    background: var(--border);
   }
 </style>

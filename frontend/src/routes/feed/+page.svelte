@@ -415,7 +415,7 @@
             onclick={() => showFilter = !showFilter}
             class="flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-lg transition-all duration-200
               {showFilter || activeFilterLabel
-                ? 'bg-brand-500/20 text-brand-300 border border-brand-500/30 shadow-[0_0_12px_rgba(99,102,241,0.1)]'
+                ? 'bg-brand-500/20 text-brand-300 border border-brand-500/30 shadow-[0_0_12px_rgb(var(--brand-rgb)/0.1)]'
                 : 'bg-surface-hover text-muted border border-line hover:border-line hover:text-content'}"
           >
             <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -862,7 +862,7 @@
               class="group flex items-center gap-2.5 px-6 py-3 text-sm font-medium rounded-xl
                 bg-surface-hover border border-line-hover text-content-secondary
                 hover:bg-line-hover hover:border-brand-500/30 hover:text-content
-                transition-all duration-200 shadow-sm hover:shadow-[0_0_20px_rgba(99,102,241,0.08)]"
+                transition-all duration-200 shadow-sm hover:shadow-[0_0_20px_rgb(var(--brand-rgb)/0.08)]"
             >
               <svg class="w-4 h-4 transition-transform group-hover:rotate-180 duration-300" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
                 <path d="M8 3v10M4 9l4 4 4-4" stroke-linecap="round" stroke-linejoin="round" />

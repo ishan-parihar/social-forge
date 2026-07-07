@@ -18,13 +18,16 @@
         --text-secondary: #d1d5db;
         --brand: #6366f1;
         --brand-hover: #4f46e5;
+        /* v26-2: brand color as RGB triplet for rgb(var(--brand-rgb) / <alpha>) syntax.
+           Used by shadow utilities + sparkline fills that need brand-color opacity. */
+        --brand-rgb: 99 102 241;
         /* v22 Phase 3: semantic status colors as space-separated RGB triplets
            so Tailwind's `rgb(var(--success-rgb) / <alpha-value>)` syntax works
            for arbitrary opacity (bg-success/20, text-error, border-warning). */
         --success-rgb: 34 197 94;   /* green-500 */
-        --warning-rgb: 234 179 8;   /* yellow-500 */
-        --error-rgb: 239 68 68;     /* red-500 */
-        --info-rgb: 59 130 246;     /* blue-500 */
+        --warning-rgb: 234 179 8;  /* yellow-500 */
+        --error-rgb: 239 68 68;    /* red-500 */
+        --info-rgb: 59 130 246;    /* blue-500 */
         --radius: 12px;
         --radius-sm: 6px;
         --radius-md: 8px;
@@ -48,6 +51,7 @@
         --text-secondary: #334155;
         --brand: #6366f1;
         --brand-hover: #4f46e5;
+        --brand-rgb: 99 102 241;
         /* v22 Phase 3: light-mode status colors (slightly darker for contrast). */
         --success-rgb: 22 163 74;   /* green-600 */
         --warning-rgb: 202 138 4;   /* yellow-600 */

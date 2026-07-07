@@ -97,7 +97,7 @@
       <input
         type="checkbox"
         bind:checked={newTab}
-        class="accent-[#6366f1] w-4 h-4"
+        class="accent-brand-500 w-4 h-4"
       />
       <span class="text-xs text-muted">Open in new tab</span>
     </label>
@@ -127,8 +127,8 @@
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    background: #131720;
-    border: 1px solid #1e2435;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
     border-radius: 0.5rem;
     padding: 0.875rem;
     width: 18rem;
