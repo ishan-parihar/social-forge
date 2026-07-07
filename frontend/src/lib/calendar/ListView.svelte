@@ -190,9 +190,9 @@
                  class="text-indigo-400 hover:text-indigo-300 px-1.5 py-0.5 rounded text-xs"
                  title="View original post">🔗</a>
             {/if}
-            <button onclick={() => onDuplicate?.(event.id)} class="text-[#9ca3af] hover:text-white px-1.5 py-0.5 rounded text-xs" title="Duplicate" aria-label="Duplicate post">📋</button>
-            <button onclick={() => onStats?.(event.id)} class="text-[#9ca3af] hover:text-white px-1.5 py-0.5 rounded text-xs" title="Statistics" aria-label="View post statistics">📊</button>
-            <button onclick={() => onDelete?.(event.id)} class="text-[#9ca3af] hover:text-red-400 px-1.5 py-0.5 rounded text-xs" title="Delete" aria-label="Delete post">🗑️</button>
+            <button onclick={() => onDuplicate?.(event.id)} class="text-muted hover:text-content px-1.5 py-0.5 rounded text-xs" title="Duplicate" aria-label="Duplicate post">📋</button>
+            <button onclick={() => onStats?.(event.id)} class="text-muted hover:text-content px-1.5 py-0.5 rounded text-xs" title="Statistics" aria-label="View post statistics">📊</button>
+            <button onclick={() => onDelete?.(event.id)} class="text-muted hover:text-error px-1.5 py-0.5 rounded text-xs" title="Delete" aria-label="Delete post">🗑️</button>
           </div>
         </div>
       {/each}
