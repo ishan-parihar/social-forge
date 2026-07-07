@@ -157,6 +157,7 @@ pub async fn reply(
             settings: serde_json::json!({}),
             in_reply_to: None,
             idempotency_key: None,
+            delay_minutes: None
         };
         provider.reply_to_comment(&access_token, &comment_id, &content)
             .await
@@ -201,6 +202,7 @@ pub async fn reply(
                     settings: serde_json::json!({}),
                 in_reply_to: None,
                 idempotency_key: None,
+            delay_minutes: None
                 };
                 provider.reply_to_comment(&access_token, &comment_id, &content)
                     .await

@@ -327,6 +327,9 @@ impl PostService {
             // manual "Post Now" after a stuck-publishing reclaim would
             // create a duplicate post on the platform.
             idempotency_key: Some(post.idempotency_key.to_string()),
+            delay_minutes: post.settings.get("delay_minutes")
+                .and_then(|v| v.as_u64())
+                .map(|v| v as u32),
         };
 
         // Validate
@@ -363,8 +366,9 @@ impl PostService {
                     content: comment_text.clone(),
                     media: vec![],
                     settings: serde_json::json!({}),
-                in_reply_to: None,
-                idempotency_key: None,
+                    in_reply_to: None,
+                    idempotency_key: None,
+                    delay_minutes: None,
                 };
                 if let Err(e) = provider
                     .comment(

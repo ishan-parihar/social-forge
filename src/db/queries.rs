@@ -402,7 +402,13 @@ pub async fn create_thread_posts(
             .bind(part)
             .bind(None::<&str>)
             .bind(&serde_json::Value::Null)
-            .bind(&serde_json::json!({}))
+            // v24-5: store delay_minutes in settings so the scheduler can
+            // read it and sleep between thread parts.
+            .bind(if delay_minutes.is_some() {
+                serde_json::json!({"delay_minutes": delay_minutes.unwrap()})
+            } else {
+                serde_json::json!({})
+            })
             .bind(part_scheduled_at)
             .bind(&st)
             .bind(None::<&str>)

@@ -25,6 +25,7 @@ pub async fn handle(action: MastodonAction, state: &AppState) -> anyhow::Result<
                 settings: serde_json::Value::Object(serde_json::Map::new()),
             in_reply_to: None,
             idempotency_key: None,
+            delay_minutes: None
             };
             provider.reply_to_comment(&token, &status_id, &post).await
                 .map(|r| serde_json::json!({"id": r.platform_post_id, "url": r.platform_post_url, "status": r.status}))

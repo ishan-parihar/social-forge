@@ -873,7 +873,30 @@ async fn publish_post(
         // and stays stable across retries; only a re-publish (action=
         // 'schedule' on reschedule) generates a new key.
         idempotency_key: Some(post.idempotency_key.to_string()),
+        // v24-5: per-row delay for thread parts. If this post is part of
+        // a thread (sequence > 1) and has a delay_minutes set in its
+        // settings, the scheduler sleeps for that duration before
+        // publishing. This allows spaced-out thread publishing (e.g.
+        // "part 1, wait 30min, part 2"). The delay is stored in the
+        // post's settings JSONB under 'delay_minutes'.
+        delay_minutes: post.settings.get("delay_minutes")
+            .and_then(|v| v.as_u64())
+            .map(|v| v as u32),
     };
+
+    // v24-5: sleep before publishing if this is a thread part with a delay.
+    // Only applies to sequence > 1 (the first part has no delay).
+    if post.sequence > 1 {
+        if let Some(delay) = content.delay_minutes {
+            if delay > 0 {
+                tracing::info!(
+                    "Thread delay: sleeping {} minutes before publishing post {} (seq {})",
+                    delay, post.id, post.sequence
+                );
+                tokio::time::sleep(Duration::from_secs(delay as u64 * 60)).await;
+            }
+        }
+    }
 
     // Validate content against provider limits before publishing
     provider.validate_post(&content)
@@ -1012,8 +1035,9 @@ async fn publish_post(
                             content: comment_text.clone(),
                             media: vec![],
                             settings: serde_json::json!({}),
-                        in_reply_to: None,
-                        idempotency_key: None,
+                            in_reply_to: None,
+                            idempotency_key: None,
+                            delay_minutes: None,
                         };
                         if let Err(e) = provider.comment(
                             &access_token,

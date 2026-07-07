@@ -28,6 +28,7 @@ pub async fn handle(action: LinkedinAction, state: &AppState) -> anyhow::Result<
                 settings: serde_json::Value::Object(serde_json::Map::new()),
             in_reply_to: None,
             idempotency_key: None,
+            delay_minutes: None
             };
             provider.publish(&token, &post).await
                 .map(|r| serde_json::json!({"id": r.platform_post_id, "url": r.platform_post_url, "status": r.status}))
@@ -81,6 +82,7 @@ pub async fn handle(action: LinkedinAction, state: &AppState) -> anyhow::Result<
                 settings: serde_json::Value::Object(serde_json::Map::new()),
             in_reply_to: None,
             idempotency_key: None,
+            delay_minutes: None
             };
             provider.reply_to_comment(&token, &comment_id, &post).await
                 .map(|r| serde_json::json!({"id": r.platform_post_id, "status": r.status}))
@@ -93,6 +95,7 @@ pub async fn handle(action: LinkedinAction, state: &AppState) -> anyhow::Result<
                 settings: serde_json::Value::Object(serde_json::Map::new()),
             in_reply_to: None,
             idempotency_key: None,
+            delay_minutes: None
             };
             provider.send_dm(&token, &recipient, &post).await
                 .map(|r| serde_json::json!({"id": r.platform_post_id, "status": r.status}))
