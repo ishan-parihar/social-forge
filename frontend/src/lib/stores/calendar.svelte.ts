@@ -37,7 +37,22 @@ let _state = $state({
   listState: 'all' as 'all' | 'scheduled' | 'draft' | 'published',
   listPage: 1,
   listTotalPages: 1,
+  // v23-8: a "now tick" that increments every 2 minutes, so calendar
+  // views can re-evaluate isPast() without a full refetch. Postiz uses
+  // a 2-2.5min useInterval for this. Components that depend on isPast
+  // should read _state.nowTick in a $derived so they recompute when it
+  // changes. Without this, a tab left open overnight wouldn't flip
+  // yesterday's cells to greyscale until a manual refresh.
+  nowTick: 0,
 });
+
+// v23-8: start a 2-minute interval that increments nowTick. This
+// triggers re-evaluation of isPast-derived state in calendar views.
+// The interval is cleaned up automatically when the module is unloaded
+// (browser tab close) — no explicit cleanup needed for a singleton.
+if (typeof window !== 'undefined') {
+  setInterval(() => { _state.nowTick++; }, 120_000);
+}
 
 // Persist view + date changes to localStorage.
 $effect(() => {

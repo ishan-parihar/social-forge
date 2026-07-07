@@ -3,6 +3,8 @@
   import { engagementIcon, engagementLabel, formatMetricCount } from "./engagement";
   import RepeatingBadge from "./RepeatingBadge.svelte";
   import PostHoverToolbar from "./PostHoverToolbar.svelte";
+  // v23-8: import calendarState so isPast re-evaluates on the 2min nowTick.
+  import { calendarState } from "$lib/stores/calendar.svelte";
 
   let { event, compact = false, onDuplicate, onStats, onDelete }: {
     event: CEvent;
@@ -15,7 +17,13 @@
   let visibleTags = $derived((event.tags || []).slice(0, 2));
   let overflowCount = $derived((event.tags?.length || 0) - 2);
 
-  let isPast = $derived(event.date ? event.date < todayStr() : false);
+  // v23-8: read calendarState.nowTick so isPast re-evaluates every 2min.
+  // Without this, a tab left open overnight wouldn't flip yesterday's
+  // cells to greyscale until a manual refresh.
+  let isPast = $derived.by(() => {
+    void calendarState.state.nowTick; // dependency — recomputes when tick changes
+    return event.date ? event.date < todayStr() : false;
+  });
   function todayStr() {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
