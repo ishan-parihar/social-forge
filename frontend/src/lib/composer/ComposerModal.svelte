@@ -18,7 +18,7 @@
   // and entry-point state (presetDate, editingPostId, etc.).
 
   import { onMount, onDestroy } from 'svelte';
-  import { postsApi, type PostDetail } from '$lib/api/posts';
+  import { postsApi, type PostDetail, type PostSummary } from '$lib/api/posts';
   import { integrationsApi, type Integration } from '$lib/api/integrations';
   import { toast } from '$lib/stores/toast';
   import { realtime } from '$lib/stores/realtime';
@@ -75,6 +75,18 @@
   // is hidden by default and can be toggled with a button in the footer.
   let showPreviewMobile = $state(false);
 
+  // Phase v21: group-editing state. When editing a post that has a
+  // group_id (i.e., it's part of a thread or has a first-comment child),
+  // we fetch all sibling posts via postsApi.getGroup() and show a tab
+  // strip at the top of the editor so the user can switch between parts.
+  // The currently-edited part's content/title/media is what gets saved
+  // on submit. Switching tabs saves the current draft to a per-part
+  // cache and loads the newly-selected part.
+  let groupPosts = $state<Array<{ id: string; sequence: number; content: string; title?: string }>>([]);
+  let editingGroupPostId = $state<string | null>(null);
+  // Per-part draft cache so switching tabs doesn't lose unsaved edits.
+  let groupDraftCache = $state<Map<string, { content: string; title: string; mediaItems: MediaItem[] }>>(new Map());
+
   // Draft auto-save (create mode only)
   let draftSaved = $state(false);
   let draftTimer: ReturnType<typeof setTimeout>;
@@ -127,6 +139,57 @@
       original_name: m.alt || 'media',
       file_size: 0,
     }));
+    editingGroupPostId = post.id;
+
+    // Phase v21: if this post is part of a group (thread or first-comment
+    // chain), fetch all sibling posts and populate the group tab strip.
+    // The user can then switch between parts without leaving the composer.
+    if (post.group_id) {
+      const groupRes = await postsApi.getGroup(post.group_id);
+      if (groupRes.data && groupRes.data.length > 1) {
+        // Sort by sequence so the tab strip shows parts in order.
+        groupPosts = groupRes.data
+          .map(p => ({ id: p.id, sequence: p.sequence ?? 0, content: p.content, title: p.title }))
+          .sort((a, b) => a.sequence - b.sequence);
+      } else {
+        groupPosts = [];
+      }
+    } else {
+      groupPosts = [];
+    }
+  }
+
+  /**
+   * Phase v21: switch the editor to a different part of the thread group.
+   * Caches the current part's unsaved edits, then loads the selected part.
+   * The cache is keyed by post id and holds {content, title, mediaItems}.
+   */
+  function switchGroupPart(targetId: string) {
+    if (targetId === editingGroupPostId) return;
+    // Save current state to cache.
+    if (editingGroupPostId) {
+      groupDraftCache.set(editingGroupPostId, {
+        content,
+        title,
+        mediaItems: [...mediaItems],
+      });
+      groupDraftCache = new Map(groupDraftCache);
+    }
+    // Load target from cache or from the groupPosts snapshot.
+    const cached = groupDraftCache.get(targetId);
+    if (cached) {
+      content = cached.content;
+      title = cached.title;
+      mediaItems = [...cached.mediaItems];
+    } else {
+      const part = groupPosts.find(p => p.id === targetId);
+      if (part) {
+        content = part.content || '';
+        title = part.title || '';
+        mediaItems = [];
+      }
+    }
+    editingGroupPostId = targetId;
   }
 
   onMount(async () => {
@@ -334,7 +397,7 @@
 
       if (composer.mode === 'edit' && composer.editingPostId) {
         // ── Edit mode: update existing post ──
-        const r = await postsApi.update(composer.editingPostId, {
+        const r = await postsApi.update(currentEditingPostId, {
           content: payload.content,
           title: payload.title,
           media: payload.media,
@@ -345,7 +408,7 @@
         // If a scheduled_at is set and differs from the original, reschedule.
         // (The update endpoint doesn't touch scheduled_at.)
         if (payload.scheduled_at && r.data?.scheduled_at && payload.scheduled_at !== r.data.scheduled_at) {
-          await postsApi.reschedule(composer.editingPostId, payload.scheduled_at, false);
+          await postsApi.reschedule(currentEditingPostId, payload.scheduled_at, false);
         }
 
         localStorage.removeItem(DRAFT_KEY);
@@ -402,14 +465,14 @@
 
       if (composer.mode === 'edit' && composer.editingPostId) {
         // Edit mode: update content, then publish immediately.
-        const r = await postsApi.update(composer.editingPostId, {
+        const r = await postsApi.update(currentEditingPostId, {
           content: payload.content,
           title: payload.title,
           media: payload.media,
           settings: payload.settings,
         });
         if (r.error) { error = r.error; return; }
-        const pub = await postsApi.publish(composer.editingPostId);
+        const pub = await postsApi.publish(currentEditingPostId);
         if (pub.error) { error = pub.error; return; }
         localStorage.removeItem(DRAFT_KEY);
         composer.close();
@@ -448,7 +511,7 @@
         // time + 100 years to effectively unschedule — TODO: add a
         // dedicated "unchedule" endpoint in v22).
         // For now, just update content; the state stays as-is.
-        const r = await postsApi.update(composer.editingPostId, {
+        const r = await postsApi.update(currentEditingPostId, {
           content: payload.content,
           title: payload.title,
           media: payload.media,
@@ -496,6 +559,11 @@
   }
 
   let isDirty = $derived(!!content.trim() || !!title.trim() || selectedIntegrations.length > 0);
+
+  // Phase v21: the post id to send update/publish/reschedule calls to.
+  // Falls back to composer.editingPostId when the user hasn't switched
+  // tabs (or when there's no group — single-post edit).
+  let currentEditingPostId = $derived(editingGroupPostId || composer.editingPostId);
 
   // Phase 3: compute which integrations have diverged from global.
   // An integration "diverged" when it has an override in providerOverride
@@ -574,6 +642,27 @@
       <div class="flex-1 overflow-y-auto p-5 space-y-4">
         {#if error}
           <div class="bg-red-500/10 border border-red-500/30 text-red-400 text-sm rounded-lg p-3">{error}</div>
+        {/if}
+
+        <!-- Phase v21: group/thread tab strip. Shows one tab per post in
+             the group when editing a multi-part thread. Switching tabs
+             caches the current part's edits and loads the selected part. -->
+        {#if composer.mode === 'edit' && groupPosts.length > 1}
+          <div class="bg-surface border border-line rounded-xl p-2">
+            <div class="text-xs text-muted mb-1.5 px-1">Thread parts ({groupPosts.length})</div>
+            <div class="flex gap-1 flex-wrap">
+              {#each groupPosts as part, i (part.id)}
+                <button
+                  onclick={() => switchGroupPart(part.id)}
+                  class="px-2.5 py-1 text-xs rounded-lg transition-colors {part.id === editingGroupPostId ? 'bg-indigo-600 text-white' : 'bg-surface-hover text-muted hover:text-content'}"
+                  title={part.content ? (part.content.slice(0, 80) + (part.content.length > 80 ? '…' : '')) : `Part ${i + 1}`}
+                >
+                  {i === 0 ? 'Main post' : `Part ${i + 1}`}
+                </button>
+              {/each}
+            </div>
+            <p class="text-[10px] text-muted-dark mt-1.5 px-1">Editing part {groupPosts.findIndex(p => p.id === editingGroupPostId) + 1} of {groupPosts.length}. Switching tabs preserves your unsaved edits per part.</p>
+          </div>
         {/if}
 
         <!-- Title -->
