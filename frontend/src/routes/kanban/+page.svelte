@@ -28,6 +28,12 @@
   let selectedCampaign = $state<string | null>(null);
   let loading = $state(true);
   let draggingId = $state<string | null>(null);
+  // v25-4: within-column drag-to-reorder state. dropTargetId is the post
+  // the cursor is hovering over; dropPosition is 'before' or 'after'
+  // based on which half of the card the cursor is in. When dropTargetId
+  // is null, the drop goes to the end of the column.
+  let dropTargetId = $state<string | null>(null);
+  let dropPosition = $state<'before' | 'after'>('before');
 
   // Phase v21: campaign-create modal state. Previously used native
   // prompt() which is jarring and can't be styled. Now we render a
@@ -161,34 +167,91 @@
     load();
   }
 
-  // Drag-and-drop: move post to a new column.
+  // Drag-and-drop: move post to a new column OR reorder within a column.
   function onDragStart(e: DragEvent, postId: string) {
     draggingId = postId;
+    dropTargetId = null;
     e.dataTransfer?.setData('text/plain', `kanban:${postId}`);
     e.dataTransfer!.effectAllowed = 'move';
+  }
+
+  // v25-4: track which card the cursor is over + which half. Determines
+  // whether the drop inserts before or after the target card.
+  function onDragOverCard(e: DragEvent, post: PostSummary) {
+    if (!draggingId || draggingId === post.id) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const midpoint = rect.top + rect.height / 2;
+    dropTargetId = post.id;
+    dropPosition = e.clientY < midpoint ? 'before' : 'after';
+    e.dataTransfer!.dropEffect = 'move';
+  }
+
+  // When dragging over the column background (not a card), clear the
+  // drop target — the post will go to the end of the column.
+  function onDragOverColumn(e: DragEvent) {
+    e.preventDefault();
+    if (dropTargetId !== null) dropTargetId = null;
   }
 
   async function onDrop(e: DragEvent, newState: string) {
     e.preventDefault();
     const postId = draggingId;
     if (!postId) return;
-    draggingId = null;
+    const draggedPost = posts.find(p => p.id === postId);
+    if (!draggedPost) { draggingId = null; dropTargetId = null; return; }
 
-    // Optimistic update: move the post to the new column immediately.
-    const post = posts.find(p => p.id === postId);
-    if (post) {
-      post.state = newState;
+    const isSameColumn = draggedPost.state === newState;
+
+    if (isSameColumn) {
+      // v25-4: reorder within the column.
+      const colPosts = [...(postsByState[newState] || [])];
+      const fromIdx = colPosts.findIndex(p => p.id === postId);
+      if (fromIdx === -1) {
+        draggingId = null; dropTargetId = null; return;
+      }
+      // Remove the dragged post, then compute the insertion index.
+      colPosts.splice(fromIdx, 1);
+      let toIdx: number;
+      if (dropTargetId) {
+        const targetIdx = colPosts.findIndex(p => p.id === dropTargetId);
+        toIdx = targetIdx === -1
+          ? colPosts.length
+          : (dropPosition === 'before' ? targetIdx : targetIdx + 1);
+      } else {
+        toIdx = colPosts.length; // dropped on empty column area
+      }
+      colPosts.splice(toIdx, 0, draggedPost);
+
+      // Optimistic update: reassign kanban_sort_order locally so the
+      // derived postsByState re-sorts immediately.
+      colPosts.forEach((p, i) => { p.kanban_sort_order = i; });
       posts = [...posts];
+
+      // Persist the new order. No success toast — reordering is a
+      // quiet operation (the card visibly moved, that's the feedback).
+      const r = await postsApi.reorderKanban(newState, colPosts.map(p => p.id));
+      if (r.error) {
+        toast(`Failed to reorder: ${r.error}`, 'error');
+        load(); // revert
+      }
+    } else {
+      // Cross-column move (existing v20 behavior).
+      draggedPost.state = newState;
+      posts = [...posts];
+
+      const r = await campaignsApi.updateStage(postId, newState, selectedCampaign || undefined);
+      if (r.error) {
+        toast(`Failed to move: ${r.error}`, 'error');
+        load(); // revert
+      } else {
+        toast(`Moved to ${newState}`, 'success');
+      }
     }
 
-    // Persist the stage change.
-    const r = await campaignsApi.updateStage(postId, newState, selectedCampaign || undefined);
-    if (r.error) {
-      toast(`Failed to move: ${r.error}`, 'error');
-      load(); // revert
-    } else {
-      toast(`Moved to ${newState}`, 'success');
-    }
+    draggingId = null;
+    dropTargetId = null;
   }
 
   function onDragOver(e: DragEvent) {
@@ -197,6 +260,7 @@
 
   function onDragEnd() {
     draggingId = null;
+    dropTargetId = null;
   }
 
   // Create a new campaign.
@@ -376,8 +440,8 @@
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
       {#each columns as col (col.state)}
         <div
-          class="bg-surface border border-line rounded-xl overflow-hidden {col.color} border-t-4"
-          ondragover={onDragOver}
+          class="bg-surface border border-line rounded-xl overflow-hidden {col.color} border-t-4 {draggingId && dropTargetId === null && posts.find(p => p.id === draggingId)?.state === col.state ? 'ring-1 ring-brand-500/40' : ''}"
+          ondragover={(e) => onDragOverColumn(e)}
           ondrop={(e) => onDrop(e, col.state)}
           role="region"
           aria-label="{col.label} column"
@@ -391,10 +455,16 @@
           <!-- Cards -->
           <div class="p-2 space-y-2 min-h-[200px] max-h-[600px] overflow-y-auto">
             {#each postsByState[col.state] || [] as post (post.id)}
+              <!-- v25-4: drop indicator line rendered BEFORE this card
+                   when the cursor is in its top half. -->
+              {#if dropTargetId === post.id && dropPosition === 'before' && draggingId !== post.id}
+                <div class="h-0.5 bg-brand-500 rounded-full -mx-2" aria-hidden="true"></div>
+              {/if}
               <article
-                class="bg-background-input border border-line rounded-lg cursor-grab active:cursor-grabbing hover:border-brand-500/50 transition-colors overflow-hidden {draggingId === post.id ? 'opacity-50' : ''} {priorityBorderClass(post.priority || 'medium')}"
+                class="bg-background-input border border-line rounded-lg cursor-grab active:cursor-grabbing hover:border-brand-500/50 transition-colors overflow-hidden {draggingId === post.id ? 'opacity-50' : ''} {priorityBorderClass(post.priority || 'medium')} {dropTargetId === post.id ? 'ring-1 ring-brand-500/50' : ''}"
                 draggable={true}
                 ondragstart={(e) => onDragStart(e, post.id)}
+                ondragover={(e) => onDragOverCard(e, post)}
                 ondragend={onDragEnd}
                 onclick={() => composer.openEdit(post.id)}
                 role="button"
@@ -462,6 +532,11 @@
                   {/if}
                 </div>
               </article>
+              <!-- v25-4: drop indicator line rendered AFTER this card
+                   when the cursor is in its bottom half. -->
+              {#if dropTargetId === post.id && dropPosition === 'after' && draggingId !== post.id}
+                <div class="h-0.5 bg-brand-500 rounded-full -mx-2" aria-hidden="true"></div>
+              {/if}
             {/each}
 
             <!-- Empty state -->

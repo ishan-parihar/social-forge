@@ -147,6 +147,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/posts/{id}/repeat", axum::routing::post(posts::repeat_post))
         .route("/api/posts/{id}/tags", axum::routing::put(posts::set_post_tags))
         .route("/api/posts/{id}/stage", axum::routing::patch(campaigns::update_stage))
+        .route("/api/posts/kanban-reorder", axum::routing::patch(posts::kanban_reorder))
         .route("/api/posts/find-slot", axum::routing::get(posts::find_slot))
         .route("/api/posts/group/{group_id}", axum::routing::get(posts::get_group))
         // Phase 7: Campaigns + Kanban

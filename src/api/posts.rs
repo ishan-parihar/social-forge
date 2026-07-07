@@ -917,9 +917,112 @@ pub async fn set_post_tags(
          first_comment: post.first_comment.clone(),
          sequence: post.sequence,
      }))
- }
- 
- /// GET /api/posts/find-slot
+}
+
+// v25-4: Kanban drag-to-reorder within a column.
+//
+// Accepts the full new ordering of post IDs for a given kanban state
+// (idea/draft/queued/published) and renumbers each post's
+// kanban_sort_order to match its index in the array. Bulk update in a
+// single transaction so concurrent reorders don't leave gaps or duplicates.
+//
+// The frontend sends the complete ordered list because it already has the
+// full column rendered — this avoids the need for a "before_id / after_id"
+// protocol that would require the backend to fetch the current order first.
+//
+// Validates:
+//   - state is one of the 5 valid post states
+//   - all ordered_post_ids belong to the user (per-user scoping)
+//   - all ids are actually in the given state (prevents a reordered post
+//     from silently jumping columns)
+//
+// Broadcasts `post_stage_changed` (reusing the existing event) so other
+// tabs refetch and see the new order. The event payload includes a
+// `reordered: true` flag so listeners can distinguish a reorder from a
+// state transition if needed.
+
+#[derive(Debug, Deserialize)]
+pub struct KanbanReorderRequest {
+    pub state: String,
+    pub ordered_post_ids: Vec<Uuid>,
+}
+
+pub async fn kanban_reorder(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Json(body): Json<KanbanReorderRequest>,
+) -> Result<Json<serde_json::Value>, crate::error::AppError> {
+    let valid_states = ["idea", "draft", "queued", "published", "error"];
+    if !valid_states.contains(&body.state.as_str()) {
+        return Err(crate::error::AppError::BadRequest(format!(
+            "Invalid state: {} (expected one of: {})",
+            body.state,
+            valid_states.join(", ")
+        )));
+    }
+    if body.ordered_post_ids.is_empty() {
+        return Ok(Json(serde_json::json!({ "updated": 0 })));
+    }
+
+    // Deduplicate (a buggy client shouldn't be able to corrupt order).
+    let mut seen = std::collections::HashSet::with_capacity(body.ordered_post_ids.len());
+    let mut deduped = Vec::with_capacity(body.ordered_post_ids.len());
+    for id in &body.ordered_post_ids {
+        if seen.insert(*id) {
+            deduped.push(*id);
+        }
+    }
+
+    let mut tx = state.db.begin().await
+        .map_err(|e| crate::error::AppError::Internal(format!("Failed to begin tx: {e}")))?;
+
+    // Update each post's kanban_sort_order to its index. We use a CTE that
+    // unnests the array with ordinality so we can do this in a single SQL
+    // statement rather than N round-trips.
+    //
+    // Security: the WHERE user_id = $2 AND state = $3 clause ensures the
+    // caller can only reorder their OWN posts in the specified column —
+    // even if they send a foreign user's post ID, it won't match.
+    let result = sqlx::query(
+        r#"WITH ordered AS (
+             SELECT * FROM unnest($1::uuid[]) WITH ORDINALITY AS t(id, ord)
+           )
+           UPDATE posts p
+           SET kanban_sort_order = ordered.ord::int,
+               updated_at = NOW()
+           FROM ordered
+           WHERE p.id = ordered.id
+             AND p.user_id = $2
+             AND p.state = $3::post_state
+             AND p.deleted_at IS NULL"#,
+    )
+    .bind(&deduped)
+    .bind(auth.user_id)
+    .bind(&body.state)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| crate::error::AppError::Internal(format!("Failed to reorder: {e}")))?;
+
+    let updated = result.rows_affected() as i64;
+
+    tx.commit().await
+        .map_err(|e| crate::error::AppError::Internal(format!("Failed to commit reorder: {e}")))?;
+
+    // Broadcast so other tabs refetch the new order.
+    state.broadcast.send(
+        "post_stage_changed",
+        &serde_json::json!({
+            "id": deduped.first().map(|u| u.to_string()).unwrap_or_default(),
+            "state": body.state,
+            "reordered": true,
+            "count": updated,
+        }),
+    );
+
+    Ok(Json(serde_json::json!({ "updated": updated })))
+}
+
+/// GET /api/posts/find-slot
 #[derive(Debug, Deserialize)]
 pub struct FindSlotQuery {
     pub integration_id: Option<Uuid>,
