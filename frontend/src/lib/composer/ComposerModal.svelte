@@ -43,6 +43,7 @@
   import type { MediaItem } from '$lib/api/media';
   import TargetPicker from '$lib/composer/TargetPicker.svelte';
   import type { TargetInfo } from '$lib/api/integrations';
+  import { signaturesApi } from '$lib/api/signatures';
 
   // Props passed by ModalManager (it injects a `close` function).
   let { close } = $props<{ close: (confirmed?: boolean) => void }>();
@@ -216,6 +217,27 @@
     }
     if (composer.prefilledContent) {
       content = composer.prefilledContent;
+    }
+    // Phase v21/v22: auto-append the user's default signature when
+    // creating a new post (postiz-app pattern). Only fires if:
+    //   - we're in create mode (not edit — editing shouldn't re-append)
+    //   - no draft was restored (draft takes precedence — user already
+    //     has the signature from their last session)
+    //   - no prefilled content was set (repurpose/duplicate flows bring
+    //     their own content; appending a signature would be noise)
+    // The signature is fetched from GET /api/signatures/default, which
+    // falls back to the global default if no provider-specific default
+    // exists. A 404 (no default set) is silently ignored.
+    if (composer.mode === 'create' && !content && !composer.prefilledContent) {
+      try {
+        const sigRes = await signaturesApi.getDefault();
+        if (sigRes.data && sigRes.data.content) {
+          // Append on a new line so the signature sits below the post body.
+          content = '\n' + sigRes.data.content;
+        }
+      } catch {
+        // 404 or network error — no default signature set, silently skip.
+      }
     }
     if (composer.mode === 'edit' && composer.editingPostId) {
       await loadEditingPost(composer.editingPostId);

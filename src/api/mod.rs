@@ -193,6 +193,8 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/tags/{id}", axum::routing::get(tags::get).put(tags::update).delete(tags::delete))
         .route("/api/signatures", axum::routing::get(signatures::list).post(signatures::create))
         .route("/api/signatures/{id}", axum::routing::put(signatures::update).delete(signatures::delete))
+        .route("/api/signatures/{id}/set-default", axum::routing::post(signatures::set_default))
+        .route("/api/signatures/default", axum::routing::get(signatures::get_default))
         .route("/api/developer/api-keys", axum::routing::get(developer::list).post(developer::create))
         .route("/api/developer/api-keys/{id}", axum::routing::delete(developer::revoke))
         .route("/api/developer/api-keys/{id}/regenerate", axum::routing::post(developer::regenerate))

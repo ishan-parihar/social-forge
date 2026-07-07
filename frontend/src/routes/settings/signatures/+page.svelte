@@ -129,6 +129,27 @@
     }
   }
 
+  /**
+   * Phase v21/v22: set a signature as the default for its provider (or
+   * globally if provider is empty). The backend atomically clears
+   * is_default on all other signatures with the same (user_id, provider).
+   * The composer's auto-append flow uses the default signature when
+   * creating a new post.
+   */
+  async function handleSetDefault(id: string) {
+    try {
+      const r = await signaturesApi.setDefault(id);
+      if (r.error) {
+        error = r.error;
+      } else {
+        toast('Default signature updated', 'success');
+        load();
+      }
+    } catch (e: unknown) {
+      error = e instanceof Error ? e.message : 'Failed to set default signature';
+    }
+  }
+
   function preview(content: string): string {
     const stripped = content.replace(/<[^>]*>/g, '').trim();
     return stripped.length > 100 ? stripped.slice(0, 100) + '...' : stripped;
@@ -252,17 +273,27 @@
             <!-- Display -->
             <div class="flex items-start justify-between gap-3">
               <div class="flex-1 min-w-0">
-                <div class="flex items-center gap-2">
+                <div class="flex items-center gap-2 flex-wrap">
                   <h4 class="text-sm font-medium">{sig.name}</h4>
                   {#if sig.provider}
                     <span class="text-xs px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">{sig.provider}</span>
                   {:else}
                     <span class="text-xs px-2 py-0.5 rounded-full bg-line text-muted">Global</span>
                   {/if}
+                  {#if sig.is_default}
+                    <span class="text-xs px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" title="This signature is auto-appended to new posts for its provider (or globally if no provider)">
+                      ★ Default
+                    </span>
+                  {/if}
                 </div>
                 <p class="text-xs text-muted mt-1">{preview(sig.content)}</p>
               </div>
               <div class="flex gap-1 flex-shrink-0">
+                {#if !sig.is_default}
+                  <Button size="sm" variant="ghost" onclick={() => handleSetDefault(sig.id)} aria-label="Set as default signature — auto-append this signature to new posts">
+                    Set default
+                  </Button>
+                {/if}
                 <Button size="sm" variant="ghost" onclick={() => startEdit(sig)} aria-label="Edit signature">Edit</Button>
                 <Button size="sm" variant="ghost" onclick={() => handleDelete(sig.id)} aria-label="Delete signature">Delete</Button>
               </div>

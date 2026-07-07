@@ -2127,14 +2127,15 @@ pub async fn list_signatures(
     pool: &PgPool,
     user_id: Uuid,
 ) -> Result<Vec<Signature>, sqlx::Error> {
-    sqlx::query_as!(
-        Signature,
-        r#"SELECT id, user_id, name, content, provider,
+    // Runtime query (Phase v21/v22 — is_default column added, can't
+    // regenerate .sqlx offline cache without a live Postgres).
+    sqlx::query_as::<_, Signature>(
+        r#"SELECT id, user_id, name, content, provider, is_default,
            created_at, updated_at
            FROM signatures WHERE user_id = $1
-           ORDER BY created_at DESC"#,
-        user_id,
+           ORDER BY is_default DESC, created_at DESC"#,
     )
+    .bind(user_id)
     .fetch_all(pool)
     .await
 }
@@ -2146,17 +2147,16 @@ pub async fn create_signature(
     content: &str,
     provider: Option<&str>,
 ) -> Result<Signature, sqlx::Error> {
-    sqlx::query_as!(
-        Signature,
-        r#"INSERT INTO signatures (user_id, name, content, provider)
-           VALUES ($1, $2, $3, $4)
-           RETURNING id, user_id, name, content, provider,
+    sqlx::query_as::<_, Signature>(
+        r#"INSERT INTO signatures (user_id, name, content, provider, is_default)
+           VALUES ($1, $2, $3, $4, FALSE)
+           RETURNING id, user_id, name, content, provider, is_default,
              created_at, updated_at"#,
-        user_id,
-        name,
-        content,
-        provider,
     )
+    .bind(user_id)
+    .bind(name)
+    .bind(content)
+    .bind(provider)
     .fetch_one(pool)
     .await
 }
@@ -2169,22 +2169,120 @@ pub async fn update_signature(
     content: Option<&str>,
     provider: Option<&str>,
 ) -> Result<Option<Signature>, sqlx::Error> {
-    sqlx::query_as!(
-        Signature,
+    sqlx::query_as::<_, Signature>(
         r#"UPDATE signatures SET
            name = COALESCE($3, name),
            content = COALESCE($4, content),
            provider = COALESCE($5, provider),
            updated_at = now()
            WHERE id = $1 AND user_id = $2
-           RETURNING id, user_id, name, content, provider,
+           RETURNING id, user_id, name, content, provider, is_default,
              created_at, updated_at"#,
-        id,
-        user_id,
-        name,
-        content,
-        provider,
     )
+    .bind(id)
+    .bind(user_id)
+    .bind(name)
+    .bind(content)
+    .bind(provider)
+    .fetch_optional(pool)
+    .await
+}
+
+/// Phase v21/v22: set a signature as the default for its provider.
+/// Atomically clears is_default on all other signatures for the same
+/// (user_id, provider) and sets it on the target. Uses a transaction
+/// so the swap is all-or-nothing.
+///
+/// `provider` is the target signature's provider (NULL = global).
+/// The partial unique index idx_signatures_default_per_provider enforces
+/// at-most-one-default per (user_id, provider) at the DB level — this
+/// function clears the old default first to avoid a constraint violation.
+pub async fn set_default_signature(
+    pool: &PgPool,
+    id: Uuid,
+    user_id: Uuid,
+) -> Result<Option<Signature>, sqlx::Error> {
+    let mut tx = pool.begin().await?;
+
+    // 1. Fetch the target signature to get its provider.
+    let target: Option<(Option<String>,)> = sqlx::query_as(
+        "SELECT provider FROM signatures WHERE id = $1 AND user_id = $2",
+    )
+    .bind(id)
+    .bind(user_id)
+    .fetch_optional(&mut *tx)
+    .await?;
+
+    let target = match target {
+        Some(t) => t.0,
+        None => {
+            tx.rollback().await?;
+            return Ok(None);
+        }
+    };
+
+    // 2. Clear is_default on all other signatures with the same (user_id, provider).
+    sqlx::query(
+        r#"UPDATE signatures SET is_default = FALSE
+           WHERE user_id = $1 AND is_default = TRUE
+             AND (provider IS NOT DISTINCT FROM $2)"#,
+    )
+    .bind(user_id)
+    .bind(&target)
+    .execute(&mut *tx)
+    .await?;
+
+    // 3. Set is_default = TRUE on the target.
+    let updated = sqlx::query_as::<_, Signature>(
+        r#"UPDATE signatures SET is_default = TRUE, updated_at = now()
+           WHERE id = $1 AND user_id = $2
+           RETURNING id, user_id, name, content, provider, is_default,
+             created_at, updated_at"#,
+    )
+    .bind(id)
+    .bind(user_id)
+    .fetch_optional(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
+    Ok(updated)
+}
+
+/// Phase v21/v22: get the default signature for a given provider.
+/// Falls back to the global default (provider IS NULL) if no
+/// provider-specific default exists. Returns None if neither exists.
+///
+/// Used by the composer's auto-append flow: when creating a new post,
+/// the frontend calls this to get the signature to append.
+pub async fn get_default_signature(
+    pool: &PgPool,
+    user_id: Uuid,
+    provider: Option<&str>,
+) -> Result<Option<Signature>, sqlx::Error> {
+    // Try provider-specific default first, then global.
+    if let Some(p) = provider {
+        let provider_specific = sqlx::query_as::<_, Signature>(
+            r#"SELECT id, user_id, name, content, provider, is_default,
+               created_at, updated_at
+               FROM signatures
+               WHERE user_id = $1 AND provider = $2 AND is_default = TRUE"#,
+        )
+        .bind(user_id)
+        .bind(p)
+        .fetch_optional(pool)
+        .await?;
+        if provider_specific.is_some() {
+            return Ok(provider_specific);
+        }
+    }
+    // Fall back to global default.
+    sqlx::query_as::<_, Signature>(
+        r#"SELECT id, user_id, name, content, provider, is_default,
+           created_at, updated_at
+           FROM signatures
+           WHERE user_id = $1 AND provider IS NULL AND is_default = TRUE"#,
+    )
+    .bind(user_id)
     .fetch_optional(pool)
     .await
 }

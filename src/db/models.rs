@@ -491,6 +491,11 @@ pub struct Signature {
     pub name: String,
     pub content: String,
     pub provider: Option<String>,
+    /// Phase v21/v22: if TRUE, this signature is auto-appended to new
+    /// posts for its provider (or globally if provider is NULL). At most
+    /// one default per (user_id, provider) — enforced by the partial
+    /// unique index idx_signatures_default_per_provider.
+    pub is_default: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
