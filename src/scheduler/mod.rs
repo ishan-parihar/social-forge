@@ -598,15 +598,66 @@ async fn publish_post(
         let attempt_start = Utc::now();
         match provider.publish(&access_token, &content).await {
             Ok(result) => {
-                queries::update_post_state(
-                    db,
-                    post.id,
-                    PostState::Published,
-                    Some(&result.platform_post_id),
-                    result.platform_post_url.as_deref(),
-                    None,
-                )
-                .await?;
+                // Phase v22: robustness fix for the publish-orphan problem.
+                //
+                // Previously, if update_post_state failed here (DB connection
+                // drop, pool exhaustion, etc.), the `?` propagated the error
+                // and the post stayed in 'publishing' state — even though it
+                // was already live on the platform. On next startup,
+                // reclaim_stuck_publishing would mark it 'error', and the
+                // user could retry → double-publish (now mitigated by
+                // idempotency keys, but still messy: the post shows as
+                // 'error' even though it's actually published).
+                //
+                // Now: the publish SUCCEEDED on the platform, so the post IS
+                // published. We retry the DB update a few times. If all DB
+                // retries fail, we log a CRITICAL warning (manual intervention
+                // needed) but return Ok — the source of truth at this point
+                // is the platform, not our DB. The reclaim_stuck_publishing
+                // path won't touch it because we set state='published'
+                // (eventually consistent).
+                let mut db_updated = false;
+                for db_attempt in 1..=3 {
+                    match queries::update_post_state(
+                        db,
+                        post.id,
+                        PostState::Published,
+                        Some(&result.platform_post_id),
+                        result.platform_post_url.as_deref(),
+                        None,
+                    ).await {
+                        Ok(_) => { db_updated = true; break; }
+                        Err(e) => {
+                            tracing::warn!(
+                                "Post {} published on {} but DB update failed (attempt {}/3): {}. Retrying in 1s...",
+                                post.id, post.provider_identifier, db_attempt, e
+                            );
+                            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                        }
+                    }
+                }
+                if !db_updated {
+                    // Critical: the post is live on the platform but our DB
+                    // still shows 'publishing'. Log loudly for manual triage.
+                    // We do NOT return Err — that would trigger reclaim→error
+                    // and a potential double-publish on retry. The idempotency
+                    // key would protect against the double-publish, but the
+                    // 'error' state would mislead the user.
+                    tracing::error!(
+                        "CRITICAL: Post {} published on {} (platform_post_id={}) but DB update failed after 3 attempts. \
+                         The post IS live on the platform. Manual DB reconciliation needed: \
+                         UPDATE posts SET state='published', platform_post_id='{}', platform_post_url={} WHERE id='{}';",
+                        post.id,
+                        post.provider_identifier,
+                        result.platform_post_id,
+                        result.platform_post_id,
+                        result.platform_post_url.as_deref().map(|u| format!("'{}'", u)).unwrap_or_else(|| "NULL".to_string()),
+                        post.id,
+                    );
+                    // Still record the attempt + broadcast so the UI updates.
+                    // The reclaim path will eventually mark it 'error', but
+                    // the operator has been warned via the CRITICAL log.
+                }
 
                 // Record successful attempt in audit trail.
                 let _ = queries::record_publish_attempt(
