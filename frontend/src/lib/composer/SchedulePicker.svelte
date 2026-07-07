@@ -2,6 +2,7 @@
   import { postsApi } from "$lib/api/posts";
   import { toast } from "$lib/stores/toast";
   import { timezone } from "$lib/stores/timezone.svelte";
+  import CalendarPopover from "$lib/ui/CalendarPopover.svelte";
 
   let { scheduledAt, onChange, recurring, onRecurringChange, integrationId }: {
     scheduledAt?: string | null;
@@ -113,11 +114,12 @@
   </label>
 
   {#if scheduled}
+    <!-- v26-3: replaced native <input type="date"> with CalendarPopover.
+         The time input stays native — it's compact and consistent enough. -->
     <div class="flex gap-2">
-      <input type="date" bind:value={dateStr} onchange={update}
-        class="flex-1 px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-content-secondary" />
+      <CalendarPopover bind:value={dateStr} placeholder="Select date" onchange={update} class="flex-1" />
       <input type="time" bind:value={timeStr} onchange={update}
-        class="flex-1 px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-content-secondary" />
+        class="px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-content-secondary" />
     </div>
 
     <button onclick={autoSchedule} disabled={autoScheduling}
@@ -144,8 +146,8 @@
           </div>
           <div class="flex-1">
             <label class="text-xs text-muted mb-1 block">Until</label>
-            <input type="date" bind:value={endDateStr} onchange={updateRepeat}
-              class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-content-secondary" />
+            <!-- v26-3: CalendarPopover for the repeat end date too. -->
+            <CalendarPopover bind:value={endDateStr} placeholder="End date" onchange={updateRepeat} class="w-full" />
           </div>
         </div>
       {/if}
