@@ -1311,10 +1311,27 @@ pub async fn find_next_free_slot(
     for day_offset in 0..14i64 {
         let date = today + chrono::Duration::days(day_offset);
         for &minutes in &posting_times {
-            let slot = date
-                .and_hms_opt((minutes / 60) as u32, (minutes % 60) as u32, 0)
-                .unwrap()
-                .and_utc();
+            // v22 Phase 1 (BUG #22): guard against malformed posting_times
+            // JSON. `and_hms_opt` returns None when hours > 23 or minutes
+            // > 59 — previously this `.unwrap()`ed and panicked the request
+            // thread (returning HTTP 500). Now we skip the invalid slot
+            // and log a warning so the operator can fix the integration's
+            // posting_times config.
+            let h = (minutes / 60) as u32;
+            let m = (minutes % 60) as u32;
+            if h > 23 || m > 59 || minutes < 0 {
+                tracing::warn!(
+                    "Invalid posting_time minutes value {minutes} (h={h}, m={m}) — skipping slot"
+                );
+                continue;
+            }
+            let Some(slot_naive) = date.and_hms_opt(h, m, 0) else {
+                tracing::warn!(
+                    "and_hms_opt returned None for minutes={minutes} (h={h}, m={m}) — skipping slot"
+                );
+                continue;
+            };
+            let slot = slot_naive.and_utc();
             // Skip slots in the past
             if slot <= now {
                 continue;

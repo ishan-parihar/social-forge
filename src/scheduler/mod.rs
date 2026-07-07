@@ -74,6 +74,14 @@ pub fn start_scheduler(
                     }
                 }
                 _ = interval.tick() => {
+                    // v22 Phase 1 (D.5): reclaim stuck publishing posts
+                    // every tick (30s) instead of only on startup. This
+                    // catches publishes that hung mid-API-call without
+                    // waiting for a process restart. The UPDATE is cheap
+                    // (single statement, indexed by state).
+                    if let Err(e) = queries::reclaim_stuck_publishing(&db1, 300).await {
+                        tracing::warn!("reclaim_stuck_publishing failed: {e}");
+                    }
                     if let Err(e) = process_due_posts(&db1, &providers1, &broadcaster, token_key).await {
                         tracing::error!("Scheduler tick error: {e}");
                     }

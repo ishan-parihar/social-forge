@@ -360,7 +360,7 @@
     // Phase 2: fetch integrations for DayView ghost slots
     const integRes = await integrationsApi.list();
     if (integRes.data) allIntegrations = integRes.data.integrations.filter(i => !i.disabled);
-    const events = ['post_created', 'post_scheduled', 'post_published', 'post_failed', 'post_deleted'];
+    const events = ['post_created', 'post_scheduled', 'post_published', 'post_failed', 'post_deleted', 'post_stage_changed', 'lagged'];
     for (const evt of events) {
       calUnsubscribers.push(realtime.on(evt, () => refresh()));
     }

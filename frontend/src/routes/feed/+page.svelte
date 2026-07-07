@@ -345,7 +345,7 @@
       await load();
     }
     // Auto-refresh on realtime events
-    const events = ['post_published', 'post_created'];
+    const events = ['post_published', 'post_created', 'lagged'];
     for (const evt of events) {
       feedUnsubscribers.push(realtime.on(evt, () => load()));
     }

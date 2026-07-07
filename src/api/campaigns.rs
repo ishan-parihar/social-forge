@@ -171,6 +171,17 @@ pub async fn delete(
 
 /// PATCH /api/posts/{id}/stage — change a post's state (kanban drag-and-drop)
 /// and optionally assign it to a campaign.
+///
+/// v22 Phase 1 (BUG #6): State-transition validation. Previously a user
+/// could drag a post from `idea` → `published` even if it had no
+/// `platform_post_id` — the DB happily wrote `state='published'` with
+/// `published_at IS NULL` and the calendar then treated it as published
+/// (filtering by `published_at`), making it disappear. Now we reject
+/// illegal transitions and require `platform_post_id` for `published`.
+///
+/// v22 Phase 1 (BUG #7): Broadcast `post_stage_changed` so other browser
+/// tabs (and the dashboard) update in real-time. Previously the kanban
+/// had no multi-tab sync — dragging in tab A left tab B stale.
 pub async fn update_stage(
     State(state): State<AppState>,
     auth: AuthenticatedUser,
@@ -181,6 +192,79 @@ pub async fn update_stage(
     let valid_states = ["idea", "draft", "queued", "published", "error"];
     if !valid_states.contains(&body.state.as_str()) {
         return Err(AppError::BadRequest(format!("Invalid state: {}", body.state)));
+    }
+
+    // Fetch the current state to validate the transition.
+    let current_state: Option<String> = sqlx::query_scalar(
+        r#"SELECT state::text FROM posts WHERE id = $1 AND user_id = $2"#,
+    )
+    .bind(id)
+    .bind(auth.user_id)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|e| AppError::Internal(format!("Failed to fetch current state: {e}")))?;
+
+    let current_state = current_state.ok_or_else(|| AppError::NotFound("Post not found".into()))?;
+
+    // No-op if the state isn't actually changing (but still update campaign_id).
+    if current_state == body.state {
+        sqlx::query(
+            r#"UPDATE posts SET campaign_id = $3, updated_at = NOW()
+               WHERE id = $1 AND user_id = $2"#,
+        )
+        .bind(id)
+        .bind(auth.user_id)
+        .bind(body.campaign_id)
+        .execute(&state.db)
+        .await
+        .map_err(|e| AppError::Internal(format!("Failed to update campaign: {e}")))?;
+
+        state.broadcast.send(
+            "post_stage_changed",
+            &serde_json::json!({
+                "id": id.to_string(),
+                "state": body.state,
+                "previous_state": current_state,
+                "campaign_id": body.campaign_id.map(|c| c.to_string()),
+            }),
+        );
+        return Ok(Json(serde_json::json!({ "updated": true, "noop": true })));
+    }
+
+    // Validate the transition is legal.
+    // Allowed forward transitions:
+    //   idea → draft, idea → error
+    //   draft → queued, draft → error, draft → idea
+    //   queued → publishing (scheduler only — not user-settable here),
+    //           queued → error, queued → draft, queued → idea
+    //   published → queued (reschedule), published → error, published → draft
+    //   error → draft, error → queued, error → idea
+    // The scheduler is the only thing that should set `publishing` and
+    // `published` (with platform_post_id); users can move posts OUT of
+    // `published` (e.g. back to draft to edit) but not INTO it manually.
+    let allowed = match (&current_state[..], body.state.as_str()) {
+        // Forward out of idea
+        ("idea", "draft") | ("idea", "error") => true,
+        // Forward out of draft
+        ("draft", "queued") | ("draft", "error") | ("draft", "idea") => true,
+        // Forward out of queued (NOT to publishing — that's scheduler-only)
+        ("queued", "error") | ("queued", "draft") | ("queued", "idea") => true,
+        // Forward out of published (reschedule / re-draft)
+        ("published", "queued") | ("published", "error") | ("published", "draft") => true,
+        // Forward out of error
+        ("error", "draft") | ("error", "queued") | ("error", "idea") => true,
+        // `published` is only reachable via the scheduler — reject manual
+        // attempts to drag a post into the Published column.
+        (_, "published") => false,
+        // `publishing` is scheduler-only — never user-settable.
+        (_, "publishing") => false,
+        _ => false,
+    };
+    if !allowed {
+        return Err(AppError::BadRequest(format!(
+            "Illegal state transition: {current_state} → {} (only the scheduler can publish posts)",
+            body.state
+        )));
     }
 
     sqlx::query(
@@ -197,6 +281,17 @@ pub async fn update_stage(
     .execute(&state.db)
     .await
     .map_err(|e| AppError::Internal(format!("Failed to update post stage: {e}")))?;
+
+    // Broadcast so other tabs / the dashboard update in real-time.
+    state.broadcast.send(
+        "post_stage_changed",
+        &serde_json::json!({
+            "id": id.to_string(),
+            "state": body.state,
+            "previous_state": current_state,
+            "campaign_id": body.campaign_id.map(|c| c.to_string()),
+        }),
+    );
 
     Ok(Json(serde_json::json!({ "updated": true })))
 }

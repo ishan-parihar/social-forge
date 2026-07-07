@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import { automationApi, type AutomationRuleDisplay, type ExecutionLogDisplay, type CreateRulePayload } from "$lib/api/automation";
+  import { integrationsApi, type Integration } from "$lib/api/integrations";
   import { toast } from "$lib/stores/toast";
   import { realtime } from "$lib/stores/realtime";
   import { modals } from '$lib/stores/modals.svelte';
@@ -20,7 +21,17 @@
   let formTrigger = $state("comment");
   let formResponseType = $state("fixed");
   let formTemplate = $state("");
+  let formIntegrationId = $state<string>("");
   let saving = $state(false);
+
+  // v22 Phase 1 (BUG #26 — frontend automation NIL UUID):
+  // Previously the page created every rule with
+  // `integration_id: "00000000-0000-0000-0000-000000000000"`, which the
+  // backend rejected (FK constraint) or silently created a broken rule.
+  // Now we load the user's connected integrations and require one to be
+  // selected before save. The platform selector filters the integration
+  // list to make selection easier.
+  let integrations = $state<Integration[]>([]);
 
   const platforms = ["x", "reddit", "linkedin", "facebook", "instagram", "telegram", "discord"];
   const triggers = ["comment", "dm", "mention", "follow"];
@@ -29,11 +40,23 @@
   async function load() {
     loading = true;
     error = null;
-    const r = await automationApi.listRules();
-    if (r.data) {
-      rules = r.data.rules;
+    const [rulesRes, integRes] = await Promise.all([
+      automationApi.listRules(),
+      integrationsApi.list(),
+    ]);
+    if (rulesRes.data) {
+      rules = rulesRes.data.rules;
     } else {
-      error = r.error || "Failed to load rules";
+      error = rulesRes.error || "Failed to load rules";
+    }
+    if (integRes.data) {
+      integrations = integRes.data.integrations.filter(i => !i.disabled);
+      // Default-select the first integration matching the current platform,
+      // or the first integration overall.
+      if (!formIntegrationId) {
+        const matching = integrations.find(i => i.provider_identifier === formPlatform);
+        formIntegrationId = (matching || integrations[0])?.id || "";
+      }
     }
     loading = false;
   }
@@ -45,6 +68,9 @@
     formTrigger = "comment";
     formResponseType = "fixed";
     formTemplate = "";
+    // Pre-select first integration matching default platform.
+    const matching = integrations.find(i => i.provider_identifier === formPlatform);
+    formIntegrationId = (matching || integrations[0])?.id || "";
     showModal = true;
   }
 
@@ -55,14 +81,36 @@
     formTrigger = rule.trigger_type;
     formResponseType = rule.response_type;
     formTemplate = "";
+    // When editing, we don't know the integration_id from the slim
+    // AutomationRuleDisplay type — pre-select the first matching the
+    // rule's platform. The user can change it if needed.
+    const matching = integrations.find(i => i.provider_identifier === formPlatform);
+    formIntegrationId = (matching || integrations[0])?.id || "";
     showModal = true;
   }
 
+  // Filter integrations by selected platform for the dropdown.
+  let platformIntegrations = $derived(
+    integrations.filter(i => i.provider_identifier === formPlatform)
+  );
+
+  // v22 Phase 1: when platform changes, reset integration selection to
+  // the first matching integration (so the user doesn't accidentally
+  // save with a mismatched integration_id).
+  function onPlatformChange() {
+    const matching = platformIntegrations[0];
+    formIntegrationId = matching?.id || "";
+  }
+
   async function saveRule() {
+    if (!formIntegrationId) {
+      error = "Please select a connected channel first. Connect one in the Channels page if none are available.";
+      return;
+    }
     saving = true;
     error = null;
     const body: CreateRulePayload = {
-      integration_id: "00000000-0000-0000-0000-000000000000", // TODO: wire to selected integration
+      integration_id: formIntegrationId, // v22 Phase 1: real integration_id (was NIL UUID)
       name: formName,
       trigger_type: formTrigger,
       response_type: formResponseType,
@@ -187,11 +235,24 @@
       <input type="text" bind:value={formName} placeholder="Auto-reply to comments" class="w-full mb-3 px-3 py-2 bg-surface-hover border border-line rounded text-sm" />
 
       <label class="block text-sm text-muted mb-1">Platform</label>
-      <select bind:value={formPlatform} class="w-full mb-3 px-3 py-2 bg-surface-hover border border-line rounded text-sm">
+      <select bind:value={formPlatform} onchange={onPlatformChange} class="w-full mb-3 px-3 py-2 bg-surface-hover border border-line rounded text-sm">
         {#each platforms as p}
           <option value={p}>{p}</option>
         {/each}
       </select>
+
+      <label class="block text-sm text-muted mb-1">Channel (connected account)</label>
+      {#if platformIntegrations.length === 0}
+        <div class="w-full mb-3 px-3 py-2 bg-surface-hover border border-line rounded text-sm text-red-400">
+          No connected {formPlatform} accounts. Connect one in the <a href="/channels" class="underline">Channels</a> page.
+        </div>
+      {:else}
+        <select bind:value={formIntegrationId} class="w-full mb-3 px-3 py-2 bg-surface-hover border border-line rounded text-sm">
+          {#each platformIntegrations as integ (integ.id)}
+            <option value={integ.id}>{integ.provider_name || integ.provider_identifier}</option>
+          {/each}
+        </select>
+      {/if}
 
       <label class="block text-sm text-muted mb-1">Trigger Type</label>
       <select bind:value={formTrigger} class="w-full mb-3 px-3 py-2 bg-surface-hover border border-line rounded text-sm">

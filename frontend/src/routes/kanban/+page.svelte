@@ -53,7 +53,10 @@
 
   onMount(() => {
     load();
-    const events = ['post_created', 'post_scheduled', 'post_published', 'post_failed', 'post_deleted'];
+    // v22 Phase 1: subscribe to post lifecycle events + the new
+    // `post_stage_changed` (kanban drag in another tab) + `lagged`
+    // (SSE missed events → refetch).
+    const events = ['post_created', 'post_scheduled', 'post_published', 'post_failed', 'post_deleted', 'post_stage_changed', 'lagged'];
     for (const evt of events) {
       unsubscribers.push(realtime.on(evt, () => load()));
     }

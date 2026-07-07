@@ -102,7 +102,6 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/auth/callback", axum::routing::get(integrations::oauth_callback))
         .route("/api/auth/callback/{provider}", axum::routing::get(integrations::oauth_callback))
         .route("/integrations/social/{provider}", axum::routing::get(integrations::oauth_callback))
-        .route("/api/events", axum::routing::get(sse::sse_handler))
         .route("/api/media/{id}", axum::routing::get(media::serve_media))
         .route("/api/proxy-media", axum::routing::get(media::proxy_media))
         // Public onboarding — browser-accessible OAuth flow (no JWT header needed)
@@ -120,6 +119,10 @@ pub fn build_router(state: AppState) -> Router {
     let protected_routes = Router::new()
         .route("/api/auth/me", axum::routing::get(auth::me))
         .route("/api/auth/logout", axum::routing::post(auth::logout))
+        // SSE realtime stream — auth-gated to prevent event leakage on
+        // networked deployments (BUG #19). The auth_middleware validates
+        // the sf_session cookie; the SSE handler then subscribes.
+        .route("/api/events", axum::routing::get(sse::sse_handler))
         .route("/api/posts", axum::routing::get(posts::list).post(posts::create))
         .route("/api/posts/thread", axum::routing::post(posts::create_thread))
         .route("/api/posts/validate", axum::routing::post(posts::validate))

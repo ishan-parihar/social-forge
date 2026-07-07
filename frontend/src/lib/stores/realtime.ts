@@ -27,6 +27,8 @@ class RealtimeClient {
                                 this.errorCount++;
                                 // After repeated failures, stop retrying and
                                 // bounce to /login — session likely expired.
+                                // (v22 Phase 1: SSE is now auth-gated, so a 401
+                                // here means the session cookie is gone.)
                                 if (this.errorCount >= this.MAX_ERRORS) {
                                         if (typeof window !== "undefined") {
                                                 window.location.href = "/login";
@@ -41,6 +43,13 @@ class RealtimeClient {
                                 "post_published",
                                 "post_failed",
                                 "post_deleted",
+                                // v22 Phase 1 (BUG #7): kanban stage changes now
+                                // broadcast so multi-tab sync works.
+                                "post_stage_changed",
+                                // v22 Phase 1 (BUG #18): synthetic event emitted
+                                // by the server when the SSE client lagged behind
+                                // >1024 events. Listeners should refetch stale views.
+                                "lagged",
                                 "integration_connected",
                                 "integration_disconnected",
                                 "notification_new",

@@ -320,7 +320,13 @@ impl PostService {
             media: resolved_media,
             settings: post.settings.clone(),
             in_reply_to,
-            idempotency_key: None,
+            // v22 Phase 1 (BUG #15): pass the post's idempotency_key so
+            // providers that support the `Idempotency-Key` HTTP header
+            // (X v2, LinkedIn, Reddit, Slack) can deduplicate a retry
+            // after a crash. Previously this was `None`, meaning a
+            // manual "Post Now" after a stuck-publishing reclaim would
+            // create a duplicate post on the platform.
+            idempotency_key: Some(post.idempotency_key.to_string()),
         };
 
         // Validate
