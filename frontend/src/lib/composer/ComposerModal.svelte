@@ -433,11 +433,15 @@
 
       if (composer.mode === 'edit' && composer.editingPostId) {
         // ── Edit mode: update existing post ──
+        // v23-5: include tag_ids + first_comment in the update payload
+        // (were silently dropped before the v23-5 backend fix).
         const r = await postsApi.update(currentEditingPostId, {
           content: payload.content,
           title: payload.title,
           media: payload.media,
           settings: payload.settings,
+          tag_ids: payload.tag_ids,
+          first_comment: payload.first_comment,
         });
         if (r.error) { error = r.error; return; }
 

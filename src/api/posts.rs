@@ -72,6 +72,10 @@ pub struct UpdatePostRequest {
     pub title: Option<String>,
     pub media: Option<serde_json::Value>,
     pub settings: Option<serde_json::Value>,
+    // v23-5: tag_ids + first_comment now persistable on update.
+    // Previously the composer's edit-mode silently dropped these fields.
+    pub tag_ids: Option<Vec<Uuid>>,
+    pub first_comment: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -589,8 +593,11 @@ pub async fn update(
     let content = body.content.unwrap_or_default();
     let media = body.media.unwrap_or(serde_json::json!([]));
     let settings = body.settings.unwrap_or(serde_json::json!({}));
+    let first_comment = body.first_comment.as_deref();
 
-    let post = queries::update_post_content(
+    // v23-5: use update_post_full so first_comment is persisted (was
+    // silently dropped by update_post_content).
+    let post = queries::update_post_full(
         &state.db,
         id,
         auth.user_id,
@@ -598,9 +605,15 @@ pub async fn update(
         body.title.as_deref(),
         &media,
         &settings,
+        first_comment,
     )
     .await?
     .ok_or_else(|| crate::error::AppError::NotFound("Post not found".into()))?;
+
+    // v23-5: update tags if tag_ids was provided in the request.
+    if let Some(tag_ids) = body.tag_ids.as_ref() {
+        queries::set_post_tags(&state.db, id, tag_ids).await?;
+    }
 
     Ok(Json(PostPublic::from(post)))
 }

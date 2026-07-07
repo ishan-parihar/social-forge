@@ -74,7 +74,9 @@ export const postsApi = {
     api.post<{ valid: boolean; errors: Array<{ integration_id: string; provider: string; provider_name: string; kind: string; message: string; max_length?: number; actual_length?: number }> }>("/api/posts/validate", d),
   createThread: (d: ThreadRequest) =>
     api.post<{ posts: PostSummary[]; group_id: string }>("/api/posts/thread", d),
-  update: (id: string, d: { content: string; title?: string; media?: { id: string; url: string; mime_type: string; alt?: string }[]; settings?: Record<string, unknown> }) =>
+  // v23-5: update now accepts tag_ids + first_comment (was silently
+  // dropped on edit-mode save).
+  update: (id: string, d: { content: string; title?: string; media?: { id: string; url: string; mime_type: string; alt?: string }[]; settings?: Record<string, unknown>; tag_ids?: string[]; first_comment?: string }) =>
     api.put<PostDetail>(`/api/posts/${id}`, d),
   schedule: (id: string, at: string) => api.post<PostDetail>(`/api/posts/${id}/schedule`, { scheduled_at: at }),
   reschedule: (id: string, scheduledAt: string, moveGroup?: boolean, action?: 'schedule' | 'update') =>

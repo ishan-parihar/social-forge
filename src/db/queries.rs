@@ -743,6 +743,45 @@ pub async fn count_posts_search(
       .await
   }
 
+ /// v23-5: update post content + first_comment in one UPDATE.
+ /// The original update_post_content only updates content/title/media/
+ /// settings — first_comment was silently dropped on edit. This variant
+ /// adds first_comment to the UPDATE so the composer's edit-mode can
+ /// persist first-comment changes.
+ pub async fn update_post_full(
+    pool: &PgPool,
+    id: Uuid,
+    user_id: Uuid,
+    content: &str,
+    title: Option<&str>,
+    media: &serde_json::Value,
+    settings: &serde_json::Value,
+    first_comment: Option<&str>,
+ ) -> Result<Option<Post>, sqlx::Error> {
+    sqlx::query_as::<_, Post>(
+        r#"UPDATE posts SET
+             content = $1, title = $2, media = $3, settings = $4,
+             first_comment = $5,
+             updated_at = now()
+           WHERE id = $6 AND user_id = $7
+           RETURNING id, user_id, integration_id, state as "state: PostState",
+               content, title, media, settings, scheduled_at, published_at,
+               platform_post_id, platform_post_url, error_message,
+               created_at, updated_at,
+               repeat_interval_days, repeat_end_date, group_id,
+               first_comment, sequence, idempotency_key"#,
+    )
+        .bind(content)
+        .bind(title)
+        .bind(media)
+        .bind(settings)
+        .bind(first_comment)
+        .bind(id)
+        .bind(user_id)
+      .fetch_optional(pool)
+      .await
+  }
+
   pub async fn schedule_post(
     pool: &PgPool,
     id: Uuid,
