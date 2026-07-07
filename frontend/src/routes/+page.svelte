@@ -12,6 +12,7 @@
   import { providerIcon, providerColor } from '$lib/providers';
   import Icon from '$lib/ui/Icon.svelte';
   import StatCard from '$lib/ui/StatCard.svelte';
+  import Sparkline from '$lib/ui/Sparkline.svelte';
   import GettingStarted from '$lib/onboarding/GettingStarted.svelte';
   import { composer } from '$lib/stores/composer.svelte';
 
@@ -155,6 +156,15 @@
       ? Math.max(...analyticsSummary.posts_by_provider.map(p => p.count), 1)
       : 1
   );
+
+  // v25-2: per-day series for the dashboard sparklines. The data is already
+  // fetched (engagementData.by_day, cadenceData.by_day) but wasn't being
+  // visualized. These derived arrays extract just the numeric series so
+  // Sparkline can render them without re-mapping on every paint.
+  let engagementLikesSeries = $derived(engagementData?.by_day?.map(d => d.likes) ?? []);
+  let engagementCommentsSeries = $derived(engagementData?.by_day?.map(d => d.comments) ?? []);
+  let engagementSharesSeries = $derived(engagementData?.by_day?.map(d => d.shares) ?? []);
+  let cadenceSeries = $derived(cadenceData?.by_day?.map(d => d.count) ?? []);
 </script>
 
 <div class="page-enter space-y-6">
@@ -199,29 +209,44 @@
         <div class="stat-card bg-surface border border-line rounded-xl p-4">
           <div class="flex items-center gap-2">
             <Icon name="heart" class="w-4 h-4 text-pink-400" />
-            <div>
+            <div class="flex-1 min-w-0">
               <div class="text-xl font-bold text-pink-400">{totalEngagement.likes.toLocaleString()}</div>
               <div class="text-[10px] text-muted uppercase tracking-wider">Likes (7d)</div>
             </div>
           </div>
+          {#if engagementLikesSeries.length > 1}
+            <div class="mt-2 text-pink-400 w-full">
+              <Sparkline data={engagementLikesSeries} width={200} height={24} class="w-full" ariaLabel="Likes per day, last 7 days" />
+            </div>
+          {/if}
         </div>
         <div class="stat-card bg-surface border border-line rounded-xl p-4">
           <div class="flex items-center gap-2">
             <Icon name="comment-bubble" class="w-4 h-4 text-info" />
-            <div>
+            <div class="flex-1 min-w-0">
               <div class="text-xl font-bold text-info">{totalEngagement.comments.toLocaleString()}</div>
               <div class="text-[10px] text-muted uppercase tracking-wider">Comments (7d)</div>
             </div>
           </div>
+          {#if engagementCommentsSeries.length > 1}
+            <div class="mt-2 text-info w-full">
+              <Sparkline data={engagementCommentsSeries} width={200} height={24} class="w-full" ariaLabel="Comments per day, last 7 days" />
+            </div>
+          {/if}
         </div>
         <div class="stat-card bg-surface border border-line rounded-xl p-4">
           <div class="flex items-center gap-2">
             <Icon name="share" class="w-4 h-4 text-success" />
-            <div>
+            <div class="flex-1 min-w-0">
               <div class="text-xl font-bold text-success">{totalEngagement.shares.toLocaleString()}</div>
               <div class="text-[10px] text-muted uppercase tracking-wider">Shares (7d)</div>
             </div>
           </div>
+          {#if engagementSharesSeries.length > 1}
+            <div class="mt-2 text-success w-full">
+              <Sparkline data={engagementSharesSeries} width={200} height={24} class="w-full" ariaLabel="Shares per day, last 7 days" />
+            </div>
+          {/if}
         </div>
       </div>
     {/if}
@@ -272,6 +297,11 @@
                 <div class="text-[10px] text-muted uppercase tracking-wider">Total (30d)</div>
               </div>
             </div>
+            {#if cadenceSeries.length > 1}
+              <div class="text-brand-400 mb-3 w-full">
+                <Sparkline data={cadenceSeries} width={400} height={36} class="w-full" ariaLabel="Posts per day, last 30 days" />
+              </div>
+            {/if}
             {#if cadenceData.goal_per_day !== null}
               <div class="flex items-center gap-2">
                 <div class="flex-1 bg-background-input rounded-full h-2 overflow-hidden">
