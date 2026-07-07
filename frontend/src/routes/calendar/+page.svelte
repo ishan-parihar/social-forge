@@ -4,6 +4,7 @@
   import { postsApi } from "$lib/api/posts";
   import { integrationsApi, type Integration } from "$lib/api/integrations";
   import { tagsApi, type Tag } from "$lib/api/tags";
+  import { campaignsApi, type Campaign } from "$lib/api/campaigns";
   import { calendarState } from "$lib/stores/calendar.svelte";
   import { toast } from "$lib/stores/toast";
   import { realtime } from "$lib/stores/realtime";
@@ -25,7 +26,14 @@
   let events = $state<CalendarEvent[]>([]);
   let allTags = $state<Tag[]>([]);
   let allIntegrations = $state<Integration[]>([]);
+  let allCampaigns = $state<Campaign[]>([]);
   let selectedTagId = $state<string | null>(null);
+  // v24-2: server-side calendar filters (channel + campaign). These are
+  // passed to calendarApi.get() which sends them as query params to the
+  // backend (v23-4). The backend filters in SQL, so the client doesn't
+  // need to filter post-hoc.
+  let selectedIntegrationId = $state<string | null>(null);
+  let selectedCampaignId = $state<string | null>(null);
   let filteredEvents = $derived(
     selectedTagId
       ? events.filter(e => e.tags?.some(t => t.id === selectedTagId))
@@ -93,7 +101,12 @@
   async function fetchEvents(start: string, end: string) {
     loading = true;
     fetchError = null;
-    const r = await calendarApi.get(start, end);
+    // v24-2: pass server-side filters (integration_ids, campaign_id)
+    // to the calendar API. The backend filters in SQL.
+    const filters: { integration_ids?: string[]; campaign_id?: string } = {};
+    if (selectedIntegrationId) filters.integration_ids = [selectedIntegrationId];
+    if (selectedCampaignId) filters.campaign_id = selectedCampaignId;
+    const r = await calendarApi.get(start, end, Object.keys(filters).length > 0 ? filters : undefined);
     if (r.data) {
       events = r.data.days.flatMap(d => d.posts.map(toCalendarEvent));
     } else {
@@ -366,9 +379,22 @@
     // Phase 2: fetch integrations for DayView ghost slots
     const integRes = await integrationsApi.list();
     if (integRes.data) allIntegrations = integRes.data.integrations.filter(i => !i.disabled);
+    // v24-2: fetch campaigns for the campaign filter dropdown.
+    const campRes = await campaignsApi.list();
+    if (campRes.data) allCampaigns = campRes.data;
     const events = ['post_created', 'post_scheduled', 'post_published', 'post_failed', 'post_deleted', 'post_stage_changed', 'lagged'];
     for (const evt of events) {
       calUnsubscribers.push(realtime.on(evt, () => refresh()));
+    }
+  });
+
+  // v24-2: re-fetch events when the channel or campaign filter changes.
+  $effect(() => {
+    selectedIntegrationId;
+    selectedCampaignId;
+    // Only re-fetch if we've already loaded once (avoid double-fetch on mount).
+    if (allIntegrations.length > 0 || allCampaigns.length > 0) {
+      refresh();
     }
   });
 
@@ -400,7 +426,7 @@
         class="px-3 py-1.5 text-sm border border-line rounded-lg text-muted hover:text-white hover:bg-surface-hover transition-colors"
         title="Generate multiple posts from a topic using AI"
       >✨ Generate Posts</button>
-      <button onclick={() => composer.openCreate()} class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm transition-colors">
+      <button onclick={() => composer.openCreate()} class="px-3 py-1.5 bg-brand-500 hover:bg-brand-600 rounded-lg text-sm transition-colors">
         + New Post
       </button>
     </div>
@@ -416,20 +442,26 @@
     tags={allTags}
     {selectedTagId}
     onTagFilter={(id) => selectedTagId = id}
+    integrations={allIntegrations}
+    {selectedIntegrationId}
+    onIntegrationFilter={(id) => selectedIntegrationId = id}
+    campaigns={allCampaigns}
+    {selectedCampaignId}
+    onCampaignFilter={(id) => selectedCampaignId = id}
   />
 
   {#if selected.size > 0}
-    <div class="flex items-center gap-3 bg-indigo-600/10 border border-indigo-500/30 rounded-lg px-4 py-2">
-      <span class="text-sm text-indigo-300">{selected.size} selected</span>
-      <button onclick={() => showBulkSchedule = !showBulkSchedule} disabled={bulkProcessing} class="px-3 py-1 text-xs bg-indigo-600 hover:bg-indigo-500 rounded disabled:opacity-50">Reschedule</button>
-      <button onclick={bulkDelete} disabled={bulkProcessing} class="px-3 py-1 text-xs bg-red-600 hover:bg-red-500 rounded disabled:opacity-50">Delete</button>
-      <button onclick={() => selected = new Set()} class="ml-auto text-xs text-muted hover:text-white">Clear</button>
+    <div class="flex items-center gap-3 bg-brand-500/10 border border-brand-500/30 rounded-lg px-4 py-2">
+      <span class="text-sm text-brand-300">{selected.size} selected</span>
+      <button onclick={() => showBulkSchedule = !showBulkSchedule} disabled={bulkProcessing} class="px-3 py-1 text-xs bg-brand-500 hover:bg-brand-600 rounded disabled:opacity-50">Reschedule</button>
+      <button onclick={bulkDelete} disabled={bulkProcessing} class="px-3 py-1 text-xs bg-error hover:bg-error/90 rounded disabled:opacity-50">Delete</button>
+      <button onclick={() => selected = new Set()} class="ml-auto text-xs text-muted hover:text-content">Clear</button>
     </div>
     {#if showBulkSchedule}
       <div class="flex items-center gap-2 bg-background-input border border-line rounded-lg p-3">
         <input type="date" bind:value={bulkScheduleDate} class="px-2 py-1 bg-surface border border-line rounded text-sm text-content-secondary" />
         <input type="time" bind:value={bulkScheduleTime} class="px-2 py-1 bg-surface border border-line rounded text-sm text-content-secondary" />
-        <button onclick={bulkReschedule} disabled={bulkProcessing || !bulkScheduleDate} class="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 rounded text-xs disabled:opacity-50">Apply</button>
+        <button onclick={bulkReschedule} disabled={bulkProcessing || !bulkScheduleDate} class="px-3 py-1 bg-brand-500 hover:bg-brand-600 rounded text-xs disabled:opacity-50">Apply</button>
       </div>
     {/if}
   {/if}
@@ -448,7 +480,7 @@
       <p class="text-xs text-muted mb-4 max-w-md">{fetchError}</p>
       <button
         onclick={retryFetch}
-        class="px-4 py-2 text-sm bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors flex items-center gap-2"
+        class="px-4 py-2 text-sm bg-brand-500 hover:bg-brand-600 text-white rounded-lg transition-colors flex items-center gap-2"
       >
         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
           <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
