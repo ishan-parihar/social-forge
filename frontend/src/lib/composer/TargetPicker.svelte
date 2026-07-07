@@ -88,7 +88,7 @@
         {searchQuery ? "No targets match your search" : "No targets found"}
       </div>
     {:else}
-      <div class="divide-y divide-[#1e2435]">
+      <div class="divide-y divide-line">
         {#each filteredTargets as target (target.id)}
           {@const isSelected = selectedTargets.includes(target.id)}
           <button
