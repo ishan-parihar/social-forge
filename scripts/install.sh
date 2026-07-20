@@ -403,3 +403,70 @@ fi
 echo ""
 echo "  Docs: https://github.com/${REPO}"
 echo ""
+
+# ── Install Session Hooks (AXI §7) ─────────────────────────────────────────
+if [ "$SKIP_SKILL" != "true" ]; then
+    head "Installing AI agent session hooks..."
+
+    # Claude Code session hook
+    CLAUDE_SETTINGS="$HOME/.claude/settings.json"
+    if command -v jq &>/dev/null && [ -f "$CLAUDE_SETTINGS" ]; then
+        if jq -e '.hooks.SessionStart[]?.hooks[]?.command == "social-forge"' "$CLAUDE_SETTINGS" &>/dev/null; then
+            log "Claude Code session hook already installed"
+        else
+            cp "$CLAUDE_SETTINGS" "${CLAUDE_SETTINGS}.bak.$(date +%s)"
+            jq '.hooks.SessionStart += [{"matcher":"","hooks":[{"type":"command","command":"social-forge"}]}]' \
+                "$CLAUDE_SETTINGS" > "${CLAUDE_SETTINGS}.tmp" && mv "${CLAUDE_SETTINGS}.tmp" "$CLAUDE_SETTINGS"
+            log "Claude Code session hook installed"
+        fi
+    else
+        info "Claude Code: Add to ~/.claude/settings.json:"
+        echo '    {"hooks":{"SessionStart":[{"matcher":"","hooks":[{"type":"command","command":"social-forge"}]}]}}'
+    fi
+
+    # Codex session hook
+    CODEX_DIR="$HOME/.codex"
+    if [ -d "$CODEX_DIR" ]; then
+        CODEX_HOOKS="$CODEX_DIR/hooks.json"
+        if [ -f "$CODEX_HOOKS" ] && jq -e '.SessionStart == "social-forge"' "$CODEX_HOOKS" &>/dev/null; then
+            log "Codex session hook already installed"
+        else
+            if [ -f "$CODEX_HOOKS" ]; then
+                cp "$CODEX_HOOKS" "${CODEX_HOOKS}.bak.$(date +%s)"
+                jq '.SessionStart = "social-forge"' "$CODEX_HOOKS" > "${CODEX_HOOKS}.tmp" && mv "${CODEX_HOOKS}.tmp" "$CODEX_HOOKS"
+            else
+                echo '{"SessionStart":"social-forge"}' > "$CODEX_HOOKS"
+            fi
+            log "Codex session hook installed"
+            CODEX_CONFIG="$CODEX_DIR/config.toml"
+            if [ -f "$CODEX_CONFIG" ] && ! grep -q 'hooks = true' "$CODEX_CONFIG"; then
+                echo -e '\n[features]\nhooks = true' >> "$CODEX_CONFIG"
+                info "Enabled hooks in $CODEX_CONFIG"
+            fi
+        fi
+    else
+        info "Codex: Create ~/.codex/hooks.json with {"SessionStart":"social-forge"}"
+    fi
+
+    # OpenCode session hook
+    OPENCODE_DIR="$HOME/.config/opencode/plugins"
+    if [ -d "$HOME/.config/opencode" ]; then
+        mkdir -p "$OPENCODE_DIR"
+        if [ -f "$OPENCODE_DIR/social-forge.ts" ]; then
+            log "OpenCode session hook already installed"
+        else
+            cat > "$OPENCODE_DIR/social-forge.ts" << 'OPENCODE_PLUGIN'
+export default {
+  name: "social-forge",
+  onSessionStart: async () => {
+    const { execSync } = require("child_process");
+    return execSync("social-forge").toString();
+  },
+};
+OPENCODE_PLUGIN
+            log "OpenCode session hook installed"
+        fi
+    else
+        info "OpenCode: Create ~/.config/opencode/plugins/social-forge.ts (see README)"
+    fi
+fi
