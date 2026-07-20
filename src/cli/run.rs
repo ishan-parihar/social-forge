@@ -31,16 +31,7 @@ pub(crate) fn output_error_with_hint(msg: &str, hint: &str) -> ! {
     std::process::exit(2);
 }
 
-pub(crate) fn truncate_str(s: &str, max: usize) -> String {
-    let char_count = s.chars().count();
-    if char_count <= max {
-        s.to_string()
-    } else {
-        let truncated: String = s.chars().take(max).collect();
-        format!("{}...
-  ... (truncated, {} chars total)", truncated, char_count)
-    }
-}
+
 
 // ── Target Discovery Helpers ─────────────────────────────────
 
