@@ -12,6 +12,8 @@ Post to 21 social platforms from a single CLI with auto content-splitting.
 
 <!-- Static skill — regenerate: social-forge --help -->
 <!-- Install: npx skills add <owner/social-forge> --skill social-forge -->
+<!-- CI check: diff <(social-forge --help) SKILL.md && exit 1 -->
+<!-- Install: npx skills add <owner/social-forge> --skill social-forge -->
 
 ## Quick Start
 
