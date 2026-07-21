@@ -37,6 +37,12 @@ async fn main() -> anyhow::Result<()> {
     // Install rustls crypto provider for TLS
     let _ = rustls::crypto::ring::default_provider().install_default();
 
+    // AXI §8: Content-first home view — show live state when no args provided
+    if std::env::args().len() <= 1 {
+        cli::home::handle_home();
+        return Ok(());
+    }
+
     let cli_args = Cli::parse();
 
     // Extract port for server mode

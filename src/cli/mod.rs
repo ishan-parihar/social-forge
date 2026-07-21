@@ -1,5 +1,6 @@
 pub mod run;
 pub mod platforms;
+pub mod home;
 pub use run::run_cli;
 
 use clap::{Parser, Subcommand};

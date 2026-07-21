@@ -34,7 +34,28 @@ pub(crate) fn output_error_with_hint(msg: &str, hint: &str) -> ! {
     std::process::exit(2);
 }
 
-
+/// AXI §3: Truncate long string fields in a JSON value to save agent tokens.
+/// Fields exceeding `max_chars` are truncated with a total-length indicator.
+pub(crate) fn truncate_json_strings(value: &serde_json::Value, max_chars: usize) -> serde_json::Value {
+    match value {
+        serde_json::Value::Object(map) => {
+            let mut out = serde_json::Map::new();
+            for (k, v) in map {
+                out.insert(k.clone(), truncate_json_strings(v, max_chars));
+            }
+            serde_json::Value::Object(out)
+        }
+        serde_json::Value::Array(arr) => {
+            serde_json::Value::Array(arr.iter().map(|v| truncate_json_strings(v, max_chars)).collect())
+        }
+        serde_json::Value::String(s) if s.len() > max_chars => {
+            let total = s.len();
+            let truncated: String = s.chars().take(max_chars).collect();
+            serde_json::json!(format!("{}... (truncated, {} chars total)", truncated, total))
+        }
+        other => other.clone(),
+    }
+}
 
 // ── Target Discovery Helpers ─────────────────────────────────
 
@@ -233,7 +254,25 @@ async fn handle_providers_with_state(state: &AppState) -> anyhow::Result<()> {le
             "disabled": i.disabled,
         })
     }).collect();
-    output_json(&serde_json::json!({"providers": list}));
+    let active = list.iter().filter(|p| p["disabled"] != true).count();
+    let disabled = list.len() - active;
+    // AXI §5: Definitive empty state
+    if list.is_empty() {
+        output_json(&serde_json::json!({
+            "providers": [],
+            "count": 0,
+            "message": "No providers connected. Run 'social-forge connect <provider>' or visit /setup to get started.",
+            "help": "Run 'social-forge connect --help' to see all supported providers.",
+        }));
+    } else {
+        // AXI §4: Pre-computed aggregates
+        output_json(&serde_json::json!({
+            "count": list.len(),
+            "active": active,
+            "disabled": disabled,
+            "providers": list,
+        }));
+    }
     Ok(())
 }
 
@@ -1222,11 +1261,26 @@ async fn handle_feed_with_state(state: &AppState, provider: Option<&str>, limit:
     )
     .await?;
 
-    output_json(&serde_json::json!({
-        "provider": provider,
-        "count": posts.len(),
-        "posts": posts,
-    }));
+    // AXI §5: Definitive empty state + §3: truncate long post text
+    if posts.is_empty() {
+        let filter = provider.unwrap_or("all");
+        output_json(&serde_json::json!({
+            "posts": [],
+            "count": 0,
+            "provider": provider,
+            "message": format!("No feed posts found for {filter}. Run 'social-forge import <provider> --count 10' to pull recent posts."),
+        }));
+    } else {
+        let truncated: Vec<serde_json::Value> = posts.into_iter().map(|p| {
+            let val = serde_json::to_value(&p).unwrap_or_default();
+            truncate_json_strings(&val, 500)
+        }).collect();
+        output_json(&serde_json::json!({
+            "provider": provider,
+            "count": truncated.len(),
+            "posts": truncated,
+        }));
+    }
     Ok(())
 }
 
