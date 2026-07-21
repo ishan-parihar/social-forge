@@ -1296,8 +1296,13 @@ async fn handle_comment_with_state(state: &AppState, action: CommentAction) -> a
                 post_id,
                 limit: Some(limit),
             };
-            let result = crate::mcp::tools_comments::get_comments(&state, &input).await
-                .map_err(|e| anyhow::anyhow!("{}", e))?;
+            let result = match crate::mcp::tools_comments::get_comments(&state, &input).await {
+                Ok(r) => r,
+                Err(e) => output_error_with_hint(
+                    &format!("Failed to get comments: {}", e),
+                    "Run `social-forge doctor` to check provider health."
+                ),
+            };
             output_json(&serde_json::to_value(result.0).unwrap_or_default());
         }
         CommentAction::Reply { integration_id, comment_id, content } => {
@@ -1306,8 +1311,13 @@ async fn handle_comment_with_state(state: &AppState, action: CommentAction) -> a
                 comment_id,
                 content,
             };
-            let result = crate::mcp::tools_comments::reply_to_comment(&state, &input).await
-                .map_err(|e| anyhow::anyhow!("{}", e))?;
+            let result = match crate::mcp::tools_comments::reply_to_comment(&state, &input).await {
+                Ok(r) => r,
+                Err(e) => output_error_with_hint(
+                    &format!("Failed to reply to comment: {}", e),
+                    "Ensure the integration is connected. Run `social-forge doctor` to check."
+                ),
+            };
             output_json(&serde_json::to_value(result.0).unwrap_or_default());
         }
         CommentAction::Delete { integration_id, comment_id } => {
@@ -1315,8 +1325,13 @@ async fn handle_comment_with_state(state: &AppState, action: CommentAction) -> a
                 integration_id,
                 comment_id,
             };
-            let result = crate::mcp::tools_comments::delete_comment(&state, &input).await
-                .map_err(|e| anyhow::anyhow!("{}", e))?;
+            let result = match crate::mcp::tools_comments::delete_comment(&state, &input).await {
+                Ok(r) => r,
+                Err(e) => output_error_with_hint(
+                    &format!("Failed to delete comment: {}", e),
+                    "Ensure the comment belongs to your account."
+                ),
+            };
             output_json(&serde_json::to_value(result.0).unwrap_or_default());
         }
     }
@@ -1332,8 +1347,13 @@ async fn handle_dm_with_state(state: &AppState, action: DmAction) -> anyhow::Res
                 recipient,
                 content,
             };
-            let result = crate::mcp::tools_dm::send_dm(&state, &input).await
-                .map_err(|e| anyhow::anyhow!("{}", e))?;
+            let result = match crate::mcp::tools_dm::send_dm(&state, &input).await {
+                Ok(r) => r,
+                Err(e) => output_error_with_hint(
+                    &format!("Failed to send DM: {}", e),
+                    "Ensure the DM integration is connected. Run `social-forge doctor` to check."
+                ),
+            };
             output_json(&serde_json::to_value(result.0).unwrap_or_default());
         }
         DmAction::List { integration_id, limit } => {
@@ -1341,8 +1361,13 @@ async fn handle_dm_with_state(state: &AppState, action: DmAction) -> anyhow::Res
                 integration_id,
                 limit: Some(limit),
             };
-            let result = crate::mcp::tools_dm::list_dm_conversations(&state, &input).await
-                .map_err(|e| anyhow::anyhow!("{}", e))?;
+            let result = match crate::mcp::tools_dm::list_dm_conversations(&state, &input).await {
+                Ok(r) => r,
+                Err(e) => output_error_with_hint(
+                    &format!("Failed to list DM conversations: {}", e),
+                    "Run `social-forge doctor` to check provider health."
+                ),
+            };
             output_json(&serde_json::to_value(result.0).unwrap_or_default());
         }
         DmAction::Messages { integration_id, conversation_id, limit } => {
@@ -1351,8 +1376,13 @@ async fn handle_dm_with_state(state: &AppState, action: DmAction) -> anyhow::Res
                 conversation_id,
                 limit: Some(limit),
             };
-            let result = crate::mcp::tools_dm::get_dm_messages(&state, &input).await
-                .map_err(|e| anyhow::anyhow!("{}", e))?;
+            let result = match crate::mcp::tools_dm::get_dm_messages(&state, &input).await {
+                Ok(r) => r,
+                Err(e) => output_error_with_hint(
+                    &format!("Failed to get DM messages: {}", e),
+                    "Ensure the conversation ID is valid."
+                ),
+            };
             output_json(&serde_json::to_value(result.0).unwrap_or_default());
         }
     }
