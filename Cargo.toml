@@ -137,6 +137,9 @@ feed-rs = "2.1"
 # When frontend/build/ doesn't exist, rust-embed produces an empty set (no panic).
 rust-embed = { version = "8", features = ["include-exclude"] }
 
+# AXI S1: Token-efficient TOON output
+toon-helper = { path = "../toon-helper" }
+
 [patch.crates-io]
 # core2 0.4.0 was yanked from crates.io, but glass_pumpkin 1.6 (transitive
 # dep of grammers-crypto 0.7) still requires it. The real core2 is a
@@ -145,3 +148,5 @@ rust-embed = { version = "8", features = ["include-exclude"] }
 # re-exports the std types so the build unblocks.
 core2 = { path = "vendor/core2" }
 
+
+toon-helper = { path = "../toon-helper" }

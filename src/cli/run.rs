@@ -13,21 +13,24 @@ use crate::social::registry::ProviderRegistry;
 
 use super::{Cli, Command, ConfigAction, CommentAction, DmAction, AutomationAction, MediaAction, PostsAction};
 use crate::social::TargetInfo;
+use toon_helper;
 use crate::db::models::Integration;
 
 // ── Output Helpers ───────────────────────────────────────────
 
 pub(crate) fn output_json(value: &serde_json::Value) {
-    println!("{}", serde_json::to_string_pretty(value).unwrap());
+    println!("{}", toon_helper::format_text(value, "toon"));
 }
 
 pub(crate) fn output_error(msg: &str) -> anyhow::Result<()> {
-    println!("{}", serde_json::json!({"error": msg}));
+    let err = serde_json::json!({"error": msg});
+    println!("{}", toon_helper::format_text(&err, "toon"));
     std::process::exit(2);
 }
 
 pub(crate) fn output_error_with_hint(msg: &str, hint: &str) -> ! {
-    println!("{}", serde_json::json!({"error": msg, "help": hint}));
+    let err = serde_json::json!({"error": msg, "help": hint});
+    println!("{}", toon_helper::format_text(&err, "toon"));
     std::process::exit(2);
 }
 
