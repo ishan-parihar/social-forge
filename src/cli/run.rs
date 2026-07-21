@@ -13,7 +13,7 @@ use crate::social::registry::ProviderRegistry;
 
 use super::{Cli, Command, ConfigAction, CommentAction, DmAction, AutomationAction, MediaAction, PostsAction};
 use crate::social::TargetInfo;
-use toon_helper;
+use toon_helper::{self, truncate_json_strings};
 use crate::db::models::Integration;
 
 // ── Output Helpers ───────────────────────────────────────────
@@ -32,29 +32,6 @@ pub(crate) fn output_error_with_hint(msg: &str, hint: &str) -> ! {
     let err = serde_json::json!({"error": msg, "help": hint});
     println!("{}", toon_helper::format_text(&err, "toon"));
     std::process::exit(2);
-}
-
-/// AXI §3: Truncate long string fields in a JSON value to save agent tokens.
-/// Fields exceeding `max_chars` are truncated with a total-length indicator.
-pub(crate) fn truncate_json_strings(value: &serde_json::Value, max_chars: usize) -> serde_json::Value {
-    match value {
-        serde_json::Value::Object(map) => {
-            let mut out = serde_json::Map::new();
-            for (k, v) in map {
-                out.insert(k.clone(), truncate_json_strings(v, max_chars));
-            }
-            serde_json::Value::Object(out)
-        }
-        serde_json::Value::Array(arr) => {
-            serde_json::Value::Array(arr.iter().map(|v| truncate_json_strings(v, max_chars)).collect())
-        }
-        serde_json::Value::String(s) if s.len() > max_chars => {
-            let total = s.len();
-            let truncated: String = s.chars().take(max_chars).collect();
-            serde_json::json!(format!("{}... (truncated, {} chars total)", truncated, total))
-        }
-        other => other.clone(),
-    }
 }
 
 // ── Target Discovery Helpers ─────────────────────────────────
