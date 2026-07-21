@@ -145,4 +145,3 @@ rust-embed = { version = "8", features = ["include-exclude"] }
 # re-exports the std types so the build unblocks.
 core2 = { path = "vendor/core2" }
 
-toon-helper = { path = "../toon-helper" }
