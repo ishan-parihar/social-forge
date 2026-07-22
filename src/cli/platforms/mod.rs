@@ -31,21 +31,27 @@ pub mod tags;
 pub mod analytics;
 
 use serde::Serialize;
+use toon_helper::{self, truncate_json_strings};
+
+/// Maximum chars for string values in list outputs (AXI §3: truncation).
+const LIST_TRUNCATE_CHARS: usize = 500;
 
 /// Shared result-printing footer for every CLI platform shim.
 ///
-/// Replaces the 5-line `match result { Ok(v) => println!(...), Err(e) =>
-/// { eprintln!(...); std::process::exit(1); } } Ok(())` block that was
-/// duplicated across all 22 `cli/platforms/*.rs` files.
+/// Uses TOON format (AXI §1) with optional truncation for list payloads.
 pub fn emit_result<T: Serialize>(result: Result<T, String>) -> anyhow::Result<()> {
     match result {
         Ok(v) => {
-            println!("{}", serde_json::to_string_pretty(&v).unwrap_or_else(|_| "{}".into()));
+            let val = serde_json::to_value(&v).unwrap_or_default();
+            // AXI §3: truncate string fields in list-like outputs
+            let truncated = truncate_json_strings(&val, LIST_TRUNCATE_CHARS);
+            println!("{}", toon_helper::format_text(&truncated, "toon"));
             Ok(())
         }
         Err(e) => {
-            eprintln!("{}", serde_json::json!({"error": e}));
-            std::process::exit(1);
+            let err = serde_json::json!({"error": e, "hint": "Run `social-forge doctor` to check provider health."});
+            println!("{}", toon_helper::format_text(&err, "toon"));
+            std::process::exit(2);
         }
     }
 }

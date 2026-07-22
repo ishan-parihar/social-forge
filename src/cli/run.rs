@@ -1215,11 +1215,15 @@ async fn handle_import_with_state(state: &AppState, provider_name: &str, count: 
         }
     }
 
+    let truncated: Vec<serde_json::Value> = posts.into_iter().map(|p| {
+        let val = serde_json::to_value(&p).unwrap_or_default();
+        truncate_json_strings(&val, 500)
+    }).collect();
     output_json(&serde_json::json!({
         "provider": provider_name,
         "imported": imported,
-        "total": posts.len(),
-        "posts": posts,
+        "total": truncated.len(),
+        "posts": truncated,
     }));
     Ok(())
 }
@@ -1280,7 +1284,8 @@ async fn handle_comment_with_state(state: &AppState, action: CommentAction) -> a
                     "Run `social-forge doctor` to check provider health."
                 ),
             };
-            output_json(&serde_json::to_value(result.0).unwrap_or_default());
+            let val = truncate_json_strings(&serde_json::to_value(result.0).unwrap_or_default(), 500);
+            output_json(&val);
         }
         CommentAction::Reply { integration_id, comment_id, content } => {
             let input = crate::mcp::tools_comments::ReplyToCommentInput {
@@ -1345,7 +1350,8 @@ async fn handle_dm_with_state(state: &AppState, action: DmAction) -> anyhow::Res
                     "Run `social-forge doctor` to check provider health."
                 ),
             };
-            output_json(&serde_json::to_value(result.0).unwrap_or_default());
+            let val = truncate_json_strings(&serde_json::to_value(result.0).unwrap_or_default(), 500);
+            output_json(&val);
         }
         DmAction::Messages { integration_id, conversation_id, limit } => {
             let input = crate::mcp::tools_dm::GetDmInput {
@@ -1360,7 +1366,8 @@ async fn handle_dm_with_state(state: &AppState, action: DmAction) -> anyhow::Res
                     "Ensure the conversation ID is valid."
                 ),
             };
-            output_json(&serde_json::to_value(result.0).unwrap_or_default());
+            let val = truncate_json_strings(&serde_json::to_value(result.0).unwrap_or_default(), 500);
+            output_json(&val);
         }
     }
     Ok(())
@@ -1391,7 +1398,8 @@ async fn handle_automation_with_state(state: &AppState, action: AutomationAction
             };
             let result = crate::mcp::tools_automation::list_rules(&state, &input).await
                 .map_err(|e| anyhow::anyhow!("{}", e))?;
-            output_json(&serde_json::to_value(result.0).unwrap_or_default());
+            let val = truncate_json_strings(&serde_json::to_value(result.0).unwrap_or_default(), 500);
+            output_json(&val);
         }
         AutomationAction::Update { rule_id, name, response_template, is_active } => {
             let input = crate::mcp::tools_automation::UpdateRuleInput {
@@ -1424,7 +1432,8 @@ async fn handle_automation_with_state(state: &AppState, action: AutomationAction
             };
             let result = crate::mcp::tools_automation::get_logs(&state, &input).await
                 .map_err(|e| anyhow::anyhow!("{}", e))?;
-            output_json(&serde_json::to_value(result.0).unwrap_or_default());
+            let val = truncate_json_strings(&serde_json::to_value(result.0).unwrap_or_default(), 500);
+            output_json(&val);
         }
     }
     Ok(())
@@ -1805,7 +1814,7 @@ async fn handle_posts_with_state(state: &AppState, action: PostsAction) -> anyho
             ).await {
                 Ok((posts, total)) => {
                     let summaries: Vec<_> = posts.iter().map(|p| {
-                        serde_json::json!({
+                        let mut val = serde_json::json!({
                             "id": p.id,
                             "content": p.content,
                             "state": p.state,
@@ -1821,13 +1830,17 @@ async fn handle_posts_with_state(state: &AppState, action: PostsAction) -> anyho
                             "settings": p.settings,
                             "created_at": p.created_at.to_rfc3339(),
                             "updated_at": p.updated_at.to_rfc3339(),
-                        })
+                        });
+                        // AXI §3: truncate long strings in list view
+                        val = truncate_json_strings(&val, 500);
+                        val
                     }).collect();
                     Ok(serde_json::json!({
                         "total": total.unwrap_or(0),
                         "limit": limit,
                         "offset": offset,
                         "count": summaries.len(),
+                        "hint": if total.unwrap_or(0) as i64 > limit { Some(format!("Showing {} of {} posts. Use --offset {} for next page.", summaries.len(), total.unwrap_or(0), offset + limit)) } else { None },
                         "posts": summaries,
                     }))
                 },
