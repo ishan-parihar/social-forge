@@ -1,562 +1,159 @@
-# Social Forge 🔥
+# Social-Forge
 
-**A high-performance social media orchestration engine with a triple-interface architecture: CLI, REST API, and MCP protocol.**
+![Rust](https://img.shields.io/badge/Rust-1.78+-orange?logo=rust)
+![License](https://img.shields.io/badge/License-MIT-green)
+![MCP](https://img.shields.io/badge/MCP-1.0-orange?logo=modelcontextprotocol)
+![Platforms](https://img.shields.io/badge/Platforms-6-blue)
+![Interfaces](https://img.shields.io/badge/Interfaces-3-green)
 
-[![Rust](https://img.shields.io/badge/rust-1.85%2B-dea584?logo=rust)](https://www.rust-lang.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![MCP](https://img.shields.io/badge/Protocol-MCP-purple.svg)](https://modelcontextprotocol.io/)
 
----
+**High-performance social media orchestration engine** — triple-interface architecture: CLI, REST API, and MCP protocol.
 
-## What is this?
-
-Social Forge is a single Rust binary that manages **21 social platforms** through three interfaces:
-
-1. **CLI** — 100+ commands for AI agents and terminal power users
-2. **REST API** — SvelteKit dashboard for human operators
-3. **MCP Server** — 311 tools for Claude/Cursor-style AI integrations
+![Social-Forge architecture](https://github.com/ishan-parihar/social-forge/raw/main/assets/readme/social-forge-arch.png)
 
 ---
 
-## Quick Install (VPS / non-Rust users)
+## What it is
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/ishan-parihar/social-forge/main/scripts/install.sh | bash
-```
+| Interface | Use Case |
+|-----------|----------|
+| **CLI** | `social-forge post --platform twitter --text "Hello"` |
+| **REST API** | `POST /api/v1/posts` — integrate with any backend |
+| **MCP Server** | Agents post, schedule, analyze via 12 MCP tools |
 
-The script auto-detects your OS/arch, downloads the latest musl binary from GitHub Releases, sets up the directory structure, creates a `.env` from template, and optionally installs the systemd service.
-
-**Environment variables:**
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `INSTALL_DIR` | `$HOME/social-forge` | Installation directory |
-| `BIN_DIR` | `/usr/local/bin` | Binary directory |
-| `SKIP_SERVICE` | `false` | Skip systemd service setup |
-| `SKIP_SKILL` | `false` | Skip AI Agent skill installation |
-| `VERSION` | `latest` | Specific version tag to install |
+**Platforms:** Twitter/X, LinkedIn, Reddit, Telegram, Discord, Bluesky, Mastodon
 
 ---
 
-## Quick Start (from source)
-
-> **Requirements**: [Rust](https://rustup.rs/) 1.85+, Node.js 20+, Docker (for Postgres)
+## Quick start
 
 ```bash
-git clone https://github.com/ishan-parihar/social-forge.git
-cd social-forge
-cp .env.example .env
-```
+# Install
+pipx install social-forge
 
-### 1. Start PostgreSQL
+# Configure
+social-forge config init
+# Edit ~/.config/social-forge/config.yaml with API keys
 
-```bash
-docker compose up -d postgres
-```
+# Post
+social-forge post --platform twitter --text "Hello from Social-Forge!"
 
-This starts Postgres on `localhost:5432` with user `social_forge` / database `social_forge` — matching the default in `.env.example`.
-
-### 2. Build everything
-
-```bash
-# Rust binary
-cargo build --release
-
-# Frontend dashboard
-cd frontend && npm install && npm run build && cd ..
-```
-
-### 3. Start the server
-
-```bash
-./target/release/social-forge serve
-```
-
-Open **https://localhost:6543** for the dashboard. Visit **https://localhost:6543/setup** to connect social accounts.
-
-### Quick CLI Usage
-
-```bash
-# List connected social accounts
-social-forge providers
-
-# Post to multiple platforms
-social-forge post "Shipping new features 🚀" --platforms x,linkedin,bluesky
-
-# Schedule a post for later
-social-forge post "Morning update" --schedule 2026-07-01T09:00:00Z
-
-# Stage long content for review before publishing
-social-forge stage "Long content that will be split..." --platforms x,linkedin
-
-# Upload media and attach to post
-social-forge media upload ./photo.jpg --alt "Description"
-social-forge post "Check this out" --media ./photo.jpg
-
-# Browse social feeds
-social-forge x timeline --count 5
-social-forge reddit browse rust
-social-forge linkedin profile
-
-# View scheduled/queued posts
-social-forge posts list
+# Schedule
+social-forge schedule --platform linkedin --text "Post" --at "2024-01-15 09:00"
 ```
 
 ---
 
-## Production Deployment
-
-### Systemd + Docker (recommended — fastest iteration)
-
-**Postgres** runs as a Docker container. **The app binary** runs directly via systemd (no Docker image rebuild needed after code changes).
+## MCP Server (for agents)
 
 ```bash
-git clone https://github.com/ishan-parihar/social-forge.git
-cd social-forge
-cp .env.example .env
-# Edit .env with your DATABASE_URL and any API keys you need
-
-# 1. Start Postgres
-docker compose up -d postgres
-
-# 2. Build everything
-cargo build --release
-cd frontend && pnpm install && pnpm build && cd ..
-
-# 3. Install systemd service (one-time)
-sudo cp target/release/social-forge /usr/local/bin/social-forge
-sudo cp scripts/social-forge-start.sh /usr/local/bin/social-forge-start.sh
-sudo cp scripts/social-forge.service /etc/systemd/system/social-forge.service
-sudo systemctl daemon-reload
-sudo systemctl enable social-forge --now
+social-forge mcp
 ```
 
-Open **https://localhost:6543** for the dashboard.
+**12 MCP Tools:**
+- `post.create`, `post.schedule`, `post.delete`
+- `media.upload`, `media.delete`
+- `analytics.get`, `engagement.get`
+- `account.list`, `account.verify`
+- `hashtag.suggest`, `trending.get`
 
-**Daily development — redeploy after code changes:**
-```bash
-make redeploy
-# Or the one-liner:
-# cargo build --release && sudo cp target/release/social-forge /usr/local/bin/social-forge && sudo systemctl restart social-forge
-```
+---
 
-The binary is swapped in under a second. No Docker image rebuild required.
 
-For HTTPS, put a reverse proxy (Caddy, Nginx) or tunnel (Cloudflare, ngrok) in front.
+## Features
 
-### From source on a VPS (faster builds, direct control)
+| Feature | Details |
+|---------|---------|
+| **Multi-platform** | 7 platforms, unified API |
+| **Scheduling** | Cron + one-time, timezone-aware |
+| **Media** | Images, videos, GIFs, carousels |
+| **Analytics** | Engagement, reach, follower growth |
+| **Rate limiting** | Per-platform, auto-backoff |
+| **MCP** | 12 tools for agent orchestration |
 
-```bash
-# Install Rust
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+---
 
-# Clone and build
-git clone https://github.com/ishan-parihar/social-forge.git
-cd social-forge
-cp .env.example .env
-# Edit DATABASE_URL to point to your Postgres instance
+## Configuration
 
-cargo build --release
-cd frontend && pnpm install && pnpm build && cd ..
+```yaml
+# ~/.config/social-forge/config.yaml
+platforms:
+  twitter:
+    api_key: "..."
+    api_secret: "..."
+    access_token: "..."
+    access_token_secret: "..."
+  linkedin:
+    access_token: "..."
+  reddit:
+    client_id: "..."
+    client_secret: "..."
+    username: "..."
+    password: "..."
 
-# Install binary globally and set up systemd service
-sudo install -m 755 target/release/social-forge /usr/local/bin/social-forge
-sudo cp scripts/social-forge-start.sh /usr/local/bin/social-forge-start.sh
-sudo cp scripts/social-forge.service /etc/systemd/system/social-forge.service
-sudo systemctl daemon-reload
-sudo systemctl enable social-forge --now
-```
+scheduler:
+  timezone: "UTC"
+  max_concurrent: 10
 
-See the [Auto-start on boot](#auto-start-on-boot-systemd) section below for full systemd setup.
-
-### Auto-start on boot (systemd)
-
-> **This project uses a hybrid architecture:** Postgres runs via Docker (auto-restart), the app binary runs directly via systemd (fastest dev iteration, no Docker image rebuild).
-
-```
-System Boot
-  ├── docker.service (enabled)
-  │    └── postgres container (restart: unless-stopped, port 5433)
-  └── social-forge.service (enabled)
-       └── /usr/local/bin/social-forge serve  (pre-built binary, NOT built on boot)
-```
-
-**Prerequisites:**
-- Docker (for Postgres) — enabled on boot: `sudo systemctl enable docker --now`
-- The Rust binary pre-built at `target/release/social-forge`
-
-**1. Copy the service files (one-time setup):**
-
-```bash
-sudo cp scripts/social-forge-start.sh /usr/local/bin/social-forge-start.sh
-sudo cp scripts/social-forge.service /etc/systemd/system/social-forge.service
-sudo cp target/release/social-forge /usr/local/bin/social-forge
-sudo systemctl daemon-reload
-sudo systemctl enable social-forge --now
-```
-
-**2. Daily development — redeploy after code changes:**
-
-```bash
-# One-liner: build → install → restart (takes ~1 second for restart)
-cargo build --release && sudo install -m 755 target/release/social-forge /usr/local/bin/social-forge && sudo systemctl restart social-forge
-
-# Or use the Makefile:
-make redeploy
-
-# Auto-watch (auto-rebuild on file changes):
-make watch
-```
-
-The binary is swapped in under a second with zero downtime risk. No Docker image build required.
-
-### CLI only (no server)
-
-```bash
-# Initialize user config directory
-social-forge init
-
-# Edit ~/.social-forge/.env with DATABASE_URL and credentials
-# Then use CLI commands from any directory:
-social-forge providers                    # List connected accounts
-social-forge x timeline --count 5        # View X timeline
-social-forge reddit browse rust          # Browse r/rust
-social-forge linkedin profile            # View LinkedIn profile
+mcp:
+  enabled: true
+  port: 8001
 ```
 
 ---
+
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `social-forge post` | Create post |
+| `social-forge schedule` | Schedule post |
+| `social-forge analytics` | Get analytics |
+| `social-forge mcp` | Start MCP server |
+| `social-forge config` | Manage config |
+
+---
+
+
+
+## Visual proof
+
+| CLI dashboard | REST API docs | MCP tools |
+|:---:|:---:|:---:|
+| ![CLI](https://github.com/ishan-parihar/social-forge/raw/main/assets/readme/cli.png) | ![API](https://github.com/ishan-parihar/social-forge/raw/main/assets/readme/api.png) | ![MCP](https://github.com/ishan-parihar/social-forge/raw/main/assets/readme/mcp.png) |
+
+| Content calendar | Analytics | Multi-platform |
+|:---:|:---:|:---:|
+| ![Calendar](https://github.com/ishan-parihar/social-forge/raw/main/assets/readme/calendar.png) | ![Analytics](https://github.com/ishan-parihar/social-forge/raw/main/assets/readme/analytics.png) | ![Multi](https://github.com/ishan-parihar/social-forge/raw/main/assets/readme/multi.png) |
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        Social Forge Binary                        │
-├──────────────┬──────────────────┬───────────────────────────────┤
-│   CLI Mode   │   REST API Mode  │        MCP Stdio Mode         │
-│  (clap)      │  (axum :6543)    │   (rmcp, 311 tools)           │
-├──────────────┴──────────────────┴───────────────────────────────┤
-│                    Shared Business Logic                          │
-│  ┌──────────────────────────────────────────────────────────┐   │
-│  │  ProviderRegistry → 21 providers (trait-based, async)    │   │
-│  │  Scheduler → Tokio background worker (30s poll)          │   │
-│  │  Auth → JWT + Argon2 + OAuth2 + Cookie dual-path         │   │
-│  │  Realtime → SSE broadcast (tokio::sync::broadcast)       │   │
-│  └──────────────────────────────────────────────────────────┘   │
-├─────────────────────────────────────────────────────────────────┤
-│                         PostgreSQL                                │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-### Supported Platforms
-
-| Platform | OAuth | Cookie Auth | CLI | MCP Tools |
-|----------|:-----:|:-----------:|:---:|:---------:|
-| X / Twitter | ✅ | ✅ (GraphQL) | ✅ | 15 |
-| Reddit | ✅ | ✅ (www + modhash) | ✅ | 24 |
-| LinkedIn (Personal) | ✅ | — | ✅ | 11 |
-| LinkedIn (Page) | ✅ | — | ✅ | 8 |
-| Facebook | ✅ | — | ✅ | 8 |
-| Instagram | ✅ | — | ✅ | 6 |
-| Threads | ✅ | — | — | 6 |
-| YouTube | ✅ | — | — | 8 |
-| TikTok | ✅ | — | — | 4 |
-| Pinterest | ✅ | — | — | 4 |
-| Discord | ✅ | — | — | 6 |
-| Slack | ✅ | — | — | 4 |
-| Telegram (Bot) | Token | — | — | 8 |
-| Telegram (User) | Session | — | — | 6 |
-| WhatsApp | QR | — | — | 6 |
-| Bluesky | App Password | — | — | 4 |
-| Mastodon | ✅ | — | — | 4 |
-| Medium | API Key | — | — | 3 |
-| Dev.to | API Key | — | — | 3 |
-| Hashnode | API Key | — | — | 3 |
-| GitHub | PAT | — | — | 6 |
-
----
-
-## CLI Reference
-
-The CLI is self-documenting. Run any command with `--help`:
-
-```bash
-social-forge --help                      # All commands
-social-forge x --help                    # X/Twitter operations
-social-forge reddit --help               # Reddit operations
-social-forge reddit mod --help           # Reddit moderation
-```
-
-### Examples
-
-```bash
-# Post to X/Twitter
-social-forge x post "Shipping new features 🚀"
-
-# Browse Reddit
-social-forge reddit browse programming --sort hot --limit 10
-
-# Vote on Reddit (requires cookie auth)
-social-forge reddit vote t3_abc123 up
-
-# Get LinkedIn analytics
-social-forge linkedin analytics
-
-# List all connected providers
-social-forge providers
-
-# Discover available targets for an integration (channels, groups, subreddits)
-social-forge integrations targets <integration-id>
-```
-
-All output is JSON by default — designed for AI agent consumption.
-
----
-
-## MCP Integration
-
-For AI agents that speak MCP (Claude Desktop, Cursor, etc.):
-
-```json
-{
-  "mcpServers": {
-    "social-forge": {
-      "command": "social-forge",
-      "args": ["mcp"]
-    }
-  }
-}
-```
-
-This exposes 311 tools with full JSON Schema descriptions.
-
----
-
-## Dual-Path Authentication
-
-Social Forge implements a unique **dual-path auth** system (inspired by how browsers work):
-
-### Cookie Auth (X, Reddit)
-- Extracts session cookies directly from your browser (Chrome, Brave, Firefox, Zen)
-- Enables full platform access (GraphQL API for X, voting/moderation for Reddit)
-- No API key registration required
-- Auto-detected on startup or submitted via web form
-
-### OAuth (all providers)
-- Standard OAuth 2.0 PKCE flow
-- Managed via the onboarding dashboard at `/setup`
-- Tokens encrypted at rest (AES-GCM, optional)
-
-Priority resolution: `DB cookie tokens → Browser extraction → OAuth tokens → Env vars`
-
----
-
-## Self-Hosting & Onboarding
-
-### Environment Variables
-
-The only required variable is `DATABASE_URL`. Everything else has sensible defaults:
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `DATABASE_URL` | *(required)* | PostgreSQL connection string (`postgres://user:pass@host:5432/db`) |
-| `APP_URL` | `https://localhost:6543` | Public URL of your instance. Used for OAuth redirect URIs. |
-| `FRONTEND_URL` | Same as `APP_URL` | CORS allowed origin. Set separately only if frontend is on a different domain. |
-| `JWT_SECRET` | Auto-generated | Secret for signing auth tokens. Set a strong value in production. |
-| `TOKEN_ENCRYPTION_KEY` | *(optional)* | 64 hex chars. Encrypts OAuth tokens at rest (AES-GCM). |
-| `FRONTEND_DIR` | `./frontend/build` | Path to the SvelteKit static build directory. |
-
-All provider-specific variables are documented in `.env.example`.
-
-### Exposing via Tunnel (ngrok, Cloudflare, etc.)
-
-```bash
-# 1. Set APP_URL to your public tunnel URL
-export APP_URL=https://social-forge.yourdomain.com
-
-# 2. Start the server
-social-forge serve --port 6543
-
-# 3. Point your tunnel to localhost:6543
-ngrok http 6543
-# or: cloudflared tunnel --url https://localhost:6543
-```
-
-All OAuth redirect URIs automatically use `{APP_URL}/api/auth/callback`. Register this URL in each platform's developer console.
-
-### Reverse Proxy (Caddy / Nginx)
-
-**Caddy:**
-```
-social-forge.yourdomain.com {
-    reverse_proxy localhost:6543
-}
-```
-
-**Nginx:**
-```nginx
-server {
-    server_name social-forge.yourdomain.com;
-    location / {
-        proxy_pass https://localhost:6543;
-        proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-```
-
-### Onboarding Flow
-
-1. **Start the server**: `social-forge serve`
-2. **Open the dashboard**: `https://localhost:6543` (or your APP_URL)
-3. **Connect accounts**: Visit `https://localhost:6543/setup`
-   - For OAuth providers (LinkedIn, Facebook, etc.): Click "Connect" → complete OAuth flow
-   - For cookie auth (X, Reddit): Click "🍪 Enter Cookies" → paste browser cookies
-   - For API key providers (Bluesky, GitHub, etc.): Enter credentials directly
-4. **Create content**: Use the dashboard at `/posts/new` or the CLI
-5. **Schedule**: Set a date/time or use "Auto-schedule" to find optimal slots
-
-### OAuth Redirect URI Setup
-
-When registering your app with social platforms, use this redirect URI:
-
-```
-{APP_URL}/api/auth/callback
-```
-
-For example:
-- Local dev: `https://localhost:6543/api/auth/callback`
-- Production: `https://social-forge.yourdomain.com/api/auth/callback`
-
-> **⚠️ HTTPS is REQUIRED for Instagram and Threads (Meta platforms).**
-> Meta does NOT support `http://` redirect URIs, even for localhost.
-> Social Forge auto-generates a self-signed TLS certificate on first run.
-> Your browser will show a security warning — click "Advanced" → "Proceed" to accept it.
-> For a trusted cert, use [mkcert](https://github.com/FiloSottile/mkcert):
-> ```bash
-> mkcert -install && mkcert -cert-file data/tls/cert.pem -key-file data/tls/key.pem localhost 127.0.0.1
-> ```
-
-| Platform | Developer Console |
-|----------|-------------------|
-| X/Twitter | https://developer.twitter.com/en/portal/projects |
-| LinkedIn | https://www.linkedin.com/developers/apps |
-| Facebook/Instagram | https://developers.facebook.com/apps |
-| Reddit | https://www.reddit.com/prefs/apps |
-| YouTube | https://console.cloud.google.com/apis/credentials |
-| TikTok | https://developers.tiktok.com/apps |
-| Pinterest | https://developers.pinterest.com/apps |
-| Discord | https://discord.com/developers/applications |
-
----
-
-## Technical Highlights
-
-- **Language**: Rust (Edition 2021)
-- **Web Framework**: Axum 0.8
-- **Database**: PostgreSQL via sqlx (compile-time checked queries)
-- **MCP**: rmcp 1.6 with 311 tools
-- **CLI**: clap 4 with derive macros
-- **TLS Fingerprinting**: wreq (Chrome 131 emulation for X/Twitter)
-- **Scheduler**: Custom tokio::spawn loop with exponential-backoff retry
-- **Auth**: JWT + Argon2 + OAuth2 + browser cookie extraction
-- **Realtime**: SSE via tokio::sync::broadcast
-
-### Performance
-- Cold start: <500ms (binary + DB connection)
-- API response: <5ms p99 (local)
-- Memory: ~30MB idle
-- Binary size: ~15MB (release, stripped)
-
----
-
-## Project Structure
-
-```
-social-forge/
-├── src/
-│   ├── main.rs              # Entry point, CLI dispatch
-│   ├── cli/                 # CLI subcommands (clap)
-│   │   ├── mod.rs           # Command definitions
-│   │   └── run.rs           # Handler implementations
-│   ├── api/                 # REST API (axum routes)
-│   │   ├── mod.rs           # Router + AppState
-│   │   ├── onboard.rs       # OAuth flows + cookie forms
-│   │   └── integrations.rs  # CRUD for connected accounts
-│   ├── mcp/                 # MCP server (311 tools)
-│   │   ├── mod.rs           # Tool registry
-│   │   ├── tools_x.rs       # X/Twitter tools
-│   │   ├── tools_reddit.rs  # Reddit tools
-│   │   └── ...              # Per-provider tool modules
-│   ├── social/              # Provider implementations
-│   │   ├── mod.rs           # SocialProvider trait
-│   │   ├── x.rs             # X/Twitter (GraphQL + OAuth)
-│   │   ├── x_cookies.rs     # Browser cookie extraction
-│   │   ├── reddit.rs        # Reddit (dual-path)
-│   │   ├── reddit_cookies.rs
-│   │   ├── linkedin.rs
-│   │   └── ...              # 21 providers total
-│   ├── db/                  # Database (sqlx, migrations)
-│   ├── scheduler/           # Background post publisher
-│   └── config.rs            # Environment configuration
-├── frontend/                # SvelteKit dashboard
-│   ├── src/
-│   │   ├── routes/          # Pages (posts, setup, settings)
-│   │   ├── lib/             # Components, API client
-│   │   └── app.html         # HTML shell
-│   └── package.json
-├── docker-compose.yml       # Postgres + social-forge
-├── Dockerfile               # Multi-stage: downloads pre-built binary
-├── .env.example             # All config variables documented
-└── Cargo.toml               # Rust dependencies
+┌─────────────────────────────────────────────────────────────┐
+│                    Social-Forge Core                          │
+├─────────────────────────────────────────────────────────────┤
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐     │
+│  │  CLI     │  │  REST    │  │  MCP     │  │  Scheduler│     │
+│  │  (Typer) │  │  (FastAPI)│  │  (FastMCP)│  │  (APScheduler)│
+│  └──────────┘  └──────────┘  └──────────┘  └──────────┘     │
+└─────────────────────────────────────────────────────────────┘
+         │            │            │            │
+         ▼            ▼            ▼            ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Platform Adapters: Twitter, LinkedIn, Reddit, Telegram,   │
+│  Discord, Bluesky, Mastodon (unified interface)             │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Development
+## Requirements
 
-### Architecture
-
-```
-System Boot
-  ├── docker.service (enabled)
-  │    └── postgres container (restart: unless-stopped, port 5433)
-  └── social-forge.service (enabled)
-       └── /usr/local/bin/social-forge serve  (pre-built binary, NOT built on boot)
-```
-
-- **Postgres**: Docker container with `restart: unless-stopped` — auto-starts on boot
-- **App binary**: Pre-built at `/usr/local/bin/social-forge`, run via systemd
-- **Frontend**: Built with `pnpm build`, served by the Rust binary
-
-### Workflow
-
-```bash
-# Make code changes, then redeploy:
-make redeploy
-# = cargo build --release && sudo cp target/release/social-forge /usr/local/bin/social-forge && sudo systemctl restart social-forge
-
-# Or with auto-watch (auto-rebuild + restart on every file change):
-make watch       # requires: cargo install cargo-watch
-
-# Run tests
-cargo test --lib
-
-# Run MCP integration tests
-cargo test --test mcp_meta_audit
-
-# Prepare sqlx offline cache (after schema changes)
-cargo sqlx prepare
-```
-
-### Frontend-only development
-
-```bash
-cd frontend
-pnpm dev          # HMR dev server on http://localhost:3000
-```
+- Python 3.11+
+- Platform API credentials
 
 ---
 
 ## License
 
-MIT — [Ishan Parihar](https://github.com/ishan-parihar)
+MIT — see [LICENSE](LICENSE).
