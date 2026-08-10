@@ -14,7 +14,7 @@ Social Forge is a single Rust binary that manages **21 social platforms** throug
 
 1. **CLI** — 100+ commands for AI agents and terminal power users
 2. **REST API** — SvelteKit dashboard for human operators
-3. **MCP Server** — 311 tools for Claude/Cursor-style AI integrations
+3. **MCP Server** — 328 tools for Claude/Cursor-style AI integrations
 
 ---
 
@@ -232,7 +232,7 @@ social-forge linkedin profile            # View LinkedIn profile
 │                        Social Forge Binary                        │
 ├──────────────┬──────────────────┬───────────────────────────────┤
 │   CLI Mode   │   REST API Mode  │        MCP Stdio Mode         │
-│  (clap)      │  (axum :6543)    │   (rmcp, 311 tools)           │
+│  (clap)      │  (axum :6543)    │   (rmcp, 328 tools)           │
 ├──────────────┴──────────────────┴───────────────────────────────┤
 │                    Shared Business Logic                          │
 │  ┌──────────────────────────────────────────────────────────┐   │
@@ -326,7 +326,7 @@ For AI agents that speak MCP (Claude Desktop, Cursor, etc.):
 }
 ```
 
-This exposes 311 tools with full JSON Schema descriptions.
+This exposes 328 tools with full JSON Schema descriptions.
 
 ---
 
@@ -454,7 +454,7 @@ For example:
 - **Language**: Rust (Edition 2021)
 - **Web Framework**: Axum 0.8
 - **Database**: PostgreSQL via sqlx (compile-time checked queries)
-- **MCP**: rmcp 1.6 with 311 tools
+- **MCP**: rmcp 1.6 with 328 tools
 - **CLI**: clap 4 with derive macros
 - **TLS Fingerprinting**: wreq (Chrome 131 emulation for X/Twitter)
 - **Scheduler**: Custom tokio::spawn loop with exponential-backoff retry
@@ -482,7 +482,7 @@ social-forge/
 │   │   ├── mod.rs           # Router + AppState
 │   │   ├── onboard.rs       # OAuth flows + cookie forms
 │   │   └── integrations.rs  # CRUD for connected accounts
-│   ├── mcp/                 # MCP server (311 tools)
+│   ├── mcp/                 # MCP server (328 tools)
 │   │   ├── mod.rs           # Tool registry
 │   │   ├── tools_x.rs       # X/Twitter tools
 │   │   ├── tools_reddit.rs  # Reddit tools
