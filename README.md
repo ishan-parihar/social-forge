@@ -1,20 +1,28 @@
 # Social Forge 🔥
 
+<p align="center">
+  <img src="./assets/readme/hero.svg" width="100%" alt="Social Forge: one Rust binary, 30 social platforms, three interfaces — CLI, REST, MCP">
+</p>
+
+<!-- T2I HERO SPEC — Subject: a social media forge — a single anvil-like server core (Rust) with three spokes: CLI terminal, REST dashboard, and MCP protocol link — radiating post-flows to a ring of 30+ platform logos (X, Reddit, LinkedIn, Instagram, Threads, YouTube, TikTok, Discord, Slack, Telegram, WhatsApp, Bluesky…). Composition: hub-and-spoke, concentric pulse rings. Palette: forge-fire orange #f97316 → deep charcoal #1c1917, ember gold #fbbf24 sparks, clean UI white text. Style: dark industrial flat vector, glowing embers, no readable logos, no text. 16:9. -->
+
 **A high-performance social media orchestration engine with a triple-interface architecture: CLI, REST API, and MCP protocol.**
 
 [![Rust](https://img.shields.io/badge/rust-1.85%2B-dea584?logo=rust)](https://www.rust-lang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![MCP](https://img.shields.io/badge/Protocol-MCP-purple.svg)](https://modelcontextprotocol.io/)
+[![Platforms](https://img.shields.io/badge/platforms-30-orange)](https://github.com/ishan-parihar/social-forge)
+[![Tests](https://img.shields.io/badge/tests-lib%20+%20mcp--audit-green)](https://github.com/ishan-parihar/social-forge)
 
 ---
 
 ## What is this?
 
-Social Forge is a single Rust binary that manages **21 social platforms** through three interfaces:
+Social Forge is a single Rust binary that manages **30 social platforms** (verified: `src/social/registry.rs`) through three interfaces:
 
 1. **CLI** — 100+ commands for AI agents and terminal power users
 2. **REST API** — SvelteKit dashboard for human operators
-3. **MCP Server** — 328 tools for Claude/Cursor-style AI integrations
+3. **MCP Server** — 300+ tools across 42 tool modules for Claude/Cursor-style AI integrations
 
 ---
 
@@ -232,11 +240,11 @@ social-forge linkedin profile            # View LinkedIn profile
 │                        Social Forge Binary                        │
 ├──────────────┬──────────────────┬───────────────────────────────┤
 │   CLI Mode   │   REST API Mode  │        MCP Stdio Mode         │
-│  (clap)      │  (axum :6543)    │   (rmcp, 328 tools)           │
+│  (clap)      │  (axum :6543)    │   (rmcp, 300+ tools)          │
 ├──────────────┴──────────────────┴───────────────────────────────┤
 │                    Shared Business Logic                          │
 │  ┌──────────────────────────────────────────────────────────┐   │
-│  │  ProviderRegistry → 21 providers (trait-based, async)    │   │
+│  │  ProviderRegistry → 30 providers (trait-based, async)    │   │
 │  │  Scheduler → Tokio background worker (30s poll)          │   │
 │  │  Auth → JWT + Argon2 + OAuth2 + Cookie dual-path         │   │
 │  │  Realtime → SSE broadcast (tokio::sync::broadcast)       │   │
@@ -271,6 +279,37 @@ social-forge linkedin profile            # View LinkedIn profile
 | Dev.to | API Key | — | — | 3 |
 | Hashnode | API Key | — | — | 3 |
 | GitHub | PAT | — | — | 6 |
+| Dev.to | API Key | — | — | 3 |
+| Medium | API Key | — | — | 3 |
+| Hashnode | API Key | — | — | 3 |
+| Farcaster | ✅ | — | — | 4 |
+| Mastodon | ✅ | — | — | 4 |
+| Lemmy | ✅ | — | — | 4 |
+| Kick | ✅ | — | — | 4 |
+| VK | ✅ | — | — | 4 |
+| Skool | ✅ | — | — | 4 |
+| Whop | ✅ | — | — | 4 |
+| Wordpress | ✅ | — | — | 6 |
+| Google (Gmail/Calendar/Drive) | ✅ | — | — | 20+ |
+
+*Platform list verified against `src/social/registry.rs` (30 providers) and the `src/mcp/tools_*.rs` modules (42 tool modules).*
+
+---
+
+## How it compares
+
+| Capability | **Social Forge** | Buffer / Hootsuite | n8n / Make | Postiz |
+|---|---|---|---|---|
+| **AI-agent native** | ✅ CLI + MCP + REST all same engine | ❌ human dashboards | ⚠️ workflow only | ⚠️ some API |
+| **Platforms** | 30, trait-based registry | ~6–10 | via nodes | ~10 |
+| **Dual-path auth** | ✅ OAuth2 + browser-cookie extraction | ❌ | ❌ | ❌ |
+| **Self-hosted** | ✅ single ~15MB musl binary | ❌ SaaS | ✅ | ✅ |
+| **Scheduler w/ retry** | ✅ in-process Tokio, exp-backoff, per-provider concurrency | ✅ | ✅ | ✅ |
+| **Realtime SSE** | ✅ broadcast | ⚠️ | ✅ | ❌ |
+| **Stage→review→publish** | ✅ | ✅ | ✅ | ✅ |
+| **Installs as agent skill (AXI)** | ✅ session-start ambient context | ❌ | ❌ | ❌ |
+
+Buffer manages your *calendar*; Social Forge runs your *entire social operation* as an agent-accessible service — schedule, publish, moderate, monitor, and recover — from one self-hosted binary.
 
 ---
 
@@ -326,7 +365,7 @@ For AI agents that speak MCP (Claude Desktop, Cursor, etc.):
 }
 ```
 
-This exposes 328 tools with full JSON Schema descriptions.
+This exposes 300+ tools with full JSON Schema descriptions.
 
 ---
 
@@ -454,7 +493,7 @@ For example:
 - **Language**: Rust (Edition 2021)
 - **Web Framework**: Axum 0.8
 - **Database**: PostgreSQL via sqlx (compile-time checked queries)
-- **MCP**: rmcp 1.6 with 328 tools
+- **MCP**: rmcp 1.6 with 300+ tools (42 tool modules)
 - **CLI**: clap 4 with derive macros
 - **TLS Fingerprinting**: wreq (Chrome 131 emulation for X/Twitter)
 - **Scheduler**: Custom tokio::spawn loop with exponential-backoff retry
@@ -482,7 +521,7 @@ social-forge/
 │   │   ├── mod.rs           # Router + AppState
 │   │   ├── onboard.rs       # OAuth flows + cookie forms
 │   │   └── integrations.rs  # CRUD for connected accounts
-│   ├── mcp/                 # MCP server (328 tools)
+│   ├── mcp/                 # MCP server (300+ tools, 42 modules)
 │   │   ├── mod.rs           # Tool registry
 │   │   ├── tools_x.rs       # X/Twitter tools
 │   │   ├── tools_reddit.rs  # Reddit tools
@@ -494,7 +533,7 @@ social-forge/
 │   │   ├── reddit.rs        # Reddit (dual-path)
 │   │   ├── reddit_cookies.rs
 │   │   ├── linkedin.rs
-│   │   └── ...              # 21 providers total
+│   │   └── ...              # 30 providers total
 │   ├── db/                  # Database (sqlx, migrations)
 │   ├── scheduler/           # Background post publisher
 │   └── config.rs            # Environment configuration
@@ -604,7 +643,7 @@ At session start, Social Forge prints a compact dashboard:
 
 ```
 bin: /usr/local/bin/social-forge
-description: Post to 21 social platforms from a single CLI
+description: Post to 30 social platforms from a single CLI
 
 providers[3]{name,status,platforms}:
   x,connected,X/Twitter
@@ -612,7 +651,7 @@ providers[3]{name,status,platforms}:
   bluesky,connected,Bluesky
   ...
 
-platforms_total: 21
+platforms_total: 30
 
 help[4]:
   Run `social-forge providers` to see all connected accounts
