@@ -9,6 +9,7 @@
 **A high-performance social media orchestration engine with a triple-interface architecture: CLI, REST API, and MCP protocol.**
 
 [![Rust](https://img.shields.io/badge/rust-1.85%2B-dea584?logo=rust)](https://www.rust-lang.org/)
+[![CI](https://github.com/ishan-parihar/social-forge/actions/workflows/ci.yml/badge.svg)](https://github.com/ishan-parihar/social-forge/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![MCP](https://img.shields.io/badge/Protocol-MCP-purple.svg)](https://modelcontextprotocol.io/)
 [![Platforms](https://img.shields.io/badge/platforms-30-orange)](https://github.com/ishan-parihar/social-forge)
