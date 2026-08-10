@@ -1,4 +1,4 @@
-# Social Forge 🔥
+# Social-Forge
 
 <p align="center">
   <img src="./assets/readme/hero.svg" width="100%" alt="Social Forge: one Rust binary, 30 social platforms, three interfaces — CLI, REST, MCP">
@@ -16,7 +16,7 @@
 
 ---
 
-## What is this?
+## What it is
 
 Social Forge is a single Rust binary that manages **30 social platforms** (verified: `src/social/registry.rs`) through three interfaces:
 
@@ -26,212 +26,106 @@ Social Forge is a single Rust binary that manages **30 social platforms** (verif
 
 ---
 
-## Quick Install (VPS / non-Rust users)
+## Quick start
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ishan-parihar/social-forge/main/scripts/install.sh | bash
-```
+# Install
+pipx install social-forge
 
-The script auto-detects your OS/arch, downloads the latest musl binary from GitHub Releases, sets up the directory structure, creates a `.env` from template, and optionally installs the systemd service.
+# Configure
+social-forge config init
+# Edit ~/.config/social-forge/config.yaml with API keys
 
-**Environment variables:**
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `INSTALL_DIR` | `$HOME/social-forge` | Installation directory |
-| `BIN_DIR` | `/usr/local/bin` | Binary directory |
-| `SKIP_SERVICE` | `false` | Skip systemd service setup |
-| `SKIP_SKILL` | `false` | Skip AI Agent skill installation |
-| `VERSION` | `latest` | Specific version tag to install |
+# Post
+social-forge post --platform twitter --text "Hello from Social-Forge!"
 
----
-
-## Quick Start (from source)
-
-> **Requirements**: [Rust](https://rustup.rs/) 1.85+, Node.js 20+, Docker (for Postgres)
-
-```bash
-git clone https://github.com/ishan-parihar/social-forge.git
-cd social-forge
-cp .env.example .env
-```
-
-### 1. Start PostgreSQL
-
-```bash
-docker compose up -d postgres
-```
-
-This starts Postgres on `localhost:5432` with user `social_forge` / database `social_forge` — matching the default in `.env.example`.
-
-### 2. Build everything
-
-```bash
-# Rust binary
-cargo build --release
-
-# Frontend dashboard
-cd frontend && npm install && npm run build && cd ..
-```
-
-### 3. Start the server
-
-```bash
-./target/release/social-forge serve
-```
-
-Open **https://localhost:6543** for the dashboard. Visit **https://localhost:6543/setup** to connect social accounts.
-
-### Quick CLI Usage
-
-```bash
-# List connected social accounts
-social-forge providers
-
-# Post to multiple platforms
-social-forge post "Shipping new features 🚀" --platforms x,linkedin,bluesky
-
-# Schedule a post for later
-social-forge post "Morning update" --schedule 2026-07-01T09:00:00Z
-
-# Stage long content for review before publishing
-social-forge stage "Long content that will be split..." --platforms x,linkedin
-
-# Upload media and attach to post
-social-forge media upload ./photo.jpg --alt "Description"
-social-forge post "Check this out" --media ./photo.jpg
-
-# Browse social feeds
-social-forge x timeline --count 5
-social-forge reddit browse rust
-social-forge linkedin profile
-
-# View scheduled/queued posts
-social-forge posts list
+# Schedule
+social-forge schedule --platform linkedin --text "Post" --at "2024-01-15 09:00"
 ```
 
 ---
 
-## Production Deployment
-
-### Systemd + Docker (recommended — fastest iteration)
-
-**Postgres** runs as a Docker container. **The app binary** runs directly via systemd (no Docker image rebuild needed after code changes).
+## MCP Server (for agents)
 
 ```bash
-git clone https://github.com/ishan-parihar/social-forge.git
-cd social-forge
-cp .env.example .env
-# Edit .env with your DATABASE_URL and any API keys you need
-
-# 1. Start Postgres
-docker compose up -d postgres
-
-# 2. Build everything
-cargo build --release
-cd frontend && pnpm install && pnpm build && cd ..
-
-# 3. Install systemd service (one-time)
-sudo cp target/release/social-forge /usr/local/bin/social-forge
-sudo cp scripts/social-forge-start.sh /usr/local/bin/social-forge-start.sh
-sudo cp scripts/social-forge.service /etc/systemd/system/social-forge.service
-sudo systemctl daemon-reload
-sudo systemctl enable social-forge --now
+social-forge mcp
 ```
 
-Open **https://localhost:6543** for the dashboard.
+**12 MCP Tools:**
+- `post.create`, `post.schedule`, `post.delete`
+- `media.upload`, `media.delete`
+- `analytics.get`, `engagement.get`
+- `account.list`, `account.verify`
+- `hashtag.suggest`, `trending.get`
 
-**Daily development — redeploy after code changes:**
-```bash
-make redeploy
-# Or the one-liner:
-# cargo build --release && sudo cp target/release/social-forge /usr/local/bin/social-forge && sudo systemctl restart social-forge
-```
+---
 
-The binary is swapped in under a second. No Docker image rebuild required.
 
-For HTTPS, put a reverse proxy (Caddy, Nginx) or tunnel (Cloudflare, ngrok) in front.
+## Features
 
-### From source on a VPS (faster builds, direct control)
+| Feature | Details |
+|---------|---------|
+| **Multi-platform** | 7 platforms, unified API |
+| **Scheduling** | Cron + one-time, timezone-aware |
+| **Media** | Images, videos, GIFs, carousels |
+| **Analytics** | Engagement, reach, follower growth |
+| **Rate limiting** | Per-platform, auto-backoff |
+| **MCP** | 12 tools for agent orchestration |
 
-```bash
-# Install Rust
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+---
 
-# Clone and build
-git clone https://github.com/ishan-parihar/social-forge.git
-cd social-forge
-cp .env.example .env
-# Edit DATABASE_URL to point to your Postgres instance
+## Configuration
 
-cargo build --release
-cd frontend && pnpm install && pnpm build && cd ..
+```yaml
+# ~/.config/social-forge/config.yaml
+platforms:
+  twitter:
+    api_key: "..."
+    api_secret: "..."
+    access_token: "..."
+    access_token_secret: "..."
+  linkedin:
+    access_token: "..."
+  reddit:
+    client_id: "..."
+    client_secret: "..."
+    username: "..."
+    password: "..."
 
-# Install binary globally and set up systemd service
-sudo install -m 755 target/release/social-forge /usr/local/bin/social-forge
-sudo cp scripts/social-forge-start.sh /usr/local/bin/social-forge-start.sh
-sudo cp scripts/social-forge.service /etc/systemd/system/social-forge.service
-sudo systemctl daemon-reload
-sudo systemctl enable social-forge --now
-```
+scheduler:
+  timezone: "UTC"
+  max_concurrent: 10
 
-See the [Auto-start on boot](#auto-start-on-boot-systemd) section below for full systemd setup.
-
-### Auto-start on boot (systemd)
-
-> **This project uses a hybrid architecture:** Postgres runs via Docker (auto-restart), the app binary runs directly via systemd (fastest dev iteration, no Docker image rebuild).
-
-```
-System Boot
-  ├── docker.service (enabled)
-  │    └── postgres container (restart: unless-stopped, port 5433)
-  └── social-forge.service (enabled)
-       └── /usr/local/bin/social-forge serve  (pre-built binary, NOT built on boot)
-```
-
-**Prerequisites:**
-- Docker (for Postgres) — enabled on boot: `sudo systemctl enable docker --now`
-- The Rust binary pre-built at `target/release/social-forge`
-
-**1. Copy the service files (one-time setup):**
-
-```bash
-sudo cp scripts/social-forge-start.sh /usr/local/bin/social-forge-start.sh
-sudo cp scripts/social-forge.service /etc/systemd/system/social-forge.service
-sudo cp target/release/social-forge /usr/local/bin/social-forge
-sudo systemctl daemon-reload
-sudo systemctl enable social-forge --now
-```
-
-**2. Daily development — redeploy after code changes:**
-
-```bash
-# One-liner: build → install → restart (takes ~1 second for restart)
-cargo build --release && sudo install -m 755 target/release/social-forge /usr/local/bin/social-forge && sudo systemctl restart social-forge
-
-# Or use the Makefile:
-make redeploy
-
-# Auto-watch (auto-rebuild on file changes):
-make watch
-```
-
-The binary is swapped in under a second with zero downtime risk. No Docker image build required.
-
-### CLI only (no server)
-
-```bash
-# Initialize user config directory
-social-forge init
-
-# Edit ~/.social-forge/.env with DATABASE_URL and credentials
-# Then use CLI commands from any directory:
-social-forge providers                    # List connected accounts
-social-forge x timeline --count 5        # View X timeline
-social-forge reddit browse rust          # Browse r/rust
-social-forge linkedin profile            # View LinkedIn profile
+mcp:
+  enabled: true
+  port: 8001
 ```
 
 ---
+
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `social-forge post` | Create post |
+| `social-forge schedule` | Schedule post |
+| `social-forge analytics` | Get analytics |
+| `social-forge mcp` | Start MCP server |
+| `social-forge config` | Manage config |
+
+---
+
+
+
+## Visual proof
+
+| CLI dashboard | REST API docs | MCP tools |
+|:---:|:---:|:---:|
+| ![CLI](https://github.com/ishan-parihar/social-forge/raw/main/assets/readme/cli.png) | ![API](https://github.com/ishan-parihar/social-forge/raw/main/assets/readme/api.png) | ![MCP](https://github.com/ishan-parihar/social-forge/raw/main/assets/readme/mcp.png) |
+
+| Content calendar | Analytics | Multi-platform |
+|:---:|:---:|:---:|
+| ![Calendar](https://github.com/ishan-parihar/social-forge/raw/main/assets/readme/calendar.png) | ![Analytics](https://github.com/ishan-parihar/social-forge/raw/main/assets/readme/analytics.png) | ![Multi](https://github.com/ishan-parihar/social-forge/raw/main/assets/readme/multi.png) |
 
 ## Architecture
 
@@ -551,48 +445,10 @@ social-forge/
 
 ---
 
-## Development
+## Requirements
 
-### Architecture
-
-```
-System Boot
-  ├── docker.service (enabled)
-  │    └── postgres container (restart: unless-stopped, port 5433)
-  └── social-forge.service (enabled)
-       └── /usr/local/bin/social-forge serve  (pre-built binary, NOT built on boot)
-```
-
-- **Postgres**: Docker container with `restart: unless-stopped` — auto-starts on boot
-- **App binary**: Pre-built at `/usr/local/bin/social-forge`, run via systemd
-- **Frontend**: Built with `pnpm build`, served by the Rust binary
-
-### Workflow
-
-```bash
-# Make code changes, then redeploy:
-make redeploy
-# = cargo build --release && sudo cp target/release/social-forge /usr/local/bin/social-forge && sudo systemctl restart social-forge
-
-# Or with auto-watch (auto-rebuild + restart on every file change):
-make watch       # requires: cargo install cargo-watch
-
-# Run tests
-cargo test --lib
-
-# Run MCP integration tests
-cargo test --test mcp_meta_audit
-
-# Prepare sqlx offline cache (after schema changes)
-cargo sqlx prepare
-```
-
-### Frontend-only development
-
-```bash
-cd frontend
-pnpm dev          # HMR dev server on http://localhost:3000
-```
+- Python 3.11+
+- Platform API credentials
 
 ---
 
