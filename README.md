@@ -1,15 +1,18 @@
+<!-- T2I HERO SPEC — Subject: a social media forge — a single anvil-like server core (Rust) with three spokes: CLI terminal, REST dashboard, and MCP protocol link — radiating post-flows to a ring of 30+ platform logos (X, Reddit, LinkedIn, Instagram, Threads, YouTube, TikTok, Discord, Slack, Telegram, WhatsApp, Bluesky…). Composition: hub-and-spoke, concentric pulse rings. Palette: forge-fire orange #f97316 → deep charcoal #1c1917, ember gold #fbbf24 sparks, clean UI white text. Style: dark industrial flat vector, glowing embers, no readable logos, no text. 16:9. -->
+
 # Social-Forge
 
 <p align="center">
   <img src="./assets/readme/hero.svg" width="100%" alt="Social Forge: one Rust binary, 30 social platforms, three interfaces — CLI, REST, MCP">
 </p>
 
-<!-- T2I HERO SPEC — Subject: a social media forge — a single anvil-like server core (Rust) with three spokes: CLI terminal, REST dashboard, and MCP protocol link — radiating post-flows to a ring of 30+ platform logos (X, Reddit, LinkedIn, Instagram, Threads, YouTube, TikTok, Discord, Slack, Telegram, WhatsApp, Bluesky…). Composition: hub-and-spoke, concentric pulse rings. Palette: forge-fire orange #f97316 → deep charcoal #1c1917, ember gold #fbbf24 sparks, clean UI white text. Style: dark industrial flat vector, glowing embers, no readable logos, no text. 16:9. -->
+
 
 **A high-performance social media orchestration engine with a triple-interface architecture: CLI, REST API, and MCP protocol.**
 
 [![Rust](https://img.shields.io/badge/rust-1.85%2B-dea584?logo=rust)](https://www.rust-lang.org/)
 ![LOC](https://img.shields.io/badge/LOC-98.2K-informational?style=flat-square)
+<img src="https://img.shields.io/badge/Status-Active-brightgreen" alt="Status">
 [![CI](https://github.com/ishan-parihar/social-forge/actions/workflows/ci.yml/badge.svg)](https://github.com/ishan-parihar/social-forge/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![MCP](https://img.shields.io/badge/Protocol-MCP-purple.svg)](https://modelcontextprotocol.io/)
