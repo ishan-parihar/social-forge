@@ -1,15 +1,11 @@
 name: CI
 
-# Run on PRs and pushes to main/master branches only.
-# Tags are handled exclusively by release.yml — do NOT add tags: ['v*'] here.
+# Portfolio CI policy: tag-only triggers (v* tags) + manual dispatch.
+# Release.yml stays manual-only (workflow_dispatch); CI gates every version tag.
 on:
-  pull_request:
-    branches: [master, main]
   push:
-    branches: [master, main]
+    tags: ['v*']
   workflow_dispatch:
-
-# Cancel redundant runs on the same branch
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true

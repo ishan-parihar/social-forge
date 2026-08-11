@@ -138,7 +138,7 @@ feed-rs = "2.1"
 rust-embed = { version = "8", features = ["include-exclude"] }
 
 # AXI S1: Token-efficient TOON output
-toon-helper = { path = "../toon-helper" }
+toon-helper = { path = "crates/toon-helper" }
 
 [patch.crates-io]
 # core2 0.4.0 was yanked from crates.io, but glass_pumpkin 1.6 (transitive
@@ -149,4 +149,4 @@ toon-helper = { path = "../toon-helper" }
 core2 = { path = "vendor/core2" }
 
 
-toon-helper = { path = "../toon-helper" }
+toon-helper = { path = "crates/toon-helper" }
