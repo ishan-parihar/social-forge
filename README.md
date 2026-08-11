@@ -1,9 +1,9 @@
-<!-- T2I HERO SPEC — Subject: a social media forge — a single anvil-like server core (Rust) with three spokes: CLI terminal, REST dashboard, and MCP protocol link — radiating post-flows to a ring of 30+ platform logos (X, Reddit, LinkedIn, Instagram, Threads, YouTube, TikTok, Discord, Slack, Telegram, WhatsApp, Bluesky…). Composition: hub-and-spoke, concentric pulse rings. Palette: forge-fire orange #f97316 → deep charcoal #1c1917, ember gold #fbbf24 sparks, clean UI white text. Style: dark industrial flat vector, glowing embers, no readable logos, no text. 16:9. -->
+<!-- T2I HERO SPEC — Subject: a social media forge — a single anvil-like server core (Rust) with three spokes: CLI terminal, REST dashboard, and MCP protocol link — radiating post-flows to a ring of 25 platform logos (X, Reddit, LinkedIn, Instagram, Threads, YouTube, TikTok, Discord, Slack, Telegram, WhatsApp, Bluesky…). Composition: hub-and-spoke, concentric pulse rings. Palette: forge-fire orange #f97316 → deep charcoal #1c1917, ember gold #fbbf24 sparks, clean UI white text. Style: dark industrial flat vector, glowing embers, no readable logos, no text. 16:9. -->
 
 # Social-Forge
 
 <p align="center">
-  <img src="./assets/readme/hero.svg" width="100%" alt="Social Forge: one Rust binary, 30 social platforms, three interfaces — CLI, REST, MCP">
+  <img src="./assets/readme/hero.svg" width="100%" alt="Social Forge: one Rust binary, 25 social platforms, three interfaces — CLI, REST, MCP">
 </p>
 
 
@@ -16,14 +16,14 @@
 [![CI](https://github.com/ishan-parihar/social-forge/actions/workflows/ci.yml/badge.svg)](https://github.com/ishan-parihar/social-forge/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![MCP](https://img.shields.io/badge/Protocol-MCP-purple.svg)](https://modelcontextprotocol.io/)
-[![Platforms](https://img.shields.io/badge/platforms-30-orange)](https://github.com/ishan-parihar/social-forge)
+[![Platforms](https://img.shields.io/badge/platforms-25-orange)](https://github.com/ishan-parihar/social-forge)
 [![Tests](https://img.shields.io/badge/tests-lib%20+%20mcp--audit-green)](https://github.com/ishan-parihar/social-forge)
 
 ---
 
 ## What it is
 
-Social Forge is a single Rust binary that manages **30 social platforms** (verified: `src/social/registry.rs`) through three interfaces:
+Social Forge is a single Rust binary that manages **25 social platforms** (verified: `src/social/registry.rs`) through three interfaces:
 
 1. **CLI** — 100+ commands for AI agents and terminal power users
 2. **REST API** — SvelteKit dashboard for human operators
@@ -504,7 +504,7 @@ At session start, Social Forge prints a compact dashboard:
 
 ```
 bin: /usr/local/bin/social-forge
-description: Post to 30 social platforms from a single CLI
+description: Post to 25 social platforms from a single CLI
 
 providers[3]{name,status,platforms}:
   x,connected,X/Twitter
