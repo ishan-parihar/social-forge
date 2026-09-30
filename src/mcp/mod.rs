@@ -375,14 +375,6 @@ impl SocialForgeMcpServer {
         tools_comments::reply_to_comment(&self.state, &params.0).await
     }
 
-    #[tool(description = "Delete a comment on any platform")]
-    async fn delete_comment(
-        &self,
-        params: Parameters<tools_comments::DeleteCommentInput>,
-    ) -> Result<Json<McpJsonValue>, String> {
-        tools_comments::delete_comment(&self.state, &params.0).await
-    }
-
     // ── DM Tools ────────────────────────────────────────────
 
     #[tool(description = "Send a direct message on any platform")]

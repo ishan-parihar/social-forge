@@ -1291,20 +1291,6 @@ async fn handle_comment_with_state(state: &AppState, action: CommentAction) -> a
             };
             output_json(&serde_json::to_value(result.0).unwrap_or_default());
         }
-        CommentAction::Delete { integration_id, comment_id } => {
-            let input = crate::mcp::tools_comments::DeleteCommentInput {
-                integration_id,
-                comment_id,
-            };
-            let result = match crate::mcp::tools_comments::delete_comment(&state, &input).await {
-                Ok(r) => r,
-                Err(e) => output_error_with_hint(
-                    &format!("Failed to delete comment: {}", e),
-                    "Ensure the comment belongs to your account."
-                ),
-            };
-            output_json(&serde_json::to_value(result.0).unwrap_or_default());
-        }
     }
     Ok(())
 }

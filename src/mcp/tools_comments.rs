@@ -43,12 +43,6 @@ pub struct ReplyToCommentOutput {
     pub status: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, JsonSchema)]
-pub struct DeleteCommentInput {
-    pub integration_id: String,
-    pub comment_id: String,
-}
-
 pub async fn get_comments(
     state: &AppState,
     input: &GetCommentsInput,
@@ -121,31 +115,6 @@ pub async fn reply_to_comment(
         post_id: result.platform_post_id,
         status: result.status,
     }))
-}
-
-pub async fn delete_comment(
-    state: &AppState,
-    input: &DeleteCommentInput,
-) -> Result<Json<crate::mcp::McpJsonValue>, String> {
-    let user_id = resolve_first_user(state).await?;
-    let integration_id = Uuid::parse_str(&input.integration_id)
-        .map_err(|_| "Invalid integration_id format")?;
-
-    let integration = crate::db::queries::get_integration(&state.db, integration_id, user_id)
-        .await
-        .map_err(|e| format!("Integration not found: {e}"))?
-        .ok_or_else(|| "Integration not found".to_string())?;
-
-    let provider = state.providers.get(&integration.provider_identifier)
-        .ok_or_else(|| format!("Provider {} not found", integration.provider_identifier))?;
-
-    let token = crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
-
-    provider.delete_comment(&token, &input.comment_id)
-        .await
-        .map_err(|e| format!("Failed to delete comment: {e}"))?;
-
-    Ok(Json(crate::mcp::McpJsonValue(serde_json::json!({"success": true, "message": "Comment deleted",}))))
 }
 
 use super::auth::resolve_first_user;

@@ -369,13 +369,6 @@ pub enum CommentAction {
         /// Reply content
         content: String,
     },
-    /// Delete a comment
-    Delete {
-        /// Integration ID
-        integration_id: String,
-        /// Comment ID
-        comment_id: String,
-    },
 }
 
 // ─── DM Actions ─────────────────────────────────────────────────────────────
