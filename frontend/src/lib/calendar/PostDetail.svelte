@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { focusTrap } from "$lib/ui/focus-trap";
   import { tick } from "svelte";
   import { goto } from "$app/navigation";
   import Badge from "$lib/ui/Badge.svelte";
@@ -26,12 +27,20 @@
 </script>
 
 {#if event}
-  <div class="fixed inset-0 z-40 flex justify-end" role="dialog" aria-modal="true" onkeydown={handleKeydown}>
-    <div class="absolute inset-0 bg-black/40" onclick={onclose} onkeydown={(e) => e.key === "Escape" && onclose()}></div>
+  <div
+    class="fixed inset-0 z-40 flex justify-end"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Post details"
+    tabindex="-1"
+    onkeydown={handleKeydown}
+    use:focusTrap
+  >
+    <div class="absolute inset-0 bg-overlay" aria-hidden="true" onclick={onclose}></div>
     <div
       bind:this={panelEl}
       tabindex="-1"
-      class="relative w-96 bg-surface border-l border-line p-6 overflow-y-auto outline-none"
+      class="relative w-full sm:w-96 max-w-full bg-surface border-l border-line p-6 overflow-y-auto outline-none"
     >
       <div class="flex items-center justify-between mb-6">
         <h3 class="font-semibold">Post Details</h3>

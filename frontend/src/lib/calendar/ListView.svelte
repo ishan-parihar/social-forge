@@ -106,7 +106,10 @@
   <!-- Header: state filter + pagination -->
   <div class="px-4 py-2.5 border-b border-line flex items-center justify-between gap-2 flex-wrap">
     <!-- State filter segmented control -->
-    <div class="flex gap-1 bg-background-input rounded-lg p-0.5">
+    <!-- v25 F5: `overflow-x-auto`. Same segmented-control pattern that
+         posts/+page.svelte and search/+page.svelte already wrap; here it was
+         the one with no scroller. -->
+    <div class="flex gap-1 bg-background-input rounded-lg p-0.5 overflow-x-auto max-w-full">
       {#each stateFilters as f}
         <button
           onclick={() => calendarState.setListState(f.value)}
@@ -172,7 +175,7 @@
               <div class="text-sm truncate">{event.title}</div>
               <div class="text-xs text-muted">{event.integrationName}</div>
               {#if event.likes != null || event.comments != null || event.impressions != null}
-                <div class="flex gap-2 mt-0.5">
+                <div class="flex gap-2 mt-0.5 flex-wrap">
                   {#if event.likes != null}<span class="text-[10px] text-viz-like/60" title="{engagementLabel('likes', event.platform)}">{engagementIcon('likes', event.platform)} {formatMetricCount(event.likes)}</span>{/if}
                   {#if event.comments != null}<span class="text-[10px] text-warning/60" title="{engagementLabel('comments', event.platform)}">{engagementIcon('comments', event.platform)} {formatMetricCount(event.comments)}</span>{/if}
                   {#if event.impressions != null}<span class="text-[10px] text-accent/60" title="{engagementLabel('impressions', event.platform)}">{engagementIcon('impressions', event.platform)} {formatMetricCount(event.impressions)}</span>{/if}
@@ -184,7 +187,13 @@
               <span class="text-xs text-error" title={event.error}>⚠</span>
             {/if}
           </button>
-          <div class="invisible group-hover:visible group-focus-within:visible transition-all duration-150 flex items-center gap-1 shrink-0">
+          <!-- v25 F5: `sm:visible` alongside the hover/focus reveal. `group-hover` and
+               `group-focus-within` both leave the row invisible on a touch
+               device — no hover, and nothing focused yet — so on a phone the
+               Duplicate / Stats / Delete actions simply did not exist. Below
+               `sm` they are always shown: three small buttons in exchange for
+               the entire action set. -->
+          <div class="invisible sm:visible group-hover:visible group-focus-within:visible transition-all duration-150 flex items-center gap-1 shrink-0">
             {#if event.state === 'published' && event.postUrl}
               <a href={event.postUrl} target="_blank" rel="noopener noreferrer"
                  class="text-accent hover:text-accent-strong px-1.5 py-0.5 rounded text-xs"

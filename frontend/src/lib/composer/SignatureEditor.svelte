@@ -11,6 +11,11 @@
   let signatures = $state<Signature[]>([]);
   let loading = $state(true);
   let error = $state<string | null>(null);
+  // v25 F5: every option's aria-selected was hardcoded "false", so the listbox
+  // reported "nothing selected" unconditionally. It is the applied signature,
+  // so it has to be remembered across the close.
+  let selectedId = $state<string | null>(null);
+  let triggerEl: HTMLButtonElement | undefined = $state();
 
   onMount(load);
 
@@ -32,8 +37,10 @@
   }
 
   function handleSelect(sig: Signature) {
+    selectedId = sig.id;
     onInsert?.(sig.content);
     open = false;
+    triggerEl?.focus();
   }
 
   function toggle() {
@@ -59,9 +66,16 @@
 </script>
 
 <div class="relative">
+  <!-- v25 F5: the trigger never said a listbox was behind it, and the listbox
+       itself had no keydown handler — no Escape, no arrows, and focus never
+       left the trigger, so the panel was only reachable by blind Tabbing. -->
   <button
     onclick={toggle}
+    bind:this={triggerEl}
     aria-label="Insert signature"
+    aria-haspopup="listbox"
+    aria-expanded={open}
+    aria-controls="sig-listbox"
     class="toolbar-btn"
     class:active={open}
   >
@@ -76,9 +90,14 @@
       onclick={() => (open = false)}
     ></div>
     <div
-      class="absolute top-full left-0 mt-1 w-72 bg-surface border border-line rounded-lg shadow-xl z-50 max-h-80 overflow-y-auto"
+      class="absolute top-full left-0 mt-1 w-[min(18rem,calc(100vw-2rem))] bg-surface border border-line rounded-lg shadow-lg z-50 max-h-80 overflow-y-auto"
       role="listbox"
+      id="sig-listbox"
       aria-label="Select a signature"
+      tabindex="-1"
+      onkeydown={(e) => {
+        if (e.key === 'Escape') { e.preventDefault(); open = false; triggerEl?.focus(); }
+      }}
     >
       {#if loading}
         <div class="flex justify-center py-6">
@@ -95,27 +114,27 @@
         {#if grouped.global.length > 0}
           <div class="px-3 pt-2 pb-1 text-xs text-muted font-semibold uppercase tracking-wider">Global</div>
           {#each grouped.global as sig (sig.id)}
-            <button
-              onclick={() => handleSelect(sig)}
-              class="w-full text-left px-3 py-2 hover:bg-surface-hover transition-colors"
-              role="option"
-              aria-selected="false"
-              aria-label={sig.name}
-            >
-              <div class="text-sm text-content-secondary truncate">{sig.name}</div>
-              <div class="text-xs text-muted truncate mt-0.5">{sig.content.slice(0, 60)}{sig.content.length > 60 ? '...' : ''}</div>
-            </button>
+<button
+            onclick={() => handleSelect(sig)}
+            class="w-full text-left px-3 py-2 hover:bg-surface-hover transition-colors"
+            role="option"
+            aria-selected={selectedId === sig.id}
+            aria-label={sig.name}
+          >
+            <div class="text-sm text-content-secondary truncate">{sig.name}</div>
+            <div class="text-xs text-muted truncate mt-0.5">{sig.content.slice(0, 60)}{sig.content.length > 60 ? '...' : ''}</div>
+          </button>
           {/each}
         {/if}
         <!-- Provider-specific signatures -->
         {#each [...grouped.byProvider.entries()] as [provider, sigs] (provider)}
-          <div class="px-3 pt-2 pb-1 text-xs text-muted font-semibold uppercase tracking-wider">{provider}</div>
+          <div class="px-3 pt-2 pb-1 text-xs text-muted font-semibold uppercase tracking-wider" role="presentation">{provider}</div>
           {#each sigs as sig (sig.id)}
             <button
               onclick={() => handleSelect(sig)}
               class="w-full text-left px-3 py-2 hover:bg-surface-hover transition-colors"
               role="option"
-              aria-selected="false"
+              aria-selected={selectedId === sig.id}
               aria-label={sig.name}
             >
               <div class="text-sm text-content-secondary truncate">{sig.name}</div>

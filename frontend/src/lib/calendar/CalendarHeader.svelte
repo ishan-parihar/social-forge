@@ -41,9 +41,13 @@
 </script>
 
 <div class="flex items-center justify-between flex-wrap gap-2">
-  <div class="flex items-center gap-2">
+  <!-- v25 F5: `flex-wrap` + the title's 200px floor relaxed below `sm`. The row
+       measured ~332px (2 arrows + a 200px title + Today) against ~312px at a
+       360px viewport, so the month/year title was pushed off-screen — and the
+       title is the one thing you need to know which month you are looking at. -->
+  <div class="flex items-center gap-2 flex-wrap">
     <button onclick={onPrev} aria-label="Previous" class="px-2 py-1 text-sm text-muted hover:text-content rounded hover:bg-surface-hover">&larr;</button>
-    <span class="text-lg font-semibold min-w-[200px] text-center">{title}</span>
+    <span class="text-lg font-semibold text-center min-w-0 sm:min-w-[200px]">{title}</span>
     <button onclick={onNext} aria-label="Next" class="px-2 py-1 text-sm text-muted hover:text-content rounded hover:bg-surface-hover">&rarr;</button>
     <button onclick={onToday} aria-label="Go to today" class="px-2 py-1 text-xs bg-surface-hover hover:bg-line-hover rounded">Today</button>
   </div>

@@ -285,7 +285,13 @@
       <div class="sticky top-0 z-20">
         <TopBar ontogglenav={sidebarOpen ? () => sidebarOpen = false : () => sidebarOpen = !sidebarOpen} />
       </div>
-      <div class="max-w-6xl mx-auto p-6 w-full">{@render children()}</div>
+      <!-- v25 F5: `p-6` unconditionally cost 48px of horizontal room, leaving
+           312px of usable content at a 360px viewport — the budget every
+           composer/calendar/channels row has to fit inside. `p-4 sm:p-6`
+           returns 32px on the narrowest phones and changes nothing above
+           `sm`. This is the one global lever for the 360px pass: most of the
+           remaining clipped rows fit once the gutter is 16px instead of 24px. -->
+      <div class="max-w-6xl mx-auto p-4 sm:p-6 w-full">{@render children()}</div>
     </main>
   </div>
 {/if}

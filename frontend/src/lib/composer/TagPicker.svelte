@@ -27,14 +27,14 @@
   {#if loading}
     <div class="text-sm text-muted py-2">Loading tags...</div>
   {:else if error}
-    <div class="text-sm text-error py-2">{error}</div>
+    <div class="text-sm text-error py-2" role="alert">{error}</div>
   {:else if tags.length === 0}
     <div class="text-sm text-muted py-2">
       No tags yet.
       <a href="/tags" class="text-accent hover:underline">Create some in the Tags page.</a>
     </div>
   {:else}
-    <div class="flex flex-wrap gap-2">
+    <div class="flex flex-wrap gap-2" role="group" aria-label="Tags">
       {#each tags as tag (tag.id)}
         {@const isSelected = selected.includes(tag.id)}
         <button
@@ -45,14 +45,16 @@
               : 'border-line text-muted hover:text-content hover:bg-surface-hover'}"
           style={isSelected ? `background: ${tag.color}; border-color: ${tag.color};` : ''}
           aria-label="{isSelected ? 'Remove' : 'Add'} tag {tag.name}"
+          aria-pressed={isSelected}
         >
           <span
             class="w-2 h-2 rounded-full"
             style="background: {isSelected ? 'white' : tag.color}"
+            aria-hidden="true"
           ></span>
           {tag.name}
           {#if isSelected}
-            <span class="text-xs ml-0.5">&#10003;</span>
+            <span class="text-xs ml-0.5" aria-hidden="true">&#10003;</span>
           {/if}
         </button>
       {/each}

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { focusTrap } from '$lib/ui/focus-trap';
   import { onMount, onDestroy } from "svelte";
   import EmptyState from '$lib/ui/EmptyState.svelte';
   import Skeleton from '$lib/ui/Skeleton.svelte';
@@ -860,14 +861,16 @@
 <!-- Phase v21: Repurpose modal — pick a target channel + call the backend -->
 {#if repurposeModalOpen && repurposePost}
   <div
-    class="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+    class="fixed inset-0 z-[200] flex items-center justify-center bg-overlay backdrop-blur-sm p-4"
     onclick={() => !repurposeSubmitting && (repurposeModalOpen = false)}
     role="dialog"
     aria-modal="true"
     aria-labelledby="repurpose-title"
+    tabindex="-1"
+    use:focusTrap
   >
     <div
-      class="bg-surface border border-line rounded-xl shadow-2xl w-full max-w-md p-5"
+      class="bg-surface border border-line rounded-xl shadow-lg w-full max-w-md p-5"
       onclick={(e) => e.stopPropagation()}
     >
       <h3 id="repurpose-title" class="text-lg font-semibold mb-1">Repurpose post</h3>
@@ -914,14 +917,16 @@
 <!-- Phase v21: Edit modal — update the cached feed post's text -->
 {#if editModalOpen && editPost}
   <div
-    class="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+    class="fixed inset-0 z-[200] flex items-center justify-center bg-overlay backdrop-blur-sm p-4"
     onclick={() => !editSubmitting && (editModalOpen = false)}
     role="dialog"
     aria-modal="true"
     aria-labelledby="edit-title"
+    tabindex="-1"
+    use:focusTrap
   >
     <div
-      class="bg-surface border border-line rounded-xl shadow-2xl w-full max-w-lg p-5"
+      class="bg-surface border border-line rounded-xl shadow-lg w-full max-w-lg p-5"
       onclick={(e) => e.stopPropagation()}
     >
       <h3 id="edit-title" class="text-lg font-semibold mb-1">Edit cached post</h3>

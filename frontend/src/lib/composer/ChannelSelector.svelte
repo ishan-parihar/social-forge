@@ -28,19 +28,22 @@
       No active channels. <a href="/channels" class="text-accent hover:underline">Connect a channel</a> first.
     </div>
   {:else}
-    <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+    <div class="grid grid-cols-2 sm:grid-cols-3 gap-2" role="group" aria-label="Channels">
       {#each integrations as int (int.id)}
         {@const isSelected = selected.includes(int.id)}
+        {@const name = int.profile_name || int.provider_name}
         <button
           onclick={() => onToggle?.(int.id)}
           class="flex items-center gap-2 p-2.5 rounded-lg border transition-colors text-left {isSelected ? 'border-accent bg-accent-fill/10' : 'border-line hover:bg-surface-hover'}"
+          aria-pressed={isSelected}
+          aria-label="{isSelected ? 'Remove' : 'Add'} {name}"
         >
           <ProviderIcon provider={int.provider_identifier} size="sm" />
           <div class="flex-1 min-w-0">
-            <div class="text-xs truncate">{int.profile_name || int.provider_name}</div>
+            <div class="text-xs truncate">{name}</div>
           </div>
           {#if isSelected}
-            <span class="text-accent text-xs">✓</span>
+            <span class="text-accent text-xs" aria-hidden="true">✓</span>
           {/if}
         </button>
       {/each}

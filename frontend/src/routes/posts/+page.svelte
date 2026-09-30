@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { focusTrap } from "$lib/ui/focus-trap";
   import { toast } from "$lib/stores/toast";
   import Skeleton from '$lib/ui/Skeleton.svelte';
   import ErrorState from '$lib/ui/ErrorState.svelte';
@@ -535,14 +536,16 @@
      prompt() calls with a proper modal that has date + time + spread inputs. -->
 {#if bulkRescheduleModalOpen}
   <div
-    class="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+    class="fixed inset-0 z-[200] flex items-center justify-center bg-overlay backdrop-blur-sm p-4"
     onclick={() => (bulkRescheduleModalOpen = false)}
     role="dialog"
     aria-modal="true"
     aria-labelledby="bulk-reschedule-title"
+    tabindex="-1"
+    use:focusTrap
   >
     <div
-      class="bg-surface border border-line rounded-xl shadow-2xl w-full max-w-md p-5"
+      class="bg-surface border border-line rounded-xl shadow-lg w-full max-w-md p-5"
       onclick={(e) => e.stopPropagation()}
     >
       <h3 id="bulk-reschedule-title" class="text-lg font-semibold mb-1">

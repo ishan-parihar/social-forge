@@ -63,6 +63,27 @@
       first?.focus();
     }
   });
+
+  // v25 F5: arrow-key roving over the 8-column grid. Escape already worked via
+  // the window handler; arrows did not, so a keyboard user had to Tab through
+  // every emoji in every category (hundreds of stops) to reach the one they
+  // wanted. Arrows move by 1 horizontally and by 8 (the column count) vertically.
+  function onGridKeydown(e: KeyboardEvent) {
+    const buttons = Array.from(emojiContainer?.querySelectorAll<HTMLElement>('.emoji-btn') ?? []);
+    const at = buttons.indexOf(document.activeElement as HTMLElement);
+    if (at < 0) return;
+    const COLS = 8;
+    let next = -1;
+    if (e.key === 'ArrowRight') next = at + 1;
+    else if (e.key === 'ArrowLeft') next = at - 1;
+    else if (e.key === 'ArrowDown') next = at + COLS;
+    else if (e.key === 'ArrowUp') next = at - COLS;
+    else if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = buttons.length - 1;
+    if (next < 0 || next >= buttons.length) return;
+    e.preventDefault();
+    buttons[next].focus();
+  }
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
@@ -73,8 +94,10 @@
     bind:this={emojiContainer}
     class="emoji-popover"
     role="dialog"
+    aria-modal="true"
     aria-label="Insert emoji"
     tabindex="-1"
+    onkeydown={onGridKeydown}
     onclick={(e) => e.stopPropagation()}
   >
     {#each categories as cat (cat.name)}
@@ -106,10 +129,15 @@
     border: 1px solid var(--border);
     border-radius: 0.5rem;
     padding: 0.75rem;
-    width: 20rem;
+    /* v25 F5: bare `20rem` (320px) overflowed the composer column it renders
+       inside (~296px at a 360px viewport). See RichTextEditor .img-input-popover. */
+    width: min(20rem, calc(100vw - 2rem));
     max-height: 18rem;
     overflow-y: auto;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    /* v25 F5: was a raw `rgba(0,0,0,0.4)` — a pure-black shadow that reads as a
+       smear on a white page. --shadow-lg is the F1 token and tints with the
+       surface. Same reasoning as the .link-editor-backdrop swap. */
+    box-shadow: var(--shadow-lg);
     z-index: 50;
   }
 
@@ -132,7 +160,10 @@
   }
 
   .emoji-backdrop {
-    background: rgba(0, 0, 0, 0.3);
+    /* v25 F5: was a raw `rgba(0,0,0,0.3)` modal scrim — a pure-black wash that
+       reads as a dead grey rectangle over a light composer. --overlay is the F1
+       token and tints with the theme. Same fix as .link-editor-backdrop. */
+    background: var(--overlay);
   }
 
   /* scrollbar styling */

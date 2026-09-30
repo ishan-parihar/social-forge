@@ -15,6 +15,7 @@
   import { onMount, onDestroy } from 'svelte';
   import { modals } from '$lib/stores/modals.svelte';
   import Icon from '$lib/ui/Icon.svelte';
+  import { focusTrap } from '$lib/ui/focus-trap';
 
   // Body scroll lock: when any modal is open, lock body overflow.
   $effect(() => {
@@ -79,11 +80,13 @@
     style="z-index: {entry.zIndex}"
     role="dialog"
     aria-modal="true"
+    aria-labelledby={entry.options.title ? `mm-title-${entry.id}` : undefined}
+    aria-label={entry.options.title ? undefined : 'Dialog'}
   >
     <!-- Backdrop -->
     {#if entry.isTop}
       <div
-        class="absolute inset-0 bg-black/60 {entry.options.closeOnClickOutside !== false ? 'cursor-pointer' : ''}"
+        class="absolute inset-0 bg-overlay {entry.options.closeOnClickOutside !== false ? 'cursor-pointer' : ''}"
         aria-hidden="true"
         onclick={() => {
           if (entry.options.closeOnClickOutside !== false) {
@@ -92,14 +95,16 @@
         }}
       ></div>
     {:else}
-      <!-- Lower modals: dim the backdrop more so the top modal stands out -->
-      <div class="absolute inset-0 bg-black/40 pointer-events-none" aria-hidden="true"></div>
+      <!-- Lower modals: dim the backdrop more so the top modal stands out.
+           F5: bg-overlay/60 rather than a second raw black step — the scrim
+           tint comes from the theme, so this stays theme-aware. -->
+      <div class="absolute inset-0 bg-overlay/60 pointer-events-none" aria-hidden="true"></div>
     {/if}
 
     <!-- Modal panel -->
     <div
-      class="relative bg-surface border border-line rounded-xl shadow-2xl flex flex-col max-h-[90vh]
-        {entry.options.fullScreen ? 'w-full max-w-[1400px] h-[90vh]' : ''}
+      class="relative bg-surface border border-line rounded-xl shadow-lg flex flex-col max-h-[90vh] w-full
+        {entry.options.fullScreen ? 'max-w-[1400px] h-[90vh]' : ''}
         {entry.options.panelClass || ''}
         {entry.isTop ? '' : 'opacity-90'}"
       style={entry.options.fullScreen
@@ -111,12 +116,14 @@
       class:max-w-4xl={entry.options.size === 'max-w-4xl'}
       class:max-w-2xl={entry.options.size === 'max-w-2xl'}
       class:max-w-6xl={entry.options.size === 'max-w-6xl'}
+      tabindex="-1"
+      use:focusTrap={{ enabled: entry.isTop }}
     >
       <!-- Header (only if title or close button) -->
       {#if entry.options.title || entry.options.withCloseButton !== false}
         <div class="flex items-center justify-between px-5 py-3 border-b border-line shrink-0">
           {#if entry.options.title}
-            <h3 class="text-lg font-semibold">{entry.options.title}</h3>
+            <h3 id={`mm-title-${entry.id}`} class="text-lg font-semibold">{entry.options.title}</h3>
           {:else}
             <span></span>
           {/if}
@@ -152,18 +159,25 @@
     style="z-index: {500 + modals.stack.length}"
     role="alertdialog"
     aria-modal="true"
+    aria-labelledby={pc.opts.title ? 'mm-confirm-title' : undefined}
+    aria-describedby={pc.opts.message ? 'mm-confirm-msg' : undefined}
+    aria-label={pc.opts.title ? undefined : 'Confirm'}
   >
     <div
-      class="absolute inset-0 bg-black/70"
+      class="absolute inset-0 bg-overlay"
       aria-hidden="true"
       onclick={() => resolveConfirm(false)}
     ></div>
-    <div class="relative bg-surface border border-line rounded-xl shadow-2xl max-w-sm w-full p-6">
+    <div
+      class="relative bg-surface border border-line rounded-xl shadow-lg max-w-sm w-full p-6"
+      tabindex="-1"
+      use:focusTrap={{ focusSelf: false }}
+    >
       {#if pc.opts.title}
-        <h3 class="text-lg font-semibold mb-2">{pc.opts.title}</h3>
+        <h3 id="mm-confirm-title" class="text-lg font-semibold mb-2">{pc.opts.title}</h3>
       {/if}
       {#if pc.opts.message}
-        <p class="text-sm text-muted mb-5">{pc.opts.message}</p>
+        <p id="mm-confirm-msg" class="text-sm text-muted mb-5">{pc.opts.message}</p>
       {/if}
       <div class="flex justify-end gap-2">
         <button

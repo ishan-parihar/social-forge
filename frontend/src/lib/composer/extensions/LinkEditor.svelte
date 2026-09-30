@@ -12,6 +12,8 @@
   let newTab = $state(false);
   let linkText = $state('');
   let urlInput = $state<HTMLInputElement | null>(null);
+  // v25 F5: the rejection below used to be a bare `return`.
+  let urlError = $state('');
 
   // Populate fields when the editor already has a link selected
   $effect(() => {
@@ -33,8 +35,11 @@
     if (!editor) return;
     const href = url.trim();
     if (href && !/^https?:\/\//i.test(href)) {
-      return; // silently reject non-http(s) URLs
+      urlError = 'Enter a full URL starting with http:// or https://';
+      urlInput?.focus();
+      return; // reject non-http(s) URLs, but say so
     }
+    urlError = '';
     const chain = editor.chain().focus().extendMarkRange('link');
     if (href) {
       chain.setLink({
@@ -73,6 +78,7 @@
   <div
     class="link-editor-popover"
     role="dialog"
+    aria-modal="true"
     aria-label="Edit link"
     tabindex="-1"
     onclick={(e) => e.stopPropagation()}
@@ -84,14 +90,24 @@
     {/if}
 
     <label for="link-url" class="block text-xs text-muted mb-1">URL</label>
+    <!-- v25 F5: type="url" (was "text") so the browser validates and mobile
+         keyboards show the right layout, plus an error region. `applyLink`
+         used to `return` silently on a non-http URL, so a keyboard user could
+         press Apply on garbage and get no feedback whatsoever. -->
     <input
       id="link-url"
-      type="text"
+      type="url"
       placeholder="https://example.com"
       bind:this={urlInput}
       bind:value={url}
-      class="w-full px-3 py-2 rounded text-sm bg-background-input border border-line text-content-secondary placeholder:text-faint outline-none focus:border-accent transition-colors"
+      aria-invalid={urlError ? "true" : undefined}
+      aria-describedby={urlError ? "link-url-error" : undefined}
+      oninput={() => (urlError = "")}
+      class="w-full px-3 py-2 rounded text-sm bg-background-input border text-content-secondary placeholder:text-faint outline-none focus:border-accent transition-colors {urlError ? 'border-error' : 'border-line'}"
     />
+    {#if urlError}
+      <p id="link-url-error" role="alert" class="text-[11px] text-error mt-1">{urlError}</p>
+    {/if}
 
     <label class="flex items-center gap-2 mt-2 cursor-pointer select-none">
       <input
@@ -131,12 +147,14 @@
     border: 1px solid var(--border);
     border-radius: 0.5rem;
     padding: 0.875rem;
-    width: 18rem;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    /* v25 F5: bare `18rem` (288px) inside a card with p-4 padding either side
+       left ~264px to fit it. See RichTextEditor .img-input-popover. */
+    width: min(18rem, calc(100vw - 2rem));
+    box-shadow: var(--shadow-lg);
     z-index: 50;
   }
 
   .link-editor-backdrop {
-    background: rgba(0, 0, 0, 0.3);
+    background: var(--overlay);
   }
 </style>

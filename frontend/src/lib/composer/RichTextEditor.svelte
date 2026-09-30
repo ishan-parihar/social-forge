@@ -221,7 +221,12 @@
     border: 1px solid var(--border);
     border-radius: 0.5rem;
     padding: 0.875rem;
-    width: 24rem;
+    /* v25 F5: was a bare `width: 24rem` (384px). The popover is absolutely
+       positioned and centred, and nothing between it and the composer's
+       `fixed` overlay clips — so on a 360px phone this was the single widest
+       element in the app and the one thing that could scroll the whole page
+       sideways. `min()` keeps the desktop size and yields to the viewport. */
+    width: min(24rem, calc(100vw - 2rem));
     box-shadow: var(--shadow-lg);
     z-index: 50;
   }

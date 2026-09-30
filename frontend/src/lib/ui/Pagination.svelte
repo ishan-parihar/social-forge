@@ -42,16 +42,17 @@
       class="px-2 py-1 rounded text-muted hover:text-content hover:bg-surface-hover disabled:opacity-40 disabled:hover:bg-transparent"
       aria-label="Previous page"
     >
-      ‹
+      <span aria-hidden="true">‹</span>
     </button>
     {#each pages as p (p)}
       {#if p === "..."}
-        <span class="px-2 text-muted">…</span>
+        <span class="px-2 text-muted" aria-hidden="true">…</span>
       {:else}
         <button
           onclick={() => (page = p)}
           class="min-w-[28px] px-2 py-1 rounded transition-colors {p === page ? 'bg-accent-fill text-accent-fg' : 'text-muted hover:text-content hover:bg-surface-hover'}"
           aria-current={p === page ? "page" : undefined}
+          aria-label="Page {p}"
         >
           {p}
         </button>
@@ -63,7 +64,11 @@
       class="px-2 py-1 rounded text-muted hover:text-content hover:bg-surface-hover disabled:opacity-40 disabled:hover:bg-transparent"
       aria-label="Next page"
     >
-      ›
+      <span aria-hidden="true">›</span>
     </button>
+    <!-- F5: paging is a silent mutation. The row of numbers changes and a
+         screen-reader user gets no confirmation that anything happened, which
+         reads as a dead button. This announces the new position instead. -->
+    <span class="sr-only" role="status" aria-live="polite">Page {page} of {totalPages}</span>
   </nav>
 {/if}

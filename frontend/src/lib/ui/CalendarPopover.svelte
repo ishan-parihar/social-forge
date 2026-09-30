@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { tick } from 'svelte';
+
   // v26-3: CalendarPopover — a Mantine-style date picker popover.
   //
   // Pure Svelte, no new deps. Shows a month grid with weekday headers,
@@ -33,6 +35,52 @@
   let viewYear = $state(0);
   let viewMonth = $state(0); // 0-11
   let containerEl: HTMLDivElement;
+  let triggerEl: HTMLButtonElement | undefined = $state();
+  let panelEl: HTMLDivElement | undefined = $state();
+
+  // v25 F5 — keyboard. The trigger already declared aria-haspopup/aria-expanded,
+  // but the popover had no keydown handler at all: Escape did not close it, the
+  // 42 day buttons were reachable only by Tab (43 stops), and focus was never
+  // moved in on open nor returned to the trigger on close. Added:
+  //   - roving tabindex over the days, so Tab enters the grid once
+  //   - Arrow keys ±1/±7 days, Home/End, PageUp/PageDown for months
+  //   - Escape closes and returns focus to the trigger
+  let focusedDate = $state<string | null>(null);
+
+  function close(returnFocus = true) {
+    open = false;
+    if (returnFocus) triggerEl?.focus();
+  }
+
+  function focusDay(dateStr: string) {
+    if (!dateStr || isDisabled(dateStr)) return;
+    focusedDate = dateStr;
+    tick().then(() => {
+      panelEl?.querySelector<HTMLElement>(`[data-day="${dateStr}"]`)?.focus();
+    });
+  }
+
+  /** Move by whole days inside the fixed 42-cell grid, so arrows never dead-end. */
+  function moveDay(delta: number) {
+    const i = grid.findIndex((c) => c.dateStr === focusedDate);
+    const from = i >= 0 ? i : Math.max(0, grid.findIndex((c) => c.dateStr === value));
+    const next = grid[Math.min(grid.length - 1, Math.max(0, from + delta))];
+    if (next) focusDay(next.dateStr);
+  }
+
+  function onGridKeydown(e: KeyboardEvent) {
+    switch (e.key) {
+      case "ArrowLeft": e.preventDefault(); moveDay(-1); break;
+      case "ArrowRight": e.preventDefault(); moveDay(1); break;
+      case "ArrowUp": e.preventDefault(); moveDay(-7); break;
+      case "ArrowDown": e.preventDefault(); moveDay(7); break;
+      case "Home": e.preventDefault(); focusDay(grid[0]?.dateStr ?? ''); break;
+      case "End": e.preventDefault(); focusDay(grid[grid.length - 1]?.dateStr ?? ''); break;
+      case "PageUp": e.preventDefault(); prevMonth(); break;
+      case "PageDown": e.preventDefault(); nextMonth(); break;
+      case "Escape": e.preventDefault(); close(); break;
+    }
+  }
 
   // Initialize view month/year from the current value or today.
   $effect(() => {
@@ -105,17 +153,19 @@
   function prevMonth() {
     if (viewMonth === 0) { viewMonth = 11; viewYear--; }
     else viewMonth--;
+    focusedDate = null;
   }
   function nextMonth() {
     if (viewMonth === 11) { viewMonth = 0; viewYear++; }
     else viewMonth++;
+    focusedDate = null;
   }
 
   function selectDate(dateStr: string) {
     if (isDisabled(dateStr)) return;
     value = dateStr;
     onchange?.(dateStr);
-    open = false;
+    close();
   }
 
   function toggle() { open = !open; }
@@ -124,7 +174,7 @@
   $effect(() => {
     if (!open) return;
     function onDocClick(e: MouseEvent) {
-      if (containerEl && !containerEl.contains(e.target as Node)) open = false;
+      if (containerEl && !containerEl.contains(e.target as Node)) close(false);
     }
     document.addEventListener('click', onDocClick);
     return () => document.removeEventListener('click', onDocClick);
@@ -142,6 +192,7 @@
 <div class="relative inline-block" bind:this={containerEl}>
   <button
     type="button"
+    bind:this={triggerEl}
     onclick={toggle}
     class="flex-1 px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-content-secondary hover:border-accent/50 transition-colors text-left {className}"
     aria-haspopup="dialog"
@@ -152,15 +203,20 @@
     {:else}
       <span class="text-muted">{placeholder}</span>
     {/if}
-    <span class="text-muted ml-2 float-right">📅</span>
+    <span class="text-muted ml-2 float-right" aria-hidden="true">📅</span>
   </button>
 
   {#if open}
+    <!-- F5: min-width capped against the viewport. 18rem = 288px was fine at
+         desktop but overflowed a 360px phone once the layout gutter was added
+         back. Arrow keys / Escape are handled on the panel. -->
     <div
-      class="absolute z-50 mt-1 p-3 bg-surface border border-line rounded-lg shadow-xl"
-      style="min-width: 18rem;"
+      bind:this={panelEl}
+      class="absolute z-50 mt-1 p-3 bg-surface border border-line rounded-lg shadow-lg w-[min(18rem,calc(100vw-2rem))]"
       role="dialog"
       aria-label="Date picker"
+      tabindex="-1"
+      onkeydown={onGridKeydown}
     >
       <!-- Month nav -->
       <div class="flex items-center justify-between mb-3">
@@ -186,12 +242,16 @@
         {/each}
       </div>
 
-      <!-- Calendar grid -->
-      <div class="grid grid-cols-7 gap-0.5">
+      <!-- Calendar grid. F5: role=grid/row/gridcell so the roving tabindex has a
+           valid structure to live in — a bare button list announces as 42
+           unrelated buttons. -->
+      <div class="grid grid-cols-7 gap-0.5" role="grid" aria-label="{MONTHS[viewMonth]} {viewYear}">
         {#each grid as cell (cell.dateStr)}
           <button
             type="button"
+            data-day={cell.dateStr}
             onclick={() => selectDate(cell.dateStr)}
+            onfocus={() => (focusedDate = cell.dateStr)}
             disabled={isDisabled(cell.dateStr)}
             class="aspect-square flex items-center justify-center rounded text-xs transition-colors
               {cell.isCurrent ? 'text-content-secondary' : 'text-faint'}
@@ -199,8 +259,10 @@
               {cell.dateStr === todayStr && cell.dateStr !== value ? 'ring-1 ring-accent' : ''}
               {isDisabled(cell.dateStr) ? 'opacity-30 cursor-not-allowed' : 'hover:bg-surface-hover'}
             "
-            aria-label={cell.dateStr}
-            aria-pressed={cell.dateStr === value}
+            role="gridcell"
+            tabindex={focusedDate === cell.dateStr ? 0 : -1}
+            aria-label={new Date(cell.year, cell.month, cell.day).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+            aria-selected={cell.dateStr === value}
           >
             {cell.day}
           </button>

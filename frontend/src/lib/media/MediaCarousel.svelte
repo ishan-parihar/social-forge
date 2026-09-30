@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { focusTrap } from '$lib/ui/focus-trap';
   import { tick } from 'svelte';
   import { proxyMediaUrl } from '$lib/api/feed';
   import type { MediaAttachment } from '$lib/api/feed';
@@ -247,6 +248,7 @@
     onclick={closeFullscreen}
     ontouchstart={handleTouchStart}
     ontouchend={handleTouchEnd}
+    use:focusTrap
   >
     <!-- Close button -->
     <button

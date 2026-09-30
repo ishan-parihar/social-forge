@@ -195,7 +195,9 @@
          The time input stays native — it's compact and consistent enough. -->
     <div class="flex gap-2">
       <CalendarPopover bind:value={dateStr} placeholder="Select date" onchange={update} class="flex-1" />
-      <input type="time" bind:value={timeStr} onchange={update}
+      <!-- v25 F5: the time input had no label at all — no id/for, no
+           aria-label — so it announced as an unlabelled field. -->
+      <input type="time" bind:value={timeStr} onchange={update} aria-label="Time"
         class="px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-content-secondary" />
     </div>
 
@@ -220,17 +222,20 @@
     <!-- Read-back line. This is the whole point of the picker: it proves which
          instant the wall clock resolved to, in the zone that will publish it. -->
     {#if resolved && roundTripOk}
-      <p class="text-[11px] text-muted">
+      <!-- v25 F5: role=status. This read-back is the entire reason the picker
+           exists (it proves which instant the wall clock resolved to), and it
+           was silent: a screen-reader user changed the date and heard nothing. -->
+      <p class="text-[11px] text-muted" role="status">
         {dateStr} {timeStr} in {zoneLabel}
         <span class="text-faint">→ {new Date(resolved).toISOString().replace('.000Z', 'Z')} (UTC)</span>
       </p>
     {:else if resolved}
-      <p class="text-[11px] text-warning">
+      <p class="text-[11px] text-warning" role="alert">
         {dateStr} {timeStr} does not round-trip in {zoneLabel} — the clocks change at that moment. Pick another time.
       </p>
     {/if}
 
-    <button onclick={autoSchedule} disabled={autoScheduling}
+    <button onclick={autoSchedule} disabled={autoScheduling} aria-busy={autoScheduling}
       class="w-full px-3 py-2 bg-surface-hover hover:bg-line-hover border border-line rounded-lg text-sm text-accent transition-colors flex items-center justify-center gap-2">
       {#if autoScheduling}
         <span class="inline-block w-4 h-4 border-2 border-line border-t-accent rounded-full animate-spin" aria-hidden="true"></span>

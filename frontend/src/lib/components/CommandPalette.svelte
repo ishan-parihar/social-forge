@@ -12,6 +12,7 @@
   import { browser } from '$app/environment';
   import { onMount, onDestroy } from 'svelte';
   import Icon from '$lib/ui/Icon.svelte';
+  import { focusTrap } from '$lib/ui/focus-trap';
 
   let { onClose }: { onClose: () => void } = $props();
 
@@ -53,6 +54,17 @@
   let query = $state('');
   let selectedIndex = $state(0);
   let inputEl: HTMLInputElement | null = $state(null);
+
+  // v25 F5: the palette is a select-only combobox. Arrow keys already moved
+  // `selectedIndex`, but nothing told assistive tech about it, so the roving
+  // selection was invisible: a screen-reader user heard the list read out
+  // with no "selected" state and no way to know which row Enter would fire.
+  // aria-activedescendant + role=option is what makes the existing key
+  // handling perceivable. Focus stays in the input, so the trap below has a
+  // single, stable first stop.
+  const uid = $props.id();
+  const listboxId = `cmd-list-${uid}`;
+  const optionId = (id: string) => `cmd-opt-${uid}-${id}`;
 
   // Recent commands (persisted).
   let recentIds: string[] = $state([]);
@@ -140,17 +152,25 @@
 </script>
 
 <!-- Backdrop -->
+<!-- svelte-ignore a11y_click_events_have_key_events
+     The backdrop closes on click; its keyboard equivalent is Escape, handled by
+     the window listener in onMount. A backdrop div is never focusable, so a
+     keydown here would be dead code — the focus trap below is what makes the
+     palette keyboard-exitable. -->
 <div
-  class="fixed inset-0 bg-black/50 z-50 flex items-start justify-center pt-[15vh] px-4"
+  class="fixed inset-0 bg-overlay z-50 flex items-start justify-center pt-[15vh] px-4"
   onclick={onClose}
-  role="presentation"
+  aria-hidden="true"
 >
   <!-- Palette panel -->
   <div
-    class="bg-background-input border border-line rounded-lg shadow-2xl w-full max-w-lg overflow-hidden"
+    class="bg-background-input border border-line rounded-lg shadow-lg w-full max-w-lg overflow-hidden"
     onclick={(e) => e.stopPropagation()}
     role="dialog"
+    aria-modal="true"
     aria-label="Command palette"
+    tabindex="-1"
+    use:focusTrap
   >
     <!-- Search input -->
     <div class="flex items-center gap-3 px-4 py-3 border-b border-line">
@@ -159,12 +179,18 @@
         bind:this={inputEl}
         bind:value={query}
         placeholder="Type a command or search..."
+        aria-label="Search commands"
+        role="combobox"
+        aria-expanded="true"
+        aria-controls={listboxId}
+        aria-autocomplete="list"
+        aria-activedescendant={flat[selectedIndex] ? optionId(flat[selectedIndex].id) : undefined}
         class="flex-1 bg-transparent border-none outline-none text-sm text-content placeholder:text-muted"
       />
       <kbd class="text-[10px] text-muted bg-surface-hover px-1.5 py-0.5 rounded">ESC</kbd>
     </div>
     <!-- Results -->
-    <div class="max-h-[400px] overflow-y-auto py-2">
+    <div class="max-h-[400px] overflow-y-auto py-2" role="listbox" id={listboxId} aria-label="Commands">
       {#if flat.length === 0}
         <div class="px-4 py-8 text-center text-sm text-muted">No commands match "{query}"</div>
       {:else}
@@ -175,6 +201,9 @@
           {#each group.items as cmd, i}
             {@const flatIndex = flat.indexOf(cmd)}
             <button
+              id={optionId(cmd.id)}
+              role="option"
+              aria-selected={selectedIndex === flatIndex}
               onclick={() => runCommand(cmd)}
               onmouseenter={() => (selectedIndex = flatIndex)}
               class="w-full flex items-center gap-3 px-4 py-2 text-sm transition-colors text-left

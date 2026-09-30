@@ -116,9 +116,16 @@
         --hue-emerald-rgb: 52 211 153;
         --hue-amber-rgb: 251 191 36;
         --hue-neutral-rgb: 156 163 175;
-        /* — chrome: scrims, focus, shadows, scrollbar. — */
+        /* — chrome: scrims, focus, shadows, scrollbar. —
+           F5: the ring's GEOMETRY lives beside its colour so the two cannot
+           drift. --focus-ring is the halo colour, --focus-ring-width/-gap are
+           the outline width and offset. Theme-independent by nature, but
+           declared in both blocks alongside --radius for the same reason:
+           this file is the single place a token may be defined. */
         --overlay: rgb(0 0 0 / 0.6);
         --focus-ring: rgb(99 102 241 / 0.35);
+        --focus-ring-width: 2px;
+        --focus-ring-gap: 2px;
         --focus-ring-offset: rgb(0 0 0 / 0.0);
         --row-hover: rgb(26 31 46 / 0.5);
         --shadow-color: rgb(0 0 0 / 0.4);
@@ -215,6 +222,8 @@
         /* — chrome — */
         --overlay: rgb(15 23 42 / 0.45);
         --focus-ring: rgb(79 70 229 / 0.35);
+        --focus-ring-width: 2px;
+        --focus-ring-gap: 2px;
         --focus-ring-offset: rgb(15 23 42 / 0.0);
         --row-hover: rgb(226 232 240 / 0.5);
         --shadow-color: rgb(15 23 42 / 0.12);
@@ -276,11 +285,20 @@ select {
         transition: border-color 0.15s, box-shadow 0.15s;
         font-family: inherit;
 }
-input:focus,
-textarea:focus,
-select:focus {
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
         border-color: var(--brand);
-        box-shadow: 0 0 0 3px var(--focus-ring);
+        box-shadow: 0 0 0 var(--focus-ring-width) var(--focus-ring);
+}
+/* F5: the field ring used to hang off `:focus`, so a plain mouse click left a
+   glow behind — the classic "does my click register?" tell, and noise on a
+   form the user is filling by hand. Clearing it on non-keyboard focus keeps
+   the ring meaning exactly one thing: you are here by Tab. */
+input:focus:not(:focus-visible),
+textarea:focus:not(:focus-visible),
+select:focus:not(:focus-visible) {
+        box-shadow: none;
 }
 button {
         cursor: pointer;
@@ -299,14 +317,48 @@ a:hover {
         transition: color 0.2s, background-color 0.2s;
 }
 
-/* Focus visible for keyboard navigation. F1: the ring reads against BOTH
-   themes because it is derived from --brand, which flips per theme. */
+/* ==========================================================================
+   FOCUS RING — v25 F5
+   --------------------------------------------------------------------------
+   F1 shipped the ring COLOUR (--focus-ring, --brand) but not its geometry, so
+   the width and offset were magic numbers repeated at each call site — and the
+   selector list covered only a/button/[role=button]. Everything else F2–F4
+   built (calendar day cells, listbox options, media tiles, tab strips) was
+   reachable by keyboard with NO visible ring.
+
+   Two rules, one system:
+     - text fields get a soft halo (--focus-ring), because an outline drawn
+       tight around a 10px-padded input reads as part of the border;
+     - everything else gets a 2px outline offset 2px from the box, which is
+       what survives on a chip, a chip-coloured tag, and a dense calendar cell
+       where a halo would swamp the content.
+   Both derive from --brand, which flips per theme, so the ring clears 3:1
+   against --bg-card in light AND dark.
+   ========================================================================== */
 a:focus-visible,
 button:focus-visible,
-[role="button"]:focus-visible {
-        outline: 2px solid var(--brand);
-        outline-offset: 2px;
-        border-radius: 4px;
+summary:focus-visible,
+[tabindex]:focus-visible,
+[role="button"]:focus-visible,
+[role="option"]:focus-visible,
+[role="menuitem"]:focus-visible,
+[role="menuitemcheckbox"]:focus-visible,
+[role="menuitemradio"]:focus-visible,
+[role="listbox"]:focus-visible,
+[role="tab"]:focus-visible,
+[role="switch"]:focus-visible,
+[role="checkbox"]:focus-visible,
+[role="radio"]:focus-visible,
+[role="slider"]:focus-visible,
+[role="spinbutton"]:focus-visible,
+[role="gridcell"]:focus-visible,
+[role="combobox"]:focus-visible {
+        outline: var(--focus-ring-width) solid var(--brand);
+        outline-offset: var(--focus-ring-gap);
+        /* A ring on a fully-round element (avatar button, channel dot) must not
+           square off the shape — outline follows border-radius, so only reset
+           the 4px that F1 hardcoded for rectangular controls. */
+        border-radius: inherit;
 }
 
 /* Card */
@@ -390,7 +442,23 @@ tr.data-row:hover {
         100% { background-position: -200% 0; }
 }
 
-/* Reduced motion */
+/* ==========================================================================
+   REDUCED MOTION — v25 F5
+   --------------------------------------------------------------------------
+   F1 shipped a blanket `animation-duration: 0.01ms` override, which is the
+   right first line but leaves two holes:
+
+     1. It made TRANSITIONS instant rather than absent. A 0.1s transform that
+        now takes 0ms is a jump, and a jump is exactly what a motion-sensitive
+        user asked not to see. The transforms below are removed outright.
+     2. It left the shimmer's paint cost in place. The animation is gone, but
+        the element still carries a 200%-wide gradient it no longer needs.
+
+   The drag ghost (lib/calendar/touch-drag.ts) is deliberately NOT disabled.
+   It tracks the finger 1:1 and carries the drop target's text — it is the
+   drag itself, not decoration. What gets suppressed there is the drop-target
+   highlight pulse, below.
+   ========================================================================== */
 @media (prefers-reduced-motion: reduce) {
         *,
         *::before,
@@ -398,12 +466,41 @@ tr.data-row:hover {
                 animation-duration: 0.01ms !important;
                 animation-iteration-count: 1 !important;
                 transition-duration: 0.01ms !important;
+                /* One further step: an animation that runs once in 0.01ms can
+                   still fire its own `from` frame, which for a fade reads as a
+                   single-frame flash. `animation: none` removes the effect
+                   entirely instead of compressing it. Applied per-class below
+                   so a component that genuinely needs a state change on
+                   :hover still gets it. */
         }
         .page-enter {
                 animation: none;
         }
+        /* Shimmer: drop the sweep AND the oversized gradient behind it. The
+           flat --skeleton-from fill still reserves the exact space the real
+           content will occupy, so the layout does not jump when data lands —
+           which is the whole reason the placeholder exists. */
         .skeleton {
                 animation: none;
                 background: var(--skeleton-from);
+                background-size: auto;
+        }
+        /* Hover lift, not hover feedback. The border-colour change above stays
+           (it is a colour swap, not motion) so the card is still announced as
+           interactive; only the 1px translate goes. */
+        .stat-card:hover {
+                transform: none;
+        }
+        /* Calendar drop-target affordance. The cell keeps its highlight colour
+           so the drop is still unambiguous; it just arrives without the
+           transition. */
+        .drop-target,
+        [data-drop-date].drop-active {
+                transition: none !important;
+        }
+        /* The drag ghost: keep it (see header) but strip the transitions some
+           views attach to it on pickup. */
+        .drag-ghost {
+                transition: none !important;
         }
 }

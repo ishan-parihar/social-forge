@@ -758,8 +758,14 @@
 
 <div class="flex flex-col h-full">
   <!-- Header -->
-  <div class="flex items-center justify-between px-5 py-3 border-b border-line shrink-0">
-    <div class="flex items-center gap-3">
+  <div class="flex items-center justify-between px-5 py-3 border-b border-line shrink-0 gap-3">
+    <!-- v25 F5: `flex-wrap` + `min-w-0` on the left group. In the steady state
+         this row measures ~235px inside the 328px the composer gets at a 360px
+         viewport, but the `saving` branch adds a spinner plus a label and
+         pushes it to ~333px — so the header overflowed during every autosave.
+         Wrapping is the right fix rather than shortening the label: all three
+         states are load-bearing, and the steady state is unaffected. -->
+    <div class="flex items-center gap-3 flex-wrap min-w-0">
       <h2 class="text-xl font-semibold">
         {composer.mode === 'edit' ? 'Edit Post' : 'Create Post'}
       </h2>

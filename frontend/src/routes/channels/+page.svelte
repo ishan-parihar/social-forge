@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { focusTrap } from '$lib/ui/focus-trap';
   import { integrationsApi, type Integration } from "$lib/api/integrations";
   import Skeleton from '$lib/ui/Skeleton.svelte';
   import ErrorState from '$lib/ui/ErrorState.svelte';
@@ -359,7 +360,7 @@
 />
 
 {#if onboardDialog}
-<div class="fixed inset-0 bg-overlay flex items-center justify-center z-50" role="dialog" aria-modal="true" aria-label="Connect {providerLabel(onboardDialog.provider)}">
+<div class="fixed inset-0 bg-overlay flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true" aria-label="Connect {providerLabel(onboardDialog.provider)}" tabindex="-1" use:focusTrap>
   <div class="bg-surface border border-line rounded-xl p-6 w-full max-w-sm elev-lg">
     <h3 class="text-lg font-semibold mb-3">Connect {providerLabel(onboardDialog.provider)}</h3>
 

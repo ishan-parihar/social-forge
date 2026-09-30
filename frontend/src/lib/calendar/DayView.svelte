@@ -130,7 +130,7 @@
         <span class="ml-2 align-middle text-[10px] font-medium uppercase tracking-wider px-1.5 py-0.5 rounded bg-accent-fill/10 text-accent-strong">Today</span>
       {/if}
     </div>
-    <div class="flex items-center justify-center gap-3 mt-1 text-xs">
+    <div class="flex items-center justify-center gap-3 mt-1 text-xs flex-wrap">
       <span class="text-muted">{dayEvents.length} total</span>
       {#if stateSummary.queued > 0}
         <span class="text-accent">{stateSummary.queued} scheduled</span>

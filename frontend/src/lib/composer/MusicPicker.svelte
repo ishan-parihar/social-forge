@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { focusTrap } from '$lib/ui/focus-trap';
 
   let {
     integrationId = '',
@@ -10,6 +11,9 @@
     onSelect?: (track: { id: string; title: string; artist: string }) => void;
     onclose?: () => void;
   } = $props();
+
+  const uid = $props.id();
+  const titleId = `music-title-${uid}`;
 
   let query = $state('');
   let tracks = $state<Array<{ id: string; title: string; artist: string; cover_url?: string; duration_ms?: number }>>([]);
@@ -60,24 +64,40 @@
   });
 </script>
 
-<div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50" role="dialog">
-  <div class="bg-surface border border-line rounded-xl w-full max-w-md mx-4 overflow-hidden">
-    <div class="flex items-center justify-between px-4 py-3 border-b border-line">
-      <h3 class="text-sm font-semibold">🎵 Add Music</h3>
-      <button onclick={onclose} class="text-muted hover:text-content text-xl">&times;</button>
+<!-- v25 F5: this dialog had NO keydown handler at all — Escape did not close
+     it, so a keyboard user was trapped in the modal with no way out short of
+     Tab-ing to the ✕. `role="dialog"` also sat on the full-screen overlay
+     rather than the panel, and there was no aria-modal, so the dialog had no
+     name and no focus containment. All three are fixed below; the ✕ also had
+     no accessible name. -->
+<svelte:window onkeydown={(e) => { if (e.key === 'Escape') onclose?.(); }} />
+
+<div class="fixed inset-0 bg-overlay flex items-center justify-center z-50 p-4" aria-hidden="true">
+  <div
+    class="bg-surface border border-line rounded-xl shadow-lg w-full max-w-md max-h-[90vh] overflow-hidden flex flex-col"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby={titleId}
+    tabindex="-1"
+    use:focusTrap
+  >
+    <div class="flex items-center justify-between px-4 py-3 border-b border-line shrink-0">
+      <h3 id={titleId} class="text-sm font-semibold">🎵 Add Music</h3>
+      <button onclick={onclose} aria-label="Close music picker" class="text-muted hover:text-content text-xl">&times;</button>
     </div>
 
-    <div class="p-4 space-y-3">
+    <div class="p-4 space-y-3 overflow-y-auto">
       <input
         type="text"
         bind:value={query}
         oninput={handleInput}
         placeholder="Search trending music..."
+        aria-label="Search music"
         class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none"
       />
 
       {#if error}
-        <div class="text-xs text-error bg-error/10 rounded-lg p-2">
+        <div class="text-xs text-error bg-error/10 rounded-lg p-2" role="alert">
           {error}
           <br>
           <span class="text-muted">Note: Music search requires an Instagram Business/Creator account with the Facebook Login flow.</span>
@@ -85,7 +105,7 @@
       {/if}
 
       {#if loading}
-        <div class="text-center py-6 text-muted text-sm">Loading...</div>
+        <div class="text-center py-6 text-muted text-sm" role="status">Loading...</div>
       {:else if tracks.length === 0 && !error}
         <div class="text-center py-6 text-muted text-sm">No tracks found</div>
       {:else}
@@ -93,6 +113,7 @@
           {#each tracks as track (track.id)}
             <button
               onclick={() => handleSelect(track)}
+              aria-pressed={selectedId === track.id}
               class="w-full flex items-center gap-3 p-2 rounded-lg transition-colors text-left
                 {selectedId === track.id ? 'bg-accent-fill/20 ring-1 ring-accent' : 'hover:bg-surface-hover'}"
             >
@@ -109,7 +130,7 @@
                 <span class="text-xs text-muted shrink-0">{formatDuration(track.duration_ms)}</span>
               {/if}
               {#if selectedId === track.id}
-                <span class="text-accent text-sm shrink-0">✓</span>
+                <span class="text-accent text-sm shrink-0" aria-hidden="true">✓</span>
               {/if}
             </button>
           {/each}
@@ -119,7 +140,7 @@
       {#if selectedId}
         <button
           onclick={onclose}
-          class="w-full px-4 py-2 bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg text-sm font-medium"
+          class="w-full px-4 py-2 bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg text-sm font-medium shrink-0"
         >
           Done
         </button>

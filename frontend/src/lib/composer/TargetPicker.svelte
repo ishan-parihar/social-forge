@@ -61,13 +61,17 @@
 
 <div>
   <!-- Search + Selected Count Header -->
+  <!-- v25 F5: `min-w-0` on the search wrapper. A bare `flex-1` keeps the flex
+       item's default `min-width: auto`, so the input's intrinsic width plus
+       the nowrap "N selected" chip below overflowed the composer column. -->
   <div class="flex items-center gap-2 mb-2">
-    <div class="relative flex-1">
-      <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted text-sm">&#128269;</span>
+    <div class="relative flex-1 min-w-0">
+      <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted text-sm" aria-hidden="true">&#128269;</span>
       <input
         type="text"
         bind:value={searchQuery}
         placeholder={placeholder}
+        aria-label={placeholder}
         class="w-full pl-8 pr-3 py-1.5 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none placeholder:text-faint"
       />
     </div>

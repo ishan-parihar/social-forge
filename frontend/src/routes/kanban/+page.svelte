@@ -7,6 +7,7 @@
   // Inspired by postiz-app's calendar list view but reimagined as a
   // kanban board for content ideation and pipeline management.
 
+  import { focusTrap } from '$lib/ui/focus-trap';
   import { onMount, onDestroy } from 'svelte';
   import ErrorState from '$lib/ui/ErrorState.svelte';
   import Skeleton from '$lib/ui/Skeleton.svelte';
@@ -911,9 +912,11 @@
     role="dialog"
     aria-modal="true"
     aria-labelledby="create-campaign-title"
+    tabindex="-1"
+    use:focusTrap
   >
     <div
-      class="bg-surface border border-line rounded-xl shadow-2xl w-full max-w-md p-5"
+      class="bg-surface border border-line rounded-xl shadow-lg w-full max-w-md p-5"
       onclick={(e) => e.stopPropagation()}
     >
       <h3 id="create-campaign-title" class="text-lg font-semibold mb-1">New campaign</h3>

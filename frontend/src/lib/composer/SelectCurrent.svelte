@@ -33,17 +33,25 @@
   } = $props();
 </script>
 
-<div class="flex items-center gap-2 flex-wrap">
+<!-- v25 F5: this is a tablist (pick WHICH channel the next edit applies to),
+     but it announced as a row of plain buttons with no selected state — the
+     only signal was background colour. `role="tab"` + aria-selected exposes it,
+     and the strip is now a single tab stop with arrow-key movement rather than
+     N tab stops. -->
+<div class="flex items-center gap-2 flex-wrap" role="tablist" aria-label="Apply the next change to">
   <!-- Global pill -->
   <button
     onclick={() => onCurrentChange('global')}
+    role="tab"
+    aria-selected={current === 'global'}
+    tabindex={current === 'global' ? 0 : -1}
     class="px-3 py-1.5 text-xs rounded-lg transition-colors flex items-center gap-1.5
       {current === 'global'
         ? 'bg-accent-fill text-accent-fg'
         : 'text-muted hover:bg-surface-hover border border-line'}"
     title="Shared content for all channels"
   >
-    <span>🌐</span>
+    <span aria-hidden="true">🌐</span>
     <span>Global</span>
   </button>
 
@@ -54,16 +62,21 @@
     {@const isActive = current === intId}
     <button
       onclick={() => onCurrentChange(intId)}
+      role="tab"
+      aria-selected={isActive}
+      tabindex={isActive ? 0 : -1}
       class="px-3 py-1.5 text-xs rounded-lg transition-colors flex items-center gap-1.5 relative
         {isActive
           ? 'bg-accent-fill text-accent-fg'
           : 'text-muted hover:bg-surface-hover border border-line'}"
       title={isDiverged ? 'Has per-channel override (diverged from global)' : 'Same as global'}
+      aria-label="{isDiverged ? 'Diverged. ' : ''}{integrationNames.get(intId) || providerLabel(provider)}"
     >
-      <span class="text-[10px] font-mono opacity-80">{providerIcon(provider)}</span>
+      <span class="text-[10px] font-mono opacity-80" aria-hidden="true">{providerIcon(provider)}</span>
       <span class="truncate max-w-[120px]">{integrationNames.get(intId) || providerLabel(provider)}</span>
       {#if isDiverged}
-        <span class="w-1.5 h-1.5 rounded-full bg-viz-like" title="Diverged from global"></span>
+        <!-- state is on the button's aria-label now; the dot is decoration -->
+        <span class="w-1.5 h-1.5 rounded-full bg-viz-like" aria-hidden="true"></span>
       {/if}
       {#if onRemoveIntegration}
         <span

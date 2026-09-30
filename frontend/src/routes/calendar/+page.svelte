@@ -419,7 +419,9 @@
 </script>
 
 <div class="page-enter space-y-6">
-  <div class="flex items-center justify-between">
+  <!-- v25 F5: `flex-wrap` + responsive gap. The h2 (~165px) plus two buttons
+       measured ~350px against the ~312px available at a 360px viewport. -->
+  <div class="flex items-center justify-between flex-wrap gap-2">
     <h2 class="text-xl font-semibold">Content Calendar</h2>
     <div class="flex gap-2">
       <button
@@ -452,16 +454,16 @@
   />
 
   {#if selected.size > 0}
-    <div class="flex items-center gap-3 bg-accent-fill/10 border border-accent/30 rounded-lg px-4 py-2">
+    <div class="flex items-center gap-3 bg-accent-fill/10 border border-accent/30 rounded-lg px-4 py-2 flex-wrap">
       <span class="text-sm text-accent-strong">{selected.size} selected</span>
       <button onclick={() => showBulkSchedule = !showBulkSchedule} disabled={bulkProcessing} class="px-3 py-1 text-xs bg-accent-fill hover:bg-accent-fill-hover rounded disabled:opacity-50">Reschedule</button>
       <button onclick={bulkDelete} disabled={bulkProcessing} class="px-3 py-1 text-xs bg-error hover:bg-error/90 rounded disabled:opacity-50">Delete</button>
-      <button onclick={() => selected = new Set()} class="ml-auto text-xs text-muted hover:text-content">Clear</button>
+      <button onclick={() => selected = new Set()} class="sm:ml-auto text-xs text-muted hover:text-content">Clear</button>
     </div>
     {#if showBulkSchedule}
-      <div class="flex items-center gap-2 bg-background-input border border-line rounded-lg p-3">
-        <input type="date" bind:value={bulkScheduleDate} class="px-2 py-1 bg-surface border border-line rounded text-sm text-content-secondary" />
-        <input type="time" bind:value={bulkScheduleTime} class="px-2 py-1 bg-surface border border-line rounded text-sm text-content-secondary" />
+      <div class="flex items-center gap-2 bg-background-input border border-line rounded-lg p-3 flex-wrap">
+        <input type="date" aria-label="Bulk reschedule date" bind:value={bulkScheduleDate} class="px-2 py-1 bg-surface border border-line rounded text-sm text-content-secondary" />
+        <input type="time" aria-label="Bulk reschedule time" bind:value={bulkScheduleTime} class="px-2 py-1 bg-surface border border-line rounded text-sm text-content-secondary" />
         <button onclick={bulkReschedule} disabled={bulkProcessing || !bulkScheduleDate} class="px-3 py-1 bg-accent-fill hover:bg-accent-fill-hover rounded text-xs disabled:opacity-50">Apply</button>
       </div>
     {/if}

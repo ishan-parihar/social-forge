@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { focusTrap } from '$lib/ui/focus-trap';
   import { tick } from "svelte";
   import { mediaApi, type MediaItem } from "$lib/api/media";
   import MediaGrid from "./MediaGrid.svelte";
@@ -86,14 +87,15 @@
     aria-modal="true"
     aria-label="Choose from Library"
     tabindex="-1"
-    class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+    class="fixed inset-0 z-50 flex items-center justify-center bg-overlay backdrop-blur-sm p-4"
     onclick={handleBackdropClick}
     onkeydown={handleKeydown}
+    use:focusTrap
   >
     <div
       bind:this={dialogEl}
       tabindex="-1"
-      class="bg-surface border border-line rounded-xl w-full max-w-3xl max-h-[80vh] flex flex-col shadow-2xl"
+      class="bg-surface border border-line rounded-xl w-full max-w-3xl max-h-[80vh] flex flex-col shadow-lg"
     >
       <div class="flex items-center justify-between px-5 py-4 border-b border-line">
         <h3 class="text-base font-semibold text-content">Choose from Library</h3>

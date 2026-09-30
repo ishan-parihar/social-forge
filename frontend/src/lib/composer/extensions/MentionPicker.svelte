@@ -148,17 +148,49 @@
     document.addEventListener('keydown', handleKeydown, true);
     return () => document.removeEventListener('keydown', handleKeydown, true);
   });
+
+  // v25 F5: aria-activedescendant on the editor.
+  // The mention list is the textbook activedescendant pattern: focus MUST stay
+  // in the caret or typing breaks, so the options can never receive it. But
+  // nothing announced which option the arrow keys had moved to — the popup
+  // updated silently and Enter picked something the user could not see
+  // highlighted. Pointing the editor's own aria-activedescendant at the
+  // selected option is what makes the existing key handling perceivable.
+  // Attributes are removed on close so the editor is not left claiming an
+  // expanded combobox when no popup is showing.
+  $effect(() => {
+    const dom = editor?.view?.dom as HTMLElement | undefined;
+    if (!dom) return;
+    const active = open ? results[selectedIndex] : undefined;
+    if (active) {
+      dom.setAttribute('role', 'combobox');
+      dom.setAttribute('aria-autocomplete', 'list');
+      dom.setAttribute('aria-expanded', 'true');
+      dom.setAttribute('aria-controls', 'mention-listbox');
+      dom.setAttribute('aria-activedescendant', `mention-opt-${active.id}`);
+    } else {
+      for (const a of ['role', 'aria-autocomplete', 'aria-expanded', 'aria-controls', 'aria-activedescendant']) {
+        dom.removeAttribute(a);
+      }
+    }
+  });
 </script>
 
 {#if open && (results.length > 0 || loading)}
   <div
-    class="fixed z-[100] bg-surface border border-line rounded-lg shadow-xl max-h-60 overflow-y-auto min-w-[16rem]"
+    class="fixed z-[100] bg-surface border border-line rounded-lg shadow-lg max-h-60 overflow-y-auto w-[min(16rem,calc(100vw-2rem))]"
     style="left: {popupX}px; top: {popupY}px;"
     role="listbox"
+    id="mention-listbox"
     aria-label="Mention suggestions"
+    aria-busy={loading}
   >
     {#if loading}
-      <div class="px-3 py-2 text-xs text-muted">Searching...</div>
+      <!-- v25 F5: role=status. The roving selection below is driven from the
+           editor (focus must stay in the caret to keep typing), so the whole
+           popup's state has to be announced — this was the one piece of the
+           interaction with no channel to AT at all. -->
+      <div class="px-3 py-2 text-xs text-muted" role="status">Searching...</div>
     {:else}
       {#each results as result, i (result.id + i)}
         <button
@@ -167,6 +199,7 @@
           onmouseenter={() => selectedIndex = i}
           class="w-full flex items-center gap-2 px-3 py-2 text-left text-sm transition-colors {i === selectedIndex ? 'bg-surface-hover' : ''}"
           role="option"
+          id={`mention-opt-${result.id}`}
           aria-selected={i === selectedIndex}
         >
           {#if result.image}
