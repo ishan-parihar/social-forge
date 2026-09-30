@@ -87,9 +87,10 @@ used for the X/Twitter GraphQL API (`Cargo.toml:74-80`). The `=` prefix is delib
 `reqwest` gets blocked without JA3/JA4 emulation. **AGENTS.md §9.1 forbids upgrading to
 `rc.29+`** — breaking API changes landed in `rc.24`…`rc.31`. See §5.
 
-**`toon-format` 0.4.6** — vendored into [`crates/toon-helper`](../../crates/toon-helper)
-for AXI-compliant TOON output (`Cargo.toml:141`). Pinned at the `0.4` minor; `0.5.0` exists
-upstream and is a semver-major bump for a local path crate.
+**`toon-format` 0.4.6** — direct dependency for AXI-compliant TOON output
+(`Cargo.toml:147`); the `crates/toon-helper` path crate that used to wrap it is gone,
+its three functions now live in `src/cli/run.rs`. Pinned at the `0.4` minor; `0.5.0` exists
+upstream and is a semver-major bump.
 
 **`glass_pumpkin` 1.10.0 / `grammers-crypto` 0.7.0** — the Telegram MTProto transport
 (`Cargo.toml:87-91`). These are transitive, not direct, dependencies; they are recorded here
@@ -148,7 +149,7 @@ of a feature phase (plan §9).
 |---|---|---|
 | `wreq` =6.0.0-rc.23 | `6.0.0-rc.24` … `6.0.0-rc.31` | No stable release exists. **rc.29+ is breaking — do not bump.** |
 | `wreq-util` =3.0.0-rc.10 | `3.0.0-rc.11` … `3.0.0-rc.14` | No stable release exists. |
-| `toon-format` 0.4.6 | `0.5.0` | Semver-major for the local `toon-helper` wrapper. |
+| `toon-format` 0.4.6 | `0.5.0` | Semver-major; breaks the `encode_default` call in `src/cli/run.rs`. |
 | `grammers-crypto` 0.7.0 | `0.10.0` | Prerequisite for removing `vendor/core2` (§4). |
 | `glass_pumpkin` 1.10.0 | `1.9.1` newest non-yanked; `2.0.0-rc0` available | **1.10.0 is itself yanked** — see F-1. |
 

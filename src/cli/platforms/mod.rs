@@ -31,7 +31,8 @@ pub mod tags;
 pub mod analytics;
 
 use serde::Serialize;
-use toon_helper::{self, truncate_json_strings};
+
+use super::run::{format_text, truncate_json_strings};
 
 /// Maximum chars for string values in list outputs (AXI §3: truncation).
 const LIST_TRUNCATE_CHARS: usize = 500;
@@ -45,12 +46,12 @@ pub fn emit_result<T: Serialize>(result: Result<T, String>) -> anyhow::Result<()
             let val = serde_json::to_value(&v).unwrap_or_default();
             // AXI §3: truncate string fields in list-like outputs
             let truncated = truncate_json_strings(&val, LIST_TRUNCATE_CHARS);
-            println!("{}", toon_helper::format_text(&truncated, "toon"));
+            println!("{}", format_text(&truncated, "toon"));
             Ok(())
         }
         Err(e) => {
             let err = serde_json::json!({"error": e, "hint": "Run `social-forge doctor` to check provider health."});
-            println!("{}", toon_helper::format_text(&err, "toon"));
+            println!("{}", format_text(&err, "toon"));
             std::process::exit(2);
         }
     }

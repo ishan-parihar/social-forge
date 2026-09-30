@@ -13,24 +13,68 @@ use crate::social::registry::ProviderRegistry;
 
 use super::{Cli, Command, ConfigAction, CommentAction, DmAction, AutomationAction, MediaAction, PostsAction};
 use crate::social::TargetInfo;
-use toon_helper::{self, truncate_json_strings};
 use crate::db::models::Integration;
+
+// ── TOON Output (AXI §1/§3) ───────────────────────────────────
+// Formerly the `toon-helper` crate: three functions, one call site each.
+// A workspace member for this much code cost more than it carried.
+
+/// TOON-encode a value for AI-agent token-efficiency, falling back to
+/// compact JSON if the encoder errors.
+pub(crate) fn toon_encode<T: serde::Serialize>(value: &T) -> String {
+    toon_format::encode_default(value)
+        .unwrap_or_else(|_| serde_json::to_string(value).unwrap_or_default())
+}
+
+/// Serialize to the requested format ("toon" | "json"). TOON is the default
+/// for ~40% token savings (AXI §1).
+pub(crate) fn format_text<T: serde::Serialize>(value: &T, format: &str) -> String {
+    if format == "json" {
+        serde_json::to_string_pretty(value).unwrap_or_default()
+    } else {
+        toon_encode(value)
+    }
+}
+
+/// AXI §3: Recursively truncate long string fields to `max_chars`, appending
+/// a total-length indicator so the agent knows the field was clipped.
+pub(crate) fn truncate_json_strings(value: &serde_json::Value, max_chars: usize) -> serde_json::Value {
+    match value {
+        serde_json::Value::Object(map) => serde_json::Value::Object(
+            map.iter()
+                .map(|(k, v)| (k.clone(), truncate_json_strings(v, max_chars)))
+                .collect(),
+        ),
+        serde_json::Value::Array(arr) => serde_json::Value::Array(
+            arr.iter().map(|v| truncate_json_strings(v, max_chars)).collect(),
+        ),
+        serde_json::Value::String(s) if s.len() > max_chars => {
+            let total = s.len();
+            let truncated: String = s.chars().take(max_chars).collect();
+            serde_json::json!(format!(
+                "{}... (truncated, {} chars total)",
+                truncated, total
+            ))
+        }
+        other => other.clone(),
+    }
+}
 
 // ── Output Helpers ───────────────────────────────────────────
 
 pub(crate) fn output_json(value: &serde_json::Value) {
-    println!("{}", toon_helper::format_text(value, "toon"));
+    println!("{}", format_text(value, "toon"));
 }
 
 pub(crate) fn output_error(msg: &str) -> anyhow::Result<()> {
     let err = serde_json::json!({"error": msg});
-    println!("{}", toon_helper::format_text(&err, "toon"));
+    println!("{}", format_text(&err, "toon"));
     std::process::exit(2);
 }
 
 pub(crate) fn output_error_with_hint(msg: &str, hint: &str) -> ! {
     let err = serde_json::json!({"error": msg, "help": hint});
-    println!("{}", toon_helper::format_text(&err, "toon"));
+    println!("{}", format_text(&err, "toon"));
     std::process::exit(2);
 }
 
@@ -2064,5 +2108,32 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
         Command::Notifications { action } => crate::cli::platforms::notifications::handle(action, &state).await,
         Command::Tags { action } => crate::cli::platforms::tags::handle(action, &state).await,
         Command::Analytics { action } => crate::cli::platforms::analytics::handle(action, &state).await,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // The 500-char clip is the one behaviour agents depend on but cannot
+    // observe from the value alone, so it gets a check.
+    #[test]
+    fn truncate_marks_clipped_fields_with_total_length() {
+        let val = serde_json::json!({
+            "body": "a".repeat(600),
+            "title": "short",
+            "nested": {"inner": "b".repeat(700)},
+        });
+        let out = truncate_json_strings(&val, 500);
+        assert_eq!(out["body"].as_str().unwrap(), format!("{}... (truncated, 600 chars total)", "a".repeat(500)));
+        assert_eq!(out["title"], "short");
+        assert!(out["nested"]["inner"].as_str().unwrap().ends_with("(truncated, 700 chars total)"));
+    }
+
+    #[test]
+    fn format_text_switches_between_toon_and_json() {
+        let val = serde_json::json!({"key": "value"});
+        assert!(format_text(&val, "json").starts_with('{'));
+        assert!(!format_text(&val, "toon").starts_with('{'));
     }
 }

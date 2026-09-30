@@ -141,8 +141,10 @@ feed-rs = "2.1"
 # When frontend/build/ doesn't exist, rust-embed produces an empty set (no panic).
 rust-embed = { version = "8", features = ["include-exclude"] }
 
-# AXI S1: Token-efficient TOON output
-toon-helper = { path = "crates/toon-helper" }
+# AXI §1: Token-efficient TOON output. Was wrapped in a crates/toon-helper
+# path crate; inlined into src/cli/run.rs when that member was dropped.
+# Pinned at the 0.4 minor — 0.5.0 is a semver-major (see docs/planning/VENDOR_PINS.md).
+toon-format = { version = "0.4", default-features = false }
 
 [patch.crates-io]
 # core2 0.4.0 was yanked from crates.io, but glass_pumpkin 1.6 (transitive
@@ -151,6 +153,3 @@ toon-helper = { path = "crates/toon-helper" }
 # which in std contexts is identical to std::error::Error. This local stub
 # re-exports the std types so the build unblocks.
 core2 = { path = "vendor/core2" }
-
-
-toon-helper = { path = "crates/toon-helper" }
