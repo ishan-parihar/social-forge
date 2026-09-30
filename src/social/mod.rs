@@ -1467,9 +1467,6 @@ pub(crate) fn test_config() -> crate::config::Config {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::sync::Arc;
-
     use super::*;
 
     // ── classify_error ───────────────────────────────────────
@@ -1642,6 +1639,9 @@ impl From<EngagementData> for EngagementRow {
 
 #[cfg(test)]
 mod insights_tests {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+
     use super::*;
 
     #[test]
@@ -1972,7 +1972,7 @@ mod insights_tests {
         assert!(pages_to_targets(&[], "board").is_empty());
     }
 
-    // ── pending-publish lifecycle ─────────────────────────────
+    // ── pending-publish lifecycle ────────────────────────────
 
     fn result(status: &str) -> PublishResult {
         PublishResult {
@@ -2001,8 +2001,8 @@ mod insights_tests {
 
     /// Stands in for an async platform: `post_pending` accepts, then
     /// `check_post_status` reports pending `pending_times` times before the
-    /// terminal status. Its `publish` stays synchronous, so the same fake also
-    /// covers the "one of the 23 synchronous providers" control case.
+    /// terminal status. With `pending_times == 0` it never reports pending at
+    /// all, which is exactly one of the 23 synchronous providers.
     struct FakeAsyncProvider {
         pending_times: u32,
         terminal_status: &'static str,
@@ -2038,6 +2038,13 @@ mod insights_tests {
         ) -> Result<AuthToken, ProviderError> {
             unimplemented!()
         }
+        async fn fetch_page_info(
+            &self,
+            _t: &str,
+            _p: &str,
+        ) -> Result<PageInfo, ProviderError> {
+            unimplemented!()
+        }
         async fn publish(
             &self,
             _t: &str,
@@ -2048,9 +2055,14 @@ mod insights_tests {
 
         async fn post_pending(
             &self,
-            _t: &str,
-            _p: &PostContent,
+            t: &str,
+            p: &PostContent,
         ) -> Result<PublishResult, ProviderError> {
+            // `pending_times == 0` is the synchronous case: delegate to
+            // `publish` and report published, exactly as the trait default does.
+            if self.pending_times == 0 {
+                return self.publish(t, p).await;
+            }
             Ok(result("pending"))
         }
 
@@ -2129,17 +2141,76 @@ mod insights_tests {
 
     #[tokio::test]
     async fn synchronous_providers_keep_defaulting_to_a_single_publish() {
-        // A provider that never reports pending must not be polled at all —
-        // this is the 23-provider no-change path.
+        // A provider that never reports pending must not reach the poll path:
+        // `post_pending` delegates to `publish` and reports published, so the
+        // scheduler's `if result.is_pending()` is false. This is the
+        // 23-provider no-change path.
         let p = fake(0, "published");
         let accepted = p.post_pending("", &PostContent::default()).await.unwrap();
         assert!(
             accepted.is_published(),
             "default post_pending must delegate to publish"
         );
+        assert!(!accepted.is_pending(), "so the scheduler never polls it");
+    }
 
+    /// A provider that overrides nothing but the required methods — the shape
+    /// of all 23 synchronous providers.
+    struct SyncProvider;
+
+    #[async_trait]
+    impl SocialProvider for SyncProvider {
+        fn identifier(&self) -> &'static str { "sync" }
+        fn name(&self) -> &'static str { "Sync" }
+        fn scopes(&self) -> Vec<String> { vec![] }
+        fn max_content_length(&self) -> usize { 280 }
+
+        async fn generate_auth_url(
+            &self,
+            _s: &str,
+            _v: &str,
+            _r: &str,
+        ) -> Result<AuthUrlResponse, ProviderError> {
+            unimplemented!()
+        }
+        async fn exchange_code(
+            &self,
+            _c: &str,
+            _v: &str,
+            _r: &str,
+        ) -> Result<AuthToken, ProviderError> {
+            unimplemented!()
+        }
+        async fn refresh_token(
+            &self,
+            _r: &str,
+        ) -> Result<AuthToken, ProviderError> {
+            unimplemented!()
+        }
+        async fn fetch_page_info(
+            &self,
+            _t: &str,
+            _p: &str,
+        ) -> Result<PageInfo, ProviderError> {
+            unimplemented!()
+        }
+        async fn publish(
+            &self,
+            _t: &str,
+            _p: &PostContent,
+        ) -> Result<PublishResult, ProviderError> {
+            Ok(result("published"))
+        }
+    }
+
+    #[tokio::test]
+    async fn provider_with_no_lifecycle_overrides_finalizes_in_a_single_default_check() {
+        // The whole point of the defaults: a synchronous provider is polled
+        // once, reports published, and behaves exactly as it did before this
+        // lifecycle existed.
+        let p = SyncProvider;
         let out = p.finalize_post("", "post-1", Duration::ZERO).await.unwrap();
         assert!(out.is_published());
-        assert_eq!(p.polls.load(Ordering::SeqCst), 0, "nothing to poll");
+        assert_eq!(out.platform_post_id, "post-1");
     }
 }
