@@ -561,6 +561,11 @@ pub enum ConfigAction {
     },
     /// List all configured values (redacts secrets)
     List,
+    /// Reset the single-user WebUI password (APP_PASSWORD in ~/.social-forge/.env)
+    ResetPassword {
+        /// New password. Omit to generate a strong random one (printed once).
+        password: Option<String>,
+    },
 }
 
 // ─── X (Twitter) ────────────────────────────────────────────────────────────

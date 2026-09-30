@@ -159,7 +159,9 @@ impl Config {
                     p
                 } else {
                     let generated = generate_random_password(32);
-                    persist_app_password(&generated);
+                    if let Err(e) = persist_app_password(&generated) {
+                        tracing::warn!("Failed to persist APP_PASSWORD: {e}");
+                    }
                     // Do NOT log the password value — it would leak into
                     // container logs, journald, shell history, etc. Point
                     // the user at the persisted file instead.
@@ -358,7 +360,7 @@ fn opt(key: &str) -> Option<String> {
 }
 
 /// Generate a random URL-safe password of the given length.
-fn generate_random_password(len: usize) -> String {
+pub(crate) fn generate_random_password(len: usize) -> String {
     use rand::Rng;
     const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ\
                              abcdefghijklmnopqrstuvwxyz\
@@ -374,12 +376,12 @@ fn generate_random_password(len: usize) -> String {
 
 /// Persist `APP_PASSWORD=<pw>` to `~/.social-forge/.env`, creating
 /// the directory if needed. Idempotent — replaces any existing line.
-fn persist_app_password(password: &str) {
+///
+/// Returns the write error instead of only warning so callers that
+/// report the outcome to a human (e.g. the CLI) can fail loudly.
+pub(crate) fn persist_app_password(password: &str) -> anyhow::Result<std::path::PathBuf> {
     let dir = config_dir();
-    if let Err(e) = std::fs::create_dir_all(&dir) {
-        tracing::warn!("Failed to create {}: {e}", dir.display());
-        return;
-    }
+    std::fs::create_dir_all(&dir)?;
     let env_path = dir.join(".env");
     let existing = std::fs::read_to_string(&env_path).unwrap_or_default();
     let mut lines: Vec<String> = existing
@@ -389,7 +391,6 @@ fn persist_app_password(password: &str) {
         .collect();
     lines.push(format!("APP_PASSWORD={password}"));
     let body = lines.join("\n") + "\n";
-    if let Err(e) = std::fs::write(&env_path, body) {
-        tracing::warn!("Failed to write {}: {e}", env_path.display());
-    }
+    std::fs::write(&env_path, body)?;
+    Ok(env_path)
 }

@@ -1028,49 +1028,64 @@ async fn handle_connect_all_with_state(state: &AppState) -> anyhow::Result<()> {
 
 // ── Config: Manage ~/.social-forge/.env ──────────────────────
 
+fn set_env_value(env_path: &std::path::Path, key_upper: &str, value: &str) -> anyhow::Result<()> {
+    let content = if env_path.exists() {
+        std::fs::read_to_string(env_path)?
+    } else {
+        String::new()
+    };
+
+    let new_line = format!("{key_upper}={value}");
+    let prefix = format!("{key_upper}=");
+    let commented_prefix = format!("# {prefix}");
+    let hashed_prefix = format!("#{key_upper}=");
+
+    let mut found = false;
+    let new_content: String = content
+        .lines()
+        .map(|line| {
+            let trimmed = line.trim();
+            if trimmed.starts_with(&prefix)
+                || trimmed.starts_with(&commented_prefix)
+                || trimmed.starts_with(&hashed_prefix)
+            {
+                found = true;
+                new_line.clone()
+            } else {
+                line.to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    if found {
+        std::fs::write(env_path, &new_content)?;
+    } else {
+        let mut to_write = new_content;
+        if !to_write.ends_with('\n') {
+            to_write.push('\n');
+        }
+        to_write.push_str(&new_line);
+        to_write.push('\n');
+        std::fs::write(env_path, &to_write)?;
+    }
+    Ok(())
+}
+
 fn handle_config(action: ConfigAction) -> anyhow::Result<()> {
     crate::config::load_dotenv();
     let dir = crate::config::config_dir();
     std::fs::create_dir_all(&dir)?;
     let env_path = dir.join(".env");
 
+    // `Config::from_env` derives the session secret from APP_PASSWORD when
+    // JWT_SECRET is unset, so a reset invalidates every existing session cookie.
+    let jwt_secret_set = std::env::var("JWT_SECRET").is_ok_and(|v| !v.is_empty());
+
     match action {
         ConfigAction::Set { key, value } => {
-            // Read existing content
-            let content = if env_path.exists() {
-                std::fs::read_to_string(&env_path)?
-            } else {
-                String::new()
-            };
-
             let key_upper = key.to_uppercase();
-            let new_line = format!("{key_upper}={value}");
-
-            // Check if key already exists and replace it
-            let mut found = false;
-            let new_content: String = content.lines().map(|line| {
-                let trimmed = line.trim();
-                if trimmed.starts_with(&format!("{key_upper}=")) ||
-                   trimmed.starts_with(&format!("# {key_upper}=")) ||
-                   trimmed.starts_with(&format!("#{key_upper}=")) {
-                    found = true;
-                    new_line.clone()
-                } else {
-                    line.to_string()
-                }
-            }).collect::<Vec<_>>().join("\n");
-
-            if found {
-                std::fs::write(&env_path, &new_content)?;
-            } else {
-                let mut to_write = new_content;
-                if !to_write.ends_with('\n') {
-                    to_write.push('\n');
-                }
-                to_write.push_str(&new_line);
-                to_write.push('\n');
-                std::fs::write(&env_path, &to_write)?;
-            }
+            set_env_value(&env_path, &key_upper, &value)?;
 
             output_json(&serde_json::json!({
                 "status": "set",
@@ -1111,6 +1126,29 @@ fn handle_config(action: ConfigAction) -> anyhow::Result<()> {
                     }));
                 }
             }
+        }
+        ConfigAction::ResetPassword { password } => {
+            let generated = password.as_deref().map_or(true, |p| p.is_empty());
+            let new_pw = match password.filter(|p| !p.is_empty()) {
+                Some(p) => p,
+                None => crate::config::generate_random_password(32),
+            };
+            if new_pw.len() < 8 {
+                return output_error("Password must be at least 8 characters.");
+            }
+            let written = crate::config::persist_app_password(&new_pw)?;
+            let mut out = serde_json::json!({
+                "status": "reset",
+                "key": "APP_PASSWORD",
+                "path": written.display().to_string(),
+                "generated": generated,
+                "sessions_invalidated": !jwt_secret_set,
+                "message": "Password updated. Restart social-forge to apply.",
+            });
+            if generated {
+                out["password"] = serde_json::json!(new_pw);
+            }
+            output_json(&out);
         }
         ConfigAction::List => {
             // Read from .env file to show all keys (without loading into env)
