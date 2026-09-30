@@ -215,7 +215,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/comments", axum::routing::get(comments::list))
         .route("/api/comments/{id}/resolve", axum::routing::post(comments::resolve))
         .route("/api/comments/{id}/reply", axum::routing::post(comments::reply))
-        .route("/api/media", axum::routing::get(media::list).post(media::upload))
+        .route("/api/media", axum::routing::get(media::list))
         .route("/api/media/{id}", axum::routing::delete(media::delete))
         .route("/api/analytics", axum::routing::get(analytics::get))
         .route("/api/analytics/summary", axum::routing::get(analytics::get_summary))
@@ -287,6 +287,28 @@ pub fn build_router(state: AppState) -> Router {
             auth_middleware,
         ));
 
+    // Upload route lives outside the global 10 MB transport cap (applied
+    // below): the handler streams to disk and enforces MAX_FILE_SIZE
+    // (50 MB) incrementally, so a transport cap must not pre-empt it.
+    // Every other protection is re-applied here in the same relative order
+    // (trace > rate-limit > CORS > auth > CSRF), only the size cap is out.
+    let upload_route = Router::new()
+        .route("/api/media", axum::routing::post(media::upload))
+        .layer(middleware::from_fn_with_state(
+            CsrfState { allowed_origin: state.config.frontend_url.clone() },
+            csrf_origin_check,
+        ))
+        .layer(middleware::from_fn_with_state(
+            AuthState {
+                session_secret: state.config.jwt_secret.clone(),
+                db: state.db.clone(),
+            },
+            auth_middleware,
+        ))
+        .layer(cors_layer.clone())
+        .layer(middleware::from_fn(rate_limit::enforce))
+        .layer(TraceLayer::new_for_http());
+
     // Global middleware stack
     let app = Router::new()
         .merge(public_routes)
@@ -301,6 +323,9 @@ pub fn build_router(state: AppState) -> Router {
         .layer(RequestBodyLimitLayer::new(
             10 * 1024 * 1024, // 10 MB limit
         ))
+        // Merged after the transport cap so POST /api/media bypasses it;
+        // the handler enforces its own streaming cap instead.
+        .merge(upload_route)
         .with_state(state);
 
     // ── Frontend serving ──────────────────────────────────────────────────
