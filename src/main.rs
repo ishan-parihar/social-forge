@@ -32,6 +32,76 @@ use social_forge::services::telegram_client::TelegramClientManager;
 use social_forge::social::registry::ProviderRegistry;
 use social_forge::wa::WhaClient;
 
+/// Start the six leader-only background pollers. One call site at boot,
+/// one in the re-election watchdog: a standby that later wins the lease
+/// starts the exact same set, so promotion needs no second spawn list.
+/// Loop bodies are untouched — only the gate moved.
+#[allow(clippy::too_many_arguments)]
+fn spawn_pollers(
+    db: db::PgPool,
+    providers_arc: Arc<ProviderRegistry>,
+    broadcaster: Broadcaster,
+    token_key: Option<[u8; 32]>,
+    config: config::Config,
+    shutdown_tx: &tokio::sync::watch::Sender<bool>,
+) {
+    let scheduler_rx = shutdown_tx.subscribe();
+    scheduler::start_scheduler(
+        db.clone(),
+        providers_arc.clone(),
+        broadcaster.clone(),
+        token_key,
+        scheduler_rx,
+    );
+
+    // ── Start RSS poller ─────────────────────────────────────
+    let rss_rx = shutdown_tx.subscribe();
+    rss::start_rss_poller(
+        db.clone(),
+        providers_arc.clone(),
+        Arc::new(config.clone()),
+        rss_rx,
+    );
+
+    // ── Start analytics cache refresh ─────────────────────────
+    let cache_db = db.clone();
+    let cache_providers = providers_arc.clone();
+    let cache_shutdown = shutdown_tx.subscribe();
+    let cache_token_key = token_key;
+    tokio::spawn(async move {
+        scheduler::run_analytics_cache_refresh(
+            cache_db,
+            cache_providers,
+            cache_token_key,
+            cache_shutdown,
+        )
+        .await;
+    });
+
+    // ── Start feed refresher ────────────────────────────────────
+    let feed_rx = shutdown_tx.subscribe();
+    social_forge::feed::start_feed_refresher(
+        db.clone(),
+        providers_arc.clone(),
+        broadcaster.clone(),
+        token_key,
+        feed_rx,
+    );
+
+    // ── Start streak reset checker ────────────────────────────
+    let streak_rx = shutdown_tx.subscribe();
+    scheduler::start_streak_reset(db.clone(), streak_rx);
+
+    // ── Start plug runner (outbound post-publish automations) ──
+    let plug_rx = shutdown_tx.subscribe();
+    social_forge::services::plugs::start_plug_runner(
+        db.clone(),
+        providers_arc.clone(),
+        token_key,
+        plug_rx,
+    );
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // Install rustls crypto provider for TLS
@@ -97,7 +167,8 @@ async fn main() -> anyhow::Result<()> {
     let leader_lease = social_forge::lease::try_acquire_leader(&db)
         .await
         .context("Failed to acquire scheduler lease")?;
-    let is_leader = leader_lease.is_some();
+    // `is_leader` is decided inside the gate below from the lease slot, so a
+    // standby can be promoted later without restarting.
 
     // ── Realtime broadcaster ──────────────────────────────────
     let broadcaster = Broadcaster::new();
@@ -197,73 +268,75 @@ async fn main() -> anyhow::Result<()> {
 
     // ── Start scheduler ───────────────────────────────────────
     // The six pollers below are leader-only. Loop bodies are untouched —
-    // this is the single gate that decides who runs them.
+    // this is the single gate that decides who runs them. A standby that
+    // later wins the lease starts the identical set via the watchdog, so
+    // promotion needs no second spawn list.
     let (shutdown_tx, _) = tokio::sync::watch::channel(false);
-    if is_leader {
-        let scheduler_rx = shutdown_tx.subscribe();
-        scheduler::start_scheduler(
-            db.clone(),
-            providers_arc.clone(),
-            broadcaster.clone(),
-            token_key,
-            scheduler_rx,
-        );
-
-        // ── Start RSS poller ─────────────────────────────────────
-        let rss_rx = shutdown_tx.subscribe();
-        rss::start_rss_poller(
-            db.clone(),
-            providers_arc.clone(),
-            Arc::new(config.clone()),
-            rss_rx,
-        );
-
-        // ── Start analytics cache refresh ─────────────────────────
-        let cache_db = db.clone();
-        let cache_providers = providers_arc.clone();
-        let cache_shutdown = shutdown_tx.subscribe();
-        let cache_token_key = token_key;
-        tokio::spawn(async move {
-            scheduler::run_analytics_cache_refresh(
-                cache_db,
-                cache_providers,
-                cache_token_key,
-                cache_shutdown,
-            )
-            .await;
-        });
-
-        // ── Start feed refresher ────────────────────────────────────
-        let feed_rx = shutdown_tx.subscribe();
-        social_forge::feed::start_feed_refresher(
-            db.clone(),
-            providers_arc.clone(),
-            broadcaster.clone(),
-            token_key,
-            feed_rx,
-        );
-
-        // ── Start streak reset checker ────────────────────────────
-        let streak_rx = shutdown_tx.subscribe();
-        scheduler::start_streak_reset(db.clone(), streak_rx);
-
-        // ── Start plug runner (outbound post-publish automations) ──
-        let plug_rx = shutdown_tx.subscribe();
-        social_forge::services::plugs::start_plug_runner(
-            db.clone(),
-            providers_arc.clone(),
-            token_key,
-            plug_rx,
-        );
-    } else {
-        tracing::info!(
-            "Standby instance: REST + MCP served, 6 background pollers not started \
-             (another replica holds the scheduler lease)"
-        );
+    let lease_slot: std::sync::Arc<
+        tokio::sync::Mutex<Option<social_forge::lease::LeaderLease>>,
+    > = std::sync::Arc::new(tokio::sync::Mutex::new(leader_lease));
+    {
+        let slot = lease_slot.clone();
+        let already_leader = slot.lock().await.is_some();
+        if already_leader {
+            spawn_pollers(
+                db.clone(),
+                providers_arc.clone(),
+                broadcaster.clone(),
+                token_key,
+                config.clone(),
+                &shutdown_tx,
+            );
+        } else {
+            tracing::info!(
+                "Standby instance: REST + MCP served, 6 background pollers not started \
+                 (another replica holds the scheduler lease) — re-election watchdog running"
+            );
+            let db_w = db.clone();
+            let prov_w = providers_arc.clone();
+            let bc_w = broadcaster.clone();
+            let cfg_w = config.clone();
+            let tx_w = shutdown_tx.clone();
+            tokio::spawn(async move {
+                let mut tick =
+                    tokio::time::interval(std::time::Duration::from_secs(30));
+                tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+                let mut stop = tx_w.subscribe();
+                loop {
+                    tokio::select! {
+                        _ = stop.changed() => break,
+                        _ = tick.tick() => {
+                            let mut g = slot.lock().await;
+                            if g.is_none() {
+                                match social_forge::lease::try_acquire_leader(&db_w).await {
+                                    Ok(Some(lease)) => {
+                                        tracing::info!(
+                                            "Scheduler lease acquired — promoted to leader, starting background pollers"
+                                        );
+                                        *g = Some(lease);
+                                        spawn_pollers(
+                                            db_w.clone(),
+                                            prov_w.clone(),
+                                            bc_w.clone(),
+                                            token_key,
+                                            cfg_w.clone(),
+                                            &tx_w,
+                                        );
+                                        break;
+                                    }
+                                    Ok(None) => {}
+                                    Err(e) => tracing::warn!("Re-election attempt failed: {e}"),
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
     }
-    // The lease is held for the process lifetime: dropping it would release
-    // the advisory lock and let a second replica start polling alongside us.
-    let _leader_lease = leader_lease;
+    // The lease slot lives to the end of main: dropping the LeaderLease
+    // would release the advisory lock and let a second replica start
+    // polling alongside us.
 
     // ── Build HTTP router ─────────────────────────────────────
     let app = api::build_router(state);
