@@ -1,8 +1,10 @@
 <script lang="ts">
   import ProviderIcon from "./ProviderIcon.svelte";
   import ChannelContextMenu from "./ChannelContextMenu.svelte";
+  import Icon from "$lib/ui/Icon.svelte";
   import { integrationsApi, type Integration, type TimeslotEntry } from "$lib/api/integrations";
   import { getAuthType } from "./auth-types";
+  import { channelStatus } from "./channel-status";
   import { toast } from "$lib/stores/toast";
 
   let { integration, timeslots, onDisconnect, onRefresh, onReconnect, onToggleDisable, isRefreshing }: {
@@ -20,6 +22,11 @@
   );
 
   let authType = $derived(getAuthType(integration.provider_identifier));
+
+  // v25 F4: one source of truth for the status chip, shared with the page-level
+  // summary and any future status filter. See ./channel-status.ts for the
+  // precedence rules.
+  let status = $derived(channelStatus(integration));
 
   let authTypeLabel = $derived.by(() => {
     const m = integration.auth_method;
@@ -47,12 +54,6 @@
     }
   });
 
-  // Phase v21: handleRename removed. The function was a stub that called
-  // native prompt() but then did nothing ("Rename not yet implemented").
-  // Removing dead code per YAGNI. When channel rename is actually
-  // implemented, it should use a proper modal + a PUT /api/integrations/{id}
-  // endpoint (which also doesn't exist yet).
-
   function handleCopyId() {
     navigator.clipboard.writeText(integration.id);
   }
@@ -76,12 +77,22 @@
   }
 </script>
 
-<div class="flex items-center gap-3 px-3 py-2.5 hover:bg-surface-hover rounded-lg transition-colors group">
+<!--
+  v25 F4: the row is an <li> because the parent renders these inside a group
+  list. The status is folded into the row's aria-label so a screen reader
+  hears the connection state together with the account name, instead of
+  having to find and read the chip separately.
+-->
+<li
+  class="flex items-center gap-3 px-3 py-2.5 hover:bg-surface-hover rounded-lg transition-colors group"
+  aria-label="{integration.profile_name || integration.provider_name}, {status.label}"
+>
   {#if integration.profile_picture}
     <img src={integration.profile_picture} alt="" class="w-8 h-8 rounded-full object-cover flex-shrink-0" />
   {:else}
     <ProviderIcon provider={integration.provider_identifier} size="sm" />
   {/if}
+
   <div class="flex-1 min-w-0">
     <div class="text-sm truncate flex items-center gap-2">
       {integration.profile_name || integration.provider_name}
@@ -101,25 +112,43 @@
         {integration.provider_name}
       {/if}
     </div>
-  </div>
-  <div class="shrink-0 flex items-center gap-2">
-    {#if integration.disabled}
-      <span class="w-2 h-2 rounded-full bg-error" title="Disabled"></span>
-    {:else if integration.refresh_needed}
-      <div class="flex items-center gap-1.5">
-        <span class="w-2 h-2 rounded-full bg-warning" title="Refresh needed"></span>
-        <span class="text-[10px] text-warning hidden sm:inline">Token needs refresh</span>
-      </div>
-    {:else}
-      <span class="w-2 h-2 rounded-full bg-success" title="Connected"></span>
+
+    <!--
+      F4: the reason a channel is unhealthy is stated in words, not implied by
+      a color. It only renders when there is something to fix; a healthy channel
+      does not need a reassuring sentence on every row.
+    -->
+    {#if status.actionable}
+      <p class="text-xs text-faint truncate mt-0.5">{status.hint}</p>
     {/if}
+  </div>
+
+  <div class="shrink-0 flex items-center gap-2">
+    <!--
+      F4 replaces the 2px dot + `title`. `title` only appears on hover, is
+      unreachable by touch, and gave no hint about the remedy. This is a real
+      chip: colored icon + word, with the full explanation as the accessible
+      title on top of the visible label.
+    -->
+    <span
+      role="status"
+      title={status.hint}
+      class="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[10px] font-medium {status.chip}"
+    >
+      <Icon name={status.icon} class="w-3 h-3" />
+      {status.label}
+    </span>
+    <!-- Below sm the chip is dropped for space, so the icon carries the state
+         and the row's aria-label keeps it available to a screen reader. -->
+    <Icon name={status.icon} class="sm:hidden w-3.5 h-3.5 {status.textClass}" />
+
     <ChannelContextMenu
       integrationId={integration.id}
       integrationName={integration.profile_name || integration.provider_name}
       currentTimeslots={currentTimeslots}
       disabled={integration.disabled}
       isRefreshing={isRefreshing}
-      onRefreshToken={integration.refresh_needed || authType === "oauth" ? () => onRefresh?.(integration.id) : undefined}
+      onRefreshToken={status.actionable || authType === "oauth" ? () => onRefresh?.(integration.id) : undefined}
       onReconnect={onReconnect ? () => onReconnect(integration.id) : undefined}
       onRename={undefined}
       onToggleDisable={handleToggleDisable}
@@ -127,4 +156,4 @@
       onDelete={handleDelete}
     />
   </div>
-</div>
+</li>

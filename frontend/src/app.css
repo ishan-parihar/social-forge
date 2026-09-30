@@ -32,13 +32,20 @@
 :root.dark {
         /* — background layers (darkest → raised) — */
         --bg: #0b0e14;
+        --bg-rgb: 11 14 20;
         --bg-card: #131720;
+        --bg-card-rgb: 19 23 32;
         --bg-hover: #1a1f2e;
+        --bg-hover-rgb: 26 31 46;
         --bg-input: #0d1117;
+        --bg-input-rgb: 13 17 23;
         --bg-sidebar: #0b0e14;
+        --bg-sidebar-rgb: 11 14 20;
         /* — borders — */
         --border: #1e2435;
+        --border-rgb: 30 36 53;
         --border-hover: #2a3045;
+        --border-hover-rgb: 42 48 69;
         /* — text ramp (strongest → faintest) —
            F1 measured every tier against every dark surface (--bg, --bg-card,
            --bg-hover, --bg-input). Both muted and faint clear WCAG AA 4.5:1:
@@ -47,9 +54,13 @@
            second tier was unreadable, and it carries real content (timestamps,
            section labels), not decoration. */
         --text: #e8edf5;
+        --text-rgb: 232 237 245;
         --text-muted: #9aa5b8;
+        --text-muted-rgb: 154 165 184;
         --text-faint: #7a879a;
+        --text-faint-rgb: 122 135 154;
         --text-secondary: #d1d5db;
+        --text-secondary-rgb: 209 213 219;
         /* — accent (the single brand color) —
            F1 splits accent into FILL and FOREGROUND, because one value cannot
            serve both across themes:
@@ -64,6 +75,7 @@
            these are two tokens and not one. */
         --brand: #6164f1;
         --brand-hover: #4f46e5;
+        --brand-hover-rgb: 79 70 229;
         --brand-rgb: 97 100 241;
         --accent: #a5b4fc;        /* brand-300 — 8.23:1 on --bg */
         --accent-strong: #c7d2fe; /* brand-200 — 11.0:1, the hover step */
@@ -73,6 +85,7 @@
            themes: brand-500 clears 4.7:1 on white, so the button reads the
            same in either mode (Postiz reference: one CTA, always legible). */
         --brand-fg: #ffffff;
+        --brand-fg-rgb: 255 255 255;
         /* Soft accent wash for chips/selected rows. */
         --brand-soft: rgb(97 100 241 / 0.14);
         /* v26-2: brand color as RGB triplet for rgb(var(--brand-rgb) / <alpha>) syntax.
@@ -113,7 +126,9 @@
         --shadow-md: 0 4px 12px -2px var(--shadow-color);
         --shadow-lg: 0 8px 24px -4px var(--shadow-color);
         --scrollbar-thumb: #1e2435;
+        --scrollbar-thumb-rgb: 30 36 53;
         --scrollbar-thumb-hover: #2a3045;
+        --scrollbar-thumb-hover-rgb: 42 48 69;
         /* — geometry — */
         --radius: 12px;
         --radius-sm: 6px;
@@ -121,20 +136,29 @@
         --radius-lg: 12px;
         /* — loading — */
         --skeleton-from: #1a1f2e;
+        --skeleton-from-rgb: 26 31 46;
         --skeleton-to: #1e2435;
+        --skeleton-to-rgb: 30 36 53;
 }
 
 /* Light theme */
 :root.light {
         /* — background layers — */
         --bg: #f8fafc;
+        --bg-rgb: 248 250 252;
         --bg-card: #ffffff;
+        --bg-card-rgb: 255 255 255;
         --bg-hover: #f1f5f9;
+        --bg-hover-rgb: 241 245 249;
         --bg-input: #f8fafc;
+        --bg-input-rgb: 248 250 252;
         --bg-sidebar: #f8fafc;
+        --bg-sidebar-rgb: 248 250 252;
         /* — borders — */
         --border: #e2e8f0;
+        --border-rgb: 226 232 240;
         --border-hover: #cbd5e1;
+        --border-hover-rgb: 203 213 225;
         /* — text ramp (strongest → faintest) —
            Same AA measurement as the dark block. In light mode the two tiers
            must step the OTHER way (darker = more contrast), so `faint` is the
@@ -142,18 +166,24 @@
            `muted-dark` was confusing:
              muted 6.92:1   faint 4.61:1 */
         --text: #1e293b;
+        --text-rgb: 30 41 59;
         --text-muted: #475569;
+        --text-muted-rgb: 71 85 105;
         --text-faint: #5d708c;
+        --text-faint-rgb: 93 112 140;
         --text-secondary: #334155;
+        --text-secondary-rgb: 51 65 85;
         /* — accent (fill + foreground) — */
         --brand: #4f46e5;
         --brand-hover: #4338ca;
+        --brand-hover-rgb: 67 56 202;
         --brand-rgb: 79 70 229;
         --accent: #4f46e5;        /* brand-600 — 6.3:1 on #fff, text-safe */
         --accent-strong: #3730a3; /* brand-800 — 9.0:1 on #fff */
         --brand-accent-rgb: 79 70 229;
         --brand-accent-strong-rgb: 55 48 163;
         --brand-fg: #ffffff;
+        --brand-fg-rgb: 255 255 255;
         --brand-soft: rgb(79 70 229 / 0.10);
         /* 4.5:1 is the floor; the wash behind a chip also needs to stay visible
            against --bg-card, so it is a touch stronger than the dark value. */
@@ -192,7 +222,9 @@
         --shadow-md: 0 4px 12px -2px var(--shadow-color);
         --shadow-lg: 0 8px 24px -4px var(--shadow-color);
         --scrollbar-thumb: #cbd5e1;
+        --scrollbar-thumb-rgb: 203 213 225;
         --scrollbar-thumb-hover: #94a3b8;
+        --scrollbar-thumb-hover-rgb: 148 163 184;
         /* — geometry — */
         --radius: 12px;
         --radius-sm: 6px;
@@ -200,7 +232,9 @@
         --radius-lg: 12px;
         /* — loading — */
         --skeleton-from: #f1f5f9;
+        --skeleton-from-rgb: 241 245 249;
         --skeleton-to: #e2e8f0;
+        --skeleton-to-rgb: 226 232 240;
 }
 
 * {

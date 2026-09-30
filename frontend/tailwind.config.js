@@ -25,29 +25,42 @@ export default {
         },
         // Semantic colors — use CSS variables so the theme toggle works.
         // The variables are defined in app.css under :root.dark and :root.light.
-        surface: "var(--bg-card)",
-        "surface-hover": "var(--bg-hover)",
-        background: "var(--bg)",
-        "background-input": "var(--bg-input)",
-        line: "var(--border)",
-        "line-hover": "var(--border-hover)",
-        muted: "var(--text-muted)",
-        content: "var(--text)",
-        "content-secondary": "var(--text-secondary)",
+        //
+        // v25 F4: every entry is a `rgb(var(--x-rgb) / <alpha-value>)` triplet
+        // rather than a bare `var(--x)`. Tailwind 3 can only synthesise an
+        // opacity modifier (`bg-surface/50`) from the triplet form — given a
+        // bare `var(--surface)` it silently emits NOTHING, so the class is a
+        // no-op and the element renders with no background at all. That had
+        // already broken ~60 call sites (bars, hovers, washes) across
+        // composer/calendar/kanban/channels/analytics, including the
+        // analytics channel bars, which rendered as empty tracks in BOTH
+        // themes and read as "no data" rather than "broken class". Fixing it
+        // here repairs every call site without editing the component that
+        // asked for the alpha. The `-rgb` triplets live in app.css next to
+        // their hex, so the two cannot drift.
+        surface: "rgb(var(--bg-card-rgb) / <alpha-value>)",
+        "surface-hover": "rgb(var(--bg-hover-rgb) / <alpha-value>)",
+        background: "rgb(var(--bg-rgb) / <alpha-value>)",
+        "background-input": "rgb(var(--bg-input-rgb) / <alpha-value>)",
+        line: "rgb(var(--border-rgb) / <alpha-value>)",
+        "line-hover": "rgb(var(--border-hover-rgb) / <alpha-value>)",
+        muted: "rgb(var(--text-muted-rgb) / <alpha-value>)",
+        content: "rgb(var(--text-rgb) / <alpha-value>)",
+        "content-secondary": "rgb(var(--text-secondary-rgb) / <alpha-value>)",
         // v25 F1: `muted-dark` renamed to `faint`. It was always the faintest
         // text tier (it flips value with the theme), so the old name misled.
         // The alias stays one release so no call site breaks.
-        faint: "var(--text-faint)",
-        "muted-dark": "var(--text-faint)",
+        faint: "rgb(var(--text-faint-rgb) / <alpha-value>)",
+        "muted-dark": "rgb(var(--text-faint-rgb) / <alpha-value>)",
         // v25 F1: accent is split into FILL and FOREGROUND, because a single
         // brand value cannot clear 4.5:1 as text in both themes.
         //   accent-fill*       → backgrounds (buttons, bar fills)
         //   accent/accent-strong → text, borders, rings (AA in both themes)
-        accent: "var(--accent)",
-        "accent-strong": "var(--accent-strong)",
-        "accent-fill": "var(--brand)",
-        "accent-fill-hover": "var(--brand-hover)",
-        "accent-fg": "var(--brand-fg)",
+        accent: "rgb(var(--accent-rgb) / <alpha-value>)",
+        "accent-strong": "rgb(var(--accent-strong-rgb) / <alpha-value>)",
+        "accent-fill": "rgb(var(--brand-rgb) / <alpha-value>)",
+        "accent-fill-hover": "rgb(var(--brand-hover-rgb) / <alpha-value>)",
+        "accent-fg": "rgb(var(--brand-fg-rgb) / <alpha-value>)",
         "accent-soft": "var(--brand-soft)",
         // v22 Phase 3: semantic status colors (success/warning/error/info).
         // Exposed as Tailwind colors so components can use `bg-success/20`,

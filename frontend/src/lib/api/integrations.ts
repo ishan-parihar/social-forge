@@ -8,6 +8,16 @@ export interface Integration {
   posting_times?: { time: number }[];
   auth_method?: string;
   root_internal_id?: string;
+  /**
+   * v25 F4: ISO-8601 expiry of the stored access token, when the API sends
+   * one. Optional on purpose — `IntegrationPublic` in src/db/models.rs does
+   * NOT expose `token_expires_at` yet, so today this is always undefined and
+   * channelStatus() falls back to connected / refresh-needed. It is declared
+   * ahead of the backend so enabling the "expiring" status is a one-line Rust
+   * change rather than a second frontend pass. See
+   * lib/channels/channel-status.ts.
+   */
+  token_expires_at?: string | null;
 }
 
 export interface TimeslotEntry {
