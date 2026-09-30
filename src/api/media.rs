@@ -20,13 +20,14 @@
 
 use axum::{
     body::{Body, HttpBody},
-    extract::{Path, State},
+    extract::{DefaultBodyLimit, FromRequest, Path, Request, State},
     http::{header, Response},
     Json,
 };
-use axum_extra::extract::Multipart;
-use std::path::PathBuf;
+use axum_extra::extract::{multipart, Multipart};
+use std::path::{Path as FsPath, PathBuf};
 use std::sync::Arc;
+use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
 
 use crate::auth::middleware::AuthenticatedUser;
@@ -44,6 +45,13 @@ pub struct ListMediaQuery {
 }
 
 const MAX_FILE_SIZE: u64 = 50 * 1024 * 1024; // 50 MB
+
+/// Head bytes kept in memory while the body streams to disk. Enough for every
+/// magic-byte signature we accept (longest is MP4/WebP at 12) and for the JPEG
+/// SOF marker `detect_image_dimensions` walks to.
+/// ponytail: fixed 64 KiB ceiling; raise it only if a real image ever comes
+/// back with no dimensions because its EXIF block pushes SOF past it.
+const SNIFF_HEAD_BYTES: usize = 64 * 1024;
 
 /// Allowed MIME types for uploads. Anything else is rejected before
 /// the file is written to disk or stored in the DB.
@@ -480,40 +488,162 @@ fn warn_once(msg: &str) {
 }
 
 /// POST /api/media — upload a file
+///
+/// Streams the multipart field to disk chunk by chunk. The 50 MB cap is
+/// enforced against the running total, so an oversized upload is rejected
+/// mid-stream instead of after the whole body has been buffered. Only the
+/// first [`SNIFF_HEAD_BYTES`] are retained for magic-byte sniffing and image
+/// dimension detection; the rest never sits in memory.
 pub async fn upload(
     State(state): State<AppState>,
     auth: AuthenticatedUser,
-    mut multipart: Multipart,
+    mut req: Request,
 ) -> Result<Json<MediaPublic>, AppError> {
-    let field = multipart
+    // `Multipart::from_request` wraps the body in axum's *default* 2 MB
+    // limit, which would cap every upload long before the 50 MB cap below.
+    // Disable it so `MAX_FILE_SIZE` is the single authority on size — one
+    // rule, one error message, enforced incrementally by `stream_to_disk`
+    // rather than by a body wrapper that trips with its own 413.
+    DefaultBodyLimit::disable().apply(&mut req);
+    let mut multipart = Multipart::from_request(req, &state)
+        .await
+        .map_err(|e| AppError::BadRequest(format!("Invalid multipart: {}", e.body_text())))?;
+
+    let mut field = multipart
         .next_field()
         .await
         .map_err(|e| AppError::BadRequest(format!("Invalid multipart: {e}")))?
         .ok_or_else(|| AppError::BadRequest("No file uploaded".into()))?;
 
-    let original_name = field
-        .file_name()
-        .unwrap_or("unnamed")
-        .to_string();
+    let original_name = field.file_name().unwrap_or("unnamed").to_string();
 
     let declared_mime = field
         .content_type()
         .unwrap_or("application/octet-stream")
         .to_string();
 
-    let data = field.bytes().await.map_err(|e| AppError::BadRequest(format!("Read error: {e}")))?;
+    // Save to local filesystem
+    let file_id = Uuid::new_v4();
+    let ext = FsPath::new(&original_name)
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("bin");
+    let filename = format!("{file_id}.{ext}");
+    let upload_dir = FsPath::new(&state.config.media_dir);
+    tokio::fs::create_dir_all(upload_dir).await.map_err(|e| {
+        AppError::Internal(format!("Failed to create upload dir: {e}"))
+    })?;
 
-    if data.len() as u64 > MAX_FILE_SIZE {
-        return Err(AppError::BadRequest("File too large (max 50 MB)".into()));
-    }
+    let filepath = upload_dir.join(&filename);
+    let (size, head) = stream_to_disk(&mut field, &filepath, MAX_FILE_SIZE).await?;
 
     // ── MIME validation: allowlist + magic-byte sniff ────────
     // The client-supplied Content-Type is never trusted alone.
     // We sniff the actual file bytes and require the sniffed MIME to
     // (a) be in the allowlist and (b) match the declared Content-Type
     // when one was supplied. Mismatches are rejected with 400.
-    let sniffed_mime = sniff_mime(&data);
-    let mime_type = match (declared_mime.as_str(), sniffed_mime) {
+    //
+    // `head` carries the first SNIFF_HEAD_BYTES of the stream — enough for
+    // every signature in `sniff_mime` and for the JPEG SOF scan.
+    let mime_type = match resolve_mime(&declared_mime, &head) {
+        Ok(mime) => mime,
+        Err(err) => {
+            // Nothing legitimate references this object key (no DB row), so
+            // the partial bytes are dead — drop them rather than orphaning a
+            // file on disk.
+            let _ = tokio::fs::remove_file(&filepath).await;
+            return Err(err);
+        }
+    };
+
+    // Get dimensions for images
+    let (width, height) = if mime_type.starts_with("image/") {
+        detect_image_dimensions(&head)
+    } else {
+        (None, None)
+    };
+
+    let entry = queries::create_media(
+        &state.db,
+        auth.user_id,
+        &original_name,
+        &filename,
+        &mime_type,
+        size as i64,
+        width,
+        height,
+    )
+    .await?;
+
+    Ok(Json(MediaPublic::from(entry)))
+}
+
+/// Drain `field` into `dest`, aborting with "File too large" the moment the
+/// running total passes `max_bytes`.
+///
+/// Returns `(bytes_written, head)` where `head` is up to
+/// [`SNIFF_HEAD_BYTES`] of leading bytes kept for sniffing. The sink is closed
+/// on every failure path, and the partial file is removed — a rejected upload
+/// never leaves bytes on disk.
+async fn stream_to_disk(
+    field: &mut multipart::Field,
+    dest: &FsPath,
+    max_bytes: u64,
+) -> Result<(u64, Vec<u8>), AppError> {
+    let mut file = tokio::fs::File::create(dest).await.map_err(|e| {
+        AppError::Internal(format!("Failed to write file: {e}"))
+    })?;
+
+    let mut size: u64 = 0;
+    let mut head: Vec<u8> = Vec::with_capacity(SNIFF_HEAD_BYTES);
+
+    while let Some(chunk) = field
+        .chunk()
+        .await
+        .map_err(|e| AppError::BadRequest(format!("Read error: {e}")))?
+    {
+        // Check before writing: the cap must hold during the stream, so the
+        // over-limit chunk is never persisted either.
+        size += chunk.len() as u64;
+        if size > max_bytes {
+            return Err(abort_partial(dest, file).await);
+        }
+
+        if head.len() < SNIFF_HEAD_BYTES {
+            let take = (SNIFF_HEAD_BYTES - head.len()).min(chunk.len());
+            head.extend_from_slice(&chunk[..take]);
+        }
+
+        if let Err(e) = file.write_all(&chunk).await {
+            return Err(AppError::Internal(format!("Failed to write file: {e}")));
+        }
+    }
+
+    file.flush()
+        .await
+        .map_err(|e| AppError::Internal(format!("Failed to write file: {e}")))?;
+
+    Ok((size, head))
+}
+
+/// Close `file` and delete whatever it already wrote, returning the
+/// caller-facing error. Used when the cap trips mid-stream.
+async fn abort_partial(dest: &FsPath, file: tokio::fs::File) -> AppError {
+    drop(file);
+    let _ = tokio::fs::remove_file(dest).await;
+    AppError::BadRequest(format!("File too large (max {} MB)", MAX_FILE_SIZE / (1024 * 1024)))
+}
+
+/// Resolve the stored MIME type from the client's declared type and the real
+/// bytes. Unchanged rules, extracted so both the handler and its tests share
+/// one implementation.
+///
+/// The client-supplied Content-Type is never trusted alone: the sniffed MIME
+/// must (a) be in the allowlist and (b) match the declared Content-Type when
+/// one was supplied. Mismatches are rejected.
+fn resolve_mime(declared: &str, head: &[u8]) -> Result<String, AppError> {
+    let sniffed_mime = sniff_mime(head);
+    match (declared, sniffed_mime) {
         // Sniffer recognised the bytes — trust it (it can't be lied to).
         (declared, Some(sniffed)) if ALLOWED_MIMES.contains(&sniffed.as_str()) => {
             // If the client declared something else, reject as suspicious.
@@ -525,61 +655,19 @@ pub async fn upload(
                     "MIME mismatch: declared `{declared}` but bytes look like `{sniffed}`"
                 )));
             }
-            sniffed
+            Ok(sniffed)
         }
         // Sniffer didn't recognise the bytes — fall back to declared
         // only if it's in the allowlist (still rejects text/html etc.).
-        (declared, None) if ALLOWED_MIMES.contains(&declared) => declared.to_string(),
+        (declared, None) if ALLOWED_MIMES.contains(&declared) => Ok(declared.to_string()),
         // Either sniffer said "not allowed" or declared is not in allowlist.
-        (_, Some(sniffed)) => {
-            return Err(AppError::BadRequest(format!(
-                "Unsupported file type: `{sniffed}`. Allowed: PNG, JPEG, WebP, GIF, MP4, QuickTime."
-            )));
-        }
-        (_, None) => {
-            return Err(AppError::BadRequest(
-                "Unrecognised file type. Allowed: PNG, JPEG, WebP, GIF, MP4, QuickTime.".into(),
-            ));
-        }
-    };
-
-    // Save to local filesystem
-    let file_id = Uuid::new_v4();
-    let ext = std::path::Path::new(&original_name)
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("bin");
-    let filename = format!("{file_id}.{ext}");
-    let upload_dir = std::path::Path::new(&state.config.media_dir);
-    tokio::fs::create_dir_all(upload_dir).await.map_err(|e| {
-        AppError::Internal(format!("Failed to create upload dir: {e}"))
-    })?;
-
-    let filepath = upload_dir.join(&filename);
-    tokio::fs::write(&filepath, &data).await.map_err(|e| {
-        AppError::Internal(format!("Failed to write file: {e}"))
-    })?;
-
-    // Get dimensions for images
-    let (width, height) = if mime_type.starts_with("image/") {
-        detect_image_dimensions(&data)
-    } else {
-        (None, None)
-    };
-
-    let entry = queries::create_media(
-        &state.db,
-        auth.user_id,
-        &original_name,
-        &filename,
-        &mime_type,
-        data.len() as i64,
-        width,
-        height,
-    )
-    .await?;
-
-    Ok(Json(MediaPublic::from(entry)))
+        (_, Some(sniffed)) => Err(AppError::BadRequest(format!(
+            "Unsupported file type: `{sniffed}`. Allowed: PNG, JPEG, WebP, GIF, MP4, QuickTime."
+        ))),
+        (_, None) => Err(AppError::BadRequest(
+            "Unrecognised file type. Allowed: PNG, JPEG, WebP, GIF, MP4, QuickTime.".into(),
+        )),
+    }
 }
 
 /// GET /api/media — list user's media uploads
@@ -979,5 +1067,168 @@ mod tests {
             .enable_all()
             .build()
             .expect("runtime")
+    }
+
+    // ─── Streaming upload path ─────────────────────────────────
+    // The handler needs a live `AppState` + Postgres, so these tests drive the
+    // same three steps it does — `Multipart` → `stream_to_disk` → `resolve_mime`
+    // — against a real multipart request body. What they pin: the cap trips
+    // mid-stream and leaves nothing on disk, a large-but-legal body lands
+    // byte-for-byte while only a bounded head stays in memory, and small
+    // uploads resolve exactly as the buffered version resolved them.
+
+    const BOUNDARY: &str = "socialforge-test-boundary";
+    const CHUNK: usize = 1024 * 1024;
+
+    use axum::body::Bytes;
+
+    /// A multipart request whose single `video/mp4` file field is exactly
+    /// `total_bytes` long, delivered in 1 MiB frames so the test process never
+    /// materialises the whole body either.
+    fn mp4_upload_request(total_bytes: usize) -> Request {
+        use axum::http::header::CONTENT_TYPE;
+        use futures::stream;
+
+        let mut payload = vec![0u8; CHUNK];
+        // `ftyp` box at offset 4 — what sniff_mime keys on.
+        payload[..12].copy_from_slice(&[0, 0, 0, 32, b'f', b't', b'y', b'p', b'i', b's', b'o', b'm']);
+        let payload = Bytes::from(payload);
+
+        let preamble = Bytes::from(format!(
+            "--{BOUNDARY}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"clip.mp4\"\r\nContent-Type: video/mp4\r\n\r\n"
+        ));
+        let epilogue = Bytes::from(format!("\r\n--{BOUNDARY}--\r\n"));
+
+        // One `Bytes` per frame, all sharing the same refcounted payload — a
+        // 48 MiB body without the test holding 48 MiB of data. The tail frame
+        // is trimmed so the field is exactly `total_bytes`.
+        let full = total_bytes / CHUNK;
+        let tail = total_bytes % CHUNK;
+        let mut frames: Vec<Bytes> = Vec::with_capacity(full + usize::from(tail > 0) + 2);
+        frames.push(preamble);
+        frames.extend(std::iter::repeat_n(payload.clone(), full));
+        if tail > 0 {
+            frames.push(payload.slice(..tail));
+        }
+        frames.push(epilogue);
+
+        let body = stream::iter(
+            frames
+                .into_iter()
+                .map(|b| -> std::result::Result<Bytes, std::io::Error> { Ok(b) }),
+        );
+
+        Request::builder()
+            .header(CONTENT_TYPE, format!("multipart/form-data; boundary={BOUNDARY}"))
+            .body(Body::from_stream(body))
+            .unwrap()
+    }
+
+    fn scratch_dir(tag: &str) -> PathBuf {
+        let dir =
+            std::env::temp_dir().join(format!("social-forge-upload-{tag}-{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    /// The handler's open-multipart step, with the same body-limit override it
+    /// applies. The `Multipart` is returned alongside the field because the
+    /// handler holds it for the duration of the stream.
+    async fn open_mp4_field(total_bytes: usize) -> (Multipart, multipart::Field) {
+        let mut req = mp4_upload_request(total_bytes);
+        DefaultBodyLimit::disable().apply(&mut req);
+        let mut multipart = Multipart::from_request(req, &()).await.unwrap();
+        let field = multipart.next_field().await.unwrap().unwrap();
+        (multipart, field)
+    }
+
+    #[tokio::test]
+    async fn cap_rejects_oversized_upload_mid_stream_and_leaves_no_file() {
+        let dest = scratch_dir("oversize").join("out.mp4");
+
+        let (_multipart, mut field) =
+            open_mp4_field(MAX_FILE_SIZE as usize + CHUNK).await;
+        let err = stream_to_disk(&mut field, &dest, MAX_FILE_SIZE)
+            .await
+            .unwrap_err();
+
+        assert!(
+            matches!(&err, AppError::BadRequest(m) if m == "File too large (max 50 MB)"),
+            "{err:?}"
+        );
+        assert!(!dest.exists(), "rejected upload left bytes on disk");
+
+        std::fs::remove_dir_all(dest.parent().unwrap()).ok();
+    }
+
+    #[tokio::test]
+    async fn large_upload_streams_to_disk_without_buffering_whole_file() {
+        // 48 MiB — under the 50 MiB cap, far over any buffer we'd want.
+        let total = 48 * CHUNK;
+        let dest = scratch_dir("large").join("out.mp4");
+
+        let (_multipart, mut field) = open_mp4_field(total).await;
+        let (size, head) = stream_to_disk(&mut field, &dest, MAX_FILE_SIZE).await.unwrap();
+        let mime = resolve_mime("video/mp4", &head).unwrap();
+
+        assert_eq!(size, total as u64, "byte count written");
+        assert_eq!(
+            std::fs::metadata(&dest).unwrap().len(),
+            total as u64,
+            "bytes on disk"
+        );
+        assert_eq!(mime, "video/mp4", "magic bytes survive the head-only sniff");
+        // The point of the change: memory held is bounded by the head window,
+        // not by the file.
+        assert_eq!(head.len(), SNIFF_HEAD_BYTES);
+        assert_eq!(
+            &head[..12],
+            &[0, 0, 0, 32, b'f', b't', b'y', b'p', b'i', b's', b'o', b'm']
+        );
+
+        std::fs::remove_dir_all(dest.parent().unwrap()).ok();
+    }
+
+    #[tokio::test]
+    async fn small_upload_keeps_whole_file_as_head_and_resolves_as_before() {
+        let total = 4096;
+        let dest = scratch_dir("small").join("out.mp4");
+
+        let (_multipart, mut field) = open_mp4_field(total).await;
+        let (size, head) = stream_to_disk(&mut field, &dest, MAX_FILE_SIZE).await.unwrap();
+        let mime = resolve_mime("video/mp4", &head).unwrap();
+
+        assert_eq!(size, total as u64);
+        assert_eq!(head.len(), total, "a small upload is all head");
+        assert_eq!(std::fs::metadata(&dest).unwrap().len(), total as u64);
+        assert_eq!(mime, "video/mp4");
+
+        std::fs::remove_dir_all(dest.parent().unwrap()).ok();
+    }
+
+    #[test]
+    fn resolve_mime_rejects_undeclared_types_and_mismatched_declaration() {
+        let html = b"<script>alert(1)</script>";
+        // Not on the allowlist → rejected, whatever the bytes say.
+        assert!(matches!(
+            resolve_mime("text/html", html),
+            Err(AppError::BadRequest(_))
+        ));
+        assert!(matches!(
+            resolve_mime("application/x-msdownload", html),
+            Err(AppError::BadRequest(_))
+        ));
+        // Declared MP4 over PNG bytes: the sniffer wins, the lie is rejected.
+        let png = [137, 80, 78, 71, 13, 10, 26, 10, 0, 0];
+        assert!(matches!(
+            resolve_mime("video/mp4", &png),
+            Err(AppError::BadRequest(m)) if m.contains("MIME mismatch")
+        ));
+        // Unrecognised bytes under an allowlisted declaration: unchanged
+        // fallback — still stored as the declared type, still nosniffed at
+        // serve time.
+        assert_eq!(resolve_mime("image/png", &[]).unwrap(), "image/png");
+        // Sniffed type with no usable declaration: the sniff decides.
+        assert_eq!(resolve_mime("application/octet-stream", &png).unwrap(), "image/png");
     }
 }
