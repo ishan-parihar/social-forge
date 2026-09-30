@@ -98,6 +98,11 @@
       if (selectedId) loadMessages(selectedId);
       load();
     }));
+    // Server-side "you missed events" signal — same refetch as dm_received.
+    dmsUnsubscribers.push(realtime.on('lagged', () => {
+      if (selectedId) loadMessages(selectedId);
+      load();
+    }));
   });
 
   onDestroy(() => {

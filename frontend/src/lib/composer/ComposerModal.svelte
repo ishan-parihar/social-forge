@@ -339,6 +339,9 @@
     // Realtime: refresh integrations if connected/disconnected in another tab.
     unsubscribers.push(realtime.on('integration_connected', loadIntegrations));
     unsubscribers.push(realtime.on('integration_disconnected', loadIntegrations));
+    // Server-side "you missed events" signal — the channel selector is the
+    // composer's most staled list, so refetch that.
+    unsubscribers.push(realtime.on('lagged', loadIntegrations));
 
     // Composer keyboard shortcuts (U-4): Cmd+Enter=post, Cmd+S=save draft.
     function onKeydown(e: KeyboardEvent) {

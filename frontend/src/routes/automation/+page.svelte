@@ -172,7 +172,7 @@
 
   onMount(() => {
     load();
-    for (const evt of ['post_published', 'post_failed']) {
+    for (const evt of ['post_published', 'post_failed', 'lagged']) {
       autoUnsubscribers.push(realtime.on(evt, () => load()));
     }
   });

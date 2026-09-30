@@ -347,8 +347,11 @@
       attemptedImport = true;
       await load();
     }
-    // Auto-refresh on realtime events
-    const events = ['post_published', 'post_created', 'lagged'];
+    // Auto-refresh on realtime events. `feed:new_posts` / `feed:engagement`
+    // come from the background feed refresher (src/feed/mod.rs) — the feed
+    // view is derived from that cache, so these are the events it actually
+    // needs; `post_published`/`post_created` cover our own publishes.
+    const events = ['post_published', 'post_created', 'feed:new_posts', 'feed:engagement', 'lagged'];
     for (const evt of events) {
       feedUnsubscribers.push(realtime.on(evt, () => load()));
     }

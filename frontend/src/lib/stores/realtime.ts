@@ -43,6 +43,9 @@ class RealtimeClient {
                                 "post_published",
                                 "post_failed",
                                 "post_deleted",
+                                // Post edited after creation (content, media,
+                                // schedule edits via the services layer).
+                                "post_updated",
                                 // v22 Phase 1 (BUG #7): kanban stage changes now
                                 // broadcast so multi-tab sync works.
                                 "post_stage_changed",
@@ -55,6 +58,18 @@ class RealtimeClient {
                                 "notification_new",
                                 "comment_received",
                                 "dm_received",
+                                // v22 Phase 6: campaign CRUD — the campaigns pages
+                                // and the kanban campaign filter were already
+                                // subscribing to these; they only went dead because
+                                // the names were never registered here.
+                                "campaign_created",
+                                "campaign_updated",
+                                "campaign_deleted",
+                                // Background feed refresher (src/feed/mod.rs):
+                                // new external posts pulled in, and engagement /
+                                // comment counters refreshed on its own cadence.
+                                "feed:new_posts",
+                                "feed:engagement",
                         ].forEach((type) => {
                                 this.es!.addEventListener(type, (e: MessageEvent) => {
                                         try {

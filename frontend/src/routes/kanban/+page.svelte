@@ -112,7 +112,7 @@
     // v22 Phase 6: also subscribe to campaign_created/updated/deleted.
     const events = [
       'post_created', 'post_scheduled', 'post_published', 'post_failed',
-      'post_deleted', 'post_stage_changed', 'lagged',
+      'post_deleted', 'post_updated', 'post_stage_changed', 'lagged',
       'campaign_created', 'campaign_updated', 'campaign_deleted',
     ];
     for (const evt of events) {

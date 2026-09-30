@@ -109,6 +109,8 @@
   onMount(() => {
     loadTags();
     tagsUnsubscribers.push(realtime.on('post_created', () => loadTags()));
+    // Server-side "you missed events" signal — refetch stale tag counts.
+    tagsUnsubscribers.push(realtime.on('lagged', () => loadTags()));
   });
 
   onDestroy(() => {

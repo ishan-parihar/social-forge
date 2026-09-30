@@ -223,6 +223,20 @@ pub async fn send_dm(
         .await
         .map_err(AppError::from)?;
 
+    // Broadcast so the /dms view (and any other open tab) reloads the
+    // conversation list / thread after a message goes out.
+    //
+    // Only the send path broadcasts. DMs are fetched live from the provider
+    // on every GET (there is no DM cache table and no background DM poller),
+    // so emitting from `list_conversations` / `get_messages` would loop: the
+    // /dms page's `dm_received` handler re-fetches exactly those endpoints.
+    // `send_dm` is a one-shot, non-idempotent state change — the only place a
+    // DM event can originate without that feedback loop.
+    state.broadcast.send(
+        "dm_received",
+        &serde_json::json!({ "id": result.platform_post_id }),
+    );
+
     Ok(Json(SendDmResponse {
         message_id: result.platform_post_id,
         status: result.status,

@@ -80,7 +80,7 @@
     // Refresh when a new comment arrives (realtime SSE event) — this is the
     // event the backend actually broadcasts. The previous subscription to
     // `post_published`/`post_created` never fired for comment activity.
-    for (const evt of ['comment_received', 'post_published']) {
+    for (const evt of ['comment_received', 'post_published', 'lagged']) {
       commentsUnsubscribers.push(realtime.on(evt, () => load()));
     }
   });

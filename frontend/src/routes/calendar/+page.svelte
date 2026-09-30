@@ -383,7 +383,7 @@
     // v24-2: fetch campaigns for the campaign filter dropdown.
     const campRes = await campaignsApi.list();
     if (campRes.data) allCampaigns = campRes.data;
-    const events = ['post_created', 'post_scheduled', 'post_published', 'post_failed', 'post_deleted', 'post_stage_changed', 'lagged'];
+    const events = ['post_created', 'post_scheduled', 'post_published', 'post_failed', 'post_deleted', 'post_updated', 'post_stage_changed', 'lagged'];
     for (const evt of events) {
       calUnsubscribers.push(realtime.on(evt, () => refresh()));
     }

@@ -42,7 +42,9 @@
 
   onMount(() => {
     load();
-    const events = ['post_published', 'post_failed', 'post_deleted'];
+    // `post_updated` covers edits made in another tab; `lagged` is the
+    // server's synthetic "you missed events" signal (refetch stale view).
+    const events = ['post_published', 'post_failed', 'post_deleted', 'post_updated', 'lagged'];
     for (const evt of events) {
       unsubscribers.push(realtime.on(evt, () => load()));
     }

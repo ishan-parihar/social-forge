@@ -53,11 +53,17 @@
     return centralProviderLabel(provider);
   }
 
-  // Connectable providers. Deliberately a superset of what the backend has
-  // registered: a provider still needs to be offered here before the user has
-  // supplied the credentials that make it register. Tier membership is defined
-  // in src/social/tier.rs (v25 plan §1): kick/vk/whop/lemmy were removed
-  // outright, farcaster is Tier-3 (archive).
+  // Connectable providers — the same 26 the backend registry always registers
+  // (`ProviderRegistry::new` in src/social/registry.rs, unconditional since
+  // registration was decoupled from credentials). This literal previously
+  // drifted: `youtube` was missing here while the registry, `$lib/providers`
+  // and the onboarding modal all listed it, so the grid showed 25 cards for a
+  // 26-platform product with no way to connect YouTube. Keep it in step with
+  // the registry; the identifier spelling (notably `google_my_business` with an
+  // underscore) is the registry's, not `PROVIDERS`' hyphenated alias.
+  //
+  // Tier membership is defined in src/social/tier.rs (v25 plan §1):
+  // kick/vk/whop/lemmy were removed outright, farcaster is Tier-3 (archive).
   //
   // Tier-3 archive providers are hidden by default. To surface one, start the
   // backend with ENABLE_ARCHIVE_PROVIDERS=1 AND add the id below. The flag is a
@@ -72,7 +78,8 @@
     "linkedin", "linkedin-page",
     "google",
     "reddit", "bluesky", "discord", "pinterest",
-    "tiktok", "mastodon",
+    "tiktok", "youtube",
+    "mastodon",
     "google_my_business", "slack",
     "telegram-bot", "telegram-user",
     "whatsapp",
@@ -250,7 +257,9 @@
     // connect method, including the OAuth pop-up. The pop-up used to run a 1s
     // setInterval to guess whether it had closed and then re-fetch the whole
     // integration list on a timer.
-    const events = ['integration_connected', 'integration_disconnected'];
+    // `lagged` is the server's synthetic "you missed events" signal — refetch
+    // the list so a backgrounded tab doesn't show stale connections.
+    const events = ['integration_connected', 'integration_disconnected', 'lagged'];
     for (const evt of events) {
       chanUnsubscribers.push(realtime.on(evt, () => load()));
     }

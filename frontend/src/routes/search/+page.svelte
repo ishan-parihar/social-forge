@@ -185,6 +185,11 @@
       loadAccounts();
       load();
     }));
+    // Server-side "you missed events" signal — refetch the stale results.
+    unsubscribers.push(realtime.on('lagged', () => {
+      loadAccounts();
+      load();
+    }));
   });
 
   onDestroy(() => {
