@@ -134,6 +134,8 @@ impl PublishResult {
         matches!(
             self.status.to_ascii_lowercase().as_str(),
             "published" | "succeeded" | "success" | "complete" | "completed" | "ready" | "live" | "done"
+            // `comment` results use "sent" for the same thing.
+            | "sent"
         )
     }
 
@@ -1987,7 +1989,7 @@ mod insights_tests {
             assert!(!result(s).is_terminal(), "{s} should not be terminal");
             assert!(!result(s).is_published(), "{s} should not be published");
         }
-        for s in ["published", "succeeded", "COMPLETED", "live"] {
+        for s in ["published", "succeeded", "COMPLETED", "live", "sent"] {
             assert!(result(s).is_published(), "{s} should be published");
             assert!(result(s).is_terminal());
         }
