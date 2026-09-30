@@ -25,9 +25,6 @@ const MAX_RETRIES: u32 = 3;
 /// Max posts processed per scheduler tick
 const DUE_POSTS_LIMIT: i64 = 50;
 
-/// Backoff delay between retries (seconds)
-const RETRY_BACKOFF_SECS: u64 = 10;
-
 /// How far ahead to consider a token "expired" and refresh preemptively
 const TOKEN_REFRESH_BUFFER_SECS: i64 = 300; // 5 minutes
 
@@ -590,8 +587,8 @@ async fn drain_publish_outbox(db: &PgPool) -> Result<(), sqlx::Error> {
     // Claim pending rows (FOR UPDATE SKIP LOCKED so multiple instances
     // don't double-process).
     let pending: Vec<PublishOutboxRow> = sqlx::query_as(
-        r#"SELECT id, post_id, idempotency_key, platform_post_id, platform_post_url,
-                  published_at, error_message, attempts, next_attempt_at, created_at, completed_at
+        r#"SELECT id, post_id, platform_post_id, platform_post_url,
+                  published_at, error_message
            FROM publish_outbox
            WHERE completed_at IS NULL
              AND next_attempt_at <= NOW()
@@ -709,15 +706,10 @@ async fn drain_publish_outbox(db: &PgPool) -> Result<(), sqlx::Error> {
 struct PublishOutboxRow {
     id: Uuid,
     post_id: Uuid,
-    idempotency_key: Uuid,
     platform_post_id: Option<String>,
     platform_post_url: Option<String>,
     published_at: Option<chrono::DateTime<chrono::Utc>>,
     error_message: Option<String>,
-    attempts: i32,
-    next_attempt_at: chrono::DateTime<chrono::Utc>,
-    created_at: chrono::DateTime<chrono::Utc>,
-    completed_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 /// v23-2: Write a publish result to the outbox.

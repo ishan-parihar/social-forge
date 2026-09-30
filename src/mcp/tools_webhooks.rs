@@ -69,7 +69,6 @@ struct WebhookDeliveryRow {
     id: Uuid,
     webhook_id: Uuid,
     event_type: String,
-    payload: serde_json::Value,
     status: String,
     status_code: Option<i32>,
     response_body: Option<String>,
@@ -306,7 +305,7 @@ pub async fn handle_wh_test(
         r#"
         INSERT INTO webhook_deliveries (webhook_id, event_type, payload, status, status_code, response_body, delivered_at)
         VALUES ($1, $2, $3, $4, $5, $6, now())
-        RETURNING id, webhook_id, event_type, payload, status, status_code, response_body, attempted_at, delivered_at
+        RETURNING id, webhook_id, event_type, status, status_code, response_body, attempted_at, delivered_at
         "#,
     )
     .bind(webhook_id)

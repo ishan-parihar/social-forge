@@ -11,14 +11,12 @@ const MEDIUM_API_BASE: &str = "https://api.medium.com/v1";
 
 pub struct MediumProvider {
     client: reqwest::Client,
-    config: Config,
 }
 
 impl MediumProvider {
-    pub fn new(config: &Config) -> Self {
+    pub fn new(_config: &Config) -> Self {
         Self {
             client: reqwest::Client::new(),
-            config: config.clone(),
         }
     }
 

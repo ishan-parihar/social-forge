@@ -96,10 +96,6 @@ impl RedditProvider {
         });
     }
 
-    fn has_cookies(&self) -> bool {
-        self.cookie_string.is_some()
-    }
-
     /// GET request via www.reddit.com with cookie auth
     pub async fn get_www(
         &self,

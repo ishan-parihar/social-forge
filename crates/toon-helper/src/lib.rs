@@ -23,22 +23,6 @@ pub fn format_text<T: Serialize>(value: &T, format: &str) -> String {
     }
 }
 
-/// Truncate a string to max characters with ellipsis.
-///
-/// Used for AXI §3 content truncation in detail views.
-pub fn truncate_str(s: &str, max: usize) -> String {
-    let char_count = s.chars().count();
-    if char_count <= max {
-        s.to_string()
-    } else {
-        let truncated: String = s.chars().take(max).collect();
-        format!(
-            "{}...\n  ... (truncated, {} chars total)",
-            truncated, char_count
-        )
-    }
-}
-
 /// AXI §3: Recursively truncate long string fields in a JSON value.
 ///
 /// Fields exceeding `max_chars` are truncated with a total-length indicator.
@@ -67,14 +51,6 @@ pub fn truncate_json_strings(value: &serde_json::Value, max_chars: usize) -> ser
         }
         other => other.clone(),
     }
-}
-
-/// Print output to stdout in the requested format.
-///
-/// Combined helper for the common pattern of format → println!.
-pub fn print_output<T: Serialize>(format: &str, value: &T) {
-    let text = format_text(value, format);
-    println!("{}", text);
 }
 
 #[cfg(test)]
@@ -111,19 +87,6 @@ mod tests {
     }
 
     #[test]
-    fn test_truncate_str_short() {
-        let result = truncate_str("hello", 10);
-        assert_eq!(result, "hello");
-    }
-
-    #[test]
-    fn test_truncate_str_long() {
-        let result = truncate_str("hello world this is a long string", 10);
-        assert!(result.contains("..."));
-        assert!(result.contains("chars total"));
-    }
-
-    #[test]
     fn test_truncate_json_strings_short() {
         let val = serde_json::json!({"name": "hello", "count": 42});
         let result = truncate_json_strings(&val, 100);
@@ -151,24 +114,5 @@ mod tests {
             .unwrap()
             .contains("truncated"));
         assert!(result["other"][0].as_str().unwrap().contains("truncated"));
-    }
-}
-
-#[cfg(test)]
-mod output_tests {
-    use super::*;
-
-    #[test]
-    fn test_print_output_toon() {
-        let value = serde_json::json!({"name": "test", "count": 42});
-        // print_output writes to stdout, so we just verify it doesn't panic
-        print_output("toon", &value);
-    }
-
-    #[test]
-    fn test_print_output_json() {
-        let value = serde_json::json!({"name": "test", "count": 42});
-        // print_output writes to stdout, so we just verify it doesn't panic
-        print_output("json", &value);
     }
 }

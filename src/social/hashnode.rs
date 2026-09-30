@@ -10,19 +10,13 @@ use crate::config::Config;
 const HASHNODE_API_BASE: &str = "https://api.hashnode.com";
 
 pub struct HashnodeProvider {
-    api_key: String,
     http: reqwest::Client,
 }
 
 impl HashnodeProvider {
-    pub fn new(config: &Config) -> Self {
-        let api_key = config
-            .provider_credentials("hashnode")
-            .map(|(_, key)| key)
-            .unwrap_or_default();
+    pub fn new(_config: &Config) -> Self {
         Self {
             http: reqwest::Client::new(),
-            api_key,
         }
     }
 

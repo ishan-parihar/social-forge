@@ -832,7 +832,6 @@ pub struct XCookieForm {
     pub auth_token: Option<String>,
     pub ct0: Option<String>,
     pub cookie_string: Option<String>,
-    pub submit: Option<String>,
 }
 
 /// GET /api/public/connect/x-cookies — show cookie input form with instructions
@@ -1119,7 +1118,6 @@ pub struct RedditCookieForm {
     pub reddit_session: Option<String>,
     pub token_v2: Option<String>,
     pub cookie_string: Option<String>,
-    pub submit: Option<String>,
 }
 
 /// GET /api/public/connect/reddit-cookies — show cookie input form

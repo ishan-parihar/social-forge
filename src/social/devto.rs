@@ -11,14 +11,12 @@ const DEVTO_API_BASE: &str = "https://dev.to/api";
 
 pub struct DevtoProvider {
     client: reqwest::Client,
-    config: Config,
 }
 
 impl DevtoProvider {
-    pub fn new(config: &Config) -> Self {
+    pub fn new(_config: &Config) -> Self {
         Self {
             client: reqwest::Client::new(),
-            config: config.clone(),
         }
     }
 }

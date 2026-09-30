@@ -89,27 +89,6 @@ pub struct XProvider {
     http: wreq::Client,
     /// Additional cookies beyond auth_token+ct0 (e.g. guest_id, kdt, twid)
     cookie_string: Option<String>,
-    /// Cached X-Client-Transaction-Id generator
-    transaction_generator: Option<XTransactionGenerator>,
-}
-
-/// Generates X-Client-Transaction-Id headers
-struct XTransactionGenerator {
-    client_id: String,
-}
-
-impl XTransactionGenerator {
-    fn new() -> Self {
-        let id = uuid::Uuid::new_v4().to_string().replace('-', "");
-        Self { client_id: id }
-    }
-
-    fn generate(&self, method: &str, path: &str) -> String {
-        use sha2::{Digest, Sha256};
-        let input = format!("{}{}{}", method.to_uppercase(), path, self.client_id);
-        let digest = Sha256::digest(input.as_bytes());
-        format!("{:x}", digest)[..32].to_string()
-    }
 }
 
 impl XProvider {
@@ -146,7 +125,6 @@ impl XProvider {
             client_secret,
             http,
             cookie_string: None,
-            transaction_generator: Some(XTransactionGenerator::new()),
         };
 
         // Priority 1: Env vars (X_AUTH_TOKEN + X_CT0)
@@ -274,16 +252,6 @@ impl XProvider {
         (ct0, cs)
     }
 
-    fn add_tx_header(&self, req: wreq::RequestBuilder, method: &str, url: &str) -> wreq::RequestBuilder {
-        if let Some(ref tx) = self.transaction_generator {
-            let path = url.split('?').next().unwrap_or(url);
-            let tid = tx.generate(method, path);
-            req.header("X-Client-Transaction-Id", &tid)
-        } else {
-            req
-        }
-    }
-
     async fn graphql_get(
         &self,
         query_id: &str,
@@ -397,29 +365,6 @@ impl XProvider {
             .send()
             .await
             .map_err(|e| ProviderError::Api(format!("X v2 DELETE error: {e}")))?;
-        let status = resp.status();
-        let json: serde_json::Value = resp.json().await.map_err(|e| ProviderError::Api(e.to_string()))?;
-        self.check_v2_response(status, &json)
-    }
-
-    async fn v2_form_post(
-        &self,
-        url: &str,
-        access_token: &str,
-        form: &[(&str, &str)],
-    ) -> Result<serde_json::Value, ProviderError> {
-        let body = form.iter().map(|(k, v)| format!("{}={}", urlencoding::encode(k), urlencoding::encode(v)))
-            .collect::<Vec<_>>()
-            .join("&");
-        let resp = self
-            .http
-            .post(url)
-            .header(header::AUTHORIZATION, format!("Bearer {access_token}"))
-            .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-            .body(body)
-            .send()
-            .await
-            .map_err(|e| ProviderError::Api(format!("X v2 form POST error: {e}")))?;
         let status = resp.status();
         let json: serde_json::Value = resp.json().await.map_err(|e| ProviderError::Api(e.to_string()))?;
         self.check_v2_response(status, &json)
@@ -1808,29 +1753,6 @@ impl SocialProvider for XProvider {
 // ════════════════════════════════════════════════════════════════
 
 impl XProvider {
-    /// Helper: dispatch to GraphQL or v2 based on token type.
-    /// GraphQL path is preferred when cookie creds are available.
-    async fn gql_or_v2_get<F>(
-        &self,
-        access_token: &str,
-        gql_op: &str,
-        gql_vars: &serde_json::Value,
-        v2_url: &str,
-        v2_construct: F,
-    ) -> Result<serde_json::Value, ProviderError>
-    where
-        F: FnOnce(serde_json::Value) -> serde_json::Value,
-    {
-        if let Some((_at, _ct0)) = Self::parse_cookie_token(access_token) {
-            let qid = FALLBACK_QUERY_IDS
-                .get(gql_op)
-                .ok_or_else(|| ProviderError::Api(format!("Missing {gql_op} queryId")))?;
-            let result = self.graphql_get(qid, gql_op, gql_vars, access_token).await?;
-            return Ok(v2_construct(result));
-        }
-        self.v2_get(v2_url, access_token).await
-    }
-
     // ── User / Profile ───────────────────────────────────────
 
     pub async fn get_me(

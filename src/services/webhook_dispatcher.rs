@@ -95,7 +95,7 @@ pub async fn dispatch_event(
 ) {
     let webhooks = match sqlx::query_as::<_, WebhookDispatchRow>(
         r#"
-        SELECT id, url, secret, event_types
+        SELECT id, url, secret
         FROM webhooks
         WHERE user_id = $1
           AND is_active = true
@@ -180,5 +180,4 @@ struct WebhookDispatchRow {
     id: Uuid,
     url: String,
     secret: Option<String>,
-    event_types: Vec<String>,
 }
