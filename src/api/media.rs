@@ -572,6 +572,22 @@ pub async fn upload(
         (None, None)
     };
 
+    // Remote backend: the stream above landed on local disk (memory-bounded
+    // by design). Push the completed object to the active backend and drop
+    // the local copy, so serve/delete resolve against the same backend that
+    // holds the bytes. Local backend: no-op, the file is already home.
+    let backend = storage(&state);
+    if backend.backend() != "local" {
+        let bytes = tokio::fs::read(&filepath).await.map_err(|e| {
+            AppError::Internal(format!("Failed to stage upload for remote backend: {e}"))
+        })?;
+        if let Err(e) = backend.store(&filename, &bytes, &mime_type).await {
+            let _ = tokio::fs::remove_file(&filepath).await;
+            return Err(AppError::Internal(format!("Remote backend store failed: {e}")));
+        }
+        let _ = tokio::fs::remove_file(&filepath).await;
+    }
+
     let entry = queries::create_media(
         &state.db,
         auth.user_id,
