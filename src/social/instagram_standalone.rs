@@ -24,6 +24,12 @@ impl InstagramStandaloneProvider {
             http: reqwest::Client::new(),
         }
     }
+
+    /// Instagram Basic Display / Graph insights host (same pinned v21 as the
+    /// Facebook-side providers — do not drift the version independently).
+    fn graph_url(&self) -> &'static str {
+        "https://graph.instagram.com/v21.0"
+    }
 }
 
 #[async_trait]
@@ -325,6 +331,98 @@ impl SocialProvider for InstagramStandaloneProvider {
             "Instagram Standalone does not support page management".into(),
         ))
     }
+
+    /// Account-level insights over a day range. Feeds the dashboard via the
+    /// shared analytics cache refresher.
+    async fn analytics(
+        &self,
+        access_token: &str,
+        _internal_id: &str,
+        days: u32,
+    ) -> Result<Vec<AnalyticsData>, ProviderError> {
+        let ig_id = self.resolve_user_id(access_token).await?;
+
+        let since = chrono::Utc::now()
+            .checked_sub_signed(chrono::Duration::days(days as i64))
+            .unwrap_or_default()
+            .format("%Y-%m-%d")
+            .to_string();
+        let until = chrono::Utc::now().format("%Y-%m-%d").to_string();
+
+        let json = self
+            .get_insights_range(
+                access_token,
+                &ig_id,
+                "reach,views,profile_views,follower_count",
+                "day",
+                Some(&since),
+                Some(&until),
+            )
+            .await?;
+
+        Ok(super::parse_insights_data(&json))
+    }
+
+    /// Per-media insights (lifetime). Graph returns single-value metrics here,
+    /// which `parse_insights_data` turns into one data point per metric.
+    async fn post_analytics(
+        &self,
+        access_token: &str,
+        platform_post_id: &str,
+    ) -> Result<Vec<AnalyticsData>, ProviderError> {
+        let json = self
+            .get_insights_range(
+                access_token,
+                platform_post_id,
+                "reach,views,saved,likes,comments",
+                "lifetime",
+                None,
+                None,
+            )
+            .await?;
+
+        Ok(super::parse_insights_data(&json))
+    }
+
+    /// Merge the media object's own counters with its insights envelope so
+    /// `parse_engagement_data("instagram-standalone", …)` gets one flat shape.
+    async fn get_post_engagement(
+        &self,
+        access_token: &str,
+        platform_post_id: &str,
+    ) -> Result<Option<serde_json::Value>, ProviderError> {
+        let mut detail = self.get_media_detail(access_token, platform_post_id).await?;
+        if detail.get("error").is_some() || detail.get("id").is_none() {
+            return Ok(None);
+        }
+
+        // Insights are best-effort: a metrics scope or metric-level failure
+        // must not drop the counts the media object already gave us.
+        match self
+            .get_insights_range(
+                access_token,
+                platform_post_id,
+                "reach,views,saved",
+                "lifetime",
+                None,
+                None,
+            )
+            .await
+        {
+            Ok(insights) => {
+                if let Some(obj) = detail.as_object_mut() {
+                    for metric in ["reach", "views", "saved"] {
+                        if let Some(v) = super::insight_value(&insights, metric) {
+                            obj.insert(metric.to_string(), serde_json::json!(v));
+                        }
+                    }
+                }
+            }
+            Err(e) => tracing::debug!("IG standalone insights unavailable for {platform_post_id}: {e}"),
+        }
+
+        Ok(Some(detail))
+    }
 }
 
 impl InstagramStandaloneProvider {
@@ -396,6 +494,48 @@ impl InstagramStandaloneProvider {
             ])
             .send()
             .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 429 {
+            Err(ProviderError::RateLimited("Instagram API rate limit".into()))
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let detail = json["error"]["message"]
+                .as_str()
+                .unwrap_or("Instagram API error")
+                .to_string();
+            Err(ProviderError::Api(detail))
+        }
+    }
+
+    /// `/{id}/insights` with an optional `since`/`until` window, so
+    /// `analytics()` can honour the requested day range.
+    pub async fn get_insights_range(
+        &self,
+        access_token: &str,
+        ig_id: &str,
+        metric: &str,
+        period: &str,
+        since: Option<&str>,
+        until: Option<&str>,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let mut params: Vec<(&str, &str)> = vec![
+            ("metric", metric),
+            ("period", period),
+            ("access_token", access_token),
+        ];
+        if let Some(s) = since {
+            params.push(("since", s));
+        }
+        if let Some(u) = until {
+            params.push(("until", u));
+        }
+
+        let url = format!("{}/{}/insights", self.graph_url(), ig_id);
+        let resp = self.http.get(&url).query(&params).send().await?;
         let status = resp.status();
         let json: serde_json::Value = resp.json().await?;
         if status.is_success() {
@@ -573,5 +713,120 @@ impl InstagramStandaloneProvider {
             .as_str()
             .unwrap_or("IN_PROGRESS");
         Ok(status_code.to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::social::test_config;
+
+    fn post_with_images(n: usize) -> PostContent {
+        PostContent {
+            content: "caption".into(),
+            media: (0..n)
+                .map(|i| MediaAttachment {
+                    url: format!("https://example.com/{i}.jpg"),
+                    mime_type: "image/jpeg".into(),
+                    alt: None,
+                    poster_url: None,
+                })
+                .collect(),
+            settings: serde_json::json!({}),
+            in_reply_to: None,
+            idempotency_key: None,
+            delay_minutes: None,
+        }
+    }
+
+    /// Shape the provider hands to `fetch_engagement` after merging the media
+    /// object with its insights envelope.
+    fn merged_media_and_insights() -> serde_json::Value {
+        let mut detail = serde_json::json!({
+            "id": "17900000000000000",
+            "media_type": "IMAGE",
+            "like_count": 42,
+            "comments_count": 12
+        });
+        let insights = serde_json::json!({
+            "data": [
+                { "name": "reach", "period": "lifetime", "values": [{ "value": 300, "end_time": "2026-09-29T00:00:00+0000" }] },
+                { "name": "views", "period": "lifetime", "values": [{ "value": 420, "end_time": "2026-09-29T00:00:00+0000" }] },
+                { "name": "saved", "period": "lifetime", "values": [{ "value": 7, "end_time": "2026-09-29T00:00:00+0000" }] }
+            ]
+        });
+        let obj = detail.as_object_mut().expect("json object");
+        for metric in ["reach", "views", "saved"] {
+            if let Some(v) = super::super::insight_value(&insights, metric) {
+                obj.insert(metric.to_string(), serde_json::json!(v));
+            }
+        }
+        detail
+    }
+
+    #[test]
+    fn test_identifier_uses_hyphenated_slug() {
+        let provider = InstagramStandaloneProvider::new(&test_config());
+        assert_eq!(provider.identifier(), "instagram-standalone");
+    }
+
+    #[test]
+    fn test_graph_url_is_pinned_to_v21() {
+        let provider = InstagramStandaloneProvider::new(&test_config());
+        assert_eq!(provider.graph_url(), "https://graph.instagram.com/v21.0");
+    }
+
+    #[test]
+    fn parse_should_expand_account_insights_into_daily_series() {
+        let raw = serde_json::json!({
+            "data": [{
+                "name": "reach",
+                "period": "day",
+                "values": [
+                    { "value": 300, "end_time": "2026-09-28T00:00:00+0000" },
+                    { "value": 420, "end_time": "2026-09-29T00:00:00+0000" }
+                ]
+            }]
+        });
+        let series = super::super::parse_insights_data(&raw);
+        assert_eq!(series.len(), 1);
+        assert_eq!(series[0].label, "reach");
+        assert_eq!(series[0].data.len(), 2);
+        assert_eq!(series[0].data[1].total, "420");
+    }
+
+    #[test]
+    fn parse_should_expand_lifetime_media_insights_into_one_point_each() {
+        let raw = serde_json::json!({
+            "data": [
+                { "name": "reach", "period": "lifetime", "values": [{ "value": 300, "end_time": "2026-09-29T00:00:00+0000" }] },
+                { "name": "saved", "period": "lifetime", "values": [{ "value": 7, "end_time": "2026-09-29T00:00:00+0000" }] }
+            ]
+        });
+        let series = super::super::parse_insights_data(&raw);
+        assert_eq!(series.len(), 2);
+        assert!(series.iter().all(|s| s.data.len() == 1));
+        assert_eq!(series[1].data[0].total, "7");
+    }
+
+    #[test]
+    fn parse_should_map_merged_media_counts_and_insights() {
+        let e = super::super::parse_engagement_data("instagram-standalone", merged_media_and_insights());
+        assert_eq!(e.likes, 42);
+        assert_eq!(e.comments, 12);
+        assert_eq!(e.saves, 7);
+        assert_eq!(e.views, 420);
+    }
+
+    #[test]
+    fn publish_should_reject_11th_image() {
+        let provider = InstagramStandaloneProvider::new(&test_config());
+        assert!(provider.validate_media(&post_with_images(11)).is_err());
+    }
+
+    #[test]
+    fn publish_should_accept_10_images() {
+        let provider = InstagramStandaloneProvider::new(&test_config());
+        assert!(provider.validate_media(&post_with_images(10)).is_ok());
     }
 }

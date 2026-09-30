@@ -346,28 +346,7 @@ impl SocialProvider for FacebookProvider {
             Some(&until),
         ).await?;
 
-        let mut result = Vec::new();
-        if let Some(data) = json["data"].as_array() {
-            for entry in data {
-                let name = entry["name"].as_str().unwrap_or("unknown").to_string();
-                let mut points = Vec::new();
-                if let Some(values) = entry["values"].as_array() {
-                    for v in values {
-                        points.push(AnalyticsDataPoint {
-                            total: v["value"].as_i64().unwrap_or(0).to_string(),
-                            date: v["end_time"].as_str().unwrap_or("").to_string(),
-                        });
-                    }
-                }
-                result.push(AnalyticsData {
-                    label: name,
-                    data: points,
-                    percentage_change: 0.0,
-                });
-            }
-        }
-
-        Ok(result)
+        Ok(super::parse_insights_data(&json))
     }
 
     async fn post_analytics(
@@ -401,28 +380,7 @@ impl SocialProvider for FacebookProvider {
             }
         }
 
-        let mut result = Vec::new();
-        if let Some(data) = json["data"].as_array() {
-            for entry in data {
-                let name = entry["name"].as_str().unwrap_or("unknown").to_string();
-                let mut points = Vec::new();
-                if let Some(values) = entry["values"].as_array() {
-                    for v in values {
-                        points.push(AnalyticsDataPoint {
-                            total: v["value"].as_i64().unwrap_or(0).to_string(),
-                            date: v["end_time"].as_str().unwrap_or("").to_string(),
-                        });
-                    }
-                }
-                result.push(AnalyticsData {
-                    label: name,
-                    data: points,
-                    percentage_change: 0.0,
-                });
-            }
-        }
-
-        Ok(result)
+        Ok(super::parse_insights_data(&json))
     }
 
     async fn get_recent_posts(
@@ -1184,76 +1142,23 @@ impl FacebookProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::Config;
+    use crate::social::test_config;
 
-    fn test_config() -> Config {
-        Config {
-            database_url: "test".into(),
-            jwt_secret: "test".into(),
-            app_password: "test".into(),
-            app_url: "http://localhost:3000".into(),
-            frontend_url: "http://localhost:4200".into(),
-            x_client_id: Some("test".into()),
-            x_client_secret: Some("test".into()),
-            x_auth_token: None,
-            x_ct0: None,
-            linkedin_client_id: Some("test".into()),
-            linkedin_client_secret: Some("test".into()),
-            bluesky_handle: None,
-            bluesky_app_password: None,
-            facebook_client_id: Some("test".into()),
-            facebook_client_secret: Some("test".into()),
-            instagram_client_id: Some("test".into()),
-            instagram_client_secret: Some("test".into()),
-        threads_app_id: Some("test".into()),
-        threads_app_secret: Some("test".into()),
-            youtube_client_id: Some("test".into()),
-            youtube_client_secret: Some("test".into()),
-            reddit_client_id: Some("test".into()),
-            reddit_client_secret: Some("test".into()),
-            reddit_username: Some("test".into()),
-            reddit_password: Some("test".into()),
-            reddit_access_token: Some("test".into()),
-            reddit_refresh_token: Some("test".into()),
-            discord_client_id: None,
-            discord_client_secret: None,
-            discord_bot_token: None,
-
-            telegram_bot_tokens: None,
-            telegram_session_dir: None,
-            telegram_api_id: None,
-            telegram_api_hash: None,
-            tiktok_client_id: None,
-            tiktok_client_secret: None,
-            medium_access_token: None,
-            devto_api_key: None,
-            pinterest_client_id: None,
-            pinterest_client_secret: None,
-            instagram_app_id: Some("test".into()),
-            instagram_app_secret: Some("test".into()),
-            whatsapp_store_dir: None,
-            slack_client_id: None,
-            slack_client_secret: None,
-            mastodon_client_id: None,
-            mastodon_client_secret: None,
-            mastodon_instance_url: None,
-            hashnode_api_key: None,
-            github_token: None,
-            neynar_api_key: None,
-            token_encryption_key: None,
-            media_dir: "./uploads".into(),
-            stripe_secret_key: None,
-            stripe_webhook_secret: None,
-            stripe_price_free: None,
-            stripe_price_pro_monthly: None,
-            stripe_price_pro_annual: None,
-            stripe_price_business_monthly: None,
-            stripe_price_business_annual: None,
-            llm_endpoint: None,
-            llm_model: None,
-            dub_co_api_key: None,
-            dub_co_workspace: None,
-            strip_links_from_x: false,
+    fn post_with_images(n: usize) -> PostContent {
+        PostContent {
+            content: "hello".into(),
+            media: (0..n)
+                .map(|i| MediaAttachment {
+                    url: format!("https://example.com/{i}.jpg"),
+                    mime_type: "image/jpeg".into(),
+                    alt: None,
+                    poster_url: None,
+                })
+                .collect(),
+            settings: serde_json::json!({}),
+            in_reply_to: None,
+            idempotency_key: None,
+            delay_minutes: None,
         }
     }
 
@@ -1285,11 +1190,55 @@ mod tests {
         let result = provider.generate_auth_url("test_state", "test_verifier", "http://localhost:3000/callback").await;
         let url = result.unwrap().url;
 
-        assert!(url.contains("client_id=test"), "should contain client_id");
+        assert!(url.contains("client_id="), "should contain client_id");
         assert!(url.contains("redirect_uri="), "should contain redirect_uri");
         assert!(url.contains("state=test_state"), "should contain state");
         assert!(url.contains("scope="), "should contain scope");
         assert!(url.contains("response_type=code"), "should contain response_type");
         assert!(url.starts_with("https://www.facebook.com/v21.0/dialog/oauth"));
+    }
+
+    #[test]
+    fn publish_should_reject_11th_image() {
+        let provider = FacebookProvider::new(&test_config());
+        assert!(provider.validate_media(&post_with_images(11)).is_err());
+    }
+
+    #[test]
+    fn publish_should_accept_10_images() {
+        let provider = FacebookProvider::new(&test_config());
+        assert!(provider.validate_media(&post_with_images(10)).is_ok());
+    }
+
+    #[test]
+    fn parse_should_expand_page_insights_into_daily_series() {
+        let raw = serde_json::json!({
+            "data": [{
+                "name": "page_impressions",
+                "period": "day",
+                "values": [
+                    { "value": 100, "end_time": "2026-09-28T00:00:00+0000" },
+                    { "value": 150, "end_time": "2026-09-29T00:00:00+0000" }
+                ]
+            }]
+        });
+        let series = super::super::parse_insights_data(&raw);
+        assert_eq!(series.len(), 1);
+        assert_eq!(series[0].label, "page_impressions");
+        assert_eq!(series[0].data.len(), 2);
+        assert_eq!(series[0].data[0].total, "100");
+    }
+
+    #[test]
+    fn parse_should_map_post_reactions_and_shares() {
+        let raw = serde_json::json!({
+            "reactions": { "summary": { "total_count": 42 } },
+            "comments": { "summary": { "total_count": 12 } },
+            "shares": { "count": 5 }
+        });
+        let e = super::super::parse_engagement_data("facebook", raw);
+        assert_eq!(e.likes, 42);
+        assert_eq!(e.comments, 12);
+        assert_eq!(e.shares, 5);
     }
 }

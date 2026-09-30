@@ -349,7 +349,7 @@ impl SocialProvider for InstagramProvider {
         // ── Resolve IG Business accounts from collected pages ─────────────────
         let mut result = Vec::new();
 
-        for (_page_id, page) in &pages_map {
+        for page in pages_map.values() {
             let page_token = page["access_token"].as_str().unwrap_or(access_token);
 
             // Try to get the IG Business account ID (prefer the inline field)
@@ -682,29 +682,7 @@ impl SocialProvider for InstagramProvider {
         }
 
         let json: serde_json::Value = resp.json().await.unwrap_or_default();
-        let mut result = Vec::new();
-
-        if let Some(data) = json["data"].as_array() {
-            for entry in data {
-                let name = entry["name"].as_str().unwrap_or("unknown").to_string();
-                let mut points = Vec::new();
-                if let Some(values) = entry["values"].as_array() {
-                    for v in values {
-                        points.push(AnalyticsDataPoint {
-                            total: v["value"].as_i64().unwrap_or(0).to_string(),
-                            date: v["end_time"].as_str().unwrap_or("").to_string(),
-                        });
-                    }
-                }
-                result.push(AnalyticsData {
-                    label: name,
-                    data: points,
-                    percentage_change: 0.0,
-                });
-            }
-        }
-
-        Ok(result)
+        Ok(super::parse_insights_data(&json))
     }
 
     async fn post_analytics(
@@ -728,29 +706,7 @@ impl SocialProvider for InstagramProvider {
         }
 
         let json: serde_json::Value = resp.json().await.unwrap_or_default();
-        let mut result = Vec::new();
-
-        if let Some(data) = json["data"].as_array() {
-            for entry in data {
-                let name = entry["name"].as_str().unwrap_or("unknown").to_string();
-                let mut points = Vec::new();
-                if let Some(values) = entry["values"].as_array() {
-                    for v in values {
-                        points.push(AnalyticsDataPoint {
-                            total: v["value"].as_i64().unwrap_or(0).to_string(),
-                            date: v["end_time"].as_str().unwrap_or("").to_string(),
-                        });
-                    }
-                }
-                result.push(AnalyticsData {
-                    label: name,
-                    data: points,
-                    percentage_change: 0.0,
-                });
-            }
-        }
-
-        Ok(result)
+        Ok(super::parse_insights_data(&json))
     }
 
     fn resolve_media_url(&self, attachment: &MediaAttachment, app_url: &str) -> MediaAttachment {
@@ -1476,5 +1432,86 @@ impl InstagramProvider {
             .as_str()
             .unwrap_or("IN_PROGRESS");
         Ok(status_code.to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::social::test_config;
+
+    fn post_with_images(n: usize) -> PostContent {
+        PostContent {
+            content: "caption".into(),
+            media: (0..n)
+                .map(|i| MediaAttachment {
+                    url: format!("https://example.com/{i}.jpg"),
+                    mime_type: "image/jpeg".into(),
+                    alt: None,
+                    poster_url: None,
+                })
+                .collect(),
+            settings: serde_json::json!({}),
+            in_reply_to: None,
+            idempotency_key: None,
+            delay_minutes: None,
+        }
+    }
+
+    #[test]
+    fn parse_should_expand_account_insights_into_daily_series() {
+        let raw = serde_json::json!({
+            "data": [{
+                "name": "reach",
+                "period": "day",
+                "values": [
+                    { "value": 300, "end_time": "2026-09-28T00:00:00+0000" },
+                    { "value": 420, "end_time": "2026-09-29T00:00:00+0000" }
+                ]
+            }]
+        });
+        let series = super::super::parse_insights_data(&raw);
+        assert_eq!(series.len(), 1);
+        assert_eq!(series[0].label, "reach");
+        assert_eq!(series[0].data.len(), 2);
+        assert_eq!(series[0].data[0].total, "300");
+    }
+
+    #[test]
+    fn parse_should_map_media_insights_into_daily_series() {
+        let raw = serde_json::json!({
+            "data": [
+                { "name": "engagement", "values": [{ "value": 55, "end_time": "2026-09-29T00:00:00+0000" }] },
+                { "name": "saved", "values": [{ "value": 7, "end_time": "2026-09-29T00:00:00+0000" }] }
+            ]
+        });
+        let series = super::super::parse_insights_data(&raw);
+        assert_eq!(series.len(), 2);
+        assert_eq!(series[1].label, "saved");
+        assert_eq!(series[1].data[0].total, "7");
+    }
+
+    #[test]
+    fn parse_should_map_media_detail_engagement_counts() {
+        let raw = serde_json::json!({
+            "id": "17900000000000000",
+            "like_count": 42,
+            "comments_count": 12
+        });
+        let e = super::super::parse_engagement_data("instagram", raw);
+        assert_eq!(e.likes, 42);
+        assert_eq!(e.comments, 12);
+    }
+
+    #[test]
+    fn publish_should_reject_11th_image() {
+        let provider = InstagramProvider::new(&test_config());
+        assert!(provider.validate_media(&post_with_images(11)).is_err());
+    }
+
+    #[test]
+    fn publish_should_accept_10_images() {
+        let provider = InstagramProvider::new(&test_config());
+        assert!(provider.validate_media(&post_with_images(10)).is_ok());
     }
 }

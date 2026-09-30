@@ -384,45 +384,25 @@ impl SocialProvider for ThreadsProvider {
     ) -> Result<Vec<AnalyticsData>, ProviderError> {
         let user_id = self.resolve_user_id(access_token).await?;
 
-        let _since = chrono::Utc::now()
+        let since = chrono::Utc::now()
             .checked_sub_signed(chrono::Duration::days(days as i64))
             .unwrap_or_default()
             .format("%Y-%m-%d")
             .to_string();
-        let _until = chrono::Utc::now().format("%Y-%m-%d").to_string();
+        let until = chrono::Utc::now().format("%Y-%m-%d").to_string();
 
         let json = self
-            .get_insights(
+            .get_insights_range(
                 access_token,
                 &user_id,
                 "views,likes,replies,reposts,quotes",
                 "day",
+                Some(&since),
+                Some(&until),
             )
             .await?;
 
-        let mut result = Vec::new();
-
-        if let Some(data) = json["data"].as_array() {
-            for entry in data {
-                let name = entry["name"].as_str().unwrap_or("unknown").to_string();
-                let mut points = Vec::new();
-                if let Some(values) = entry["values"].as_array() {
-                    for v in values {
-                        points.push(AnalyticsDataPoint {
-                            total: v["value"].as_i64().unwrap_or(0).to_string(),
-                            date: v["end_time"].as_str().unwrap_or("").to_string(),
-                        });
-                    }
-                }
-                result.push(AnalyticsData {
-                    label: name,
-                    data: points,
-                    percentage_change: 0.0,
-                });
-            }
-        }
-
-        Ok(result)
+        Ok(super::parse_insights_data(&json))
     }
 
     async fn post_analytics(
@@ -445,29 +425,7 @@ impl SocialProvider for ThreadsProvider {
         }
 
         let json: serde_json::Value = resp.json().await.unwrap_or_default();
-        let mut result = Vec::new();
-
-        if let Some(data) = json["data"].as_array() {
-            for entry in data {
-                let name = entry["name"].as_str().unwrap_or("unknown").to_string();
-                let mut points = Vec::new();
-                if let Some(values) = entry["values"].as_array() {
-                    for v in values {
-                        points.push(AnalyticsDataPoint {
-                            total: v["value"].as_i64().unwrap_or(0).to_string(),
-                            date: v["end_time"].as_str().unwrap_or("").to_string(),
-                        });
-                    }
-                }
-                result.push(AnalyticsData {
-                    label: name,
-                    data: points,
-                    percentage_change: 0.0,
-                });
-            }
-        }
-
-        Ok(result)
+        Ok(super::parse_insights_data(&json))
     }
 
     fn resolve_media_url(&self, attachment: &MediaAttachment, app_url: &str) -> MediaAttachment {
@@ -555,7 +513,7 @@ impl ThreadsProvider {
             .http
             .get(format!("{}/{}", self.graph_url(), media_id))
             .query(&[
-                ("fields", "id,text,media_type,media_url,permalink,timestamp,username,like_count,reply_count,children{id,media_url,media_type}"),
+                ("fields", "id,text,media_type,media_url,permalink,timestamp,username,like_count,reply_count,repost_count,quote_count,children{id,media_url,media_type}"),
                 ("access_token", access_token),
             ])
             .send()
@@ -623,10 +581,37 @@ impl ThreadsProvider {
         metric: &str,
         period: &str,
     ) -> Result<serde_json::Value, ProviderError> {
+        self.get_insights_range(access_token, user_id, metric, period, None, None)
+            .await
+    }
+
+    /// `threads_insights` with an optional `since`/`until` window so
+    /// `analytics()` can honour the requested day range.
+    pub async fn get_insights_range(
+        &self,
+        access_token: &str,
+        user_id: &str,
+        metric: &str,
+        period: &str,
+        since: Option<&str>,
+        until: Option<&str>,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let mut params: Vec<(&str, &str)> = vec![
+            ("metric", metric),
+            ("period", period),
+            ("access_token", access_token),
+        ];
+        if let Some(s) = since {
+            params.push(("since", s));
+        }
+        if let Some(u) = until {
+            params.push(("until", u));
+        }
+
         let resp = self
             .http
             .get(format!("{}/{}/threads_insights", self.graph_url(), user_id))
-            .query(&[("metric", metric), ("period", period), ("access_token", access_token)])
+            .query(&params)
             .send()
             .await?;
 
@@ -736,5 +721,82 @@ impl ThreadsProvider {
                 .map(String::from),
             status: "published".into(),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::social::test_config;
+
+    fn post_with_images(n: usize) -> PostContent {
+        PostContent {
+            content: "a thread part".into(),
+            media: (0..n)
+                .map(|i| MediaAttachment {
+                    url: format!("https://example.com/{i}.jpg"),
+                    mime_type: "image/jpeg".into(),
+                    alt: None,
+                    poster_url: None,
+                })
+                .collect(),
+            settings: serde_json::json!({}),
+            in_reply_to: Some("8888888888888888888".into()),
+            idempotency_key: None,
+            delay_minutes: None,
+        }
+    }
+
+    #[test]
+    fn parse_should_expand_thread_insights_into_daily_series() {
+        let raw = serde_json::json!({
+            "data": [{
+                "name": "views",
+                "period": "day",
+                "values": [
+                    { "value": 800, "end_time": "2026-09-28T00:00:00+0000" },
+                    { "value": 900, "end_time": "2026-09-29T00:00:00+0000" }
+                ]
+            }]
+        });
+        let series = super::super::parse_insights_data(&raw);
+        assert_eq!(series.len(), 1);
+        assert_eq!(series[0].label, "views");
+        assert_eq!(series[0].data[1].total, "900");
+    }
+
+    #[test]
+    fn parse_should_map_thread_detail_counts() {
+        let raw = serde_json::json!({
+            "id": "8888888888888888888",
+            "like_count": 42,
+            "reply_count": 12,
+            "repost_count": 5,
+            "quote_count": 1
+        });
+        let e = super::super::parse_engagement_data("threads", raw);
+        assert_eq!(e.likes, 42);
+        assert_eq!(e.replies, 12);
+        assert_eq!(e.reposts, 5);
+        assert_eq!(e.quotes, 1);
+    }
+
+    #[test]
+    fn publish_should_reject_11th_image() {
+        let provider = ThreadsProvider::new(&test_config());
+        assert!(provider.validate_media(&post_with_images(11)).is_err());
+    }
+
+    #[test]
+    fn publish_should_accept_10_images() {
+        let provider = ThreadsProvider::new(&test_config());
+        assert!(provider.validate_media(&post_with_images(10)).is_ok());
+    }
+
+    #[test]
+    fn publish_should_map_auth_error_to_user_facing_message() {
+        let provider = ThreadsProvider::new(&test_config());
+        let mapped = provider.map_error("Error validating access token: 190", 400);
+        assert_eq!(mapped.as_deref(), Some("Threads access token expired"));
     }
 }
