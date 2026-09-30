@@ -57,9 +57,7 @@ pub async fn search_music(
         ));
     }
 
-    let token = state.token_key.as_ref()
-        .and_then(|key| crate::crypto::decrypt_string(&integration.access_token, key).ok())
-        .unwrap_or_else(|| integration.access_token.clone());
+    let token = crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
 
     let internal_id = &integration.internal_id;
     let audio_type = query.audio_type.as_deref().unwrap_or("music");

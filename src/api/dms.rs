@@ -111,7 +111,7 @@ pub async fn list_conversations(
             AppError::BadRequest(format!("Provider {} not found", integration.provider_identifier))
         })?;
 
-    let access_token = resolve_access_token(&state, &integration.access_token);
+    let access_token = crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
 
     let conversations = provider
         .get_dm_conversations(&access_token, query.limit)
@@ -161,7 +161,7 @@ pub async fn get_messages(
             AppError::BadRequest(format!("Provider {} not found", integration.provider_identifier))
         })?;
 
-    let access_token = resolve_access_token(&state, &integration.access_token);
+    let access_token = crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
 
     let messages = provider
         .get_dm_messages(&access_token, &conversation_id, query.limit)
@@ -207,7 +207,7 @@ pub async fn send_dm(
             AppError::BadRequest(format!("Provider {} not found", integration.provider_identifier))
         })?;
 
-    let access_token = resolve_access_token(&state, &integration.access_token);
+    let access_token = crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
 
     let content = PostContent {
         content: request.content,
@@ -239,15 +239,4 @@ pub async fn send_dm(
         message_id: result.platform_post_id,
         status: result.status,
     }))
-}
-
-// ── Helpers ─────────────────────────────────────────────────
-
-/// Resolve access token: try decryption with token_key, fall back to raw.
-fn resolve_access_token(state: &AppState, token: &str) -> String {
-    state
-        .token_key
-        .as_ref()
-        .and_then(|key| crate::crypto::decrypt_string(token, key).ok())
-        .unwrap_or_else(|| token.to_string())
 }

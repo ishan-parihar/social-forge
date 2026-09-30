@@ -237,10 +237,7 @@ async fn find_x_token(state: &AppState, user_id: Uuid) -> Result<(String, String
     if let Some(preferred) = x_integrations.iter()
         .find(|i| i.access_token.starts_with('{'))
     {
-        let token = preferred.access_token.clone();
-        let token = state.token_key.as_ref()
-            .and_then(|key| crypto::decrypt_string(&token, key).ok())
-            .unwrap_or(token);
+        let token = crypto::maybe_decrypt_token(&preferred.access_token, state.token_key.as_ref());
         return Ok((token, preferred.internal_id.clone()));
     }
 
@@ -265,10 +262,7 @@ async fn find_x_token(state: &AppState, user_id: Uuid) -> Result<(String, String
 
     // Priority 4: OAuth DB tokens as last resort
     if let Some(oauth) = x_integrations.first() {
-        let token = oauth.access_token.clone();
-        let token = state.token_key.as_ref()
-            .and_then(|key| crypto::decrypt_string(&token, key).ok())
-            .unwrap_or(token);
+        let token = crypto::maybe_decrypt_token(&oauth.access_token, state.token_key.as_ref());
         return Ok((token, oauth.internal_id.clone()));
     }
 

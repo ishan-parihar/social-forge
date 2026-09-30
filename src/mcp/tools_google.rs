@@ -30,10 +30,7 @@ async fn find_goog_token(state: &AppState, user_id: Uuid) -> Result<String, Stri
         .find(|i| i.provider_identifier == "google")
         .ok_or_else(|| "Google not connected. Connect it via the onboarding page first.".to_string())?;
 
-    let tok = goog.access_token.clone();
-    let tok = state.token_key.as_ref()
-        .and_then(|k| crypto::decrypt_string(&tok, k).ok())
-        .unwrap_or(tok);
+    let tok = crypto::maybe_decrypt_token(&goog.access_token, state.token_key.as_ref());
     Ok(tok)
 }
 

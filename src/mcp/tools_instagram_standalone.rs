@@ -59,13 +59,10 @@ pub struct IasPollContainerInput {
 // ── Helpers ──────────────────────────────────────────────────
 
 async fn find_ias_token(state: &AppState, user_id: Uuid, ig_id: &str) -> Result<String, String> {
-    let integrations = crate::db::queries::list_integrations(&state.db, user_id)
+    let ig = state
+        .integration_by_internal_id(user_id, "instagram-standalone", ig_id)
         .await
-        .map_err(|e| format!("DB error: {e}"))?;
-
-    let ig = integrations
-        .iter()
-        .find(|i| i.provider_identifier == "instagram-standalone" && i.internal_id == ig_id)
+        .map_err(|e| format!("DB error: {e}"))?
         .ok_or_else(|| {
             format!(
                 "Instagram Standalone account '{}' not connected. Connect it via the onboarding page first.",

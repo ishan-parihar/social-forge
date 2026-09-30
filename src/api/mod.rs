@@ -71,6 +71,29 @@ pub struct AppState {
     pub media_wreq_client: wreq::Client,
 }
 
+impl AppState {
+    /// Find one integration by its `(provider_identifier, internal_id)` pair —
+    /// the key a platform uses for a specific sub-account (LinkedIn Page, FB
+    /// page, IG account, Discord channel, …), as opposed to the
+    /// provider-level match used for the parent account.
+    ///
+    /// `Ok(None)` means "not connected"; callers keep their own not-connected
+    /// wording, so this carries no provider-specific copy. DB failures surface
+    /// as `sqlx::Error` so each caller maps them into its own error type the
+    /// same way it already does for `list_integrations`.
+    pub async fn integration_by_internal_id(
+        &self,
+        user_id: uuid::Uuid,
+        provider: &str,
+        internal_id: &str,
+    ) -> Result<Option<crate::db::models::Integration>, sqlx::Error> {
+        Ok(crate::db::queries::list_integrations(&self.db, user_id)
+            .await?
+            .into_iter()
+            .find(|i| i.provider_identifier == provider && i.internal_id == internal_id))
+    }
+}
+
 /// Build the axum router with all routes
 pub fn build_router(state: AppState) -> Router {
     // Extract allowed origin for CORS

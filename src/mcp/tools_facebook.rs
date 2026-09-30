@@ -127,32 +127,23 @@ async fn find_facebook_token(state: &AppState, user_id: Uuid) -> Result<String, 
             "No Facebook account connected. Use the onboarding page first.".to_string()
         })?;
 
-    let token = fb.access_token.clone();
-    let token = state.token_key.as_ref()
-        .and_then(|key| crypto::decrypt_string(&token, key).ok())
-        .unwrap_or(token);
+    let token = crypto::maybe_decrypt_token(&fb.access_token, state.token_key.as_ref());
     Ok(token)
 }
 
 /// Find a page-scoped Facebook token by page_id.
 async fn find_page_token(state: &AppState, user_id: Uuid, page_id: &str) -> Result<String, String> {
-    let integrations = crate::db::queries::list_integrations(&state.db, user_id)
+    let page = state
+        .integration_by_internal_id(user_id, "facebook", page_id)
         .await
-        .map_err(|e| format!("DB error: {e}"))?;
-
-    let page = integrations
-        .iter()
-        .find(|i| i.provider_identifier == "facebook" && i.internal_id == page_id)
+        .map_err(|e| format!("DB error: {e}"))?
         .ok_or_else(|| {
             format!(
                 "Facebook page '{page_id}' not connected. Use available-pages to connect it first."
             )
         })?;
 
-    let token = page.access_token.clone();
-    let token = state.token_key.as_ref()
-        .and_then(|key| crypto::decrypt_string(&token, key).ok())
-        .unwrap_or(token);
+    let token = crypto::maybe_decrypt_token(&page.access_token, state.token_key.as_ref());
     Ok(token)
 }
 

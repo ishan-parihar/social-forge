@@ -147,9 +147,8 @@ pub async fn reply(
                 AppError::BadRequest(format!("Provider {} not found", integration.provider_identifier))
             })?;
 
-        let access_token = state.token_key.as_ref()
-            .and_then(|key| crate::crypto::decrypt_string(&integration.access_token, key).ok())
-            .unwrap_or(integration.access_token.clone());
+        let access_token =
+            crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
 
         let content = PostContent {
             content: body.content.clone(),
@@ -188,9 +187,8 @@ pub async fn reply(
             None => continue,
         };
 
-        let access_token = state.token_key.as_ref()
-            .and_then(|key| crate::crypto::decrypt_string(&integration.access_token, key).ok())
-            .unwrap_or(integration.access_token.clone());
+        let access_token =
+            crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
 
         if let Ok(provider_comments) = provider.get_post_comments(&access_token, &post.platform_post_id).await {
             if provider_comments.iter().any(|c| c.id == comment_id) {

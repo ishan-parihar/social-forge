@@ -200,22 +200,20 @@ pub(crate) async fn find_linkedin_token(state: &AppState, user_id: Uuid) -> anyh
 }
 
 pub(crate) async fn find_linkedin_page_token(state: &AppState, user_id: Uuid, page_id: &str) -> anyhow::Result<(String, String)> {
-    let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
-    let lip = integrations.iter()
-        .find(|i| i.provider_identifier == "linkedin-page" && i.internal_id == page_id)
+    let lip = state
+        .integration_by_internal_id(user_id, "linkedin-page", page_id)
+        .await?
         .ok_or_else(|| anyhow::anyhow!("LinkedIn Page '{}' not connected", page_id))?;
-    let token = lip.access_token.clone();
-    let token = crate::crypto::maybe_decrypt_token(&token, state.token_key.as_ref());
+    let token = crate::crypto::maybe_decrypt_token(&lip.access_token, state.token_key.as_ref());
     Ok((token, lip.internal_id.clone()))
 }
 
 pub(crate) async fn find_facebook_page_token(state: &AppState, user_id: Uuid, page_id: &str) -> anyhow::Result<String> {
-    let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
-    let page = integrations.iter()
-        .find(|i| i.provider_identifier == "facebook" && i.internal_id == page_id)
+    let page = state
+        .integration_by_internal_id(user_id, "facebook", page_id)
+        .await?
         .ok_or_else(|| anyhow::anyhow!("Facebook page '{}' not connected", page_id))?;
-    let token = page.access_token.clone();
-    let token = crate::crypto::maybe_decrypt_token(&token, state.token_key.as_ref());
+    let token = crate::crypto::maybe_decrypt_token(&page.access_token, state.token_key.as_ref());
     Ok(token)
 }
 

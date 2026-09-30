@@ -292,9 +292,7 @@ pub async fn list_targets(
     let provider = state.providers.get(&integration.provider_identifier)
         .ok_or_else(|| format!("Provider '{}' not in registry", integration.provider_identifier))?;
 
-    let token = state.token_key.as_ref()
-        .and_then(|key| crate::crypto::decrypt_string(&integration.access_token, key).ok())
-        .unwrap_or_else(|| integration.access_token.clone());
+    let token = crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
 
     let targets = provider.targets(&token).await
         .map_err(|e| format!("Failed to fetch targets: {}", e))?;

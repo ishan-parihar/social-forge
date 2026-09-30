@@ -142,10 +142,7 @@ async fn find_gh_token(state: &AppState, user_id: Uuid) -> Result<String, String
         .find(|i| i.provider_identifier == "github")
         .ok_or_else(|| "GitHub account not connected. Add GITHUB_TOKEN to .env or connect via onboarding.".to_string())?;
 
-    let tok = gh.access_token.clone();
-    let tok = state.token_key.as_ref()
-        .and_then(|k| crypto::decrypt_string(&tok, k).ok())
-        .unwrap_or(tok);
+    let tok = crypto::maybe_decrypt_token(&gh.access_token, state.token_key.as_ref());
     Ok(tok)
 }
 

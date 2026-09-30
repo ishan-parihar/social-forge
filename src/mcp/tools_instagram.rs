@@ -131,10 +131,7 @@ async fn find_instagram_token(state: &AppState, user_id: Uuid, ig_id: &str) -> R
             format!("Instagram account '{ig_id}' not connected. Connect it via the onboarding page first.")
         })?;
 
-    let token = ig.access_token.clone();
-    let token = state.token_key.as_ref()
-        .and_then(|key| crypto::decrypt_string(&token, key).ok())
-        .unwrap_or(token);
+    let token = crypto::maybe_decrypt_token(&ig.access_token, state.token_key.as_ref());
     Ok(token)
 }
 

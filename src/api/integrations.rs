@@ -461,15 +461,9 @@ pub async fn refresh(
         .get(&integration.provider_identifier)
         .ok_or_else(|| AppError::BadRequest("Provider not found in registry".into()))?;
 
-    let resolve_token = |token: &str| -> String {
-        state.token_key.as_ref()
-            .and_then(|key| crypto::decrypt_string(token, key).ok())
-            .unwrap_or_else(|| token.to_string())
-    };
-
     let mut new_access_token = None;
     if let Some(ref refresh_token_encrypted) = integration.refresh_token {
-        let refresh_token = resolve_token(refresh_token_encrypted);
+        let refresh_token = crypto::maybe_decrypt_token(refresh_token_encrypted, state.token_key.as_ref());
         match provider_obj.refresh_token(&refresh_token).await {
             Ok(new_token) => {
                 let (access_token, refresh_token_to_store) = if let Some(key) = state.token_key {
@@ -516,7 +510,7 @@ pub async fn refresh(
         }
     }
 
-    let fallback_token = resolve_token(&integration.access_token);
+    let fallback_token = crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
     let token_to_use = new_access_token.as_deref()
         .unwrap_or(&fallback_token);
 
@@ -1220,13 +1214,6 @@ pub async fn available_pages(
         .get(&integration.provider_identifier)
         .ok_or_else(|| AppError::BadRequest("Provider not found in registry".into()))?;
 
-    // Decrypt the stored token if encryption is enabled
-    let resolve_token = |token: &str| -> String {
-        state.token_key.as_ref()
-            .and_then(|key| crypto::decrypt_string(token, key).ok())
-            .unwrap_or_else(|| token.to_string())
-    };
-
     // Facebook/Instagram store the user-level token in refresh_token for page discovery.
     // Other multi-step providers (LinkedIn Page) use access_token directly.
     let raw_token = if integration.provider_identifier == "facebook"
@@ -1240,7 +1227,8 @@ pub async fn available_pages(
     } else {
         &integration.access_token
     };
-    let token = resolve_token(raw_token);
+    // Decrypt the stored token if encryption is enabled
+    let token = crypto::maybe_decrypt_token(raw_token, state.token_key.as_ref());
 
     let pages = provider_obj
         .pages(&token)
@@ -1278,12 +1266,6 @@ pub async fn connect_page(
         .get(&parent.provider_identifier)
         .ok_or_else(|| AppError::BadRequest("Provider not found in registry".into()))?;
 
-    let resolve_token = |token: &str| -> String {
-        state.token_key.as_ref()
-            .and_then(|key| crypto::decrypt_string(token, key).ok())
-            .unwrap_or_else(|| token.to_string())
-    };
-
     // Same token discovery logic as available_pages
     let raw_token = if parent.provider_identifier == "facebook"
         || parent.provider_identifier == "instagram"
@@ -1296,7 +1278,7 @@ pub async fn connect_page(
     } else {
         &parent.access_token
     };
-    let token = resolve_token(raw_token);
+    let token = crypto::maybe_decrypt_token(raw_token, state.token_key.as_ref());
 
     // Fetch all pages and find the matching one
     let pages = provider_obj
@@ -1387,9 +1369,7 @@ pub async fn list_targets(
     let provider = state.providers.get(&integration.provider_identifier)
         .ok_or_else(|| AppError::NotFound(format!("Provider '{}' not in registry", integration.provider_identifier)))?;
 
-    let token = state.token_key.as_ref()
-        .and_then(|key| crypto::decrypt_string(&integration.access_token, key).ok())
-        .unwrap_or_else(|| integration.access_token.clone());
+    let token = crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
 
     let targets = provider.targets(&token).await
         .map_err(|e| AppError::Internal(format!("Failed to fetch targets: {}", e)))?;
@@ -1436,9 +1416,7 @@ pub async fn search_mentions(
     let provider = state.providers.get(&integration.provider_identifier)
         .ok_or_else(|| AppError::NotFound(format!("Provider '{}' not in registry", integration.provider_identifier)))?;
 
-    let token = state.token_key.as_ref()
-        .and_then(|key| crypto::decrypt_string(&integration.access_token, key).ok())
-        .unwrap_or_else(|| integration.access_token.clone());
+    let token = crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
 
     let mentions = provider.search_mention(&token, &query.q).await
         .map_err(|e| AppError::Internal(format!("Mention search failed: {}", e)))?;

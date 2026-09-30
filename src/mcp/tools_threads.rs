@@ -75,13 +75,10 @@ async fn find_threads_token(
     user_id: Uuid,
     threads_id: &str,
 ) -> Result<String, String> {
-    let integrations = crate::db::queries::list_integrations(&state.db, user_id)
+    let threads = state
+        .integration_by_internal_id(user_id, "threads", threads_id)
         .await
-        .map_err(|e| format!("DB error: {e}"))?;
-
-    let threads = integrations
-        .iter()
-        .find(|i| i.provider_identifier == "threads" && i.internal_id == threads_id)
+        .map_err(|e| format!("DB error: {e}"))?
         .ok_or_else(|| {
             format!(
                 "Threads account '{threads_id}' not connected. Connect it via the onboarding page first."

@@ -51,13 +51,10 @@ pub struct PiGetPinAnalyticsInput {
 // ── Helpers ──────────────────────────────────────────────────
 
 async fn find_pi_token(state: &AppState, user_id: Uuid, board_id: &str) -> Result<String, String> {
-    let integrations = crate::db::queries::list_integrations(&state.db, user_id)
+    state
+        .integration_by_internal_id(user_id, "pinterest", board_id)
         .await
-        .map_err(|e| format!("DB error: {e}"))?;
-
-    integrations
-        .iter()
-        .find(|i| i.provider_identifier == "pinterest" && i.internal_id == board_id)
+        .map_err(|e| format!("DB error: {e}"))?
         .map(|i| i.access_token.clone())
         .ok_or_else(|| {
             format!(

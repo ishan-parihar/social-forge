@@ -96,10 +96,7 @@ async fn try_refresh_and_fetch(
         integration.id, integration.provider_identifier
     );
     let refresh_token = integration.refresh_token.as_ref()?;
-    let rt = token_key
-        .as_ref()
-        .and_then(|key| crypto::decrypt_string(refresh_token, key).ok())
-        .unwrap_or_else(|| refresh_token.clone());
+    let rt = crypto::maybe_decrypt_token(refresh_token, token_key.as_ref());
     let new_token = match provider.refresh_token(&rt).await {
         Ok(t) => t,
         Err(e) => {
@@ -156,10 +153,7 @@ pub async fn refresh_user_posts(
             }
         };
 
-        let token = token_key
-            .as_ref()
-            .and_then(|key| crypto::decrypt_string(&integration.access_token, key).ok())
-            .unwrap_or_else(|| integration.access_token.clone());
+        let token = crypto::maybe_decrypt_token(&integration.access_token, token_key.as_ref());
 
         let posts = match provider
             .get_recent_posts(&token, &integration.internal_id, RECENT_POSTS_LIMIT)
@@ -269,10 +263,7 @@ async fn refresh_all_posts(
         };
 
         // Resolve token (decrypt if needed)
-        let token = token_key
-            .as_ref()
-            .and_then(|key| crypto::decrypt_string(&integration.access_token, key).ok())
-            .unwrap_or_else(|| integration.access_token.clone());
+        let token = crypto::maybe_decrypt_token(&integration.access_token, token_key.as_ref());
 
         // Fetch recent posts from provider
         let posts = match provider
@@ -390,10 +381,7 @@ async fn refresh_all_engagement(
             None => continue,
         };
 
-        let token = token_key
-            .as_ref()
-            .and_then(|key| crypto::decrypt_string(&integration.access_token, key).ok())
-            .unwrap_or_else(|| integration.access_token.clone());
+        let token = crypto::maybe_decrypt_token(&integration.access_token, token_key.as_ref());
 
         // Fetch recent posts from DB to get their platform_post_ids
         let recent_posts =
@@ -468,10 +456,7 @@ async fn refresh_all_comments(
             None => continue,
         };
 
-        let token = token_key
-            .as_ref()
-            .and_then(|key| crypto::decrypt_string(&integration.access_token, key).ok())
-            .unwrap_or_else(|| integration.access_token.clone());
+        let token = crypto::maybe_decrypt_token(&integration.access_token, token_key.as_ref());
 
         // Fetch the most recent N posts for this integration from the DB.
         // We cache comments only for recent posts — older posts' comments

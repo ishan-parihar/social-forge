@@ -66,13 +66,10 @@ pub struct YtGetSubscriptionsInput {
 // ── Helpers ──────────────────────────────────────────────────
 
 async fn find_yt_token(state: &AppState, user_id: Uuid, channel_id: &str) -> Result<String, String> {
-    let integrations = crate::db::queries::list_integrations(&state.db, user_id)
+    let yt = state
+        .integration_by_internal_id(user_id, "youtube", channel_id)
         .await
-        .map_err(|e| format!("DB error: {e}"))?;
-
-    let yt = integrations
-        .iter()
-        .find(|i| i.provider_identifier == "youtube" && i.internal_id == channel_id)
+        .map_err(|e| format!("DB error: {e}"))?
         .ok_or_else(|| {
             format!(
                 "YouTube channel '{}' not connected. Connect it via the onboarding page first.",

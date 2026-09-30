@@ -67,13 +67,10 @@ async fn find_linkedin_token(
     user_id: Uuid,
     li_id: &str,
 ) -> Result<String, String> {
-    let integrations = crate::db::queries::list_integrations(&state.db, user_id)
+    let li = state
+        .integration_by_internal_id(user_id, "linkedin", li_id)
         .await
-        .map_err(|e| format!("DB error: {e}"))?;
-
-    let li = integrations
-        .iter()
-        .find(|i| i.provider_identifier == "linkedin" && i.internal_id == li_id)
+        .map_err(|e| format!("DB error: {e}"))?
         .ok_or_else(|| {
             format!(
                 "LinkedIn account '{li_id}' not connected. Connect it via the onboarding page first."

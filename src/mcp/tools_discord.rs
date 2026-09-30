@@ -41,13 +41,10 @@ pub struct DiGetThreadMembersInput {
 /// Find a Discord integration by channel_id (stored as internal_id) and return its access token.
 /// The bot_token is not returned — it is read from config by DiscordProvider internally.
 async fn find_di_token(state: &AppState, user_id: Uuid, channel_id: &str) -> Result<String, String> {
-    let integrations = crate::db::queries::list_integrations(&state.db, user_id)
+    let discord = state
+        .integration_by_internal_id(user_id, "discord", channel_id)
         .await
-        .map_err(|e| format!("DB error: {e}"))?;
-
-    let discord = integrations
-        .iter()
-        .find(|i| i.provider_identifier == "discord" && i.internal_id == channel_id)
+        .map_err(|e| format!("DB error: {e}"))?
         .ok_or_else(|| {
             format!(
                 "Discord channel '{channel_id}' not connected. Connect Discord first via integrations_connect."

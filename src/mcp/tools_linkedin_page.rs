@@ -53,13 +53,10 @@ async fn find_linkedin_page_token(
     lip_id: &str,
 ) -> Result<String, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
-    let integrations = crate::db::queries::list_integrations(&state.db, user_id)
+    let integration = state
+        .integration_by_internal_id(user_id, "linkedin-page", lip_id)
         .await
-        .map_err(|e| format!("DB error: {e}"))?;
-
-    let integration = integrations
-        .iter()
-        .find(|i| i.provider_identifier == "linkedin-page" && i.internal_id == lip_id)
+        .map_err(|e| format!("DB error: {e}"))?
         .ok_or_else(|| {
             format!(
                 "LinkedIn Page account '{}' not connected. Connect it via the onboarding page first.",

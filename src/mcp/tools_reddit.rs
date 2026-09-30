@@ -126,10 +126,7 @@ async fn find_reddit_token(state: &AppState, user_id: Uuid) -> Result<String, St
     if let Some(preferred) = reddit_integrations.iter()
         .find(|i| i.access_token.starts_with('{'))
     {
-        let token = preferred.access_token.clone();
-        let token = state.token_key.as_ref()
-            .and_then(|key| crypto::decrypt_string(&token, key).ok())
-            .unwrap_or(token);
+        let token = crypto::maybe_decrypt_token(&preferred.access_token, state.token_key.as_ref());
         return Ok(token);
     }
 
@@ -143,10 +140,7 @@ async fn find_reddit_token(state: &AppState, user_id: Uuid) -> Result<String, St
 
     // Priority 3: OAuth DB tokens
     if let Some(oauth) = reddit_integrations.first() {
-        let token = oauth.access_token.clone();
-        let token = state.token_key.as_ref()
-            .and_then(|key| crypto::decrypt_string(&token, key).ok())
-            .unwrap_or(token);
+        let token = crypto::maybe_decrypt_token(&oauth.access_token, state.token_key.as_ref());
         return Ok(token);
     }
 
