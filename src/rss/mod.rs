@@ -1,39 +1,38 @@
 use std::sync::Arc;
 
 use sha2::{Digest, Sha256};
+use std::time::Duration;
 use tokio::sync::watch;
 use tracing;
 
 use crate::config::Config;
 use crate::db::models::PostState;
 use crate::db::PgPool;
+use crate::poll::{spawn_poll, FirstTick};
 use crate::social::registry::ProviderRegistry;
 
 pub fn start_rss_poller(
     db: PgPool,
     _providers: Arc<ProviderRegistry>,
     config: Arc<Config>,
-    mut shutdown_rx: watch::Receiver<bool>,
+    shutdown_rx: watch::Receiver<bool>,
 ) {
-    tokio::spawn(async move {
-        let interval = tokio::time::Duration::from_secs(15 * 60); // every 15 min
-        tracing::info!("RSS poller started (interval: 15 min)");
-        loop {
-            tokio::select! {
-                _ = tokio::time::sleep(interval) => {
-                    if let Err(e) = poll_all_feeds(&db, &config).await {
-                        tracing::error!("RSS poller error: {e}");
-                    }
-                }
-                _ = shutdown_rx.changed() => {
-                    if *shutdown_rx.borrow() {
-                        tracing::info!("RSS poller shutting down");
-                        break;
-                    }
+    tracing::info!("RSS poller started (interval: 15 min)");
+    spawn_poll(
+        Duration::from_secs(15 * 60), // every 15 min
+        FirstTick::AfterDelay,
+        shutdown_rx,
+        "RSS poller shutting down",
+        move || {
+            let db = db.clone();
+            let config = config.clone();
+            async move {
+                if let Err(e) = poll_all_feeds(&db, &config).await {
+                    tracing::error!("RSS poller error: {e}");
                 }
             }
-        }
-    });
+        },
+    );
 }
 
 async fn poll_all_feeds(

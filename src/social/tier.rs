@@ -142,6 +142,90 @@ pub fn all_known_identifiers() -> Vec<&'static str> {
     ids
 }
 
+/// Onboarding presentation metadata for a provider identifier:
+/// `(display name, emoji icon, setup hint)`.
+///
+/// `api::onboard` used to carry four independent `match id` tables —
+/// display name, icon, the "what env vars does this need" hint on the
+/// `/setup` page, and the same hint again in the `public_connect` error.
+/// They were edited independently, so a provider could be added to one
+/// and forgotten in another. One lookup now serves all four sites.
+///
+/// * `name` is the *onboarding* label. It is deliberately not
+///   `SocialProvider::name()`: 2 of the 13 identifiers below disagree
+///   with the provider's own name (`x`, `instagram-standalone`) and the
+///   fallback for everything else is the raw identifier, not a title.
+///   `name_matches_provider_name` pins the 11 that do agree so this
+///   table cannot drift further.
+/// * `icon` is the emoji rendered on setup cards. Unknown ids get `🔗`.
+/// * `env_hint` is shown on `/setup` when the provider has no
+///   credentials configured. It is the full sentence, not a bare var
+///   list, because `reddit` and `skool` need one ("Cookie auth
+///   available…", "Requires Chrome extension…"). Unknown ids get a
+///   generic line; callers that need to distinguish "unknown provider"
+///   from "known but unset" check `all_known_identifiers()` first.
+pub fn provider_meta(id: &str) -> (&str, &'static str, &'static str) {
+    let (name, icon, env_hint) = match id {
+        "x" => ("𝕏 (Twitter)", "𝕏", "Requires: X_CLIENT_ID + X_CLIENT_SECRET"),
+        "linkedin" => ("LinkedIn", "💼", "Requires: LINKEDIN_CLIENT_ID + LINKEDIN_CLIENT_SECRET"),
+        "linkedin-page" => (
+            "LinkedIn Page",
+            "💼",
+            "Requires: LINKEDIN_CLIENT_ID + LINKEDIN_CLIENT_SECRET",
+        ),
+        "facebook" => (
+            "Facebook",
+            "📘",
+            "Requires: FACEBOOK_CLIENT_ID + FACEBOOK_CLIENT_SECRET",
+        ),
+        "instagram" => (
+            "Instagram",
+            "📘",
+            "Requires: FACEBOOK_CLIENT_ID + FACEBOOK_CLIENT_SECRET",
+        ),
+        "instagram-standalone" => (
+            "Instagram Standalone",
+            "📸",
+            "Requires: INSTAGRAM_APP_ID + INSTAGRAM_APP_SECRET",
+        ),
+        "threads" => ("Threads", "🧵", "Requires: THREADS_APP_ID + THREADS_APP_SECRET"),
+        "youtube" => (
+            "YouTube",
+            "▶️",
+            "Requires: YOUTUBE_CLIENT_ID + YOUTUBE_CLIENT_SECRET",
+        ),
+        "google" => (
+            "Google Suite",
+            "▶️",
+            "Requires: YOUTUBE_CLIENT_ID + YOUTUBE_CLIENT_SECRET",
+        ),
+        "telegram-bot" => ("Telegram Bot", "✈️", "Requires: TELEGRAM_BOT_TOKENS"),
+        "telegram-user" => (
+            "Telegram User",
+            "✈️",
+            "Requires: TELEGRAM_CLI_PATH (or tg in PATH)",
+        ),
+        "bluesky" => (
+            "Bluesky",
+            "🦋",
+            "Requires: BLUESKY_HANDLE + BLUESKY_APP_PASSWORD",
+        ),
+        "skool" => (
+            "Skool",
+            "🎓",
+            "Requires Chrome extension — install, login to Skool, extract auth_token cookie",
+        ),
+        "github" => ("GitHub", "🐙", "Requires: GITHUB_TOKEN"),
+        "reddit" => (
+            "reddit",
+            "🔗",
+            "Cookie auth available (no env vars needed) — or set REDDIT_CLIENT_ID + REDDIT_CLIENT_SECRET for OAuth",
+        ),
+        _ => (id, "🔗", "Missing environment variables"),
+    };
+    (name, icon, env_hint)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -209,5 +293,74 @@ mod tests {
                 "unexpected parse for ENABLE_ARCHIVE_PROVIDERS={raw:?}"
             );
         }
+    }
+
+    /// `provider_meta`'s name is an onboarding label, not the provider's
+    /// own name. For every identifier where the two are *supposed* to
+    /// agree, assert they still do — otherwise the label table silently
+    /// rots away from the providers it labels.
+    #[test]
+    fn provider_meta_name_matches_provider_name_where_the_table_covers_it() {
+        use crate::social::registry::ProviderRegistry;
+        use crate::social::test_config;
+
+        let registry = ProviderRegistry::new(&test_config(), None, None);
+        for id in [
+            "linkedin",
+            "linkedin-page",
+            "facebook",
+            "instagram",
+            "threads",
+            "youtube",
+            "google",
+            "telegram-bot",
+            "telegram-user",
+            "bluesky",
+            "skool",
+            "github",
+        ] {
+            let provider = registry
+                .get(id)
+                .unwrap_or_else(|| panic!("{id} is not registered"));
+            assert_eq!(
+                provider_meta(id).0,
+                provider.name(),
+                "{id}: onboarding label drifted from the provider's own name"
+            );
+        }
+    }
+
+    /// The two identifiers where the onboarding label is deliberately
+    /// *not* the provider's name. Pinned so nobody "fixes" the label and
+    /// silently changes what `/setup` renders.
+    #[test]
+    fn provider_meta_keeps_its_two_intentional_name_divergences() {
+        use crate::social::registry::ProviderRegistry;
+        use crate::social::test_config;
+
+        let registry = ProviderRegistry::new(&test_config(), None, None);
+        for (id, label) in [("x", "𝕏 (Twitter)"), ("instagram-standalone", "Instagram Standalone")] {
+            let provider = registry
+                .get(id)
+                .unwrap_or_else(|| panic!("{id} is not registered"));
+            assert_eq!(
+                provider_meta(id).0,
+                label,
+                "{id}: the onboarding label is pinned by this test"
+            );
+            assert_ne!(
+                provider.name(),
+                label,
+                "{id} is listed here because its label intentionally differs from the provider's own name — if they now agree, drop it from this list and from the other test"
+            );
+        }
+    }
+
+    #[test]
+    fn provider_meta_falls_back_to_the_identifier() {
+        assert_eq!(
+            provider_meta("not-a-provider"),
+            ("not-a-provider", "🔗", "Missing environment variables")
+        );
     }
 }

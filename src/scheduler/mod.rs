@@ -9,6 +9,7 @@ use chrono::Utc;
 
 use crate::db::models::{PostState, PostWithIntegration};
 use crate::db::PgPool;
+use crate::poll::{spawn_poll, FirstTick};
 use crate::realtime::Broadcaster;
 use crate::social::registry::ProviderRegistry;
 use crate::social::ProviderError;
@@ -54,170 +55,156 @@ pub fn start_scheduler(
     // Main post publishing scheduler
     let db1 = db.clone();
     let providers1 = providers.clone();
-    let mut shutdown1 = shutdown.clone();
-    tokio::spawn(async move {
-        tracing::info!("Scheduler started (poll interval: {POLL_INTERVAL_SECS}s)");
+    // The boot-time reclaim below runs once, before the loop's first
+    // iteration. Gating it on a captured flag keeps it in the same place
+    // in the sequence — before the per-tick reclaim, which also runs on
+    // the first tick — without spawning a second task for it.
+    let mut boot = true;
+    spawn_poll(
+        Duration::from_secs(POLL_INTERVAL_SECS),
+        FirstTick::Now,
+        shutdown.clone(),
+        "Scheduler shutting down...",
+        move || {
+            let boot = std::mem::take(&mut boot);
+            let db = db1.clone();
+            let providers = providers1.clone();
+            let broadcaster = broadcaster.clone();
+            async move {
+                if boot {
+                    tracing::info!("Scheduler started (poll interval: {POLL_INTERVAL_SECS}s)");
 
-        // On startup, reclaim any posts stuck in `publishing` state
-        // from a previous crash. 5 minutes is the threshold — anything
-        // still publishing after 5 min is almost certainly a dead
-        // process, not a slow API call.
-        match queries::reclaim_stuck_publishing(&db1, 300).await {
-            Ok(count) if count > 0 => {
-                tracing::warn!(
-                    "Reclaimed {count} post(s) stuck in 'publishing' state — marked as error for manual review"
-                );
-            }
-            Ok(_) => {}
-            Err(e) => {
-                tracing::error!("Failed to reclaim stuck publishing posts: {e}");
-            }
-        }
-
-        let mut interval = tokio::time::interval(Duration::from_secs(POLL_INTERVAL_SECS));
-        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-
-        loop {
-            tokio::select! {
-                _ = shutdown1.changed() => {
-                    if *shutdown1.borrow() {
-                        tracing::info!("Scheduler shutting down...");
-                        break;
-                    }
-                }
-                _ = interval.tick() => {
-                    // v22 Phase 1 (D.5): reclaim stuck publishing posts
-                    // every tick (30s) instead of only on startup. This
-                    // catches publishes that hung mid-API-call without
-                    // waiting for a process restart. The UPDATE is cheap
-                    // (single statement, indexed by state).
-                    if let Err(e) = queries::reclaim_stuck_publishing(&db1, 300).await {
-                        tracing::warn!("reclaim_stuck_publishing failed: {e}");
-                    }
-                    // Posting-gap detection: alert on posts the scheduler
-                    // never got out the door. Runs on the existing tick —
-                    // no separate task — and the query is bounded by
-                    // POSTING_GAP_LIMIT and deduped against unread alerts,
-                    // so a 30s cadence is cheap.
-                    if let Err(e) = check_posting_gaps(&db1, &broadcaster).await {
-                        tracing::warn!("check_posting_gaps failed: {e}");
-                    }
-                    if let Err(e) = process_due_posts(&db1, &providers1, &broadcaster, token_key).await {
-                        tracing::error!("Scheduler tick error: {e}");
-                    }
-                    // v23-2: drain the publish_outbox. This retries any
-                    // post-state updates that failed after a successful
-                    // platform publish (e.g. DB connection blip). The
-                    // drain is idempotent — completed rows are skipped.
-                    if let Err(e) = drain_publish_outbox(&db1).await {
-                        tracing::warn!("publish_outbox drain failed: {e}");
-                    }
-                }
-            }
-        }
-    });
-
-    // Background cleanup task for expired oauth_states (runs every 10 minutes)
-    let db_cleanup = db.clone();
-    let mut shutdown_cleanup = shutdown.clone();
-    tokio::spawn(async move {
-        let mut interval = tokio::time::interval(Duration::from_secs(600));
-        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-        loop {
-            tokio::select! {
-                _ = shutdown_cleanup.changed() => {
-                    if *shutdown_cleanup.borrow() {
-                        tracing::info!("OAuth cleanup task shutting down...");
-                        break;
-                    }
-                }
-                _ = interval.tick() => {
-                    match queries::cleanup_expired_oauth_states(&db_cleanup).await {
+                    // On startup, reclaim any posts stuck in `publishing` state
+                    // from a previous crash. 5 minutes is the threshold — anything
+                    // still publishing after 5 min is almost certainly a dead
+                    // process, not a slow API call.
+                    match queries::reclaim_stuck_publishing(&db, 300).await {
                         Ok(count) if count > 0 => {
-                            tracing::info!("Cleaned up {count} expired OAuth state(s)");
+                            tracing::warn!(
+                                "Reclaimed {count} post(s) stuck in 'publishing' state — marked as error for manual review"
+                            );
                         }
                         Ok(_) => {}
                         Err(e) => {
-                            tracing::error!("Failed to cleanup OAuth states: {e}");
+                            tracing::error!("Failed to reclaim stuck publishing posts: {e}");
                         }
                     }
                 }
+
+                // v22 Phase 1 (D.5): reclaim stuck publishing posts
+                // every tick (30s) instead of only on startup. This
+                // catches publishes that hung mid-API-call without
+                // waiting for a process restart. The UPDATE is cheap
+                // (single statement, indexed by state).
+                if let Err(e) = queries::reclaim_stuck_publishing(&db, 300).await {
+                    tracing::warn!("reclaim_stuck_publishing failed: {e}");
+                }
+                // Posting-gap detection: alert on posts the scheduler
+                // never got out the door. Runs on the existing tick —
+                // no separate task — and the query is bounded by
+                // POSTING_GAP_LIMIT and deduped against unread alerts,
+                // so a 30s cadence is cheap.
+                if let Err(e) = check_posting_gaps(&db, &broadcaster).await {
+                    tracing::warn!("check_posting_gaps failed: {e}");
+                }
+                if let Err(e) = process_due_posts(&db, &providers, &broadcaster, token_key).await {
+                    tracing::error!("Scheduler tick error: {e}");
+                }
+                // v23-2: drain the publish_outbox. This retries any
+                // post-state updates that failed after a successful
+                // platform publish (e.g. DB connection blip). The
+                // drain is idempotent — completed rows are skipped.
+                if let Err(e) = drain_publish_outbox(&db).await {
+                    tracing::warn!("publish_outbox drain failed: {e}");
+                }
             }
-        }
-    });
+        },
+    );
+
+    // Background cleanup task for expired oauth_states (runs every 10 minutes)
+    let db_cleanup = db.clone();
+    spawn_poll(
+        Duration::from_secs(600),
+        FirstTick::Now,
+        shutdown.clone(),
+        "OAuth cleanup task shutting down...",
+        move || {
+            let db = db_cleanup.clone();
+            async move {
+                match queries::cleanup_expired_oauth_states(&db).await {
+                    Ok(count) if count > 0 => {
+                        tracing::info!("Cleaned up {count} expired OAuth state(s)");
+                    }
+                    Ok(_) => {}
+                    Err(e) => {
+                        tracing::error!("Failed to cleanup OAuth states: {e}");
+                    }
+                }
+            }
+        },
+    );
 
     // Proactive token refresh task (runs every 6 hours)
     // Refreshes tokens expiring within 24h to prevent silent expiration
     let db2 = db.clone();
     let providers2 = providers.clone();
-    let mut shutdown_token = shutdown.clone();
-    tokio::spawn(async move {
-        let mut interval = tokio::time::interval(Duration::from_secs(21600)); // 6 hours
-        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-        loop {
-            tokio::select! {
-                _ = shutdown_token.changed() => {
-                    if *shutdown_token.borrow() {
-                        tracing::info!("Proactive token refresh shutting down...");
-                        break;
-                    }
-                }
-                _ = interval.tick() => {
-                    if let Err(e) = proactive_token_refresh(&db2, &providers2, token_key).await {
-                        tracing::error!("Proactive token refresh error: {e}");
-                    }
+    spawn_poll(
+        Duration::from_secs(21600), // 6 hours
+        FirstTick::Now,
+        shutdown.clone(),
+        "Proactive token refresh shutting down...",
+        move || {
+            let db = db2.clone();
+            let providers = providers2.clone();
+            async move {
+                if let Err(e) = proactive_token_refresh(&db, &providers, token_key).await {
+                    tracing::error!("Proactive token refresh error: {e}");
                 }
             }
-        }
-    });
+        },
+    );
 
     // v23: events_log cleanup task (runs every 6 hours).
     // Trims events_log rows older than 7 days to prevent unbounded growth.
     // The dashboard only queries the last 10-50 events, so 7 days is
     // generous headroom.
     let db_events = db.clone();
-    let mut shutdown_events = shutdown.clone();
-    tokio::spawn(async move {
-        let mut interval = tokio::time::interval(Duration::from_secs(21600)); // 6 hours
-        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-        loop {
-            tokio::select! {
-                _ = shutdown_events.changed() => {
-                    if *shutdown_events.borrow() {
-                        tracing::info!("Events log cleanup shutting down...");
-                        break;
+    spawn_poll(
+        Duration::from_secs(21600), // 6 hours
+        FirstTick::Now,
+        shutdown.clone(),
+        "Events log cleanup shutting down...",
+        move || {
+            let db = db_events.clone();
+            async move {
+                let retention_days: i64 = std::env::var("EVENTS_LOG_RETENTION_DAYS")
+                    .ok()
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(7);
+                // `$1` binds as bigint; make_interval's `days` arg is int and
+                // bigint->int is an assignment-only cast, so Postgres raises
+                // 42883 "function make_interval(days => bigint) does not exist"
+                // without the explicit cast.
+                match sqlx::query(
+                    "DELETE FROM events_log WHERE created_at < NOW() - make_interval(days => $1::int)",
+                )
+                .bind(retention_days)
+                .execute(&db)
+                .await
+                {
+                    Ok(res) => {
+                        let n = res.rows_affected();
+                        if n > 0 {
+                            tracing::debug!("Cleaned up {n} events_log rows older than {retention_days} days");
+                        }
                     }
-                }
-                _ = interval.tick() => {
-                    let retention_days: i64 = std::env::var("EVENTS_LOG_RETENTION_DAYS")
-                        .ok()
-                        .and_then(|s| s.parse().ok())
-                        .unwrap_or(7);
-                    // `$1` binds as bigint; make_interval's `days` arg is int and
-                    // bigint->int is an assignment-only cast, so Postgres raises
-                    // 42883 "function make_interval(days => bigint) does not exist"
-                    // without the explicit cast.
-                    match sqlx::query(
-                        "DELETE FROM events_log WHERE created_at < NOW() - make_interval(days => $1::int)",
-                    )
-                    .bind(retention_days)
-                    .execute(&db_events)
-                    .await
-                    {
-                        Ok(res) => {
-                            let n = res.rows_affected();
-                            if n > 0 {
-                                tracing::debug!("Cleaned up {n} events_log rows older than {retention_days} days");
-                            }
-                        }
-                        Err(e) => {
-                            tracing::warn!("events_log cleanup failed: {e}");
-                        }
+                    Err(e) => {
+                        tracing::warn!("events_log cleanup failed: {e}");
                     }
                 }
             }
-        }
-    });
+        },
+    );
 }
 
 /// Proactive token refresh: refreshes tokens expiring within 24h for providers that need cron refresh
@@ -1518,26 +1505,22 @@ async fn update_streak_on_publish(db: &PgPool, user_id: uuid::Uuid) {
 /// Daily streak reset: checks all users. If streak_since is more than
 /// 48 hours ago (missed a full day), reset streak_days to 0.
 /// Runs every hour (lightweight query).
-pub fn start_streak_reset(db: PgPool, mut shutdown: tokio::sync::watch::Receiver<bool>) {
-    tokio::spawn(async move {
-        let interval = Duration::from_secs(3600); // every hour
-        tracing::info!("Streak reset checker started (interval: 1 hour)");
-        loop {
-            tokio::select! {
-                _ = tokio::time::sleep(interval) => {
-                    if let Err(e) = reset_expired_streaks(&db).await {
-                        tracing::error!("Streak reset error: {e}");
-                    }
-                }
-                _ = shutdown.changed() => {
-                    if *shutdown.borrow() {
-                        tracing::info!("Streak reset checker shutting down");
-                        break;
-                    }
+pub fn start_streak_reset(db: PgPool, shutdown: tokio::sync::watch::Receiver<bool>) {
+    tracing::info!("Streak reset checker started (interval: 1 hour)");
+    spawn_poll(
+        Duration::from_secs(3600), // every hour
+        FirstTick::AfterDelay,
+        shutdown,
+        "Streak reset checker shutting down",
+        move || {
+            let db = db.clone();
+            async move {
+                if let Err(e) = reset_expired_streaks(&db).await {
+                    tracing::error!("Streak reset error: {e}");
                 }
             }
-        }
-    });
+        },
+    );
 }
 
 async fn reset_expired_streaks(db: &PgPool) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {

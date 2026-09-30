@@ -21,6 +21,7 @@ use crate::auth::jwt;
 use crate::auth::middleware::{extract_cookie, SESSION_COOKIE};
 use crate::db::queries;
 use crate::error::AppError;
+use crate::social::tier::{all_known_identifiers, provider_meta};
 
 use super::AppState;
 
@@ -120,7 +121,7 @@ pub async fn onboard_page(
     let mut connected_cards = String::new();
     for integration in &integrations {
         let pid = &integration.provider_identifier;
-        let icon = provider_icon(pid);
+        let (_, icon, _) = provider_meta(pid);
         let name = integration.profile_name.as_deref().unwrap_or(&integration.provider_name);
         // Profile pic URL comes from upstream provider response — escape
         // it for both HTML-attribute context (quote-breakout) and JS
@@ -137,23 +138,7 @@ pub async fn onboard_page(
         let integration_id = integration.id.to_string();
 
         // Provider display name for the identifier
-        let provider_display = match pid.as_str() {
-            "x" => "𝕏 (Twitter)",
-            "linkedin" => "LinkedIn",
-            "facebook" => "Facebook",
-            "instagram" => "Instagram",
-            "instagram-standalone" => "Instagram Standalone",
-            "threads" => "Threads",
-            "youtube" => "YouTube",
-            "telegram-bot" => "Telegram Bot",
-            "telegram-user" => "Telegram User",
-            "linkedin-page" => "LinkedIn Page",
-            "bluesky" => "Bluesky",
-            "skool" => "Skool",
-            "github" => "GitHub",
-            "google" => "Google Suite",
-            _ => pid.as_str(),
-        };
+        let provider_display = provider_meta(pid).0;
 
         connected_cards.push_str(&format!(
             r#"<div class="connected-card" id="ic-{iid}">
@@ -238,21 +223,7 @@ pub async fn onboard_page(
         } else if !has_creds {
             badge_class = "badge-error";
             badge_text = "Not Configured".into();
-            hint_text = match id {
-                "x" => "Requires: X_CLIENT_ID + X_CLIENT_SECRET",
-                "linkedin" | "linkedin-page" => "Requires: LINKEDIN_CLIENT_ID + LINKEDIN_CLIENT_SECRET",
-                "facebook" | "instagram" => "Requires: FACEBOOK_CLIENT_ID + FACEBOOK_CLIENT_SECRET",
-                "instagram-standalone" => "Requires: INSTAGRAM_APP_ID + INSTAGRAM_APP_SECRET",
-                "threads" => "Requires: THREADS_APP_ID + THREADS_APP_SECRET",
-                "youtube" | "google" => "Requires: YOUTUBE_CLIENT_ID + YOUTUBE_CLIENT_SECRET",
-                "telegram-bot" => "Requires: TELEGRAM_BOT_TOKENS",
-                "telegram-user" => "Requires: TELEGRAM_CLI_PATH (or tg in PATH)",
-                "reddit" => "Cookie auth available (no env vars needed) — or set REDDIT_CLIENT_ID + REDDIT_CLIENT_SECRET for OAuth",
-                "bluesky" => "Requires: BLUESKY_HANDLE + BLUESKY_APP_PASSWORD",
-                "skool" => "Requires Chrome extension — install, login to Skool, extract auth_token cookie",
-                "github" => "Requires: GITHUB_TOKEN",
-                _ => "Missing environment variables",
-            }.into();
+            hint_text = provider_meta(id).2.into();
             // Reddit and X can use cookie auth without any env vars
             // Telegram Bot can accept a token directly
             if id == "reddit" {
@@ -324,7 +295,7 @@ pub async fn onboard_page(
         };
 
         // ── Provider icon ──────────────────────────────────────
-        let icon = provider_icon(id);
+        let (_, icon, _) = provider_meta(id);
 
         cards.push_str(&format!(
             r#"<div class="card{css_connected}">
@@ -596,22 +567,6 @@ function dc(iid){{
     Ok(Html(html))
 }
 
-fn provider_icon(id: &str) -> &'static str {
-    match id {
-        "x" => "𝕏",
-        "linkedin" | "linkedin-page" => "💼",
-        "facebook" | "instagram" => "📘",
-        "instagram-standalone" => "📸",
-        "threads" => "🧵",
-        "youtube" | "google" => "▶️",
-        "telegram-bot" | "telegram-user" => "✈️",
-        "bluesky" => "🦋",
-        "skool" => "🎓",
-        "github" => "🐙",
-        _ => "🔗",
-    }
-}
-
 /// GET /api/public/connect/{provider} — initiate OAuth from browser
 ///
 /// AUTH: requires `sf_session` cookie OR `?token=<jwt>` query param.
@@ -632,19 +587,13 @@ pub async fn public_connect(
     let user_id = resolve_authed_user(&headers, query.token.as_deref(), &state.config.jwt_secret)?;
 
     if state.config.provider_credentials(&provider).is_none() {
-        let needed = match provider.as_str() {
-            "x" => "X_CLIENT_ID + X_CLIENT_SECRET",
-            "linkedin" | "linkedin-page" => "LINKEDIN_CLIENT_ID + LINKEDIN_CLIENT_SECRET",
-            "facebook" | "instagram" => "FACEBOOK_CLIENT_ID + FACEBOOK_CLIENT_SECRET",
-            "instagram-standalone" => "INSTAGRAM_APP_ID + INSTAGRAM_APP_SECRET",
-            "threads" => "THREADS_APP_ID + THREADS_APP_SECRET",
-            "youtube" | "google" => "YOUTUBE_CLIENT_ID + YOUTUBE_CLIENT_SECRET",
-            "telegram-bot" => "TELEGRAM_BOT_TOKENS (comma-separated)",
-            "telegram-user" => "TELEGRAM_CLI_PATH",
-                "bluesky" => "BLUESKY_HANDLE + BLUESKY_APP_PASSWORD",
-                "skool" => "Chrome extension — install, login to Skool, extract auth_token cookie",
-                "github" => "GITHUB_TOKEN",
-            _ => "Unknown provider. Check server logs.",
+        // A known-but-unset provider and an outright typo need different
+        // advice, and only `provider_meta` knows the former's env hint.
+        let known = all_known_identifiers();
+        let needed = if known.iter().any(|k| *k == provider) {
+            provider_meta(&provider).2
+        } else {
+            "Unknown provider. Check server logs."
         };
         return Err(AppError::BadRequest(format!(
             "❌ Provider '{provider}' is not configured.\n\nSet these in your .env:\n  {needed}\n\nThen restart the server."

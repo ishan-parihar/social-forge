@@ -14,6 +14,7 @@ use chrono::Utc;
 use uuid::Uuid;
 
 use crate::db::PgPool;
+use crate::poll::{spawn_poll, FirstTick};
 use crate::social::registry::ProviderRegistry;
 
 /// Start the plug runner background task. Polls every 60 seconds.
@@ -21,27 +22,24 @@ pub fn start_plug_runner(
     db: PgPool,
     providers: Arc<ProviderRegistry>,
     token_key: Option<[u8; 32]>,
-    mut shutdown: tokio::sync::watch::Receiver<bool>,
+    shutdown: tokio::sync::watch::Receiver<bool>,
 ) {
-    tokio::spawn(async move {
-        let interval = tokio::time::Duration::from_secs(60);
-        tracing::info!("Plug runner started (interval: 60s)");
-        loop {
-            tokio::select! {
-                _ = tokio::time::sleep(interval) => {
-                    if let Err(e) = process_due_plugs(&db, &providers, token_key).await {
-                        tracing::error!("Plug runner error: {e}");
-                    }
-                }
-                _ = shutdown.changed() => {
-                    if *shutdown.borrow() {
-                        tracing::info!("Plug runner shutting down");
-                        break;
-                    }
+    tracing::info!("Plug runner started (interval: 60s)");
+    spawn_poll(
+        std::time::Duration::from_secs(60),
+        FirstTick::AfterDelay,
+        shutdown,
+        "Plug runner shutting down",
+        move || {
+            let db = db.clone();
+            let providers = providers.clone();
+            async move {
+                if let Err(e) = process_due_plugs(&db, &providers, token_key).await {
+                    tracing::error!("Plug runner error: {e}");
                 }
             }
-        }
-    });
+        },
+    );
 }
 
 /// Query all due plugs and execute them.
