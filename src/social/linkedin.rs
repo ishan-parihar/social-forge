@@ -69,6 +69,27 @@ impl LinkedInProvider {
         Ok(user_id)
     }
 
+    // ── Analytics parsers (pure: fixture-testable, no HTTP) ──
+
+    /// Pull the like/comment/share counts out of a `/rest/socialActions/{urn}`
+    /// response. Returns an empty map when the response carries no summaries,
+    /// which callers treat as "no engagement data for this post".
+    pub(crate) fn social_action_counts(
+        json: &serde_json::Value,
+    ) -> serde_json::Map<String, serde_json::Value> {
+        let mut out = serde_json::Map::new();
+        for (key, path) in [
+            ("likeCount", "/likesSummary/totalLikes"),
+            ("commentCount", "/commentsSummary/totalFirstLevelComments"),
+            ("shareCount", "/sharesSummary/totalShares"),
+        ] {
+            if let Some(n) = json.pointer(path).and_then(|v| v.as_i64()) {
+                out.insert(key.into(), serde_json::json!(n));
+            }
+        }
+        out
+    }
+
     pub async fn get_posts(
         &self,
         access_token: &str,
@@ -532,6 +553,48 @@ impl SocialProvider for LinkedInProvider {
         })
     }
 
+    /// LinkedIn-specific user-facing error copy (v25 §2 row 9).
+    fn map_error(&self, body: &str, status: u16) -> Option<String> {
+        match classify_error(body, status) {
+            Some(ErrorKind::RateLimited) => Some(
+                "LinkedIn rate limit hit. LinkedIn allows roughly 100 API calls per day \
+                 for most apps — wait for the daily quota to reset."
+                    .into(),
+            ),
+            Some(ErrorKind::Duplicate) => Some(
+                "LinkedIn flagged this post as a duplicate of recent content. \
+                 Vary the text or publish to a different visibility."
+                    .into(),
+            ),
+            Some(ErrorKind::MediaRejected) => Some(
+                "LinkedIn rejected the media. UGC posts accept JPEG/PNG/GIF images or \
+                 MP4 video, up to 20 items, each from a publicly reachable URL."
+                    .into(),
+            ),
+            Some(ErrorKind::AuthExpired) => Some(
+                "LinkedIn access token expired or was revoked. Reconnect the account \
+                 to refresh it (the token lives ~60 days)."
+                    .into(),
+            ),
+            Some(ErrorKind::Forbidden) => Some(
+                "LinkedIn denied this request. The token is usually missing the scope \
+                 the endpoint needs (r_member_social, r_organization_social) or the \
+                 resource does not belong to this member."
+                    .into(),
+            ),
+            Some(ErrorKind::NotFound) => Some(
+                "LinkedIn post or member not found. Check the URN (urn:li:activity:…)."
+                    .into(),
+            ),
+            Some(ErrorKind::InvalidRequest) => Some(
+                "LinkedIn rejected the request as invalid. Check the post text length \
+                 (3 000 chars) and that the author URN is a person URN."
+                    .into(),
+            ),
+            None => None,
+        }
+    }
+
     async fn publish(
         &self,
         access_token: &str,
@@ -609,7 +672,11 @@ impl SocialProvider for LinkedInProvider {
                 .or_else(|| json["error_description"].as_str())
                 .unwrap_or("LinkedIn publish failed")
                 .to_string();
-            Err(ProviderError::Api(msg))
+            let raw = format!("LinkedIn publish failed (HTTP {status}): {msg}");
+            Err(ProviderError::Api(friendly_error(
+                self.map_error(&msg, status.as_u16()),
+                &raw,
+            )))
         }
     }
 
@@ -706,32 +773,29 @@ impl SocialProvider for LinkedInProvider {
         let json: serde_json::Value = resp.json().await.unwrap_or_default();
         if !status.is_success() {
             let msg = json["message"].as_str().unwrap_or("LinkedIn post analytics error").to_string();
-            return Err(ProviderError::Api(msg));
+            let raw = format!("LinkedIn post analytics error (HTTP {status}): {msg}");
+            return Err(ProviderError::Api(friendly_error(
+                self.map_error(&msg, status.as_u16()),
+                &raw,
+            )));
         }
 
         let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+        let counts = Self::social_action_counts(&json);
         let mut results = Vec::new();
 
-        if let Some(n) = json["likesSummary"]["totalLikes"].as_u64() {
-            results.push(AnalyticsData {
-                label: "likes".into(),
-                data: vec![AnalyticsDataPoint { total: n.to_string(), date: today.clone() }],
-                percentage_change: 0.0,
-            });
-        }
-        if let Some(n) = json["commentsSummary"]["totalFirstLevelComments"].as_u64() {
-            results.push(AnalyticsData {
-                label: "comments".into(),
-                data: vec![AnalyticsDataPoint { total: n.to_string(), date: today.clone() }],
-                percentage_change: 0.0,
-            });
-        }
-        if let Some(n) = json["sharesSummary"]["totalShares"].as_u64() {
-            results.push(AnalyticsData {
-                label: "shares".into(),
-                data: vec![AnalyticsDataPoint { total: n.to_string(), date: today }],
-                percentage_change: 0.0,
-            });
+        for (label, key) in [
+            ("likes", "likeCount"),
+            ("comments", "commentCount"),
+            ("shares", "shareCount"),
+        ] {
+            if let Some(n) = counts.get(key).and_then(|v| v.as_i64()) {
+                results.push(AnalyticsData {
+                    label: label.into(),
+                    data: vec![AnalyticsDataPoint { total: n.to_string(), date: today.clone() }],
+                    percentage_change: 0.0,
+                });
+            }
         }
 
         Ok(results)
@@ -918,22 +982,11 @@ impl SocialProvider for LinkedInProvider {
         }
 
         let json: serde_json::Value = resp.json().await.unwrap_or_default();
-        let mut result = serde_json::Map::new();
-
-        if let Some(n) = json["likesSummary"]["totalLikes"].as_i64() {
-            result.insert("likeCount".into(), serde_json::json!(n));
-        }
-        if let Some(n) = json["commentsSummary"]["totalFirstLevelComments"].as_i64() {
-            result.insert("commentCount".into(), serde_json::json!(n));
-        }
-        if let Some(n) = json["sharesSummary"]["totalShares"].as_i64() {
-            result.insert("shareCount".into(), serde_json::json!(n));
-        }
-
-        if result.is_empty() {
+        let counts = Self::social_action_counts(&json);
+        if counts.is_empty() {
             Ok(None)
         } else {
-            Ok(Some(serde_json::Value::Object(result)))
+            Ok(Some(serde_json::Value::Object(counts)))
         }
     }
 
@@ -1261,77 +1314,8 @@ fn find_first_url(val: &serde_json::Value) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::Config;
 
-    fn test_config() -> Config {
-        Config {
-            database_url: "sqlite:test".into(),
-            jwt_secret: "test".into(),
-            app_password: "test".into(),
-            app_url: "http://localhost:3000".into(),
-            frontend_url: "http://localhost:4200".into(),
-            x_client_id: None,
-            x_client_secret: None,
-            x_auth_token: None,
-            x_ct0: None,
-            linkedin_client_id: Some("test_linkedin_id".into()),
-            linkedin_client_secret: Some("test_linkedin_secret".into()),
-            bluesky_handle: None,
-            bluesky_app_password: None,
-            facebook_client_id: None,
-            facebook_client_secret: None,
-            instagram_client_id: None,
-            instagram_client_secret: None,
-            threads_app_id: None,
-            threads_app_secret: None,
-            youtube_client_id: None,
-            youtube_client_secret: None,
-            reddit_client_id: None,
-            reddit_client_secret: None,
-            reddit_username: None,
-            reddit_password: None,
-            reddit_access_token: None,
-            reddit_refresh_token: None,
-            discord_client_id: None,
-            discord_client_secret: None,
-            discord_bot_token: None,
-            telegram_bot_tokens: None,
-            telegram_session_dir: None,
-            telegram_api_id: None,
-            telegram_api_hash: None,
-            tiktok_client_id: None,
-            tiktok_client_secret: None,
-            medium_access_token: None,
-            devto_api_key: None,
-            pinterest_client_id: None,
-            pinterest_client_secret: None,
-            whatsapp_store_dir: None,
-            slack_client_id: None,
-            slack_client_secret: None,
-            instagram_app_id: None,
-            instagram_app_secret: None,
-            mastodon_client_id: None,
-            mastodon_client_secret: None,
-            mastodon_instance_url: None,
-            hashnode_api_key: None,
-            github_token: None,
-            neynar_api_key: None,
-            token_encryption_key: None,
-            media_dir: "./uploads".into(),
-            stripe_secret_key: None,
-            stripe_webhook_secret: None,
-            stripe_price_free: None,
-            stripe_price_pro_monthly: None,
-            stripe_price_pro_annual: None,
-            stripe_price_business_monthly: None,
-            stripe_price_business_annual: None,
-            llm_endpoint: None,
-            llm_model: None,
-            dub_co_api_key: None,
-            dub_co_workspace: None,
-            strip_links_from_x: false,
-        }
-    }
+    use crate::social::test_config;
 
     #[test]
     fn test_scopes_contain_required() {
@@ -1367,5 +1351,93 @@ mod tests {
         assert!(url.contains("state=test_state"), "should contain state");
         assert!(url.contains("scope="), "should contain scope");
         assert!(url.starts_with("https://www.linkedin.com/oauth/v2/authorization"));
+    }
+
+    // ── B2c: social-actions parser fixtures ──────────────────
+
+    #[test]
+    fn social_action_counts_reads_all_three_summaries() {
+        let fixture = serde_json::json!({
+            "likesSummary": { "totalLikes": 42 },
+            "commentsSummary": { "totalFirstLevelComments": 12 },
+            "sharesSummary": { "totalShares": 5 }
+        });
+        let counts = LinkedInProvider::social_action_counts(&fixture);
+        assert_eq!(counts["likeCount"], 42);
+        assert_eq!(counts["commentCount"], 12);
+        assert_eq!(counts["shareCount"], 5);
+    }
+
+    #[test]
+    fn social_action_counts_skips_absent_summaries() {
+        let fixture = serde_json::json!({ "likesSummary": { "totalLikes": 0 } });
+        let counts = LinkedInProvider::social_action_counts(&fixture);
+        assert_eq!(counts["likeCount"], 0);
+        assert!(!counts.contains_key("commentCount"));
+        assert!(!counts.contains_key("shareCount"));
+    }
+
+    #[test]
+    fn social_action_counts_empty_for_error_body() {
+        let fixture = serde_json::json!({ "message": "Not Found", "status": 404 });
+        assert!(LinkedInProvider::social_action_counts(&fixture).is_empty());
+    }
+
+    #[test]
+    fn social_action_counts_feed_normalises_into_engagement_data() {
+        // The engagement arm in mod.rs reads exactly these keys.
+        let fixture = serde_json::json!({
+            "likesSummary": { "totalLikes": 42 },
+            "commentsSummary": { "totalFirstLevelComments": 12 },
+            "sharesSummary": { "totalShares": 5 }
+        });
+        let e = crate::social::parse_engagement_data(
+            "linkedin",
+            serde_json::Value::Object(LinkedInProvider::social_action_counts(&fixture)),
+        );
+        assert_eq!((e.likes, e.comments, e.shares), (42, 12, 5));
+    }
+
+    // ── B2c: map_error fixtures ─────────────────────────────
+
+    #[test]
+    fn map_error_explains_rate_limit_on_429() {
+        let p = LinkedInProvider::new(&test_config());
+        let msg = p.map_error("Too many requests", 429).unwrap();
+        assert!(msg.contains("rate limit"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_duplicate_content() {
+        let p = LinkedInProvider::new(&test_config());
+        let msg = p.map_error("This content is a duplicate", 400).unwrap();
+        assert!(msg.contains("duplicate"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_rejected_media() {
+        let p = LinkedInProvider::new(&test_config());
+        let msg = p.map_error("The image upload was rejected", 422).unwrap();
+        assert!(msg.contains("media"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_expired_token_on_401() {
+        let p = LinkedInProvider::new(&test_config());
+        let msg = p.map_error("", 401).unwrap();
+        assert!(msg.contains("expired"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_forbidden_on_403() {
+        let p = LinkedInProvider::new(&test_config());
+        let msg = p.map_error("", 403).unwrap();
+        assert!(msg.contains("denied"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_returns_none_for_server_error() {
+        let p = LinkedInProvider::new(&test_config());
+        assert!(p.map_error("Internal Server Error", 503).is_none());
     }
 }

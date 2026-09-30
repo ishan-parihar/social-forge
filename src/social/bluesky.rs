@@ -43,12 +43,14 @@ impl BlueskyProvider {
                 .map(String::from)
                 .ok_or_else(|| ProviderError::Auth("Missing accessJwt".into()))
         } else {
-            Err(ProviderError::Auth(
-                json["message"]
-                    .as_str()
-                    .unwrap_or("Bluesky auth failed")
-                    .to_string(),
-            ))
+            let msg = json["message"]
+                .as_str()
+                .unwrap_or("Bluesky auth failed")
+                .to_string();
+            Err(ProviderError::Auth(friendly_error(
+                self.map_error(&msg, status.as_u16()),
+                &msg,
+            )))
         }
     }
 
@@ -99,6 +101,143 @@ impl BlueskyProvider {
             .map(String::from)
             .ok_or_else(|| ProviderError::Api(format!("Could not fetch CID for {uri}")))
     }
+
+    // ── Analytics helpers ────────────────────────────────────
+
+    /// Fetch the author profile record (follower/follows/post counts).
+    pub async fn get_profile(
+        &self,
+        access_token: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let jwt = self.session_jwt(access_token).await?;
+        let resp = self
+            .http
+            .get("https://bsky.social/xrpc/app.bsky.actor.getProfile")
+            .header("Authorization", format!("Bearer {jwt}"))
+            .query(&[("actor", &self.handle)])
+            .send()
+            .await?;
+        let status = resp.status().as_u16();
+        let body = resp.text().await.unwrap_or_default();
+        self.check_status(status, &body, "getProfile")?;
+        Self::parse_body(&body, "getProfile")
+    }
+
+    /// Look up a post's counters by CID. The AT Protocol has no "get one post
+    /// by CID" endpoint that carries engagement counts, so we page the author
+    /// feed and match — the same lookup `get_post_engagement` already used.
+    async fn post_metrics(
+        &self,
+        access_token: &str,
+        platform_post_id: &str,
+    ) -> Result<Option<serde_json::Value>, ProviderError> {
+        let jwt = self.session_jwt(access_token).await?;
+        let did = self.resolve_handle().await?;
+
+        let limit = "30".to_string();
+        let resp = self
+            .http
+            .get("https://bsky.social/xrpc/app.bsky.feed.getAuthorFeed")
+            .header("Authorization", format!("Bearer {jwt}"))
+            .query(&[("actor", &did), ("limit", &limit)])
+            .send()
+            .await?;
+        let status = resp.status().as_u16();
+        let body = resp.text().await.unwrap_or_default();
+        self.check_status(status, &body, "getAuthorFeed")?;
+        let json = Self::parse_body(&body, "getAuthorFeed")?;
+        Ok(Self::post_metrics_from_feed(&json, platform_post_id))
+    }
+
+    /// Use the stored session JWT, or mint one when the caller has none.
+    async fn session_jwt(&self, access_token: &str) -> Result<String, ProviderError> {
+        if access_token.is_empty() {
+            self.create_session().await
+        } else {
+            Ok(access_token.to_string())
+        }
+    }
+
+    /// Check an XRPC response, routing failures through the shared error
+    /// classifier so every Bluesky call reports the same user-facing copy.
+    fn check_status(&self, status: u16, body: &str, operation: &str) -> Result<(), ProviderError> {
+        if (200..300).contains(&status) {
+            return Ok(());
+        }
+        let raw = format!("Bluesky {operation} failed (HTTP {status}): {body}");
+        Err(ProviderError::Api(friendly_error(
+            self.map_error(body, status),
+            &raw,
+        )))
+    }
+
+    fn parse_body(body: &str, operation: &str) -> Result<serde_json::Value, ProviderError> {
+        serde_json::from_str(body)
+            .map_err(|e| ProviderError::Api(format!("Bluesky {operation} JSON parse error: {e}")))
+    }
+
+    // ── Analytics parsers (pure: fixture-testable, no HTTP) ──
+
+    /// Scan a `getAuthorFeed` response for the post with this CID and return
+    /// its counters. Returns `None` when the post is not on the first page.
+    pub(crate) fn post_metrics_from_feed(
+        json: &serde_json::Value,
+        platform_post_id: &str,
+    ) -> Option<serde_json::Value> {
+        json["feed"].as_array()?.iter().find_map(|item| {
+            let post = &item["post"];
+            if post["cid"].as_str()? != platform_post_id {
+                return None;
+            }
+            Some(serde_json::json!({
+                "likeCount": post["likeCount"].as_i64().unwrap_or(0),
+                "repostCount": post["repostCount"].as_i64().unwrap_or(0),
+                "replyCount": post["replyCount"].as_i64().unwrap_or(0),
+                "quoteCount": post["quoteCount"].as_i64().unwrap_or(0),
+            }))
+        })
+    }
+
+    /// Map an `app.bsky.actor.getProfile` response into dashboard rows.
+    pub(crate) fn profile_analytics(json: &serde_json::Value) -> Vec<AnalyticsData> {
+        let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+        [
+            ("Followers", "followersCount"),
+            ("Following", "followsCount"),
+            ("Posts", "postsCount"),
+        ]
+        .into_iter()
+        .filter_map(|(label, key)| {
+            let total = json.get(key).and_then(|v| v.as_i64())?.to_string();
+            Some(AnalyticsData {
+                label: label.into(),
+                data: vec![AnalyticsDataPoint { total, date: today.clone() }],
+                percentage_change: 0.0,
+            })
+        })
+        .collect()
+    }
+
+    /// Map a post's counters into per-post dashboard rows.
+    pub(crate) fn post_analytics_rows(metrics: &serde_json::Value) -> Vec<AnalyticsData> {
+        let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+        [
+            ("Likes", "likeCount"),
+            ("Reposts", "repostCount"),
+            ("Replies", "replyCount"),
+            ("Quotes", "quoteCount"),
+        ]
+        .into_iter()
+        .filter_map(|(label, key)| {
+            let total = metrics.get(key).and_then(|v| v.as_i64())?.to_string();
+            Some(AnalyticsData {
+                label: label.into(),
+                data: vec![AnalyticsDataPoint { total, date: today.clone() }],
+                percentage_change: 0.0,
+            })
+        })
+        .collect()
+    }
 }
 
 #[async_trait]
@@ -126,6 +265,72 @@ impl SocialProvider for BlueskyProvider {
     /// Bluesky doesn't use OAuth; this returns an error instructing the user
     fn uses_oauth(&self) -> bool {
         false // Bluesky uses app passwords instead of OAuth
+    }
+
+    /// Bluesky-specific user-facing error copy (v25 §2 row 9).
+    fn map_error(&self, body: &str, status: u16) -> Option<String> {
+        match classify_error(body, status) {
+            Some(ErrorKind::RateLimited) => Some(
+                "Bluesky rate limit exceeded. The PDS is throttling this session — \
+                 retry in a minute or reduce the publish cadence."
+                    .into(),
+            ),
+            Some(ErrorKind::Duplicate) => Some(
+                "Bluesky rejected this post as a duplicate of a recent post. \
+                 Change the text before republishing."
+                    .into(),
+            ),
+            Some(ErrorKind::MediaRejected) => Some(
+                "Bluesky rejected the blob. Images must be under 1 MB and reachable at a \
+                 public URL that the PDS can fetch."
+                    .into(),
+            ),
+            Some(ErrorKind::AuthExpired) => Some(
+                "Bluesky session expired — app-password sessions last about 2 hours. \
+                 Reconnect by re-entering BLUESKY_HANDLE and BLUESKY_APP_PASSWORD."
+                    .into(),
+            ),
+            Some(ErrorKind::Forbidden) => Some(
+                "Bluesky denied the request. Re-generate the app password with the \
+                 required permissions, or check the handle is correct."
+                    .into(),
+            ),
+            Some(ErrorKind::NotFound) => Some(
+                "Bluesky post or handle not found. Check the handle spelling and that \
+                 the post is still on the account."
+                    .into(),
+            ),
+            Some(ErrorKind::InvalidRequest) => Some(
+                "Bluesky rejected the record. Posts are limited to 300 characters and \
+                 4 images, and the handle must be a valid atproto identifier."
+                    .into(),
+            ),
+            None => None,
+        }
+    }
+
+    /// Account-level dashboard metrics: follower / following / post counts.
+    async fn analytics(
+        &self,
+        access_token: &str,
+        _internal_id: &str,
+        _days: u32,
+    ) -> Result<Vec<AnalyticsData>, ProviderError> {
+        let profile = self.get_profile(access_token).await?;
+        Ok(Self::profile_analytics(&profile))
+    }
+
+    /// Per-post dashboard metrics. Bluesky exposes no single-post stats
+    /// endpoint, so this reuses the author-feed lookup.
+    async fn post_analytics(
+        &self,
+        access_token: &str,
+        platform_post_id: &str,
+    ) -> Result<Vec<AnalyticsData>, ProviderError> {
+        match self.post_metrics(access_token, platform_post_id).await? {
+            Some(metrics) => Ok(Self::post_analytics_rows(&metrics)),
+            None => Ok(vec![]),
+        }
     }
 
     async fn generate_auth_url(
@@ -234,12 +439,10 @@ impl SocialProvider for BlueskyProvider {
                 status: "published".into(),
             })
         } else {
-            Err(ProviderError::Api(
-                json["message"]
-                    .as_str()
-                    .unwrap_or("Bluesky publish failed")
-                    .to_string(),
-            ))
+            Err(ProviderError::Api(friendly_error(
+                self.map_error(&json.to_string(), status.as_u16()),
+                "Bluesky publish failed",
+            )))
         }
     }
 
@@ -368,42 +571,9 @@ impl SocialProvider for BlueskyProvider {
     async fn get_post_engagement(
         &self,
         access_token: &str,
-        _platform_post_id: &str,
+        platform_post_id: &str,
     ) -> Result<Option<serde_json::Value>, ProviderError> {
-        // Use getAuthorFeed to find the post by matching against recent posts
-        let jwt = if access_token.is_empty() { self.create_session().await? } else { access_token.to_string() };
-        let did = self.resolve_handle().await?;
-
-        let resp = self.http
-            .get("https://bsky.social/xrpc/app.bsky.feed.getAuthorFeed")
-            .header("Authorization", format!("Bearer {jwt}"))
-            .query(&[("actor", &did), ("limit", &"30".to_string())])
-            .send()
-            .await?;
-
-        let json: serde_json::Value = resp.json().await?;
-        let feed = json["feed"].as_array().map(|a| a.to_vec()).unwrap_or_default();
-
-        for item in &feed {
-            let post = &item["post"];
-            let cid = post["cid"].as_str().unwrap_or("");
-            if cid == _platform_post_id {
-                let like_count = post["likeCount"].as_i64().unwrap_or(0);
-                let repost_count = post["repostCount"].as_i64().unwrap_or(0);
-                let reply_count = post["replyCount"].as_i64().unwrap_or(0);
-                let quote_count = post["quoteCount"].as_i64().unwrap_or(0);
-
-                let result = serde_json::json!({
-                    "likeCount": like_count,
-                    "repostCount": repost_count,
-                    "replyCount": reply_count,
-                    "quoteCount": quote_count,
-                });
-                return Ok(Some(result));
-            }
-        }
-
-        Ok(None)
+        self.post_metrics(access_token, platform_post_id).await
     }
 
     async fn reply_to_comment(
@@ -454,7 +624,10 @@ impl SocialProvider for BlueskyProvider {
                 .as_str()
                 .unwrap_or("Bluesky reply failed")
                 .to_string();
-            Err(ProviderError::Api(msg))
+            Err(ProviderError::Api(friendly_error(
+                self.map_error(&msg, status.as_u16()),
+                &msg,
+            )))
         }
     }
 }
@@ -495,5 +668,144 @@ impl BlueskyProvider {
             }
         }
         Ok(serde_json::Value::Null)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::social::test_config;
+
+    fn provider() -> BlueskyProvider {
+        BlueskyProvider::new(&test_config())
+    }
+
+    #[test]
+    fn identifier_is_bluesky() {
+        assert_eq!(provider().identifier(), "bluesky");
+    }
+
+    // ── B2c: profile analytics fixtures ──────────────────────
+
+    #[test]
+    fn profile_analytics_reads_all_three_counts() {
+        let fixture = serde_json::json!({
+            "handle": "test.bsky.social",
+            "followersCount": 1200,
+            "followsCount": 340,
+            "postsCount": 87
+        });
+        let rows = BlueskyProvider::profile_analytics(&fixture);
+        let labels: Vec<&str> = rows.iter().map(|r| r.label.as_str()).collect();
+        assert_eq!(labels, ["Followers", "Following", "Posts"]);
+        assert_eq!(rows[0].data[0].total, "1200");
+        assert!(!rows[0].data[0].date.is_empty());
+    }
+
+    #[test]
+    fn profile_analytics_empty_for_error_body() {
+        let fixture = serde_json::json!({ "error": "Profile not found" });
+        assert!(BlueskyProvider::profile_analytics(&fixture).is_empty());
+    }
+
+    // ── B2c: post metrics fixtures ───────────────────────────
+
+    fn feed_fixture() -> serde_json::Value {
+        serde_json::json!({
+            "feed": [
+                { "post": { "cid": "bafy1", "likeCount": 1, "repostCount": 0, "replyCount": 0, "quoteCount": 0 } },
+                { "post": { "cid": "bafy2", "likeCount": 42, "repostCount": 8, "replyCount": 3, "quoteCount": 1 } }
+            ]
+        })
+    }
+
+    #[test]
+    fn post_metrics_from_feed_matches_by_cid() {
+        let metrics = BlueskyProvider::post_metrics_from_feed(&feed_fixture(), "bafy2").unwrap();
+        assert_eq!(metrics["likeCount"], 42);
+        assert_eq!(metrics["repostCount"], 8);
+        assert_eq!(metrics["replyCount"], 3);
+        assert_eq!(metrics["quoteCount"], 1);
+    }
+
+    #[test]
+    fn post_metrics_from_feed_returns_none_when_post_not_on_page() {
+        assert!(BlueskyProvider::post_metrics_from_feed(&feed_fixture(), "bafy-missing").is_none());
+    }
+
+    #[test]
+    fn post_metrics_from_feed_returns_none_for_empty_feed() {
+        let fixture = serde_json::json!({ "feed": [] });
+        assert!(BlueskyProvider::post_metrics_from_feed(&fixture, "bafy1").is_none());
+    }
+
+    #[test]
+    fn post_metrics_feed_into_engagement_data_matches_parser_arm() {
+        let metrics = BlueskyProvider::post_metrics_from_feed(&feed_fixture(), "bafy2").unwrap();
+        let e = crate::social::parse_engagement_data("bluesky", metrics);
+        assert_eq!((e.likes, e.reposts, e.replies, e.quotes), (42, 8, 3, 1));
+    }
+
+    #[test]
+    fn post_analytics_rows_covers_all_four_counters() {
+        let metrics = serde_json::json!({
+            "likeCount": 5, "repostCount": 2, "replyCount": 1, "quoteCount": 0
+        });
+        let rows = BlueskyProvider::post_analytics_rows(&metrics);
+        let labels: Vec<&str> = rows.iter().map(|r| r.label.as_str()).collect();
+        assert_eq!(labels, ["Likes", "Reposts", "Replies", "Quotes"]);
+        assert_eq!(rows[0].data[0].total, "5");
+    }
+
+    // ── B2c: map_error fixtures ─────────────────────────────
+
+    #[test]
+    fn map_error_explains_rate_limit_on_429() {
+        let msg = provider().map_error("Too Many Requests", 429).unwrap();
+        assert!(msg.contains("rate limit"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_duplicate_post() {
+        let msg = provider().map_error("duplicate record", 400).unwrap();
+        assert!(msg.contains("duplicate"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_rejected_blob() {
+        let msg = provider()
+            .map_error("BlobTooLarge: blob is too large", 400)
+            .unwrap();
+        assert!(msg.contains("blob"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_expired_session_on_401() {
+        let msg = provider().map_error("Expired token", 401).unwrap();
+        assert!(msg.contains("expired"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_forbidden_on_403() {
+        let msg = provider().map_error("", 403).unwrap();
+        assert!(msg.contains("denied"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_returns_none_for_server_error() {
+        assert!(provider().map_error("Internal Server Error", 503).is_none());
+    }
+
+    #[test]
+    fn check_status_passes_through_2xx() {
+        assert!(provider().check_status(200, "{}", "getProfile").is_ok());
+    }
+
+    #[test]
+    fn check_status_annotates_401_with_friendly_copy() {
+        let err = provider().check_status(401, "Expired token", "getProfile").unwrap_err();
+        let msg = format!("{err}");
+        assert!(msg.contains("expired"), "got: {msg}");
+        assert!(msg.contains("raw:"), "raw text must be preserved: {msg}");
     }
 }

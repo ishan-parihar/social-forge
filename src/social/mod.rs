@@ -676,9 +676,182 @@ pub enum ProviderError {
     Auth(String),
 }
 
+// ── Error classification (v25 §2 row 9) ────────────────────────
+
+/// Coarse bucket a provider error response falls into.
+///
+/// Per-provider `map_error` impls turn this into user-facing copy, so the
+/// body-sniffing heuristics live in one place instead of being
+/// re-implemented (and drifting) across every provider.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ErrorKind {
+    RateLimited,
+    Duplicate,
+    MediaRejected,
+    AuthExpired,
+    Forbidden,
+    NotFound,
+    InvalidRequest,
+}
+
+/// Classify an error response body + HTTP status into an [`ErrorKind`].
+///
+/// `status` is authoritative when it says something specific (401/403/404/429/
+/// 400/422); the body is only sniffed for the cases a status cannot express
+/// (duplicate submissions, rejected media, expired grants). Returns `None`
+/// when nothing useful can be said — callers then fall back to the raw body.
+pub fn classify_error(body: &str, status: u16) -> Option<ErrorKind> {
+    let lower = body.to_ascii_lowercase();
+
+    // Body signals are checked before the status code because they are more
+    // specific: a 403 carrying "rate limit exceeded" is a rate limit, not a
+    // permission problem.
+    if lower.contains("\"code\":88")
+        || lower.contains("rate limit exceeded")
+        || lower.contains("too many requests")
+        || lower.contains("ratelimit")
+    {
+        return Some(ErrorKind::RateLimited);
+    }
+    if lower.contains("duplicate") || lower.contains("already exists") {
+        return Some(ErrorKind::Duplicate);
+    }
+    if lower.contains("expired")
+        || lower.contains("invalid_grant")
+        || lower.contains("unauthorized")
+        || lower.contains("not authorized")
+        || lower.contains("invalid token")
+        || lower.contains("bad authentication")
+    {
+        return Some(ErrorKind::AuthExpired);
+    }
+    let is_media = ["media", "image", "video", "blob", "upload", "thumbnail"]
+        .iter()
+        .any(|t| lower.contains(t));
+    let is_media_failure = [
+        "rejected",
+        "invalid",
+        "unsupported",
+        "not allowed",
+        "could not be uploaded",
+        "failed to upload",
+        "too large",
+    ]
+    .iter()
+    .any(|t| lower.contains(t));
+    if is_media && is_media_failure {
+        return Some(ErrorKind::MediaRejected);
+    }
+
+    match status {
+        401 => Some(ErrorKind::AuthExpired),
+        403 => Some(ErrorKind::Forbidden),
+        404 => Some(ErrorKind::NotFound),
+        429 => Some(ErrorKind::RateLimited),
+        400 | 422 => Some(ErrorKind::InvalidRequest),
+        _ => None,
+    }
+}
+
+/// Prefix a raw provider error with the user-friendly copy returned by
+/// `map_error`, keeping the raw text so debugging stays possible. Falls back
+/// to the raw text alone when the provider has no mapping for this error.
+pub fn friendly_error(friendly: Option<String>, raw: &str) -> String {
+    match friendly {
+        Some(msg) => format!("{msg} (raw: {raw})"),
+        None => raw.to_string(),
+    }
+}
+
 // ── Engagement Data Parser ────────────────────────────────────
 
-// ── Provider metric readers (v25 §2 rows 3–4) ───────────────────
+// ── Meta Graph insights helpers ───────────────────────────────
+// Facebook, Instagram, Instagram-standalone and Threads all serve metrics
+// through the same Graph insights envelope, so one parser serves all four.
+
+/// Read a numeric JSON field, accepting both integer and float encodings.
+fn json_i64(v: Option<&serde_json::Value>) -> Option<i64> {
+    match v? {
+        serde_json::Value::Number(n) => n.as_i64().or_else(|| n.as_f64().map(|f| f as i64)),
+        serde_json::Value::String(s) => s.parse().ok(),
+        _ => None,
+    }
+}
+
+/// Look up one metric in a Graph insights envelope or a flat media object.
+///
+/// Accepts both shapes the Graph API returns:
+/// - multi-point: `{"data":[{"name":"views","values":[{"value":12,"end_time":"…"}]}]}`
+/// - single-value: `{"data":[{"name":"reach","value":30}]}`
+/// - flat: `{"like_count":42}`
+///
+/// Returns `None` when the metric is absent, so callers can fall back to the
+/// next candidate metric without mistaking a real zero for a missing field.
+pub fn insight_value(raw: &serde_json::Value, metric: &str) -> Option<i64> {
+    if let Some(v) = json_i64(raw.get(metric)) {
+        return Some(v);
+    }
+    let entry = raw
+        .get("data")
+        .and_then(|d| d.as_array())?
+        .iter()
+        .find(|e| e.get("name").and_then(|n| n.as_str()) == Some(metric))?;
+
+    match entry.get("values").and_then(|v| v.as_array()) {
+        // Multi-point envelope: the first bucket is the closest-to-now total
+        // for lifetime metrics, and the only one for period-scoped metrics.
+        Some(values) => json_i64(values.first().and_then(|v| v.get("value"))),
+        None => json_i64(entry.get("value")),
+    }
+}
+
+/// Parse a Graph insights response into dashboard-shaped `AnalyticsData`.
+///
+/// One `AnalyticsData` per metric, labelled with the metric name, one data point
+/// per bucket. Metrics without a `values` array become a single data point.
+/// `percentage_change` is left at 0.0 — no consumer reads it today.
+pub fn parse_insights_data(raw: &serde_json::Value) -> Vec<AnalyticsData> {
+    raw.get("data")
+        .and_then(|d| d.as_array())
+        .map(|entries| {
+            entries
+                .iter()
+                .filter_map(|entry| {
+                    let label = entry.get("name").and_then(|n| n.as_str())?.to_string();
+                    let data = match entry.get("values").and_then(|v| v.as_array()) {
+                        Some(values) => values
+                            .iter()
+                            .map(|v| AnalyticsDataPoint {
+                                total: json_i64(v.get("value")).unwrap_or(0).to_string(),
+                                date: v
+                                    .get("end_time")
+                                    .and_then(|d| d.as_str())
+                                    .unwrap_or_default()
+                                    .to_string(),
+                            })
+                            .collect(),
+                        // Single-value metric (e.g. IG `reach`, `follower_count`)
+                        None => vec![AnalyticsDataPoint {
+                            total: json_i64(entry.get("value")).unwrap_or(0).to_string(),
+                            date: entry
+                                .get("end_time")
+                                .and_then(|d| d.as_str())
+                                .unwrap_or_default()
+                                .to_string(),
+                        }],
+                    };
+                    Some(AnalyticsData {
+                        label,
+                        data,
+                        percentage_change: 0.0,
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+// ── Provider metric readers (v25 §2 rows 3–4) ─────────────────
 
 /// Read one count out of a JSON object, tolerating the shapes the analytics
 /// endpoints use: YouTube Data API sends string-encoded numbers
@@ -768,12 +941,20 @@ pub fn parse_engagement_data(provider: &str, raw: serde_json::Value) -> Engageme
             e.quotes = raw.get("quoteCount").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
         }
 
-        // Instagram: { "like_count": 42, "comments_count": 12 } (from Graph API)
+        // Instagram (Facebook Graph + graph.instagram.com), flat or insights-envelope:
+        // { "like_count": 42, "comments_count": 12, "saved": 5, "reach": 300, "views": 420 }
         "instagram" | "instagram_standalone" | "instagram-standalone" => {
-            e.likes = raw.get("like_count").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-            e.comments = raw.get("comments_count").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-            e.saves = raw.get("saved_count").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-            e.views = raw.get("reach").and_then(|v| v.as_i64()).or_else(|| raw.get("impressions").and_then(|v| v.as_i64())).unwrap_or(0) as i32;
+            let g = |m: &str| insight_value(&raw, m).unwrap_or(0) as i32;
+            e.likes = g("like_count");
+            e.comments = g("comments_count");
+            e.saves = match insight_value(&raw, "saved") {
+                Some(v) => v as i32,
+                None => g("saved_count"),
+            };
+            e.views = ["views", "plays", "reach", "impressions"]
+                .iter()
+                .find_map(|m| insight_value(&raw, m))
+                .unwrap_or(0) as i32;
         }
 
         // LinkedIn: { "likeCount": 42, "commentCount": 12, "shareCount": 5 }
@@ -852,10 +1033,11 @@ pub fn parse_engagement_data(provider: &str, raw: serde_json::Value) -> Engageme
 
         // Threads: { "like_count": 42, "reply_count": 12, "repost_count": 5, "quote_count": 1 }
         "threads" => {
-            e.likes = raw.get("like_count").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-            e.replies = raw.get("reply_count").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-            e.reposts = raw.get("repost_count").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-            e.quotes = raw.get("quote_count").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            let g = |m: &str| insight_value(&raw, m).unwrap_or(0) as i32;
+            e.likes = g("like_count");
+            e.replies = g("reply_count");
+            e.reposts = g("repost_count");
+            e.quotes = g("quote_count");
         }
 
         _ => {}
@@ -883,6 +1065,232 @@ pub struct EngagementRow {
     pub raw: serde_json::Value,
 }
 
+#[cfg(test)]
+/// Minimal offline `Config` for provider unit tests.
+///
+/// Lives here so every provider's `#[cfg(test)]` module shares one literal
+/// instead of each carrying its own ~60-line copy. No credentials, no DB.
+pub(crate) fn test_config() -> crate::config::Config {
+    crate::config::Config {
+        database_url: "postgres://test:test@localhost:5432/test".into(),
+        jwt_secret: "test".into(),
+        app_password: "test".into(),
+        app_url: "http://localhost:3000".into(),
+        frontend_url: "http://localhost:4200".into(),
+        x_client_id: None,
+        x_client_secret: None,
+        x_auth_token: None,
+        x_ct0: None,
+        linkedin_client_id: Some("test_linkedin_id".into()),
+        linkedin_client_secret: Some("test_linkedin_secret".into()),
+        bluesky_handle: Some("test.bsky.social".into()),
+        bluesky_app_password: Some("test-app-password".into()),
+        facebook_client_id: None,
+        facebook_client_secret: None,
+        instagram_client_id: None,
+        instagram_client_secret: None,
+        threads_app_id: None,
+        threads_app_secret: None,
+        youtube_client_id: None,
+        youtube_client_secret: None,
+        reddit_client_id: Some("test_reddit_id".into()),
+        reddit_client_secret: Some("test_reddit_secret".into()),
+        reddit_username: Some("test_reddit_user".into()),
+        reddit_password: Some("test_reddit_pass".into()),
+        reddit_access_token: None,
+        reddit_refresh_token: None,
+        discord_client_id: None,
+        discord_client_secret: None,
+        discord_bot_token: None,
+        telegram_bot_tokens: None,
+        telegram_session_dir: None,
+        telegram_api_id: None,
+        telegram_api_hash: None,
+        tiktok_client_id: None,
+        tiktok_client_secret: None,
+        medium_access_token: None,
+        devto_api_key: None,
+        pinterest_client_id: None,
+        pinterest_client_secret: None,
+        whatsapp_store_dir: None,
+        slack_client_id: None,
+        slack_client_secret: None,
+        instagram_app_id: None,
+        instagram_app_secret: None,
+        mastodon_client_id: None,
+        mastodon_client_secret: None,
+        mastodon_instance_url: None,
+        hashnode_api_key: None,
+        github_token: None,
+        neynar_api_key: None,
+        token_encryption_key: None,
+        media_dir: "./uploads".into(),
+        stripe_secret_key: None,
+        stripe_webhook_secret: None,
+        stripe_price_free: None,
+        stripe_price_pro_monthly: None,
+        stripe_price_pro_annual: None,
+        stripe_price_business_monthly: None,
+        stripe_price_business_annual: None,
+        llm_endpoint: None,
+        llm_model: None,
+        dub_co_api_key: None,
+        dub_co_workspace: None,
+        strip_links_from_x: false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── classify_error ───────────────────────────────────────
+
+    #[test]
+    fn classify_error_detects_rate_limit_from_code_88() {
+        assert_eq!(
+            classify_error(r#"{"errors":[{"code":88}]}"#, 400),
+            Some(ErrorKind::RateLimited)
+        );
+    }
+
+    #[test]
+    fn classify_error_detects_rate_limit_from_429_status() {
+        assert_eq!(
+            classify_error("too many requests", 429),
+            Some(ErrorKind::RateLimited)
+        );
+    }
+
+    #[test]
+    fn classify_error_prefers_body_rate_limit_over_403() {
+        assert_eq!(
+            classify_error("Rate limit exceeded for this method", 403),
+            Some(ErrorKind::RateLimited)
+        );
+    }
+
+    #[test]
+    fn classify_error_detects_duplicate() {
+        assert_eq!(
+            classify_error("Status is a duplicate.", 403),
+            Some(ErrorKind::Duplicate)
+        );
+    }
+
+    #[test]
+    fn classify_error_detects_media_rejection() {
+        assert_eq!(
+            classify_error("The media upload was rejected by the platform", 400),
+            Some(ErrorKind::MediaRejected)
+        );
+    }
+
+    #[test]
+    fn classify_error_detects_expired_grant() {
+        assert_eq!(
+            classify_error(r#"{"error":"invalid_grant"}"#, 400),
+            Some(ErrorKind::AuthExpired)
+        );
+    }
+
+    #[test]
+    fn classify_error_falls_back_to_status_codes() {
+        assert_eq!(classify_error("", 401), Some(ErrorKind::AuthExpired));
+        assert_eq!(classify_error("", 403), Some(ErrorKind::Forbidden));
+        assert_eq!(classify_error("", 404), Some(ErrorKind::NotFound));
+        assert_eq!(classify_error("", 400), Some(ErrorKind::InvalidRequest));
+        assert_eq!(classify_error("", 422), Some(ErrorKind::InvalidRequest));
+    }
+
+    #[test]
+    fn classify_error_returns_none_for_uninformative_server_error() {
+        assert_eq!(classify_error("Internal Server Error", 500), None);
+    }
+
+    // ── parse_engagement_data: X ─────────────────────────────
+
+    #[test]
+    fn parse_engagement_data_maps_x_v2_public_metrics() {
+        let raw = serde_json::json!({
+            "public_metrics": {
+                "like_count": 42, "retweet_count": 8, "reply_count": 3,
+                "quote_count": 1, "impression_count": 1200, "bookmark_count": 5
+            }
+        });
+        let e = parse_engagement_data("x", raw);
+        assert_eq!(e.likes, 42);
+        assert_eq!(e.reposts, 8);
+        assert_eq!(e.replies, 3);
+        assert_eq!(e.quotes, 1);
+        assert_eq!(e.views, 1200);
+        assert_eq!(e.saves, 5);
+    }
+
+    // ── parse_engagement_data: Reddit ────────────────────────
+
+    #[test]
+    fn parse_engagement_data_maps_reddit_submission_metrics() {
+        let raw = serde_json::json!({
+            "score": 120, "num_comments": 12, "upvote_ratio": 0.95,
+            "ups": 123, "downs": 3, "total_awards_received": 2
+        });
+        let e = parse_engagement_data("reddit", raw);
+        assert_eq!(e.likes, 120);
+        assert_eq!(e.comments, 12);
+        assert_eq!(e.upvote_ratio, Some(0.95));
+        assert_eq!(e.upvotes, 123);
+        assert_eq!(e.downvotes, 3);
+        assert_eq!(e.awards, 2);
+    }
+
+    #[test]
+    fn parse_engagement_data_treats_null_reddit_ups_as_zero() {
+        // Reddit omits ups/downs for non-authors — must not panic or read as NaN.
+        let raw = serde_json::json!({ "score": 7, "num_comments": 1, "ups": null, "downs": null });
+        let e = parse_engagement_data("reddit", raw);
+        assert_eq!(e.upvotes, 0);
+        assert_eq!(e.downvotes, 0);
+        assert_eq!(e.likes, 7);
+    }
+
+    // ── parse_engagement_data: Bluesky ───────────────────────
+
+    #[test]
+    fn parse_engagement_data_maps_bluesky_post_metrics() {
+        let raw = serde_json::json!({
+            "likeCount": 42, "repostCount": 8, "replyCount": 3, "quoteCount": 1
+        });
+        let e = parse_engagement_data("bluesky", raw);
+        assert_eq!(e.likes, 42);
+        assert_eq!(e.reposts, 8);
+        assert_eq!(e.replies, 3);
+        assert_eq!(e.quotes, 1);
+    }
+
+    // ── parse_engagement_data: LinkedIn (member + page) ──────
+
+    #[test]
+    fn parse_engagement_data_maps_linkedin_social_actions() {
+        let raw = serde_json::json!({
+            "likeCount": 42, "commentCount": 12, "shareCount": 5, "impressionCount": 900
+        });
+        for provider in ["linkedin", "linkedin_page", "linkedin-page"] {
+            let e = parse_engagement_data(provider, raw.clone());
+            assert_eq!(e.likes, 42, "{provider} likes");
+            assert_eq!(e.comments, 12, "{provider} comments");
+            assert_eq!(e.shares, 5, "{provider} shares");
+            assert_eq!(e.views, 900, "{provider} views");
+        }
+    }
+
+    #[test]
+    fn parse_engagement_data_unknown_provider_yields_zeroes() {
+        let e = parse_engagement_data("not-a-provider", serde_json::json!({ "likeCount": 5 }));
+        assert_eq!(e.likes, 0);
+    }
+}
+
 impl From<EngagementData> for EngagementRow {
     fn from(e: EngagementData) -> Self {
         EngagementRow {
@@ -901,5 +1309,144 @@ impl From<EngagementData> for EngagementRow {
             awards: e.awards,
             raw: e.raw.unwrap_or(serde_json::Value::Object(serde_json::Map::new())),
         }
+    }
+}
+
+#[cfg(test)]
+mod insights_tests {
+    use super::*;
+
+    #[test]
+    fn parse_should_read_flat_metric() {
+        let raw = serde_json::json!({ "like_count": 42 });
+        assert_eq!(insight_value(&raw, "like_count"), Some(42));
+    }
+
+    #[test]
+    fn parse_should_read_metric_from_values_envelope() {
+        let raw = serde_json::json!({
+            "data": [
+                { "name": "reach", "period": "lifetime", "values": [{ "value": 300, "end_time": "2026-09-29T00:00:00+0000" }] }
+            ]
+        });
+        assert_eq!(insight_value(&raw, "reach"), Some(300));
+    }
+
+    #[test]
+    fn parse_should_read_metric_from_single_value_envelope() {
+        let raw = serde_json::json!({ "data": [{ "name": "follower_count", "value": 1200 }] });
+        assert_eq!(insight_value(&raw, "follower_count"), Some(1200));
+    }
+
+    #[test]
+    fn parse_should_return_none_for_absent_metric() {
+        let raw = serde_json::json!({ "data": [{ "name": "reach", "value": 1 }] });
+        assert_eq!(insight_value(&raw, "views"), None);
+    }
+
+    #[test]
+    fn parse_should_expand_daily_insights_into_dashboard_series() {
+        let raw = serde_json::json!({
+            "data": [
+                {
+                    "name": "views",
+                    "period": "day",
+                    "values": [
+                        { "value": 10, "end_time": "2026-09-28T00:00:00+0000" },
+                        { "value": 25, "end_time": "2026-09-29T00:00:00+0000" }
+                    ]
+                },
+                { "name": "follower_count", "value": 1200 }
+            ]
+        });
+        let series = parse_insights_data(&raw);
+        assert_eq!(series.len(), 2);
+        assert_eq!(series[0].label, "views");
+        assert_eq!(series[0].data.len(), 2);
+        assert_eq!(series[0].data[1].total, "25");
+        assert_eq!(series[0].data[1].date, "2026-09-29T00:00:00+0000");
+        assert_eq!(series[1].label, "follower_count");
+        assert_eq!(series[1].data[0].total, "1200");
+    }
+
+    #[test]
+    fn parse_should_map_facebook_reaction_comment_share_shape() {
+        let raw = serde_json::json!({
+            "id": "123_456",
+            "reactions": {
+                "summary": { "total_count": 42 },
+                "data": [
+                    { "type": "LIKE", "total_count": 30 },
+                    { "type": "LOVE", "total_count": 7 },
+                    { "type": "LIKE", "total_count": 5 }
+                ]
+            },
+            "comments": { "summary": { "total_count": 12 } },
+            "shares": { "count": 5 }
+        });
+        let e = parse_engagement_data("facebook", raw);
+        assert_eq!(e.likes, 42);
+        assert_eq!(e.comments, 12);
+        assert_eq!(e.shares, 5);
+        // Repeated reaction types are aggregated into the breakdown map.
+        assert_eq!(e.reactions, Some(serde_json::json!({ "like": 2, "love": 1 })));
+    }
+
+    #[test]
+    fn parse_should_map_instagram_graph_media_shape() {
+        let raw = serde_json::json!({
+            "id": "17900000000000000",
+            "like_count": 42,
+            "comments_count": 12,
+            "saved": 7,
+            "reach": 300,
+            "views": 420
+        });
+        let e = parse_engagement_data("instagram", raw);
+        assert_eq!(e.likes, 42);
+        assert_eq!(e.comments, 12);
+        assert_eq!(e.saves, 7);
+        assert_eq!(e.views, 420);
+    }
+
+    #[test]
+    fn parse_should_map_instagram_standalone_insights_envelope_shape() {
+        let raw = serde_json::json!({
+            "id": "17900000000000000",
+            "like_count": 8,
+            "comments_count": 2,
+            "data": [
+                { "name": "reach", "values": [{ "value": 90, "end_time": "2026-09-29T00:00:00+0000" }] },
+                { "name": "saved", "values": [{ "value": 3, "end_time": "2026-09-29T00:00:00+0000" }] }
+            ]
+        });
+        let e = parse_engagement_data("instagram-standalone", raw);
+        assert_eq!(e.likes, 8);
+        assert_eq!(e.comments, 2);
+        assert_eq!(e.saves, 3);
+        assert_eq!(e.views, 90);
+    }
+
+    #[test]
+    fn parse_should_map_threads_reaction_shape() {
+        let raw = serde_json::json!({
+            "id": "8888888888888888888",
+            "like_count": 42,
+            "reply_count": 12,
+            "repost_count": 5,
+            "quote_count": 1
+        });
+        let e = parse_engagement_data("threads", raw);
+        assert_eq!(e.likes, 42);
+        assert_eq!(e.replies, 12);
+        assert_eq!(e.reposts, 5);
+        assert_eq!(e.quotes, 1);
+    }
+
+    #[test]
+    fn parse_should_keep_raw_payload_for_engagement_row() {
+        let raw = serde_json::json!({ "like_count": 1 });
+        let e = parse_engagement_data("instagram", raw.clone());
+        assert_eq!(e.raw, Some(raw));
     }
 }

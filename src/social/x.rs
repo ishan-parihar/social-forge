@@ -302,8 +302,10 @@ impl XProvider {
         let body = resp.text().await
             .map_err(|e| ProviderError::Api(format!("X body error: {e}")))?;
         if !status.is_success() {
-            return Err(ProviderError::Api(format!(
-                "X GraphQL {operation}: HTTP {status}: {body}"
+            let raw = format!("X GraphQL {operation}: HTTP {status}: {body}");
+            return Err(ProviderError::Api(friendly_error(
+                self.map_error(&body, status.as_u16()),
+                &raw,
             )));
         }
         let json: serde_json::Value = serde_json::from_str(&body)
@@ -448,7 +450,11 @@ impl XProvider {
         let msg = json["errors"][0]["message"]
             .as_str()
             .unwrap_or("GraphQL request failed");
-        Err(ProviderError::Api(format!("HTTP {status}: {msg}")))
+        let raw = format!("HTTP {status}: {msg}");
+        Err(ProviderError::Api(friendly_error(
+            self.map_error(msg, status.as_u16()),
+            &raw,
+        )))
     }
 
     fn check_v2_response(&self, status: wreq::StatusCode, json: &serde_json::Value) -> Result<serde_json::Value, ProviderError> {
@@ -465,7 +471,10 @@ impl XProvider {
             .get("detail")
             .and_then(|d| d.as_str())
             .unwrap_or("Unknown API error");
-        Err(ProviderError::Api(detail.to_string()))
+        Err(ProviderError::Api(friendly_error(
+            self.map_error(detail, status.as_u16()),
+            detail,
+        )))
     }
 
     // ── Pagination cursor extraction from GraphQL timeline ───
@@ -495,6 +504,89 @@ impl XProvider {
             }
         }
         None
+    }
+
+    // ── Analytics parsers (pure: fixture-testable, no HTTP) ──
+
+    /// Map a `/2/users/{id}?user.fields=public_metrics` response into dashboard rows.
+    fn parse_account_metrics(json: &serde_json::Value) -> Vec<AnalyticsData> {
+        let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+        let metrics = &json["data"]["public_metrics"];
+        [
+            ("Followers", "followers_count"),
+            ("Following", "following_count"),
+            ("Tweets", "tweet_count"),
+            ("Listed", "listed_count"),
+        ]
+        .into_iter()
+        .filter_map(|(label, key)| {
+            let total = metrics.get(key).and_then(|v| v.as_i64())?.to_string();
+            Some(AnalyticsData {
+                label: label.into(),
+                data: vec![AnalyticsDataPoint { total, date: today.clone() }],
+                percentage_change: 0.0,
+            })
+        })
+        .collect()
+    }
+
+    /// Map a `/2/tweets/{id}?tweet.fields=public_metrics` response into per-post rows.
+    fn parse_tweet_metrics(json: &serde_json::Value) -> Vec<AnalyticsData> {
+        let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+        let metrics = &json["data"]["public_metrics"];
+        [
+            ("Likes", "like_count"),
+            ("Retweets", "retweet_count"),
+            ("Replies", "reply_count"),
+            ("Quotes", "quote_count"),
+            ("Impressions", "impression_count"),
+        ]
+        .into_iter()
+        .filter_map(|(label, key)| {
+            let total = metrics.get(key).and_then(|v| v.as_i64())?.to_string();
+            Some(AnalyticsData {
+                label: label.into(),
+                data: vec![AnalyticsDataPoint { total, date: today.clone() }],
+                percentage_change: 0.0,
+            })
+        })
+        .collect()
+    }
+
+    /// Normalize both tweet shapes into the v2 `public_metrics` object that
+    /// `parse_engagement_data("x", …)` understands.
+    ///
+    /// The OAuth path returns `data.public_metrics` verbatim. The GraphQL
+    /// (cookie) path nests the tweet under `data.result.legacy` and uses v1
+    /// key names, so without this translation the cookie path silently
+    /// reported zero engagement.
+    fn extract_public_metrics(detail: &serde_json::Value) -> Option<serde_json::Value> {
+        let data = detail.get("data")?;
+        if let Some(pm) = data.get("public_metrics") {
+            return Some(pm.clone());
+        }
+        let legacy = data.get("result").unwrap_or(data).get("legacy")?;
+        // X sometimes serializes GraphQL counters as strings; normalise to
+        // numbers so `as_i64()` in the parser arm does not read them as 0.
+        let count = |v: &serde_json::Value| -> Option<serde_json::Value> {
+            v.as_i64()
+                .map(serde_json::Value::from)
+                .or_else(|| v.as_str()?.trim().parse::<i64>().ok().map(serde_json::Value::from))
+        };
+        let mut out = serde_json::Map::new();
+        for (gql_key, v2_key) in [
+            ("favorite_count", "like_count"),
+            ("retweet_count", "retweet_count"),
+            ("reply_count", "reply_count"),
+            ("quote_count", "quote_count"),
+            ("bookmark_count", "bookmark_count"),
+            ("view_count", "impression_count"),
+        ] {
+            if let Some(v) = legacy.get(gql_key).and_then(count) {
+                out.insert(v2_key.to_string(), v);
+            }
+        }
+        (!out.is_empty()).then_some(serde_json::Value::Object(out))
     }
 
     // ── Media upload (v1.1 API, used by both paths) ──────────
@@ -1192,6 +1284,48 @@ impl SocialProvider for XProvider {
         })
     }
 
+    /// X-specific user-facing error copy (v25 §2 row 9). The GraphQL and v2
+    /// response checkers both route their `Api` messages through this.
+    fn map_error(&self, body: &str, status: u16) -> Option<String> {
+        match classify_error(body, status) {
+            Some(ErrorKind::RateLimited) => Some(
+                "X rate limit reached. Forge retries with backoff automatically — \
+                 lower the publish rate or move to a higher X API tier to remove the wait."
+                    .into(),
+            ),
+            Some(ErrorKind::Duplicate) => Some(
+                "X rejected this post as a duplicate of a recent post. \
+                 Change the text or wait for X's duplicate window to pass."
+                    .into(),
+            ),
+            Some(ErrorKind::MediaRejected) => Some(
+                "X rejected the attached media. Check that the file is a supported \
+                 image/GIF (under 5 MB) or MP4 (under 140 s) and that the media URL \
+                 is publicly fetchable by X."
+                    .into(),
+            ),
+            Some(ErrorKind::AuthExpired) => Some(
+                "X session expired or the cookies are stale. Re-paste your X cookies \
+                 (auth_token + ct0) on the Channels page, or reconnect via OAuth."
+                    .into(),
+            ),
+            Some(ErrorKind::Forbidden) => Some(
+                "X denied this request (HTTP 403). The account is typically suspended, \
+                 temporarily blocked from posting, or missing a required API scope."
+                    .into(),
+            ),
+            Some(ErrorKind::NotFound) => {
+                Some("X post or user not found — it may be deleted or protected.".into())
+            }
+            Some(ErrorKind::InvalidRequest) => Some(
+                "X rejected the request as invalid. Check the text length (280 chars, \
+                 25 000 for premium) and the media count (4 images / 1 video)."
+                    .into(),
+            ),
+            None => None,
+        }
+    }
+
     async fn analytics(
         &self,
         access_token: &str,
@@ -1201,38 +1335,7 @@ impl SocialProvider for XProvider {
         let json = self
             .v2_get("https://api.twitter.com/2/users/me?user.fields=public_metrics", access_token)
             .await?;
-        let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
-        let metrics = &json["data"]["public_metrics"];
-        let mut result = Vec::new();
-        if let Some(followers) = metrics["followers_count"].as_i64() {
-            result.push(AnalyticsData {
-                label: "Followers".into(),
-                data: vec![AnalyticsDataPoint { total: followers.to_string(), date: today.clone() }],
-                percentage_change: 0.0,
-            });
-        }
-        if let Some(following) = metrics["following_count"].as_i64() {
-            result.push(AnalyticsData {
-                label: "Following".into(),
-                data: vec![AnalyticsDataPoint { total: following.to_string(), date: today.clone() }],
-                percentage_change: 0.0,
-            });
-        }
-        if let Some(tweets) = metrics["tweet_count"].as_i64() {
-            result.push(AnalyticsData {
-                label: "Tweets".into(),
-                data: vec![AnalyticsDataPoint { total: tweets.to_string(), date: today.clone() }],
-                percentage_change: 0.0,
-            });
-        }
-        if let Some(listed) = metrics["listed_count"].as_i64() {
-            result.push(AnalyticsData {
-                label: "Listed".into(),
-                data: vec![AnalyticsDataPoint { total: listed.to_string(), date: today }],
-                percentage_change: 0.0,
-            });
-        }
-        Ok(result)
+        Ok(Self::parse_account_metrics(&json))
     }
 
     async fn post_analytics(
@@ -1244,25 +1347,7 @@ impl SocialProvider for XProvider {
             "https://api.twitter.com/2/tweets/{platform_post_id}?tweet.fields=public_metrics"
         );
         let json = self.v2_get(&url, access_token).await?;
-        let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
-        let metrics = &json["data"]["public_metrics"];
-        let mut result = Vec::new();
-        for (label, key) in [
-            ("Likes", "like_count"),
-            ("Retweets", "retweet_count"),
-            ("Replies", "reply_count"),
-            ("Quotes", "quote_count"),
-            ("Impressions", "impression_count"),
-        ] {
-            if let Some(val) = metrics.get(key).and_then(|v| v.as_i64()) {
-                result.push(AnalyticsData {
-                    label: label.into(),
-                    data: vec![AnalyticsDataPoint { total: val.to_string(), date: today.clone() }],
-                    percentage_change: 0.0,
-                });
-            }
-        }
-        Ok(result)
+        Ok(Self::parse_tweet_metrics(&json))
     }
 
     async fn get_recent_posts(
@@ -1342,18 +1427,8 @@ impl SocialProvider for XProvider {
         platform_post_id: &str,
     ) -> Result<Option<serde_json::Value>, ProviderError> {
         let detail = self.tweet_detail(access_token, platform_post_id).await?;
-        let metrics = detail
-            .get("data")
-            .and_then(|d| d.get("public_metrics"))
-            .or_else(|| {
-                // GraphQL path: extract from tweet result
-                detail
-                    .get("data")
-                    .and_then(|d| d.get("legacy"))
-                    .and_then(|l| l.get("public_metrics"))
-            })
-            .cloned();
-        Ok(metrics.map(|m| serde_json::json!({ "public_metrics": m })))
+        Ok(Self::extract_public_metrics(&detail)
+            .map(|m| serde_json::json!({ "public_metrics": m })))
     }
 
     async fn reply_to_comment(
@@ -2237,5 +2312,224 @@ impl XProvider {
             url.push_str(&format!("&pagination_token={token}"));
         }
         self.v2_get(&url, access_token).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::social::test_config;
+
+    fn provider() -> XProvider {
+        XProvider::new(&test_config())
+    }
+
+    // ── B2c: account analytics fixtures ──────────────────────
+
+    #[test]
+    fn parse_account_metrics_reads_all_four_counts() {
+        let fixture = serde_json::json!({
+            "data": { "public_metrics": {
+                "followers_count": 1200,
+                "following_count": 340,
+                "tweet_count": 5000,
+                "listed_count": 12
+            }}
+        });
+        let rows = XProvider::parse_account_metrics(&fixture);
+        let labels: Vec<&str> = rows.iter().map(|r| r.label.as_str()).collect();
+        assert_eq!(labels, ["Followers", "Following", "Tweets", "Listed"]);
+        assert_eq!(rows[0].data[0].total, "1200");
+        assert!(!rows[0].data[0].date.is_empty(), "rows must carry a date");
+    }
+
+    #[test]
+    fn parse_account_metrics_skips_metrics_x_omits() {
+        // `listed_count` only appears for accounts that are listed.
+        let fixture = serde_json::json!({
+            "data": { "public_metrics": { "followers_count": 7 } }
+        });
+        let rows = XProvider::parse_account_metrics(&fixture);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].label, "Followers");
+    }
+
+    #[test]
+    fn parse_account_metrics_empty_for_error_body() {
+        let fixture = serde_json::json!({ "title": "Unauthorized", "status": 401 });
+        assert!(XProvider::parse_account_metrics(&fixture).is_empty());
+    }
+
+    // ── B2c: post analytics fixtures ─────────────────────────
+
+    #[test]
+    fn parse_tweet_metrics_reads_all_five_counters() {
+        let fixture = serde_json::json!({
+            "data": { "public_metrics": {
+                "like_count": 42, "retweet_count": 8, "reply_count": 3,
+                "quote_count": 1, "impression_count": 1200
+            }}
+        });
+        let rows = XProvider::parse_tweet_metrics(&fixture);
+        let labels: Vec<&str> = rows.iter().map(|r| r.label.as_str()).collect();
+        assert_eq!(labels, ["Likes", "Retweets", "Replies", "Quotes", "Impressions"]);
+        assert_eq!(rows[4].data[0].total, "1200");
+    }
+
+    #[test]
+    fn parse_tweet_metrics_skips_absent_impressions() {
+        // v2 omits impression_count unless the token has the right scope.
+        let fixture = serde_json::json!({ "data": { "public_metrics": { "like_count": 2 } } });
+        let rows = XProvider::parse_tweet_metrics(&fixture);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].label, "Likes");
+    }
+
+    // ── B2c: engagement normalisation (both auth paths) ──────
+
+    #[test]
+    fn extract_public_metrics_passes_v2_through_unchanged() {
+        let fixture = serde_json::json!({
+            "data": { "public_metrics": { "like_count": 42, "retweet_count": 8 } }
+        });
+        let metrics = XProvider::extract_public_metrics(&fixture).unwrap();
+        assert_eq!(metrics["like_count"], 42);
+    }
+
+    #[test]
+    fn extract_public_metrics_maps_graphql_legacy_keys() {
+        // The cookie/GraphQL path nests the tweet under `result.legacy` and
+        // uses v1 key names — without translation this read as all-zero.
+        let fixture = serde_json::json!({
+            "data": { "result": { "rest_id": "123", "legacy": {
+                "favorite_count": 42, "retweet_count": 8, "reply_count": 3,
+                "quote_count": 1, "bookmark_count": 5, "view_count": 1200
+            }}}
+        });
+        let metrics = XProvider::extract_public_metrics(&fixture).unwrap();
+        assert_eq!(metrics["like_count"], 42);
+        assert_eq!(metrics["impression_count"], 1200);
+        assert_eq!(metrics["bookmark_count"], 5);
+
+        let e = crate::social::parse_engagement_data("x", serde_json::json!({ "public_metrics": metrics }));
+        assert_eq!((e.likes, e.reposts, e.replies, e.quotes, e.views, e.saves),
+                   (42, 8, 3, 1, 1200, 5));
+    }
+
+    #[test]
+    fn extract_public_metrics_handles_unwrapped_graphql_tweet() {
+        let fixture = serde_json::json!({
+            "data": { "rest_id": "123", "legacy": { "favorite_count": 9 } }
+        });
+        let metrics = XProvider::extract_public_metrics(&fixture).unwrap();
+        assert_eq!(metrics["like_count"], 9);
+    }
+
+    #[test]
+    fn extract_public_metrics_coerces_stringified_graphql_counts() {
+        let fixture = serde_json::json!({
+            "data": { "result": { "legacy": { "favorite_count": "42" } } }
+        });
+        let metrics = XProvider::extract_public_metrics(&fixture).unwrap();
+        assert_eq!(metrics["like_count"], 42, "string counts must be coerced to numbers");
+    }
+
+    #[test]
+    fn extract_public_metrics_returns_none_for_tombstone() {
+        let fixture = serde_json::json!({
+            "data": { "result": { "__typename": "TweetTombstone", "tombstone": { "text": "gone" } } }
+        });
+        assert!(XProvider::extract_public_metrics(&fixture).is_none());
+    }
+
+    #[test]
+    fn extract_public_metrics_returns_none_for_empty_legacy() {
+        let fixture = serde_json::json!({ "data": { "result": { "legacy": {} } } });
+        assert!(XProvider::extract_public_metrics(&fixture).is_none());
+    }
+
+    // ── B2c: map_error fixtures ─────────────────────────────
+
+    #[test]
+    fn map_error_explains_rate_limit_from_graphql_code_88() {
+        let msg = provider().map_error(r#"{"errors":[{"code":88}]}"#, 400).unwrap();
+        assert!(msg.contains("rate limit"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_duplicate_tweet() {
+        let msg = provider()
+            .map_error("Status is a duplicate.", 403)
+            .unwrap();
+        assert!(msg.contains("duplicate"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_rejected_media() {
+        let msg = provider()
+            .map_error("MEDIA upload failed to upload the chunk", 400)
+            .unwrap();
+        assert!(msg.contains("media"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_expired_cookies() {
+        let msg = provider()
+            .map_error("Could not authenticate you", 401)
+            .unwrap();
+        assert!(msg.contains("expired"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_forbidden_on_403() {
+        let msg = provider().map_error("", 403).unwrap();
+        assert!(msg.contains("denied"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_returns_none_for_server_error() {
+        assert!(provider().map_error("Internal Server Error", 500).is_none());
+    }
+
+    // ── B2c: response-checker wiring ────────────────────────
+
+    #[test]
+    fn check_v2_response_keeps_rate_limited_variant() {
+        let err = provider()
+            .check_v2_response(wreq::StatusCode::TOO_MANY_REQUESTS, &serde_json::json!({}))
+            .unwrap_err();
+        assert!(matches!(err, ProviderError::RateLimited(_)), "got: {err:?}");
+    }
+
+    #[test]
+    fn check_v2_response_keeps_token_expired_variant() {
+        let err = provider()
+            .check_v2_response(wreq::StatusCode::UNAUTHORIZED, &serde_json::json!({}))
+            .unwrap_err();
+        assert!(matches!(err, ProviderError::TokenExpired), "got: {err:?}");
+    }
+
+    #[test]
+    fn check_v2_response_annotates_api_error_with_friendly_copy() {
+        let err = provider()
+            .check_v2_response(
+                wreq::StatusCode::UNPROCESSABLE_ENTITY,
+                &serde_json::json!({ "detail": "duplicate content" }),
+            )
+            .unwrap_err();
+        let msg = format!("{err}");
+        assert!(msg.contains("duplicate"), "got: {msg}");
+        assert!(msg.contains("raw:"), "raw detail must be preserved: {msg}");
+    }
+
+    #[test]
+    fn check_graphql_response_keeps_token_expired_for_auth_errors() {
+        let err = provider()
+            .check_graphql_response(
+                wreq::StatusCode::OK,
+                &serde_json::json!({ "errors": [{ "message": "Not authorized" }] }),
+            )
+            .unwrap_err();
+        assert!(matches!(err, ProviderError::TokenExpired), "got: {err:?}");
     }
 }

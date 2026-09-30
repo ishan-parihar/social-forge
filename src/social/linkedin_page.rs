@@ -29,6 +29,37 @@ impl LinkedInPageProvider {
         "https://www.linkedin.com/oauth/v2/accessToken"
     }
 
+    // ── Analytics parser (pure: fixture-testable, no HTTP) ───
+
+    /// Walk a LinkedIn REST share-statistics response (`elements[].totalShareStatistics`)
+    /// into dashboard rows. Both the org-wide endpoint and the per-share
+    /// endpoint return this shape, so one parser serves `analytics()` and
+    /// `post_analytics()`.
+    pub(crate) fn share_statistics_analytics(json: &serde_json::Value) -> Vec<AnalyticsData> {
+        let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+        let mut out = Vec::new();
+        let Some(elements) = json["elements"].as_array() else {
+            return out;
+        };
+        for element in elements {
+            let Some(stats) = element["totalShareStatistics"].as_object() else {
+                continue;
+            };
+            for (key, val) in stats {
+                let Some(n) = val.as_u64() else { continue };
+                out.push(AnalyticsData {
+                    label: key.clone(),
+                    data: vec![AnalyticsDataPoint {
+                        total: n.to_string(),
+                        date: today.clone(),
+                    }],
+                    percentage_change: 0.0,
+                });
+            }
+        }
+        out
+    }
+
     /// Fetch organization logo via REST API (fallback when decoration doesn't work)
     async fn fetch_org_logo(&self, access_token: &str, org_id: &str) -> Result<String, ProviderError> {
         // Use the REST API with version header to get logoV2 URN
@@ -376,17 +407,61 @@ impl SocialProvider for LinkedInPageProvider {
                 .as_str()
                 .unwrap_or("LinkedIn Page publish failed")
                 .to_string();
-            Err(ProviderError::Api(msg))
+            let raw = format!("LinkedIn Page publish failed (HTTP {status}): {msg}");
+            Err(ProviderError::Api(friendly_error(
+                self.map_error(&msg, status.as_u16()),
+                &raw,
+            )))
         }
     }
 
-    fn map_error(&self, body: &str, _status: u16) -> Option<String> {
+    fn map_error(&self, body: &str, status: u16) -> Option<String> {
+        // Page-specific copy first: these are the two failures only an
+        // organization token hits, and they read better than the generic
+        // bucket text.
         if body.contains("Unable to obtain activity") {
-            Some("Unable to obtain activity. Please try again.".into())
-        } else if body.contains("resource is forbidden") {
-            Some("Resource is forbidden. Check your organization permissions.".into())
-        } else {
-            None
+            return Some("Unable to obtain activity. Please try again.".into());
+        }
+        if body.contains("resource is forbidden") {
+            return Some("Resource is forbidden. Check your organization permissions.".into());
+        }
+        match classify_error(body, status) {
+            Some(ErrorKind::RateLimited) => Some(
+                "LinkedIn rate limit hit. LinkedIn allows roughly 100 API calls per day \
+                 for most apps — wait for the daily quota to reset."
+                    .into(),
+            ),
+            Some(ErrorKind::Duplicate) => Some(
+                "LinkedIn flagged this Page post as a duplicate of recent content. \
+                 Vary the text or publish again later."
+                    .into(),
+            ),
+            Some(ErrorKind::MediaRejected) => Some(
+                "LinkedIn rejected the media. Page posts accept JPEG/PNG/GIF images or \
+                 MP4 video, up to 20 items, each from a publicly reachable URL."
+                    .into(),
+            ),
+            Some(ErrorKind::AuthExpired) => Some(
+                "LinkedIn access token expired or was revoked. Reconnect the Page to \
+                 refresh it (the token lives ~60 days)."
+                    .into(),
+            ),
+            Some(ErrorKind::Forbidden) => Some(
+                "LinkedIn denied this request. The token needs r_organization_social \
+                 and the Page admin role, or the resource belongs to another organization."
+                    .into(),
+            ),
+            Some(ErrorKind::NotFound) => Some(
+                "LinkedIn Page, post, or organization not found. Re-pick the Page on the \
+                 Channels screen if it was transferred or renamed."
+                    .into(),
+            ),
+            Some(ErrorKind::InvalidRequest) => Some(
+                "LinkedIn rejected the request as invalid. Check the organization URN and \
+                 that the post visibility is one LinkedIn allows for organizations."
+                    .into(),
+            ),
+            None => None,
         }
     }
 
@@ -432,27 +507,14 @@ impl SocialProvider for LinkedInPageProvider {
                 .as_str()
                 .unwrap_or("LinkedIn share statistics error")
                 .to_string();
-            return Err(ProviderError::Api(msg));
+            let raw = format!("LinkedIn share statistics error (HTTP {status}): {msg}");
+            return Err(ProviderError::Api(friendly_error(
+                self.map_error(&msg, status.as_u16()),
+                &raw,
+            )));
         }
 
-        if let Some(elements) = json["elements"].as_array() {
-            for element in elements {
-                if let Some(stats) = element["totalShareStatistics"].as_object() {
-                    for (key, val) in stats {
-                        if let Some(n) = val.as_u64() {
-                            results.push(AnalyticsData {
-                                label: key.clone(),
-                                data: vec![AnalyticsDataPoint {
-                                    total: n.to_string(),
-                                    date: chrono::Utc::now().format("%Y-%m-%d").to_string(),
-                                }],
-                                percentage_change: 0.0,
-                            });
-                        }
-                    }
-                }
-            }
-        }
+        results.extend(Self::share_statistics_analytics(&json));
 
         // Follower count
         let follower_url = format!(
@@ -527,31 +589,14 @@ impl SocialProvider for LinkedInPageProvider {
                 .as_str()
                 .unwrap_or("LinkedIn post statistics error")
                 .to_string();
-            return Err(ProviderError::Api(msg));
+            let raw = format!("LinkedIn post statistics error (HTTP {status}): {msg}");
+            return Err(ProviderError::Api(friendly_error(
+                self.map_error(&msg, status.as_u16()),
+                &raw,
+            )));
         }
 
-        let mut results = Vec::new();
-
-        if let Some(elements) = json["elements"].as_array() {
-            for element in elements {
-                if let Some(stats) = element["totalShareStatistics"].as_object() {
-                    for (key, val) in stats {
-                        if let Some(n) = val.as_u64() {
-                            results.push(AnalyticsData {
-                                label: key.clone(),
-                                data: vec![AnalyticsDataPoint {
-                                    total: n.to_string(),
-                                    date: chrono::Utc::now().format("%Y-%m-%d").to_string(),
-                                }],
-                                percentage_change: 0.0,
-                            });
-                        }
-                    }
-                }
-            }
-        }
-
-        Ok(results)
+        Ok(Self::share_statistics_analytics(&json))
     }
 
     // ── Import recent posts from LinkedIn Page ────────────────
@@ -691,22 +736,11 @@ impl SocialProvider for LinkedInPageProvider {
         }
 
         let json: serde_json::Value = resp.json().await.unwrap_or_default();
-        let mut result = serde_json::Map::new();
-
-        if let Some(n) = json["likesSummary"]["totalLikes"].as_i64() {
-            result.insert("likeCount".into(), serde_json::json!(n));
-        }
-        if let Some(n) = json["commentsSummary"]["totalFirstLevelComments"].as_i64() {
-            result.insert("commentCount".into(), serde_json::json!(n));
-        }
-        if let Some(n) = json["sharesSummary"]["totalShares"].as_i64() {
-            result.insert("shareCount".into(), serde_json::json!(n));
-        }
-
-        if result.is_empty() {
+        let counts = super::linkedin::LinkedInProvider::social_action_counts(&json);
+        if counts.is_empty() {
             Ok(None)
         } else {
-            Ok(Some(serde_json::Value::Object(result)))
+            Ok(Some(serde_json::Value::Object(counts)))
         }
     }
 }
@@ -822,5 +856,113 @@ impl LinkedInPageProvider {
                 Err(ProviderError::Api(msg))
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::social::test_config;
+
+    fn provider() -> LinkedInPageProvider {
+        LinkedInPageProvider::new(&test_config())
+    }
+
+    #[test]
+    fn identifier_is_linkedin_page() {
+        assert_eq!(provider().identifier(), "linkedin-page");
+    }
+
+    // ── B2c: share-statistics parser fixtures ────────────────
+
+    #[test]
+    fn share_statistics_analytics_flattens_total_share_statistics() {
+        let fixture = serde_json::json!({
+            "elements": [{
+                "totalShareStatistics": {
+                    "impressionCount": 1200,
+                    "engagement": 47,
+                    "clickCount": 33
+                }
+            }]
+        });
+        let rows = LinkedInPageProvider::share_statistics_analytics(&fixture);
+        let labels: Vec<&str> = rows.iter().map(|r| r.label.as_str()).collect();
+        assert_eq!(labels, ["impressionCount", "engagement", "clickCount"]);
+        assert_eq!(rows[0].data[0].total, "1200");
+        assert!(!rows[0].data[0].date.is_empty(), "rows must carry a date");
+    }
+
+    #[test]
+    fn share_statistics_analytics_sums_multiple_elements() {
+        let fixture = serde_json::json!({
+            "elements": [
+                { "totalShareStatistics": { "impressionCount": 10 } },
+                { "totalShareStatistics": { "impressionCount": 5 } }
+            ]
+        });
+        let rows = LinkedInPageProvider::share_statistics_analytics(&fixture);
+        assert_eq!(rows.len(), 2);
+    }
+
+    #[test]
+    fn share_statistics_analytics_empty_for_null_elements() {
+        let fixture = serde_json::json!({ "elements": null });
+        assert!(LinkedInPageProvider::share_statistics_analytics(&fixture).is_empty());
+    }
+
+    // ── B2c: map_error fixtures ─────────────────────────────
+
+    #[test]
+    fn map_error_keeps_activity_specific_copy() {
+        assert_eq!(
+            provider().map_error("Unable to obtain activity", 500).unwrap(),
+            "Unable to obtain activity. Please try again."
+        );
+    }
+
+    #[test]
+    fn map_error_keeps_forbidden_resource_copy() {
+        assert_eq!(
+            provider().map_error("resource is forbidden", 403).unwrap(),
+            "Resource is forbidden. Check your organization permissions."
+        );
+    }
+
+    #[test]
+    fn map_error_explains_rate_limit_on_429() {
+        let msg = provider().map_error("Too many requests", 429).unwrap();
+        assert!(msg.contains("rate limit"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_duplicate_page_post() {
+        let msg = provider()
+            .map_error("This content is a duplicate", 400)
+            .unwrap();
+        assert!(msg.contains("duplicate"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_rejected_media() {
+        let msg = provider().map_error("The image upload was rejected", 422).unwrap();
+        assert!(msg.contains("media"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_expired_token_on_401() {
+        let msg = provider().map_error("", 401).unwrap();
+        assert!(msg.contains("expired"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_missing_scope_on_403() {
+        let msg = provider().map_error("", 403).unwrap();
+        assert!(msg.contains("r_organization_social"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_returns_none_for_server_error() {
+        assert!(provider().map_error("Internal Server Error", 503).is_none());
     }
 }

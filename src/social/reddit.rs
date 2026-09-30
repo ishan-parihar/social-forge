@@ -367,8 +367,10 @@ impl RedditProvider {
         let status = resp.status();
         if !status.is_success() {
             let body = resp.text().await.unwrap_or_default();
-            return Err(ProviderError::Api(format!(
-                "Reddit API error ({status}): {body}"
+            let raw = format!("Reddit API error ({status}): {body}");
+            return Err(ProviderError::Api(friendly_error(
+                self.map_error(&body, status.as_u16()),
+                &raw,
             )));
         }
 
@@ -574,6 +576,86 @@ impl RedditProvider {
         let endpoint = format!("/message/{folder}");
         self.get_oauth(token, &endpoint, &[("limit", &limit.to_string())])
             .await
+    }
+
+    // ── Analytics parsers (pure: fixture-testable, no HTTP) ──
+
+    /// Map a `/api/v1/me/karma` response into one row per subreddit.
+    pub(crate) fn karma_analytics(json: &serde_json::Value) -> Vec<AnalyticsData> {
+        let Some(data) = json["data"].as_array() else {
+            return Vec::new();
+        };
+        data.iter()
+            .map(|entry| {
+                let subreddit = entry["sr"].as_str().unwrap_or("unknown");
+                AnalyticsData {
+                    label: format!("r/{subreddit}"),
+                    data: vec![
+                        AnalyticsDataPoint {
+                            total: entry["link_karma"].as_i64().unwrap_or(0).to_string(),
+                            date: "link_karma".into(),
+                        },
+                        AnalyticsDataPoint {
+                            total: entry["comment_karma"].as_i64().unwrap_or(0).to_string(),
+                            date: "comment_karma".into(),
+                        },
+                    ],
+                    percentage_change: 0.0,
+                }
+            })
+            .collect()
+    }
+
+    /// Map a `/by_id/t3_*` submission response into per-post rows.
+    pub(crate) fn submission_analytics(json: &serde_json::Value) -> Vec<AnalyticsData> {
+        let data = &json["data"]["children"][0]["data"];
+        [
+            ("score", data["score"].as_i64().map(|v| v.to_string())),
+            (
+                "upvote_ratio",
+                data["upvote_ratio"]
+                    .as_f64()
+                    .map(|v| format!("{v:.2}")),
+            ),
+            (
+                "num_comments",
+                data["num_comments"].as_i64().map(|v| v.to_string()),
+            ),
+            ("gilded", data["gilded"].as_i64().map(|v| v.to_string())),
+            (
+                "total_awards_received",
+                data["total_awards_received"].as_i64().map(|v| v.to_string()),
+            ),
+        ]
+        .into_iter()
+        .filter_map(|(label, total)| {
+            Some(AnalyticsData {
+                label: label.into(),
+                data: vec![AnalyticsDataPoint {
+                    total: total?,
+                    date: String::new(),
+                }],
+                percentage_change: 0.0,
+            })
+        })
+        .collect()
+    }
+
+    /// Map an `/api/info` child into the engagement shape the `reddit` parser
+    /// arm reads. Reddit only returns `ups`/`downs` to the submission's author,
+    /// so both keys are emitted even when they arrive null.
+    pub(crate) fn info_child_engagement(child: &serde_json::Value) -> Option<serde_json::Value> {
+        if child.is_null() {
+            return None;
+        }
+        Some(serde_json::json!({
+            "score": child["score"],
+            "num_comments": child["num_comments"],
+            "upvote_ratio": child["upvote_ratio"],
+            "downs": child["downs"],
+            "ups": child["ups"],
+            "total_awards_received": child["total_awards_received"],
+        }))
     }
 
     /// Parse a Reddit listing JSON response into ExternalPostData vec
@@ -1141,9 +1223,10 @@ impl SocialProvider for RedditProvider {
         let body = resp.text().await.unwrap_or_default();
 
         if !status.is_success() {
-            return Err(ProviderError::Api(format!(
-                "Reddit submit API error ({}): {}",
-                status, body
+            let raw = format!("Reddit submit API error ({}): {}", status, body);
+            return Err(ProviderError::Api(friendly_error(
+                self.map_error(&body, status.as_u16()),
+                &raw,
             )));
         }
 
@@ -1157,6 +1240,8 @@ impl SocialProvider for RedditProvider {
         let post_url = data["url"].as_str().unwrap_or("").to_string();
 
         if post_id.is_empty() {
+            // Reddit reports most rejections here with HTTP 200 and a
+            // `json.errors` array like ["SUBREDDIT", "SUBMISSION_DUPLICATE", …].
             let err = json["json"]["errors"]
                 .as_array()
                 .and_then(|a| a.first())
@@ -1164,7 +1249,10 @@ impl SocialProvider for RedditProvider {
                 .and_then(|e| e.get(1))
                 .and_then(|v| v.as_str())
                 .unwrap_or("Unknown error");
-            return Err(ProviderError::Api(err.to_string()));
+            return Err(ProviderError::Api(friendly_error(
+                self.map_error(err, status.as_u16()),
+                err,
+            )));
         }
 
         Ok(PublishResult {
@@ -1238,6 +1326,49 @@ impl SocialProvider for RedditProvider {
         })
     }
 
+    /// Reddit-specific user-facing error copy (v25 §2 row 9).
+    fn map_error(&self, body: &str, status: u16) -> Option<String> {
+        match classify_error(body, status) {
+            Some(ErrorKind::RateLimited) => Some(
+                "Reddit rate limit exceeded. Reddit allows roughly one request per second \
+                 per OAuth client — slow the publish cadence or add a delay between posts."
+                    .into(),
+            ),
+            Some(ErrorKind::Duplicate) => Some(
+                "Reddit rejected this submission as a duplicate. Reddit blocks re-posting \
+                 identical content to the same subreddit, so change the text or target."
+                    .into(),
+            ),
+            Some(ErrorKind::MediaRejected) => Some(
+                "Reddit rejected the media. Submit images as publicly fetchable URLs \
+                 (up to 20 per post) — a local /api/media path is invisible to Reddit — \
+                 and post video as a hosted link."
+                    .into(),
+            ),
+            Some(ErrorKind::AuthExpired) => Some(
+                "Reddit token expired or was rejected. Reconnect the account; cookie \
+                 sessions also need a fresh reddit_session + token_v2 pair."
+                    .into(),
+            ),
+            Some(ErrorKind::Forbidden) => Some(
+                "Reddit denied the request. Check the subreddit rules (NSFW, karma \
+                 minimum, required flair) and that the app was granted the right scopes."
+                    .into(),
+            ),
+            Some(ErrorKind::NotFound) => Some(
+                "Reddit post or subreddit not found — it may be deleted, private, \
+                 quarantined, or the ID is wrong."
+                    .into(),
+            ),
+            Some(ErrorKind::InvalidRequest) => Some(
+                "Reddit rejected the request. Check the title (300 chars), body, \
+                 subreddit name, and any required flair."
+                    .into(),
+            ),
+            None => None,
+        }
+    }
+
     async fn analytics(
         &self,
         access_token: &str,
@@ -1258,32 +1389,7 @@ impl SocialProvider for RedditProvider {
         }
 
         let json: serde_json::Value = resp.json().await.unwrap_or_default();
-        let mut result = Vec::new();
-
-        if let Some(data) = json["data"].as_array() {
-            for entry in data {
-                let subreddit = entry["sr"].as_str().unwrap_or("unknown");
-                let link_karma = entry["link_karma"].as_i64().unwrap_or(0);
-                let comment_karma = entry["comment_karma"].as_i64().unwrap_or(0);
-
-                result.push(AnalyticsData {
-                    label: format!("r/{subreddit}"),
-                    data: vec![
-                        AnalyticsDataPoint {
-                            total: link_karma.to_string(),
-                            date: "link_karma".into(),
-                        },
-                        AnalyticsDataPoint {
-                            total: comment_karma.to_string(),
-                            date: "comment_karma".into(),
-                        },
-                    ],
-                    percentage_change: 0.0,
-                });
-            }
-        }
-
-        Ok(result)
+        Ok(Self::karma_analytics(&json))
     }
 
     async fn post_analytics(
@@ -1311,57 +1417,7 @@ impl SocialProvider for RedditProvider {
         }
 
         let json: serde_json::Value = resp.json().await.unwrap_or_default();
-        let data = &json["data"]["children"][0]["data"];
-
-        let score = data["score"].as_i64().unwrap_or(0);
-        let upvote_ratio = data["upvote_ratio"].as_f64().unwrap_or(0.0);
-        let num_comments = data["num_comments"].as_i64().unwrap_or(0);
-        let gilded = data["gilded"].as_i64().unwrap_or(0);
-        let total_awards = data["total_awards_received"].as_i64().unwrap_or(0);
-
-        let mut result = Vec::new();
-        result.push(AnalyticsData {
-            label: "score".into(),
-            data: vec![AnalyticsDataPoint {
-                total: score.to_string(),
-                date: String::new(),
-            }],
-            percentage_change: 0.0,
-        });
-        result.push(AnalyticsData {
-            label: "upvote_ratio".into(),
-            data: vec![AnalyticsDataPoint {
-                total: format!("{:.2}", upvote_ratio),
-                date: String::new(),
-            }],
-            percentage_change: 0.0,
-        });
-        result.push(AnalyticsData {
-            label: "num_comments".into(),
-            data: vec![AnalyticsDataPoint {
-                total: num_comments.to_string(),
-                date: String::new(),
-            }],
-            percentage_change: 0.0,
-        });
-        result.push(AnalyticsData {
-            label: "gilded".into(),
-            data: vec![AnalyticsDataPoint {
-                total: gilded.to_string(),
-                date: String::new(),
-            }],
-            percentage_change: 0.0,
-        });
-        result.push(AnalyticsData {
-            label: "total_awards_received".into(),
-            data: vec![AnalyticsDataPoint {
-                total: total_awards.to_string(),
-                date: String::new(),
-            }],
-            percentage_change: 0.0,
-        });
-
-        Ok(result)
+        Ok(Self::submission_analytics(&json))
     }
 
     async fn search_mention(
@@ -1504,17 +1560,7 @@ impl SocialProvider for RedditProvider {
         let pid = platform_post_id.trim_start_matches("t3_");
         let info_id = format!("t3_{pid}");
         let info = self.get_oauth(access_token, "/api/info", &[("id", &info_id)]).await?;
-        let child = info["data"]["children"][0]["data"].clone();
-        if child.is_null() {
-            return Ok(None);
-        }
-        Ok(Some(serde_json::json!({
-            "score": child["score"],
-            "num_comments": child["num_comments"],
-            "upvote_ratio": child["upvote_ratio"],
-            "downs": child["downs"],
-            "ups": child["ups"],
-        })))
+        Ok(Self::info_child_engagement(&info["data"]["children"][0]["data"]))
     }
 
     fn resolve_media_url(&self, attachment: &MediaAttachment, app_url: &str) -> MediaAttachment {
@@ -1526,5 +1572,136 @@ impl SocialProvider for RedditProvider {
         } else {
             attachment.clone()
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::social::test_config;
+
+    fn provider() -> RedditProvider {
+        RedditProvider::new(&test_config())
+    }
+
+    // ── B2c: karma analytics fixtures ────────────────────────
+
+    #[test]
+    fn karma_analytics_emits_one_row_per_subreddit() {
+        let fixture = serde_json::json!({
+            "data": [
+                { "sr": "rust", "link_karma": 120, "comment_karma": 30 },
+                { "sr": "programming", "link_karma": 5, "comment_karma": 1 }
+            ]
+        });
+        let rows = RedditProvider::karma_analytics(&fixture);
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].label, "r/rust");
+        assert_eq!(rows[0].data[0].total, "120");
+        assert_eq!(rows[0].data[0].date, "link_karma");
+        assert_eq!(rows[0].data[1].total, "30");
+        assert_eq!(rows[1].label, "r/programming");
+    }
+
+    #[test]
+    fn karma_analytics_empty_for_null_data() {
+        let fixture = serde_json::json!({ "kind": "Listing" });
+        assert!(RedditProvider::karma_analytics(&fixture).is_empty());
+    }
+
+    // ── B2c: submission analytics fixtures ───────────────────
+
+    #[test]
+    fn submission_analytics_reads_all_five_metrics() {
+        let fixture = serde_json::json!({
+            "data": { "children": [{ "data": {
+                "score": 420,
+                "upvote_ratio": 0.95,
+                "num_comments": 17,
+                "gilded": 2,
+                "total_awards_received": 3
+            }}]}
+        });
+        let rows = RedditProvider::submission_analytics(&fixture);
+        let by_label: std::collections::HashMap<_, _> =
+            rows.iter().map(|r| (r.label.as_str(), r.data[0].total.as_str())).collect();
+        assert_eq!(by_label["score"], "420");
+        assert_eq!(by_label["upvote_ratio"], "0.95");
+        assert_eq!(by_label["num_comments"], "17");
+        assert_eq!(by_label["gilded"], "2");
+        assert_eq!(by_label["total_awards_received"], "3");
+    }
+
+    #[test]
+    fn submission_analytics_skips_metrics_reddit_omits() {
+        // Non-authors get no gilded/awards fields — rows must be omitted,
+        // not rendered as a misleading "0".
+        let fixture = serde_json::json!({
+            "data": { "children": [{ "data": { "score": 1, "num_comments": 0 } }] }
+        });
+        let rows = RedditProvider::submission_analytics(&fixture);
+        let labels: Vec<&str> = rows.iter().map(|r| r.label.as_str()).collect();
+        assert_eq!(labels, ["score", "num_comments"]);
+    }
+
+    // ── B2c: engagement fixtures ─────────────────────────────
+
+    #[test]
+    fn info_child_engagement_includes_awards_for_the_parser_arm() {
+        let child = serde_json::json!({
+            "score": 42, "num_comments": 3, "upvote_ratio": 0.9,
+            "ups": 44, "downs": 2, "total_awards_received": 1
+        });
+        let raw = RedditProvider::info_child_engagement(&child).unwrap();
+        assert_eq!(raw["total_awards_received"], 1);
+        let e = crate::social::parse_engagement_data("reddit", raw);
+        assert_eq!(e.awards, 1);
+        assert_eq!(e.likes, 42);
+        assert_eq!(e.comments, 3);
+        assert_eq!(e.upvote_ratio, Some(0.9));
+    }
+
+    #[test]
+    fn info_child_engagement_returns_none_for_missing_post() {
+        assert!(RedditProvider::info_child_engagement(&serde_json::Value::Null).is_none());
+    }
+
+    // ── B2c: map_error fixtures ─────────────────────────────
+
+    #[test]
+    fn map_error_explains_rate_limit_on_429() {
+        let msg = provider().map_error("Too Many Requests", 429).unwrap();
+        assert!(msg.contains("rate limit"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_duplicate_submission() {
+        let msg = provider()
+            .map_error("SUBREDDIT SUBMISSION_DUPLICATE", 200)
+            .unwrap();
+        assert!(msg.contains("duplicate"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_rejected_media() {
+        let msg = provider().map_error("invalid image url", 400).unwrap();
+        assert!(msg.contains("media"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_expired_token_on_401() {
+        let msg = provider().map_error("", 401).unwrap();
+        assert!(msg.contains("expired"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_forbidden_on_403() {
+        let msg = provider().map_error("", 403).unwrap();
+        assert!(msg.contains("denied"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_returns_none_for_server_error() {
+        assert!(provider().map_error("Internal Server Error", 503).is_none());
     }
 }
