@@ -507,7 +507,11 @@ pub async fn refresh(
                 if let Err(e) = queries::mark_integration_refresh_needed(&state.db, id).await {
                     tracing::warn!("DB operation failed: {e}");
                 }
-                return Err(AppError::Provider(format!("Token refresh failed: {e}")));
+                return Err(crate::error::map_scope_loss(
+                    &integration.provider_identifier,
+                    &id.to_string(),
+                    &format!("Token refresh failed: {e}"),
+                ));
             }
         }
     }
@@ -519,7 +523,13 @@ pub async fn refresh(
     let info = provider_obj
         .reconnect(token_to_use, &integration.internal_id, &integration.internal_id)
         .await
-        .map_err(|e| AppError::Provider(format!("Failed to refresh profile: {e}")))?;
+        .map_err(|e| {
+            crate::error::map_scope_loss(
+                &integration.provider_identifier,
+                &id.to_string(),
+                &format!("Failed to refresh profile: {e}"),
+            )
+        })?;
 
     sqlx::query(
         "UPDATE integrations SET profile_name = $1, profile_picture = COALESCE($2, profile_picture), refresh_needed = false, updated_at = NOW() WHERE id = $3 AND user_id = $4",

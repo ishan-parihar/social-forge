@@ -1083,7 +1083,13 @@ async fn publish_post(
                         // Mark the integration as needing re-auth so the
                         // user gets a UI prompt to reconnect.
                         let _ = queries::mark_integration_refresh_needed(db, post.integration_id).await;
-                        return Err(e.into());
+                        // A lost grant gets an actionable message; every other
+                        // refresh failure keeps its original text.
+                        return Err(crate::error::annotate_scope_loss(
+                            &post.provider_identifier,
+                            &e.to_string(),
+                        )
+                        .into());
                     }
                 };
                 // Retry with new token (still inside the retry loop)
@@ -1130,7 +1136,12 @@ async fn publish_post(
             }
             Err(e) => {
                 tracing::error!("Publish error for post {}: {e}", post.id);
-                last_error = Some(e.to_string());
+                // Stored in post.error_message + the post.failed webhook, so
+                // a lost grant has to name the provider and the fix itself.
+                last_error = Some(crate::error::annotate_scope_loss(
+                    &post.provider_identifier,
+                    &e.to_string(),
+                ));
                 break;
             }
         }
@@ -1248,7 +1259,10 @@ async fn resolve_token(
         tracing::info!("Token for post {} is expiring, refreshing", post.id);
         let token = provider
             .refresh_token(post.refresh_token.as_deref().unwrap_or(""))
-            .await?;
+            .await
+            .map_err(|e| {
+                crate::error::annotate_scope_loss(&post.provider_identifier, &e.to_string())
+            })?;
 
         // Encrypt before storing if encryption key is configured.
         let enc_access_token = if let Some(ref k) = token_key {

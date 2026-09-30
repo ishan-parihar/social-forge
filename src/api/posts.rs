@@ -1153,7 +1153,29 @@ pub async fn publish_post(
         state.token_key,
     )
     .await
-    .map_err(crate::error::AppError::BadRequest)?;
+    {
+        Ok(url) => url,
+        // A lost OAuth grant is not a bad post: the content is fine, the
+        // token no longer carries the scopes to send it. 409 + reconnect hint
+        // beats a 400 the operator cannot act on. The provider/integration
+        // lookup only runs on this error path.
+        Err(e) if crate::error::looks_like_scope_loss(&e) => {
+            let (provider, integration_id) = queries::get_post_with_integration(
+                &state.db, id, auth.user_id,
+            )
+            .await
+            .ok()
+            .flatten()
+            .map(|p| (p.provider_identifier, p.integration_id.to_string()))
+            .unwrap_or_else(|| ("unknown".to_string(), id.to_string()));
+            return Err(crate::error::AppError::ScopeLost {
+                provider,
+                integration_id,
+                detail: e,
+            });
+        }
+        Err(e) => return Err(crate::error::AppError::BadRequest(e)),
+    };
 
     Ok(Json(PublishResponse {
         id: id.to_string(),
