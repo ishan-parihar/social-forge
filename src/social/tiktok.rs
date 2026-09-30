@@ -2,10 +2,23 @@
 // Uses TikTok OAuth 2.0 + TikTok Content Posting API.
 // Supports: OAuth flow, user info, video upload, video publish.
 
+use std::time::Duration;
+
 use async_trait::async_trait;
 
 use super::*;
 use crate::config::Config;
+
+/// What one `POST /v2/video/query/` response says about a submitted publish.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum PublishPoll {
+    /// Terminal success (`PUBLISH_COMPLETE`).
+    Complete,
+    /// Terminal failure, carrying TikTok's own `fail_reason`.
+    Failed(String),
+    /// Still working. Holds the observed status for the timeout message.
+    Pending(String),
+}
 
 pub struct TikTokProvider {
     client_id: String,
@@ -164,6 +177,110 @@ impl TikTokProvider {
                 .to_string();
             Err(ProviderError::Api(msg))
         }
+    }
+
+    /// Read the publish outcome out of one `POST /v2/video/query/` response.
+    ///
+    /// The status lives on the first entry of `data.videos`; TikTok omits
+    /// `publish_status` entirely while the record is still propagating, which
+    /// reads as `Pending` so the caller keeps polling rather than guessing.
+    fn parse_publish_status(json: &serde_json::Value) -> PublishPoll {
+        let Some(video) = json.pointer("/data/videos/0") else {
+            return PublishPoll::Pending("not reported yet".into());
+        };
+        let status = video["publish_status"].as_str().unwrap_or("");
+        let reason = video["fail_reason"].as_str().unwrap_or("no reason given");
+        match status {
+            "PUBLISH_COMPLETE" => PublishPoll::Complete,
+            "FAILED" => PublishPoll::Failed(format!("{reason} (status {status})")),
+            other => PublishPoll::Pending(if other.is_empty() {
+                "not reported yet".into()
+            } else {
+                other.to_string()
+            }),
+        }
+    }
+
+    /// Poll `POST /v2/video/query/` until TikTok reports a terminal publish
+    /// status for `post_id`.
+    ///
+    /// `video/publish/` is asynchronous: it queues the post and hands back a
+    /// `post_id` for something still in flight, so returning `status:
+    /// "published"` on submit claims success for uploads TikTok may still
+    /// reject (copyright strike, community guidelines, region block, an
+    /// unapproved audio track). Bounded to 6 attempts 10s apart (~60s): a
+    /// still-processing post surfaces as an API error naming the last observed
+    /// status, so the operator knows to check the app rather than repost blind.
+    async fn await_publish_status(
+        &self,
+        access_token: &str,
+        post_id: &str,
+    ) -> Result<(), ProviderError> {
+        const ATTEMPTS: usize = 6;
+        const INTERVAL: Duration = Duration::from_secs(10);
+
+        if post_id.is_empty() {
+            return Err(ProviderError::Api(
+                "TikTok accepted the publish but returned no post_id, so the video's \
+                 status cannot be verified. Check the TikTok app before reposting."
+                    .into(),
+            ));
+        }
+
+        let body = serde_json::json!({ "filters": { "video_ids": [post_id] } });
+        let mut last_seen = String::new();
+
+        for attempt in 1..=ATTEMPTS {
+            let resp = self
+                .http
+                .post("https://open.tiktokapis.com/v2/video/query/")
+                .header("Authorization", format!("Bearer {access_token}"))
+                .header("Content-Type", "application/json")
+                .json(&body)
+                .send()
+                .await?;
+
+            let status = resp.status();
+            let json: serde_json::Value = resp.json().await?;
+
+            if !status.is_success() {
+                let msg = json["error"]["message"]
+                    .as_str()
+                    .unwrap_or("Publish-status query failed");
+                let code = json["error"]["code"].as_u64().unwrap_or(0);
+                let raw =
+                    format!("TikTok publish-status query failed (HTTP {status}, code {code}): {msg}");
+                return Err(ProviderError::Api(friendly_error(
+                    self.map_error(msg, status.as_u16()),
+                    &raw,
+                )));
+            }
+
+            match Self::parse_publish_status(&json) {
+                PublishPoll::Complete => {
+                    tracing::debug!("TikTok video {post_id} live (status query #{attempt})");
+                    return Ok(());
+                }
+                PublishPoll::Failed(reason) => {
+                    let raw = format!("TikTok did not publish video {post_id}: {reason}");
+                    return Err(ProviderError::Api(friendly_error(None, &raw)));
+                }
+                PublishPoll::Pending(seen) => {
+                    last_seen = seen;
+                    if attempt < ATTEMPTS {
+                        tokio::time::sleep(INTERVAL).await;
+                    }
+                }
+            }
+        }
+
+        let raw = format!(
+            "TikTok video {post_id} was still {last_seen} after {}s. The submit was \
+             accepted, so check the TikTok app before reposting — a second upload \
+             of the same video can be rejected as duplicate content.",
+            ATTEMPTS as u64 * INTERVAL.as_secs()
+        );
+        Err(ProviderError::Api(friendly_error(None, &raw)))
     }
 }
 
@@ -510,6 +627,11 @@ impl SocialProvider for TikTokProvider {
             .unwrap_or("")
             .to_string();
 
+        // Step 4: `publish` only queued the post. Confirm it actually went live
+        // before reporting success — see await_publish_status.
+        self.await_publish_status(access_token, &post_id_val)
+            .await?;
+
         Ok(PublishResult {
             platform_post_url: Some(format!("https://www.tiktok.com/@i/video/{post_id_val}")),
             platform_post_id: post_id_val,
@@ -722,6 +844,58 @@ impl SocialProvider for TikTokProvider {
 mod tests {
     use super::*;
     use crate::social::parse_engagement_data;
+
+    #[test]
+    fn publish_status_should_treat_publish_complete_as_success() {
+        let q = serde_json::json!({
+            "data": { "videos": [ { "id": "7", "publish_status": "PUBLISH_COMPLETE" } ] }
+        });
+        assert_eq!(
+            TikTokProvider::parse_publish_status(&q),
+            PublishPoll::Complete
+        );
+    }
+
+    #[test]
+    fn publish_status_should_surface_tiktoks_own_fail_reason() {
+        let q = serde_json::json!({
+            "data": { "videos": [ {
+                "id": "7",
+                "publish_status": "FAILED",
+                "fail_reason": "Audio track is not allowed"
+            } ] }
+        });
+        match TikTokProvider::parse_publish_status(&q) {
+            PublishPoll::Failed(reason) => {
+                assert!(reason.contains("Audio track is not allowed"), "got: {reason}");
+            }
+            other => panic!("FAILED must not be treated as pending, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn publish_status_should_keep_polling_while_processing() {
+        for status in ["PROCESSING", "PROCESSING_UPLOAD", "PUBLISHING"] {
+            let q = serde_json::json!({
+                "data": { "videos": [ { "id": "7", "publish_status": status } ] }
+            });
+            match TikTokProvider::parse_publish_status(&q) {
+                PublishPoll::Pending(seen) => assert_eq!(seen, status),
+                other => panic!("{status} must stay pending, got {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn publish_status_should_keep_polling_when_status_is_absent() {
+        // TikTok omits publish_status while the record propagates; reporting
+        // success there is exactly the bug the poll exists to prevent.
+        let q = serde_json::json!({ "data": { "videos": [ { "id": "7" } ] } });
+        assert!(matches!(
+            TikTokProvider::parse_publish_status(&q),
+            PublishPoll::Pending(_)
+        ));
+    }
 
     #[test]
     fn parse_should_map_tiktok_display_api_counts() {

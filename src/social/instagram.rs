@@ -2,10 +2,16 @@
 // OAuth 2.0 + Instagram Graph API (for Business/Creator accounts).
 // Posts to Instagram Business accounts via Facebook's Graph API.
 
+use std::time::Duration;
+
 use async_trait::async_trait;
 
 use super::*;
 use crate::config::Config;
+
+/// How long to wait for a media container to become publishable.
+const CONTAINER_READY_ATTEMPTS: usize = 12;
+const CONTAINER_READY_INTERVAL: Duration = Duration::from_secs(5);
 
 pub struct InstagramProvider {
     client_id: String,
@@ -198,6 +204,7 @@ impl SocialProvider for InstagramProvider {
                 &ig_id, access_token, &post.media[0].url, &post.content, false,
             ).await?;
 
+            self.await_container_ready(access_token, &container_id).await?;
             let platform_post_id = self.publish_container(&ig_id, access_token, &container_id).await?;
             Ok(PublishResult {
                 platform_post_url: Some(format!("https://instagram.com/p/{platform_post_id}")),
@@ -247,9 +254,14 @@ impl SocialProvider for InstagramProvider {
                 .as_str()
                 .ok_or_else(|| ProviderError::Api(
                     format!("Instagram did not return carousel container ID: {carousel_json:?}")
-                ))?;
+                ))?
+                .to_string();
 
-            let platform_post_id = self.publish_container(&ig_id, access_token, carousel_id).await?;
+            // Polling the CAROUSEL container also covers the children: Instagram
+            // only marks a carousel FINISHED once every child has finished its
+            // own processing, so one wait replaces N per-child waits.
+            self.await_container_ready(access_token, &carousel_id).await?;
+            let platform_post_id = self.publish_container(&ig_id, access_token, &carousel_id).await?;
             Ok(PublishResult {
                 platform_post_url: Some(format!("https://instagram.com/p/{platform_post_id}")),
                 platform_post_id,
@@ -961,6 +973,87 @@ impl InstagramProvider {
             .ok_or_else(|| {
                 ProviderError::Api(format!("Instagram publish unexpected response: {json:?}"))
             })
+    }
+
+    /// Block until `container_id` is ready to publish.
+    ///
+    /// `POST /{ig_id}/media` returns a container id for media Instagram is still
+    /// fetching and processing; `media_publish` on a container that is not yet
+    /// `FINISHED` fails with `MEDIA_NOT_READY` (and on a video container with a
+    /// misleading `MEDIA_TRANSCODING`), so publishing straight off the create
+    /// call turns a working post into a hard error.
+    ///
+    /// Image containers are usually ready on the first read, so the common path
+    /// costs one extra request. Bounded to
+    /// [`CONTAINER_READY_ATTEMPTS`] reads [`CONTAINER_READY_INTERVAL`] apart
+    /// (~60s): a terminal `ERROR`/`EXPIRED` and an unfinished container both
+    /// surface as [`ProviderError::Api`] naming the last observed status, so the
+    /// operator can tell "this will never publish" from "needs more time".
+    async fn await_container_ready(
+        &self,
+        access_token: &str,
+        container_id: &str,
+    ) -> Result<(), ProviderError> {
+        let mut last_seen = "unknown".to_string();
+
+        for attempt in 1..=CONTAINER_READY_ATTEMPTS {
+            let resp = self
+                .http
+                .get(format!("{}/{container_id}", self.graph_url()))
+                .query(&[
+                    ("fields", "status_code,status"),
+                    ("access_token", access_token),
+                ])
+                .send()
+                .await?;
+            let http_status = resp.status();
+            let json: serde_json::Value = resp.json().await?;
+
+            if let Some(err) = json["error"].as_object() {
+                let msg = err["message"]
+                    .as_str()
+                    .unwrap_or("Container status query failed");
+                let code = err["code"].as_u64().unwrap_or(0);
+                let raw = format!(
+                    "Instagram container status query failed (HTTP {http_status}, code {code}): {msg}"
+                );
+                return Err(ProviderError::Api(friendly_error(
+                    self.map_error(msg, http_status.as_u16()),
+                    &raw,
+                )));
+            }
+
+            let seen = json["status_code"].as_str().unwrap_or("");
+            last_seen = match seen {
+                "FINISHED" => {
+                    tracing::debug!("IG container {container_id} ready (check #{attempt})");
+                    return Ok(());
+                }
+                // Terminal: retrying the same container can never succeed.
+                "ERROR" | "EXPIRED" | "MEDIA_ERROR" => {
+                    let reason = json["status"].as_str().unwrap_or("no reason given");
+                    let raw = format!(
+                        "Instagram container {container_id} is {seen}: {reason}"
+                    );
+                    return Err(ProviderError::Api(friendly_error(None, &raw)));
+                }
+                // IN_PROGRESS and anything Instagram adds later.
+                other if other.is_empty() => "not reported yet".to_string(),
+                other => other.to_string(),
+            };
+
+            if attempt < CONTAINER_READY_ATTEMPTS {
+                tokio::time::sleep(CONTAINER_READY_INTERVAL).await;
+            }
+        }
+
+        let raw = format!(
+            "Instagram container {container_id} was still {last_seen} after {}s. Large \
+             images and videos need longer to process — retry this post rather than \
+             re-uploading the media, or the same container will time out again.",
+            CONTAINER_READY_ATTEMPTS as u64 * CONTAINER_READY_INTERVAL.as_secs()
+        );
+        Err(ProviderError::Api(friendly_error(None, &raw)))
     }
 
     /// Resolve the Instagram Business Account ID from a page-scoped token.

@@ -219,6 +219,23 @@ impl ProviderRegistry {
     ) -> Self {
         let mut providers: HashMap<&'static str, Arc<dyn SocialProvider>> = HashMap::new();
 
+        // Every Tier-1 / Tier-2 provider registers UNCONDITIONALLY.
+        //
+        // Registration is a catalogue decision, not a credentials decision.
+        // Gating it on `config.*_client_id.is_some()` made `/api/providers`
+        // advertise 19 of 26 on a clean environment while `/channels` rendered
+        // all 26 cards and the MCP layer advertised every tool — three
+        // surfaces, three different answers to "what does this build support?".
+        //
+        // Every provider's `new(config)` is infallible: missing credentials
+        // land as empty strings, a default instance URL, or a cloned config,
+        // and the call that needs a credential fails with the ordinary
+        // not-connected / auth error. That is the same shape reddit, pinterest,
+        // wordpress and skool have always had, and it is what the UI's
+        // "Connect" button needs to exist to offer in the first place.
+        //
+        // Tier-3 (archive) stays gated — see `tier::archive_providers_enabled`.
+
         // Current providers
         providers.insert("x", Arc::new(x::XProvider::new(config)));
         providers.insert(
@@ -235,48 +252,36 @@ impl ProviderRegistry {
             Arc::new(instagram::InstagramProvider::new(config)),
         );
 
-        // New providers (with credentials)
-        let linkedin_page = linkedin_page::LinkedInPageProvider::new(config);
-        // Only add if credential check passes — LinkedIn page uses same credentials as LinkedIn
-        if config.linkedin_client_id.is_some() {
-            providers.insert("linkedin-page", Arc::new(linkedin_page));
-        }
+        // LinkedIn Page — shares LinkedIn's OAuth app credentials, so it is
+        // constructible either way.
+        providers.insert(
+            "linkedin-page",
+            Arc::new(linkedin_page::LinkedInPageProvider::new(config)),
+        );
 
-        if config.instagram_app_id.is_some() {
-            providers.insert(
-                "instagram-standalone",
-                Arc::new(instagram_standalone::InstagramStandaloneProvider::new(
-                    config,
-                )),
-            );
-        }
+        providers.insert(
+            "instagram-standalone",
+            Arc::new(instagram_standalone::InstagramStandaloneProvider::new(config)),
+        );
 
-        if config.threads_app_id.is_some() {
-            providers.insert("threads", Arc::new(threads::ThreadsProvider::new(config)));
-        }
+        providers.insert("threads", Arc::new(threads::ThreadsProvider::new(config)));
 
-        // Always registered (show on frontend even without credentials)
         providers.insert("reddit", Arc::new(reddit::RedditProvider::new(config)));
 
-        if config.discord_client_id.is_some() {
-            providers.insert("discord", Arc::new(discord::DiscordProvider::new(config)));
-        }
+        providers.insert("discord", Arc::new(discord::DiscordProvider::new(config)));
 
         // Telegram Bot — token-based accounts (comma-separated TELEGRAM_BOT_TOKENS)
-        if config.telegram_bot_tokens.is_some() {
-            providers.insert(
-                "telegram-bot",
-                Arc::new(telegram_bot::TelegramBotProvider::new(config)),
-            );
-        }
+        providers.insert(
+            "telegram-bot",
+            Arc::new(telegram_bot::TelegramBotProvider::new(config)),
+        );
 
-        // Telegram User — Grammers-based MTProto client (always registered)
+        // Telegram User — Gramers-based MTProto client
         providers.insert(
             "telegram-user",
             Arc::new(telegram_user::TelegramUserProvider::new(config, telegram_client_manager.clone())),
         );
 
-        // Always registered (show on frontend even without credentials)
         providers.insert("pinterest", Arc::new(pinterest::PinterestProvider::new(config)));
 
         // WhatsApp — native wa-rs client with wacli fallback
@@ -287,75 +292,56 @@ impl ProviderRegistry {
         // creator accounts both publish through the same Content Posting
         // API with the same scopes; only the account type differs, so the
         // "merge" is structural — there is nothing to gate.
-        if config.tiktok_client_id.is_some() {
-            providers.insert("tiktok", Arc::new(tiktok::TikTokProvider::new(config)));
-        }
+        providers.insert("tiktok", Arc::new(tiktok::TikTokProvider::new(config)));
 
         // Google My Business — uses same Google OAuth credentials
-        if config.youtube_client_id.is_some() && config.youtube_client_secret.is_some() {
-            providers.insert(
-                "google_my_business",
-                Arc::new(google_my_business::GoogleMyBusinessProvider::new(config)),
-            );
-        }
+        providers.insert(
+            "google_my_business",
+            Arc::new(google_my_business::GoogleMyBusinessProvider::new(config)),
+        );
 
         // Mastodon — OAuth-based microblogging (with app registration).
         // v25 §1: no separate `mastodon-custom` provider. Self-hosted
         // instances are reached through `MASTODON_INSTANCE_URL` /
         // `instance_url`, so the custom-instance path is already part of
-        // this provider rather than a gated sibling.
-        if config.mastodon_client_id.is_some() {
-            providers.insert("mastodon", Arc::new(mastodon::MastodonProvider::new(config)));
-        }
+        // this provider rather than a gated sibling. `new` falls back to
+        // mastodon.social when the instance env var is unset.
+        providers.insert("mastodon", Arc::new(mastodon::MastodonProvider::new(config)));
 
         // Medium — API key-based publishing
-        if config.medium_access_token.is_some() {
-            providers.insert("medium", Arc::new(medium::MediumProvider::new(config)));
-        }
+        providers.insert("medium", Arc::new(medium::MediumProvider::new(config)));
 
         // Dev.to — API key-based publishing
-        if config.devto_api_key.is_some() {
-            providers.insert("devto", Arc::new(devto::DevtoProvider::new(config)));
-        }
+        providers.insert("devto", Arc::new(devto::DevtoProvider::new(config)));
 
         // Hashnode — API key-based blogging
-        if config.hashnode_api_key.is_some() {
-            providers.insert("hashnode", Arc::new(hashnode::HashnodeProvider::new(config)));
-        }
+        providers.insert("hashnode", Arc::new(hashnode::HashnodeProvider::new(config)));
 
-        // GitHub — PAT-based (always registered, shows as configured if GITHUB_TOKEN is set)
-        if config.github_token.is_some() {
-            providers.insert("github", Arc::new(github::GithubProvider::new(config)));
-        }
+        // GitHub — PAT-based
+        providers.insert("github", Arc::new(github::GithubProvider::new(config)));
 
         // YouTube — dedicated provider for importing recent videos
         // Uses YOUTUBE_CLIENT_ID / YOUTUBE_CLIENT_SECRET
-        if config.youtube_client_id.is_some() {
-            providers.insert("youtube", Arc::new(youtube::YoutubeProvider::new(config)));
-        }
+        providers.insert("youtube", Arc::new(youtube::YoutubeProvider::new(config)));
 
-        // Google Suite — unified provider for YouTube, Gmail, Calendar, Drive
+        // Google Suite — unified provider for Gmail, Calendar, Drive
         // Uses YOUTUBE_CLIENT_ID / YOUTUBE_CLIENT_SECRET for all Google OAuth scopes
-        if config.youtube_client_id.is_some() {
-            providers.insert("google", Arc::new(google::GoogleProvider::new(config)));
-        }
+        providers.insert("google", Arc::new(google::GoogleProvider::new(config)));
 
         // Chrome extension-based provider (no OAuth credentials needed)
         providers.insert("skool", Arc::new(skool::SkoolProvider::new()));
 
-        // WordPress — REST API + Application Password (always registered, no global credentials)
+        // WordPress — REST API + Application Password (no global credentials)
         providers.insert("wordpress", Arc::new(wordpress::WordPressProvider::new(config)));
+
+        // Slack — OAuth-based messaging workspace provider
+        providers.insert("slack", Arc::new(slack::SlackProvider::new(config)));
 
         // Farcaster — Tier-3 archive (v25 §1). Web3/Neynar, no OAuth.
         // Compiles from `social::archive` but registers only when the
         // operator opts back in via ENABLE_ARCHIVE_PROVIDERS.
         if tier::archive_providers_enabled() {
             providers.insert("farcaster", Arc::new(farcaster::FarcasterProvider::new(config)));
-        }
-
-        // Slack — OAuth-based messaging workspace provider
-        if config.slack_client_id.is_some() {
-            providers.insert("slack", Arc::new(slack::SlackProvider::new(config)));
         }
 
         tracing::info!(
@@ -408,9 +394,10 @@ impl ProviderRegistry {
         }
 
         // Tier drift guard: every registered provider must be a known tier
-        // member, and every enabled tier member must actually be registered
-        // (some are conditional on credentials, so only the tier tables
-        // themselves are asserted — see `registered_identifiers`).
+        // member. Since registration stopped being credential-conditional, the
+        // useful assertion is the other direction too — every non-archive tier
+        // member must be registered — so a provider dropped from this function
+        // is caught here instead of surfacing as a connect button that 404s.
         let registered: Vec<&str> = providers.keys().copied().collect();
         let unknown: Vec<&&str> = registered
             .iter()
@@ -420,6 +407,17 @@ impl ProviderRegistry {
             tracing::warn!(
                 "providers registered but missing from src/social/tier.rs: {:?}",
                 unknown
+            );
+        }
+        let missing: Vec<&&str> = tier::TIER_1
+            .iter()
+            .chain(tier::TIER_2.iter())
+            .filter(|id| !registered.contains(id))
+            .collect();
+        if !missing.is_empty() {
+            tracing::warn!(
+                "tier-1/tier-2 providers not registered in the registry: {:?}",
+                missing
             );
         }
 
@@ -468,5 +466,55 @@ impl ProviderRegistry {
     /// Get all providers
     pub fn all(&self) -> Vec<Arc<dyn SocialProvider>> {
         self.providers.values().cloned().collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::social::test_config;
+
+    /// Registration must not depend on credentials.
+    ///
+    /// This is the regression the credential gating caused: on a clean
+    /// environment `/api/providers` advertised 19 of 26 while `/channels`
+    /// rendered all 26 cards and MCP advertised every tool. `test_config()`
+    /// carries no provider credentials, so a credential-conditional insert
+    /// fails this assertion.
+    #[test]
+    fn registry_lists_every_default_tier_member_without_credentials() {
+        let registry = ProviderRegistry::new(&test_config(), None, None);
+        let mut ids = registry.list();
+        ids.sort_unstable();
+
+        let mut expected: Vec<&'static str> = tier::TIER_1.iter().chain(tier::TIER_2.iter()).copied().collect();
+        expected.sort_unstable();
+        expected.dedup();
+
+        assert_eq!(ids, expected, "a clean environment must register all {} default providers", expected.len());
+        assert_eq!(ids.len(), 26, "v25 §1: 12 Tier-1 + 14 Tier-2");
+    }
+
+    /// Every registered identifier must be a known tier member (drift guard).
+    #[test]
+    fn registry_contains_no_identifier_outside_the_tier_tables() {
+        let registry = ProviderRegistry::new(&test_config(), None, None);
+        for id in registry.list() {
+            assert!(
+                tier::all_known_identifiers().contains(&id),
+                "{id} is registered but absent from src/social/tier.rs"
+            );
+        }
+    }
+
+    /// Every registered provider gets a concurrency limiter and a circuit
+    /// breaker, or the scheduler has nothing to acquire and outages cascade.
+    #[test]
+    fn every_registered_provider_has_a_limiter_and_breaker() {
+        let registry = ProviderRegistry::new(&test_config(), None, None);
+        for id in registry.list() {
+            assert!(registry.concurrency(id).is_some(), "{id} has no concurrency limiter");
+            assert!(registry.circuit_breaker(id).is_some(), "{id} has no circuit breaker");
+        }
     }
 }

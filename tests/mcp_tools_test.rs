@@ -26,7 +26,7 @@ fn get_registry(config: &Config) -> ProviderRegistry {
     ProviderRegistry::new(config, None, None)
 }
 
-// ── Test 1: Provider Registry has all 14 providers ───────────────
+// ── Test 1: Provider Registry has all 26 default providers ──────
 
 #[tokio::test]
 async fn test_provider_registry_has_all_providers() {
@@ -36,15 +36,26 @@ async fn test_provider_registry_has_all_providers() {
     ids.sort();
 
     let mut expected: Vec<&str> = vec![
-        "x", "linkedin", "bluesky", "facebook", "instagram",
-        "linkedin-page", "instagram-standalone", "threads",
-        "reddit", "telegram-bot", "telegram-user", "pinterest", "skool",
-        "whatsapp", "wordpress",
-        "github", "google",
+        // Tier-1 (12)
+        "x", "linkedin", "linkedin-page", "facebook", "instagram",
+        "instagram-standalone", "threads", "youtube", "tiktok", "reddit",
+        "bluesky", "pinterest",
+        // Tier-2 (14)
+        "telegram-bot", "telegram-user", "discord", "slack", "whatsapp",
+        "wordpress", "mastodon", "medium", "devto", "hashnode", "github",
+        "google", "google_my_business", "skool",
     ];
     expected.sort();
 
-    assert_eq!(ids, expected, "Provider registry should contain all 17 providers");
+    // Registration is unconditional (see `ProviderRegistry::new`): a clean
+    // environment must still report the full catalogue, because the /channels
+    // grid and the MCP tool list advertise all 26 regardless of credentials.
+    // Tier-3 (farcaster) is excluded — it registers only under
+    // ENABLE_ARCHIVE_PROVIDERS.
+    assert_eq!(
+        ids, expected,
+        "Provider registry should contain all 26 default providers"
+    );
     println!("✅ Provider registry: {} providers registered", ids.len());
 }
 

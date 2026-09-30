@@ -27,7 +27,7 @@ Social Forge is a single Rust binary that manages **26 social platforms** (12 Ti
 
 1. **CLI** — 100+ commands for AI agents and terminal power users
 2. **REST API** — SvelteKit dashboard for human operators
-3. **MCP Server** — 300+ tools across 42 tool modules for Claude/Cursor-style AI integrations
+3. **MCP Server** — 327 tools across 42 tool modules for Claude/Cursor-style AI integrations
 
 ---
 
@@ -56,12 +56,26 @@ social-forge schedule --platform linkedin --text "Post" --at "2024-01-15 09:00"
 social-forge mcp
 ```
 
-**12 MCP Tools:**
-- `post.create`, `post.schedule`, `post.delete`
-- `media.upload`, `media.delete`
-- `analytics.get`, `engagement.get`
-- `account.list`, `account.verify`
-- `hashtag.suggest`, `trending.get`
+**327 MCP tools** across 42 tool modules, all defined in `src/mcp/mod.rs` and dispatched to per-provider handler modules in `src/mcp/tools_*.rs`. Names are namespaced by platform:
+
+| Namespace | Tools | Namespace | Tools |
+|-----------|------:|-----------|------:|
+| `goog_*` (Gmail/Calendar/Drive/YouTube data) | 28 | `tb_*` (Telegram Bot) | 10 |
+| `x_*` | 27 | `di_*` (Discord) | 10 |
+| `reddit_*` | 23 | `li_*` (LinkedIn) | 15 |
+| `ig_*` (Instagram) | 21 | `lip_*` (LinkedIn Page) | 11 |
+| `gh_*` (GitHub) | 18 | `fb_*` (Facebook) | 15 |
+| `posts_*` (cross-platform) | 17 | `th_*` (Threads) | 9 |
+| `wa_*` (WhatsApp) | 9 | `pi_*` (Pinterest) | 8 |
+| `ias_*` (Instagram standalone) | 7 | `tu_*` (Telegram User) | 7 |
+| `bs_*` (Bluesky) | 7 | `ms_*` (Mastodon) | 6 |
+| `sk_*` (Skool) | 5 | `tt_*` (TikTok) | 4 |
+| `sl_*` (Slack) | 4 | `wp_*` (WordPress) | 4 |
+| `yt_*` (YouTube) | 2 | `md_*` / `dv_*` / `hn_*` (Medium / Dev.to / Hashnode) | 3 each |
+
+The remaining 68 are cross-platform: `posts_*`, `analytics_*`, `feed_*`, `integrations_*`, `media_*`, `tag_*`, `notif_*`, `wh_*` (webhooks), `calendar_get`, `auth_status`, `setup_*`, and the automation rule tools.
+
+`social-forge mcp` enumerates the live set; 327 is the number of `#[tool(…)]` definitions in `src/mcp/mod.rs`.
 
 ---
 
@@ -70,12 +84,12 @@ social-forge mcp
 
 | Feature | Details |
 |---------|---------|
-| **Multi-platform** | 7 platforms, unified API |
+| **Multi-platform** | 26 platforms (12 Tier-1 + 14 Tier-2), one trait-based registry |
 | **Scheduling** | Cron + one-time, timezone-aware |
 | **Media** | Images, videos, GIFs, carousels |
 | **Analytics** | Engagement, reach, follower growth |
-| **Rate limiting** | Per-platform, auto-backoff |
-| **MCP** | 12 tools for agent orchestration |
+| **Rate limiting** | Per-platform, auto-backoff, concurrency limit + circuit breaker |
+| **MCP** | 327 tools across 42 modules for agent orchestration |
 
 ---
 
@@ -139,7 +153,7 @@ mcp:
 │                        Social Forge Binary                        │
 ├──────────────┬──────────────────┬───────────────────────────────┤
 │   CLI Mode   │   REST API Mode  │        MCP Stdio Mode         │
-│  (clap)      │  (axum :6543)    │   (rmcp, 300+ tools)          │
+│   (clap)      │  (axum :6543)    │   (rmcp, 327 tools)           │
 ├──────────────┴──────────────────┴───────────────────────────────┤
 │                    Shared Business Logic                          │
 │  ┌──────────────────────────────────────────────────────────┐   │
@@ -161,37 +175,37 @@ Providers are tiered: **Tier-1** gets full depth (analytics, engagement, comment
 
 | Platform | OAuth | Cookie Auth | CLI | MCP Tools |
 |----------|:-----:|:-----------:|:---:|:---------:|
-| X / Twitter | ✅ | ✅ (GraphQL) | ✅ | 15 |
-| Reddit | ✅ | ✅ (www + modhash) | ✅ | 24 |
-| LinkedIn (Personal) | ✅ | — | ✅ | 11 |
-| LinkedIn (Page) | ✅ | — | ✅ | 8 |
-| Facebook | ✅ | — | ✅ | 8 |
-| Instagram | ✅ | — | ✅ | 6 |
-| Instagram (Standalone) | ✅ | — | — | 6 |
-| Threads | ✅ | — | — | 6 |
-| YouTube | ✅ | — | — | 8 |
+| X / Twitter | ✅ | ✅ (GraphQL) | ✅ | 27 |
+| Reddit | ✅ | ✅ (www + modhash) | ✅ | 23 |
+| LinkedIn (Personal) | ✅ | — | ✅ | 15 |
+| LinkedIn (Page) | ✅ | — | ✅ | 11 |
+| Facebook | ✅ | — | ✅ | 15 |
+| Instagram | ✅ | — | ✅ | 21 |
+| Instagram (Standalone) | ✅ | — | — | 7 |
+| Threads | ✅ | — | — | 9 |
+| YouTube | ✅ | — | — | 2 |
 | TikTok | ✅ | — | — | 4 |
-| Pinterest | ✅ | — | — | 4 |
-| Bluesky | App Password | — | — | 4 |
+| Pinterest | ✅ | — | — | 8 |
+| Bluesky | App Password | — | — | 7 |
 
 #### Tier-2 — publish-maintained (14)
 
 | Platform | OAuth | Cookie Auth | CLI | MCP Tools |
 |----------|:-----:|:-----------:|:---:|:---------:|
-| Discord | ✅ | — | — | 6 |
+| Discord | ✅ | — | — | 10 |
 | Slack | ✅ | — | — | 4 |
-| Telegram (Bot) | Token | — | — | 8 |
-| Telegram (User) | Session | — | — | 6 |
-| WhatsApp | QR | — | — | 6 |
-| Mastodon | ✅ | — | — | 4 |
-| WordPress | ✅ | — | — | 6 |
+| Telegram (Bot) | Token | — | — | 10 |
+| Telegram (User) | Session | — | — | 7 |
+| WhatsApp | QR | — | — | 9 |
+| Mastodon | ✅ | — | — | 6 |
+| WordPress | ✅ | — | — | 4 |
 | Medium | API Key | — | — | 3 |
 | Dev.to | API Key | — | — | 3 |
 | Hashnode | API Key | — | — | 3 |
-| GitHub | PAT | — | — | 6 |
-| Google (Gmail/Calendar/Drive) | ✅ | — | ✅ | 20+ |
-| Google My Business | ✅ | — | — | 4 |
-| Skool | ✅ (Chrome ext) | — | — | 4 |
+| GitHub | PAT | — | — | 18 |
+| Google (Gmail/Calendar/Drive) | ✅ | — | ✅ | 28 |
+| Google My Business | ✅ | — | — | 0 |
+| Skool | ✅ (Chrome ext) | — | — | 5 |
 
 **26 platforms by default.** `kick`, `vk`, `whop` and `lemmy` were removed outright (v25 §1).
 
@@ -203,7 +217,9 @@ Providers are tiered: **Tier-1** gets full depth (analytics, engagement, comment
 
 *Mastodon custom instances use `MASTODON_INSTANCE_URL` — no separate provider. TikTok business accounts publish through the same Content Posting API as creator accounts — no separate provider.*
 
-*Platform list verified against `src/social/tier.rs` + `src/social/registry.rs` (26 default + 1 archived) and the `src/mcp/tools_*.rs` modules (42 tool modules).*
+*Google My Business has no MCP tools of its own — it is reachable through the REST API and the channels UI. Per-platform tool counts are the `#[tool(…)]` names in `src/mcp/mod.rs`; the 26 per-platform namespaces plus 68 cross-platform tools total 327.*
+
+*Platform list verified against `src/social/tier.rs` + `src/social/registry.rs` (26 default + 1 archived) and the `src/mcp/tools_*.rs` handler modules (42 modules).*
 
 ---
 
@@ -276,7 +292,7 @@ For AI agents that speak MCP (Claude Desktop, Cursor, etc.):
 }
 ```
 
-This exposes 300+ tools with full JSON Schema descriptions.
+This exposes 327 tools with full JSON Schema descriptions.
 
 ---
 
@@ -404,7 +420,7 @@ For example:
 - **Language**: Rust (Edition 2021)
 - **Web Framework**: Axum 0.8
 - **Database**: PostgreSQL via sqlx (compile-time checked queries)
-- **MCP**: rmcp 1.6 with 300+ tools (42 tool modules)
+- **MCP**: rmcp 1.6 with 327 tools (42 handler modules)
 - **CLI**: clap 4 with derive macros
 - **TLS Fingerprinting**: wreq (Chrome 131 emulation for X/Twitter)
 - **Scheduler**: Custom tokio::spawn loop with exponential-backoff retry
@@ -432,7 +448,7 @@ social-forge/
 │   │   ├── mod.rs           # Router + AppState
 │   │   ├── onboard.rs       # OAuth flows + cookie forms
 │   │   └── integrations.rs  # CRUD for connected accounts
-│   ├── mcp/                 # MCP server (300+ tools, 42 modules)
+│   ├── mcp/                 # MCP server (327 tools, 42 handler modules)
 │   │   ├── mod.rs           # Tool registry
 │   │   ├── tools_x.rs       # X/Twitter tools
 │   │   ├── tools_reddit.rs  # Reddit tools
