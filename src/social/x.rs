@@ -589,7 +589,141 @@ impl XProvider {
         (!out.is_empty()).then_some(serde_json::Value::Object(out))
     }
 
-    // ── Media upload (v1.1 API, used by both paths) ──────────
+    // ── Comment + mention parsers (pure: fixture-testable) ───
+
+    /// Walk a TweetDetail GraphQL response into comments, skipping the focal
+    /// tweet itself. GraphQL returns the conversation as one flat entry list,
+    /// so replies stay empty and the UI threads them client-side.
+    pub(crate) fn parse_graphql_comments(
+        json: &serde_json::Value,
+        focal_tweet_id: &str,
+    ) -> Vec<CommentData> {
+        json.pointer("/data/threaded_conversation_with_injections_v2/instructions")
+            .and_then(|instructions| instructions.as_array())
+            .into_iter()
+            .flatten()
+            .filter_map(|instruction| instruction.get("entries").and_then(|e| e.as_array()))
+            .flatten()
+            .filter_map(|entry| entry.pointer("/content/itemContent/tweet_results/result"))
+            .filter_map(|tweet| {
+                let id = tweet
+                    .pointer("/rest_id")
+                    .and_then(|v| v.as_str())
+                    .or_else(|| tweet.pointer("/legacy/id_str").and_then(|v| v.as_str()))?;
+                if id == focal_tweet_id {
+                    return None;
+                }
+                let legacy = tweet.get("legacy");
+                let core = tweet.pointer("/core/user_results/result/core");
+                Some(CommentData {
+                    id: id.to_string(),
+                    author_name: core
+                        .and_then(|c| c.get("name"))
+                        .and_then(|v| v.as_str())
+                        .map(String::from),
+                    author_avatar: core
+                        .and_then(|c| c.pointer("/avatar/image_url"))
+                        .and_then(|v| v.as_str())
+                        .map(String::from),
+                    text: legacy
+                        .and_then(|l| l.get("full_text"))
+                        .and_then(|v| v.as_str())
+                        .unwrap_or_default()
+                        .to_string(),
+                    created_at: legacy
+                        .and_then(|l| l.get("created_at"))
+                        .and_then(|v| v.as_str())
+                        .map(crate::social::common::parse_timestamp)
+                        .unwrap_or_else(chrono::Utc::now),
+                    like_count: legacy
+                        .and_then(|l| l.get("favorite_count"))
+                        .and_then(|v| v.as_i64())
+                        .unwrap_or(0) as i32,
+                    replies: vec![],
+                })
+            })
+            .collect()
+    }
+
+    /// Turn a `conversation_id` recent-search response into comments. The
+    /// search returns the whole conversation including the root tweet, which is
+    /// skipped; author details come from `includes.users`.
+    pub(crate) fn parse_v2_conversation(
+        json: &serde_json::Value,
+        root_tweet_id: &str,
+    ) -> Vec<CommentData> {
+        let users: std::collections::HashMap<&str, &serde_json::Value> = json
+            .pointer("/includes/users")
+            .and_then(|u| u.as_array())
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(|u| Some((u["id"].as_str()?, u)))
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        json.get("data")
+            .and_then(|d| d.as_array())
+            .map(|tweets| {
+                tweets
+                    .iter()
+                    .filter_map(|tweet| {
+                        let id = tweet["id"].as_str()?;
+                        if id == root_tweet_id {
+                            return None;
+                        }
+                        let author = users.get(tweet["author_id"].as_str()?);
+                        Some(CommentData {
+                            id: id.to_string(),
+                            author_name: author
+                                .and_then(|a| a["name"].as_str())
+                                .map(String::from),
+                            author_avatar: author
+                                .and_then(|a| a["profile_image_url"].as_str())
+                                .map(String::from),
+                            text: tweet["text"].as_str().unwrap_or_default().to_string(),
+                            created_at: tweet["created_at"]
+                                .as_str()
+                                .map(crate::social::common::parse_timestamp)
+                                .unwrap_or_else(chrono::Utc::now),
+                            like_count: tweet
+                                .pointer("/public_metrics/like_count")
+                                .and_then(|v| v.as_i64())
+                                .unwrap_or(0) as i32,
+                            replies: vec![],
+                        })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Map a `GET /2/users/search` response into @-autocomplete candidates.
+    pub(crate) fn parse_user_search(json: &serde_json::Value) -> Vec<MentionResult> {
+        json.get("data")
+            .and_then(|d| d.as_array())
+            .map(|users| {
+                users
+                    .iter()
+                    .filter_map(|user| {
+                        Some(MentionResult {
+                            id: user["id"].as_str()?.to_string(),
+                            label: user["username"]
+                                .as_str()
+                                .or(user["name"].as_str())
+                                .unwrap_or_default()
+                                .to_string(),
+                            image: user["profile_image_url"].as_str().map(String::from),
+                            do_not_cache: None,
+                        })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    // ── Media upload (v1.1 API, used by both paths) ──────────    // ── Media upload (v1.1 API, used by both paths) ──────────
 
     async fn fetch_media_bytes(&self, url: &str) -> Result<Vec<u8>, ProviderError> {
         if url.starts_with("http://") || url.starts_with("https://") {
@@ -1436,6 +1570,52 @@ impl SocialProvider for XProvider {
         let detail = self.tweet_detail(access_token, platform_post_id).await?;
         Ok(Self::extract_public_metrics(&detail)
             .map(|m| serde_json::json!({ "public_metrics": m })))
+    }
+
+    /// Read the replies under a tweet.
+    ///
+    /// Cookie auth reads the TweetDetail GraphQL conversation; OAuth v2 has no
+    /// replies endpoint, so the conversation is reconstructed from recent
+    /// search on `conversation_id`. Both land in the same shape via the two
+    /// parsers below.
+    async fn get_post_comments(
+        &self,
+        access_token: &str,
+        platform_post_id: &str,
+    ) -> Result<Vec<CommentData>, ProviderError> {
+        if Self::parse_cookie_token(access_token).is_some() {
+            let vars = serde_json::json!({
+                "focalTweetId": platform_post_id,
+                "count": 40,
+                "rankingMode": "Relevance",
+            });
+            let qid = FALLBACK_QUERY_IDS
+                .get("TweetDetail")
+                .ok_or_else(|| ProviderError::Api("Missing TweetDetail queryId".into()))?;
+            let json = self.graphql_get(qid, "TweetDetail", &vars, access_token).await?;
+            return Ok(Self::parse_graphql_comments(&json, platform_post_id));
+        }
+
+        let url = format!(
+            "https://api.twitter.com/2/tweets/search/recent?query={}&tweet.fields=created_at,public_metrics,referenced_tweets,in_reply_to_user_id&expansions=author_id&user.fields=name,username,profile_image_url",
+            urlencoding::encode(&format!("conversation_id:{platform_post_id}"))
+        );
+        let json = self.v2_get(&url, access_token).await?;
+        Ok(Self::parse_v2_conversation(&json, platform_post_id))
+    }
+
+    /// @-autocomplete over user search (`GET /2/users/search`).
+    async fn search_mention(
+        &self,
+        access_token: &str,
+        query: &str,
+    ) -> Result<Vec<MentionResult>, ProviderError> {
+        let url = format!(
+            "https://api.twitter.com/2/users/search?query={}&max_results=25&user.fields=name,username,profile_image_url",
+            urlencoding::encode(query)
+        );
+        let json = self.v2_get(&url, access_token).await?;
+        Ok(Self::parse_user_search(&json))
     }
 
     async fn reply_to_comment(
@@ -2538,5 +2718,95 @@ mod tests {
             )
             .unwrap_err();
         assert!(matches!(err, ProviderError::TokenExpired), "got: {err:?}");
+    }
+
+    // ── B3: comments (cookie GraphQL + OAuth v2) ────────────
+
+    #[test]
+    fn parse_should_read_graphql_conversation_entries_as_comments() {
+        let fixture = serde_json::json!({
+            "data": { "threaded_conversation_with_injections_v2": { "instructions": [
+                { "entries": [
+                    { "entryId": "tweet-1", "content": { "itemContent": { "tweet_results": { "result": {
+                        "rest_id": "1", "legacy": { "full_text": "root", "created_at": "Wed Oct 07 12:00:00 +0000 2026", "favorite_count": 5 },
+                        "core": { "user_results": { "result": { "core": { "name": "Ada", "avatar": { "image_url": "https://img/a.jpg" } } } } }
+                    } } } } },
+                    { "entryId": "tweet-2", "content": { "itemContent": { "tweet_results": { "result": {
+                        "rest_id": "2", "legacy": { "full_text": "a reply", "created_at": "Wed Oct 07 12:05:00 +0000 2026", "favorite_count": 2 },
+                        "core": { "user_results": { "result": { "core": { "name": "Bob" } } } }
+                    } } } } }
+                ]}
+            ]}}
+        });
+        let comments = XProvider::parse_graphql_comments(&fixture, "1");
+        assert_eq!(comments.len(), 1, "focal tweet must be skipped");
+        assert_eq!(comments[0].id, "2");
+        assert_eq!(comments[0].text, "a reply");
+        assert_eq!(comments[0].author_name.as_deref(), Some("Bob"));
+        assert_eq!(comments[0].like_count, 2);
+    }
+
+    #[test]
+    fn parse_should_skip_graphql_tombstone_entries() {
+        let fixture = serde_json::json!({
+            "data": { "threaded_conversation_with_injections_v2": { "instructions": [
+                { "entries": [
+                    { "content": { "itemContent": { "tweet_results": { "result": {
+                        "__typename": "TweetTombstone", "tombstone": { "text": "gone" }
+                    } } } } }
+                ]}
+            ]}}
+        });
+        assert!(XProvider::parse_graphql_comments(&fixture, "1").is_empty());
+    }
+
+    #[test]
+    fn parse_should_read_v2_conversation_comments_and_skip_root() {
+        let fixture = serde_json::json!({
+            "data": [
+                { "id": "1", "author_id": "u1", "text": "root", "created_at": "2026-10-07T12:00:00.000Z" },
+                { "id": "2", "author_id": "u2", "text": "nice", "created_at": "2026-10-07T12:05:00.000Z",
+                  "public_metrics": { "like_count": 3 } }
+            ],
+            "includes": { "users": [
+                { "id": "u2", "name": "Bob", "profile_image_url": "https://img/b.jpg" }
+            ]}
+        });
+        let comments = XProvider::parse_v2_conversation(&fixture, "1");
+        assert_eq!(comments.len(), 1);
+        assert_eq!(comments[0].text, "nice");
+        assert_eq!(comments[0].author_name.as_deref(), Some("Bob"));
+        assert_eq!(comments[0].author_avatar.as_deref(), Some("https://img/b.jpg"));
+        assert_eq!(comments[0].like_count, 3);
+    }
+
+    #[test]
+    fn parse_should_default_v2_conversation_comment_without_author_expansion() {
+        let fixture = serde_json::json!({
+            "data": [{ "id": "2", "author_id": "u9", "text": "hi" }]
+        });
+        let comments = XProvider::parse_v2_conversation(&fixture, "1");
+        assert_eq!(comments[0].author_name, None);
+        assert_eq!(comments[0].like_count, 0);
+    }
+
+    // ── B3: mention search ───────────────────────────────────
+
+    #[test]
+    fn parse_should_map_user_search_into_mention_results() {
+        let fixture = serde_json::json!({ "data": [
+            { "id": "7", "username": "ada", "name": "Ada", "profile_image_url": "https://img/a.jpg" }
+        ]});
+        let mentions = XProvider::parse_user_search(&fixture);
+        assert_eq!(mentions.len(), 1);
+        assert_eq!(mentions[0].id, "7");
+        assert_eq!(mentions[0].label, "ada");
+        assert_eq!(mentions[0].image.as_deref(), Some("https://img/a.jpg"));
+    }
+
+    #[test]
+    fn parse_should_read_no_mentions_from_empty_user_search() {
+        let fixture = serde_json::json!({ "meta": { "result_count": 0 } });
+        assert!(XProvider::parse_user_search(&fixture).is_empty());
     }
 }

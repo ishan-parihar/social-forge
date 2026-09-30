@@ -8,6 +8,38 @@ use async_trait::async_trait;
 use super::*;
 use crate::config::Config;
 
+/// Read one entry of a `commentThreads`/`replies.comments` list — both share
+/// the same `{ snippet: { commentId, authorDisplayName, textDisplay, … } }`.
+fn youtube_comment(item: &serde_json::Value) -> Option<CommentData> {
+    let snippet = item.get("snippet")?;
+    Some(CommentData {
+        id: snippet.get("commentId")?.as_str()?.to_string(),
+        author_name: snippet
+            .get("authorDisplayName")
+            .and_then(|v| v.as_str())
+            .map(String::from),
+        author_avatar: snippet
+            .pointer("/authorProfileImageUrl")
+            .and_then(|v| v.as_str())
+            .map(String::from),
+        text: snippet
+            .get("textDisplay")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .to_string(),
+        created_at: snippet
+            .get("publishedAt")
+            .and_then(|v| v.as_str())
+            .map(crate::social::common::parse_timestamp)
+            .unwrap_or_else(chrono::Utc::now),
+        like_count: snippet
+            .get("likeCount")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0) as i32,
+        replies: vec![],
+    })
+}
+
 pub struct YoutubeProvider {
     client_id: String,
     client_secret: String,
@@ -23,6 +55,56 @@ impl YoutubeProvider {
             client_secret,
             http: reqwest::Client::new(),
         }
+    }
+
+    /// Map a `commentThreads` response into comments. The Data API wraps every
+    /// top-level comment in a thread under `snippet.topLevelComment`, and its
+    /// replies under `replies.comments`; both carry their own `snippet`.
+    pub(crate) fn parse_comment_threads(json: &serde_json::Value) -> Vec<CommentData> {
+        json.get("items")
+            .and_then(|i| i.as_array())
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(|thread| {
+                        let mut comment = youtube_comment(thread.pointer("/snippet/topLevelComment")?)?;
+                        comment.replies = thread
+                            .pointer("/snippet/replies/comments")
+                            .and_then(|r| r.as_array())
+                            .map(|replies| replies.iter().filter_map(youtube_comment).collect())
+                            .unwrap_or_default();
+                        Some(comment)
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Map a `search?type=channel` response into @-autocomplete candidates.
+    pub(crate) fn parse_channel_search(json: &serde_json::Value) -> Vec<MentionResult> {
+        json.get("items")
+            .and_then(|i| i.as_array())
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(|item| {
+                        Some(MentionResult {
+                            id: item.pointer("/id/channelId")?.as_str()?.to_string(),
+                            label: item
+                                .pointer("/snippet/title")?
+                                .as_str()
+                                .unwrap_or_default()
+                                .to_string(),
+                            image: item
+                                .pointer("/snippet/thumbnails/default/url")
+                                .and_then(|u| u.as_str())
+                                .map(String::from),
+                            do_not_cache: None,
+                        })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 
     pub async fn search_videos(
@@ -56,6 +138,42 @@ impl YoutubeProvider {
                 .unwrap_or("Unknown error")
                 .to_string();
             Err(ProviderError::Api(msg))
+        }
+    }
+
+    /// `GET /youtube/v3/commentThreads` for a video.
+    pub async fn get_comment_threads(
+        &self,
+        access_token: &str,
+        video_id: &str,
+        max_results: u32,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let max = max_results.clamp(1, 100).to_string();
+        let resp = self
+            .http
+            .get("https://youtube.googleapis.com/youtube/v3/commentThreads")
+            .query(&[
+                ("part", "snippet"),
+                ("videoId", video_id),
+                ("textFormat", "plainText"),
+                ("maxResults", &max),
+                ("access_token", access_token),
+            ])
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            Err(ProviderError::Api(
+                json["error"]["message"]
+                    .as_str()
+                    .unwrap_or("YouTube commentThreads failed")
+                    .to_string(),
+            ))
         }
     }
 
@@ -999,6 +1117,71 @@ impl SocialProvider for YoutubeProvider {
         })
     }
 
+    /// Top-level comments for a video via `commentThreads`; the first reply of
+    /// each thread is nested, the rest stay in the thread (YouTube returns a
+    /// flat `replies.comments` list).
+    async fn get_post_comments(
+        &self,
+        access_token: &str,
+        platform_post_id: &str,
+    ) -> Result<Vec<CommentData>, ProviderError> {
+        let json = self
+            .get_comment_threads(access_token, platform_post_id, 100)
+            .await?;
+        Ok(Self::parse_comment_threads(&json))
+    }
+
+    /// @-autocomplete over channel search — the only member list the YouTube
+    /// Data API exposes, and what `@handle` resolves to in descriptions.
+    async fn search_mention(
+        &self,
+        access_token: &str,
+        query: &str,
+    ) -> Result<Vec<MentionResult>, ProviderError> {
+        let resp = self
+            .http
+            .get("https://youtube.googleapis.com/youtube/v3/search")
+            .query(&[
+                ("part", "snippet"),
+                ("q", query),
+                ("type", "channel"),
+                ("maxResults", "25"),
+                ("access_token", access_token),
+            ])
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(Self::parse_channel_search(&json))
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            Err(ProviderError::Api(
+                json["error"]["message"]
+                    .as_str()
+                    .unwrap_or("YouTube channel search failed")
+                    .to_string(),
+            ))
+        }
+    }
+
+    /// Channels are the posting targets, same listing as `pages()`.
+    async fn targets(&self, access_token: &str) -> Result<Vec<TargetInfo>, ProviderError> {
+        Ok(self
+            .pages(access_token)
+            .await?
+            .into_iter()
+            .map(|p| TargetInfo {
+                id: p.id,
+                name: p.name,
+                target_type: "channel".into(),
+                picture: p.picture,
+                metadata: p.username.map(|u| serde_json::json!({ "custom_url": u })),
+            })
+            .collect())
+    }
+
     async fn reply_to_comment(
         &self,
         access_token: &str,
@@ -1181,5 +1364,69 @@ mod tests {
     #[test]
     fn map_error_returns_none_for_server_error() {
         assert!(provider().map_error("Internal Server Error", 503).is_none());
+    }
+
+    // ── B3: comment threads ───────────────────────────────────
+
+    #[test]
+    fn parse_should_unwrap_top_level_comments_and_their_replies() {
+        let raw = serde_json::json!({ "items": [
+            { "snippet": {
+                "topLevelComment": { "snippet": {
+                    "commentId": "c1", "textDisplay": "great video", "authorDisplayName": "Ada",
+                    "authorProfileImageUrl": "https://img/a.jpg",
+                    "publishedAt": "2026-09-28T10:00:00Z", "likeCount": 4 } },
+                "replies": { "comments": [
+                    { "snippet": { "commentId": "c2", "textDisplay": "thanks", "authorDisplayName": "Bob" } }
+                ]}
+            }}
+        ]});
+        let comments = YoutubeProvider::parse_comment_threads(&raw);
+        assert_eq!(comments.len(), 1);
+        assert_eq!(comments[0].id, "c1");
+        assert_eq!(comments[0].text, "great video");
+        assert_eq!(comments[0].author_name.as_deref(), Some("Ada"));
+        assert_eq!(comments[0].author_avatar.as_deref(), Some("https://img/a.jpg"));
+        assert_eq!(comments[0].like_count, 4);
+        assert_eq!(comments[0].replies.len(), 1);
+        assert_eq!(comments[0].replies[0].id, "c2");
+    }
+
+    #[test]
+    fn parse_should_read_comment_thread_without_replies() {
+        let raw = serde_json::json!({ "items": [
+            { "snippet": { "topLevelComment": { "snippet": { "commentId": "c1", "textDisplay": "solo" } } } }
+        ]});
+        let comments = YoutubeProvider::parse_comment_threads(&raw);
+        assert_eq!(comments.len(), 1);
+        assert!(comments[0].replies.is_empty());
+        assert_eq!(comments[0].like_count, 0);
+    }
+
+    #[test]
+    fn parse_should_read_no_comments_from_empty_page() {
+        assert!(YoutubeProvider::parse_comment_threads(&serde_json::json!({})).is_empty());
+    }
+
+    // ── B3: channel search ───────────────────────────────────
+
+    #[test]
+    fn parse_should_map_channel_search_into_mention_results() {
+        let raw = serde_json::json!({ "items": [
+            { "id": { "kind": "youtube#channel", "channelId": "UC123" },
+              "snippet": { "title": "Rust Lang",
+                           "thumbnails": { "default": { "url": "https://img/c.jpg" } } } }
+        ]});
+        let mentions = YoutubeProvider::parse_channel_search(&raw);
+        assert_eq!(mentions.len(), 1);
+        assert_eq!(mentions[0].id, "UC123");
+        assert_eq!(mentions[0].label, "Rust Lang");
+        assert_eq!(mentions[0].image.as_deref(), Some("https://img/c.jpg"));
+    }
+
+    #[test]
+    fn parse_should_skip_channel_search_items_without_channel_id() {
+        let raw = serde_json::json!({ "items": [ { "snippet": { "title": "orphan" } } ] });
+        assert!(YoutubeProvider::parse_channel_search(&raw).is_empty());
     }
 }

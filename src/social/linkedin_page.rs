@@ -755,7 +755,83 @@ impl SocialProvider for LinkedInPageProvider {
             Ok(Some(serde_json::Value::Object(counts)))
         }
     }
+
+    /// Page posts use the same `socialActions/{urn}/comments` endpoint as
+    /// member posts, so the shared reader serves both providers.
+    async fn get_post_comments(
+        &self,
+        access_token: &str,
+        platform_post_id: &str,
+    ) -> Result<Vec<CommentData>, ProviderError> {
+        let resp = self
+            .http
+            .get(format!(
+                "https://api.linkedin.com/v2/rest/socialActions/{platform_post_id}/comments"
+            ))
+            .header("Authorization", format!("Bearer {access_token}"))
+            .header("X-Restli-Protocol-Version", "2.0.0")
+            .header("LinkedIn-Version", "202401")
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status == 401 {
+            return Err(ProviderError::TokenExpired);
+        }
+        if !status.is_success() {
+            return Ok(vec![]);
+        }
+        Ok(super::parse_linkedin_comments(&json))
+    }
+
+    /// Replies are authored by the organization, not the member behind the
+    /// token, so the actor URN comes from `resolve_org_id`.
+    async fn reply_to_comment(
+        &self,
+        access_token: &str,
+        comment_id: &str,
+        post: &PostContent,
+    ) -> Result<PublishResult, ProviderError> {
+        let org_id = self.resolve_org_id(access_token).await?;
+        let json = self
+            .create_comment(
+                access_token,
+                comment_id,
+                &format!("urn:li:organization:{org_id}"),
+                &post.content,
+            )
+            .await?;
+        let id = json["id"].as_str().unwrap_or("").to_string();
+        if id.is_empty() {
+            return Err(ProviderError::Api(format!(
+                "LinkedIn Page reply failed: {json}"
+            )));
+        }
+        Ok(PublishResult {
+            platform_post_id: id,
+            platform_post_url: None,
+            status: "published".into(),
+        })
+    }
+
+    /// Organizations this token administers are the posting targets.
+    async fn targets(&self, access_token: &str) -> Result<Vec<TargetInfo>, ProviderError> {
+        Ok(self
+            .pages(access_token)
+            .await?
+            .into_iter()
+            .map(|p| TargetInfo {
+                id: p.id,
+                name: p.name,
+                target_type: "page".into(),
+                picture: p.picture,
+                metadata: p.username.map(|u| serde_json::json!({ "vanity_name": u })),
+            })
+            .collect())
+    }
 }
+
+impl LinkedInPageProvider {}
 
 impl LinkedInPageProvider {
     /// Resolve a LinkedIn media URN (e.g. "urn:li:image:12345") to a direct download/playback URL.

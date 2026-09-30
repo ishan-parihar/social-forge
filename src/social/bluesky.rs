@@ -178,6 +178,95 @@ impl BlueskyProvider {
 
     // ── Analytics parsers (pure: fixture-testable, no HTTP) ──
 
+    /// Map a `getPostThread` response into the reply chain. `thread.reply` is a
+    /// flat array where each view carries its `parent`, so replies nest one
+    /// level; a reply whose parent is not in the page stays top-level.
+    pub(crate) fn parse_thread_replies(json: &serde_json::Value) -> Vec<CommentData> {
+        let flat: Vec<(String, Option<String>, CommentData)> = json
+            .pointer("/thread/reply")
+            .and_then(|r| r.as_array())
+            .map(|views| {
+                views
+                    .iter()
+                    .filter_map(|view| {
+                        let post = view.get("post")?;
+                        let uri = post["uri"].as_str()?.to_string();
+                        let parent = post["record"]
+                            .get("reply")
+                            .and_then(|r| r.get("parent"))
+                            .and_then(|p| p["uri"].as_str())
+                            .map(String::from);
+                        Some((
+                            uri.clone(),
+                            parent,
+                            CommentData {
+                                id: uri,
+                                author_name: post["author"]["displayName"]
+                                    .as_str()
+                                    .or(post["author"]["handle"].as_str())
+                                    .map(String::from),
+                                author_avatar: post["author"]["avatar"].as_str().map(String::from),
+                                text: post["record"]["text"]
+                                    .as_str()
+                                    .unwrap_or_default()
+                                    .to_string(),
+                                created_at: post["record"]["createdAt"]
+                                    .as_str()
+                                    .and_then(|s| {
+                                        chrono::DateTime::parse_from_rfc3339(s).ok()
+                                    })
+                                    .map(|dt| dt.with_timezone(&chrono::Utc))
+                                    .unwrap_or_else(chrono::Utc::now),
+                                like_count: post["likeCount"].as_i64().unwrap_or(0) as i32,
+                                replies: vec![],
+                            },
+                        ))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let mut roots: Vec<CommentData> = Vec::new();
+        let mut root_index: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+        for (uri, parent, comment) in flat {
+            match parent
+                .as_deref()
+                .filter(|p| *p != uri)
+                .and_then(|p| root_index.get(p))
+            {
+                Some(&i) => roots[i].replies.push(comment),
+                // No parent on the page (or it is this reply itself): keep it
+                // top-level rather than dropping it.
+                None => {
+                    root_index.insert(uri, roots.len());
+                    roots.push(comment);
+                }
+            }
+        }
+        roots
+    }
+
+    /// Map an `app.bsky.actor.searchActors` response into @-autocomplete
+    /// candidates. The DID is the stable id; the handle is what `@` resolves to.
+    pub(crate) fn parse_actor_search(json: &serde_json::Value) -> Vec<MentionResult> {
+        json.get("actors")
+            .and_then(|a| a.as_array())
+            .map(|actors| {
+                actors
+                    .iter()
+                    .filter_map(|actor| {
+                        Some(MentionResult {
+                            id: actor["did"].as_str()?.to_string(),
+                            label: actor["handle"].as_str()?.to_string(),
+                            image: actor["avatar"].as_str().map(String::from),
+                            do_not_cache: None,
+                        })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
     /// Scan a `getAuthorFeed` response for the post with this CID and return
     /// its counters. Returns `None` when the post is not on the first page.
     pub(crate) fn post_metrics_from_feed(
@@ -444,6 +533,59 @@ impl SocialProvider for BlueskyProvider {
                 "Bluesky publish failed",
             )))
         }
+    }
+
+    /// Read the reply chain for a post via `app.bsky.feed.getPostThread`.
+    /// `platform_post_id` is the AT URI (or a bare rkey, which is resolved to
+    /// this handle's URI first).
+    async fn get_post_comments(
+        &self,
+        access_token: &str,
+        platform_post_id: &str,
+    ) -> Result<Vec<CommentData>, ProviderError> {
+        let jwt = self.session_jwt(access_token).await?;
+        let uri = if platform_post_id.starts_with("at://") {
+            platform_post_id.to_string()
+        } else {
+            let did = self.resolve_handle().await?;
+            format!("at://{did}/app.bsky.feed.post/{platform_post_id}")
+        };
+
+        let resp = self
+            .http
+            .get("https://bsky.social/xrpc/app.bsky.feed.getPostThread")
+            .header("Authorization", format!("Bearer {jwt}"))
+            .query(&[("uri", uri.as_str()), ("depth", "10")])
+            .send()
+            .await?;
+        let status = resp.status().as_u16();
+        let body = resp.text().await?;
+        self.check_status(status, &body, "getPostThread")?;
+        let json = Self::parse_body(&body, "getPostThread")?;
+        Ok(Self::parse_thread_replies(&json))
+    }
+
+    /// @-autocomplete over `app.bsky.actor.searchActors`.
+    async fn search_mention(
+        &self,
+        access_token: &str,
+        query: &str,
+    ) -> Result<Vec<MentionResult>, ProviderError> {
+        let jwt = self.session_jwt(access_token).await?;
+        let resp = self
+            .http
+            .get("https://bsky.social/xrpc/app.bsky.actor.searchActors")
+            .header("Authorization", format!("Bearer {jwt}"))
+            .query(&[("q", query), ("limit", "25")])
+            .send()
+            .await?;
+        let status = resp.status().as_u16();
+        let body = resp.text().await?;
+        self.check_status(status, &body, "searchActors")?;
+        Ok(Self::parse_actor_search(&Self::parse_body(
+            &body,
+            "searchActors",
+        )?))
     }
 
     async fn fetch_page_info(
@@ -807,5 +949,62 @@ mod tests {
         let msg = format!("{err}");
         assert!(msg.contains("expired"), "got: {msg}");
         assert!(msg.contains("raw:"), "raw text must be preserved: {msg}");
+    }
+
+    // ── B3: thread replies + actor search ────────────────────
+
+    #[test]
+    fn parse_should_nest_bluesky_replies_under_their_parent() {
+        let raw = serde_json::json!({ "thread": { "reply": [
+            { "post": { "uri": "at://d/app.bsky.feed.post/1",
+                       "author": { "did": "did:plc:1", "handle": "ada.bsky.social",
+                                   "displayName": "Ada", "avatar": "https://img/a.jpg" },
+                       "record": { "text": "nice post", "createdAt": "2026-09-28T10:00:00Z" },
+                       "likeCount": 7 } },
+            { "post": { "uri": "at://d/app.bsky.feed.post/2",
+                       "author": { "did": "did:plc:2", "handle": "bob.bsky.social" },
+                       "record": { "text": "agreed", "createdAt": "2026-09-28T11:00:00Z",
+                                   "reply": { "parent": { "uri": "at://d/app.bsky.feed.post/1" } } },
+                       "likeCount": 1 } }
+        ]}});
+        let comments = BlueskyProvider::parse_thread_replies(&raw);
+        assert_eq!(comments.len(), 1);
+        assert_eq!(comments[0].id, "at://d/app.bsky.feed.post/1");
+        assert_eq!(comments[0].author_name.as_deref(), Some("Ada"));
+        assert_eq!(comments[0].author_avatar.as_deref(), Some("https://img/a.jpg"));
+        assert_eq!(comments[0].like_count, 7);
+        assert_eq!(comments[0].replies.len(), 1);
+        assert_eq!(comments[0].replies[0].id, "at://d/app.bsky.feed.post/2");
+    }
+
+    #[test]
+    fn parse_should_fall_back_to_handle_when_bluesky_display_name_absent() {
+        let raw = serde_json::json!({ "thread": { "reply": [
+            { "post": { "uri": "at://d/1", "author": { "handle": "bob.bsky.social" }, "record": { "text": "hi" } } }
+        ]}});
+        let comments = BlueskyProvider::parse_thread_replies(&raw);
+        assert_eq!(comments[0].author_name.as_deref(), Some("bob.bsky.social"));
+    }
+
+    #[test]
+    fn parse_should_read_no_bluesky_replies_from_empty_thread() {
+        assert!(BlueskyProvider::parse_thread_replies(&serde_json::json!({ "thread": {} })).is_empty());
+    }
+
+    #[test]
+    fn parse_should_map_bluesky_actor_search_into_mention_results() {
+        let raw = serde_json::json!({ "actors": [
+            { "did": "did:plc:1", "handle": "ada.bsky.social", "displayName": "Ada", "avatar": "https://img/a.jpg" }
+        ]});
+        let mentions = BlueskyProvider::parse_actor_search(&raw);
+        assert_eq!(mentions.len(), 1);
+        assert_eq!(mentions[0].id, "did:plc:1");
+        assert_eq!(mentions[0].label, "ada.bsky.social");
+        assert_eq!(mentions[0].image.as_deref(), Some("https://img/a.jpg"));
+    }
+
+    #[test]
+    fn parse_should_read_no_bluesky_mentions_from_empty_search() {
+        assert!(BlueskyProvider::parse_actor_search(&serde_json::json!({ "actors": [] })).is_empty());
     }
 }

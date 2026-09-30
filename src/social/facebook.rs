@@ -569,56 +569,73 @@ impl SocialProvider for FacebookProvider {
         platform_post_id: &str,
     ) -> Result<Vec<CommentData>, ProviderError> {
         let json = self.get_post_comments_raw(access_token, platform_post_id).await?;
+        Ok(super::parse_graph_comments(&json))
+    }
 
-        let mut comments = Vec::new();
-        if let Some(data) = json["data"].as_array() {
-            for item in data {
-                let id = item["id"].as_str().unwrap_or("").to_string();
-                let text = item["message"].as_str().unwrap_or("").to_string();
-                let created_at = item["created_time"]
-                    .as_str()
-                    .map(crate::social::common::parse_timestamp)
-                    .unwrap_or_else(chrono::Utc::now);
-
-                let author_name = item["from"]["name"].as_str().map(String::from);
-                let author_avatar = None; // Facebook comments don't include avatar in basic fields
-
-                // Parse nested replies if present
-                let replies = if let Some(reply_data) = item["comments"]["data"].as_array() {
-                    reply_data.iter().filter_map(|r| {
-                        let rid = r["id"].as_str()?;
-                        let rtext = r["message"].as_str().unwrap_or("");
-                        let rcreated = r["created_time"]
-                            .as_str()
-                            .map(crate::social::common::parse_timestamp)
-                            .unwrap_or_else(chrono::Utc::now);
-                        let rauthor_name = r["from"]["name"].as_str().map(String::from);
-                        Some(CommentData {
-                            id: rid.to_string(),
-                            author_name: rauthor_name,
-                            author_avatar: None,
-                            text: rtext.to_string(),
-                            created_at: rcreated,
-                            like_count: 0,
-                            replies: vec![],
-                        })
-                    }).collect()
-                } else {
-                    vec![]
-                };
-
-                comments.push(CommentData {
-                    id,
-                    author_name,
-                    author_avatar,
-                    text,
-                    created_at,
-                    like_count: 0, // Facebook comments API doesn't include like count by default
-                    replies,
-                });
-            }
+    /// Reply to one comment on a Page post (`POST /{comment-id}/comments`).
+    async fn reply_to_comment(
+        &self,
+        access_token: &str,
+        comment_id: &str,
+        post: &PostContent,
+    ) -> Result<PublishResult, ProviderError> {
+        let json = self
+            .post_page_comment_raw(access_token, comment_id, &post.content)
+            .await?;
+        let id = json["id"].as_str().unwrap_or("").to_string();
+        if id.is_empty() {
+            return Err(ProviderError::Api(format!(
+                "Facebook reply failed: {json}"
+            )));
         }
-        Ok(comments)
+        Ok(PublishResult {
+            platform_post_url: None,
+            platform_post_id: id,
+            status: "published".into(),
+        })
+    }
+
+    /// TargetPicker reads the same `/me/accounts` listing as `pages()`.
+    async fn targets(&self, access_token: &str) -> Result<Vec<TargetInfo>, ProviderError> {
+        Ok(self
+            .pages(access_token)
+            .await?
+            .into_iter()
+            .map(|p| TargetInfo {
+                id: p.id,
+                name: p.name,
+                target_type: "page".into(),
+                picture: p.picture,
+                metadata: p.username.map(|u| serde_json::json!({ "username": u })),
+            })
+            .collect())
+    }
+
+    /// Facebook exposes no member search to a page token, so @-autocomplete
+    /// offers the Pages this token can tag.
+    async fn search_mention(
+        &self,
+        access_token: &str,
+        query: &str,
+    ) -> Result<Vec<MentionResult>, ProviderError> {
+        let pages = self.pages(access_token).await?;
+        let needle = query.trim().to_lowercase();
+        Ok(pages
+            .into_iter()
+            .filter(|p| {
+                needle.is_empty()
+                    || p.name.to_lowercase().contains(&needle)
+                    || p.username
+                        .as_deref()
+                        .is_some_and(|u| u.to_lowercase().contains(&needle))
+            })
+            .map(|p| MentionResult {
+                id: p.id,
+                label: p.username.unwrap_or(p.name),
+                image: p.picture,
+                do_not_cache: None,
+            })
+            .collect())
     }
 
         async fn fetch_page_info(
@@ -737,17 +754,21 @@ impl FacebookProvider {
         }
     }
 
-    /// Get comments on a post (raw Graph API response).
-    pub async fn get_post_comments_raw(
-        &self, access_token: &str, post_id: &str
+    /// Post a reply under an existing comment (raw Graph API response).
+    pub async fn post_page_comment_raw(
+        &self,
+        access_token: &str,
+        comment_id: &str,
+        message: &str,
     ) -> Result<serde_json::Value, ProviderError> {
-        let url = format!(
-            "{}/{post_id}/comments?fields=id,message,from,created_time",
-            self.graph_url()
-        );
-        let resp = self.http.get(&url)
+        let url = format!("{}/{comment_id}/comments", self.graph_url());
+        let resp = self
+            .http
+            .post(url)
             .header("Authorization", format!("Bearer {access_token}"))
-            .send().await?;
+            .form(&[("message", message)])
+            .send()
+            .await?;
         let status = resp.status();
         let json: serde_json::Value = resp.json().await?;
         if status.is_success() {
@@ -758,7 +779,42 @@ impl FacebookProvider {
             Err(ProviderError::TokenExpired)
         } else {
             Err(ProviderError::Api(
-                json["error"]["message"].as_str().unwrap_or("Facebook API error").to_string()
+                json["error"]["message"]
+                    .as_str()
+                    .unwrap_or("Facebook API error")
+                    .to_string(),
+            ))
+        }
+    }
+
+    /// Get comments on a post (raw Graph API response).
+    pub async fn get_post_comments_raw(
+        &self, access_token: &str, post_id: &str
+    ) -> Result<serde_json::Value, ProviderError> {
+        let url = format!(
+            "{}/{post_id}/comments?fields=id,message,from,created_time",
+            self.graph_url()
+        );
+        let resp = self
+            .http
+            .get(&url)
+            .header("Authorization", format!("Bearer {access_token}"))
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 429 {
+            Err(ProviderError::RateLimited("Facebook API rate limit".into()))
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            Err(ProviderError::Api(
+                json["error"]["message"]
+                    .as_str()
+                    .unwrap_or("Facebook API error")
+                    .to_string(),
             ))
         }
     }
@@ -1370,5 +1426,13 @@ mod tests {
         // Page tokens have no refresh endpoint — refresh_token() errors by
         // design, so the scheduler must never try to refresh them.
         assert!(!provider().needs_cron_refresh());
+    }
+
+    // ── B3: comment read path wiring ────────────────────────
+
+    #[test]
+    fn parse_should_emit_no_facebook_comments_for_error_body() {
+        let raw = serde_json::json!({ "error": { "message": "Unsupported get request." } });
+        assert!(super::parse_graph_comments(&raw).is_empty());
     }
 }

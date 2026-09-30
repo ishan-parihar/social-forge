@@ -621,55 +621,22 @@ impl SocialProvider for InstagramProvider {
         platform_post_id: &str,
     ) -> Result<Vec<CommentData>, ProviderError> {
         let json = self.get_ig_media_comments(access_token, platform_post_id).await?;
+        Ok(super::parse_graph_comments(&json))
+    }
 
-        let mut comments = Vec::new();
-        if let Some(data) = json["data"].as_array() {
-            for item in data {
-                let id = item["id"].as_str().unwrap_or("").to_string();
-                let text = item["text"].as_str().unwrap_or("").to_string();
-                let created_at = item["timestamp"]
-                    .as_str()
-                    .map(crate::social::common::parse_timestamp)
-                    .unwrap_or_else(chrono::Utc::now);
-
-                let author_name = item["username"].as_str().map(String::from);
-                let like_count = item["like_count"].as_i64().unwrap_or(0) as i32;
-
-                // Parse nested replies if present
-                let replies = if let Some(reply_data) = item["replies"]["data"].as_array() {
-                    reply_data.iter().filter_map(|r| {
-                        let rid = r["id"].as_str()?;
-                        let rtext = r["text"].as_str().unwrap_or("");
-                        let rcreated = r["timestamp"]
-                            .as_str()
-                            .map(crate::social::common::parse_timestamp)
-                            .unwrap_or_else(chrono::Utc::now);
-                        Some(CommentData {
-                            id: rid.to_string(),
-                            author_name: r["username"].as_str().map(String::from),
-                            author_avatar: None,
-                            text: rtext.to_string(),
-                            created_at: rcreated,
-                            like_count: 0,
-                            replies: vec![],
-                        })
-                    }).collect()
-                } else {
-                    vec![]
-                };
-
-                comments.push(CommentData {
-                    id,
-                    author_name,
-                    author_avatar: None,
-                    text,
-                    created_at,
-                    like_count,
-                    replies,
-                });
-            }
-        }
-        Ok(comments)
+    /// Instagram has no member-search endpoint; accounts that mention the
+    /// business are the only taggable set the Graph API exposes.
+    async fn search_mention(
+        &self,
+        access_token: &str,
+        query: &str,
+    ) -> Result<Vec<MentionResult>, ProviderError> {
+        let ig_id = self
+            .resolve_ig_business_account(access_token)
+            .await
+            .map_err(|e| ProviderError::Api(format!("Failed to resolve IG business account: {e}")))?;
+        let json = self.get_mentions(access_token, &ig_id).await?;
+        Ok(super::parse_graph_mentions(&json, query))
     }
 
     async fn fetch_page_info(
@@ -1184,6 +1151,42 @@ impl InstagramProvider {
         } else {
             let detail = json["error"]["message"].as_str().unwrap_or("Instagram API error").to_string();
             Err(ProviderError::Api(detail))
+        }
+    }
+
+    /// Accounts that have mentioned this business account
+    /// (`GET /{ig_id}/mentions`) — the @-autocomplete source.
+    pub async fn get_mentions(
+        &self,
+        access_token: &str,
+        ig_id: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let url = format!("{}/{ig_id}/mentions", self.graph_url());
+        let resp = self
+            .http
+            .get(url)
+            .query(&[(
+                "fields",
+                "id,username,profile_picture_url,text,timestamp",
+            )])
+            .header("Authorization", format!("Bearer {access_token}"))
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 429 {
+            Err(ProviderError::RateLimited("Instagram API rate limit".into()))
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            Err(ProviderError::Api(
+                json["error"]["message"]
+                    .as_str()
+                    .unwrap_or("Instagram API error")
+                    .to_string(),
+            ))
         }
     }
 

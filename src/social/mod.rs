@@ -896,6 +896,182 @@ pub(crate) fn metrics_series(
         .collect()
 }
 
+/// Parse a Meta Graph API comments payload into `CommentData` (v25 §2 row 5).
+///
+/// Facebook, Instagram, Instagram-standalone and Threads all expose the same
+/// envelope with different field names: Facebook uses `message` /
+/// `created_time` / `from.name` and nests replies under `comments.data`,
+/// Instagram and Threads use `text` / `timestamp` / `username` and nest them
+/// under `replies.data`. One reader serves all four, so the providers stay
+/// thin and the shape is fixture-tested once.
+pub(crate) fn parse_graph_comments(raw: &serde_json::Value) -> Vec<CommentData> {
+    raw.get("data")
+        .and_then(|d| d.as_array())
+        .map(|items| items.iter().filter_map(graph_comment).collect())
+        .unwrap_or_default()
+}
+
+fn graph_comment(item: &serde_json::Value) -> Option<CommentData> {
+    let id = item.get("id")?.as_str()?.to_string();
+    let text = item
+        .get("text")
+        .or_else(|| item.get("message"))
+        .and_then(|t| t.as_str())
+        .unwrap_or_default()
+        .to_string();
+    let created_at = item
+        .get("timestamp")
+        .or_else(|| item.get("created_time"))
+        .and_then(|t| t.as_str())
+        .map(common::parse_timestamp)
+        .unwrap_or_else(chrono::Utc::now);
+    let author_name = item
+        .get("username")
+        .or_else(|| item.pointer("/from/name"))
+        .and_then(|n| n.as_str())
+        .map(String::from);
+    let author_avatar = item
+        .get("profile_picture_url")
+        .or_else(|| item.pointer("/from/picture/data/url"))
+        .and_then(|u| u.as_str())
+        .map(String::from);
+    let like_count = count(item, "like_count").unwrap_or(0);
+    let replies = item
+        .pointer("/replies/data")
+        .or_else(|| item.pointer("/comments/data"))
+        .and_then(|d| d.as_array())
+        .map(|items| items.iter().filter_map(graph_comment).collect())
+        .unwrap_or_default();
+
+    Some(CommentData {
+        id,
+        author_name,
+        author_avatar,
+        text,
+        created_at,
+        like_count,
+        replies,
+    })
+}
+
+/// Parse a Meta mentions payload into @-autocomplete candidates (v25 §2 row 6).
+///
+/// Meta exposes no member-search endpoint, so the only autocomplete source the
+/// API offers is the set of accounts that already mention you
+/// (`/{ig-id}/mentions`, `/{user-id}/mentions`). An empty `query` returns the
+/// whole page; otherwise only usernames containing it (case-insensitive) are
+/// kept, so the caller can pass the API's `search` param or filter locally.
+pub(crate) fn parse_graph_mentions(
+    raw: &serde_json::Value,
+    query: &str,
+) -> Vec<MentionResult> {
+    let needle = query.trim().to_lowercase();
+    raw.get("data")
+        .and_then(|d| d.as_array())
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|item| {
+                    let username = item.get("username").and_then(|u| u.as_str())?;
+                    if !needle.is_empty() && !username.to_lowercase().contains(&needle) {
+                        return None;
+                    }
+                    Some(MentionResult {
+                        id: item
+                            .get("id")
+                            .and_then(|i| i.as_str())
+                            .unwrap_or(username)
+                            .to_string(),
+                        label: username.to_string(),
+                        image: item
+                            .get("profile_picture_url")
+                            .or_else(|| item.get("threads_profile_picture_url"))
+                            .and_then(|u| u.as_str())
+                            .map(String::from),
+                        do_not_cache: None,
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Parse a LinkedIn v2 `socialActions/{urn}/comments` response into comments
+/// (v25 §2 row 5). The member and page providers share this shape.
+pub(crate) fn parse_linkedin_comments(raw: &serde_json::Value) -> Vec<CommentData> {
+    raw.get("elements")
+        .and_then(|e| e.as_array())
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|element| {
+                    let id = element.get("id")?.as_str()?.to_string();
+                    Some(CommentData {
+                        id,
+                        // `actor` is a URN ("urn:li:person:abc"); only the id
+                        // half is meaningful — the REST comments endpoint
+                        // returns no profile or avatar.
+                        author_name: element
+                            .get("actor")
+                            .and_then(|a| a.as_str())
+                            .map(|a| a.rsplit(':').next().unwrap_or(a).to_string()),
+                        author_avatar: None,
+                        text: element
+                            .pointer("/message/text")
+                            .and_then(|t| t.as_str())
+                            .unwrap_or_default()
+                            .to_string(),
+                        created_at: element
+                            .get("createdAt")
+                            .and_then(|ms| ms.as_i64())
+                            .and_then(chrono::DateTime::from_timestamp_millis)
+                            .unwrap_or_else(chrono::Utc::now),
+                        like_count: element
+                            .get("likesSummary")
+                            .and_then(|s| count(s, "totalLikes"))
+                            .unwrap_or(0),
+                        // LinkedIn's REST comments endpoint returns one flat
+                        // level; the UI threads replies client-side.
+                        replies: vec![],
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Parse a LinkedIn `/v2/connections` response into @-autocomplete candidates
+/// (v25 §2 row 6). LinkedIn has no people-search endpoint, so first-degree
+/// connections are the only member list a token can read.
+pub(crate) fn parse_linkedin_connections(
+    raw: &serde_json::Value,
+    query: &str,
+) -> Vec<MentionResult> {
+    let needle = query.trim().to_lowercase();
+    raw.get("elements")
+        .and_then(|e| e.as_array())
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|item| {
+                    let name = item.get("name").and_then(|n| n.as_str())?;
+                    if !needle.is_empty() && !name.to_lowercase().contains(&needle) {
+                        return None;
+                    }
+                    Some(MentionResult {
+                        id: name.to_string(),
+                        label: name.to_string(),
+                        image: None,
+                        // Connections change slowly and the endpoint is not
+                        // query-filterable server-side; don't cache per keystroke.
+                        do_not_cache: Some(true),
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 /// Parse a provider's raw engagement JSON into a normalized EngagementData struct.
 /// Each provider returns a different JSON shape from get_post_engagement().
 /// This function handles all known provider-specific formats.
@@ -1448,5 +1624,148 @@ mod insights_tests {
         let raw = serde_json::json!({ "like_count": 1 });
         let e = parse_engagement_data("instagram", raw.clone());
         assert_eq!(e.raw, Some(raw));
+    }
+
+    // ── parse_graph_comments ─────────────────────────────────
+
+    #[test]
+    fn parse_should_read_facebook_comment_field_names() {
+        let raw = serde_json::json!({
+            "data": [{
+                "id": "c1",
+                "message": "Nice post",
+                "created_time": "2026-09-28T10:00:00+0000",
+                "from": { "name": "Ada", "picture": { "data": { "url": "https://img/a.jpg" } } },
+                "comments": { "data": [{
+                    "id": "c2", "message": "thanks", "created_time": "2026-09-28T11:00:00+0000",
+                    "from": { "name": "Bob" }
+                }]}
+            }]
+        });
+        let comments = parse_graph_comments(&raw);
+        assert_eq!(comments.len(), 1);
+        assert_eq!(comments[0].id, "c1");
+        assert_eq!(comments[0].text, "Nice post");
+        assert_eq!(comments[0].author_name.as_deref(), Some("Ada"));
+        assert_eq!(comments[0].author_avatar.as_deref(), Some("https://img/a.jpg"));
+        assert_eq!(comments[0].replies.len(), 1);
+        assert_eq!(comments[0].replies[0].author_name.as_deref(), Some("Bob"));
+    }
+
+    #[test]
+    fn parse_should_read_instagram_comment_field_names() {
+        let raw = serde_json::json!({
+            "data": [{
+                "id": "ig1",
+                "text": "great shot",
+                "timestamp": "2026-09-28T10:00:00+0000",
+                "username": "ada",
+                "like_count": 4,
+                "replies": { "data": [{ "id": "ig2", "text": "ty", "username": "bob" }] }
+            }]
+        });
+        let comments = parse_graph_comments(&raw);
+        assert_eq!(comments[0].text, "great shot");
+        assert_eq!(comments[0].author_name.as_deref(), Some("ada"));
+        assert_eq!(comments[0].like_count, 4);
+        assert_eq!(comments[0].replies.len(), 1);
+    }
+
+    #[test]
+    fn parse_should_skip_comments_without_an_id() {
+        let raw = serde_json::json!({ "data": [{ "text": "orphan" }] });
+        assert!(parse_graph_comments(&raw).is_empty());
+    }
+
+    #[test]
+    fn parse_should_read_no_comments_from_error_body() {
+        let raw = serde_json::json!({ "error": { "message": "Unsupported get request." } });
+        assert!(parse_graph_comments(&raw).is_empty());
+    }
+
+    // ── parse_graph_mentions ─────────────────────────────────
+
+    #[test]
+    fn parse_should_return_every_account_for_blank_mention_query() {
+        let raw = serde_json::json!({ "data": [
+            { "id": "1", "username": "ada", "profile_picture_url": "https://img/a.jpg" },
+            { "id": "2", "username": "bob" }
+        ]});
+        let mentions = parse_graph_mentions(&raw, "");
+        assert_eq!(mentions.len(), 2);
+        assert_eq!(mentions[0].label, "ada");
+        assert_eq!(mentions[0].image.as_deref(), Some("https://img/a.jpg"));
+    }
+
+    #[test]
+    fn parse_should_filter_mentions_by_username_case_insensitively() {
+        let raw = serde_json::json!({ "data": [
+            { "id": "1", "username": "AdaLovelace" },
+            { "id": "2", "username": "bob" }
+        ]});
+        let mentions = parse_graph_mentions(&raw, "adalove");
+        assert_eq!(mentions.len(), 1);
+        assert_eq!(mentions[0].id, "1");
+    }
+
+    #[test]
+    fn parse_should_fall_back_to_username_when_mention_id_absent() {
+        let raw = serde_json::json!({ "data": [{ "username": "ada" }] });
+        assert_eq!(parse_graph_mentions(&raw, "")[0].id, "ada");
+    }
+
+    // ── parse_linkedin_comments ──────────────────────────────
+
+    #[test]
+    fn parse_should_read_linkedin_social_actions_comments() {
+        let raw = serde_json::json!({ "elements": [{
+            "id": "urn:li:comment:123",
+            "message": { "text": "Congrats" },
+            "createdAt": 1_757_000_000_000_i64,
+            "actor": "urn:li:person:abc",
+            "likesSummary": { "totalLikes": 3 }
+        }]});
+        let comments = parse_linkedin_comments(&raw);
+        assert_eq!(comments.len(), 1);
+        assert_eq!(comments[0].text, "Congrats");
+        assert_eq!(comments[0].author_name.as_deref(), Some("abc"));
+        assert_eq!(comments[0].like_count, 3);
+        assert!(comments[0].replies.is_empty());
+    }
+
+    #[test]
+    fn parse_should_default_missing_linkedin_comment_fields() {
+        let comments = parse_linkedin_comments(&serde_json::json!({ "elements": [{ "id": "c1" }] }));
+        assert_eq!(comments[0].text, "");
+        assert_eq!(comments[0].author_name, None);
+        assert_eq!(comments[0].like_count, 0);
+    }
+
+    // ── parse_linkedin_connections ───────────────────────────
+
+    #[test]
+    fn parse_should_return_all_linkedin_connections_for_blank_query() {
+        let raw = serde_json::json!({ "elements": [
+            { "name": "Ada Lovelace" }, { "name": "Bob Smith" }
+        ]});
+        let mentions = parse_linkedin_connections(&raw, "");
+        assert_eq!(mentions.len(), 2);
+        assert_eq!(mentions[0].label, "Ada Lovelace");
+        assert_eq!(mentions[0].do_not_cache, Some(true));
+    }
+
+    #[test]
+    fn parse_should_filter_linkedin_connections_by_name_case_insensitively() {
+        let raw = serde_json::json!({ "elements": [
+            { "name": "Ada Lovelace" }, { "name": "Bob Smith" }
+        ]});
+        let mentions = parse_linkedin_connections(&raw, "BOB");
+        assert_eq!(mentions.len(), 1);
+        assert_eq!(mentions[0].id, "Bob Smith");
+    }
+
+    #[test]
+    fn parse_should_read_no_linkedin_connections_from_error_body() {
+        assert!(parse_linkedin_connections(&serde_json::json!({ "message": "Not Found" }), "").is_empty());
     }
 }

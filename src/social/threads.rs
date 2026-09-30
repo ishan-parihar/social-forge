@@ -493,6 +493,51 @@ impl SocialProvider for ThreadsProvider {
         Ok(super::parse_insights_data(&json))
     }
 
+    async fn get_post_comments(
+        &self,
+        access_token: &str,
+        platform_post_id: &str,
+    ) -> Result<Vec<CommentData>, ProviderError> {
+        let json = self
+            .get_thread_replies(access_token, platform_post_id)
+            .await?;
+        Ok(super::parse_graph_comments(&json))
+    }
+
+    async fn reply_to_comment(
+        &self,
+        access_token: &str,
+        comment_id: &str,
+        post: &PostContent,
+    ) -> Result<PublishResult, ProviderError> {
+        let json = self
+            .reply_to_thread(access_token, comment_id, &post.content)
+            .await?;
+        let id = json["id"].as_str().unwrap_or("").to_string();
+        if id.is_empty() {
+            return Err(ProviderError::Api(format!(
+                "Threads reply failed: {json}"
+            )));
+        }
+        Ok(PublishResult {
+            platform_post_id: id,
+            platform_post_url: None,
+            status: "published".into(),
+        })
+    }
+
+    /// Threads exposes no member search; accounts that mention this profile are
+    /// the only taggable set available.
+    async fn search_mention(
+        &self,
+        access_token: &str,
+        query: &str,
+    ) -> Result<Vec<MentionResult>, ProviderError> {
+        let user_id = self.resolve_user_id(access_token).await?;
+        let json = self.get_mentions(&user_id).await?;
+        Ok(super::parse_graph_mentions(&json, query))
+    }
+
     fn resolve_media_url(&self, attachment: &MediaAttachment, app_url: &str) -> MediaAttachment {
         if attachment.url.starts_with("/api/media/") || attachment.url.starts_with("/media/") {
             MediaAttachment {
@@ -615,6 +660,29 @@ impl ThreadsProvider {
 
         let json: serde_json::Value = resp.json().await?;
         Ok(json)
+    }
+
+    /// Accounts that have mentioned this profile — the @-autocomplete source.
+    pub async fn get_mentions(
+        &self,
+        user_id: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let resp = self
+            .http
+            .get(format!("{}/{user_id}/mentions", self.graph_url()))
+            .query(&[(
+                "fields",
+                "id,username,threads_profile_picture_url,text,timestamp",
+            )])
+            .send()
+            .await?;
+
+        if !resp.status().is_success() {
+            let body = resp.text().await?;
+            return Err(ProviderError::Api(format!("get_mentions failed: {body}")));
+        }
+
+        Ok(resp.json().await?)
     }
 
     pub async fn reply_to_thread(

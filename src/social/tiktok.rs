@@ -52,7 +52,71 @@ impl TikTokProvider {
         }
     }
 
-    /// Find one video's metrics in a `/v2/video/list/` response by id.
+    /// Map a `research/video/comment` response into comments. The API returns
+    /// a flat list with `parent_comment_id`, so replies are nested here rather
+    /// than by a second request.
+    pub(crate) fn parse_research_comments(json: &serde_json::Value) -> Vec<CommentData> {
+        let flat: Vec<CommentData> = json
+            .pointer("/data/comments")
+            .and_then(|c| c.as_array())
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(|c| {
+                        Some(CommentData {
+                            id: c["id"].as_str()?.to_string(),
+                            author_name: c
+                                .pointer("/user/screen_name")
+                                .and_then(|v| v.as_str())
+                                .map(String::from),
+                            author_avatar: None,
+                            text: c["text"].as_str().unwrap_or_default().to_string(),
+                            created_at: c["create_time"]
+                                .as_i64()
+                                .and_then(|s| chrono::DateTime::from_timestamp(s, 0))
+                                .unwrap_or_else(chrono::Utc::now),
+                            like_count: c["like_count"].as_i64().unwrap_or(0) as i32,
+                            replies: vec![],
+                        })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let parents: std::collections::HashMap<&str, &str> = json
+            .pointer("/data/comments")
+            .and_then(|c| c.as_array())
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(|c| Some((c["id"].as_str()?, c["parent_comment_id"].as_str()?)))
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let mut roots: Vec<CommentData> = Vec::new();
+        let mut root_index: std::collections::HashMap<String, usize> =
+            std::collections::HashMap::new();
+        for comment in flat {
+            match parents
+                .get(comment.id.as_str())
+                .copied()
+                .filter(|parent| *parent != comment.id)
+                .and_then(|parent| root_index.get(parent))
+            {
+                Some(&i) => roots[i].replies.push(comment),
+                // Parent not in this page — surface the reply at top level
+                // rather than dropping it.
+                None => {
+                    root_index.insert(comment.id.clone(), roots.len());
+                    roots.push(comment);
+                }
+            }
+        }
+        roots
+    }
+
+    /// Find one video's metrics in a `/v2/video/list/` response by id.    /// Find one video's metrics in a `/v2/video/list/` response by id.
     /// The Display API returns videos newest-first, so the first page is where a
     /// just-published post lives.
     fn find_video<'a>(
@@ -596,6 +660,47 @@ impl SocialProvider for TikTokProvider {
         })
     }
 
+    /// Read a video's comments from the Research API
+    /// (`GET /v2/research/video/comment/`).
+    ///
+    /// The Content Posting API has no comment-read endpoint — this is the only
+    /// one TikTok exposes, and it needs approved Research API access. An app
+    /// without it gets HTTP 403, so the read degrades to an empty list rather
+    /// than failing the whole Comments tab.
+    async fn get_post_comments(
+        &self,
+        access_token: &str,
+        platform_post_id: &str,
+    ) -> Result<Vec<CommentData>, ProviderError> {
+        let resp = self
+            .http
+            .get("https://open.tiktokapis.com/v2/research/video/comment/")
+            .header("Authorization", format!("Bearer {access_token}"))
+            .query(&[
+                ("video_id", platform_post_id),
+                ("max_count", "50"),
+                ("fields", "id,text,create_time,like_count,reply_id,parent_comment_id"),
+            ])
+            .send()
+            .await?;
+
+        let status = resp.status();
+        if status == 401 {
+            return Err(ProviderError::TokenExpired);
+        }
+        if status == 429 {
+            return Err(ProviderError::RateLimited("TikTok API rate limit".into()));
+        }
+        if !status.is_success() {
+            // 403 = no Research API access; the Comments tab shows empty.
+            tracing::debug!("TikTok comment read unavailable (HTTP {status})");
+            return Ok(vec![]);
+        }
+
+        let json: serde_json::Value = resp.json().await?;
+        Ok(Self::parse_research_comments(&json))
+    }
+
     async fn reconnect(
         &self,
         access_token: &str,
@@ -744,5 +849,39 @@ mod tests {
     #[test]
     fn map_error_returns_none_for_server_error() {
         assert!(provider().map_error("Internal Server Error", 503).is_none());
+    }
+
+    // ── B3: research comments ────────────────────────────────
+
+    #[test]
+    fn parse_should_nest_tiktok_replies_under_their_parent() {
+        let raw = serde_json::json!({ "data": { "comments": [
+            { "id": "c1", "text": "nice", "create_time": 1_757_000_000_i64,
+              "like_count": 5, "parent_comment_id": "0", "user": { "screen_name": "ada" } },
+            { "id": "c2", "text": "agreed", "create_time": 1_757_000_100_i64,
+              "parent_comment_id": "c1", "user": { "screen_name": "bob" } }
+        ]}});
+        let comments = TikTokProvider::parse_research_comments(&raw);
+        assert_eq!(comments.len(), 1);
+        assert_eq!(comments[0].id, "c1");
+        assert_eq!(comments[0].author_name.as_deref(), Some("ada"));
+        assert_eq!(comments[0].like_count, 5);
+        assert_eq!(comments[0].replies.len(), 1);
+        assert_eq!(comments[0].replies[0].id, "c2");
+    }
+
+    #[test]
+    fn parse_should_surface_tiktok_reply_whose_parent_is_absent() {
+        let raw = serde_json::json!({ "data": { "comments": [
+            { "id": "c2", "text": "orphan reply", "parent_comment_id": "missing" }
+        ]}});
+        let comments = TikTokProvider::parse_research_comments(&raw);
+        assert_eq!(comments.len(), 1);
+        assert_eq!(comments[0].id, "c2");
+    }
+
+    #[test]
+    fn parse_should_read_no_tiktok_comments_from_empty_response() {
+        assert!(TikTokProvider::parse_research_comments(&serde_json::json!({ "data": {} })).is_empty());
     }
 }

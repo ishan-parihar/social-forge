@@ -139,6 +139,39 @@ impl LinkedInProvider {
         }
     }
 
+    /// GET a LinkedIn REST/v2 URL with the version headers the API requires,
+    /// mapping auth failures onto the shared error variants.
+    pub async fn rest_get(
+        &self,
+        access_token: &str,
+        url: &str,
+        params: &[(&str, &str)],
+    ) -> Result<serde_json::Value, ProviderError> {
+        let resp = self
+            .http
+            .get(url)
+            .query(params)
+            .header("Authorization", format!("Bearer {access_token}"))
+            .header("X-Restli-Protocol-Version", "2.0.0")
+            .header("LinkedIn-Version", "202401")
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            Err(ProviderError::Api(
+                json["message"]
+                    .as_str()
+                    .unwrap_or("LinkedIn API error")
+                    .to_string(),
+            ))
+        }
+    }
+
     pub async fn get_post_detail(
         &self,
         access_token: &str,
@@ -995,45 +1028,35 @@ impl SocialProvider for LinkedInProvider {
         access_token: &str,
         platform_post_id: &str,
     ) -> Result<Vec<CommentData>, ProviderError> {
-        let json = self.get_post_comments_linkedin(access_token, platform_post_id).await?;
+        let json = self
+            .get_post_comments_linkedin(access_token, platform_post_id)
+            .await?;
+        Ok(super::parse_linkedin_comments(&json))
+    }
 
-        let mut comments = Vec::new();
-        if let Some(elements) = json["elements"].as_array() {
-            for element in elements {
-                let id = element["id"].as_str().unwrap_or("").to_string();
-                let text = element["message"]["text"]
-                    .as_str()
-                    .unwrap_or("")
-                    .to_string();
-
-                let created_at = element["createdAt"].as_i64()
-                    .and_then(|ms| chrono::DateTime::from_timestamp_millis(ms))
-                    .unwrap_or_else(chrono::Utc::now);
-
-                let author = element["actor"].as_str().map(|a| {
-                    // Extract name from URN, e.g., "urn:li:person:{id}"
-                    a.rsplit(':').next().unwrap_or(a).to_string()
-                });
-
-                let like_count = element["likesSummary"]["totalLikes"]
-                    .as_i64()
-                    .unwrap_or(0) as i32;
-
-                // LinkedIn comments API v2 doesn't include nested replies in the same endpoint
-                let replies = Vec::new();
-
-                comments.push(CommentData {
-                    id,
-                    author_name: author.clone(),
-                    author_avatar: None,
-                    text,
-                    created_at,
-                    like_count,
-                    replies,
-                });
-            }
-        }
-        Ok(comments)
+    /// LinkedIn's REST API has no people-search endpoint, so @-autocomplete
+    /// offers the connections returned by `/connections` when the `r_liteprofile`
+    /// / community-management access has been granted, and an empty list
+    /// otherwise rather than a hard error.
+    async fn search_mention(
+        &self,
+        access_token: &str,
+        query: &str,
+    ) -> Result<Vec<MentionResult>, ProviderError> {
+        let json = match self
+            .rest_get(
+                access_token,
+                "https://api.linkedin.com/v2/connections",
+                &[("count", "50")],
+            )
+            .await
+        {
+            Ok(json) => json,
+            // No partner access to connections: an empty autocomplete is the
+            // documented LinkedIn behaviour, not an error the UI should show.
+            Err(_) => return Ok(vec![]),
+        };
+        Ok(super::parse_linkedin_connections(&json, query))
     }
 
     async fn fetch_page_info(

@@ -302,6 +302,48 @@ impl RedditProvider {
         self.post_www("/api/comment", &[("thing_id", &id), ("text", &txt)]).await
     }
 
+    /// Map a `/comments/{id}` listing into comments. The response is a
+    /// two-element array — [submission listing, comment listing] — so the
+    /// comment half is what carries `data.children`.
+    pub(crate) fn parse_comment_listing(json: &serde_json::Value) -> Vec<CommentData> {
+        let listing = json.as_array().and_then(|parts| parts.get(1)).unwrap_or(json);
+        Self::parse_comment_children(listing)
+    }
+
+    fn parse_comment_children(listing: &serde_json::Value) -> Vec<CommentData> {
+        listing
+            .pointer("/data/children")
+            .and_then(|c| c.as_array())
+            .map(|children| {
+                children
+                    .iter()
+                    .filter_map(|child| {
+                        // kind == "more" is Reddit's continuation marker, not a comment.
+                        if child["kind"].as_str() == Some("more") {
+                            return None;
+                        }
+                        let data = child.get("data")?;
+                        Some(CommentData {
+                            id: data["id"].as_str()?.to_string(),
+                            author_name: data["author"].as_str().map(String::from),
+                            author_avatar: None,
+                            text: data["body"].as_str().unwrap_or_default().to_string(),
+                            created_at: data["created_utc"]
+                                .as_f64()
+                                .and_then(|s| chrono::DateTime::from_timestamp(s as i64, 0))
+                                .unwrap_or_else(chrono::Utc::now),
+                            like_count: data["score"].as_i64().unwrap_or(0) as i32,
+                            replies: data
+                                .get("replies")
+                                .map(Self::parse_comment_children)
+                                .unwrap_or_default(),
+                        })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
     async fn password_grant(&self) -> Result<(String, u32), ProviderError> {
         let auth = base64::Engine::encode(
             &base64::engine::general_purpose::STANDARD,
@@ -1270,6 +1312,103 @@ impl SocialProvider for RedditProvider {
         })
     }
 
+    /// Read a submission's comment tree.
+    ///
+    /// OAuth uses `/comments/{id}` on oauth.reddit.com; cookie sessions use
+    /// the same path on www.reddit.com with the stored cookie jar.
+    async fn get_post_comments(
+        &self,
+        access_token: &str,
+        platform_post_id: &str,
+    ) -> Result<Vec<CommentData>, ProviderError> {
+        let post_id = platform_post_id.trim_start_matches("t3_");
+        let endpoint = format!("/comments/{post_id}");
+
+        let json = if Self::is_cookie_auth(access_token) {
+            let (_, _, extra) = crate::social::reddit_cookies::parse_cookie_token(access_token)
+                .ok_or_else(|| ProviderError::Auth("Invalid Reddit cookie token".into()))?;
+            let cookie_str = extra.filter(|s| !s.is_empty()).ok_or_else(|| {
+                ProviderError::Auth(
+                    "Reddit cookie token missing cookie_string — re-authenticate via Reddit cookies"
+                        .into(),
+                )
+            })?;
+            self.http
+                .get(format!("https://www.reddit.com{endpoint}.json"))
+                .header("Cookie", cookie_str)
+                .query(&[("limit", "100"), ("raw_json", "1"), ("depth", "3")])
+                .send()
+                .await?
+                .json()
+                .await?
+        } else {
+            self.get_oauth(access_token, &endpoint, &[("limit", "100"), ("depth", "3")])
+                .await?
+        };
+
+        Ok(Self::parse_comment_listing(&json))
+    }
+
+    /// Reply to a specific comment — same `/api/comment` endpoint as a
+    /// top-level comment, with the parent's fullname (`t1_…`) in `thing_id`.
+    async fn reply_to_comment(
+        &self,
+        access_token: &str,
+        comment_id: &str,
+        post: &PostContent,
+    ) -> Result<PublishResult, ProviderError> {
+        let parent_id = if comment_id.starts_with("t1_") {
+            comment_id.to_string()
+        } else {
+            format!("t1_{comment_id}")
+        };
+
+        let resp = self
+            .http
+            .post("https://oauth.reddit.com/api/comment")
+            .header("Authorization", format!("Bearer {access_token}"))
+            .header("User-Agent", "social-forge:v0.1.0 (by /u/social_forge)")
+            .form(&[
+                ("api_type", "json"),
+                ("thing_id", &parent_id),
+                ("text", &post.content),
+            ])
+            .send()
+            .await?;
+
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        if !status.is_success() {
+            return Err(ProviderError::Api(format!(
+                "Reddit comment API error ({}): {body}",
+                status
+            )));
+        }
+
+        let json: serde_json::Value = serde_json::from_str(&body)
+            .map_err(|e| ProviderError::Api(format!("Failed to parse Reddit comment response: {e}")))?;
+        let comment_id = json["json"]["data"]["things"][0]["data"]["id"]
+            .as_str()
+            .unwrap_or("")
+            .to_string();
+        if comment_id.is_empty() {
+            let err = json["json"]["errors"]
+                .as_array()
+                .and_then(|a| a.first())
+                .and_then(|e| e.as_array())
+                .and_then(|e| e.get(1))
+                .and_then(|v| v.as_str())
+                .unwrap_or("Unknown error");
+            return Err(ProviderError::Api(err.to_string()));
+        }
+
+        Ok(PublishResult {
+            platform_post_id: comment_id,
+            platform_post_url: None,
+            status: "published".into(),
+        })
+    }
+
     async fn comment(
         &self,
         access_token: &str,
@@ -1711,5 +1850,63 @@ mod tests {
     #[test]
     fn map_error_returns_none_for_server_error() {
         assert!(provider().map_error("Internal Server Error", 503).is_none());
+    }
+
+    // ── B3: comment listing fixtures ─────────────────────────
+
+    #[test]
+    fn parse_should_read_reddit_comments_from_the_second_listing() {
+        // /comments/{id} returns [submission, comments]; only the second half
+        // carries the comment tree.
+        let raw = serde_json::json!([
+            { "kind": "Listing", "data": { "children": [
+                { "kind": "t3", "data": { "id": "abc" } }
+            ]}},
+            { "kind": "Listing", "data": { "children": [
+                { "kind": "t1", "data": {
+                    "id": "c1", "author": "ada", "body": "great post",
+                    "created_utc": 1_757_000_000.0, "score": 12,
+                    "replies": { "kind": "Listing", "data": { "children": [
+                        { "kind": "t1", "data": { "id": "c2", "author": "bob", "body": "agreed", "score": 3 } }
+                    ]}}
+                }}
+            ]}}
+        ]);
+        let comments = RedditProvider::parse_comment_listing(&raw);
+        assert_eq!(comments.len(), 1);
+        assert_eq!(comments[0].id, "c1");
+        assert_eq!(comments[0].text, "great post");
+        assert_eq!(comments[0].author_name.as_deref(), Some("ada"));
+        assert_eq!(comments[0].like_count, 12);
+        assert_eq!(comments[0].replies.len(), 1);
+        assert_eq!(comments[0].replies[0].id, "c2");
+    }
+
+    #[test]
+    fn parse_should_skip_reddit_more_continuation_entries() {
+        let raw = serde_json::json!({ "kind": "Listing", "data": { "children": [
+            { "kind": "more", "data": { "count": 12 } },
+            { "kind": "t1", "data": { "id": "c1", "body": "real" } }
+        ]}});
+        let comments = RedditProvider::parse_comment_listing(&raw);
+        assert_eq!(comments.len(), 1);
+        assert_eq!(comments[0].id, "c1");
+    }
+
+    #[test]
+    fn parse_should_keep_deleted_reddit_comment_author_marker() {
+        let raw = serde_json::json!([
+            { "kind": "Listing" },
+            { "kind": "Listing", "data": { "children": [
+                { "kind": "t1", "data": { "id": "c1", "body": "[deleted]", "author": "[deleted]" } }
+            ]}}
+        ]);
+        let comments = RedditProvider::parse_comment_listing(&raw);
+        assert_eq!(comments[0].author_name.as_deref(), Some("[deleted]"));
+    }
+
+    #[test]
+    fn parse_should_read_no_reddit_comments_from_empty_listing() {
+        assert!(RedditProvider::parse_comment_listing(&serde_json::json!({})).is_empty());
     }
 }

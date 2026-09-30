@@ -215,6 +215,20 @@ impl PinterestProvider {
 /// Build the `(start_date, end_date)` window Pinterest analytics accepts.
 /// v5 rejects a range wider than 90 days, so a longer dashboard request is
 /// clamped here instead of erroring at the API.
+/// Map board `PageInfo`s into TargetPicker targets.
+pub(crate) fn board_targets(pages: &[PageInfo]) -> Vec<TargetInfo> {
+    pages
+        .iter()
+        .map(|p| TargetInfo {
+            id: p.id.clone(),
+            name: p.name.clone(),
+            target_type: "board".into(),
+            picture: p.picture.clone(),
+            metadata: None,
+        })
+        .collect()
+}
+
 fn analytics_window(days: u32) -> (String, String) {
     let days = i64::from(days.clamp(1, 90));
     let end = chrono::Utc::now().date_naive();
@@ -503,6 +517,22 @@ impl SocialProvider for PinterestProvider {
         Err(ProviderError::Api(
             "Pinterest does not support page-level management".into(),
         ))
+    }
+
+    /// Boards are the posting targets, same listing as `pages()`.
+    async fn targets(&self, access_token: &str) -> Result<Vec<TargetInfo>, ProviderError> {
+        Ok(board_targets(&self.pages(access_token).await?))
+    }
+
+    /// Pinterest's v5 API exposes no comment endpoints on pins — pin comments
+    /// were removed with the v3 API — so the Comments tab stays empty for this
+    /// provider rather than reporting an error the user cannot act on.
+    async fn get_post_comments(
+        &self,
+        _access_token: &str,
+        _platform_post_id: &str,
+    ) -> Result<Vec<CommentData>, ProviderError> {
+        Ok(vec![])
     }
 
     async fn get_recent_posts(&self, access_token: &str, _internal_id: &str, limit: u32) -> Result<Vec<ExternalPostData>, ProviderError> {
@@ -873,5 +903,38 @@ mod tests {
         // Pinterest v5 access tokens do not expire — the refresh endpoint
         // exists but there is no expiry for the scheduler to act on.
         assert!(!provider().needs_cron_refresh());
+    }
+
+    // ── B3: board targets ────────────────────────────────────
+
+    #[test]
+    fn parse_should_map_pinterest_boards_into_targets() {
+        let boards = vec![
+            PageInfo {
+                id: "b1".into(),
+                name: "Recipes".into(),
+                access_token: None,
+                picture: None,
+                username: None,
+            },
+            PageInfo {
+                id: "b2".into(),
+                name: "Travel".into(),
+                access_token: None,
+                picture: Some("https://img/b.jpg".into()),
+                username: None,
+            },
+        ];
+        let targets = super::board_targets(&boards);
+        assert_eq!(targets.len(), 2);
+        assert_eq!(targets[0].id, "b1");
+        assert_eq!(targets[0].name, "Recipes");
+        assert_eq!(targets[0].target_type, "board");
+        assert_eq!(targets[1].picture.as_deref(), Some("https://img/b.jpg"));
+    }
+
+    #[test]
+    fn parse_should_read_no_pinterest_targets_from_empty_boards() {
+        assert!(super::board_targets(&[]).is_empty());
     }
 }

@@ -470,6 +470,49 @@ impl SocialProvider for InstagramStandaloneProvider {
 
         Ok(Some(detail))
     }
+
+    async fn get_post_comments(
+        &self,
+        access_token: &str,
+        platform_post_id: &str,
+    ) -> Result<Vec<CommentData>, ProviderError> {
+        let json = self.get_media_comments(access_token, platform_post_id).await?;
+        Ok(super::parse_graph_comments(&json))
+    }
+
+    async fn reply_to_comment(
+        &self,
+        access_token: &str,
+        comment_id: &str,
+        post: &PostContent,
+    ) -> Result<PublishResult, ProviderError> {
+        let json = self
+            .reply_to_comment(access_token, comment_id, &post.content)
+            .await?;
+        let id = json["id"].as_str().unwrap_or("").to_string();
+        if id.is_empty() {
+            return Err(ProviderError::Api(format!(
+                "Instagram reply failed: {json}"
+            )));
+        }
+        Ok(PublishResult {
+            platform_post_id: id,
+            platform_post_url: None,
+            status: "published".into(),
+        })
+    }
+
+    /// The IG API has no member search; accounts that mention this profile are
+    /// the only taggable set available.
+    async fn search_mention(
+        &self,
+        access_token: &str,
+        query: &str,
+    ) -> Result<Vec<MentionResult>, ProviderError> {
+        let ig_id = self.resolve_user_id(access_token).await?;
+        let json = self.get_mentions(access_token, &ig_id).await?;
+        Ok(super::parse_graph_mentions(&json, query))
+    }
 }
 
 impl InstagramStandaloneProvider {
@@ -663,6 +706,43 @@ impl InstagramStandaloneProvider {
                 .unwrap_or("Instagram API error")
                 .to_string();
             Err(ProviderError::Api(detail))
+        }
+    }
+
+    /// Accounts that have mentioned this profile — the @-autocomplete source.
+    pub async fn get_mentions(
+        &self,
+        access_token: &str,
+        ig_user_id: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let url = format!("{}/{ig_user_id}/mentions", self.graph_url());
+        let resp = self
+            .http
+            .get(url)
+            .query(&[
+                (
+                    "fields",
+                    "id,username,profile_picture_url,text,timestamp",
+                ),
+                ("access_token", access_token),
+            ])
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            Ok(json)
+        } else if status == 429 {
+            Err(ProviderError::RateLimited("Instagram API rate limit".into()))
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            Err(ProviderError::Api(
+                json["error"]["message"]
+                    .as_str()
+                    .unwrap_or("Instagram API error")
+                    .to_string(),
+            ))
         }
     }
 
