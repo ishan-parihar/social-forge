@@ -1,22 +1,38 @@
 <script lang="ts">
-  // v24-8: Reddit post preview.
-  // Matches Reddit's post card: subreddit, title, content, vote buttons.
-  let { content, title, integrationName = 'Reddit' }: {
-    content: string;
+  // v25 F2: Reddit post preview.
+  // Light chrome = destination-platform simulation (see previews/index.ts).
+  // F2 also added the `title` prop, which Reddit genuinely requires: without
+  // it a Reddit post is a title-less link/text body that the API refuses.
+  import { charLimitFor, countFor, plainText } from '../platforms';
+  import type { MediaItem } from '$lib/api/media';
+
+  let {
+    content = '',
+    title = '',
+    authorName = 'Your Brand',
+    media = [] as MediaItem[],
+  }: {
+    content?: string;
     title?: string;
-    integrationName?: string;
+    authorName?: string;
+    media?: MediaItem[];
   } = $props();
 
-  let plainText = $derived(content.replace(/<[^>]*>/g, ''));
+  let text = $derived(plainText(content));
+  let limit = $derived(charLimitFor('reddit'));
+  let count = $derived(countFor('reddit', text));
+  let isOver = $derived(count > limit);
+  let images = $derived(media.filter(m => m.mime_type?.startsWith('image/')).slice(0, 1));
+  let handle = $derived(authorName.toLowerCase().replace(/\s+/g, '-'));
 </script>
 
-<div class="bg-white text-gray-900 rounded-xl border border-gray-200 overflow-hidden">
+<div class="bg-white text-gray-900 rounded-xl border border-gray-200 overflow-hidden" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
   <div class="flex">
     <!-- Vote column -->
     <div class="bg-gray-100 flex flex-col items-center py-2 px-2 gap-1">
-      <svg class="w-5 h-5 text-gray-400 hover:text-orange-500" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4l8 8h-5v8h-6v-8H4z"/></svg>
+      <svg class="w-5 h-5 text-gray-400" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4l8 8h-5v8h-6v-8H4z"/></svg>
       <span class="text-xs font-bold text-orange-600">1.2k</span>
-      <svg class="w-5 h-5 text-gray-400 hover:text-blue-500" viewBox="0 0 24 24" fill="currentColor"><path d="M12 20l-8-8h5V4h6v8h5z"/></svg>
+      <svg class="w-5 h-5 text-gray-400" viewBox="0 0 24 24" fill="currentColor"><path d="M12 20l-8-8h5V4h6v8h5z"/></svg>
     </div>
     <!-- Content -->
     <div class="flex-1 p-3">
@@ -24,12 +40,24 @@
         <span class="w-5 h-5 rounded-full bg-orange-500 flex items-center justify-center text-white text-[8px] font-bold">r/</span>
         <span class="font-medium text-gray-700">r/socialforge</span>
         <span>· 2h ·</span>
-        <span>Posted by u/{integrationName}</span>
+        <span>Posted by u/{handle}</span>
       </div>
-      {#if title}
-        <h3 class="font-semibold text-base mb-1">{title}</h3>
+      <h3 class="font-semibold text-base mb-1">
+        {#if title}
+          {title}
+        {:else}
+          <span class="text-red-500 italic">Untitled — Reddit requires a title</span>
+        {/if}
+      </h3>
+      <p class="text-sm text-gray-700 whitespace-pre-wrap break-words">
+        {text.slice(0, limit)}<span class="bg-red-100 text-red-600 rounded-sm">{text.slice(limit)}</span>
+      </p>
+      {#if isOver}
+        <p class="text-[10px] text-red-600 mt-1">{count}/{limit} — will be rejected, trim {count - limit} more</p>
       {/if}
-      <p class="text-sm text-gray-700 whitespace-pre-wrap break-words">{plainText}</p>
+      {#if images.length > 0}
+        <img src={images[0].url} alt="" class="mt-2 w-full max-h-80 object-cover rounded border border-gray-200" />
+      {/if}
       <div class="flex items-center gap-4 mt-3 text-xs text-gray-500">
         <span class="flex items-center gap-1"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> 42 Comments</span>
         <span class="flex items-center gap-1"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg> Share</span>

@@ -40,6 +40,7 @@
   import PerPlatformCharCount from '$lib/composer/PerPlatformCharCount.svelte';
   import PlatformPreviewPane from '$lib/composer/PlatformPreviewPane.svelte';
   import SelectCurrent from '$lib/composer/SelectCurrent.svelte';
+  import { blockersFor, specFor, type PlatformBlocker } from '$lib/composer/platforms';
   import type { MediaItem } from '$lib/api/media';
   import TargetPicker from '$lib/composer/TargetPicker.svelte';
   import type { TargetInfo } from '$lib/api/integrations';
@@ -88,8 +89,13 @@
   // Per-part draft cache so switching tabs doesn't lose unsaved edits.
   let groupDraftCache = $state<Map<string, { content: string; title: string; mediaItems: MediaItem[] }>>(new Map());
 
-  // Draft auto-save (create mode only)
-  let draftSaved = $state(false);
+  // v25 F2: draft auto-save indicator is a three-state machine, not a boolean.
+  // A boolean could only say "something happened recently"; the composer
+  // actually needs to distinguish "idle, autosave armed" from "writing to
+  // localStorage right now" from "written". Showing the wrong one teaches
+  // people not to trust it.
+  type DraftState = 'idle' | 'saving' | 'saved';
+  let draftState = $state<DraftState>('idle');
   let draftTimer: ReturnType<typeof setTimeout>;
   const DRAFT_KEY = 'social-forge-composer-draft';
 
@@ -115,6 +121,67 @@
       return p === 'instagram' || p === 'instagram-standalone';
     })
   );
+
+  // ── v25 F2: what the composer is about to publish ─────────────────
+
+  let imageCount = $derived(mediaItems.filter(m => m.mime_type?.startsWith('image/')).length);
+  let videoCount = $derived(mediaItems.length - imageCount);
+
+  /** Selected channels that will not publish without a title, for the label. */
+  let titleRequiredChannels = $derived.by(() => {
+    const names: string[] = [];
+    for (const id of selectedIntegrations) {
+      const p = integrationProviders.get(id);
+      if (p && specFor(p)?.titleRequired) names.push(specFor(p)!.label);
+    }
+    return [...new Set(names)];
+  });
+
+  /**
+   * Every reason this post cannot be published, across all selected channels.
+   *
+   * F2's headline change: these BLOCK submit instead of being discovered by the
+   * server after a round-trip. The server check in submit() is deliberately
+   * still there — this is a UX affordance, that is the authority, and the two
+   * read their limits from the same table so they should agree.
+   */
+  let blockers = $derived.by(() => {
+    const out: PlatformBlocker[] = [];
+    const seen = new Set<string>();
+    for (const id of selectedIntegrations) {
+      const p = integrationProviders.get(id);
+      if (!p) continue;
+      for (const b of blockersFor(p, providerOverride.get(id) ?? content, {
+        title,
+        mediaCount: mediaItems.length,
+        imageCount,
+        videoCount,
+      })) {
+        // Two accounts on one platform produce the identical blocker; showing
+        // it twice is noise, not information.
+        const key = `${b.provider}|${b.message}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(b);
+      }
+    }
+    return out;
+  });
+  let canPublish = $derived(
+    selectedIntegrations.length > 0 && content.trim().length > 0 && blockers.length === 0,
+  );
+
+  /** Pinterest board / YT channel labels for the previews, by integration. */
+  let targetNames = $derived.by(() => {
+    const m = new Map<string, string>();
+    for (const [intId, ids] of selectedTargets) {
+      const names = (integrationTargets.get(intId) || [])
+        .filter(t => ids.includes(t.id))
+        .map(t => t.name);
+      if (names.length > 0) m.set(intId, names.join(', '));
+    }
+    return m;
+  });
 
   let unsubscribers: (() => void)[] = [];
 
@@ -295,20 +362,25 @@
     unsubscribers.forEach(fn => fn());
   });
 
-  // Auto-save draft (create mode only).
+  // Auto-save draft (create mode only). F2: emits idle → saving → saved → idle
+  // so the header indicator can name the state it is actually in.
   $effect(() => {
     if (composer.mode !== 'create') return;
     const _ = [content, title, selectedIntegrations, scheduledAt, firstComment];
     clearTimeout(draftTimer);
-    draftSaved = false;
+    if (!content && !title) {
+      draftState = 'idle';
+      return;
+    }
+    draftState = 'saving';
     const timer = setTimeout(() => {
-      if (content || title) {
-        localStorage.setItem(DRAFT_KEY, JSON.stringify({
-          content, title, selectedIntegrations, scheduledAt, firstComment
-        }));
-        draftSaved = true;
-        setTimeout(() => { draftSaved = false; }, 2000);
-      }
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({
+        content, title, selectedIntegrations, scheduledAt, firstComment
+      }));
+      draftState = 'saved';
+      // Back to idle (autosave armed) so the indicator does not lie about a
+      // save that is no longer happening.
+      setTimeout(() => { if (draftState === 'saved') draftState = 'idle'; }, 2500);
     }, 1500);
     return () => clearTimeout(timer);
   });
@@ -319,9 +391,9 @@
       localStorage.setItem(DRAFT_KEY, JSON.stringify({
         content, title, selectedIntegrations, scheduledAt, firstComment
       }));
-      draftSaved = true;
+      draftState = 'saved';
       clearTimeout(draftTimer);
-      setTimeout(() => { draftSaved = false; }, 2000);
+      setTimeout(() => { if (draftState === 'saved') draftState = 'idle'; }, 2500);
       toast('Draft saved', 'success');
     }
   }
@@ -355,7 +427,26 @@
     } else {
       selectedTargets.set(integrationId, [...current, targetId]);
     }
+    selectedTargets = new Map(selectedTargets);
   }
+
+  /**
+   * v25 F2: load a channel's posting targets (LinkedIn Page, Facebook pages,
+   * Reddit subreddits, YouTube channels, Pinterest boards).
+   *
+   * `fetchTargets` existed and was never called from anywhere, so
+   * `integrationTargets` stayed empty and the TargetPicker block below it was
+   * dead code — a user could not pick the Facebook Page a post goes to, nor
+   * the Pinterest board, which is a hard requirement on that platform. F2
+   * wires it: whenever the selected set changes, fetch the missing ones.
+   */
+  $effect(() => {
+    for (const id of selectedIntegrations) {
+      if (!integrationTargets.has(id) && !targetsLoading.has(id)) {
+        fetchTargets(id);
+      }
+    }
+  });
 
   function handlePostSetLoad(set: { content: string; channelIds: string[]; scheduledAt?: string | null }) {
     if (set.content) content = set.content;
@@ -423,6 +514,10 @@
     if (submitting) return;
     if (selectedIntegrations.length === 0) { error = 'Please select at least one channel'; return; }
     if (!content.trim()) { error = 'Please write some content'; return; }
+    // F2: client-side gate. The server still re-validates below; this stops the
+    // request that we already know will fail, and the banner has already told
+    // the user why.
+    if (blockers.length > 0) { error = 'Fix the highlighted channel issues before scheduling'; return; }
     submitting = true;
     error = null;
     try {
@@ -497,6 +592,7 @@
     if (submitting) return;
     if (selectedIntegrations.length === 0) { error = 'Please select at least one channel'; return; }
     if (!content.trim()) { error = 'Please write some content'; return; }
+    if (blockers.length > 0) { error = 'Fix the highlighted channel issues before posting'; return; }
     submitting = true;
     error = null;
     try {
@@ -670,8 +766,16 @@
       {#if composer.mode === 'edit'}
         <span class="text-xs px-2 py-0.5 rounded-full bg-accent-fill/20 text-accent">Editing</span>
       {/if}
-      {#if draftSaved}
-        <span class="text-xs text-success animate-pulse">✓ Draft saved</span>
+      <!-- F2: the autosave indicator names its state instead of blinking. -->
+      {#if draftState === 'saving'}
+        <span class="text-xs text-muted flex items-center gap-1.5" role="status">
+          <span class="inline-block w-2.5 h-2.5 border-2 border-line border-t-accent rounded-full animate-spin" aria-hidden="true"></span>
+          Saving draft
+        </span>
+      {:else if draftState === 'saved'}
+        <span class="text-xs text-success flex items-center gap-1" role="status">Draft saved</span>
+      {:else}
+        <span class="text-xs text-faint" title="Drafts are kept in this browser and restored when you open a new post.">Autosave on</span>
       {/if}
     </div>
     <div class="flex items-center gap-3">
@@ -692,12 +796,29 @@
       <div class="text-sm text-muted">Loading...</div>
     </div>
   {:else}
-    <!-- Two-column body: editor left, preview right -->
+    <!-- Two-column body: editor left, preview right. On <lg the flex direction
+         is already column, so the sections stack in DOM order. -->
     <div class="flex-1 flex flex-col lg:flex-row overflow-hidden">
       <!-- Left column: editor (scrollable) -->
-      <div class="flex-1 overflow-y-auto p-5 space-y-4">
+      <div class="flex-1 min-w-0 overflow-y-auto p-4 sm:p-5 space-y-4">
         {#if error}
-          <div class="bg-error/10 border border-error/30 text-error text-sm rounded-lg p-3">{error}</div>
+          <div class="bg-error/10 border border-error/30 text-error text-sm rounded-lg p-3" role="alert">{error}</div>
+        {/if}
+
+        <!-- F2: every blocking reason at once, not one per attempt. -->
+        {#if blockers.length > 0}
+          <div class="bg-warning/10 border border-warning/30 rounded-lg p-3" role="alert">
+            <p class="text-sm font-medium text-warning">
+              Not ready to publish ({blockers.length} issue{blockers.length > 1 ? 's' : ''})
+            </p>
+            <ul class="mt-1.5 space-y-0.5">
+              {#each blockers as b (`${b.provider}-${b.message}`)}
+                <li class="text-xs text-content-secondary">
+                  <span class="text-muted">{b.label}</span> — {b.message}
+                </li>
+              {/each}
+            </ul>
+          </div>
         {/if}
 
         <!-- Phase v21: group/thread tab strip. Shows one tab per post in
@@ -721,10 +842,17 @@
           </div>
         {/if}
 
-        <!-- Title -->
+        <!-- Title. F2: the label used to say "(optional)" unconditionally, which
+             became a lie once the blocking banner taught us that YouTube,
+             Pinterest and Reddit reject an untitled post. It now names the
+             channels that need it instead. -->
         <div>
-          <label class="text-sm text-muted block mb-1">Title (optional)</label>
-          <input type="text" bind:value={title} placeholder="Post title..."
+          <label for="composer-title" class="text-sm text-muted block mb-1">
+            Title{#if titleRequiredChannels.length > 0}
+              <span class="text-faint">— required for {titleRequiredChannels.join(', ')}</span>
+            {/if}
+          </label>
+          <input id="composer-title" type="text" bind:value={title} placeholder="Post title..."
             class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none" />
         </div>
 
@@ -938,21 +1066,33 @@
         />
       </div>
 
-      <!-- Right column: preview + schedule (fixed width on lg+, toggleable on mobile) -->
-      <div class="lg:w-[400px] lg:border-l lg:border-line lg:bg-background/50 overflow-y-auto p-5 space-y-4
+      <!-- Right column: preview + schedule. F2 mobile behaviour: below lg it is
+           a full-width stack AFTER the editor (same order, no absolute
+           positioning), toggled from the footer, so a phone user scrolls
+           editor → preview instead of a 400px column squeezed into 375px. -->
+      <div class="lg:w-[420px] lg:shrink-0 lg:border-l lg:border-line lg:bg-background/50 overflow-y-auto p-4 sm:p-5 space-y-4
         {showPreviewMobile ? 'block' : 'hidden lg:block'}">
         <!-- Mobile: close preview button -->
         <div class="lg:hidden flex justify-end">
-          <button onclick={() => showPreviewMobile = false} class="text-muted hover:text-content text-sm">✕ Close preview</button>
+          <button onclick={() => showPreviewMobile = false} class="text-muted hover:text-content text-sm">Close preview</button>
         </div>
-        <!-- Phase 4: per-platform live preview pane -->
+        <!-- F2: one frame per selected channel, each with the full post
+             context (title, media, first comment, schedule, TikTok sound,
+             Pinterest board) so the preview is frame-accurate rather than a
+             text-only approximation. -->
         <PlatformPreviewPane
-          content={editingMode === 'global' ? content : (providerOverride.get(editingMode.split(':')[1]) || content)}
+          {content}
+          overrides={providerOverride}
           current={editingMode === 'global' ? 'global' : editingMode.split(':')[1]}
           {selectedIntegrations}
           {integrationProviders}
           {integrationNames}
           media={mediaItems}
+          {title}
+          {firstComment}
+          {scheduledAt}
+          audioTitle={selectedMusic?.title || ''}
+          {targetNames}
         />
 
         <!-- Schedule -->
@@ -975,20 +1115,24 @@
       </div>
     </div>
 
-    <!-- Footer: actions -->
-    <div class="border-t border-line px-5 py-3 flex items-center justify-between shrink-0 bg-surface">
-      <div class="flex items-center gap-2">
+    <!-- Footer: actions. F2: on <lg the bar wraps to two rows so the primary
+         CTA is never pushed off-screen by the secondary controls, and the two
+         publish buttons are disabled with a reason while blockers stand. -->
+    <div class="border-t border-line px-4 sm:px-5 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 shrink-0 bg-surface">
+      <div class="flex items-center gap-2 shrink-0">
         <button
           onclick={() => showAi = !showAi}
-          class="px-3 py-1.5 text-sm border border-line rounded-lg transition-colors {showAi ? 'bg-accent-fill/20 text-accent border-accent/30' : 'text-muted hover:text-content'}"
-        >✨ AI</button>
-        <!-- Phase 8: mobile preview toggle -->
+          class="px-3 py-1.5 text-sm border border-line rounded-lg transition-colors {showAi ? 'bg-accent-soft text-accent border-accent/40' : 'text-muted hover:text-content'}"
+        >AI</button>
+        <!-- Preview toggle: on mobile the pane is a full-width stack below the
+             editor, so this reveals it in place instead of side by side. -->
         <button
           onclick={() => showPreviewMobile = !showPreviewMobile}
           class="lg:hidden px-3 py-1.5 text-sm border border-line rounded-lg transition-colors text-muted hover:text-content"
-        >{showPreviewMobile ? '✕ Preview' : '👁 Preview'}</button>
+          aria-expanded={showPreviewMobile}
+        >{showPreviewMobile ? 'Hide preview' : 'Preview'}</button>
       </div>
-      <div class="flex items-center gap-2 flex-wrap justify-end">
+      <div class="flex items-center gap-2 flex-wrap sm:justify-end">
         {#if composer.mode === 'edit'}
           <!-- Edit mode: no "save draft" (post already exists) -->
         {:else}
@@ -1000,13 +1144,15 @@
         {/if}
         <button
           onclick={postNow}
-          disabled={submitting}
-          class="px-3 py-1.5 bg-success hover:bg-success disabled:opacity-50 rounded-lg text-sm font-medium transition-colors"
+          disabled={submitting || !canPublish}
+          title={blockers.length > 0 ? blockers[0].message : ''}
+          class="px-3 py-1.5 bg-success hover:bg-success text-accent-fg disabled:opacity-50 rounded-lg text-sm font-medium transition-colors"
         >{submitting ? 'Posting...' : 'Post Now'}</button>
         <button
           onclick={submit}
-          disabled={submitting}
-          class="px-3 py-1.5 bg-accent-fill hover:bg-accent-fill-hover disabled:opacity-50 rounded-lg text-sm font-medium transition-colors"
+          disabled={submitting || !canPublish}
+          title={blockers.length > 0 ? blockers[0].message : ''}
+          class="px-3 py-1.5 bg-accent-fill hover:bg-accent-fill-hover text-accent-fg disabled:opacity-50 rounded-lg text-sm font-medium transition-colors"
         >{submitting ? 'Scheduling...' : 'Schedule'}</button>
       </div>
     </div>

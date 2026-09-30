@@ -1,15 +1,21 @@
 <script lang="ts">
-  // Per-platform character counter for the composer (R-4 / U-3).
-  // Shows a row of small badges — one per selected channel — each
-  // displaying the current char count vs that platform's limit.
-  // Turns yellow at 90% of the limit, red when over.
+  // PerPlatformCharCount — the composer's per-channel character rings (v25 F2).
   //
-  // v24-7: X (Twitter) uses weighted length (emoji/CJK = 2 chars, ASCII
-  // = 1 char) matching X's API. Previously all platforms used plain
-  // .length which undercounted emoji-heavy X posts. The weightedLength
-  // function is a lightweight implementation (no twitter-text dep).
+  // F2 replaced the flat text badges with a ring per platform. A badge that
+  // says "248/280" is a number the user has to mentally compare; a ring is the
+  // comparison already drawn. It also removes the "am I nearly done?" question
+  // for the platforms with a very different budget (X 280, Facebook 63206) —
+  // the ring is 98% full for X and 0.4% full for Facebook at the same moment,
+  // and that difference is the entire point of a multi-platform composer.
+  //
+  // The counting itself moved to ./platforms so this component, the blocking
+  // banner in ComposerModal, and the previews cannot disagree about whether an
+  // emoji costs 1 or 2. X uses weighted length; everything else uses plain.
+  //
+  // Colors come from the F1 token layer (app.css → tailwind `stroke-*`), so the
+  // ring rethemes with the rest of the app in light and dark.
 
-  import { providerMeta } from "$lib/providers";
+  import { charLimitFor, countFor, plainText, specFor } from './platforms';
 
   let { content, selectedIntegrations, integrationProviders, integrationNames }: {
     content: string;
@@ -19,83 +25,102 @@
   } = $props();
 
   // Plain-text length of the content (HTML tags stripped).
-  let plainText = $derived(content.replace(/<[^>]*>/g, ''));
-  let plainTextLength = $derived(plainText.length);
+  let text = $derived(plainText(content));
 
-  // v24-7: X weighted length — emoji and CJK characters count as 2,
-  // everything else as 1. This matches X's v2 API char counting.
-  // We detect "heavy" chars by code point range:
-  //   - CJK Unified Ideographs (U+4E00–U+9FFF)
-  //   - CJK Extension A (U+3400–U+4DBF)
-  //   - CJK Compatibility (U+F900–U+FAFF)
-  //   - Hiragana (U+3040–U+309F)
-  //   - Katakana (U+30A0–U+30FF)
-  //   - Emoji (various ranges — we check the emoji-presentation flag
-  //     and common emoji blocks)
-  function weightedLength(text: string): number {
-    let count = 0;
-    for (const char of text) {
-      const cp = char.codePointAt(0) ?? 0;
-      // CJK + Hiragana + Katakana = 2
-      if (
-        (cp >= 0x3040 && cp <= 0x30ff) ||  // Japanese kana
-        (cp >= 0x3400 && cp <= 0x4dbf) ||  // CJK Extension A
-        (cp >= 0x4e00 && cp <= 0x9fff) ||  // CJK Unified
-        (cp >= 0xf900 && cp <= 0xfaff) ||  // CJK Compatibility
-        (cp >= 0xac00 && cp <= 0xd7af) ||  // Korean Hangul Syllables
-        (cp >= 0x1f300 && cp <= 0x1f9ff) || // Emoji (Misc Symbols & Pictographs, Emoticons, etc.)
-        (cp >= 0x2600 && cp <= 0x27bf)     // Misc Symbols + Dingbats
-      ) {
-        count += 2;
-      } else {
-        count += 1;
-      }
-    }
-    return count;
+  const R = 14;
+  const C = 2 * Math.PI * R;
+
+  interface Ring {
+    key: string;
+    label: string;
+    account: string;
+    limit: number;
+    count: number;
+    isOver: boolean;
+    isWarning: boolean;
+    /** Remaining characters, floored at 0. */
+    left: number;
+    /** Stroke-dashoffset, i.e. how much of the ring is still empty. */
+    offset: number;
   }
 
-  // Build the list of {label, limit, count, isOver, isWarning} badges.
-  let badges = $derived.by(() => {
+  let rings = $derived.by(() => {
     const seen = new Set<string>();
-    const out: Array<{ key: string; label: string; limit: number; count: number; isOver: boolean; isWarning: boolean }> = [];
+    const out: Ring[] = [];
     for (const intId of selectedIntegrations) {
       const provider = integrationProviders.get(intId);
       if (!provider) continue;
+      // Two accounts on the same platform share a limit, so one ring covers
+      // both; the account name is listed so neither feels unrepresented.
       if (seen.has(provider)) continue;
       seen.add(provider);
-      const meta = providerMeta(provider);
-      // v24-7: X uses weighted length; all other platforms use plain length.
-      const count = (provider === 'x' || provider === 'twitter')
-        ? weightedLength(plainText)
-        : plainTextLength;
+
+      const limit = charLimitFor(provider);
+      const count = countFor(provider, text);
+      const ratio = limit > 0 ? Math.min(count / limit, 1) : 0;
       out.push({
         key: provider,
-        label: meta.label,
-        limit: meta.charLimit,
+        label: specFor(provider)?.label ?? provider,
+        account: integrationNames.get(intId) || '',
+        limit,
         count,
-        isOver: count > meta.charLimit,
-        isWarning: count > meta.charLimit * 0.9 && count <= meta.charLimit,
+        isOver: count > limit,
+        isWarning: count > limit * 0.9 && count <= limit,
+        left: Math.max(limit - count, 0),
+        offset: C * (1 - ratio),
       });
     }
     return out;
   });
+
+  let overCount = $derived(rings.filter(r => r.isOver).length);
+  /** X's weighted count means the ring's number is not String.length. */
+  function countNote(label: string): string {
+    return label === 'X' ? 'weighted' : 'chars';
+  }
 </script>
 
-{#if badges.length > 0}
-  <div class="flex flex-wrap gap-2">
-    {#each badges as b (b.key)}
-      <span
-        class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium border
-          {b.isOver
-            ? 'bg-error/10 border-error/30 text-error'
-            : b.isWarning
-              ? 'bg-warning/10 border-warning/30 text-warning'
-              : 'bg-surface-hover border-line text-muted'}"
-        title="{b.label} limit: {b.limit} chars"
-      >
-        <span>{b.label}</span>
-        <span class="font-mono">{b.count}/{b.limit}</span>
-      </span>
-    {/each}
+{#if rings.length > 0}
+  <div class="space-y-2">
+    <div class="flex flex-wrap gap-2">
+      {#each rings as r (r.key)}
+        <div
+          class="flex items-center gap-2 pl-1.5 pr-2.5 py-1 rounded-lg border
+            {r.isOver
+              ? 'border-error/40 bg-error/10'
+              : r.isWarning
+                ? 'border-warning/40 bg-warning/10'
+                : 'border-line bg-surface-hover'}"
+          title="{r.label} (weighted): {r.count} of {r.limit} {countNote(r.label)}"
+        >
+          <!-- Ring. rotate(-90) so 0% starts at 12 o'clock instead of 3. -->
+          <svg width="30" height="30" viewBox="0 0 32 32" class="shrink-0 -rotate-90" aria-hidden="true">
+            <circle cx="16" cy="16" r={R} fill="none" stroke-width="3" class="stroke-line" />
+            <circle cx="16" cy="16" r={R} fill="none" stroke-width="3" stroke-linecap="round"
+              stroke-dasharray={C}
+              stroke-dashoffset={r.offset}
+              class={r.isOver ? 'stroke-error' : r.isWarning ? 'stroke-warning' : 'stroke-accent'} />
+          </svg>
+          <div class="min-w-0 leading-tight">
+            <div class="text-xs font-medium truncate max-w-[110px]">
+              {r.label}{#if r.account}<span class="text-faint"> · {r.account}</span>{/if}
+            </div>
+            <div class="text-[10px] font-mono {r.isOver ? 'text-error' : r.isWarning ? 'text-warning' : 'text-muted'}">
+              {#if r.isOver}
+                {r.left === 0 ? `${r.count} — over by ${r.count - r.limit}` : `${r.count}/${r.limit}`}
+              {:else}
+                {r.count}/{r.limit}
+              {/if}
+            </div>
+          </div>
+        </div>
+      {/each}
+    </div>
+
+    {#if overCount > 0}
+      <p class="text-[11px] text-error">
+        {overCount} channel{overCount > 1 ? 's' : ''} over limit — trim the body or drop {overCount > 1 ? 'those channels' : 'that channel'} to publish.
+      </p>
+    {/if}
   </div>
 {/if}

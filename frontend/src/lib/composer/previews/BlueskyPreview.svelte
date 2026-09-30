@@ -1,30 +1,49 @@
 <script lang="ts">
-  // v24-8: Bluesky post preview.
-  // Matches Bluesky's clean card: avatar + handle, content, metrics.
-  let { content, media = [], integrationName = 'Bluesky' }: {
-    content: string;
-    media?: Array<{ url: string; mime_type: string }>;
-    integrationName?: string;
+  // v25 F2: Bluesky post preview.
+  // Light chrome = destination-platform simulation (see previews/index.ts).
+  // Bluesky's 300-char grapheme limit is the second-tightest after X, so the
+  // overflow mark earns its place here too.
+  import { charLimitFor, countFor, plainText } from '../platforms';
+  import type { MediaItem } from '$lib/api/media';
+
+  let {
+    content = '',
+    authorName = 'Your Brand',
+    media = [] as MediaItem[],
+  }: {
+    content?: string;
+    authorName?: string;
+    media?: MediaItem[];
   } = $props();
 
-  let plainText = $derived(content.replace(/<[^>]*>/g, ''));
+  let text = $derived(plainText(content));
+  let limit = $derived(charLimitFor('bluesky'));
+  let count = $derived(countFor('bluesky', text));
+  let isOver = $derived(count > limit);
+  // Bluesky takes up to 4 images in a 2x2 grid.
   let images = $derived(media.filter(m => m.mime_type?.startsWith('image/')).slice(0, 4));
+  let handle = $derived(authorName.toLowerCase().replace(/\s+/g, '.'));
 </script>
 
-<div class="bg-white text-gray-900 rounded-xl border border-gray-200 overflow-hidden">
+<div class="bg-white text-gray-900 rounded-xl border border-gray-200 overflow-hidden" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
   <div class="flex gap-3 p-4">
     <div class="w-10 h-10 rounded-full bg-blue-500 flex-shrink-0 flex items-center justify-center text-white text-sm font-bold">
-      {integrationName.charAt(0).toUpperCase()}
+      {authorName.charAt(0).toUpperCase()}
     </div>
     <div class="flex-1 min-w-0">
-      <div class="flex items-center gap-1 text-sm">
-        <span class="font-semibold">{integrationName}</span>
-        <span class="text-gray-400">@{integrationName.toLowerCase().replace(/\s+/g, '.')}.bsky.social</span>
+      <div class="flex items-center gap-1 text-sm flex-wrap">
+        <span class="font-semibold">{authorName}</span>
+        <span class="text-gray-400">@{handle}.bsky.social</span>
         <span class="text-gray-400">· 2h</span>
       </div>
-      <p class="mt-1 text-sm whitespace-pre-wrap break-words">{plainText}</p>
+      <p class="mt-1 text-sm whitespace-pre-wrap break-words">
+        {text.slice(0, limit)}<span class="bg-red-100 text-red-600 rounded-sm">{text.slice(limit)}</span>
+      </p>
+      {#if isOver}
+        <p class="text-[10px] text-red-600 mt-1">{count}/{limit} — will be rejected, trim {count - limit} more</p>
+      {/if}
       {#if images.length > 0}
-        <div class="mt-2 grid {images.length === 1 ? 'grid-cols-1' : 'grid-cols-2'} gap-0.5 rounded-lg overflow-hidden">
+        <div class="mt-2 grid grid-cols-2 gap-0.5 rounded-lg overflow-hidden">
           {#each images as img (img.url)}
             <img src={img.url} alt="" class="w-full h-40 object-cover" />
           {/each}

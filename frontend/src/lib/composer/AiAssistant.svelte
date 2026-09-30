@@ -1,20 +1,95 @@
 <script lang="ts">
+  // AiAssistant — in-composer AI writing (v25 F2: explicit request states).
+  //
+  // F2's change here is honesty about what the user is waiting for. The old
+  // panel had two booleans (`aiLoading` / `aiResult`), so a failed request and
+  // an abandoned one looked identical, a retry looked identical to the first
+  // attempt, and there was no way to cancel a call that was going to take 30
+  // seconds. It is now a state machine: idle → working → done | error, with an
+  // abort handle and a stage readout.
+  //
+  // On the stages: /api/ai/* returns a single JSON body. There is no streaming
+  // endpoint on the backend and F2 does not add one (that is backend work, and
+  // the brief forbids touching it). So the stage labels and the elapsed timer
+  // are a PROGRESS AFFORDANCE driven by a local clock, not a report of tokens
+  // arriving. They are labelled as such here because the next person to read
+  // this file will otherwise assume there is a stream behind them. If the
+  // backend ever grows an NDJSON or SSE response, `runTask` is the only place
+  // that needs to change — the states already exist.
   import { ai } from "$lib/api/ai";
   import { profileApi, type BrandProfile } from "$lib/api/profile";
-  import { onMount } from "svelte";
+  import { onMount, onDestroy } from "svelte";
 
   let { content = "", onInsert }: {
     content?: string;
     onInsert?: (text: string) => void;
   } = $props();
 
+  /** The request lifecycle, in one place. Never two booleans again. */
+  type Status = "idle" | "working" | "done" | "error";
+  type Task = "generate" | "improve" | "hashtags" | "tone" | "summarize";
+  let status = $state<Status>("idle");
+  let stage = $state(0);
+  let elapsedMs = $state(0);
   let aiError = $state<string | null>(null);
-  let aiLoading = $state(false);
   let aiResult = $state<string | null>(null);
-  let selectedTask = $state<"generate" | "improve" | "hashtags" | "tone" | "summarize">("generate");
+  let selectedTask = $state<Task>("generate");
   let topic = $state("");
   let tone = $state("professional");
   let length = $state("medium");
+
+  let abort: AbortController | null = null;
+  let ticker: ReturnType<typeof setInterval> | null = null;
+
+  // Stage labels per task. Short enough to read at a glance while they change.
+  const STAGES: Record<Task, string[]> = {
+    generate: ["Reading brand context", "Drafting the post", "Applying your voice", "Checking channel limits"],
+    improve: ["Reading your draft", "Rewriting for clarity", "Tightening the structure"],
+    hashtags: ["Reading your draft", "Scanning topic clusters", "Ranking tags"],
+    tone: ["Reading your draft", "Shifting register", "Re-checking voice"],
+    summarize: ["Reading your draft", "Condensing", "Fitting the character budget"],
+  };
+  const stages = $derived(STAGES[selectedTask]);
+  let stageLabel = $derived(stages[Math.min(stage, stages.length - 1)]);
+  let stagePct = $derived(stages.length > 1 ? Math.round(((Math.min(stage, stages.length - 1) + 1) / stages.length) * 100) : 100);
+
+  onDestroy(() => {
+    abort?.abort();
+    if (ticker) clearInterval(ticker);
+  });
+
+  function stopTicking() {
+    if (ticker) { clearInterval(ticker); ticker = null; }
+  }
+
+  function startTicking() {
+    stopTicking();
+    elapsedMs = 0;
+    // 2.4s per stage: slow enough that a fast model does not strobe through
+    // every label, fast enough that a slow one does not look hung.
+    ticker = setInterval(() => {
+      elapsedMs += 400;
+      const next = Math.floor(elapsedMs / 2400);
+      if (next !== stage) stage = Math.min(next, stages.length - 1);
+    }, 400);
+  }
+
+  function reset() {
+    status = "idle";
+    stage = 0;
+    elapsedMs = 0;
+    aiError = null;
+    aiResult = null;
+  }
+
+  function cancel() {
+    abort?.abort();
+    stopTicking();
+    if (status === "working") {
+      status = "idle";
+      aiError = "Cancelled";
+    }
+  }
 
   // v24-4: load the brand profile so AI requests include brand context.
   let brandProfile = $state<BrandProfile | null>(null);
@@ -52,48 +127,64 @@
   }
 
   async function handleGenerate() {
-    if (aiLoading) return;
-    aiLoading = true;
-    aiError = null;
-    aiResult = null;
+    if (status === "working") return;
+    const ctx = brandContext();
+    // Guard before we claim to be working — a missing input is an idle state
+    // with a message, not a failed request.
+    if (selectedTask === "generate" && !topic.trim()) { aiError = "Please enter a topic"; return; }
+    if (selectedTask !== "generate" && !content.trim()) { aiError = "Please write some content first"; return; }
+
+    reset();
+    status = "working";
+    startTicking();
+    abort = new AbortController();
     try {
       let result = "";
-      const ctx = brandContext();
+      const sig = abort.signal;
       switch (selectedTask) {
         case "generate":
-          if (!topic.trim()) { aiError = "Please enter a topic"; aiLoading = false; return; }
-          result = await ai.generatePost(topic + ctx, tone, length);
+          result = await ai.generatePost(topic + ctx, tone, length, sig);
           break;
         case "improve":
-          if (!content.trim()) { aiError = "Please write some content first"; aiLoading = false; return; }
-          result = await ai.improveWriting(content + ctx);
+          result = await ai.improveWriting(content + ctx, sig);
           break;
         case "hashtags":
-          if (!content.trim()) { aiError = "Please write some content first"; aiLoading = false; return; }
-          result = await ai.suggestHashtags(content);
+          result = await ai.suggestHashtags(content, sig);
           break;
         case "tone":
-          if (!content.trim()) { aiError = "Please write some content first"; aiLoading = false; return; }
-          result = await ai.changeTone(content + ctx, tone);
+          result = await ai.changeTone(content + ctx, tone, sig);
           break;
         case "summarize":
-          if (!content.trim()) { aiError = "Please write some content first"; aiLoading = false; return; }
-          result = await ai.summarize(content);
+          result = await ai.summarize(content, sig);
           break;
       }
       aiResult = result;
+      status = "done";
     } catch (e: unknown) {
-      aiError = (e instanceof Error ? e.message : String(e)) || "AI request failed. Check that LLM-Proxy is running on port 4488.";
+      // An abort is a user action, not a failure — say which it was.
+      if (e instanceof Error && e.name === "AbortError") {
+        status = "idle";
+        aiError = "Cancelled";
+      } else {
+        status = "error";
+        aiError = (e instanceof Error ? e.message : String(e)) || "AI request failed. Check that LLM-Proxy is running on port 4488.";
+      }
     } finally {
-      aiLoading = false;
+      stopTicking();
+      abort = null;
     }
   }
 
   function handleInsert() {
     if (aiResult) {
       onInsert?.(aiResult);
-      aiResult = null;
+      reset();
     }
+  }
+
+  function elapsedLabel(): string {
+    const s = Math.round(elapsedMs / 1000);
+    return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
   }
 </script>
 
@@ -105,14 +196,16 @@
     </h3>
   </div>
 
-  <!-- Task selector -->
+  <!-- Task selector. Disabled mid-request: switching task while a call is in
+       flight would leave the stage readout describing a different job. -->
   <div class="flex flex-wrap gap-2">
     {#each tasks as task}
       <button
-        onclick={() => { selectedTask = task; aiResult = null; aiError = null; }}
-        class="px-3 py-1.5 text-xs rounded-lg border transition-colors
+        onclick={() => { if (status !== "working") { selectedTask = task; reset(); } }}
+        disabled={status === "working"}
+        class="px-3 py-1.5 text-xs rounded-lg border transition-colors disabled:opacity-50
           {selectedTask === task
-            ? 'bg-accent-fill/20 text-accent border-accent/30'
+            ? 'bg-accent-soft text-accent border-accent/40'
             : 'text-muted border-line hover:text-content hover:border-line-hover'}"
       >
         {task === "generate" ? "Generate" : task === "improve" ? "Improve" : task === "hashtags" ? "Hashtags" : task === "tone" ? "Tone" : "Summarize"}
@@ -179,27 +272,53 @@
     {/if}
   </div>
 
-  <!-- Generate button -->
-  <button
-    onclick={handleGenerate}
-    disabled={aiLoading}
-    class="w-full px-3 py-2 bg-accent-fill hover:bg-accent-fill-hover disabled:opacity-50 rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
-  >
-    {#if aiLoading}
-      <span class="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-      Generating...
-    {:else}
-      Generate
-    {/if}
-  </button>
+  <!-- Generate / cancel. One control per state, so there is never a button
+       that looks live and does nothing. -->
+  {#if status === "working"}
+    <div class="space-y-2">
+      <div class="flex items-center justify-between text-xs">
+        <span class="text-content-secondary flex items-center gap-2">
+          <span class="inline-block w-3.5 h-3.5 border-2 border-line border-t-accent rounded-full animate-spin" aria-hidden="true"></span>
+          {stageLabel}
+        </span>
+        <span class="text-faint font-mono">{elapsedLabel()}</span>
+      </div>
+      <!-- Progress bar. Width is the stage count, not real completion — the
+           label above says which step it is on, and the elapsed clock says how
+           long it has been waiting. -->
+      <div class="h-1 rounded-full bg-line overflow-hidden" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={stagePct} aria-label="AI request progress">
+        <div class="h-full rounded-full bg-accent transition-[width] duration-300" style="width: {stagePct}%"></div>
+      </div>
+      <div class="skeleton h-16 rounded-lg" aria-hidden="true"></div>
+      <button onclick={cancel} class="w-full px-3 py-1.5 text-xs text-muted hover:text-content border border-line rounded-lg transition-colors">
+        Cancel
+      </button>
+    </div>
+  {:else}
+    <button
+      onclick={handleGenerate}
+      class="w-full px-3 py-2 bg-accent-fill hover:bg-accent-fill-hover disabled:opacity-50 rounded-lg text-sm text-accent-fg transition-colors flex items-center justify-center gap-2"
+    >
+      {status === "done" ? "Regenerate" : status === "error" ? "Try again" : "Generate"}
+    </button>
+  {/if}
 
-  <!-- Error -->
+  <!-- Error. Cancel is informational, not a failure, so it does not use the
+       error treatment. -->
   {#if aiError}
-    <div class="bg-error/10 border border-error/30 text-error text-sm rounded-lg p-3">{aiError}</div>
+    <div
+      class="text-sm rounded-lg p-3
+        {aiError === 'Cancelled'
+          ? 'bg-surface-hover border border-line text-muted'
+          : 'bg-error/10 border border-error/30 text-error'}"
+      role={aiError === 'Cancelled' ? 'status' : 'alert'}
+    >
+      {aiError === 'Cancelled' ? 'Cancelled — nothing was sent to the model.' : aiError}
+    </div>
   {/if}
 
   <!-- Result -->
-  {#if aiResult}
+  {#if aiResult && status === "done"}
     <div class="space-y-2">
       <div class="bg-background-input border border-line rounded-lg p-3 text-sm text-content-secondary whitespace-pre-wrap max-h-48 overflow-y-auto">
         {aiResult}
@@ -207,12 +326,12 @@
       <div class="flex gap-2">
         <button
           onclick={handleInsert}
-          class="px-3 py-1.5 bg-accent-fill hover:bg-accent-fill-hover rounded-lg text-xs transition-colors"
+          class="px-3 py-1.5 bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg text-xs transition-colors"
         >
           Insert
         </button>
         <button
-          onclick={() => { aiResult = null; }}
+          onclick={reset}
           class="px-3 py-1.5 text-xs text-muted hover:text-content border border-line rounded-lg transition-colors"
         >
           Discard
