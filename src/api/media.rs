@@ -180,6 +180,13 @@ pub struct S3Config {
 /// their own region here; not a knob until someone actually runs one.
 const S3_REGION: &str = "auto";
 
+/// Trimmed value, or `None` when missing or blank. Env-sourced S3 settings
+/// treat whitespace-only as unset so a half-edited env file cannot select
+/// a broken backend.
+fn non_blank(v: Option<&str>) -> Option<&str> {
+    v.map(str::trim).filter(|s| !s.is_empty())
+}
+
 impl S3Config {
     /// `None` unless all four values are present and non-empty. Partial
     /// config falls back to local disk — with a warning, because that
@@ -211,11 +218,13 @@ impl S3Config {
         access_key: Option<&str>,
         secret_key: Option<&str>,
     ) -> Option<Self> {
+        // Blank counts as missing: a whitespace-only value is never a valid
+        // endpoint, bucket, or credential.
         Some(Self {
-            endpoint: endpoint?.trim_end_matches('/').to_string(),
-            bucket: bucket?.to_string(),
-            access_key: access_key?.to_string(),
-            secret_key: secret_key?.to_string(),
+            endpoint: non_blank(endpoint)?.trim_end_matches('/').to_string(),
+            bucket: non_blank(bucket)?.to_string(),
+            access_key: non_blank(access_key)?.to_string(),
+            secret_key: non_blank(secret_key)?.to_string(),
         })
     }
 }
