@@ -39,6 +39,7 @@ mod notifications;
 mod onboard;
 mod posts;
 mod profile;
+mod rate_limit;
 mod rss;
 mod sse;
 mod sets;
@@ -261,6 +262,11 @@ pub fn build_router(state: AppState) -> Router {
         .merge(public_routes)
         .merge(protected_routes)
         .layer(cors_layer)
+        // Per-client rate limit on login, provider connect, and media
+        // upload. Declared after `cors_layer` so CORS stays outermost —
+        // a 429 raised here must still carry `Access-Control-Allow-Origin`
+        // or the browser reports an opaque network error instead of 429.
+        .layer(middleware::from_fn(rate_limit::enforce))
         .layer(TraceLayer::new_for_http())
         .layer(RequestBodyLimitLayer::new(
             10 * 1024 * 1024, // 10 MB limit
