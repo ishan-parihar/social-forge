@@ -46,6 +46,7 @@ mod sets;
 mod signatures;
 mod tags;
 mod developer;
+mod v1;
 mod webhooks;
 mod dms;
 mod automation;
@@ -211,6 +212,8 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/developer/api-keys", axum::routing::get(developer::list).post(developer::create))
         .route("/api/developer/api-keys/{id}", axum::routing::delete(developer::revoke))
         .route("/api/developer/api-keys/{id}/regenerate", axum::routing::post(developer::regenerate))
+        // Public API v1 — Bearer sf_… keys or session cookie, same as above.
+        .merge(v1::router())
         .route("/api/webhooks", axum::routing::get(webhooks::list).post(webhooks::create))
         .route("/api/webhooks/{id}", axum::routing::get(webhooks::get).put(webhooks::update).delete(webhooks::delete))
         .route("/api/webhooks/{id}/test", axum::routing::post(webhooks::test))
@@ -249,11 +252,15 @@ pub fn build_router(state: AppState) -> Router {
             CsrfState { allowed_origin: state.config.frontend_url.clone() },
             csrf_origin_check,
         ))
-        // Auth middleware: validates `sf_session` cookie against the
+        // Auth middleware: validates an `Authorization: Bearer sf_…` API
+        // key against `api_keys`, else the `sf_session` cookie against the
         // JWT secret derived from `APP_PASSWORD`. Injects
         // `AuthenticatedUser { user_id: DEFAULT_USER_ID }` on success.
         .layer(middleware::from_fn_with_state(
-            AuthState { session_secret: state.config.jwt_secret.clone() },
+            AuthState {
+                session_secret: state.config.jwt_secret.clone(),
+                db: state.db.clone(),
+            },
             auth_middleware,
         ));
 

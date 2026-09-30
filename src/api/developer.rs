@@ -8,11 +8,10 @@ use axum::{
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use sqlx::FromRow;
 use uuid::Uuid;
 
-use crate::auth::middleware::AuthenticatedUser;
+use crate::auth::middleware::{hash_api_key, AuthenticatedUser, API_KEY_PREFIX};
 use crate::error::AppError;
 
 use super::AppState;
@@ -22,10 +21,8 @@ use super::AppState;
 #[derive(Debug, FromRow)]
 struct ApiKeyRow {
     pub id: Uuid,
-    pub user_id: Uuid,
     pub name: String,
     pub key_prefix: String,
-    pub key_hash: String,
     pub last_used_at: Option<DateTime<Utc>>,
     pub expires_at: Option<DateTime<Utc>>,
     pub is_active: bool,
@@ -79,15 +76,18 @@ fn row_to_response(row: ApiKeyRow) -> ApiKeyResponse {
 }
 
 /// Generate a new API key and return (full_key, prefix, sha256_hash).
+///
+/// The key is `sf_`-prefixed so clients can recognise it in a secret
+/// store, and the digest comes from the shared `hash_api_key` — the same
+/// helper `auth::middleware::verify_api_key` looks up with.
 fn generate_api_key() -> (String, String, String) {
-    let full = uuid::Uuid::new_v4().to_string().replace("-", "")
+    let random = uuid::Uuid::new_v4().to_string().replace("-", "")
         + &uuid::Uuid::new_v4().to_string().replace("-", "");
-    let prefix = full[..8].to_string();
-    let hash = {
-        let mut hasher = Sha256::new();
-        hasher.update(full.as_bytes());
-        format!("{:x}", hasher.finalize())
-    };
+    let full = format!("{API_KEY_PREFIX}{random}");
+    // Display prefix comes from the random part — the `sf_` marker would
+    // otherwise eat the first 3 of the 8 characters.
+    let prefix = random[..8].to_string();
+    let hash = hash_api_key(&full);
     (full, prefix, hash)
 }
 
@@ -125,7 +125,7 @@ pub async fn create(
         r#"
         INSERT INTO api_keys (user_id, name, key_prefix, key_hash, expires_at)
         VALUES ($1, $2, $3, $4, $5)
-        RETURNING id, user_id, name, key_prefix, key_hash, last_used_at, expires_at, is_active, created_at
+        RETURNING id, name, key_prefix, last_used_at, expires_at, is_active, created_at
         "#,
     )
     .bind(auth.user_id)
@@ -153,7 +153,7 @@ pub async fn list(
 ) -> Result<Json<Vec<ApiKeyResponse>>, AppError> {
     let rows: Vec<ApiKeyRow> = sqlx::query_as(
         r#"
-        SELECT id, user_id, name, key_prefix, key_hash, last_used_at, expires_at, is_active, created_at
+        SELECT id, name, key_prefix, last_used_at, expires_at, is_active, created_at
         FROM api_keys
         WHERE user_id = $1
         ORDER BY created_at DESC
@@ -198,7 +198,7 @@ pub async fn regenerate(
     // Verify ownership first — only allow regeneration on active keys
     let existing: ApiKeyRow = sqlx::query_as(
         r#"
-        SELECT id, user_id, name, key_prefix, key_hash, last_used_at, expires_at, is_active, created_at
+        SELECT id, name, key_prefix, last_used_at, expires_at, is_active, created_at
         FROM api_keys
         WHERE id = $1 AND user_id = $2 AND is_active = true
         "#,
@@ -216,7 +216,7 @@ pub async fn regenerate(
         UPDATE api_keys
         SET key_prefix = $1, key_hash = $2
         WHERE id = $3 AND user_id = $4
-        RETURNING id, user_id, name, key_prefix, key_hash, last_used_at, expires_at, is_active, created_at
+        RETURNING id, name, key_prefix, last_used_at, expires_at, is_active, created_at
         "#,
     )
     .bind(&prefix)
