@@ -16,15 +16,30 @@ SKILL_DEST  = $(HOME)/.agents/skills/social-forge-agent
 TARGET      = x86_64-unknown-linux-gnu.2.36
 RELEASE_DIR = target/x86_64-unknown-linux-gnu/release
 
-.PHONY: build frontend deploy redeploy restart status logs watch
+.PHONY: build frontend vendor-pins check deploy redeploy restart status logs watch
 
 # ── Build ───────────────────────────────────────────────────────
 
-build: frontend
+build: vendor-pins frontend
 	cargo zigbuild --release --target $(TARGET)
 
 frontend:
 	cd frontend && pnpm install && pnpm build
+
+# ── Vendor pins (plan v25 §9, phase B0) ─────────────────────────
+# Verifies every vendored/pinned upstream source against the contract in
+# docs/planning/VENDOR_PINS.md. Local drift is fatal (non-zero + diff).
+# Upstream advisories (newer release, yanked pin) are reported loudly but do not
+# block a local build; VENDOR_PULL_STRICT=1 makes them fatal too. CI uses the
+# same gate — see VENDOR_PINS.md §1 for the ratchet to turn strict on for good.
+# Run `scripts/vendor-pull.sh --update` after an intentional pin change.
+vendor-pins:
+	@./scripts/vendor-pull.sh --check
+
+# Fast compile gate (AGENTS.md §3.2). SQLX_OFFLINE is required: the .sqlx/
+# cache is committed, so the sqlx macros must not reach for a live DATABASE_URL.
+check: vendor-pins
+	SQLX_OFFLINE=true cargo check --lib --bin social-forge
 
 # ── Deploy / Redeploy ───────────────────────────────────────────
 

@@ -96,19 +96,8 @@ pub struct Config {
     // GitHub (PAT-based)
     pub github_token: Option<String>,
 
-    // VK
-    pub vk_client_id: Option<String>,
-    pub vk_client_secret: Option<String>,
-
-    // Whop
-    pub whop_client_id: Option<String>,
-    pub whop_client_secret: Option<String>,
-
-    // Kick
-    pub kick_client_id: Option<String>,
-    pub kick_client_secret: Option<String>,
-
-    // Neynar (Farcaster) API key
+    // Neynar (Farcaster) API key — Tier-3 archive (v25 §1), only read
+    // when ENABLE_ARCHIVE_PROVIDERS is set.
     pub neynar_api_key: Option<String>,
 
     // Token encryption at rest
@@ -252,12 +241,6 @@ impl Config {
             devto_api_key: opt("DEVTO_API_KEY"),
             hashnode_api_key: opt("HASHNODE_API_KEY"),
             github_token: opt("GITHUB_TOKEN"),
-            vk_client_id: opt("VK_CLIENT_ID"),
-            vk_client_secret: opt("VK_CLIENT_SECRET"),
-            whop_client_id: opt("WHOP_CLIENT_ID"),
-            whop_client_secret: opt("WHOP_CLIENT_SECRET"),
-            kick_client_id: opt("KICK_CLIENT_ID"),
-            kick_client_secret: opt("KICK_CLIENT_SECRET"),
             neynar_api_key: opt("NEYNAR_API_KEY"),
             token_encryption_key: opt("TOKEN_ENCRYPTION_KEY"),
             media_dir: opt("MEDIA_DIR").unwrap_or_else(|| "./uploads".into()),
@@ -335,15 +318,11 @@ impl Config {
             "slack" => Some((self.slack_client_id.clone()?, self.slack_client_secret.clone()?)),
             "mastodon" => Some((self.mastodon_client_id.clone()?, self.mastodon_client_secret.clone()?)),
             "tiktok" => Some((self.tiktok_client_id.clone()?, self.tiktok_client_secret.clone()?)),
-            "vk" => Some((self.vk_client_id.clone()?, self.vk_client_secret.clone()?)),
-            "whop" => Some((self.whop_client_id.clone()?, self.whop_client_secret.clone()?)),
-            "kick" => Some((self.kick_client_id.clone()?, self.kick_client_secret.clone()?)),
             "medium" => Some(("api-key".into(), self.medium_access_token.clone()?)),
             "devto" => Some(("api-key".into(), self.devto_api_key.clone()?)),
             "hashnode" => Some(("api-key".into(), self.hashnode_api_key.clone()?)),
             "github" => Some((self.github_token.clone()?, self.github_token.clone()?)),
             "google" | "google_my_business" | "gmail" | "calendar" | "drive" => Some((self.youtube_client_id.clone()?, self.youtube_client_secret.clone()?)),
-            "lemmy" => Some(("lemmy".into(), "api_key".into())),
             "farcaster" => Some(("neynar".into(), self.neynar_api_key.clone()?)),
             _ => None,
         }

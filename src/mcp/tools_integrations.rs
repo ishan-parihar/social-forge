@@ -26,6 +26,11 @@ pub struct ProviderInfo {
     pub has_credentials: bool,
     pub editor_type: String,
     pub redirect_uri: String,
+    /// Support tier: `tier-1` (full depth: analytics, engagement, comments,
+    /// mentions, targets), `tier-2` (publish-maintained only),
+    /// `tier-3` (archive; listed only when ENABLE_ARCHIVE_PROVIDERS is set).
+    #[schemars(description = "Support tier: tier-1 (full depth), tier-2 (publish-maintained), tier-3 (archive)")]
+    pub tier: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
@@ -99,6 +104,7 @@ pub async fn list_providers(
                 } else {
                     "N/A (non-OAuth)".into()
                 },
+                tier: state.providers.tier(id).as_str().to_string(),
             }
         })
         .collect();

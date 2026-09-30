@@ -319,10 +319,6 @@ JWT_SECRET=change-me-to-a-random-secret
 # ─── Hashnode ─────────────────────────────────────────────
 # HASHNODE_PAT=
 
-# ─── VK ───────────────────────────────────────────────────
-# VK_CLIENT_ID=
-# VK_CLIENT_SECRET=
-
 # ─── Bluesky ──────────────────────────────────────────────
 # BLUESKY_IDENTIFIER=
 # BLUESKY_PASSWORD=
@@ -658,18 +654,11 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
         "skool" => {
             output_json(&serde_json::json!({"status": "chrome_extension", "provider": "skool", "hint": "Skool uses Chrome extension cookie extraction. Install the Skool Chrome extension, log into skool.com, and cookies are auto-extracted."}));
         }
-        "farcaster" | "lemmy" => {
-            output_json(&serde_json::json!({"status": "per_user", "provider": provider, "hint": format!("{provider} uses per-user credentials stored in the integration record. Connect via the web UI.")}));
+        "farcaster" => {
+            output_json(&serde_json::json!({"status": "per_user", "provider": provider, "hint": "Farcaster is a Tier-3 archive provider (v25 §1) — set ENABLE_ARCHIVE_PROVIDERS=1 to register it. Uses per-user credentials stored in the integration record; connect via the web UI."}));
         }
         "whatsapp" => {
             output_json(&serde_json::json!({"status": "native_client", "provider": "whatsapp", "hint": "WhatsApp uses a native client. Connect via the web UI to scan the QR code."}));
-        }
-        "vk" => {
-            if state.config.vk_client_id.is_some() && state.config.vk_client_secret.is_some() {
-                output_json(&serde_json::json!({"status": "configured", "provider": "vk", "method": "oauth"}));
-            } else {
-                output_json(&serde_json::json!({"status": "not_configured", "provider": "vk", "requires": ["VK_CLIENT_ID", "VK_CLIENT_SECRET"], "hint": "Create an app at https://vk.com/editapp?act=create and set credentials in ~/.social-forge/.env"}));
-            }
         }
         "threads" => {
             if state.config.threads_app_id.is_some() && state.config.threads_app_secret.is_some() {
@@ -684,7 +673,7 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
                 "status": "unknown",
                 "provider": provider,
                 "error": format!("Unknown provider '{provider}'. Use 'social-forge connect --help' for supported providers."),
-                "hint": "Try: x, reddit, linkedin, facebook, instagram, bluesky, github, telegram, discord, slack, pinterest, tiktok, mastodon, youtube, medium, devto, hashnode, wordpress, threads, vk, skool",
+                "hint": "Try: x, reddit, linkedin, facebook, instagram, bluesky, github, telegram, discord, slack, pinterest, tiktok, mastodon, youtube, medium, devto, hashnode, wordpress, threads, skool",
             }));
         }
     }

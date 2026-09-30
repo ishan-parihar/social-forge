@@ -15,10 +15,10 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use super::*;
-use super::farcaster;
-use super::kick;
+use super::archive::farcaster;
 use super::mastodon;
 use super::slack;
+use super::tier::{self, ProviderTier};
 use crate::config::Config;
 use crate::services::telegram_client::TelegramClientManager;
 use crate::wa::WhaClient;
@@ -43,9 +43,6 @@ const HIGH_CONCURRENCY_PROVIDERS: &[&str] = &[
     "medium",
     "devto",
     "hashnode",
-    "lemmy",
-    "vk",
-    "kick",
     "skool",
 ];
 
@@ -285,14 +282,13 @@ impl ProviderRegistry {
         // WhatsApp — native wa-rs client with wacli fallback
         providers.insert("whatsapp", Arc::new(whatsapp::WhatsAppProvider::new(config, wa_client.clone())));
 
-        // TikTok — OAuth-based video platform
+        // TikTok — OAuth-based video platform.
+        // v25 §1: no separate `tiktok-business` provider. Business and
+        // creator accounts both publish through the same Content Posting
+        // API with the same scopes; only the account type differs, so the
+        // "merge" is structural — there is nothing to gate.
         if config.tiktok_client_id.is_some() {
             providers.insert("tiktok", Arc::new(tiktok::TikTokProvider::new(config)));
-        }
-
-        // VK — OAuth-based social network
-        if config.vk_client_id.is_some() {
-            providers.insert("vk", Arc::new(vk::VkProvider::new(config)));
         }
 
         // Google My Business — uses same Google OAuth credentials
@@ -303,17 +299,11 @@ impl ProviderRegistry {
             );
         }
 
-        // Whop — OAuth-based community commerce platform
-        if config.whop_client_id.is_some() {
-            providers.insert("whop", Arc::new(whop::WhopProvider::new(config)));
-        }
-
-        // Kick — OAuth-based streaming platform
-        if config.kick_client_id.is_some() {
-            providers.insert("kick", Arc::new(kick::KickProvider::new(config)));
-        }
-
-        // Mastodon — OAuth-based microblogging (with app registration)
+        // Mastodon — OAuth-based microblogging (with app registration).
+        // v25 §1: no separate `mastodon-custom` provider. Self-hosted
+        // instances are reached through `MASTODON_INSTANCE_URL` /
+        // `instance_url`, so the custom-instance path is already part of
+        // this provider rather than a gated sibling.
         if config.mastodon_client_id.is_some() {
             providers.insert("mastodon", Arc::new(mastodon::MastodonProvider::new(config)));
         }
@@ -356,11 +346,12 @@ impl ProviderRegistry {
         // WordPress — REST API + Application Password (always registered, no global credentials)
         providers.insert("wordpress", Arc::new(wordpress::WordPressProvider::new(config)));
 
-        // Farcaster — Web3-based (always registered, no OAuth)
-        providers.insert("farcaster", Arc::new(farcaster::FarcasterProvider::new(config)));
-
-        // Lemmy — API key-based (always registered, no global credentials — per-user in integration record)
-        providers.insert("lemmy", Arc::new(lemmy::LemmyProvider::new(config)));
+        // Farcaster — Tier-3 archive (v25 §1). Web3/Neynar, no OAuth.
+        // Compiles from `social::archive` but registers only when the
+        // operator opts back in via ENABLE_ARCHIVE_PROVIDERS.
+        if tier::archive_providers_enabled() {
+            providers.insert("farcaster", Arc::new(farcaster::FarcasterProvider::new(config)));
+        }
 
         // Slack — OAuth-based messaging workspace provider
         if config.slack_client_id.is_some() {
@@ -416,6 +407,22 @@ impl ProviderRegistry {
             circuit_breakers.insert(id, Arc::new(CircuitBreaker::new(threshold, cooldown)));
         }
 
+        // Tier drift guard: every registered provider must be a known tier
+        // member, and every enabled tier member must actually be registered
+        // (some are conditional on credentials, so only the tier tables
+        // themselves are asserted — see `registered_identifiers`).
+        let registered: Vec<&str> = providers.keys().copied().collect();
+        let unknown: Vec<&&str> = registered
+            .iter()
+            .filter(|id| !tier::all_known_identifiers().contains(*id))
+            .collect();
+        if !unknown.is_empty() {
+            tracing::warn!(
+                "providers registered but missing from src/social/tier.rs: {:?}",
+                unknown
+            );
+        }
+
         Self {
             providers: Arc::new(providers),
             concurrency: Arc::new(concurrency),
@@ -447,6 +454,15 @@ impl ProviderRegistry {
     /// List all registered provider identifiers
     pub fn list(&self) -> Vec<&'static str> {
         self.providers.keys().copied().collect()
+    }
+
+    /// Support tier for a provider identifier (v25 §1).
+    ///
+    /// Sourced from `tier::tier_of`, so `/api/providers` and the MCP
+    /// `integrations.list_providers` tool can report it without the
+    /// registry holding a second copy of the tier tables.
+    pub fn tier(&self, identifier: &str) -> ProviderTier {
+        tier::tier_of(identifier)
     }
 
     /// Get all providers

@@ -89,13 +89,13 @@ When implementing features inspired by postiz-app or other competitors, apply th
 
 ## 1. What is Social Forge?
 
-Social Forge is a **single-user, self-hosted social media management platform** designed for AI agents. It provides a triple interface — CLI, REST API, and MCP server — over 30+ social platforms (X, Reddit, LinkedIn, Facebook, Instagram, YouTube, Threads, TikTok, Bluesky, Mastodon, Pinterest, Discord, Slack, Telegram, WhatsApp, WordPress, Medium, Dev.to, Hashnode, GitHub, etc.).
+Social Forge is a **single-user, self-hosted social media management platform** designed for AI agents. It provides a triple interface — CLI, REST API, and MCP server — over 26 social platforms (X, Reddit, LinkedIn, Facebook, Instagram, YouTube, Threads, TikTok, Bluesky, Pinterest, Discord, Slack, Telegram, WhatsApp, WordPress, Medium, Dev.to, Hashnode, GitHub, etc.).
 
 **Architecture in one paragraph:** A single Rust binary (`social-forge`) runs an axum HTTP server (REST API + embedded SvelteKit frontend), an rmcp MCP server (stdio, for AI agents like Claude/Cursor), an in-process scheduler (polls for due posts every 30s), an SSE broadcaster (realtime updates to the frontend), and background tasks (RSS poller, feed refresher, analytics cache refresher). All state lives in PostgreSQL. OAuth tokens are AES-256-GCM encrypted at rest when `TOKEN_ENCRYPTION_KEY` is set.
 
 **Key numbers (as of v11):**
 - 328 MCP tools across 44 files in `src/mcp/`
-- 31 providers registered in `src/social/registry.rs` (25 with MCP coverage)
+- 26 providers registered by default in `src/social/registry.rs` — 12 Tier-1 (depth) + 14 Tier-2 (publish-maintained), plus 1 Tier-3 (Farcaster) registered only when `ENABLE_ARCHIVE_PROVIDERS` is set. Tier membership lives in `src/social/tier.rs` (plan §1); `kick`/`vk`/`whop`/`lemmy` were removed outright.
 - 18 SQL migrations in `migrations/`
 - ~58,000 LOC of Rust + ~13,000 LOC of Svelte/TS frontend
 

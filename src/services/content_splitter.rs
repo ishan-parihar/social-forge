@@ -8,7 +8,9 @@
 /// TODO: this duplicates `SocialProvider::max_content_length()`. The
 /// splitter should take `&dyn SocialProvider` instead of a `&str` so
 /// the limits live on the providers themselves. For now, dead providers
-/// (twitch/nostr/mewe/moltbook) have been removed.
+/// (twitch/nostr/mewe/moltbook) and the v25 §1 removals
+/// (kick/vk/whop/lemmy) have been dropped. `farcaster` stays because
+/// the archive flag can re-register it.
 pub fn platform_limit(provider: &str) -> usize {
     match provider {
         "x" => 4000,
@@ -26,17 +28,13 @@ pub fn platform_limit(provider: &str) -> usize {
         "slack" => 40000,
         "telegram_bot" | "telegram_user" => 4096,
         "whatsapp" => 65536,
-        "vk" => 21000,
         "github" => 65536,
         "medium" => 100000,
         "devto" => 100000,
         "hashnode" => 100000,
         "wordpress" => 100000,
         "farcaster" => 1024,
-        "lemmy" => 10000,
         "skool" => 100000,
-        "kick" => 10000,
-        "whop" => 10000,
         _ => 10000, // safe default
     }
 }

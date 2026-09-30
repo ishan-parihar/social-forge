@@ -2,13 +2,13 @@
 export type AuthType = "oauth" | "api_key" | "web3" | "extension" | "cookie" | "pat";
 
 export const AUTH_TYPES: Record<string, AuthType> = {
-  lemmy: "api_key",
   wordpress: "api_key",
   medium: "api_key",
   devto: "api_key",
   hashnode: "api_key",
+  // Tier-3 archive provider (v25 §1): only reachable when the backend is
+  // started with ENABLE_ARCHIVE_PROVIDERS=1.
   farcaster: "web3",
-  nostr: "web3",
   skool: "extension",
 };
 

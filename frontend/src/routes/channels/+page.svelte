@@ -44,19 +44,29 @@
     return centralProviderLabel(provider);
   }
 
+  // Connectable providers. Deliberately a superset of what the backend has
+  // registered: a provider must still be offered here before the user has
+  // supplied the credentials that make it register. Tier membership is defined
+  // once in src/social/tier.rs (v25 plan §1): kick/vk/whop/lemmy were removed
+  // outright, farcaster is Tier-3 (archive).
+  //
+  // Tier-3 providers are hidden by default. To surface one, start the backend
+  // with ENABLE_ARCHIVE_PROVIDERS=1 AND add the id below — the flag is a
+  // server-side env var the frontend cannot read.
+  const ARCHIVE_PROVIDERS: string[] = [];
   let availableProviders = $state([
     "x", "facebook", "instagram", "instagram-standalone", "threads",
     "linkedin", "linkedin-page",
     "google",
     "reddit", "bluesky", "discord", "pinterest",
-    "tiktok", "vk", "kick", "mastodon",
-    "google_my_business", "whop", "slack",
+    "tiktok", "mastodon",
+    "google_my_business", "slack",
     "telegram-bot", "telegram-user",
     "whatsapp",
     "wordpress", "medium", "devto", "hashnode",
-    "github", "lemmy",
-    "farcaster",
+    "github",
     "skool",
+    ...ARCHIVE_PROVIDERS,
   ]);
   let connecting = $state<string | null>(null);
   let connectProvider = $state<string | null>(null);

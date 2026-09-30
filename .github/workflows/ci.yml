@@ -22,6 +22,7 @@ jobs:
         run: |
           bash -n scripts/install.sh
           bash -n scripts/social-forge-start.sh
+          bash -n scripts/vendor-pull.sh
           echo "✓ Shell scripts are syntactically valid"
 
   # Rust syntax/type check — uses SQLX_OFFLINE with pre-cached queries
@@ -38,6 +39,17 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
 
       - uses: Swatinem/rust-cache@v2
+
+      # Vendor freshness gate — runs before any cargo invocation so a
+      # mis-pinned, drifted or un-fetchable vendored source fails the build
+      # instead of passing silently (plan v25 §9).
+      #
+      # Local drift is fatal unconditionally. Upstream advisories (newer
+      # release, yanked pin) are reported but not fatal, because §7 of
+      # VENDOR_PINS.md lists known-accepted ones. Once §7 is empty, set
+      # VENDOR_PULL_STRICT: "true" here to make advisories fatal for good.
+      - name: Verify vendor pins
+        run: ./scripts/vendor-pull.sh --check
 
       # Only check that our source files parse — full compile happens in release.yml
       - name: Syntax check (rustfmt parse only)

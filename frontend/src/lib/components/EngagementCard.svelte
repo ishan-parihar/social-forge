@@ -22,7 +22,7 @@
     const likesVal = Math.max(engagement.likes ?? 0, engagement.upvotes ?? 0);
     let likesLabel = 'Likes';
     let likesIcon = 'heart';
-    if (provider === 'reddit' || provider === 'lemmy') {
+    if (provider === 'reddit') {
       likesLabel = 'Upvotes';
       likesIcon = 'upvote';
     } else if (engagement.reactions) {

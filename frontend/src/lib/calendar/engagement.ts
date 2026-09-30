@@ -6,14 +6,14 @@ export function engagementIcon(metric: string, platform?: string | null): string
   const p = platform?.toLowerCase() ?? '';
   switch (metric) {
     case 'likes':
-      if (p === 'reddit' || p === 'lemmy') return '👍';
+      if (p === 'reddit') return '👍';
       if (p === 'x' || p === 'bluesky' || p === 'threads') return '❤️';
       if (p === 'youtube') return '👍';
       if (p === 'facebook') return '❤️';
       return '❤️';
     case 'comments':
       if (p === 'x' || p === 'bluesky' || p === 'threads') return '💬';
-      if (p === 'reddit' || p === 'lemmy') return '💬';
+      if (p === 'reddit') return '💬';
       if (p === 'youtube') return '💬';
       return '💬';
     case 'shares':
@@ -30,14 +30,14 @@ export function engagementLabel(metric: string, platform?: string | null): strin
   const p = platform?.toLowerCase() ?? '';
   switch (metric) {
     case 'likes':
-      if (p === 'reddit' || p === 'lemmy') return 'Upvotes';
+      if (p === 'reddit') return 'Upvotes';
       if (p === 'x' || p === 'bluesky' || p === 'threads') return 'Likes';
       if (p === 'youtube') return 'Likes';
       if (p === 'facebook') return 'Reactions';
       return 'Likes';
     case 'comments':
       if (p === 'x' || p === 'bluesky' || p === 'threads') return 'Replies';
-      if (p === 'reddit' || p === 'lemmy') return 'Comments';
+      if (p === 'reddit') return 'Comments';
       return 'Comments';
     case 'shares':
       if (p === 'x' || p === 'bluesky' || p === 'threads') return 'Reposts';

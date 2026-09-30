@@ -99,7 +99,7 @@
         id="instance-url"
         type="text"
         bind:value={instanceUrl}
-        placeholder="https://lemmy.world"
+        placeholder="https://your-instance.example.com"
         class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-white placeholder:text-muted-dark focus:outline-none focus:border-brand-500 transition-colors"
       />
     </div>
@@ -112,7 +112,7 @@
         id="label"
         type="text"
         bind:value={label}
-        placeholder="e.g. My Lemmy Account"
+        placeholder="e.g. My Blog"
         class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-white placeholder:text-muted-dark focus:outline-none focus:border-brand-500 transition-colors"
       />
     </div>

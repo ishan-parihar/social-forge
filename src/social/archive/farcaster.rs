@@ -1,11 +1,15 @@
-// ─── Farcaster Provider ──────────────────────────────────────
+// ─── Farcaster Provider (Tier-3 archive) ─────────────────────
 // Uses Neynar API to post casts. Non-OAuth (Web3 wallet auth).
 // Stores signer_uuid as access_token.
-
+//
+// Tier-3 per docs/planning/PLAN_PARITY_DEPTH_SINGLEUSER_v25.md §1:
+// registered only when ENABLE_ARCHIVE_PROVIDERS is set. Import path is
+// `crate::social` (not `super`) because this module now lives one level
+// deeper under `social::archive`.
 use async_trait::async_trait;
 use reqwest::StatusCode;
 
-use super::*;
+use super::super::*;
 use crate::config::Config;
 
 const NEYNAR_API_BASE: &str = "https://api.neynar.com/v2";

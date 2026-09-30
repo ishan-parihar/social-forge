@@ -3,7 +3,7 @@
 # Social-Forge
 
 <p align="center">
-  <img src="./assets/readme/hero.svg" width="100%" alt="Social Forge: one Rust binary, 25 social platforms, three interfaces — CLI, REST, MCP">
+  <img src="./assets/readme/hero.svg" width="100%" alt="Social Forge: one Rust binary, 26 social platforms, three interfaces — CLI, REST, MCP">
 </p>
 
 
@@ -16,14 +16,14 @@
 [![CI](https://github.com/ishan-parihar/social-forge/actions/workflows/ci.yml/badge.svg)](https://github.com/ishan-parihar/social-forge/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![MCP](https://img.shields.io/badge/Protocol-MCP-purple.svg)](https://modelcontextprotocol.io/)
-[![Platforms](https://img.shields.io/badge/platforms-25-orange)](https://github.com/ishan-parihar/social-forge)
+[![Platforms](https://img.shields.io/badge/platforms-26-orange)](https://github.com/ishan-parihar/social-forge)
 [![Tests](https://img.shields.io/badge/tests-lib%20+%20mcp--audit-green)](https://github.com/ishan-parihar/social-forge)
 
 ---
 
 ## What it is
 
-Social Forge is a single Rust binary that manages **25 social platforms** (verified: `src/social/registry.rs`) through three interfaces:
+Social Forge is a single Rust binary that manages **26 social platforms** (12 Tier-1 + 14 Tier-2, verified: `src/social/tier.rs`) through three interfaces:
 
 1. **CLI** — 100+ commands for AI agents and terminal power users
 2. **REST API** — SvelteKit dashboard for human operators
@@ -143,7 +143,7 @@ mcp:
 ├──────────────┴──────────────────┴───────────────────────────────┤
 │                    Shared Business Logic                          │
 │  ┌──────────────────────────────────────────────────────────┐   │
-│  │  ProviderRegistry → 30 providers (trait-based, async)    │   │
+│  │  ProviderRegistry → 26 providers (12 T1 + 14 T2, async) │   │
 │  │  Scheduler → Tokio background worker (30s poll)          │   │
 │  │  Auth → JWT + Argon2 + OAuth2 + Cookie dual-path         │   │
 │  │  Realtime → SSE broadcast (tokio::sync::broadcast)       │   │
@@ -155,6 +155,10 @@ mcp:
 
 ### Supported Platforms
 
+Providers are tiered: **Tier-1** gets full depth (analytics, engagement, comments, mentions, target discovery); **Tier-2** is publish-maintained. Tier membership is defined once in `src/social/tier.rs` and reported as a `tier` field by `/api/providers`. Full rationale: `docs/planning/PLAN_PARITY_DEPTH_SINGLEUSER_v25.md` §1.
+
+#### Tier-1 — depth (12)
+
 | Platform | OAuth | Cookie Auth | CLI | MCP Tools |
 |----------|:-----:|:-----------:|:---:|:---------:|
 | X / Twitter | ✅ | ✅ (GraphQL) | ✅ | 15 |
@@ -163,35 +167,43 @@ mcp:
 | LinkedIn (Page) | ✅ | — | ✅ | 8 |
 | Facebook | ✅ | — | ✅ | 8 |
 | Instagram | ✅ | — | ✅ | 6 |
+| Instagram (Standalone) | ✅ | — | — | 6 |
 | Threads | ✅ | — | — | 6 |
 | YouTube | ✅ | — | — | 8 |
 | TikTok | ✅ | — | — | 4 |
 | Pinterest | ✅ | — | — | 4 |
+| Bluesky | App Password | — | — | 4 |
+
+#### Tier-2 — publish-maintained (14)
+
+| Platform | OAuth | Cookie Auth | CLI | MCP Tools |
+|----------|:-----:|:-----------:|:---:|:---------:|
 | Discord | ✅ | — | — | 6 |
 | Slack | ✅ | — | — | 4 |
 | Telegram (Bot) | Token | — | — | 8 |
 | Telegram (User) | Session | — | — | 6 |
 | WhatsApp | QR | — | — | 6 |
-| Bluesky | App Password | — | — | 4 |
 | Mastodon | ✅ | — | — | 4 |
+| WordPress | ✅ | — | — | 6 |
 | Medium | API Key | — | — | 3 |
 | Dev.to | API Key | — | — | 3 |
 | Hashnode | API Key | — | — | 3 |
 | GitHub | PAT | — | — | 6 |
-| Dev.to | API Key | — | — | 3 |
-| Medium | API Key | — | — | 3 |
-| Hashnode | API Key | — | — | 3 |
-| Farcaster | ✅ | — | — | 4 |
-| Mastodon | ✅ | — | — | 4 |
-| Lemmy | ✅ | — | — | 4 |
-| Kick | ✅ | — | — | 4 |
-| VK | ✅ | — | — | 4 |
-| Skool | ✅ | — | — | 4 |
-| Whop | ✅ | — | — | 4 |
-| Wordpress | ✅ | — | — | 6 |
-| Google (Gmail/Calendar/Drive) | ✅ | — | — | 20+ |
+| Google (Gmail/Calendar/Drive) | ✅ | — | ✅ | 20+ |
+| Google My Business | ✅ | — | — | 4 |
+| Skool | ✅ (Chrome ext) | — | — | 4 |
 
-*Platform list verified against `src/social/registry.rs` (30 providers) and the `src/mcp/tools_*.rs` modules (42 tool modules).*
+**26 platforms by default.** `kick`, `vk`, `whop` and `lemmy` were removed outright (v25 §1).
+
+#### Tier-3 — archive (1)
+
+| Platform | Enabled by | Notes |
+|----------|-----------|-------|
+| Farcaster | `ENABLE_ARCHIVE_PROVIDERS=1` | Web3/Neynar. Code kept under `src/social/archive/`; absent from `/api/providers` and the MCP tool list by default. |
+
+*Mastodon custom instances use `MASTODON_INSTANCE_URL` — no separate provider. TikTok business accounts publish through the same Content Posting API as creator accounts — no separate provider.*
+
+*Platform list verified against `src/social/tier.rs` + `src/social/registry.rs` (26 default + 1 archived) and the `src/mcp/tools_*.rs` modules (42 tool modules).*
 
 ---
 
@@ -200,7 +212,7 @@ mcp:
 | Capability | **Social Forge** | Buffer / Hootsuite | n8n / Make | Postiz |
 |---|---|---|---|---|
 | **AI-agent native** | ✅ CLI + MCP + REST all same engine | ❌ human dashboards | ⚠️ workflow only | ⚠️ some API |
-| **Platforms** | 30, trait-based registry | ~6–10 | via nodes | ~10 |
+| **Platforms** | 26, trait-based registry, tiered depth | ~6–10 | via nodes | ~10 |
 | **Dual-path auth** | ✅ OAuth2 + browser-cookie extraction | ❌ | ❌ | ❌ |
 | **Self-hosted** | ✅ single ~15MB musl binary | ❌ SaaS | ✅ | ✅ |
 | **Scheduler w/ retry** | ✅ in-process Tokio, exp-backoff, per-provider concurrency | ✅ | ✅ | ✅ |
@@ -432,7 +444,8 @@ social-forge/
 │   │   ├── reddit.rs        # Reddit (dual-path)
 │   │   ├── reddit_cookies.rs
 │   │   ├── linkedin.rs
-│   │   └── ...              # 30 providers total
+│   │   ├── tier.rs           # Tier-1/2/3 membership (v25 §1)
+│   │   └── ...              # 26 providers (+ archive/ behind flag)
 │   ├── db/                  # Database (sqlx, migrations)
 │   ├── scheduler/           # Background post publisher
 │   └── config.rs            # Environment configuration
@@ -504,7 +517,7 @@ At session start, Social Forge prints a compact dashboard:
 
 ```
 bin: /usr/local/bin/social-forge
-description: Post to 25 social platforms from a single CLI
+description: Post to 26 social platforms from a single CLI
 
 providers[3]{name,status,platforms}:
   x,connected,X/Twitter
@@ -512,7 +525,7 @@ providers[3]{name,status,platforms}:
   bluesky,connected,Bluesky
   ...
 
-platforms_total: 30
+platforms_total: 26
 
 help[4]:
   Run `social-forge providers` to see all connected accounts

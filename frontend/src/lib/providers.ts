@@ -31,6 +31,13 @@ export interface ProviderMeta {
 
 // The master map. New providers must be added here AND in the backend
 // ProviderRegistry — adding to only one will cause drift.
+//
+// Tier-1 (12) = depth platforms; Tier-2 (14) = publish-maintained.
+// kick/vk/whop/lemmy were removed outright in v25 §1. farcaster is Tier-3
+// (archive) and so absent here — it renders with the fallback glyph, which is
+// correct, because it is not registered unless ENABLE_ARCHIVE_PROVIDERS is set.
+// Source of truth for membership: src/social/tier.rs, reported as a `tier`
+// field by `/api/providers`.
 export const PROVIDERS: Record<string, ProviderMeta> = {
   x:                    { label: 'X',          color: '#9ca3af', icon: 'X',   charLimit: 280 },
   reddit:               { label: 'Reddit',     color: '#fb923c', icon: 'R',   charLimit: 10000 },
@@ -55,9 +62,6 @@ export const PROVIDERS: Record<string, ProviderMeta> = {
   medium:               { label: 'Medium',     color: '#22c55e', icon: 'MD',  charLimit: 65536 },
   wordpress:            { label: 'WordPress',  color: '#60a5fa', icon: 'WP',  charLimit: 65536 },
   hashnode:             { label: 'Hashnode',   color: '#60a5fa', icon: 'HN',  charLimit: 65536 },
-  lemmy:                { label: 'Lemmy',      color: '#f97316', icon: 'LE',  charLimit: 10000 },
-  vk:                   { label: 'VK',         color: '#60a5fa', icon: 'VK',  charLimit: 65536 },
-  kick:                 { label: 'Kick',       color: '#53fc18', icon: 'KI',  charLimit: 65536 },
   skool:                { label: 'Skool',      color: '#facc15', icon: 'SK',  charLimit: 65536 },
   gmail:                { label: 'Gmail',      color: '#ea4335', icon: 'GM',  charLimit: 65536 },
   drive:                { label: 'Drive',      color: '#1fa463', icon: 'DR',  charLimit: 65536 },

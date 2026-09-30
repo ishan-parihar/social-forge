@@ -313,9 +313,17 @@ pub struct ProviderStatus {
     pub has_credentials: bool,
     pub editor_type: String,
     pub redirect_uri: String,
+    /// Support tier: `tier-1` (depth), `tier-2` (publish-maintained),
+    /// `tier-3` (archive — only present here when ENABLE_ARCHIVE_PROVIDERS
+    /// is set). See `docs/planning/PLAN_PARITY_DEPTH_SINGLEUSER_v25.md` §1.
+    pub tier: &'static str,
 }
 
 /// GET /api/providers — list all providers with config status
+///
+/// Tier-3 (archive) providers are absent unless the operator sets
+/// `ENABLE_ARCHIVE_PROVIDERS`, so the default response is the 12 Tier-1 +
+/// 14 Tier-2 surface.
 pub async fn list_providers(
     State(state): State<AppState>,
     _auth: AuthenticatedUser,
@@ -337,6 +345,7 @@ pub async fn list_providers(
             } else {
                 "N/A (non-OAuth)".into()
             },
+            tier: state.providers.tier(id).as_str(),
         });
     }
     statuses.sort_by(|a, b| a.identifier.cmp(&b.identifier));
@@ -981,9 +990,10 @@ pub struct ConnectApiKeyResponse {
 
 /// POST /api/integrations/connect/api-key — connect a provider using API key
 ///
-/// For providers like Lemmy that use per-user API keys + instance URLs.
-/// Validates the API key by calling the provider's pages() method,
-/// then stores the credentials as JSON in the integration record.
+/// For API-key providers (medium, devto, hashnode, and any self-hosted
+/// instance reached via `instance_url`). Validates the API key by calling the
+/// provider's pages() method, then stores the credentials as JSON in the
+/// integration record.
 pub async fn connect_api_key(
     State(state): State<AppState>,
     auth: AuthenticatedUser,
@@ -1081,9 +1091,11 @@ pub struct ConnectWeb3Response {
 
 /// POST /api/integrations/connect/web3 — connect a Web3 provider
 ///
-/// For providers like Farcaster and Nostr that use wallet/npub addresses.
-/// Accepts { provider, address, label }, validates via exchange_code,
-/// then stores the address as the access_token.
+/// For providers that use wallet addresses. Farcaster is the only one left,
+/// and it is Tier-3 (archive) — the lookup below fails unless the server
+/// runs with `ENABLE_ARCHIVE_PROVIDERS` set. Accepts
+/// { provider, address, label }, validates via exchange_code, then stores
+/// the address as the access_token.
 pub async fn connect_web3(
     State(state): State<AppState>,
     auth: AuthenticatedUser,
