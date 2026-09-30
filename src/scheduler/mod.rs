@@ -28,6 +28,15 @@ const DUE_POSTS_LIMIT: i64 = 50;
 /// How far ahead to consider a token "expired" and refresh preemptively
 const TOKEN_REFRESH_BUFFER_SECS: i64 = 300; // 5 minutes
 
+/// Grace window past `scheduled_at` before a post counts as a posting
+/// gap. 3 hours: long enough to absorb a platform outage or an open
+/// circuit breaker, short enough that the operator finds out the same day.
+const POSTING_GAP_GRACE_SECS: i64 = 3 * 60 * 60;
+
+/// Max posts reported per posting-gap check — bounds the alert burst
+/// when a whole backlog is late.
+const POSTING_GAP_LIMIT: i64 = 20;
+
 /// Start the scheduler background task.
 /// Pass a watch::Receiver that resolves to `true` to trigger graceful shutdown.
 pub fn start_scheduler(
@@ -79,6 +88,14 @@ pub fn start_scheduler(
                     // (single statement, indexed by state).
                     if let Err(e) = queries::reclaim_stuck_publishing(&db1, 300).await {
                         tracing::warn!("reclaim_stuck_publishing failed: {e}");
+                    }
+                    // Posting-gap detection: alert on posts the scheduler
+                    // never got out the door. Runs on the existing tick —
+                    // no separate task — and the query is bounded by
+                    // POSTING_GAP_LIMIT and deduped against unread alerts,
+                    // so a 30s cadence is cheap.
+                    if let Err(e) = check_posting_gaps(&db1, &broadcaster).await {
+                        tracing::warn!("check_posting_gaps failed: {e}");
                     }
                     if let Err(e) = process_due_posts(&db1, &providers1, &broadcaster, token_key).await {
                         tracing::error!("Scheduler tick error: {e}");
@@ -1303,6 +1320,95 @@ async fn mark_post_error(db: &PgPool, post_id: uuid::Uuid, error: &str) {
     }
 }
 
+// ── Posting-Gap Detection ─────────────────────────────────────
+
+/// How long a post scheduled at `scheduled_at` is still on time, measured
+/// at `now`. `Some(overdue)` once it is past the
+/// [`POSTING_GAP_GRACE_SECS`] window, `None` while it is still within it.
+///
+/// Pure and `now`-parameterised so the grace boundary is unit-testable
+/// with fabricated timestamps instead of a live database.
+pub fn posting_gap_overdue(
+    scheduled_at: chrono::DateTime<Utc>,
+    now: chrono::DateTime<Utc>,
+) -> Option<chrono::Duration> {
+    let overdue = now - scheduled_at;
+    (overdue > chrono::Duration::seconds(POSTING_GAP_GRACE_SECS)).then_some(overdue)
+}
+
+/// Render an overdue duration as a compact "3h 12m" label for the log
+/// line and notification body.
+fn format_overdue(overdue: chrono::Duration) -> String {
+    let mins = overdue.num_minutes();
+    if mins < 60 {
+        format!("{mins}m")
+    } else {
+        format!("{}h {}m", mins / 60, mins % 60)
+    }
+}
+
+/// One posting-gap check: find posts still `queued`/`publishing` past
+/// their schedule and surface each as an in-app notification plus a warn
+/// log. The Postiz `missing.post.workflow` equivalent, minus the email
+/// transport.
+///
+/// Read-only — it never advances the state machine, so a stuck post is
+/// still the operator's to re-queue or cancel.
+async fn check_posting_gaps(
+    db: &PgPool,
+    broadcast: &Broadcaster,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let stuck = queries::find_stuck_posts(db, POSTING_GAP_GRACE_SECS, POSTING_GAP_LIMIT).await?;
+    if stuck.is_empty() {
+        return Ok(());
+    }
+
+    let now = Utc::now();
+    for post in &stuck {
+        // The query already filtered on the grace window; this re-check
+        // is what the unit test pins, and it keeps the boundary in one
+        // place if the SQL is ever loosened.
+        let Some(overdue) = posting_gap_overdue(post.scheduled_at, now) else {
+            continue;
+        };
+        let overdue_label = format_overdue(overdue);
+        let preview = post.content_preview.trim();
+        let preview = if preview.is_empty() { "(no text)" } else { preview };
+
+        tracing::warn!(
+            "Posting gap: post {} for user {} is still '{}' {} past its scheduled_at — \"{}\"",
+            post.id, post.user_id, post.state, overdue_label, preview
+        );
+
+        let title = format!("Post not published ({overdue_label} late)");
+        let body = format!(
+            "Still '{}' {} after its scheduled time. Scheduled {}. \"{}\"",
+            post.state,
+            overdue_label,
+            post.scheduled_at.to_rfc3339(),
+            preview
+        );
+        if let Err(e) = crate::services::notifications::NotificationService::create_via(
+            db,
+            broadcast,
+            post.user_id,
+            &title,
+            &body,
+            "post_publishing_gap",
+            Some("post"),
+            Some(&post.id.to_string()),
+        )
+        .await
+        {
+            // A failed alert must not stall the rest of the batch — the
+            // next tick retries it.
+            tracing::warn!("Failed to raise posting-gap notification for post {}: {e}", post.id);
+        }
+    }
+
+    Ok(())
+}
+
 // ── Posting Streak ───────────────────────────────────────────
 
 /// Update the user's posting streak when a post is published.
@@ -1507,5 +1613,70 @@ async fn refresh_cache_cycle(db: &PgPool, providers: &ProviderRegistry, token_ke
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::{Duration, TimeZone};
+
+    /// Fixed reference instant so every boundary assertion is exact
+    /// rather than dependent on when the test runs.
+    fn base() -> chrono::DateTime<Utc> {
+        Utc.with_ymd_and_hms(2026, 9, 30, 12, 0, 0).unwrap()
+    }
+
+    #[test]
+    fn post_lagging_more_than_three_hours_is_a_gap() {
+        let now = base();
+        let scheduled_at = now - Duration::seconds(POSTING_GAP_GRACE_SECS + 60);
+        assert!(posting_gap_overdue(scheduled_at, now).is_some());
+    }
+
+    #[test]
+    fn post_lagging_just_under_three_hours_is_not_a_gap() {
+        let now = base();
+        let scheduled_at = now - Duration::seconds(POSTING_GAP_GRACE_SECS - 60);
+        assert!(posting_gap_overdue(scheduled_at, now).is_none());
+    }
+
+    #[test]
+    fn post_exactly_at_the_grace_boundary_is_not_a_gap() {
+        let now = base();
+        let scheduled_at = now - Duration::seconds(POSTING_GAP_GRACE_SECS);
+        assert!(posting_gap_overdue(scheduled_at, now).is_none());
+    }
+
+    #[test]
+    fn post_scheduled_in_the_future_is_not_a_gap() {
+        let now = base();
+        let scheduled_at = now + Duration::hours(2);
+        assert!(posting_gap_overdue(scheduled_at, now).is_none());
+    }
+
+    #[test]
+    fn overdue_duration_is_returned_for_a_gap() {
+        let now = base();
+        let scheduled_at = now - Duration::seconds(POSTING_GAP_GRACE_SECS + 720);
+        assert_eq!(
+            posting_gap_overdue(scheduled_at, now),
+            Some(Duration::seconds(POSTING_GAP_GRACE_SECS + 720))
+        );
+    }
+
+    #[test]
+    fn grace_window_is_three_hours() {
+        assert_eq!(POSTING_GAP_GRACE_SECS, 10_800);
+    }
+
+    #[test]
+    fn overdue_label_renders_hours_and_minutes() {
+        assert_eq!(format_overdue(Duration::minutes(192)), "3h 12m");
+    }
+
+    #[test]
+    fn overdue_label_renders_minutes_under_an_hour() {
+        assert_eq!(format_overdue(Duration::minutes(47)), "47m");
     }
 }

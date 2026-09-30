@@ -1152,6 +1152,64 @@ pub async fn reclaim_stuck_publishing(
     Ok(result.rows_affected())
 }
 
+/// A post the scheduler failed to publish on time (the "posting gap"
+/// detector's row). Deliberately narrower than [`PostWithIntegration`]
+/// — the alert path only needs enough to identify the post and say how
+/// late it is.
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct StuckPost {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    /// `state` cast to text in SQL: the alert path formats it into a log
+    /// line, and a plain `String` avoids decoding the `post_state` enum.
+    pub state: String,
+    /// First 120 chars of the post body, for the notification body.
+    pub content_preview: String,
+    pub scheduled_at: DateTime<Utc>,
+}
+
+/// Find posts still sitting in `queued`/`publishing` more than
+/// `grace_secs` past their `scheduled_at`.
+///
+/// Read-only: this reports a gap, it does not touch the state machine.
+/// Soft-deleted posts (migration 027) are excluded — the operator
+/// cancelled those, so a late slot is not a gap. Posts that already have
+/// an *unread* `post_publishing_gap` notification are also excluded, so a
+/// post that stays stuck surfaces once (and again after the operator
+/// reads the alert) instead of on every scheduler tick.
+/// Runtime `sqlx::query_as` (not the `query_as!` macro) so the build
+/// needs no live DB or `.sqlx` cache entry.
+pub async fn find_stuck_posts(
+    pool: &PgPool,
+    grace_secs: i64,
+    limit: i64,
+) -> Result<Vec<StuckPost>, sqlx::Error> {
+    sqlx::query_as::<_, StuckPost>(
+        r#"SELECT p.id, p.user_id,
+                  p.state::text AS state,
+                  LEFT(p.content, 120) AS content_preview,
+                  p.scheduled_at
+           FROM posts p
+           WHERE p.state IN ('queued', 'publishing')
+             AND p.deleted_at IS NULL
+             AND p.scheduled_at IS NOT NULL
+             AND p.scheduled_at < NOW() - make_interval(secs => $1::double precision)
+             AND NOT EXISTS (
+                 SELECT 1 FROM notifications n
+                 WHERE n.user_id = p.user_id
+                   AND n.notification_type = 'post_publishing_gap'
+                   AND n.reference_id = p.id::text
+                   AND n.is_read = false
+             )
+           ORDER BY p.scheduled_at ASC
+           LIMIT $2"#,
+    )
+    .bind(grace_secs as f64)
+    .bind(limit)
+    .fetch_all(pool)
+    .await
+}
+
 /// Record a single publish attempt in the `publish_attempts` audit
 /// table. Called by the scheduler on every publish call (success or
 /// failure) so the operator has a full history.
