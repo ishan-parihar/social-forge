@@ -943,6 +943,14 @@ impl SocialProvider for RedditProvider {
         !self.client_id.is_empty() && !self.client_secret.is_empty()
     }
 
+    /// Reddit OAuth tokens expire after 1 hour — by far the shortest-lived
+    /// Tier-1 token, so a missed refresh is not a delay but an outage.
+    /// Cookie-authenticated integrations store no refresh token and are
+    /// skipped by the scheduler's `refresh_token IS NOT NULL` filter.
+    fn needs_cron_refresh(&self) -> bool {
+        true
+    }
+
     async fn generate_auth_url(
         &self,
         state: &str,

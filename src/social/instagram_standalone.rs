@@ -267,15 +267,19 @@ impl SocialProvider for InstagramStandaloneProvider {
             .send()
             .await?;
 
+        let container_status = resp.status();
         let json: serde_json::Value = resp.json().await?;
 
         if let Some(err) = json["error"].as_object() {
-            return Err(ProviderError::Api(
-                err["message"]
-                    .as_str()
-                    .unwrap_or("Container creation failed")
-                    .to_string(),
-            ));
+            let msg = err["message"]
+                .as_str()
+                .unwrap_or("Container creation failed");
+            let code = err["code"].as_u64().unwrap_or(0);
+            let raw = format!("Instagram container creation failed (code {code}): {msg}");
+            return Err(ProviderError::Api(friendly_error(
+                self.map_error(msg, container_status.as_u16()),
+                &raw,
+            )));
         }
 
         let container_id = json["id"]
@@ -298,15 +302,17 @@ impl SocialProvider for InstagramStandaloneProvider {
             .send()
             .await?;
 
+        let pub_status = pub_resp.status();
         let pub_json: serde_json::Value = pub_resp.json().await?;
 
         if let Some(err) = pub_json["error"].as_object() {
-            return Err(ProviderError::Api(
-                err["message"]
-                    .as_str()
-                    .unwrap_or("Publish failed")
-                    .to_string(),
-            ));
+            let msg = err["message"].as_str().unwrap_or("Publish failed");
+            let code = err["code"].as_u64().unwrap_or(0);
+            let raw = format!("Instagram publish failed (code {code}): {msg}");
+            return Err(ProviderError::Api(friendly_error(
+                self.map_error(msg, pub_status.as_u16()),
+                &raw,
+            )));
         }
 
         let media_id = pub_json["id"]
@@ -334,6 +340,47 @@ impl SocialProvider for InstagramStandaloneProvider {
 
     /// Account-level insights over a day range. Feeds the dashboard via the
     /// shared analytics cache refresher.
+    /// Instagram-standalone-specific user-facing error copy (v25 §2 row 9).
+    ///
+    /// Unlike the Facebook-login Instagram provider, this one *does* have a
+    /// refresh endpoint (`ig_refresh_token`), so the auth-expired copy points
+    /// at the automatic refresh rather than at a reconnect.
+    fn map_error(&self, body: &str, status: u16) -> Option<String> {
+        match classify_error(body, status) {
+            Some(ErrorKind::RateLimited) => Some(
+                "Instagram rate limit hit. The Instagram Graph API throttles container \
+                 creation — Forge retries with backoff automatically."
+                    .into(),
+            ),
+            Some(ErrorKind::MediaRejected) => Some(
+                "Instagram rejected the media. Images must be JPEG under 8 MB with a public \
+                 URL; videos must be MP4 under 1 GB and 10 minutes long."
+                    .into(),
+            ),
+            Some(ErrorKind::AuthExpired) => Some(
+                "Instagram token expired or was revoked. Reconnect the account — Instagram \
+                 standalone short-lived tokens last 24 hours and refresh only once per token."
+                    .into(),
+            ),
+            Some(ErrorKind::Forbidden) => Some(
+                "Instagram denied this request (HTTP 403). The token needs the instagram_basic \
+                 scope and the account must be a Business or Creator account."
+                    .into(),
+            ),
+            Some(ErrorKind::NotFound) => Some(
+                "Instagram account or media not found. Reconnect the account — it may have \
+                 been switched to a personal profile."
+                    .into(),
+            ),
+            Some(ErrorKind::InvalidRequest) => Some(
+                "Instagram rejected the request as invalid. Check the caption length (2200 \
+                 chars) and that exactly one media item is attached."
+                    .into(),
+            ),
+            _ => None,
+        }
+    }
+
     async fn analytics(
         &self,
         access_token: &str,
@@ -828,5 +875,61 @@ mod tests {
     fn publish_should_accept_10_images() {
         let provider = InstagramStandaloneProvider::new(&test_config());
         assert!(provider.validate_media(&post_with_images(10)).is_ok());
+    }
+
+    // ── B4: map_error fixtures ──────────────────────────────
+
+    #[test]
+    fn map_error_explains_rate_limit_on_429() {
+        let p = InstagramStandaloneProvider::new(&test_config());
+        let msg = p.map_error("Too many requests", 429).unwrap();
+        assert!(msg.contains("rate limit"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_rejected_media() {
+        let p = InstagramStandaloneProvider::new(&test_config());
+        let msg = p.map_error("The video upload was rejected", 422).unwrap();
+        assert!(msg.contains("8 MB"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_expired_token_on_401() {
+        let p = InstagramStandaloneProvider::new(&test_config());
+        let msg = p.map_error("", 401).unwrap();
+        assert!(msg.contains("24 hours"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_missing_scope_on_403() {
+        let p = InstagramStandaloneProvider::new(&test_config());
+        let msg = p.map_error("", 403).unwrap();
+        assert!(msg.contains("instagram_basic"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_missing_account_on_404() {
+        let p = InstagramStandaloneProvider::new(&test_config());
+        let msg = p.map_error("", 404).unwrap();
+        assert!(msg.contains("not found"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_invalid_request_on_400() {
+        let p = InstagramStandaloneProvider::new(&test_config());
+        let msg = p.map_error("", 400).unwrap();
+        assert!(msg.contains("2200"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_returns_none_for_server_error() {
+        let p = InstagramStandaloneProvider::new(&test_config());
+        assert!(p.map_error("Internal Server Error", 503).is_none());
+    }
+
+    #[test]
+    fn instagram_standalone_requests_cron_refresh() {
+        let p = InstagramStandaloneProvider::new(&test_config());
+        assert!(p.needs_cron_refresh());
     }
 }

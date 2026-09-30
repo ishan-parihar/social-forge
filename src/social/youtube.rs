@@ -423,6 +423,84 @@ impl SocialProvider for YoutubeProvider {
         true
     }
 
+    /// Google access tokens live only ~1 hour, and YouTube uploads are the
+    /// only way to publish on this provider — an expired token silently kills
+    /// every scheduled video, so refresh ahead of the 24h scheduler window.
+    fn needs_cron_refresh(&self) -> bool {
+        true
+    }
+
+    /// YouTube-specific user-facing error copy (v25 §2 row 9).
+    ///
+    /// The two Google quota arms come first: `classify_error` cannot tell
+    /// "you used your daily upload quota" from "your access token died", and
+    /// the fix for each is completely different. Google spells the reason
+    /// token two ways across `error.reason` and `error.message`, so match
+    /// case-insensitively on both the camelCase and spaced forms.
+    fn map_error(&self, body: &str, status: u16) -> Option<String> {
+        let lower = body.to_ascii_lowercase();
+        if lower.contains("uploadlimitexceeded") || lower.contains("daily upload limit") {
+            return Some(
+                "YouTube daily upload quota reached. The limit resets 24 hours after your \
+                 first upload — schedule the video for tomorrow or use a project that does \
+                 not count against the daily cap."
+                    .into(),
+            );
+        }
+        if lower.contains("quotaexceeded")
+            || lower.contains("quota exceeded")
+            || lower.contains("dailylimitexceeded")
+            || lower.contains("daily limit")
+        {
+            return Some(
+                "YouTube API quota exceeded. The default daily allowance is 10 000 units and \
+                 a video upload costs 1600 — wait for the daily reset or request more quota."
+                    .into(),
+            );
+        }
+        if lower.contains("forbidden") {
+            return Some(
+                "YouTube denied this request. The OAuth client needs the \
+                 youtube.upload scope and the channel must be linked to a YouTube Brand Account \
+                 that accepts uploads."
+                    .into(),
+            );
+        }
+        match classify_error(body, status) {
+            Some(ErrorKind::RateLimited) => Some(
+                "YouTube rate limit hit (HTTP 429). Back off and retry — Forge already retries \
+                 with backoff, so this resolves itself on the next attempt."
+                    .into(),
+            ),
+            Some(ErrorKind::MediaRejected) => Some(
+                "YouTube rejected the video. MP4/MOV up to 256 GB or 12 hours are accepted, \
+                 but the file must be fetched over HTTP and pass YouTube's Content ID check."
+                    .into(),
+            ),
+            Some(ErrorKind::AuthExpired) => Some(
+                "Google access token expired or was revoked. YouTube tokens last ~1 hour and \
+                 Forge refreshes them automatically — reconnect the channel if refresh fails."
+                    .into(),
+            ),
+            Some(ErrorKind::Forbidden) => Some(
+                "YouTube denied this request (HTTP 403). The token is missing the \
+                 youtube.upload scope, or the channel is not set up to accept uploads."
+                    .into(),
+            ),
+            Some(ErrorKind::NotFound) => Some(
+                "YouTube video or channel not found — it may be private, deleted, or the \
+                 integration points at a channel you no longer own."
+                    .into(),
+            ),
+            Some(ErrorKind::InvalidRequest) => Some(
+                "YouTube rejected the request as invalid. Check the title (100 chars) and \
+                 description (5000 chars) limits, and that a video file is attached."
+                    .into(),
+            ),
+            _ => None,
+        }
+    }
+
     async fn generate_auth_url(
         &self,
         state: &str,
@@ -845,9 +923,19 @@ impl SocialProvider for YoutubeProvider {
                 init_resp.json().await.unwrap_or_default();
             let msg = err_body["error"]["message"]
                 .as_str()
-                .unwrap_or("Failed to initialize resumable upload")
-                .to_string();
-            return Err(ProviderError::Api(msg));
+                .unwrap_or("Failed to initialize resumable upload");
+            let reason = err_body["error"]["errors"]
+                .as_array()
+                .and_then(|e| e.first())
+                .and_then(|e| e["reason"].as_str())
+                .unwrap_or_default();
+            let raw = format!(
+                "YouTube resumable upload init failed (HTTP {init_status}, {reason}): {msg}"
+            );
+            return Err(ProviderError::Api(friendly_error(
+                self.map_error(msg, init_status.as_u16()),
+                &raw,
+            )));
         }
 
         let upload_url = init_resp
@@ -883,9 +971,18 @@ impl SocialProvider for YoutubeProvider {
                 upload_resp.json().await.unwrap_or_default();
             let msg = err_body["error"]["message"]
                 .as_str()
-                .unwrap_or("Failed to upload video to YouTube")
-                .to_string();
-            return Err(ProviderError::Api(msg));
+                .unwrap_or("Failed to upload video to YouTube");
+            let reason = err_body["error"]["errors"]
+                .as_array()
+                .and_then(|e| e.first())
+                .and_then(|e| e["reason"].as_str())
+                .unwrap_or_default();
+            let raw =
+                format!("YouTube video upload failed (HTTP {upload_status}, {reason}): {msg}");
+            return Err(ProviderError::Api(friendly_error(
+                self.map_error(msg, upload_status.as_u16()),
+                &raw,
+            )));
         }
 
         let json: serde_json::Value = upload_resp.json().await?;
@@ -1001,5 +1098,88 @@ mod tests {
     fn first_statistics_should_return_none_for_empty_list() {
         let json = serde_json::json!({ "items": [] });
         assert!(YoutubeProvider::first_statistics(&json).is_none());
+    }
+
+    // ── B4: needs_cron_refresh + map_error fixtures ────────
+
+    fn provider() -> YoutubeProvider {
+        YoutubeProvider::new(&crate::social::test_config())
+    }
+
+    #[test]
+    fn youtube_requests_cron_refresh() {
+        assert!(provider().needs_cron_refresh());
+    }
+
+    #[test]
+    fn map_error_explains_upload_limit() {
+        let msg = provider().map_error("The uploadLimitExceeded quota was exceeded", 403).unwrap();
+        assert!(msg.contains("daily upload quota"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_treats_spaced_quota_message_as_quota_not_scope() {
+        // Google writes the same failure two ways: a camelCase `error.reason`
+        // token and a spaced `error.message`. Both must reach the quota arm,
+        // never the missing-scope arm — the fixes are completely different.
+        let msg = provider()
+            .map_error("The daily upload limit has been reached.", 403)
+            .unwrap();
+        assert!(msg.contains("daily upload quota"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_api_quota() {
+        let msg = provider().map_error("Quota exceeded for quota metric", 403).unwrap();
+        assert!(msg.contains("API quota exceeded"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_youtube_forbidden() {
+        let msg = provider()
+            .map_error("The request cannot be completed because you have exceeded the quota for youtube", 403)
+            .unwrap();
+        assert!(msg.contains("youtube.upload"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_rate_limit_on_429() {
+        let msg = provider().map_error("Too many requests", 429).unwrap();
+        assert!(msg.contains("rate limit"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_rejected_media() {
+        let msg = provider().map_error("The video upload was rejected", 422).unwrap();
+        assert!(msg.contains("256 GB"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_expired_token_on_401() {
+        let msg = provider().map_error("", 401).unwrap();
+        assert!(msg.contains("~1 hour"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_missing_upload_scope_on_403() {
+        let msg = provider().map_error("", 403).unwrap();
+        assert!(msg.contains("youtube.upload"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_missing_video_on_404() {
+        let msg = provider().map_error("", 404).unwrap();
+        assert!(msg.contains("not found"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_invalid_request_on_400() {
+        let msg = provider().map_error("", 400).unwrap();
+        assert!(msg.contains("100 chars"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_returns_none_for_server_error() {
+        assert!(provider().map_error("Internal Server Error", 503).is_none());
     }
 }

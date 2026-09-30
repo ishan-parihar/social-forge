@@ -1031,6 +1031,13 @@ impl SocialProvider for XProvider {
         super::validate_media_limits(self.identifier(), post)
     }
 
+    /// X OAuth2 access tokens live ~2 hours. Cookie-authenticated integrations
+    /// store no refresh token, so the scheduler's `refresh_token IS NOT NULL`
+    /// filter leaves them alone and their expiry surfaces as `refresh_needed`.
+    fn needs_cron_refresh(&self) -> bool {
+        true
+    }
+
     async fn generate_auth_url(
         &self,
         state: &str,

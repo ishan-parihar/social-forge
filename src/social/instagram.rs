@@ -228,11 +228,19 @@ impl SocialProvider for InstagramProvider {
                 .send()
                 .await?;
 
+            let carousel_status = carousel_resp.status();
             let carousel_json: serde_json::Value = carousel_resp.json().await?;
 
             if let Some(err) = carousel_json["error"].as_object() {
-                let msg = err["message"].as_str().unwrap_or("Carousel creation failed");
-                return Err(ProviderError::Api(msg.to_string()));
+                let msg = err["message"]
+                    .as_str()
+                    .unwrap_or("Carousel creation failed");
+                let code = err["code"].as_u64().unwrap_or(0);
+                let raw = format!("Instagram carousel creation failed (code {code}): {msg}");
+                return Err(ProviderError::Api(friendly_error(
+                    self.map_error(msg, carousel_status.as_u16()),
+                    &raw,
+                )));
             }
 
             let carousel_id = carousel_json["id"]
@@ -552,6 +560,46 @@ impl SocialProvider for InstagramProvider {
             }
         }
         Ok(posts)
+    }
+
+    /// Instagram-specific user-facing error copy (v25 §2 row 9).
+    fn map_error(&self, body: &str, status: u16) -> Option<String> {
+        match classify_error(body, status) {
+            Some(ErrorKind::RateLimited) => Some(
+                "Instagram rate limit hit. The Graph API throttles content publishing per \
+                 Business account — Forge retries with backoff automatically."
+                    .into(),
+            ),
+            Some(ErrorKind::MediaRejected) => Some(
+                "Instagram rejected the media. Carousels accept 2-10 images (or one video) \
+                 in JPEG/PNG, each under 8 MB and 1920px on the long edge, fetched from a \
+                 publicly reachable URL."
+                    .into(),
+            ),
+            Some(ErrorKind::AuthExpired) => Some(
+                "Instagram access token expired or was revoked. Facebook-login tokens last \
+                 ~60 days and cannot be refreshed — reconnect the account."
+                    .into(),
+            ),
+            Some(ErrorKind::Forbidden) => Some(
+                "Instagram denied this request (HTTP 403). The account is probably not a \
+                 Business or Creator account, is not linked to a Facebook Page, or the app \
+                 is still pending App Review."
+                    .into(),
+            ),
+            Some(ErrorKind::NotFound) => Some(
+                "Instagram media or account not found. Reconnect the account — it may have \
+                 been switched to a personal (non-Business) profile."
+                    .into(),
+            ),
+            Some(ErrorKind::InvalidRequest) => Some(
+                "Instagram rejected the request as invalid. Check the caption length (2200 \
+                 chars, 2200 more for the first comment) and that the media type matches \
+                 the container flow."
+                    .into(),
+            ),
+            _ => None,
+        }
     }
 
     async fn get_post_engagement(
@@ -1513,5 +1561,62 @@ mod tests {
     fn publish_should_accept_10_images() {
         let provider = InstagramProvider::new(&test_config());
         assert!(provider.validate_media(&post_with_images(10)).is_ok());
+    }
+
+    // ── B4: map_error fixtures ──────────────────────────────
+
+    #[test]
+    fn map_error_explains_rate_limit_on_429() {
+        let p = InstagramProvider::new(&test_config());
+        let msg = p.map_error("Too many requests", 429).unwrap();
+        assert!(msg.contains("rate limit"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_rejected_media() {
+        let p = InstagramProvider::new(&test_config());
+        let msg = p.map_error("The image upload was rejected", 422).unwrap();
+        assert!(msg.contains("2-10 images"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_expired_token_on_401() {
+        let p = InstagramProvider::new(&test_config());
+        let msg = p.map_error("", 401).unwrap();
+        assert!(msg.contains("cannot be refreshed"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_non_business_account_on_403() {
+        let p = InstagramProvider::new(&test_config());
+        let msg = p.map_error("", 403).unwrap();
+        assert!(msg.contains("Business or Creator"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_missing_account_on_404() {
+        let p = InstagramProvider::new(&test_config());
+        let msg = p.map_error("", 404).unwrap();
+        assert!(msg.contains("not found"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_invalid_request_on_400() {
+        let p = InstagramProvider::new(&test_config());
+        let msg = p.map_error("", 400).unwrap();
+        assert!(msg.contains("2200"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_returns_none_for_server_error() {
+        let p = InstagramProvider::new(&test_config());
+        assert!(p.map_error("Internal Server Error", 503).is_none());
+    }
+
+    #[test]
+    fn instagram_does_not_request_cron_refresh() {
+        // Facebook-login tokens have no refresh endpoint; reconnect is the fix.
+        let p = InstagramProvider::new(&test_config());
+        assert!(!p.needs_cron_refresh());
     }
 }

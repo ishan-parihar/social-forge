@@ -214,12 +214,14 @@ impl SocialProvider for FacebookProvider {
         } else if status == 401 {
             Err(ProviderError::TokenExpired)
         } else {
-            Err(ProviderError::Api(
-                json["error"]["message"]
-                    .as_str()
-                    .unwrap_or("Facebook publish failed")
-                    .to_string(),
-            ))
+            let msg = json["error"]["message"]
+                .as_str()
+                .unwrap_or("Facebook publish failed");
+            let raw = format!("Facebook publish failed (HTTP {status}): {msg}");
+            Err(ProviderError::Api(friendly_error(
+                self.map_error(msg, status.as_u16()),
+                &raw,
+            )))
         }
     }
 
@@ -320,6 +322,65 @@ impl SocialProvider for FacebookProvider {
 
         result.sort_by(|a, b| a.name.cmp(&b.name));
         Ok(result)
+    }
+
+    /// Facebook-specific user-facing error copy (v25 §2 row 9).
+    ///
+    /// Facebook does not flag duplicate submissions, so that arm never fires
+    /// here — it stays in the match because `classify_error` shares one
+    /// heuristic set across providers and future Graph edits may surface it.
+    fn map_error(&self, body: &str, status: u16) -> Option<String> {
+        // Page-scoped signals first: both only appear when the Page token lost
+        // its Page scope, which is a different fix from a plain expired token.
+        if body.contains("Invalid OAuth access token") {
+            return Some(
+                "Facebook Page token is no longer valid. Reconnect the Page on the \
+                 Channels screen — Page tokens cannot be refreshed, they must be reissued."
+                    .into(),
+            );
+        }
+        if body.contains("Unsupported get request") || body.contains("Unsupported post request") {
+            return Some(
+                "Facebook rejected the request shape. Page posts need a Page-scoped token \
+                 with publish_to_groups — personal profiles cannot post through this API."
+                    .into(),
+            );
+        }
+        match classify_error(body, status) {
+            Some(ErrorKind::RateLimited) => Some(
+                "Facebook rate limit hit. Page publishing is throttled per Page — Forge retries \
+                 with backoff, or lower the publish rate for this Page."
+                    .into(),
+            ),
+            Some(ErrorKind::MediaRejected) => Some(
+                "Facebook rejected the attached media. Photos and videos must come from a \
+                 publicly fetchable URL and pass Facebook's copyright scan."
+                    .into(),
+            ),
+            Some(ErrorKind::AuthExpired) => Some(
+                "Facebook access token expired or was revoked. Page tokens last ~60 days and \
+                 have no refresh endpoint — reconnect the Page to continue."
+                    .into(),
+            ),
+            Some(ErrorKind::Forbidden) => Some(
+                "Facebook denied this request (HTTP 403). The actor usually lost Page access, \
+                 the app is pending App Review, or the Page hit its posting limit."
+                    .into(),
+            ),
+            Some(ErrorKind::NotFound) => Some(
+                "Facebook Page or post not found. Re-pick the Page on the Channels screen if \
+                 it was renamed, merged, or the integration points at a deleted Page."
+                    .into(),
+            ),
+            Some(ErrorKind::InvalidRequest) => Some(
+                "Facebook rejected the request as invalid. Check the post text length and that \
+                 the Page ID in the integration is still correct."
+                    .into(),
+            ),
+            // classify_error returns Duplicate for a body mentioning "already
+            // exists"; Facebook has no such rule, so keep the raw body.
+            _ => None,
+        }
     }
 
     async fn analytics(
@@ -1144,6 +1205,10 @@ mod tests {
     use super::*;
     use crate::social::test_config;
 
+    fn provider() -> FacebookProvider {
+        FacebookProvider::new(&test_config())
+    }
+
     fn post_with_images(n: usize) -> PostContent {
         PostContent {
             content: "hello".into(),
@@ -1240,5 +1305,70 @@ mod tests {
         assert_eq!(e.likes, 42);
         assert_eq!(e.comments, 12);
         assert_eq!(e.shares, 5);
+    }
+
+    // ── B4: map_error fixtures ──────────────────────────────
+
+    #[test]
+    fn map_error_keeps_invalid_oauth_token_copy() {
+        assert_eq!(
+            provider().map_error("Invalid OAuth access token.", 400).unwrap(),
+            "Facebook Page token is no longer valid. Reconnect the Page on the Channels \
+             screen — Page tokens cannot be refreshed, they must be reissued."
+        );
+    }
+
+    #[test]
+    fn map_error_explains_unsupported_post_request() {
+        let msg = provider().map_error("Unsupported post request.", 400).unwrap();
+        assert!(msg.contains("Page-scoped token"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_rate_limit_on_429() {
+        let msg = provider().map_error("Too many requests", 429).unwrap();
+        assert!(msg.contains("rate limit"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_rejected_media() {
+        let msg = provider().map_error("The video upload was rejected", 422).unwrap();
+        assert!(msg.contains("media"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_expired_token_on_401() {
+        let msg = provider().map_error("", 401).unwrap();
+        assert!(msg.contains("no refresh endpoint"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_forbidden_on_403() {
+        let msg = provider().map_error("", 403).unwrap();
+        assert!(msg.contains("App Review"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_missing_page_on_404() {
+        let msg = provider().map_error("", 404).unwrap();
+        assert!(msg.contains("Channels screen"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_invalid_request_on_400() {
+        let msg = provider().map_error("", 400).unwrap();
+        assert!(msg.contains("invalid"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_returns_none_for_server_error() {
+        assert!(provider().map_error("Internal Server Error", 503).is_none());
+    }
+
+    #[test]
+    fn facebook_does_not_request_cron_refresh() {
+        // Page tokens have no refresh endpoint — refresh_token() errors by
+        // design, so the scheduler must never try to refresh them.
+        assert!(!provider().needs_cron_refresh());
     }
 }

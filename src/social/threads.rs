@@ -273,10 +273,19 @@ impl SocialProvider for ThreadsProvider {
             .send()
             .await?;
 
+        let create_status = resp.status();
         let json: serde_json::Value = resp.json().await?;
         let creation_id = json["id"]
             .as_str()
-            .ok_or_else(|| ProviderError::Api(format!("No creation ID: {json:?}")))?
+            .ok_or_else(|| {
+                let msg = json["error"]["message"].as_str().unwrap_or("No creation ID");
+                let code = json["error"]["code"].as_u64().unwrap_or(0);
+                let raw = format!("Threads create failed (HTTP {create_status}, code {code}): {msg}");
+                ProviderError::Api(friendly_error(
+                    self.map_error(msg, create_status.as_u16()),
+                    &raw,
+                ))
+            })?
             .to_string();
 
         // Publish
@@ -290,10 +299,23 @@ impl SocialProvider for ThreadsProvider {
             .send()
             .await?;
 
+        let pub_status = pub_resp.status();
         let pub_json: serde_json::Value = pub_resp.json().await?;
         let thread_id = pub_json["id"]
             .as_str()
-            .ok_or_else(|| ProviderError::Api(format!("Publish failed: {pub_json:?}")))?
+            .ok_or_else(|| {
+                let msg = pub_json["error"]["message"]
+                    .as_str()
+                    .unwrap_or("Publish failed");
+                let code = pub_json["error"]["code"].as_u64().unwrap_or(0);
+                let raw = format!(
+                    "Threads publish failed (HTTP {pub_status}, code {code}): {msg}"
+                );
+                ProviderError::Api(friendly_error(
+                    self.map_error(msg, pub_status.as_u16()),
+                    &raw,
+                ))
+            })?
             .to_string();
 
         let permalink = pub_json["permalink"]
@@ -366,13 +388,56 @@ impl SocialProvider for ThreadsProvider {
         Ok(Some(json))
     }
 
-    fn map_error(&self, body: &str, _status: u16) -> Option<String> {
+    /// Threads-specific user-facing error copy (v25 §2 row 9).
+    ///
+    /// The two hand-written arms stay ahead of `classify_error` because they
+    /// carry the only actionable detail Threads returns: a stale token and the
+    /// exact character cap.
+    fn map_error(&self, body: &str, status: u16) -> Option<String> {
         if body.contains("Error validating access token") {
-            Some("Threads access token expired".into())
-        } else if body.contains("text must be at most 500 characters") {
-            Some("Post text exceeds 500 characters limit".into())
-        } else {
-            None
+            return Some(
+                "Threads access token expired. Reconnect Threads on the Channels screen — \
+                 Threads tokens are short-lived and Forge refreshes them automatically until \
+                 the refresh itself is rejected."
+                    .into(),
+            );
+        }
+        if body.contains("text must be at most 500 characters") {
+            return Some("Post text exceeds the 500-character Threads limit".into());
+        }
+        match classify_error(body, status) {
+            Some(ErrorKind::RateLimited) => Some(
+                "Threads rate limit hit. Threads throttles publishing per account — Forge \
+                 retries with backoff automatically."
+                    .into(),
+            ),
+            Some(ErrorKind::MediaRejected) => Some(
+                "Threads rejected the media. Threads posts accept up to 20 images or one \
+                 video, each from a publicly fetchable URL."
+                    .into(),
+            ),
+            Some(ErrorKind::AuthExpired) => Some(
+                "Threads access token expired or was revoked. Reconnect Threads on the \
+                 Channels screen."
+                    .into(),
+            ),
+            Some(ErrorKind::Forbidden) => Some(
+                "Threads denied this request (HTTP 403). The token is missing \
+                 threads_content_publish, or the Threads profile is no longer linked to the \
+                 Instagram account that authorised it."
+                    .into(),
+            ),
+            Some(ErrorKind::NotFound) => Some(
+                "Threads post or profile not found — it may have been deleted, or the \
+                 integration points at a profile you no longer own."
+                    .into(),
+            ),
+            Some(ErrorKind::InvalidRequest) => Some(
+                "Threads rejected the request as invalid. Check the text length (500 chars) \
+                 and that reply threads carry a valid in_reply_to id."
+                    .into(),
+            ),
+            _ => None,
         }
     }
 
@@ -797,6 +862,73 @@ mod tests {
     fn publish_should_map_auth_error_to_user_facing_message() {
         let provider = ThreadsProvider::new(&test_config());
         let mapped = provider.map_error("Error validating access token: 190", 400);
-        assert_eq!(mapped.as_deref(), Some("Threads access token expired"));
+        assert!(mapped.unwrap().contains("access token expired"), "must keep the plain cause");
+    }
+
+    // ── B4: map_error fixtures ──────────────────────────────
+
+    #[test]
+    fn map_error_explains_text_cap() {
+        let provider = ThreadsProvider::new(&test_config());
+        assert_eq!(
+            provider
+                .map_error("text must be at most 500 characters", 400)
+                .as_deref(),
+            Some("Post text exceeds the 500-character Threads limit")
+        );
+    }
+
+    #[test]
+    fn map_error_explains_rate_limit_on_429() {
+        let provider = ThreadsProvider::new(&test_config());
+        let msg = provider.map_error("Too many requests", 429).unwrap();
+        assert!(msg.contains("rate limit"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_rejected_media() {
+        let provider = ThreadsProvider::new(&test_config());
+        let msg = provider.map_error("The image upload was rejected", 422).unwrap();
+        assert!(msg.contains("media"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_expired_token_on_401() {
+        let provider = ThreadsProvider::new(&test_config());
+        let msg = provider.map_error("", 401).unwrap();
+        assert!(msg.contains("Reconnect Threads"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_missing_scope_on_403() {
+        let provider = ThreadsProvider::new(&test_config());
+        let msg = provider.map_error("", 403).unwrap();
+        assert!(msg.contains("threads_content_publish"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_missing_post_on_404() {
+        let provider = ThreadsProvider::new(&test_config());
+        let msg = provider.map_error("", 404).unwrap();
+        assert!(msg.contains("not found"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_invalid_request_on_400() {
+        let provider = ThreadsProvider::new(&test_config());
+        let msg = provider.map_error("", 400).unwrap();
+        assert!(msg.contains("500 chars"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_returns_none_for_server_error() {
+        let provider = ThreadsProvider::new(&test_config());
+        assert!(provider.map_error("Internal Server Error", 503).is_none());
+    }
+
+    #[test]
+    fn threads_requests_cron_refresh() {
+        let provider = ThreadsProvider::new(&test_config());
+        assert!(provider.needs_cron_refresh());
     }
 }

@@ -132,6 +132,65 @@ impl SocialProvider for TikTokProvider {
         true
     }
 
+    /// TikTok access tokens live 24 hours (or only 7 days once the app is
+    /// public), so a missed refresh takes publishing offline for a day.
+    fn needs_cron_refresh(&self) -> bool {
+        true
+    }
+
+    /// TikTok-specific user-facing error copy (v25 §2 row 9).
+    fn map_error(&self, body: &str, status: u16) -> Option<String> {
+        if body.contains("DUPLICATE_CONTENT") || body.contains("duplicate content") {
+            return Some(
+                "TikTok rejected this video as duplicate content. TikTok hashes the audio \
+                 track, so re-uploading the same clip fails even with new captions — change \
+                 the video or use TikTok's repost flow instead."
+                    .into(),
+            );
+        }
+        if body.contains("unauthorized.creator_ttl") || body.contains("creator_ttl") {
+            return Some(
+                "TikTok rejected the video because the source URL has been posted to before. \
+                 TikTok blocks re-uploads from the same URL — serve the file from a fresh URL."
+                    .into(),
+            );
+        }
+        match classify_error(body, status) {
+            Some(ErrorKind::RateLimited) => Some(
+                "TikTok rate limit hit. The Content Posting API allows roughly 1 000 video \
+                 publishes per day per user — wait for the reset or lower the publish rate."
+                    .into(),
+            ),
+            Some(ErrorKind::MediaRejected) => Some(
+                "TikTok rejected the video. Uploads must be MP4 under 210 MB, 3-10 minutes \
+                 long, H.264 with AAC audio, fetched over HTTP from a public URL."
+                    .into(),
+            ),
+            Some(ErrorKind::AuthExpired) => Some(
+                "TikTok access token expired or was revoked. TikTok tokens last 24 hours and \
+                 Forge refreshes them automatically — reconnect if the refresh is rejected."
+                    .into(),
+            ),
+            Some(ErrorKind::Forbidden) => Some(
+                "TikTok denied this request (HTTP 403). The app needs an approved \
+                 video.publish scope, an audit note, and the account must not be under 18."
+                    .into(),
+            ),
+            Some(ErrorKind::NotFound) => Some(
+                "TikTok video or user not found — it may be private, deleted, or the app is \
+                 not approved for the Content Posting API."
+                    .into(),
+            ),
+            Some(ErrorKind::InvalidRequest) => Some(
+                "TikTok rejected the request as invalid. Check that exactly one MP4 is \
+                 attached, the title is within limits, and privacy_level is a value the app \
+                 is authorised to use."
+                    .into(),
+            ),
+            _ => None,
+        }
+    }
+
     async fn generate_auth_url(
         &self,
         state: &str,
@@ -327,9 +386,13 @@ impl SocialProvider for TikTokProvider {
         if !upload_status.is_success() {
             let msg = upload_json["error"]["message"]
                 .as_str()
-                .unwrap_or("Video upload failed")
-                .to_string();
-            return Err(ProviderError::Api(msg));
+                .unwrap_or("Video upload failed");
+            let code = upload_json["error"]["code"].as_u64().unwrap_or(0);
+            let raw = format!("TikTok video upload failed (HTTP {upload_status}, code {code}): {msg}");
+            return Err(ProviderError::Api(friendly_error(
+                self.map_error(msg, upload_status.as_u16()),
+                &raw,
+            )));
         }
 
         let publish_id = upload_json["data"]["publish_id"]
@@ -369,9 +432,13 @@ impl SocialProvider for TikTokProvider {
         if !publish_status.is_success() {
             let msg = publish_json["error"]["message"]
                 .as_str()
-                .unwrap_or("Video publish failed")
-                .to_string();
-            return Err(ProviderError::Api(msg));
+                .unwrap_or("Video publish failed");
+            let code = publish_json["error"]["code"].as_u64().unwrap_or(0);
+            let raw = format!("TikTok video publish failed (HTTP {publish_status}, code {code}): {msg}");
+            return Err(ProviderError::Api(friendly_error(
+                self.map_error(msg, publish_status.as_u16()),
+                &raw,
+            )));
         }
 
         let post_id_val = publish_json["data"]["post_id"]
@@ -611,5 +678,71 @@ mod tests {
         assert_eq!(series.len(), 1);
         assert_eq!(series[0].label, "Likes");
         assert_eq!(series[0].data[0].total, "4");
+    }
+
+    // ── B4: needs_cron_refresh + map_error fixtures ────────
+
+    fn provider() -> TikTokProvider {
+        TikTokProvider::new(&crate::social::test_config())
+    }
+
+    #[test]
+    fn tiktok_requests_cron_refresh() {
+        assert!(provider().needs_cron_refresh());
+    }
+
+    #[test]
+    fn map_error_explains_duplicate_content() {
+        let msg = provider().map_error("DUPLICATE_CONTENT", 400).unwrap();
+        assert!(msg.contains("duplicate content"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_creator_ttl_rejection() {
+        let msg = provider()
+            .map_error("The video has been posted before (unauthorized.creator_ttl)", 400)
+            .unwrap();
+        assert!(msg.contains("fresh URL"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_rate_limit_on_429() {
+        let msg = provider().map_error("Too many requests", 429).unwrap();
+        assert!(msg.contains("rate limit"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_rejected_media() {
+        let msg = provider().map_error("The video upload was rejected", 422).unwrap();
+        assert!(msg.contains("210 MB"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_expired_token_on_401() {
+        let msg = provider().map_error("", 401).unwrap();
+        assert!(msg.contains("24 hours"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_unapproved_app_on_403() {
+        let msg = provider().map_error("", 403).unwrap();
+        assert!(msg.contains("video.publish"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_missing_video_on_404() {
+        let msg = provider().map_error("", 404).unwrap();
+        assert!(msg.contains("not found"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_invalid_request_on_400() {
+        let msg = provider().map_error("", 400).unwrap();
+        assert!(msg.contains("privacy_level"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_returns_none_for_server_error() {
+        assert!(provider().map_error("Internal Server Error", 503).is_none());
     }
 }

@@ -126,6 +126,18 @@ impl SocialProvider for LinkedInPageProvider {
 
     fn is_between_steps(&self) -> bool { true }
 
+    /// Organization tokens use the same rotating refresh token as the personal
+    /// LinkedIn provider (~60 day lifetime), so they need the same cron pass.
+    fn needs_cron_refresh(&self) -> bool {
+        true
+    }
+
+    /// Page tokens rotate on refresh and the new value is not immediately
+    /// usable — same propagation delay as the personal LinkedIn provider.
+    fn refresh_wait(&self) -> bool {
+        true
+    }
+
     fn tooltip(&self) -> Option<&'static str> {
         Some("Post to a LinkedIn Company Page you administer")
     }

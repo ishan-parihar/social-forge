@@ -450,6 +450,51 @@ impl SocialProvider for PinterestProvider {
             .collect())
     }
 
+    /// Pinterest-specific user-facing error copy (v25 §2 row 9).
+    fn map_error(&self, body: &str, status: u16) -> Option<String> {
+        if body.contains("The board does not exist") || body.contains("board_id") {
+            return Some(
+                "Pinterest rejected the board. Re-pick the board on the Channels screen — \
+                 boards you lost access to are dropped from the list."
+                    .into(),
+            );
+        }
+        match classify_error(body, status) {
+            Some(ErrorKind::RateLimited) => Some(
+                "Pinterest rate limit hit. Pinterest allows roughly 1 000 API calls per user \
+                 per hour — wait for the hourly reset or lower the publish rate."
+                    .into(),
+            ),
+            Some(ErrorKind::MediaRejected) => Some(
+                "Pinterest rejected the image or video. Pins accept JPEG/PNG under 20 MB \
+                 fetched from a public URL; video pins must be MP4 under 500 MB sourced via \
+                 the /media endpoint."
+                    .into(),
+            ),
+            Some(ErrorKind::AuthExpired) => Some(
+                "Pinterest access token expired or was revoked. Reconnect the account on \
+                 the Channels screen."
+                    .into(),
+            ),
+            Some(ErrorKind::Forbidden) => Some(
+                "Pinterest denied this request (HTTP 403). The token is missing \
+                 pins:write or boards:write, or the app lost its API approval."
+                    .into(),
+            ),
+            Some(ErrorKind::NotFound) => Some(
+                "Pinterest pin or board not found — it may be deleted, or the token belongs \
+                 to a different Pinterest account."
+                    .into(),
+            ),
+            Some(ErrorKind::InvalidRequest) => Some(
+                "Pinterest rejected the request as invalid. Check the title (100 chars), \
+                 description (800 chars) and link domain limits."
+                    .into(),
+            ),
+            _ => None,
+        }
+    }
+
     async fn fetch_page_info(
         &self,
         _access_token: &str,
@@ -619,16 +664,20 @@ impl SocialProvider for PinterestProvider {
             .send()
             .await?;
 
+        let publish_status = resp.status();
         let json: serde_json::Value = resp.json().await?;
 
-        let pin_id = json["id"]
-            .as_str()
-            .ok_or_else(|| {
-                let err = json["message"]
-                    .as_str()
-                    .unwrap_or("Pinterest publish failed");
-                ProviderError::Api(err.to_string())
-            })?;
+        let pin_id = json["id"].as_str().ok_or_else(|| {
+            let err = json["message"]
+                .as_str()
+                .unwrap_or("Pinterest publish failed");
+            let code = json["code"].as_u64().unwrap_or(0);
+            let raw = format!("Pinterest publish failed (HTTP {publish_status}, code {code}): {err}");
+            ProviderError::Api(friendly_error(
+                self.map_error(err, publish_status.as_u16()),
+                &raw,
+            ))
+        })?;
 
         Ok(PublishResult {
             platform_post_id: pin_id.to_string(),
@@ -762,5 +811,67 @@ mod tests {
         let span = end.parse::<chrono::NaiveDate>().expect("end date")
             - start.parse::<chrono::NaiveDate>().expect("start date");
         assert_eq!(span.num_days(), 89, "v5 caps analytics at 90 days inclusive");
+    }
+
+    // ── B4: map_error fixtures ──────────────────────────────
+
+    fn provider() -> PinterestProvider {
+        PinterestProvider::new(&crate::social::test_config())
+    }
+
+    #[test]
+    fn map_error_keeps_board_specific_copy() {
+        let msg = provider()
+            .map_error("The board does not exist", 404)
+            .unwrap();
+        assert!(msg.contains("rejected the board"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_rate_limit_on_429() {
+        let msg = provider().map_error("Too many requests", 429).unwrap();
+        assert!(msg.contains("rate limit"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_rejected_media() {
+        let msg = provider().map_error("The image upload was rejected", 422).unwrap();
+        assert!(msg.contains("20 MB"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_expired_token_on_401() {
+        let msg = provider().map_error("", 401).unwrap();
+        assert!(msg.contains("Reconnect"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_missing_scope_on_403() {
+        let msg = provider().map_error("", 403).unwrap();
+        assert!(msg.contains("pins:write"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_missing_pin_on_404() {
+        let msg = provider().map_error("", 404).unwrap();
+        assert!(msg.contains("not found"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_explains_invalid_request_on_400() {
+        let msg = provider().map_error("", 400).unwrap();
+        assert!(msg.contains("100 chars"), "got: {msg}");
+    }
+
+    #[test]
+    fn map_error_returns_none_for_server_error() {
+        assert!(provider().map_error("Internal Server Error", 503).is_none());
+    }
+
+    #[test]
+    fn pinterest_does_not_request_cron_refresh() {
+        // Pinterest v5 access tokens do not expire — the refresh endpoint
+        // exists but there is no expiry for the scheduler to act on.
+        assert!(!provider().needs_cron_refresh());
     }
 }
