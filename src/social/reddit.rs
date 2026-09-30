@@ -1308,6 +1308,78 @@ impl SocialProvider for RedditProvider {
         })
     }
 
+    /// Submit, and report pending when Reddit accepted the submission but has
+    /// not materialised a permalink for it yet.
+    ///
+    /// Reddit's async submit answers with a real `t3_` id and an empty `url`.
+    /// Reading that as a successful publish loses the post silently: the id is
+    /// stored, no post is ever findable, and nothing notices. The empty-permalink
+    /// case is downgraded to pending so it goes through the poll lifecycle; the
+    /// synchronous text/image path returns a permalink and is unaffected.
+    async fn post_pending(
+        &self,
+        access_token: &str,
+        post: &PostContent,
+    ) -> Result<PublishResult, ProviderError> {
+        let result = self.publish(access_token, post).await?;
+        if result.platform_post_url.as_deref().unwrap_or("").is_empty() {
+            Ok(PublishResult { status: "pending".into(), ..result })
+        } else {
+            Ok(result)
+        }
+    }
+
+    /// Look the submission up by id and report it only once Reddit serves a
+    /// permalink. A missing entry is reported as pending rather than failed: a
+    /// just-accepted submission takes a moment to become readable, and the
+    /// poll budget — not a false failure — is what bounds the wait.
+    async fn check_post_status(
+        &self,
+        access_token: &str,
+        platform_post_id: &str,
+    ) -> Result<PublishResult, ProviderError> {
+        let full_id = if platform_post_id.starts_with("t3_") {
+            platform_post_id.to_string()
+        } else {
+            format!("t3_{platform_post_id}")
+        };
+
+        let resp = self
+            .http
+            .get("https://oauth.reddit.com/api/info.json")
+            .header("Authorization", format!("Bearer {access_token}"))
+            .header("User-Agent", "social-forge:v0.1.0 (by /u/social_forge)")
+            .query(&[("id", &full_id)])
+            .send()
+            .await?;
+
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        if !status.is_success() {
+            let raw = format!("Reddit submission lookup error ({status}): {body}");
+            return Err(ProviderError::Api(friendly_error(
+                self.map_error(&body, status.as_u16()),
+                &raw,
+            )));
+        }
+
+        let json: serde_json::Value = serde_json::from_str(&body).map_err(|e| {
+            ProviderError::Api(format!("Failed to parse Reddit lookup response: {e}. Body: {body}"))
+        })?;
+
+        let permalink = json[&full_id]["permalink"].as_str().unwrap_or("").trim();
+
+        Ok(PublishResult {
+            platform_post_id: platform_post_id.to_string(),
+            platform_post_url: if permalink.is_empty() {
+                None
+            } else {
+                Some(format!("https://www.reddit.com{permalink}"))
+            },
+            status: if permalink.is_empty() { "pending" } else { "published" }.into(),
+        })
+    }
+
     /// Read a submission's comment tree.
     ///
     /// OAuth uses `/comments/{id}` on oauth.reddit.com; cookie sessions use

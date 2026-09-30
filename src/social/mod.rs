@@ -39,6 +39,9 @@ pub mod x;
 pub mod x_cookies;
 pub mod youtube;
 
+use std::future::Future;
+use std::time::Duration;
+
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use schemars::JsonSchema;
@@ -113,6 +116,77 @@ pub struct PublishResult {
     pub platform_post_id: String,
     pub platform_post_url: Option<String>,
     pub status: String,
+}
+
+impl PublishResult {
+    /// Accepted by the platform but not published yet — the post is in
+    /// flight (IG transcoding a reel, an async Reddit submit, X still
+    /// processing a video chunk). Must be polled, never recorded as live.
+    pub fn is_pending(&self) -> bool {
+        matches!(
+            self.status.to_ascii_lowercase().as_str(),
+            "pending" | "processing" | "in_progress" | "accepted" | "queued" | "uploaded" | "submitted"
+        )
+    }
+
+    /// The platform has published the post. Terminal and successful.
+    pub fn is_published(&self) -> bool {
+        matches!(
+            self.status.to_ascii_lowercase().as_str(),
+            "published" | "succeeded" | "success" | "complete" | "completed" | "ready" | "live" | "done"
+        )
+    }
+
+    /// No longer in flight. Anything terminal that is not published is a
+    /// failure — an unknown future status fails safe rather than claim a post
+    /// went live that may not have.
+    pub fn is_terminal(&self) -> bool {
+        !self.is_pending()
+    }
+}
+
+/// How many times `finalize_post` polls a pending publish before giving up.
+pub const MAX_POLL_ATTEMPTS: u32 = 40;
+
+/// Default gap between pending-publish polls (~3.5 min total budget).
+pub const DEFAULT_POLL_INTERVAL: Duration = Duration::from_secs(5);
+
+/// Drive `check` until it reports a terminal state (published or failed).
+///
+/// The one piece of logic every async platform shares: poll, and stop at the
+/// first non-pending answer. `check` is a closure rather than the provider
+/// itself so a platform can finalize whatever handle it handed back, and so
+/// the loop is testable with no network.
+pub async fn poll_until_terminal<F, Fut>(
+    interval: Duration,
+    mut check: F,
+) -> Result<PublishResult, ProviderError>
+where
+    F: FnMut() -> Fut,
+    Fut: Future<Output = Result<PublishResult, ProviderError>>,
+{
+    let mut last_seen = "unknown".to_string();
+
+    for attempt in 1..=MAX_POLL_ATTEMPTS {
+        match check().await {
+            Ok(result) if result.is_terminal() => return Ok(result),
+            Ok(result) => {
+                last_seen = result.status.clone();
+                tracing::debug!(
+                    "Pending publish still {last_seen} after poll {attempt}/{MAX_POLL_ATTEMPTS}"
+                );
+            }
+            Err(e) => return Err(e),
+        }
+        if attempt < MAX_POLL_ATTEMPTS {
+            tokio::time::sleep(interval).await;
+        }
+    }
+
+    Err(ProviderError::Api(format!(
+        "Platform never finished processing the post: still {last_seen} after {MAX_POLL_ATTEMPTS} \
+         checks. The post may still go live later — check the platform before republishing."
+    )))
 }
 
 // ── Additional Common Types ─────────────────────────────────
@@ -353,6 +427,54 @@ pub trait SocialProvider: Send + Sync {
         access_token: &str,
         post: &PostContent,
     ) -> Result<PublishResult, ProviderError>;
+
+    /// Publish, reporting a pending result when the platform only *accepted*
+    /// the post (IG container publish, async Reddit submit, X still
+    /// transcoding a video).
+    ///
+    /// Default: plain `publish`, so the 23 synchronous providers are
+    /// untouched. Async providers override this and keep `publish` for the
+    /// CLI/REST/MCP paths that want the immediate, unpolled answer.
+    async fn post_pending(
+        &self,
+        access_token: &str,
+        post: &PostContent,
+    ) -> Result<PublishResult, ProviderError> {
+        self.publish(access_token, post).await
+    }
+
+    /// Check a post that `post_pending` reported as pending.
+    ///
+    /// Default: assume it went live — exactly what the scheduler did before
+    /// this lifecycle existed, so a provider that never returns pending is
+    /// never polled.
+    async fn check_post_status(
+        &self,
+        _access_token: &str,
+        platform_post_id: &str,
+    ) -> Result<PublishResult, ProviderError> {
+        Ok(PublishResult {
+            platform_post_id: platform_post_id.to_string(),
+            platform_post_url: None,
+            status: "published".into(),
+        })
+    }
+
+    /// Poll a pending post to a terminal state (published or failed).
+    ///
+    /// Default: one `check_post_status` call. A platform only overrides this
+    /// if it needs a different cadence.
+    async fn finalize_post(
+        &self,
+        access_token: &str,
+        platform_post_id: &str,
+        poll_interval: Duration,
+    ) -> Result<PublishResult, ProviderError> {
+        poll_until_terminal(poll_interval, || {
+            self.check_post_status(access_token, platform_post_id)
+        })
+        .await
+    }
 
     /// Post a comment/reply to an existing post
     async fn comment(
@@ -1343,6 +1465,9 @@ pub(crate) fn test_config() -> crate::config::Config {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+
     use super::*;
 
     // ── classify_error ───────────────────────────────────────
@@ -1843,5 +1968,176 @@ mod insights_tests {
     #[test]
     fn parse_should_read_no_targets_from_an_empty_page_listing() {
         assert!(pages_to_targets(&[], "board").is_empty());
+    }
+
+    // ── pending-publish lifecycle ─────────────────────────────
+
+    fn result(status: &str) -> PublishResult {
+        PublishResult {
+            platform_post_id: "post-1".into(),
+            platform_post_url: None,
+            status: status.into(),
+        }
+    }
+
+    #[test]
+    fn pending_statuses_are_distinguished_from_terminal_ones() {
+        for s in ["pending", "processing", "IN_PROGRESS", "accepted", "uploaded"] {
+            assert!(result(s).is_pending(), "{s} should be pending");
+            assert!(!result(s).is_terminal(), "{s} should not be terminal");
+            assert!(!result(s).is_published(), "{s} should not be published");
+        }
+        for s in ["published", "succeeded", "COMPLETED", "live"] {
+            assert!(result(s).is_published(), "{s} should be published");
+            assert!(result(s).is_terminal());
+        }
+        for s in ["error", "failed", "expired", "some_future_status"] {
+            assert!(result(s).is_terminal(), "{s} should be terminal");
+            assert!(!result(s).is_published(), "{s} must not claim a live post");
+        }
+    }
+
+    /// Stands in for an async platform: `post_pending` accepts, then
+    /// `check_post_status` reports pending `pending_times` times before the
+    /// terminal status. Its `publish` stays synchronous, so the same fake also
+    /// covers the "one of the 23 synchronous providers" control case.
+    struct FakeAsyncProvider {
+        pending_times: u32,
+        terminal_status: &'static str,
+        polls: Arc<AtomicUsize>,
+    }
+
+    #[async_trait]
+    impl SocialProvider for FakeAsyncProvider {
+        fn identifier(&self) -> &'static str { "fake" }
+        fn name(&self) -> &'static str { "Fake" }
+        fn scopes(&self) -> Vec<String> { vec![] }
+        fn max_content_length(&self) -> usize { 280 }
+
+        async fn generate_auth_url(
+            &self,
+            _s: &str,
+            _v: &str,
+            _r: &str,
+        ) -> Result<AuthUrlResponse, ProviderError> {
+            unimplemented!()
+        }
+        async fn exchange_code(
+            &self,
+            _c: &str,
+            _v: &str,
+            _r: &str,
+        ) -> Result<AuthToken, ProviderError> {
+            unimplemented!()
+        }
+        async fn refresh_token(
+            &self,
+            _r: &str,
+        ) -> Result<AuthToken, ProviderError> {
+            unimplemented!()
+        }
+        async fn publish(
+            &self,
+            _t: &str,
+            _p: &PostContent,
+        ) -> Result<PublishResult, ProviderError> {
+            Ok(result("published"))
+        }
+
+        async fn post_pending(
+            &self,
+            _t: &str,
+            _p: &PostContent,
+        ) -> Result<PublishResult, ProviderError> {
+            Ok(result("pending"))
+        }
+
+        async fn check_post_status(
+            &self,
+            _t: &str,
+            _id: &str,
+        ) -> Result<PublishResult, ProviderError> {
+            let seen = self.polls.fetch_add(1, Ordering::SeqCst);
+            if (seen as u32) < self.pending_times {
+                Ok(result("processing"))
+            } else {
+                Ok(result(self.terminal_status))
+            }
+        }
+    }
+
+    fn fake(pending_times: u32, terminal_status: &'static str) -> FakeAsyncProvider {
+        FakeAsyncProvider {
+            pending_times,
+            terminal_status,
+            polls: Arc::new(AtomicUsize::new(0)),
+        }
+    }
+
+    #[tokio::test]
+    async fn poll_until_terminal_keeps_polling_until_the_post_goes_live() {
+        let p = fake(3, "published");
+        let polls = Arc::clone(&p.polls);
+        let out = poll_until_terminal(Duration::ZERO, || {
+            p.check_post_status("", "post-1")
+        })
+        .await
+        .expect("should reach a terminal state");
+
+        assert!(out.is_published());
+        assert_eq!(polls.load(Ordering::SeqCst), 4, "3 pending + 1 published");
+    }
+
+    #[tokio::test]
+    async fn poll_until_terminal_surfaces_a_platform_failure_as_terminal() {
+        let p = fake(2, "error");
+        let out = poll_until_terminal(Duration::ZERO, || {
+            p.check_post_status("", "post-1")
+        })
+        .await
+        .expect("failure is a terminal result, not a poll error");
+
+        assert!(!out.is_published(), "a failed post must not look live");
+    }
+
+    #[tokio::test]
+    async fn poll_until_terminal_gives_up_rather_than_reporting_a_pending_post_as_published() {
+        let p = fake(u32::MAX, "published");
+        let polls = Arc::clone(&p.polls);
+        let err = poll_until_terminal(Duration::ZERO, || {
+            p.check_post_status("", "post-1")
+        })
+        .await
+        .expect_err("an endlessly pending platform must not resolve");
+
+        assert!(matches!(err, ProviderError::Api(_)));
+        assert_eq!(polls.load(Ordering::SeqCst), MAX_POLL_ATTEMPTS as usize);
+    }
+
+    #[tokio::test]
+    async fn finalize_post_polls_a_pending_publish_to_terminal() {
+        let p = fake(2, "published");
+        let out = p
+            .finalize_post("", "post-1", Duration::ZERO)
+            .await
+            .expect("finalize should reach a terminal state");
+
+        assert!(out.is_published());
+    }
+
+    #[tokio::test]
+    async fn synchronous_providers_keep_defaulting_to_a_single_publish() {
+        // A provider that never reports pending must not be polled at all —
+        // this is the 23-provider no-change path.
+        let p = fake(0, "published");
+        let accepted = p.post_pending("", &PostContent::default()).await.unwrap();
+        assert!(
+            accepted.is_published(),
+            "default post_pending must delegate to publish"
+        );
+
+        let out = p.finalize_post("", "post-1", Duration::ZERO).await.unwrap();
+        assert!(out.is_published());
+        assert_eq!(p.polls.load(Ordering::SeqCst), 0, "nothing to poll");
     }
 }

@@ -691,12 +691,18 @@ impl XProvider {
         }
     }
 
+    /// Upload one attachment through the chunked INIT/APPEND/FINALIZE flow.
+    ///
+    /// Returns the `media_id` and whether X has finished processing the bytes.
+    /// FINALIZE answers long before a video is transcoded — it reports
+    /// `processing_info.state: pending|in_progress` while the reel is still
+    /// being encoded, and only `succeeded` once it is playable.
     async fn upload_single_media(
         &self,
         _access_token: &str,
         media_url: &str,
         mime_type: &str,
-    ) -> Result<String, ProviderError> {
+    ) -> Result<(String, bool), ProviderError> {
         let bytes = self.fetch_media_bytes(media_url).await?;
         let total_bytes = bytes.len();
 
@@ -763,34 +769,203 @@ impl XProvider {
             .await
             .map_err(|e| ProviderError::Api(e.to_string()))?;
 
-        if let Some(state) = finalize_resp
+        let ready = finalize_resp
             .pointer("/processing_info/state")
             .and_then(|s| s.as_str())
-        {
-            if state == "pending" || state == "in_progress" {
-                tracing::warn!("Media processing still {state} for media_id={media_id}");
-            }
+            .map(|state| !matches!(state, "pending" | "in_progress"))
+            .unwrap_or(true);
+        if !ready {
+            tracing::debug!("Media {media_id} still processing; the post goes out as pending");
         }
 
-        Ok(media_id)
+        Ok((media_id, ready))
     }
 
+    /// Upload every attachment. Returns the media ids plus whether *all* of
+    /// them finished processing.
     async fn upload_media(
         &self,
         access_token: &str,
         media: &[MediaAttachment],
-    ) -> Result<Vec<String>, ProviderError> {
+    ) -> Result<(Vec<String>, bool), ProviderError> {
         if media.is_empty() {
-            return Ok(vec![]);
+            return Ok((vec![], true));
         }
         let mut media_ids = Vec::with_capacity(media.len());
+        let mut all_ready = true;
         for attachment in media {
-            let id = self
+            let (id, ready) = self
                 .upload_single_media(access_token, &attachment.url, &attachment.mime_type)
                 .await?;
+            all_ready &= ready;
             media_ids.push(id);
         }
-        Ok(media_ids)
+        Ok((media_ids, all_ready))
+    }
+
+    /// Create the tweet, and report whether every attached upload finished
+    /// processing. X's shared publish body: the trait's `publish` returns the
+    /// first element, `post_pending` inspects the second.
+    pub(crate) async fn publish_with_media_state(
+        &self,
+        access_token: &str,
+        post: &PostContent,
+    ) -> Result<(PublishResult, bool), ProviderError> {
+        let mut media_ready = true;
+        // Try GraphQL path if cookie auth
+        if let Some((_auth_token, _ct0)) = Self::parse_cookie_token(access_token) {
+            let mut variables = serde_json::json!({
+                "tweet_text": post.content,
+                "media": {
+                    "media_entities": [],
+                    "possibly_sensitive": false
+                },
+                "semantic_annotation_ids": [],
+                "dark_request": false,
+            });
+
+            // Thread linking: if in_reply_to is set, add the reply field
+            // so X creates this tweet as a reply to the predecessor.
+            if let Some(ref reply_to_id) = post.in_reply_to {
+                variables["reply"] = serde_json::json!({
+                    "in_reply_to_tweet_id": reply_to_id,
+                    "reply_options": [],
+                });
+            }
+
+            // Upload and attach media
+            if !post.media.is_empty() {
+                let (media_ids, ready) = self.upload_media(access_token, &post.media).await?;
+                media_ready = ready;
+                let entities: Vec<serde_json::Value> = media_ids
+                    .iter()
+                    .map(|id| serde_json::json!({"media_id": id, "tagged_users": []}))
+                    .collect();
+                variables["media"] = serde_json::json!({
+                    "media_entities": entities,
+                    "possibly_sensitive": false,
+                });
+            }
+
+            Self::write_delay();
+
+            let query_id = FALLBACK_QUERY_IDS
+                .get("CreateTweet")
+                .ok_or_else(|| ProviderError::Api("Missing CreateTweet queryId".into()))?;
+            let json = self.graphql_post(query_id, "CreateTweet", &variables, access_token).await?;
+
+            let tweet_id = json["data"]["create_tweet"]["tweet_results"]["result"]["rest_id"]
+                .as_str()
+                .unwrap_or("");
+
+            return Ok((
+                PublishResult {
+                    platform_post_url: if tweet_id.is_empty() {
+                        None
+                    } else {
+                        Some(format!("https://x.com/i/status/{tweet_id}"))
+                    },
+                    platform_post_id: tweet_id.to_string(),
+                    status: "published".into(),
+                },
+                media_ready,
+            ));
+        }
+
+        // Fallback: v2 API with Bearer token
+        let mut body = serde_json::json!({ "text": post.content });
+        if !post.media.is_empty() {
+            let (media_ids, ready) = self.upload_media(access_token, &post.media).await?;
+            media_ready = ready;
+            if !media_ids.is_empty() {
+                body["media"] = serde_json::json!({ "media_ids": media_ids });
+            }
+        }
+        // v22 Phase 2 (D.1): Send Idempotency-Key header on X v2 POST
+        // /2/tweets. X deduplicates requests with the same key for 24h,
+        // which prevents double-publish when a retry happens after a
+        // crash that left the post in `publishing` state. The key is
+        // generated per-post (posts.idempotency_key column) and
+        // regenerated on `reset_post_for_republish`.
+        let mut req = self
+            .http
+            .post("https://api.twitter.com/2/tweets")
+            .header(header::AUTHORIZATION, format!("Bearer {access_token}"))
+            .json(&body);
+        if let Some(ref key) = post.idempotency_key {
+            req = req.header("Idempotency-Key", key);
+        }
+        let resp = req
+            .send()
+            .await
+            .map_err(|e| ProviderError::Api(format!("X v2 POST error: {e}")))?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await.map_err(|e| ProviderError::Api(e.to_string()))?;
+        self.check_v2_response(status, &json)?;
+        let post_id = json["data"]["id"].as_str().unwrap_or("").to_string();
+        Ok((
+            PublishResult {
+                platform_post_url: Some(format!("https://twitter.com/user/status/{post_id}")),
+                platform_post_id: post_id,
+                status: "published".into(),
+            },
+            media_ready,
+        ))
+    }
+
+    /// First attached media id, for both the v2 and the cookie/GraphQL tweet
+    /// shape. Only reached for tweets that reported pending, which X only
+    /// does when a video is still transcoding — so the first attachment is
+    /// the one to poll.
+    pub(crate) fn first_media_id(detail: &serde_json::Value) -> Option<String> {
+        detail["data"]["attachments"]["media_ids"]
+            .as_array()
+            .and_then(|ids| ids.first())
+            .and_then(|v| v.as_str())
+            .map(String::from)
+            .or_else(|| {
+                detail["data"]["legacy"]["extended_entities"]["media"]
+                    .as_array()?
+                    .first()
+                    .and_then(|m| m["id"].as_str())
+                    .map(String::from)
+            })
+    }
+
+    /// `command=STATUS` on the chunked-upload endpoint — the documented way
+    /// to learn whether X finished encoding an upload.
+    pub(crate) async fn media_processing_state(
+        &self,
+        media_id: &str,
+    ) -> Result<String, ProviderError> {
+        let resp = self
+            .http
+            .get("https://upload.twitter.com/1.1/media/upload.json")
+            .query(&[
+                ("command", "STATUS"),
+                ("media_id", media_id),
+                ("media_category", "tweet_video"),
+            ])
+            .send()
+            .await
+            .map_err(|e| ProviderError::Api(format!("X media STATUS error: {e}")))?;
+
+        // An unreadable STATUS reply means we cannot prove the media is ready.
+        // Stay pending and let the bounded poll give up loudly rather than
+        // report a video the user cannot play.
+        if !resp.status().is_success() {
+            return Ok("pending".into());
+        }
+
+        let json: serde_json::Value = resp
+            .json()
+            .await
+            .map_err(|e| ProviderError::Api(format!("X media STATUS body: {e}")))?;
+        Ok(json
+            .pointer("/processing_info/state")
+            .and_then(|s| s.as_str())
+            .unwrap_or("succeeded")
+            .to_string())
     }
 
     // ── Page Parser ────────────────────────────────────────
@@ -1245,96 +1420,60 @@ impl SocialProvider for XProvider {
         access_token: &str,
         post: &PostContent,
     ) -> Result<PublishResult, ProviderError> {
-        // Try GraphQL path if cookie auth
-        if let Some((_auth_token, _ct0)) = Self::parse_cookie_token(access_token) {
-            let mut variables = serde_json::json!({
-                "tweet_text": post.content,
-                "media": {
-                    "media_entities": [],
-                    "possibly_sensitive": false
-                },
-                "semantic_annotation_ids": [],
-                "dark_request": false,
-            });
-
-            // Thread linking: if in_reply_to is set, add the reply field
-            // so X creates this tweet as a reply to the predecessor.
-            if let Some(ref reply_to_id) = post.in_reply_to {
-                variables["reply"] = serde_json::json!({
-                    "in_reply_to_tweet_id": reply_to_id,
-                    "reply_options": [],
-                });
-            }
-
-            // Upload and attach media
-            if !post.media.is_empty() {
-                let media_ids = self.upload_media(access_token, &post.media).await?;
-                let entities: Vec<serde_json::Value> = media_ids
-                    .iter()
-                    .map(|id| serde_json::json!({"media_id": id, "tagged_users": []}))
-                    .collect();
-                variables["media"] = serde_json::json!({
-                    "media_entities": entities,
-                    "possibly_sensitive": false,
-                });
-            }
-
-            Self::write_delay();
-
-            let query_id = FALLBACK_QUERY_IDS
-                .get("CreateTweet")
-                .ok_or_else(|| ProviderError::Api("Missing CreateTweet queryId".into()))?;
-            let json = self.graphql_post(query_id, "CreateTweet", &variables, access_token).await?;
-
-            let tweet_id = json["data"]["create_tweet"]["tweet_results"]["result"]["rest_id"]
-                .as_str()
-                .unwrap_or("");
-
-            return Ok(PublishResult {
-                platform_post_url: if tweet_id.is_empty() {
-                    None
-                } else {
-                    Some(format!("https://x.com/i/status/{tweet_id}"))
-                },
-                platform_post_id: tweet_id.to_string(),
-                status: "published".into(),
-            });
-        }
-
-        // Fallback: v2 API with Bearer token
-        let mut body = serde_json::json!({ "text": post.content });
-        if !post.media.is_empty() {
-            let media_ids = self.upload_media(access_token, &post.media).await?;
-            if !media_ids.is_empty() {
-                body["media"] = serde_json::json!({ "media_ids": media_ids });
-            }
-        }
-        // v22 Phase 2 (D.1): Send Idempotency-Key header on X v2 POST
-        // /2/tweets. X deduplicates requests with the same key for 24h,
-        // which prevents double-publish when a retry happens after a
-        // crash that left the post in `publishing` state. The key is
-        // generated per-post (posts.idempotency_key column) and
-        // regenerated on `reset_post_for_republish`.
-        let mut req = self
-            .http
-            .post("https://api.twitter.com/2/tweets")
-            .header(header::AUTHORIZATION, format!("Bearer {access_token}"))
-            .json(&body);
-        if let Some(ref key) = post.idempotency_key {
-            req = req.header("Idempotency-Key", key);
-        }
-        let resp = req
-            .send()
+        self.publish_with_media_state(access_token, post)
             .await
-            .map_err(|e| ProviderError::Api(format!("X v2 POST error: {e}")))?;
-        let status = resp.status();
-        let json: serde_json::Value = resp.json().await.map_err(|e| ProviderError::Api(e.to_string()))?;
-        self.check_v2_response(status, &json)?;
-        let post_id = json["data"]["id"].as_str().unwrap_or("").to_string();
+            .map(|(result, _media_ready)| result)
+    }
+
+    /// Publish, and report pending while X is still transcoding an attached
+    /// video.
+    ///
+    /// The chunked upload's FINALIZE returns as soon as the bytes land; a
+    /// tweet attached to a still-encoding video is published but unplayable
+    /// for a minute or two. Polling to `succeeded` is the difference between
+    /// "posted" and "posted and watchable".
+    async fn post_pending(
+        &self,
+        access_token: &str,
+        post: &PostContent,
+    ) -> Result<PublishResult, ProviderError> {
+        let (result, media_ready) = self.publish_with_media_state(access_token, post).await?;
+        if media_ready {
+            Ok(result)
+        } else {
+            Ok(PublishResult { status: "pending".into(), ..result })
+        }
+    }
+
+    /// Ask X whether the upload behind this tweet finished transcoding.
+    async fn check_post_status(
+        &self,
+        access_token: &str,
+        platform_post_id: &str,
+    ) -> Result<PublishResult, ProviderError> {
+        // Text and image tweets carry no `processing_info` — they are done
+        // the moment the tweet exists, so the poll is a no-op for them.
+        let detail = self.tweet_detail(access_token, platform_post_id).await?;
+        let state = match Self::first_media_id(&detail) {
+            None => "succeeded".to_string(),
+            Some(media_id) => self.media_processing_state(&media_id).await?,
+        };
+
+        let status = match state.as_str() {
+            "succeeded" => "published",
+            "failed" => {
+                return Err(ProviderError::Api(format!(
+                    "X failed to process the video attached to tweet {platform_post_id}. Check it \
+                     is a supported MP4 under 140s, then republish."
+                )))
+            }
+            _ => "pending",
+        };
+
         Ok(PublishResult {
-            platform_post_url: Some(format!("https://twitter.com/user/status/{post_id}")),
-            platform_post_id: post_id,
-            status: "published".into(),
+            platform_post_id: platform_post_id.to_string(),
+            platform_post_url: Some(format!("https://x.com/i/status/{platform_post_id}")),
+            status: status.into(),
         })
     }
 
@@ -1585,7 +1724,7 @@ impl SocialProvider for XProvider {
             });
 
             if !post.media.is_empty() {
-                let media_ids = self.upload_media(access_token, &post.media).await?;
+                let (media_ids, _ready) = self.upload_media(access_token, &post.media).await?;
                 let entities: Vec<serde_json::Value> = media_ids
                     .iter()
                     .map(|id| serde_json::json!({"media_id": id, "tagged_users": []}))
@@ -1623,7 +1762,7 @@ impl SocialProvider for XProvider {
             "reply": { "in_reply_to_tweet_id": comment_id }
         });
         if !post.media.is_empty() {
-            let media_ids = self.upload_media(access_token, &post.media).await?;
+            let (media_ids, _ready) = self.upload_media(access_token, &post.media).await?;
             if !media_ids.is_empty() {
                 body["media"] = serde_json::json!({ "media_ids": media_ids });
             }

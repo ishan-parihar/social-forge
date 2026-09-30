@@ -270,6 +270,36 @@ impl SocialProvider for InstagramProvider {
         }
     }
 
+    /// Same container → ready → `media_publish` path as [`Self::publish`], but
+    /// honest about what `media_publish` returns.
+    ///
+    /// `media_publish` hands back a media id as soon as the container is
+    /// accepted — for a video reel that id comes back with
+    /// `status_code: PUBLISHED`, meaning "live, still transcoding". Treating
+    /// that as published leaves the user with a post whose video does not
+    /// play, so the extra status read routes it through the pending
+    /// lifecycle instead. Images are `FINISHED` on the first read, which is
+    /// the same published result `publish` returns today.
+    async fn post_pending(
+        &self,
+        access_token: &str,
+        post: &PostContent,
+    ) -> Result<PublishResult, ProviderError> {
+        let published = self.publish(access_token, post).await?;
+        self.media_publish_state(access_token, &published.platform_post_id)
+            .await
+    }
+
+    /// Read a published media item's `status_code` and map it onto the
+    /// publish lifecycle.
+    async fn check_post_status(
+        &self,
+        access_token: &str,
+        platform_post_id: &str,
+    ) -> Result<PublishResult, ProviderError> {
+        self.media_publish_state(access_token, platform_post_id).await
+    }
+
     /// List Instagram Business accounts from the user's Facebook pages.
     ///
     /// Discovers FB pages via two phases:
@@ -1576,6 +1606,36 @@ impl InstagramProvider {
             .as_str()
             .unwrap_or("IN_PROGRESS");
         Ok(status_code.to_string())
+    }
+
+    /// Map a media item's Graph `status_code` onto the publish lifecycle.
+    ///
+    /// `FINISHED` is the only state that means the media is on the feed;
+    /// `PUBLISHED` means accepted-but-transcoding, which is still pending.
+    /// `ERROR`/`EXPIRED` never recover, so they abort the poll with the reason
+    /// Instagram reported rather than spinning out the give-up budget.
+    async fn media_publish_state(
+        &self,
+        access_token: &str,
+        media_id: &str,
+    ) -> Result<PublishResult, ProviderError> {
+        let code = self.poll_container_status(access_token, media_id).await?;
+        let status = match code.as_str() {
+            "FINISHED" => "published",
+            "ERROR" | "EXPIRED" | "MEDIA_ERROR" => {
+                return Err(ProviderError::Api(format!(
+                    "Instagram media {media_id} failed processing ({code}). Check the media \
+                     matches Instagram's format and size limits, then republish."
+                )))
+            }
+            // PUBLISHED (live, still transcoding) and IN_PROGRESS stay pending.
+            _ => "pending",
+        };
+        Ok(PublishResult {
+            platform_post_id: media_id.to_string(),
+            platform_post_url: Some(format!("https://instagram.com/p/{media_id}")),
+            status: status.into(),
+        })
     }
 }
 
