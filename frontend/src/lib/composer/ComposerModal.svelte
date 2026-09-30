@@ -5,7 +5,7 @@
   // /posts/new and /posts/[id] edit flows with a single modal that opens
   // in-place from anywhere (calendar, dashboard, posts list, keyboard 'n').
   //
-  // Design decisions (per PLAN_FRONTEND_REFACTOR_v18.md Phase 2):
+  // Design decisions (per docs/planning/PLAN_PARITY_DEPTH_SINGLEUSER_v25.md phases F1-F5):
   //   - Full-screen modal (max-w-[1400px], h-[90vh]) — like postiz-app
   //   - Two-column layout on lg+: editor left, preview right (580px)
   //   - Single column on mobile (preview collapses to a toggle)

@@ -27,25 +27,24 @@ Social Forge is a single Rust binary that manages **26 social platforms** (12 Ti
 
 1. **CLI** — 100+ commands for AI agents and terminal power users
 2. **REST API** — SvelteKit dashboard for human operators
-3. **MCP Server** — 327 tools across 42 tool modules for Claude/Cursor-style AI integrations
+3. **MCP Server** — 327 tools across 41 modules for Claude/Cursor-style AI integrations
 
 ---
 
 ## Quick start
 
 ```bash
-# Install
-pipx install social-forge
+# Build (Rust 1.85+)
+cargo build --release
 
-# Configure
-social-forge config init
-# Edit ~/.config/social-forge/config.yaml with API keys
+# Configure (writes ~/.social-forge/.env)
+./target/release/social-forge init
 
-# Post
-social-forge post --platform twitter --text "Hello from Social-Forge!"
+# Post now to X + Bluesky
+social-forge post "Hello from Social-Forge!" --platforms x,bluesky
 
-# Schedule
-social-forge schedule --platform linkedin --text "Post" --at "2024-01-15 09:00"
+# Schedule for later (ISO8601)
+social-forge post "Morning post" --platforms linkedin --schedule "2026-10-01T09:00:00Z"
 ```
 
 ---
@@ -56,7 +55,7 @@ social-forge schedule --platform linkedin --text "Post" --at "2024-01-15 09:00"
 social-forge mcp
 ```
 
-**327 MCP tools** across 42 tool modules, all defined in `src/mcp/mod.rs` and dispatched to per-provider handler modules in `src/mcp/tools_*.rs`. Names are namespaced by platform:
+**327 MCP tools** across 41 modules, all defined in `src/mcp/mod.rs` and dispatched to per-provider handler modules in `src/mcp/tools_*.rs`. Names are namespaced by platform:
 
 | Namespace | Tools | Namespace | Tools |
 |-----------|------:|-----------|------:|
@@ -89,35 +88,21 @@ The remaining 68 are cross-platform: `posts_*`, `analytics_*`, `feed_*`, `integr
 | **Media** | Images, videos, GIFs, carousels |
 | **Analytics** | Engagement, reach, follower growth |
 | **Rate limiting** | Per-platform, auto-backoff, concurrency limit + circuit breaker |
-| **MCP** | 327 tools across 42 modules for agent orchestration |
+| **MCP** | 327 tools across 41 modules for agent orchestration |
 
 ---
 
 ## Configuration
 
-```yaml
-# ~/.config/social-forge/config.yaml
-platforms:
-  twitter:
-    api_key: "..."
-    api_secret: "..."
-    access_token: "..."
-    access_token_secret: "..."
-  linkedin:
-    access_token: "..."
-  reddit:
-    client_id: "..."
-    client_secret: "..."
-    username: "..."
-    password: "..."
+All config lives in `~/.social-forge/.env` (created by `social-forge init`).
+See `.env.example` for the full documented list. The only required value
+is `DATABASE_URL`; everything else has defaults:
 
-scheduler:
-  timezone: "UTC"
-  max_concurrent: 10
-
-mcp:
-  enabled: true
-  port: 8001
+```bash
+DATABASE_URL=postgres://user:pass@localhost:5432/social_forge
+APP_PASSWORD=choose-a-strong-password   # single-user gate for the WebUI
+APP_URL=http://localhost:6543           # public URL (OAuth redirects)
+TOKEN_ENCRYPTION_KEY=<64 hex chars>     # AES-256-GCM for tokens at rest
 ```
 
 ---
@@ -126,11 +111,11 @@ mcp:
 
 | Command | Description |
 |---------|-------------|
-| `social-forge post` | Create post |
-| `social-forge schedule` | Schedule post |
-| `social-forge analytics` | Get analytics |
-| `social-forge mcp` | Start MCP server |
-| `social-forge config` | Manage config |
+| `social-forge post "text" --platforms x,bluesky` | Create (or schedule via `--schedule`) post |
+| `social-forge posts schedule <id> <at>` | Schedule an existing draft |
+| `social-forge analytics get` | Get analytics |
+| `social-forge mcp` | Start MCP server (stdio) |
+| `social-forge config set KEY VALUE` | Manage config |
 
 ---
 
@@ -420,7 +405,7 @@ For example:
 - **Language**: Rust (Edition 2021)
 - **Web Framework**: Axum 0.8
 - **Database**: PostgreSQL via sqlx (compile-time checked queries)
-- **MCP**: rmcp 1.6 with 327 tools (42 handler modules)
+- **MCP**: rmcp 1.6 with 327 tools (41 modules)
 - **CLI**: clap 4 with derive macros
 - **TLS Fingerprinting**: wreq (Chrome 131 emulation for X/Twitter)
 - **Scheduler**: Custom tokio::spawn loop with exponential-backoff retry
@@ -441,14 +426,15 @@ For example:
 social-forge/
 ├── src/
 │   ├── main.rs              # Entry point, CLI dispatch
-│   ├── cli/                 # CLI subcommands (clap)
+│   ├── cli/                 # CLI subcommands (clap, 51 commands)
 │   │   ├── mod.rs           # Command definitions
-│   │   └── run.rs           # Handler implementations
+│   │   ├── run.rs           # Cross-platform handler implementations
+│   │   └── platforms/       # 31 thin shims (call shared MCP handlers)
 │   ├── api/                 # REST API (axum routes)
 │   │   ├── mod.rs           # Router + AppState
 │   │   ├── onboard.rs       # OAuth flows + cookie forms
 │   │   └── integrations.rs  # CRUD for connected accounts
-│   ├── mcp/                 # MCP server (327 tools, 42 handler modules)
+│   ├── mcp/                 # MCP server (327 tools, 41 modules)
 │   │   ├── mod.rs           # Tool registry
 │   │   ├── tools_x.rs       # X/Twitter tools
 │   │   ├── tools_reddit.rs  # Reddit tools
@@ -481,7 +467,8 @@ social-forge/
 
 ## Requirements
 
-- Python 3.11+
+- Rust 1.85+ (backend), Node 20+ with pnpm (frontend)
+- PostgreSQL 14+
 - Platform API credentials
 
 ---

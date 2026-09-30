@@ -47,7 +47,7 @@ These are the core design decisions that define social-forge's identity. They we
 
 ### 4. Triple interface: CLI + REST API + MCP server
 - All three interfaces must have feature parity for core operations. If a feature is added to REST, it should be exposed via MCP (for AI agents) and CLI (for shell users).
-- The MCP server is the primary interface for AI agents (Claude, Cursor). It must be comprehensive — 328+ tools is the target, not a limitation.
+- The MCP server is the primary interface for AI agents (Claude, Cursor). It must be comprehensive — 327 tools is the target, not a limitation.
 - The CLI mirrors the MCP tools for shell-based automation.
 
 ### 5. Security-first design
@@ -87,14 +87,31 @@ When implementing features inspired by postiz-app or other competitors, apply th
 
 ---
 
-## 1. What is Social Forge?
+## 0.6. DOCUMENT MAP (what to read, in order)
+
+| Doc | Purpose | When to read |
+|---|---|---|
+| `AGENTS.md` (this file) | Build/test/git/security protocol | Always, first |
+| `README.md` | User-facing overview, platform tiers, CLI/MCP reference | For product context |
+| `docs/planning/PLAN_PARITY_DEPTH_SINGLEUSER_v25.md` | Live master plan: tier rationale (§1), parity phases | Before parity/feature work |
+| `docs/planning/VENDOR_PINS.md` | Pinned transitive deps enforced by `vendor-pull.sh --check` (CI gate) | Before touching `Cargo.toml` |
+| `SESSION_HOOKS.md` | Session-start ambient-context setup (AXI) | When wiring agent hooks |
+| `skills/social-forge-agent/SKILL.md` | Installed agent skill (via `make install-skill`) | When editing the skill |
+| `skills/social-forge-agent/references/providers.md` | Per-platform provider reference | When editing provider docs |
+| `skills/social-forge-agent/references/quick-reference.md` | 601-line command cheat-sheet (NOT auto-installed) | Reference only; install manually if needed |
+
+Deleted 2026-09-30: 14 stale docs (v19/v20/v22/v24 plans, plans-archive/, root `SKILL.md`, `COLD_START_HANDOFF.md`). If a doc isn't in this table, it doesn't exist — don't go looking for it.
+
+### Rust style: `rust-best-practices` skill
+
+Load the `rust-best-practices` skill (`/home/ishanp/.agents/skills/rust-best-practices/SKILL.md`, Apollo handbook, 10 chapters) before writing or reviewing Rust: `&T` over `.clone()`, `Result` + `?` over `unwrap` (never `unwrap`/`expect` outside tests), `thiserror` for libs / `anyhow` for the binary, `cargo clippy --all-targets --all-features --locked -- -D warnings` clean, descriptive test names with one assertion each.
 
 Social Forge is a **single-user, self-hosted social media management platform** designed for AI agents. It provides a triple interface — CLI, REST API, and MCP server — over 26 social platforms (X, Reddit, LinkedIn, Facebook, Instagram, YouTube, Threads, TikTok, Bluesky, Pinterest, Discord, Slack, Telegram, WhatsApp, WordPress, Medium, Dev.to, Hashnode, GitHub, etc.).
 
 **Architecture in one paragraph:** A single Rust binary (`social-forge`) runs an axum HTTP server (REST API + embedded SvelteKit frontend), an rmcp MCP server (stdio, for AI agents like Claude/Cursor), an in-process scheduler (polls for due posts every 30s), an SSE broadcaster (realtime updates to the frontend), and background tasks (RSS poller, feed refresher, analytics cache refresher). All state lives in PostgreSQL. OAuth tokens are AES-256-GCM encrypted at rest when `TOKEN_ENCRYPTION_KEY` is set.
 
 **Key numbers (as of v11):**
-- 328 MCP tools across 44 files in `src/mcp/`
+- 327 MCP tools across 41 files in `src/mcp/`
 - 26 providers registered by default in `src/social/registry.rs` — 12 Tier-1 (depth) + 14 Tier-2 (publish-maintained), plus 1 Tier-3 (Farcaster) registered only when `ENABLE_ARCHIVE_PROVIDERS` is set. Tier membership lives in `src/social/tier.rs` (plan §1); `kick`/`vk`/`whop`/`lemmy` were removed outright.
 - 18 SQL migrations in `migrations/`
 - ~58,000 LOC of Rust + ~13,000 LOC of Svelte/TS frontend
@@ -126,7 +143,7 @@ social-forge/
 │   ├── cli/                 # CLI commands (mirrors MCP tools)
 │   │   ├── run.rs           # Main CLI dispatcher (~1975 LOC)
 │   │   └── platforms/       # 32 platform shims (thin wrappers around unified commands)
-│   ├── mcp/                 # MCP server (328 tools)
+│   ├── mcp/                 # MCP server (327 tools)
 │   │   ├── mod.rs           # SocialForgeMcpServer impl + #[tool] method registration (~2800 LOC)
 │   │   ├── tools_posts.rs   # Post CRUD MCP tools
 │   │   ├── tools_admin.rs   # v9 parity wrappers (posts_repeat, posts_set_tags, media_delete, etc.)
@@ -604,7 +621,7 @@ social-forge automation list
 }
 ```
 
-### Key MCP tool categories (328 total)
+### Key MCP tool categories (327 total)
 | Category | Sample tools |
 |---|---|
 | Posts | `posts_create`, `posts_list`, `posts_publish`, `posts_repeat`, `posts_set_tags`, `posts_stage` |
