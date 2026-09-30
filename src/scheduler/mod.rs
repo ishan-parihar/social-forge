@@ -25,6 +25,11 @@ const MAX_RETRIES: u32 = 3;
 /// Max posts processed per scheduler tick
 const DUE_POSTS_LIMIT: i64 = 50;
 
+/// Gap between polls of a platform that accepted a post but has not
+/// published it yet (IG transcoding a reel, an async Reddit submit, X
+/// encoding a video).
+const PENDING_POLL_INTERVAL: Duration = crate::social::DEFAULT_POLL_INTERVAL;
+
 /// How far ahead to consider a token "expired" and refresh preemptively
 const TOKEN_REFRESH_BUFFER_SECS: i64 = 300; // 5 minutes
 
@@ -925,8 +930,60 @@ async fn publish_post(
 
     for attempt in 1..=MAX_RETRIES {
         let attempt_start = Utc::now();
-        match provider.publish(&access_token, &content).await {
+        match provider.post_pending(&access_token, &content).await {
             Ok(result) => {
+                // A provider that only *accepted* the post (Instagram reel
+                // still transcoding, async Reddit submit, X video still
+                // encoding) has not published anything yet. Recording it
+                // published now loses the post silently: the id is stored, no
+                // media is ever live, and nothing in the state machine
+                // notices. Poll it to a terminal state first.
+                //
+                // This runs *inside* the success arm on purpose — it is not a
+                // publish retry. Once the platform has the post, re-running
+                // `publish` would duplicate it, so a failed poll breaks out
+                // to the error path instead of continuing the loop.
+                let result = if result.is_pending() {
+                    tracing::info!(
+                        "Post {} accepted-but-pending on {}; polling until terminal",
+                        post.id, post.provider_identifier
+                    );
+                    match provider
+                        .finalize_post(&access_token, &result.platform_post_id, PENDING_POLL_INTERVAL)
+                        .await
+                    {
+                        Ok(settled) => settled,
+                        Err(e) => {
+                            tracing::error!(
+                                "Post {} never finished publishing on {}: {e}",
+                                post.id, post.provider_identifier
+                            );
+                            last_error = Some(crate::error::annotate_scope_loss(
+                                &post.provider_identifier,
+                                &e.to_string(),
+                            ));
+                            break;
+                        }
+                    }
+                } else {
+                    result
+                };
+
+                if !result.is_published() {
+                    // Terminal but not live: the platform rejected the post
+                    // after accepting it. Never write a non-live post as
+                    // published.
+                    tracing::error!(
+                        "Post {} on {} ended in terminal state '{}', not published",
+                        post.id, post.provider_identifier, result.status
+                    );
+                    last_error = Some(format!(
+                        "{} rejected the post after accepting it (status: {})",
+                        post.provider_identifier, result.status
+                    ));
+                    break;
+                }
+
                 // Phase v22: robustness fix for the publish-orphan problem.
                 //
                 // Previously, if update_post_state failed here (DB connection
