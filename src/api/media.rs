@@ -1,6 +1,15 @@
 // ─── Media API Routes ─────────────────────────────────────────
 // File upload and serving for post media attachments.
 //
+// Storage:
+//   Bytes live behind a `MediaStorage` backend. `LocalDisk` (the default)
+//   keeps today's behaviour exactly; `S3` targets any S3-compatible store
+//   (Cloudflare R2) so media survives container restarts and is visible to
+//   every replica. Selection is by env — see `S3Config::from_env`.
+//   `serve_media` and `delete` go through the backend; the upload write
+//   path writes the object the same way (`MediaStorage::store`, which owns
+//   the "Failed to write file: …" error text).
+//
 // Security:
 //   - Upload enforces a MIME allowlist (image/png, image/jpeg, image/webp,
 //     image/gif, video/mp4, video/quicktime) AND verifies magic bytes via
@@ -16,6 +25,8 @@ use axum::{
     Json,
 };
 use axum_extra::extract::Multipart;
+use std::path::PathBuf;
+use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::auth::middleware::AuthenticatedUser;
@@ -44,6 +55,429 @@ const ALLOWED_MIMES: &[&str] = &[
     "video/mp4",
     "video/quicktime",
 ];
+
+// ─── Storage backends ──────────────────────────────────────────
+// One trait, two impls. Everything above this line speaks in object keys
+// (`{uuid}.{ext}`), which is exactly what the `media.storage_path` column
+// stores — so a row written by one backend resolves on the same backend
+// that read it, and switching backends never rewrites the DB.
+
+/// Failure from a [`MediaStorage`] backend.
+///
+/// The `ctx` prefix is baked in by the backend so callers can surface
+/// `AppError::Internal(e.to_string())` and still get the exact message the
+/// handler produced before the backend existed (e.g. "Failed to write
+/// file: No space left on device").
+#[derive(Debug, thiserror::Error)]
+pub enum StorageError {
+    #[error("{ctx}: {src}")]
+    Io {
+        ctx: &'static str,
+        src: std::io::Error,
+    },
+    #[error("HTTP {0}")]
+    Http(String),
+    #[error("object not found")]
+    NotFound,
+}
+
+impl StorageError {
+    fn io(ctx: &'static str, src: std::io::Error) -> Self {
+        Self::Io { ctx, src }
+    }
+}
+
+/// Pluggable blob store for uploaded media bytes.
+///
+/// `key` is the opaque object key, persisted verbatim as
+/// `media.storage_path`. Implementations must treat it as relative —
+/// never as a path to escape from, and never as something to sanitise
+/// differently per backend, or existing rows stop resolving.
+#[async_trait::async_trait]
+pub trait MediaStorage: Send + Sync {
+    /// Short backend id for logs and diagnostics (`"local"`, `"s3"`).
+    fn backend(&self) -> &'static str;
+
+    /// Persist `data` under `key`, overwriting any existing object.
+    async fn store(&self, key: &str, data: &[u8], mime: &str) -> Result<(), StorageError>;
+
+    /// Fetch the bytes for `key`. Missing objects are
+    /// [`StorageError::NotFound`], not `Http`.
+    async fn get(&self, key: &str) -> Result<Vec<u8>, StorageError>;
+
+    /// Remove `key`. Deleting an object that is already gone succeeds.
+    async fn delete(&self, key: &str) -> Result<(), StorageError>;
+}
+
+/// Default backend: files under `config.media_dir`.
+pub struct LocalDisk {
+    dir: PathBuf,
+}
+
+impl LocalDisk {
+    fn new(dir: impl Into<PathBuf>) -> Self {
+        Self { dir: dir.into() }
+    }
+
+    fn path(&self, key: &str) -> PathBuf {
+        self.dir.join(key)
+    }
+}
+
+#[async_trait::async_trait]
+impl MediaStorage for LocalDisk {
+    fn backend(&self) -> &'static str {
+        "local"
+    }
+
+    async fn store(&self, key: &str, data: &[u8], _mime: &str) -> Result<(), StorageError> {
+        tokio::fs::create_dir_all(&self.dir)
+            .await
+            .map_err(|e| StorageError::io("Failed to create upload dir", e))?;
+        tokio::fs::write(self.path(key), data)
+            .await
+            .map_err(|e| StorageError::io("Failed to write file", e))?;
+        Ok(())
+    }
+
+    async fn get(&self, key: &str) -> Result<Vec<u8>, StorageError> {
+        Ok(tokio::fs::read(self.path(key))
+            .await
+            .map_err(|e| StorageError::io("Failed to read file", e))?)
+    }
+
+    async fn delete(&self, key: &str) -> Result<(), StorageError> {
+        let path = self.path(key);
+        if path.exists() {
+            tokio::fs::remove_file(&path)
+                .await
+                .map_err(|e| StorageError::io("Failed to delete file", e))?;
+        }
+        Ok(())
+    }
+}
+
+/// Resolved S3/R2 coordinates. Constructed only when all four env vars are
+/// present, so a half-configured deployment can never silently half-use S3.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct S3Config {
+    /// Base URL, e.g. `https://<account>.r2.cloudflarestorage.com`.
+    pub endpoint: String,
+    pub bucket: String,
+    pub access_key: String,
+    pub secret_key: String,
+}
+
+/// R2 signs every request as region `auto`. MinIO and AWS S3 would need
+/// their own region here; not a knob until someone actually runs one.
+const S3_REGION: &str = "auto";
+
+impl S3Config {
+    /// `None` unless all four values are present and non-empty. Partial
+    /// config falls back to local disk — with a warning, because that
+    /// fallback is exactly what makes media die with the container.
+    fn from_env() -> Option<Self> {
+        let endpoint = std::env::var("MEDIA_S3_ENDPOINT").ok().filter(|v| !v.is_empty());
+        let bucket = std::env::var("MEDIA_S3_BUCKET").ok().filter(|v| !v.is_empty());
+        let access_key = std::env::var("MEDIA_S3_KEY").ok().filter(|v| !v.is_empty());
+        let secret_key = std::env::var("MEDIA_S3_SECRET").ok().filter(|v| !v.is_empty());
+
+        let cfg = Self::from_vars(
+            endpoint.as_deref(),
+            bucket.as_deref(),
+            access_key.as_deref(),
+            secret_key.as_deref(),
+        );
+        if cfg.is_none() && [endpoint, bucket, access_key, secret_key].iter().any(|v| v.is_some()) {
+            warn_once(
+                "MEDIA_S3_* is partially set (all four of ENDPOINT, BUCKET, KEY, SECRET are required) \
+                 — media falls back to local disk and will not survive a container restart",
+            );
+        }
+        cfg
+    }
+
+    fn from_vars(
+        endpoint: Option<&str>,
+        bucket: Option<&str>,
+        access_key: Option<&str>,
+        secret_key: Option<&str>,
+    ) -> Option<Self> {
+        Some(Self {
+            endpoint: endpoint?.trim_end_matches('/').to_string(),
+            bucket: bucket?.to_string(),
+            access_key: access_key?.to_string(),
+            secret_key: secret_key?.to_string(),
+        })
+    }
+}
+
+/// S3-compatible backend over plain `PUT`/`GET`/`DELETE` with SigV4
+/// (service `s3`). Hand-rolled instead of pulling an SDK: three verbs and
+/// one signing routine do not justify the dependency tree, and the HTTP
+/// client is the one `AppState` already owns.
+pub struct S3 {
+    endpoint: String,
+    bucket: String,
+    access_key: String,
+    secret_key: String,
+    client: reqwest::Client,
+}
+
+impl S3 {
+    fn new(cfg: S3Config, client: reqwest::Client) -> Self {
+        Self {
+            endpoint: cfg.endpoint,
+            bucket: cfg.bucket,
+            access_key: cfg.access_key,
+            secret_key: cfg.secret_key,
+            client,
+        }
+    }
+
+    /// `https://<endpoint>/<bucket>/<encoded key>`. Path-style, which R2
+    /// accepts, so a bucket name that is not a valid DNS label still works.
+    fn object_url(&self, key: &str) -> String {
+        format!(
+            "{}/{}/{}",
+            self.endpoint,
+            self.bucket,
+            uri_encode_segment(key)
+        )
+    }
+
+    /// AWS SigV4 headers (service `s3`, region `auto`) for one request.
+    ///
+    /// `extra` holds headers the caller also puts on the wire — signing a
+    /// header that is not sent (or sending a signed header with a different
+    /// value) is the one way to get a 403 from a correct implementation.
+    fn sign_headers(
+        &self,
+        method: &str,
+        url: &str,
+        payload: &[u8],
+        extra: &[(&str, &str)],
+    ) -> Result<Vec<(&'static str, String)>, StorageError> {
+        let parsed = url::Url::parse(url)
+            .map_err(|e| StorageError::Http(format!("bad endpoint url: {e}")))?;
+        let host = match (parsed.host_str(), parsed.port()) {
+            (Some(h), Some(p)) => format!("{h}:{p}"),
+            (Some(h), None) => h.to_string(),
+            _ => return Err(StorageError::Http("endpoint has no host".into())),
+        };
+
+        let now = chrono::Utc::now();
+        let amz_date = now.format("%Y%m%dT%H%M%SZ").to_string();
+        let day = now.format("%Y%m%d").to_string();
+        let scope = format!("{day}/{S3_REGION}/s3/aws4_request");
+        let payload_hash = sha256_hex(payload);
+
+        let mut headers: Vec<(String, String)> = vec![
+            ("host".into(), host),
+            ("x-amz-content-sha256".into(), payload_hash.clone()),
+            ("x-amz-date".into(), amz_date.clone()),
+        ];
+        for (name, value) in extra {
+            headers.push((name.to_ascii_lowercase(), value.trim().to_string()));
+        }
+        headers.sort_by(|a, b| a.0.cmp(&b.0));
+        let signed_headers = headers
+            .iter()
+            .map(|(n, _)| n.as_str())
+            .collect::<Vec<_>>()
+            .join(";");
+        let canonical_headers = headers
+            .iter()
+            .map(|(n, v)| format!("{n}:{v}\n"))
+            .collect::<String>();
+
+        // S3 signs the path once-encoded, with `/` preserved as a separator.
+        let canonical_request = format!(
+            "{method}\n{}\n\n{canonical_headers}\n{signed_headers}\n{payload_hash}",
+            uri_encode_segment(parsed.path())
+        );
+        let string_to_sign = format!(
+            "AWS4-HMAC-SHA256\n{amz_date}\n{scope}\n{}",
+            sha256_hex(canonical_request.as_bytes())
+        );
+
+        let k_date = hmac_sha256(format!("AWS4{}", self.secret_key).as_bytes(), day.as_bytes())?;
+        let k_region = hmac_sha256(&k_date, S3_REGION.as_bytes())?;
+        let k_service = hmac_sha256(&k_region, b"s3")?;
+        let k_signing = hmac_sha256(&k_service, b"aws4_request")?;
+        let signature = hex::encode(hmac_sha256(&k_signing, string_to_sign.as_bytes())?);
+
+        Ok(vec![
+            ("x-amz-date", amz_date),
+            ("x-amz-content-sha256", payload_hash),
+            (
+                "authorization",
+                format!(
+                    "AWS4-HMAC-SHA256 Credential={}/{scope}, SignedHeaders={signed_headers}, Signature={signature}",
+                    self.access_key
+                ),
+            ),
+        ])
+    }
+
+    /// Send a signed `PUT`/`GET`/`DELETE`. Returns the raw response so
+    /// callers can interpret 404 themselves (missing object vs. already
+    /// deleted are both fine for `delete`).
+    async fn send_signed(
+        &self,
+        method: &str,
+        url: &str,
+        payload: Vec<u8>,
+        mime: Option<&str>,
+    ) -> Result<reqwest::Response, StorageError> {
+        let mut req = match method {
+            "PUT" => self.client.put(url),
+            "GET" => self.client.get(url),
+            "DELETE" => self.client.delete(url),
+            _ => return Err(StorageError::Http(format!("unsupported method {method}"))),
+        };
+        let extra: Vec<(&str, &str)> = mime.map(|m| vec![("content-type", m)]).unwrap_or_default();
+        if let Some(m) = mime {
+            req = req.header("content-type", m);
+        }
+        for (name, value) in self.sign_headers(method, url, &payload, &extra)? {
+            req = req.header(name, value);
+        }
+        req.body(payload)
+            .send()
+            .await
+            .map_err(|e| StorageError::Http(e.to_string()))
+    }
+}
+
+#[async_trait::async_trait]
+impl MediaStorage for S3 {
+    fn backend(&self) -> &'static str {
+        "s3"
+    }
+
+    async fn store(&self, key: &str, data: &[u8], mime: &str) -> Result<(), StorageError> {
+        let resp = self
+            .send_signed("PUT", &self.object_url(key), data.to_vec(), Some(mime))
+            .await?;
+        expect_ok(resp).await?;
+        Ok(())
+    }
+
+    async fn get(&self, key: &str) -> Result<Vec<u8>, StorageError> {
+        let resp = self
+            .send_signed("GET", &self.object_url(key), Vec::new(), None)
+            .await?;
+        if resp.status() == reqwest::StatusCode::NOT_FOUND {
+            return Err(StorageError::NotFound);
+        }
+        expect_ok(resp)
+            .await?
+            .bytes()
+            .await
+            .map(|b| b.to_vec())
+            .map_err(|e| StorageError::Http(e.to_string()))
+    }
+
+    async fn delete(&self, key: &str) -> Result<(), StorageError> {
+        let resp = self
+            .send_signed("DELETE", &self.object_url(key), Vec::new(), None)
+            .await?;
+        // S3 already answers 204 for a missing key; tolerate a bucket that
+        // answers 404 instead, since LocalDisk::delete is a no-op there.
+        if resp.status() == reqwest::StatusCode::NOT_FOUND {
+            return Ok(());
+        }
+        expect_ok(resp).await?;
+        Ok(())
+    }
+}
+
+async fn expect_ok(resp: reqwest::Response) -> Result<reqwest::Response, StorageError> {
+    let status = resp.status();
+    if status.is_success() {
+        return Ok(resp);
+    }
+    let body = resp.text().await.unwrap_or_default();
+    Err(StorageError::Http(format!(
+        "{status}: {}",
+        body.chars().take(200).collect::<String>()
+    )))
+}
+
+/// Percent-encode a path, preserving `/` so object keys with folders keep
+/// their separators. S3 signs the path in exactly this encoded form, so the
+/// value sent on the wire and the value signed can never drift.
+fn uri_encode_segment(path: &str) -> String {
+    let mut out = String::with_capacity(path.len());
+    for b in path.bytes() {
+        let c = b as char;
+        if c.is_ascii_alphanumeric() || matches!(c, '-' | '.' | '_' | '~' | '/') {
+            out.push(c);
+        } else {
+            out.push_str(&format!("%{b:02X}"));
+        }
+    }
+    out
+}
+
+fn sha256_hex(bytes: &[u8]) -> String {
+    hex::encode(<sha2::Sha256 as sha2::Digest>::digest(bytes))
+}
+
+fn hmac_sha256(key: &[u8], msg: &[u8]) -> Result<Vec<u8>, StorageError> {
+    use hmac::{Hmac, Mac};
+    let mut mac = <Hmac<sha2::Sha256> as Mac>::new_from_slice(key)
+        .map_err(|e| StorageError::Http(format!("bad hmac key: {e}")))?;
+    mac.update(msg);
+    Ok(mac.finalize().into_bytes().to_vec())
+}
+
+/// Backend selection, split out from [`storage`] so the rules are testable
+/// without a bucket and without mutating process env.
+fn select_backend(
+    s3: Option<S3Config>,
+    media_dir: &str,
+    client: &reqwest::Client,
+) -> Arc<dyn MediaStorage> {
+    match s3 {
+        Some(cfg) => {
+            log_backend_once(true, &cfg.bucket);
+            Arc::new(S3::new(cfg, client.clone()))
+        }
+        None => {
+            log_backend_once(false, media_dir);
+            Arc::new(LocalDisk::new(media_dir))
+        }
+    }
+}
+
+/// The backend media bytes live in for this request.
+///
+/// Reads the S3 env on every call so a restarted process picks up a changed
+/// config without a rebuild, and so the local path stays byte-identical to
+/// the previous hardcoded `config.media_dir` behaviour when S3 is unset.
+pub fn storage(state: &AppState) -> Arc<dyn MediaStorage> {
+    select_backend(S3Config::from_env(), &state.config.media_dir, &state.media_http_client)
+}
+
+/// `storage()` is per-request but the answer only changes when the operator
+/// changes the environment — log it once, loudly, and not per request.
+fn log_backend_once(is_s3: bool, where_: &str) {
+    static LOGGED: std::sync::Once = std::sync::Once::new();
+    LOGGED.call_once(|| {
+        if is_s3 {
+            tracing::info!("Media storage: S3 bucket `{where_}`");
+        } else {
+            tracing::info!("Media storage: local disk `{where_}`");
+        }
+    });
+}
+
+fn warn_once(msg: &str) {
+    static LOGGED: std::sync::Once = std::sync::Once::new();
+    LOGGED.call_once(|| tracing::warn!("{msg}"));
+}
 
 /// POST /api/media — upload a file
 pub async fn upload(
@@ -170,13 +604,10 @@ pub async fn delete(
         .await?
         .ok_or_else(|| AppError::NotFound("Media not found".into()))?;
 
-    let upload_dir = std::path::Path::new(&state.config.media_dir);
-    let filepath = upload_dir.join(&entry.storage_path);
-    if filepath.exists() {
-        tokio::fs::remove_file(&filepath).await.map_err(|e| {
-            AppError::Internal(format!("Failed to delete file: {e}"))
-        })?;
-    }
+    storage(&state)
+        .delete(&entry.storage_path)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
 
     Ok(Json(serde_json::json!({"deleted": true})))
 }
@@ -197,11 +628,10 @@ pub async fn serve_media(
         .await?
         .ok_or_else(|| AppError::NotFound("Media not found".into()))?;
 
-    let upload_dir = std::path::Path::new(&state.config.media_dir);
-    let filepath = upload_dir.join(&media.storage_path);
-    let data = tokio::fs::read(&filepath).await.map_err(|_| {
-        AppError::NotFound("File not found on disk".into())
-    })?;
+    let data = storage(&state)
+        .get(&media.storage_path)
+        .await
+        .map_err(|_| AppError::NotFound("File not found on disk".into()))?;
 
     let mime_str = media.mime_type.as_str();
 
@@ -470,5 +900,84 @@ mod tests {
     fn sniff_rejects_empty() {
         assert_eq!(sniff_mime(&[]), None);
         assert_eq!(sniff_mime(&[1, 2, 3]), None);
+    }
+
+    // ── backend selection ───────────────────────────────────
+    // No bucket, no network: these pin the rules that decide which
+    // backend serves a request.
+
+    fn s3_env() -> S3Config {
+        S3Config::from_vars(
+            Some("https://acct.r2.cloudflarestorage.com/"),
+            Some("media"),
+            Some("AKIA"),
+            Some("secret"),
+        )
+        .expect("all four vars present")
+    }
+
+    #[test]
+    fn selects_local_when_s3_unset() {
+        let backend = select_backend(None, "./uploads", &reqwest::Client::new());
+        assert_eq!(backend.backend(), "local");
+    }
+
+    #[test]
+    fn selects_s3_when_configured() {
+        let backend = select_backend(Some(s3_env()), "./uploads", &reqwest::Client::new());
+        assert_eq!(backend.backend(), "s3");
+    }
+
+    #[test]
+    fn s3_config_requires_all_four_vars() {
+        let partial = S3Config::from_vars(Some("https://acct.r2.cloudflarestorage.com"), Some("media"), Some("AKIA"), None);
+        assert!(partial.is_none());
+    }
+
+    #[test]
+    fn s3_config_rejects_blank_vars() {
+        let blank = S3Config::from_vars(Some("https://acct.r2.cloudflarestorage.com"), Some("  "), Some("AKIA"), Some("secret"));
+        assert!(blank.is_none());
+    }
+
+    #[test]
+    fn s3_config_strips_trailing_slash_from_endpoint() {
+        assert_eq!(s3_env().endpoint, "https://acct.r2.cloudflarestorage.com");
+    }
+
+    #[test]
+    fn object_url_is_path_style_and_encodes_key() {
+        let s3 = S3::new(s3_env(), reqwest::Client::new());
+        assert_eq!(
+            s3.object_url("ab cd.png"),
+            "https://acct.r2.cloudflarestorage.com/media/ab%20cd.png"
+        );
+    }
+
+    #[test]
+    fn local_disk_roundtrips_and_deletes_idempotently() {
+        let dir = std::env::temp_dir().join(format!("sf-media-test-{}", Uuid::new_v4()));
+        let local = LocalDisk::new(&dir);
+        let rt = async_runtime();
+
+        rt.block_on(async {
+            local.store("a.png", b"\x89PNG-body", "image/png").await.unwrap();
+            assert_eq!(local.get("a.png").await.unwrap(), b"\x89PNG-body");
+
+            local.delete("a.png").await.unwrap();
+            assert!(matches!(local.get("a.png").await, Err(StorageError::Io { .. })));
+            // Second delete must be a no-op, not an error.
+            local.delete("a.png").await.unwrap();
+        });
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// Minimal current-thread runtime so the disk test needs no dev-dependency.
+    fn async_runtime() -> tokio::runtime::Runtime {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("runtime")
     }
 }
