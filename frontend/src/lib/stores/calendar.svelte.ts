@@ -55,11 +55,19 @@ if (typeof window !== 'undefined') {
 }
 
 // Persist view + date changes to localStorage.
-$effect(() => {
-  if (typeof localStorage !== 'undefined') {
-    localStorage.setItem(VIEW_KEY, _state.view);
-    localStorage.setItem(DATE_KEY, _state.currentDate.toISOString());
-  }
+//
+// `$effect` at module top level throws `effect_orphan` (it needs an active
+// effect/component context, and a bare module has neither) — which killed the
+// whole /calendar route at import time, before a single event was fetched.
+// `$effect.root` supplies the missing root; the returned disposer is
+// intentionally dropped because this singleton outlives every component.
+$effect.root(() => {
+  $effect(() => {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(VIEW_KEY, _state.view);
+      localStorage.setItem(DATE_KEY, _state.currentDate.toISOString());
+    }
+  });
 });
 
 export const calendarState = {

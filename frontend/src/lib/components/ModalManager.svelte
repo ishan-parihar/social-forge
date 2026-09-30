@@ -45,8 +45,15 @@
   onMount(() => {
     window.addEventListener('keydown', handleKeydown);
   });
+  // `onDestroy` also runs during SSR, where `window` does not exist — the bare
+  // `window.removeEventListener` here used to throw `window is not defined`
+  // and 500 every server-rendered route in dev. The listener is only ever
+  // added from onMount (client-only), so skipping the removal on the server is
+  // correct, not just defensive.
   onDestroy(() => {
-    window.removeEventListener('keydown', handleKeydown);
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('keydown', handleKeydown);
+    }
   });
 
   // Resolve a size string to a CSS max-width.
