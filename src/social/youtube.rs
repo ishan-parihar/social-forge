@@ -372,6 +372,26 @@ impl YoutubeProvider {
     }
 }
 
+impl YoutubeProvider {
+    /// Resolve the channel to report on: the integration's bound channel when the
+    /// caller knows it, otherwise the first channel the token's user owns.
+    async fn resolve_channel_id(
+        &self,
+        access_token: &str,
+        internal_id: &str,
+    ) -> Result<Option<String>, ProviderError> {
+        if !internal_id.is_empty() {
+            return Ok(Some(internal_id.to_string()));
+        }
+        Ok(self.pages(access_token).await?.first().map(|c| c.id.clone()))
+    }
+
+    /// `statistics` sub-object of the first item in a Data API list response.
+    fn first_statistics(json: &serde_json::Value) -> Option<&serde_json::Value> {
+        json["items"].as_array()?.first().map(|i| &i["statistics"])
+    }
+}
+
 #[async_trait]
 impl SocialProvider for YoutubeProvider {
     fn identifier(&self) -> &'static str {
@@ -692,6 +712,61 @@ impl SocialProvider for YoutubeProvider {
         Ok(None)
     }
 
+    /// Channel-level analytics for the dashboard.
+    ///
+    /// The YouTube Data API exposes only lifetime counters under the scopes this
+    /// provider holds (`youtube`, `youtube.upload`, `youtube.force-ssl`); a real
+    /// per-day range needs `yt-analytics.readonly`, which is deliberately not
+    /// requested. So every series is a single point dated today — the same shape
+    /// X returns — and `days` carries no meaning.
+    async fn analytics(
+        &self,
+        access_token: &str,
+        internal_id: &str,
+        _days: u32,
+    ) -> Result<Vec<AnalyticsData>, ProviderError> {
+        let Some(channel_id) = self.resolve_channel_id(access_token, internal_id).await? else {
+            return Ok(vec![]);
+        };
+        let json = self.get_channel_stats(access_token, &channel_id).await?;
+        let Some(stats) = Self::first_statistics(&json) else {
+            return Ok(vec![]);
+        };
+        let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+        Ok(metrics_series(
+            stats,
+            &today,
+            &[
+                ("Subscribers", "subscriberCount"),
+                ("Total Views", "viewCount"),
+                ("Videos", "videoCount"),
+            ],
+        ))
+    }
+
+    /// Per-video analytics. The Data API serves lifetime counts only, so views /
+    /// likes / comments come back as a single point dated today.
+    async fn post_analytics(
+        &self,
+        access_token: &str,
+        platform_post_id: &str,
+    ) -> Result<Vec<AnalyticsData>, ProviderError> {
+        let json = self.get_video(access_token, platform_post_id).await?;
+        let Some(stats) = Self::first_statistics(&json) else {
+            return Ok(vec![]);
+        };
+        let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+        Ok(metrics_series(
+            stats,
+            &today,
+            &[
+                ("Views", "viewCount"),
+                ("Likes", "likeCount"),
+                ("Comments", "commentCount"),
+            ],
+        ))
+    }
+
     async fn publish(
         &self,
         access_token: &str,
@@ -866,5 +941,65 @@ impl SocialProvider for YoutubeProvider {
                 .to_string();
             Err(ProviderError::Api(msg))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::social::parse_engagement_data;
+
+    #[test]
+    fn parse_should_map_youtube_string_encoded_statistics() {
+        // The Data API encodes statistics as strings, not numbers.
+        let raw = serde_json::json!({
+            "viewCount": "1200",
+            "likeCount": "42",
+            "commentCount": "12"
+        });
+        let e = parse_engagement_data("youtube", raw);
+        assert_eq!(e.views, 1200);
+        assert_eq!(e.likes, 42);
+        assert_eq!(e.comments, 12);
+    }
+
+    #[test]
+    fn parse_should_unwrap_youtube_statistics_object() {
+        let raw = serde_json::json!({
+            "id": "dQw4w9WgXcQ",
+            "statistics": { "viewCount": 7, "likeCount": 3, "commentCount": 1 }
+        });
+        let e = parse_engagement_data("youtube", raw);
+        assert_eq!(e.views, 7);
+        assert_eq!(e.likes, 3);
+        assert_eq!(e.comments, 1);
+    }
+
+    #[test]
+    fn parse_should_default_missing_youtube_metrics_to_zero() {
+        let e = parse_engagement_data("youtube", serde_json::json!({ "viewCount": "9" }));
+        assert_eq!(e.views, 9);
+        assert_eq!(e.likes, 0);
+        assert_eq!(e.comments, 0);
+    }
+
+    #[test]
+    fn metrics_series_should_skip_absent_keys() {
+        let stats = serde_json::json!({ "subscriberCount": "128", "viewCount": "9" });
+        let series = metrics_series(
+            &stats,
+            "2026-09-30",
+            &[("Subscribers", "subscriberCount"), ("Total Views", "viewCount"), ("Videos", "videoCount")],
+        );
+        assert_eq!(series.len(), 2, "missing videoCount must be skipped, not zero-filled");
+        assert_eq!(series[0].label, "Subscribers");
+        assert_eq!(series[0].data[0].total, "128");
+        assert_eq!(series[1].data[0].date, "2026-09-30");
+    }
+
+    #[test]
+    fn first_statistics_should_return_none_for_empty_list() {
+        let json = serde_json::json!({ "items": [] });
+        assert!(YoutubeProvider::first_statistics(&json).is_none());
     }
 }

@@ -678,6 +678,51 @@ pub enum ProviderError {
 
 // ── Engagement Data Parser ────────────────────────────────────
 
+// ── Provider metric readers (v25 §2 rows 3–4) ───────────────────
+
+/// Read one count out of a JSON object, tolerating the shapes the analytics
+/// endpoints use: YouTube Data API sends string-encoded numbers
+/// (`"viewCount": "1200"`), Pinterest uses SCREAMING_SNAKE keys
+/// (`"IMPRESSION"`), TikTok uses snake_case integers. Key lookup is
+/// case-insensitive so both key styles match.
+pub(crate) fn count(source: &serde_json::Value, key: &str) -> Option<i32> {
+    let obj = source.as_object()?;
+    let v = obj.get(key).or_else(|| {
+        obj.iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case(key))
+            .map(|(_, v)| v)
+    })?;
+    // Saturate instead of `as i32`: an out-of-range count is a bad reading,
+    // not a negative one, and must never be written to the DB as such.
+    let n = v
+        .as_i64()
+        .or_else(|| v.as_f64().map(|f| f as i64))
+        .or_else(|| v.as_str()?.trim().parse().ok())?;
+    Some(i32::try_from(n).unwrap_or(i32::MAX))
+}
+
+/// Build single-date `AnalyticsData` series from a flat metrics object.
+/// `keys` are `(label, json_key)` pairs; absent or non-numeric keys are skipped
+/// so a provider that omits a metric reports the rest rather than a bogus zero.
+pub(crate) fn metrics_series(
+    source: &serde_json::Value,
+    date: &str,
+    keys: &[(&str, &str)],
+) -> Vec<AnalyticsData> {
+    keys.iter()
+        .filter_map(|(label, key)| {
+            count(source, key).map(|v| AnalyticsData {
+                label: (*label).to_string(),
+                data: vec![AnalyticsDataPoint {
+                    total: v.to_string(),
+                    date: date.to_string(),
+                }],
+                percentage_change: 0.0,
+            })
+        })
+        .collect()
+}
+
 /// Parse a provider's raw engagement JSON into a normalized EngagementData struct.
 /// Each provider returns a different JSON shape from get_post_engagement().
 /// This function handles all known provider-specific formats.
@@ -762,10 +807,13 @@ pub fn parse_engagement_data(provider: &str, raw: serde_json::Value) -> Engageme
         }
 
         // YouTube: { "viewCount": 1200, "likeCount": 42, "dislikeCount": 2, "commentCount": 12 }
+        // The Data API encodes these as strings, and callers may hand us either
+        // the normalized flat object or the raw `statistics` sub-object.
         "youtube" => {
-            e.views = raw.get("viewCount").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-            e.likes = raw.get("likeCount").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-            e.comments = raw.get("commentCount").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            let m = raw.get("statistics").unwrap_or(&raw);
+            e.views = count(m, "viewCount").unwrap_or(0);
+            e.likes = count(m, "likeCount").unwrap_or(0);
+            e.comments = count(m, "commentCount").unwrap_or(0);
         }
 
         // Mastodon: { "favourites_count": 42, "reblogs_count": 8, "replies_count": 3 }
@@ -776,11 +824,30 @@ pub fn parse_engagement_data(provider: &str, raw: serde_json::Value) -> Engageme
         }
 
         // TikTok: { "like_count": 42, "comment_count": 12, "share_count": 5, "view_count": 1200 }
+        // The provider flattens the Display API envelope to the single video
+        // object before calling this, so the flat shape is the contract.
         "tiktok" => {
-            e.likes = raw.get("like_count").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-            e.comments = raw.get("comment_count").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-            e.shares = raw.get("share_count").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-            e.views = raw.get("view_count").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            e.likes = count(&raw, "like_count").unwrap_or(0);
+            e.comments = count(&raw, "comment_count").unwrap_or(0);
+            e.shares = count(&raw, "share_count").unwrap_or(0);
+            e.views = count(&raw, "view_count").unwrap_or(0);
+        }
+
+        // Pinterest: { "all": { "summary_metrics": { "IMPRESSION": 1200, "PIN_CLICK": 42,
+        //                          "OUTBOUND_CLICK": 12, "SAVE": 7 } } }
+        // Also accepts a flat metrics object, and a body-level `summary_metrics`.
+        // Pinterest has no like metric, so pin clicks stand in as the positive
+        // engagement signal (the same treatment Reddit's score gets above);
+        // saves and impressions map literally, and OUTBOUND_CLICK stays in `raw`.
+        "pinterest" => {
+            let m = raw
+                .get("all")
+                .and_then(|a| a.get("summary_metrics"))
+                .or_else(|| raw.get("summary_metrics"))
+                .unwrap_or(&raw);
+            e.views = count(m, "IMPRESSION").unwrap_or(0);
+            e.saves = count(m, "SAVE").unwrap_or(0);
+            e.likes = count(m, "PIN_CLICK").unwrap_or(0);
         }
 
         // Threads: { "like_count": 42, "reply_count": 12, "repost_count": 5, "quote_count": 1 }

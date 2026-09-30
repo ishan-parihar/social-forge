@@ -52,6 +52,19 @@ impl TikTokProvider {
         }
     }
 
+    /// Find one video's metrics in a `/v2/video/list/` response by id.
+    /// The Display API returns videos newest-first, so the first page is where a
+    /// just-published post lives.
+    fn find_video<'a>(
+        list: &'a serde_json::Value,
+        video_id: &str,
+    ) -> Option<&'a serde_json::Value> {
+        list["data"]["videos"]
+            .as_array()?
+            .iter()
+            .find(|v| v["id"].as_str() == Some(video_id))
+    }
+
     /// List the authenticated user's videos.
     pub async fn list_videos(
         &self,
@@ -105,6 +118,9 @@ impl SocialProvider for TikTokProvider {
             "user.info.basic".into(),
             "video.publish".into(),
             "video.upload".into(),
+            // Display API read scope: backs list_videos(), which get_recent_posts()
+            // and the analytics/engagement paths all depend on.
+            "video.list".into(),
         ]
     }
 
@@ -416,6 +432,70 @@ impl SocialProvider for TikTokProvider {
         Ok(posts)
     }
 
+    /// Per-post counts (likes, comments, shares, views) for one video.
+    ///
+    /// The open API has no per-video analytics endpoint, so the counts come from
+    /// the Display API `video.list` feed.
+    async fn get_post_engagement(
+        &self,
+        access_token: &str,
+        platform_post_id: &str,
+    ) -> Result<Option<serde_json::Value>, ProviderError> {
+        // ponytail: first page only (100 newest). Covers any post the scheduler
+        // published; a post that has fallen out of the window reports None rather
+        // than a wrong zero. Page with data.cursor if that ever matters.
+        let list = self.list_videos(access_token, 100).await?;
+        Ok(Self::find_video(&list, platform_post_id).cloned())
+    }
+
+    /// Account-level analytics for the dashboard.
+    ///
+    /// `user.info.basic` returns lifetime counters only, so each series is a
+    /// single point dated today and `days` carries no meaning.
+    async fn analytics(
+        &self,
+        access_token: &str,
+        _internal_id: &str,
+        _days: u32,
+    ) -> Result<Vec<AnalyticsData>, ProviderError> {
+        let info = self.get_user_info(access_token).await?;
+        let user = &info["data"]["user"];
+        let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+        Ok(metrics_series(
+            user,
+            &today,
+            &[
+                ("Followers", "follower_count"),
+                ("Following", "following_count"),
+                ("Likes", "likes_count"),
+                ("Videos", "video_count"),
+            ],
+        ))
+    }
+
+    /// Per-post analytics, rendered from the same Display API counts as
+    /// `get_post_engagement` — there is no separate analytics endpoint.
+    async fn post_analytics(
+        &self,
+        access_token: &str,
+        platform_post_id: &str,
+    ) -> Result<Vec<AnalyticsData>, ProviderError> {
+        let Some(video) = self.get_post_engagement(access_token, platform_post_id).await? else {
+            return Ok(vec![]);
+        };
+        let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+        Ok(metrics_series(
+            &video,
+            &today,
+            &[
+                ("Views", "view_count"),
+                ("Likes", "like_count"),
+                ("Comments", "comment_count"),
+                ("Shares", "share_count"),
+            ],
+        ))
+    }
+
     /// Return the authenticated user as a single "page" (TikTok has no multi-page concept).
     async fn pages(&self, access_token: &str) -> Result<Vec<PageInfo>, ProviderError> {
         let info = self.get_user_info(access_token).await?;
@@ -463,5 +543,73 @@ impl SocialProvider for TikTokProvider {
             picture: info.picture,
             username: info.username,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::social::parse_engagement_data;
+
+    #[test]
+    fn parse_should_map_tiktok_display_api_counts() {
+        let raw = serde_json::json!({
+            "id": "7300000000000000000",
+            "view_count": 1200,
+            "like_count": 42,
+            "comment_count": 12,
+            "share_count": 5
+        });
+        let e = parse_engagement_data("tiktok", raw);
+        assert_eq!(e.views, 1200);
+        assert_eq!(e.likes, 42);
+        assert_eq!(e.comments, 12);
+        assert_eq!(e.shares, 5);
+    }
+
+    #[test]
+    fn parse_should_read_string_encoded_tiktok_counts() {
+        // `/v2/video/query/?fields=…` can return counts as strings.
+        let raw = serde_json::json!({ "like_count": "8", "view_count": "90" });
+        let e = parse_engagement_data("tiktok", raw);
+        assert_eq!(e.views, 90);
+        assert_eq!(e.likes, 8);
+    }
+
+    #[test]
+    fn parse_should_default_missing_tiktok_metrics_to_zero() {
+        let e = parse_engagement_data("tiktok", serde_json::json!({ "like_count": 3 }));
+        assert_eq!(e.likes, 3);
+        assert_eq!(e.views, 0);
+        assert_eq!(e.shares, 0);
+    }
+
+    #[test]
+    fn find_video_should_match_by_id() {
+        let list = serde_json::json!({
+            "data": { "videos": [ { "id": "111", "like_count": 1 }, { "id": "222", "like_count": 2 } ] }
+        });
+        let found = TikTokProvider::find_video(&list, "222").expect("video 222 must be found");
+        assert_eq!(found["like_count"], 2);
+    }
+
+    #[test]
+    fn find_video_should_return_none_for_unknown_id() {
+        let list = serde_json::json!({ "data": { "videos": [ { "id": "111" } ] } });
+        assert!(TikTokProvider::find_video(&list, "999").is_none());
+    }
+
+    #[test]
+    fn metrics_series_should_skip_tiktok_counters_absent_from_response() {
+        // Display API omits counters for private/under-review videos.
+        let video = serde_json::json!({ "id": "1", "like_count": 4 });
+        let series = metrics_series(
+            &video,
+            "2026-09-30",
+            &[("Views", "view_count"), ("Likes", "like_count"), ("Shares", "share_count")],
+        );
+        assert_eq!(series.len(), 1);
+        assert_eq!(series[0].label, "Likes");
+        assert_eq!(series[0].data[0].total, "4");
     }
 }

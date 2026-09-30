@@ -178,6 +178,19 @@ impl PinterestProvider {
         }
     }
 
+    /// Board to report on: the integration's bound board when the caller knows
+    /// it, otherwise the user's first board.
+    async fn resolve_board_id(
+        &self,
+        access_token: &str,
+        internal_id: &str,
+    ) -> Result<Option<String>, ProviderError> {
+        if !internal_id.is_empty() {
+            return Ok(Some(internal_id.to_string()));
+        }
+        Ok(self.pages(access_token).await?.first().map(|b| b.id.clone()))
+    }
+
     /// Search pins by keyword using Pinterest API v5
     pub async fn search_pins(&self, access_token: &str, query: &str, limit: Option<u32>) -> Result<Value, ProviderError> {
         let max = limit.unwrap_or(25).min(100);
@@ -197,6 +210,78 @@ impl PinterestProvider {
         else if status == StatusCode::FORBIDDEN { Err(ProviderError::Auth(v["message"].as_str().unwrap_or("forbidden").into())) }
         else { Err(ProviderError::Api(v["message"].as_str().unwrap_or(&text).into())) }
     }
+}
+
+/// Build the `(start_date, end_date)` window Pinterest analytics accepts.
+/// v5 rejects a range wider than 90 days, so a longer dashboard request is
+/// clamped here instead of erroring at the API.
+fn analytics_window(days: u32) -> (String, String) {
+    let days = i64::from(days.clamp(1, 90));
+    let end = chrono::Utc::now().date_naive();
+    let start = end - chrono::Duration::days(days - 1);
+    (
+        start.format("%Y-%m-%d").to_string(),
+        end.format("%Y-%m-%d").to_string(),
+    )
+}
+
+/// Pinterest analytics metric labels paired with the keys the v5 API uses.
+const PIN_METRICS: [(&str, &str); 4] = [
+    ("Impressions", "IMPRESSION"),
+    ("Pin Clicks", "PIN_CLICK"),
+    ("Outbound Clicks", "OUTBOUND_CLICK"),
+    ("Saves", "SAVE"),
+];
+
+/// Convert a Pinterest analytics payload into one date series per metric.
+///
+/// Prefers `all.daily_metrics` (one point per day, which is what the dashboard
+/// plots) and falls back to a single `today` point when the API returns
+/// `summary_metrics` only. `today` is passed in so the mapping stays a pure
+/// function of the payload and can be fixture-tested.
+fn pin_analytics_series(raw: &serde_json::Value, today: &str) -> Vec<AnalyticsData> {
+    let all = raw.get("all").unwrap_or(raw);
+    let daily = all
+        .get("daily_metrics")
+        .and_then(|d| d.as_object());
+    let summary = all.get("summary_metrics").unwrap_or(all);
+
+    PIN_METRICS
+        .iter()
+        .map(|(label, key)| {
+            let points: Vec<AnalyticsDataPoint> = daily
+                .map(|days| {
+                    days.iter()
+                        .filter_map(|(date, metrics)| {
+                            count(metrics, key).map(|v| AnalyticsDataPoint {
+                                total: v.to_string(),
+                                date: date.clone(),
+                            })
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+
+            let data = if points.is_empty() {
+                count(summary, key)
+                    .map(|v| {
+                        vec![AnalyticsDataPoint {
+                            total: v.to_string(),
+                            date: today.to_string(),
+                        }]
+                    })
+                    .unwrap_or_default()
+            } else {
+                points
+            };
+
+            AnalyticsData {
+                label: (*label).to_string(),
+                data,
+                percentage_change: 0.0,
+            }
+        })
+        .collect()
 }
 
 #[async_trait]
@@ -426,6 +511,60 @@ impl SocialProvider for PinterestProvider {
         Ok(posts)
     }
 
+    /// Pin engagement counts (impressions, saves, pin clicks) for one pin.
+    ///
+    /// Pinterest exposes these only through the analytics endpoints, not on the
+    /// pin resource itself, so this returns the raw analytics response and lets
+    /// `parse_engagement_data` normalize it.
+    async fn get_post_engagement(
+        &self,
+        access_token: &str,
+        platform_post_id: &str,
+    ) -> Result<Option<serde_json::Value>, ProviderError> {
+        let (start, end) = analytics_window(30);
+        let json = self
+            .get_pin_analytics(access_token, platform_post_id, &start, &end)
+            .await?;
+        // Non-2xx already surfaces as Err from get_pin_analytics(); this guards
+        // the 200-with-unexpected-body case so a junk payload never reaches the parser.
+        if json.get("all").is_none() && json.get("summary_metrics").is_none() {
+            return Ok(None);
+        }
+        Ok(Some(json))
+    }
+
+    /// Board-level analytics for the dashboard, one date series per metric.
+    async fn analytics(
+        &self,
+        access_token: &str,
+        internal_id: &str,
+        days: u32,
+    ) -> Result<Vec<AnalyticsData>, ProviderError> {
+        let Some(board_id) = self.resolve_board_id(access_token, internal_id).await? else {
+            return Ok(vec![]);
+        };
+        let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+        let (start, end) = analytics_window(days);
+        let json = self
+            .get_board_analytics(access_token, &board_id, &start, &end)
+            .await?;
+        Ok(pin_analytics_series(&json, &today))
+    }
+
+    /// Per-pin analytics, one date series per metric over the last 30 days.
+    async fn post_analytics(
+        &self,
+        access_token: &str,
+        platform_post_id: &str,
+    ) -> Result<Vec<AnalyticsData>, ProviderError> {
+        let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+        let (start, end) = analytics_window(30);
+        let json = self
+            .get_pin_analytics(access_token, platform_post_id, &start, &end)
+            .await?;
+        Ok(pin_analytics_series(&json, &today))
+    }
+
     async fn publish(
         &self,
         access_token: &str,
@@ -521,5 +660,107 @@ impl PinterestProvider {
         Err(ProviderError::Api(
             "Video pin upload requires additional setup. Use image pins instead.".into(),
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::social::parse_engagement_data;
+
+    #[test]
+    fn parse_should_map_pinterest_summary_metrics() {
+        let raw = serde_json::json!({
+            "all": {
+                "summary_metrics": {
+                    "IMPRESSION": 1200,
+                    "PIN_CLICK": 42,
+                    "OUTBOUND_CLICK": 12,
+                    "SAVE": 7
+                }
+            }
+        });
+        let e = parse_engagement_data("pinterest", raw);
+        assert_eq!(e.views, 1200);
+        assert_eq!(e.saves, 7);
+        // Pinterest has no like metric; pin clicks stand in for it.
+        assert_eq!(e.likes, 42);
+    }
+
+    #[test]
+    fn parse_should_fall_back_to_flat_pinterest_metrics() {
+        let raw = serde_json::json!({ "IMPRESSION": 5, "PIN_CLICK": 1, "SAVE": 0 });
+        let e = parse_engagement_data("pinterest", raw);
+        assert_eq!(e.views, 5);
+        assert_eq!(e.likes, 1);
+        assert_eq!(e.saves, 0);
+    }
+
+    #[test]
+    fn parse_should_default_missing_pinterest_metrics_to_zero() {
+        let e = parse_engagement_data(
+            "pinterest",
+            serde_json::json!({ "all": { "summary_metrics": { "IMPRESSION": 3 } } }),
+        );
+        assert_eq!(e.views, 3);
+        assert_eq!(e.saves, 0);
+        assert_eq!(e.likes, 0);
+    }
+
+    #[test]
+    fn parse_should_read_pinterest_metrics_case_insensitively() {
+        let raw = serde_json::json!({
+            "all": { "summary_metrics": { "impression": 11, "save": 2 } }
+        });
+        let e = parse_engagement_data("pinterest", raw);
+        assert_eq!(e.views, 11);
+        assert_eq!(e.saves, 2);
+    }
+
+    #[test]
+    fn pin_analytics_series_should_map_daily_metrics_to_date_series() {
+        let raw = serde_json::json!({
+            "all": {
+                "daily_metrics": {
+                    "2026-09-28": { "IMPRESSION": 10, "SAVE": 1 },
+                    "2026-09-29": { "IMPRESSION": 20, "SAVE": 2 }
+                },
+                "summary_metrics": { "IMPRESSION": 30, "SAVE": 3 }
+            }
+        });
+        let series = pin_analytics_series(&raw, "2026-09-30");
+        let impressions = series
+            .iter()
+            .find(|s| s.label == "Impressions")
+            .expect("Impressions series");
+        assert_eq!(impressions.data.len(), 2);
+        assert_eq!(impressions.data[0].date, "2026-09-28");
+        assert_eq!(impressions.data[1].total, "20");
+        let saves = series.iter().find(|s| s.label == "Saves").expect("Saves series");
+        assert_eq!(saves.data[1].total, "2");
+    }
+
+    #[test]
+    fn pin_analytics_series_should_fall_back_to_summary_point() {
+        let raw = serde_json::json!({
+            "all": { "summary_metrics": { "IMPRESSION": 30, "PIN_CLICK": 4 } }
+        });
+        let series = pin_analytics_series(&raw, "2026-09-30");
+        let impressions = series
+            .iter()
+            .find(|s| s.label == "Impressions")
+            .expect("Impressions series");
+        assert_eq!(impressions.data.len(), 1);
+        assert_eq!(impressions.data[0].total, "30");
+        assert_eq!(impressions.data[0].date, "2026-09-30");
+    }
+
+    #[test]
+    fn analytics_window_should_clamp_to_pinterest_ninety_day_max() {
+        let (start, end) = analytics_window(3650);
+        assert_eq!(end, chrono::Utc::now().date_naive().format("%Y-%m-%d").to_string());
+        let span = end.parse::<chrono::NaiveDate>().expect("end date")
+            - start.parse::<chrono::NaiveDate>().expect("start date");
+        assert_eq!(span.num_days(), 89, "v5 caps analytics at 90 days inclusive");
     }
 }
