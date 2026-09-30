@@ -1144,7 +1144,7 @@ pub async fn publish_post(
     auth: AuthenticatedUser,
     Path(id): Path<Uuid>,
 ) -> Result<Json<PublishResponse>, crate::error::AppError> {
-    let platform_url = crate::services::posts::PostService::publish(
+    let platform_url = match crate::services::posts::PostService::publish(
         &state.db,
         &state.providers,
         &state.broadcast,
