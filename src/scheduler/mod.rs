@@ -174,8 +174,12 @@ pub fn start_scheduler(
                         .ok()
                         .and_then(|s| s.parse().ok())
                         .unwrap_or(7);
+                    // `$1` binds as bigint; make_interval's `days` arg is int and
+                    // bigint->int is an assignment-only cast, so Postgres raises
+                    // 42883 "function make_interval(days => bigint) does not exist"
+                    // without the explicit cast.
                     match sqlx::query(
-                        "DELETE FROM events_log WHERE created_at < NOW() - make_interval(days => $1)",
+                        "DELETE FROM events_log WHERE created_at < NOW() - make_interval(days => $1::int)",
                     )
                     .bind(retention_days)
                     .execute(&db_events)

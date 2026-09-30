@@ -624,7 +624,7 @@ pub async fn list_posts_search(
            LEFT JOIN post_engagement pe ON pe.post_id = p.id
            WHERE p.user_id = $1
              AND p.deleted_at IS NULL
-             AND ($2::text IS NULL OR p.state = $2::text)
+             AND ($2::text IS NULL OR p.state::text = $2::text)
              AND ($3::text IS NULL OR p.content ILIKE $3 OR p.title ILIKE $3)
              AND ($4::uuid[] IS NULL OR p.integration_id = ANY($4::uuid[]))
              AND ($5::uuid[] IS NULL OR p.id IN (
@@ -644,7 +644,7 @@ pub async fn list_posts_search(
            FROM posts
            WHERE user_id = $1
              AND deleted_at IS NULL
-             AND ($2::text IS NULL OR state = $2::text)
+             AND ($2::text IS NULL OR state::text = $2::text)
              AND ($3::text IS NULL OR content ILIKE $3 OR title ILIKE $3)
              AND ($4::uuid[] IS NULL OR integration_id = ANY($4::uuid[]))
              AND ($5::uuid[] IS NULL OR id IN (
@@ -689,7 +689,7 @@ pub async fn count_posts_search(
     let row: (Option<i64>,) = sqlx::query_as(
         r#"SELECT COUNT(*)::bigint FROM posts
            WHERE user_id = $1
-             AND ($2::text IS NULL OR state = $2::text)
+             AND ($2::text IS NULL OR state::text = $2::text)
              AND ($3::text IS NULL OR content ILIKE $3 OR title ILIKE $3)
              AND ($4::uuid[] IS NULL OR integration_id = ANY($4::uuid[]))
              AND ($5::uuid[] IS NULL OR id IN (
