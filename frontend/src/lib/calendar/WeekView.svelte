@@ -138,12 +138,15 @@
   <div class="grid grid-cols-8 text-center border-b border-line">
     <div class="py-2 text-xs text-muted border-r border-line">{tzLabel}</div>
     {#each weekDays as wd (wd.dateStr)}
-      <div class="py-2 text-xs {wd.isToday ? 'text-accent' : 'text-muted'} relative">
+      <!-- v25 F3: today is a filled accent header cell, not just accent-colored
+           text. The old version (accent text + a 4px dot) was easy to lose
+           against 6 muted columns, which is exactly the moment the user needs
+           the cue most. -->
+      <div class="py-2 text-xs text-center relative {wd.isToday ? 'bg-accent-fill/10 text-accent-strong' : 'text-muted'}">
         <div>{wd.date.toLocaleDateString("en-US", { weekday: "short" })}</div>
         <div class="font-semibold">{wd.date.getDate()}</div>
         {#if wd.isToday}
-          <!-- Phase 7: today indicator — a small dot under the date -->
-          <div class="absolute bottom-0 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-accent-fill"></div>
+          <div class="absolute inset-x-0 bottom-0 h-0.5 bg-accent-fill"></div>
         {/if}
       </div>
     {/each}
@@ -164,6 +167,7 @@
               {isDragOver ? 'ring-2 ring-accent ring-inset bg-accent-fill/5' : ''}
               {wd.isToday ? 'bg-accent-fill/5' : ''}
               {past ? 'opacity-40 cursor-not-allowed' : ''}"
+            title={past ? 'Past — cannot schedule here' : `Drop to move to ${wd.date.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })} at ${hour}`}
             ondragover={(e) => { if (!past) { e.preventDefault(); handleDragEnter(wd.dateStr, hour); } }}
             ondragleave={() => handleDragLeave(wd.dateStr, hour)}
             ondrop={(e) => { if (!past) handleDrop(e, wd.dateStr, hour); }}
@@ -175,16 +179,21 @@
             {#each (eventsByDayHour.get(cellKey) || []) as event (event.id)}
               <div
                 data-event-id={event.id}
-                class="flex items-center gap-1 {event.state === 'published' || past ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'}"
+                class="group/chip flex items-center gap-1 {event.state === 'published' || past ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'}"
                 draggable={event.state !== 'published' && !past}
                 ondragstart={(e) => handleDragStart(e, event.id)}
                 onclick={() => onEventClick?.(event.id)}
                 onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') onEventClick?.(event.id); }}
                 role="button"
                 tabindex="-1"
+                title={event.state === 'published' || past ? 'Published posts cannot be dragged' : 'Drag to reschedule'}
               >
                 {#if onToggleSelect}
                   <input type="checkbox" checked={selected.has(event.id)} onclick={(e) => onToggleSelect?.(event.id, e)} class="rounded shrink-0 w-3 h-3" />
+                {/if}
+                <!-- v25 F3: drag affordance (hover-revealed grip). -->
+                {#if event.state !== 'published' && !past}
+                  <span class="hidden group-hover/chip:inline text-faint leading-none select-none" aria-hidden="true">⠿</span>
                 {/if}
                 <CalendarEvent {event} {onDuplicate} {onStats} {onDelete} />
               </div>

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { formatDateKey, getDayHours } from "./utils";
+  import { formatDateKey, getDayHours, isToday } from "./utils";
   import CalendarEvent from "./CalendarEvent.svelte";
   import type { CalendarEvent as CEvent } from "./types";
   import type { Integration } from "$lib/api/integrations";
@@ -124,6 +124,11 @@
   <div class="py-3 border-b border-line px-4">
     <div class="text-lg font-semibold text-center">
       {date.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
+      <!-- v25 F3: name the day when it IS today, so the day view carries the
+           same orientation cue the week view gets from its today column. -->
+      {#if isToday(date)}
+        <span class="ml-2 align-middle text-[10px] font-medium uppercase tracking-wider px-1.5 py-0.5 rounded bg-accent-fill/10 text-accent-strong">Today</span>
+      {/if}
     </div>
     <div class="flex items-center justify-center gap-3 mt-1 text-xs">
       <span class="text-muted">{dayEvents.length} total</span>
@@ -163,16 +168,21 @@
           {#each (eventsByHour.get(hourStr) || []) as event (event.id)}
             <div
               data-event-id={event.id}
-              class="flex items-center gap-1 {event.state === 'published' ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'}"
+              class="group/chip flex items-center gap-1 {event.state === 'published' ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'}"
               draggable={event.state !== 'published'}
               ondragstart={(e) => handleDragStart(e, event.id)}
               onclick={() => onEventClick?.(event.id)}
               onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') onEventClick?.(event.id); }}
               role="button"
               tabindex="-1"
+              title={event.state === 'published' ? 'Published posts cannot be dragged' : 'Drag to reschedule'}
             >
               {#if onToggleSelect}
                 <input type="checkbox" checked={selected.has(event.id)} onclick={(e) => onToggleSelect?.(event.id, e)} class="rounded shrink-0 w-3 h-3" />
+              {/if}
+              <!-- v25 F3: drag affordance (hover-revealed grip). -->
+              {#if event.state !== 'published'}
+                <span class="hidden group-hover/chip:inline text-faint leading-none select-none" aria-hidden="true">⠿</span>
               {/if}
               <CalendarEvent {event} {onDuplicate} {onStats} {onDelete} />
             </div>

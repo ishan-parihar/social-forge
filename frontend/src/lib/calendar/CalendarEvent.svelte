@@ -58,13 +58,28 @@
         title={`Publishing failed: ${event.error}`}
       >!</span>
     {/if}
-    {#if !compact && event.tags && event.tags.length > 0}
+    {#if event.tags && event.tags.length > 0}
       <span class="event-tags">
-        {#each visibleTags as tag (tag.id)}
-          <span class="tag-dot" style="background: {tag.color}"></span>
-        {/each}
+        {#if compact}
+          <!-- Month cells are space-starved: a 3px dot carries the hue without
+               eating the row. The name is still one hover away. -->
+          {#each visibleTags as tag (tag.id)}
+            <span class="tag-dot" style="background: {tag.color}" title={tag.name}></span>
+          {/each}
+        {:else}
+          <!-- v25 F3: readable tag-color chips. The old 3px dot was a color
+               nobody could name — two tags in a week cell looked identical
+               unless you already knew what you tagged them. A chip with the
+               name in it is self-describing; the color still does the fast
+               visual grouping job. -->
+          {#each visibleTags as tag (tag.id)}
+            <span class="tag-chip" style="background-color: {tag.color}22; color: {tag.color}" title={tag.name}>
+              {tag.name}
+            </span>
+          {/each}
+        {/if}
         {#if overflowCount > 0}
-          <span class="tag-overflow">+{overflowCount}</span>
+          <span class="tag-overflow" title="{event.tags?.length} tags">+{overflowCount}</span>
         {/if}
       </span>
     {/if}
@@ -118,11 +133,16 @@
   .event-chip.queued { background: rgb(var(--warning-rgb) / 0.15); color: rgb(var(--warning-rgb)); }
   .event-chip.published { background: rgb(var(--success-rgb) / 0.15); color: rgb(var(--success-rgb)); }
   .event-chip.error { background: rgb(var(--error-rgb) / 0.15); color: rgb(var(--error-rgb)); }
-  .event-tags { display: flex; align-items: center; gap: 1px; flex-shrink: 0; }
-  .tag-dot { width: 3px; height: 3px; border-radius: 50%; flex-shrink: 0; }
-  .tag-overflow { font-size: 0.5625rem; opacity: 0.6; margin-left: 1px; }
+  .event-tags { display: flex; align-items: center; gap: 2px; flex-shrink: 0; min-width: 0; }
+  .tag-dot { width: 4px; height: 4px; border-radius: 50%; flex-shrink: 0; }
+  .tag-chip {
+    max-width: 72px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    padding: 0 4px; border-radius: 3px; font-size: 0.5625rem; line-height: 1.3;
+    font-weight: 500; flex-shrink: 1;
+  }
+  .tag-overflow { font-size: 0.5625rem; opacity: 0.6; flex-shrink: 0; }
   .event-time { opacity: 0.7; flex-shrink: 0; }
-  .event-content { overflow: hidden; text-overflow: ellipsis; }
+  .event-content { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
   .event-metrics { display: flex; align-items: center; gap: 0.25rem; flex-shrink: 0; margin-left: auto; }
   .metric-item { font-size: 0.5625rem; opacity: 0.6; white-space: nowrap; }
 </style>

@@ -53,12 +53,31 @@
   let newCampaignName = $state('');
 
   // Kanban columns — map post_state to display config.
+  //
+  // v25 F3: `color` used to be raw Tailwind palette steps (`border-t-purple-500`,
+  // `border-t-brand-500`). Those are tuned for neither theme — in light mode
+  // `purple-500` and `brand-500` are the SAME indigo, so two columns looked
+  // identical, and neither rethemed. Now every lane reads an F1 semantic token.
+  // `wip` is the work-in-progress limit: a soft ceiling that shows where a
+  // lane is over capacity. It is advisory (a toast warns, the drop still
+  // lands) because blocking a drag would make the board feel broken rather
+  // than disciplined.
   const columns = [
-    { state: 'idea', label: '💡 Ideas', color: 'border-t-purple-500', emptyMsg: 'No ideas yet. Quick-add one below!' },
-    { state: 'draft', label: '📝 Drafts', color: 'border-t-info', emptyMsg: 'No drafts. Create a post to start.' },
-    { state: 'queued', label: '📅 Scheduled', color: 'border-t-brand-500', emptyMsg: 'No scheduled posts.' },
-    { state: 'published', label: '✅ Published', color: 'border-t-success', emptyMsg: 'No published posts yet.' },
+    { state: 'idea', label: '💡 Ideas', color: 'border-t-hue-violet', wip: 0, emptyMsg: 'No ideas yet. Quick-add one below!' },
+    { state: 'draft', label: '📝 Drafts', color: 'border-t-info', wip: 8, emptyMsg: 'No drafts. Create a post to start.' },
+    { state: 'queued', label: '📅 Scheduled', color: 'border-t-accent-fill', wip: 6, emptyMsg: 'No scheduled posts.' },
+    { state: 'published', label: '✅ Published', color: 'border-t-success', wip: 0, emptyMsg: 'No published posts yet.' },
   ];
+  /** 0 = no limit (backlog / done lanes, where a ceiling is meaningless). */
+  function wipClass(col: typeof columns[number], count: number): string {
+    if (!col.wip || count <= col.wip) return 'text-muted';
+    return 'text-error';
+  }
+  /** Lane count. A function (not an `{@const}`) because the header is not an
+   *  immediate child of a block — `{@const}` is illegal there. */
+  function colCount(state: string): number {
+    return postsByState[state]?.length || 0;
+  }
 
   let unsubscribers: (() => void)[] = [];
 
@@ -265,6 +284,7 @@
       }
     } else {
       // Cross-column move (existing v20 behavior).
+      const targetCol = columns.find(c => c.state === newState);
       draggedPost.state = newState;
       posts = [...posts];
 
@@ -273,7 +293,15 @@
         toast(`Failed to move: ${r.error}`, 'error');
         load(); // revert
       } else {
-        toast(`Moved to ${newState}`, 'success');
+        // v25 F3: WIP is advisory — the move succeeds, but say so plainly when
+        // the lane is now over its ceiling. Silently ignoring the limit would
+        // make the WIP number a lie the moment the user ignores it.
+        const nowCount = (postsByState[newState] || []).length;
+        if (targetCol?.wip && nowCount > targetCol.wip) {
+          toast(`Moved. ${targetCol.label} is over WIP (${nowCount}/${targetCol.wip}).`, 'error');
+        } else {
+          toast(`Moved to ${newState}`, 'success');
+        }
       }
     }
 
@@ -392,6 +420,31 @@
     if (diffDays === 0) return 'text-warning font-medium';
     if (diffDays <= 3) return 'text-muted';
     return 'text-faint';
+  }
+
+  // v25 F3: overdue/today get a WORD, not just a red tint. "Feb 3" in red
+  // requires the reader to notice the hue and then mentally diff it against
+  // today; "Overdue · Feb 3" states it. A color alone is also invisible to
+  // anyone who cannot separate red from grey.
+  function dueDateLabel(iso: string): string {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const dueDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const diffDays = Math.round((dueDay.getTime() - today.getTime()) / 86_400_000);
+    if (diffDays < 0) return `Overdue ${Math.abs(diffDays)}d`;
+    if (diffDays === 0) return 'Due today';
+    if (diffDays === 1) return 'Due tomorrow';
+    return '';
+  }
+
+  // v25 F3: cover image for a card. The list endpoint returns `media`, so
+  // this costs no extra request. Only the first IMAGE is used — a card wants
+  // one thumbnail, and a video's first frame is not fetchable from a URL.
+  function coverImage(post: PostSummary): string | null {
+    const m = post.media?.find((x) => x?.mime_type?.startsWith('image/') && x.url);
+    return m?.url ?? null;
   }
 
   // Substate → label + text color + dot color.
@@ -588,10 +641,22 @@
           role="region"
           aria-label="{col.label} column"
         >
-          <!-- Column header -->
-          <div class="px-4 py-3 border-b border-line flex items-center justify-between">
-            <span class="text-sm font-semibold">{col.label}</span>
-            <span class="text-xs text-muted">{postsByState[col.state]?.length || 0}</span>
+          <!-- Column header. v25 F3: the count is now a WIP gauge — a bare
+               number gave no signal about whether the lane is healthy. -->
+          <div class="px-4 py-3 border-b border-line flex items-center justify-between gap-2">
+            <span class="text-sm font-semibold truncate">{col.label}</span>
+            <span
+              class="text-xs shrink-0 {wipClass(col, colCount(col.state))}"
+              title={col.wip ? `Work in progress: ${colCount(col.state)} of ${col.wip} recommended` : `${colCount(col.state)} posts`}
+              aria-label={col.wip ? `${colCount(col.state)} of ${col.wip} WIP` : `${colCount(col.state)} posts`}
+            >
+              {#if col.wip}
+                {#if colCount(col.state) > col.wip}<span aria-hidden="true">⚠</span>{/if}
+                {colCount(col.state)}/{col.wip}
+              {:else}
+                {colCount(col.state)}
+              {/if}
+            </span>
           </div>
 
           <!-- Cards -->
@@ -614,6 +679,18 @@
                 onkeydown={(e) => { if (e.key === 'Enter') composer.openEdit(post.id); }}
                 aria-label="Post: {(post.content || post.title || '(no content)').slice(0, 80)}"
               >
+                <!-- v25 F3: cover image. A text-only card gives the eye nothing
+                     to grab onto when scanning a lane of six; the thumbnail is
+                     the fastest "what is this" signal there is. -->
+                {#if coverImage(post)}
+                  <img
+                    src={coverImage(post)}
+                    alt=""
+                    loading="lazy"
+                    decoding="async"
+                    class="w-full h-20 object-cover border-b border-line bg-background-input"
+                  />
+                {/if}
                 <div class="p-3 relative">
                   <!-- v25-5: per-card metadata edit trigger. Visible on hover.
                        stopPropagation prevents the card's onclick (open composer)
@@ -621,7 +698,7 @@
                        starting a card drag. -->
                   <button
                     type="button"
-                    class="kanban-card-menu-trigger absolute top-2 right-2 w-5 h-5 flex items-center justify-center rounded text-muted hover:text-content hover:bg-surface-hover opacity-0 group-hover:opacity-100 transition-opacity {editingCardId === post.id ? 'opacity-100 bg-surface-hover' : ''}"
+                    class="kanban-card-menu-trigger absolute top-2 right-2 w-5 h-5 flex items-center justify-center rounded text-muted hover:text-content hover:bg-surface-hover opacity-0 group-hover:opacity-100 transition-opacity {editingCardId === post.id ? 'opacity-100 bg-surface-hover' : ''} {coverImage(post) ? 'top-3' : 'top-2'}"
                     onclick={(e) => { e.stopPropagation(); editingCardId === post.id ? closeCardMenu() : openCardMenu(post); }}
                     draggable={false}
                     aria-label="Edit card metadata"
@@ -710,7 +787,12 @@
                       >Done</button>
                     </div>
                   {:else if (post.priority && post.priority !== 'medium') || post.due_date || post.kanban_substate}
-                    <!-- Metadata row: priority + due date + substate (display only) -->
+                    <!-- v25 F3: metadata row. Due date and priority are now
+                         always visible when set (previously the row was gated
+                         on a non-default priority, so a plain "medium" card
+                         with a due date read as having no deadline at all).
+                         Overdue / due-today get a filled chip, not just red
+                         text, so the state survives a grayscale check. -->
                     <div class="flex flex-wrap items-center gap-1.5 mb-2 text-[10px] leading-none">
                       {#if post.priority && post.priority !== 'medium'}
                         <span class="px-1.5 py-0.5 rounded font-medium {priorityChipClass(post.priority)}">
@@ -718,8 +800,13 @@
                         </span>
                       {/if}
                       {#if post.due_date}
-                        <span class="flex items-center gap-0.5 {dueDateClass(post.due_date)}" title="Due {new Date(post.due_date).toLocaleString()}">
-                          📅 {formatDate(post.due_date)}
+                        {@const dueLabel = dueDateLabel(post.due_date)}
+                        <span
+                          class="flex items-center gap-0.5 px-1.5 py-0.5 rounded {dueLabel ? 'bg-error/10' : ''} {dueDateClass(post.due_date)}"
+                          title="Due {new Date(post.due_date).toLocaleString()}"
+                        >
+                          <span aria-hidden="true">📅</span>
+                          {dueLabel ? dueLabel : formatDate(post.due_date)}
                         </span>
                       {/if}
                       {#if post.kanban_substate}
@@ -731,9 +818,18 @@
                     </div>
                   {/if}
 
-                  <!-- Footer: provider + scheduled date -->
+                  <!-- Footer: grip + provider + scheduled date -->
                   <div class="flex items-center justify-between text-xs text-muted">
                     <span class="flex items-center gap-1 min-w-0">
+                      <!-- v25 F3: drag affordance. The card has always been
+                           draggable but nothing said so; a hover-revealed grip
+                           makes it discoverable without a tutorial. It sits in
+                           the footer row rather than floating over the text,
+                           so it can never occlude the content. -->
+                      <span
+                        class="shrink-0 select-none text-faint opacity-0 group-hover:opacity-100 transition-opacity"
+                        aria-hidden="true"
+                      >⠿</span>
                       {#if post.integration_name}
                         <span style="color: {providerColor(providerIdFor(post))}" class="shrink-0">{providerIcon(providerIdFor(post))}</span>
                         <span class="truncate max-w-[80px]">{post.integration_name}</span>
@@ -745,7 +841,7 @@
                   </div>
 
                   {#if post.error_message}
-                    <div class="mt-1 text-[10px] text-error truncate" title={post.error_message}>⚠ {post.error_message}</div>
+                    <div class="mt-1 text-[10px] text-error truncate" title={post.error_message}><span aria-hidden="true">⚠</span> {post.error_message}</div>
                   {/if}
                 </div>
               </article>
@@ -810,7 +906,7 @@
 <!-- Phase v21: campaign-create modal — replaces native prompt(). -->
 {#if createCampaignModalOpen}
   <div
-    class="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+    class="fixed inset-0 z-[200] flex items-center justify-center bg-overlay backdrop-blur-sm p-4"
     onclick={() => (createCampaignModalOpen = false)}
     role="dialog"
     aria-modal="true"

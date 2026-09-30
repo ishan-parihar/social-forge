@@ -12,6 +12,10 @@ export interface PostSummary {
   group_id?: string | null;
   first_comment?: string | null;
   sequence?: number;
+  // v25 F3: the list endpoint already returns `media` (PostWithIntegrationName
+  // in src/api/posts.rs carries it) — it was just never declared here, so the
+  // kanban had no way to show a card's cover image. Declared, not fetched.
+  media?: { url: string; mime_type: string; alt?: string }[] | null;
   // v22 Phase 6: campaign_id for kanban filtering. Previously the
   // kanban accessed this via `as any` because the field didn't exist
   // on the type. Now it's a proper optional field.
