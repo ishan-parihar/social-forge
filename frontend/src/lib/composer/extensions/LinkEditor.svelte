@@ -90,7 +90,7 @@
       placeholder="https://example.com"
       bind:this={urlInput}
       bind:value={url}
-      class="w-full px-3 py-2 rounded text-sm bg-background-input border border-line text-content-secondary placeholder:text-muted-dark outline-none focus:border-brand-500 transition-colors"
+      class="w-full px-3 py-2 rounded text-sm bg-background-input border border-line text-content-secondary placeholder:text-faint outline-none focus:border-accent transition-colors"
     />
 
     <label class="flex items-center gap-2 mt-2 cursor-pointer select-none">
@@ -105,7 +105,7 @@
     <div class="flex items-center gap-2 mt-3">
       <button
         onclick={applyLink}
-        class="flex-1 px-3 py-1.5 rounded text-xs font-medium bg-brand-500 text-white hover:bg-brand-600 transition-colors"
+        class="flex-1 px-3 py-1.5 rounded text-xs font-medium bg-accent-fill text-accent-fg hover:bg-accent-fill-hover transition-colors"
         aria-label="Apply link"
       >
         Apply

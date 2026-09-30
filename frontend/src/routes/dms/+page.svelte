@@ -1,5 +1,8 @@
 <script lang="ts">
   import { toast } from "$lib/stores/toast";
+  import Skeleton from '$lib/ui/Skeleton.svelte';
+  import ErrorState from '$lib/ui/ErrorState.svelte';
+  import EmptyState from '$lib/ui/EmptyState.svelte';
   import { onMount, onDestroy } from "svelte";
   import { realtime } from "$lib/stores/realtime";
   import { dmsApi, type Conversation, type DmMessage } from "$lib/api/dms";
@@ -117,19 +120,20 @@
           {/each}
         </select>
       {/if}
-      <button onclick={load} class="px-3 py-1.5 text-sm text-muted hover:text-white border border-line rounded-lg transition-colors">Refresh</button>
+      <button onclick={load} class="px-3 py-1.5 text-sm text-muted hover:text-content border border-line rounded-lg transition-colors">Refresh</button>
     </div>
   </div>
 
   {#if error}
-    <div class="text-center py-12 text-sm text-error">{error}</div>
+    <ErrorState message={error} actionLabel="Retry" onaction={load} />
   {:else if loading}
-    <div class="text-center py-12 text-sm text-muted">Loading...</div>
+    <Skeleton variant="row" rows={5} />
   {:else if conversations.length === 0}
-    <div class="text-center py-12">
-      <p class="text-sm text-muted mb-2">No conversations found</p>
-      <p class="text-xs text-muted-dark">DMs require a DM-capable provider (X, Instagram, or LinkedIn) with the appropriate API tier and permissions. Select a different channel above to try another provider.</p>
-    </div>
+    <EmptyState
+      icon="dm"
+      title="No conversations found"
+      description="DMs need a DM-capable provider (X, Instagram, or LinkedIn) on an API tier that allows messaging. Pick a different channel above to try another provider."
+    />
   {:else}
     <div class="flex gap-4 h-[calc(100vh-200px)]">
       <!-- Conversation list -->
@@ -144,10 +148,10 @@
               class="w-full px-3 py-3 border-b border-line hover:bg-surface-hover transition-colors text-left {selectedId === conv.id ? 'bg-surface-hover' : ''}"
             >
               <div class="flex items-center gap-2 mb-1">
-                <span class="text-xs text-brand-400">{platformIcon(conv.platform)}</span>
+                <span class="text-xs text-accent">{platformIcon(conv.platform)}</span>
                 <span class="text-sm font-medium truncate">{conv.participant_name || conv.participant}</span>
                 {#if conv.unread_count > 0}
-                  <span class="ml-auto px-1.5 py-0.5 text-[10px] bg-brand-600 text-white rounded-full">{conv.unread_count}</span>
+                  <span class="ml-auto px-1.5 py-0.5 text-[10px] bg-accent-fill text-accent-fg rounded-full">{conv.unread_count}</span>
                 {/if}
               </div>
               <div class="flex items-center gap-2">
@@ -166,7 +170,7 @@
         {#if selected}
           <div class="px-4 py-3 border-b border-line">
             <div class="flex items-center gap-2">
-              <span class="text-xs text-brand-400">{platformIcon(selected.platform)}</span>
+              <span class="text-xs text-accent">{platformIcon(selected.platform)}</span>
               <span class="text-sm font-medium">{selected.participant_name || selected.participant}</span>
             </div>
           </div>
@@ -174,7 +178,7 @@
           <div class="flex-1 overflow-y-auto p-4 space-y-3">
             {#each messages as msg (msg.id)}
               <div class="flex {msg.read ? 'justify-end' : 'justify-start'}">
-                <div class="page-enter max-w-[70%] {msg.read ? 'bg-brand-600/30' : 'bg-line'} rounded-xl px-3 py-2">
+                <div class="page-enter max-w-[70%] {msg.read ? 'bg-accent-fill/30' : 'bg-line'} rounded-xl px-3 py-2">
                   <p class="text-sm">{msg.content}</p>
                   <span class="text-[10px] text-muted">{new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
                 </div>
@@ -194,7 +198,7 @@
               <button
                 onclick={sendMessage}
                 disabled={sending || !newMessage.trim()}
-                class="px-4 py-2 bg-brand-600 hover:bg-brand-500 rounded-lg text-sm disabled:opacity-50 transition-colors"
+                class="px-4 py-2 bg-accent-fill hover:bg-accent-fill-hover rounded-lg text-sm disabled:opacity-50 transition-colors"
               >
                 {sending ? "..." : "Send"}
               </button>

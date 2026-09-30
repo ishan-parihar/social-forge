@@ -50,7 +50,7 @@
       {:else}
         <button
           onclick={() => (page = p)}
-          class="min-w-[28px] px-2 py-1 rounded transition-colors {p === page ? 'bg-brand-500 text-white' : 'text-muted hover:text-content hover:bg-surface-hover'}"
+          class="min-w-[28px] px-2 py-1 rounded transition-colors {p === page ? 'bg-accent-fill text-accent-fg' : 'text-muted hover:text-content hover:bg-surface-hover'}"
           aria-current={p === page ? "page" : undefined}
         >
           {p}

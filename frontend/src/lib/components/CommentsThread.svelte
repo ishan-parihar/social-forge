@@ -2,6 +2,8 @@
   import { api } from "$lib/api/client";
   import { feedApi, type FeedPost, type FeedAccount } from "$lib/api/feed";
   import { engagementIcon, formatMetricCount } from "$lib/calendar/engagement";
+  import Skeleton from "$lib/ui/Skeleton.svelte";
+  import EmptyState from "$lib/ui/EmptyState.svelte";
 
   let { post, onclose }: { post: FeedPost; onclose: () => void } = $props();
 
@@ -97,7 +99,7 @@
   <!-- Header -->
   <div class="flex items-center justify-between mb-3">
     <h4 class="text-xs font-semibold text-muted uppercase tracking-wider flex items-center gap-2">
-      <svg class="w-3.5 h-3.5 text-blue-400" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+      <svg class="w-3.5 h-3.5 text-accent" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
         <path d="M14 8a6 6 0 01-9.3 5L2 14l1-2.7A6 6 0 1114 8z" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
       Comments
@@ -109,15 +111,15 @@
     </h4>
     <button
       onclick={onclose}
-      class="text-muted hover:text-muted text-xs transition-colors"
+      class="text-muted hover:text-content text-xs transition-colors"
     >Hide</button>
   </div>
 
-  <!-- Loading -->
+  <!-- Loading. F1: Skeleton primitive instead of a lone spinner — the thread
+       has a known shape (header + body + counts), so reserving the space stops
+       the panel from jumping when comments land. -->
   {#if loading}
-    <div class="flex items-center justify-center py-6">
-      <div class="w-4 h-4 rounded-full border-2 border-brand-400/30 border-t-brand-400 animate-spin" />
-    </div>
+    <Skeleton variant="row" rows={3} />
 
   <!-- Error -->
   {:else if error}
@@ -125,7 +127,11 @@
 
   <!-- Empty -->
   {:else if comments.length === 0}
-    <div class="text-xs text-muted text-center py-4">No comments yet</div>
+    <EmptyState
+      icon="comment"
+      title="No comments yet"
+      description="Nothing has landed on this post. Replies will appear here as soon as they arrive."
+    />
 
   <!-- Comments list -->
   {:else}
@@ -152,14 +158,14 @@
               <p class="text-xs text-muted mt-1 leading-relaxed whitespace-pre-wrap break-words">{comment.text}</p>
               <div class="flex items-center gap-3 mt-1.5">
                 {#if comment.like_count > 0}
-                  <span class="text-[10px] text-pink-400/60 flex items-center gap-1">
+                  <span class="text-[10px] text-viz-like/70 flex items-center gap-1">
                     {engagementIcon('likes', post.provider)} {formatMetricCount(comment.like_count)}
                   </span>
                 {/if}
                 {#if comment.replies.length > 0}
                   <button
                     onclick={() => toggleThread(comment.id)}
-                    class="text-[10px] text-brand-400 hover:text-brand-300 transition-colors"
+                    class="text-[10px] text-accent hover:text-accent-hover transition-colors"
                   >
                     {expandedThreads.has(comment.id) ? 'Hide replies' : `${comment.replies.length} ${comment.replies.length === 1 ? 'reply' : 'replies'}`}
                   </button>
@@ -190,7 +196,7 @@
                     </div>
                     <p class="text-xs text-muted mt-0.5 leading-relaxed whitespace-pre-wrap break-words">{reply.text}</p>
                     {#if reply.like_count > 0}
-                      <span class="text-[10px] text-pink-400/60 flex items-center gap-1 mt-1">
+                      <span class="text-[10px] text-viz-like/70 flex items-center gap-1 mt-1">
                         {engagementIcon('likes', post.provider)} {formatMetricCount(reply.like_count)}
                       </span>
                     {/if}
@@ -204,19 +210,3 @@
     </div>
   {/if}
 </div>
-
-<style>
-  /* Thread line for replies */
-  .thread-line {
-    position: relative;
-  }
-  .thread-line::before {
-    content: '';
-    position: absolute;
-    left: 15px;
-    top: 0;
-    bottom: 0;
-    width: 1px;
-    background: var(--border);
-  }
-</style>

@@ -61,11 +61,15 @@
   let maxShares = $derived(Math.max(...chartData.map(d => d.shares), 1));
   let maxComments = $derived(Math.max(...chartData.map(d => d.comments), 1));
 
+  // v25 F1: chart series colors were literal hex tuned for the dark surface —
+  // on a light modal the bars washed out. They now point at the shared `viz-*`
+  // tokens so a metric keeps one color app-wide (dashboard, feed, analytics)
+  // and retheme with the rest of the surface.
   let metricCards = $derived<{ label: string; icon: string; value: number; color: string; key: keyof AnalyticsDataPoint }[]>([
-    { label: "Impressions", icon: '👁️', value: totalImpressions, color: "#818cf8", key: "impressions" },
-    { label: "Likes", icon: '❤️', value: totalLikes, color: "#f472b6", key: "likes" },
-    { label: "Shares", icon: '🔄', value: totalShares, color: "#34d399", key: "shares" },
-    { label: "Comments", icon: '💬', value: totalComments, color: "#fbbf24", key: "comments" },
+    { label: "Impressions", icon: '👁️', value: totalImpressions, color: "rgb(var(--viz-impression-rgb))", key: "impressions" },
+    { label: "Likes", icon: '❤️', value: totalLikes, color: "rgb(var(--viz-like-rgb))", key: "likes" },
+    { label: "Shares", icon: '🔄', value: totalShares, color: "rgb(var(--viz-share-rgb))", key: "shares" },
+    { label: "Comments", icon: '💬', value: totalComments, color: "rgb(var(--hue-amber-rgb))", key: "comments" },
   ]);
 
   function shortDate(dateStr: string): string {
@@ -109,7 +113,7 @@
       <button
         onclick={() => days = d as 7 | 30 | 90}
         class="flex-1 px-3 py-1.5 text-xs font-medium transition-colors
-          {days === d ? 'bg-brand-600 text-white' : 'text-muted hover:text-white hover:bg-surface-hover'}"
+          {days === d ? 'bg-accent-fill text-accent-fg' : 'text-muted hover:text-content hover:bg-surface-hover'}"
       >{d}d</button>
     {/each}
   </div>

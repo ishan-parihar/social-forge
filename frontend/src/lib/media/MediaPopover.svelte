@@ -101,7 +101,7 @@
           bind:this={closeBtn}
           aria-label="Close"
           onclick={onClose}
-          class="w-7 h-7 rounded-lg flex items-center justify-center text-muted hover:text-white hover:bg-surface-hover transition-colors text-sm"
+          class="w-7 h-7 rounded-lg flex items-center justify-center text-muted hover:text-content hover:bg-surface-hover transition-colors text-sm"
         >
           &times;
         </button>
@@ -111,7 +111,7 @@
         {#if error}
           <div class="text-center py-12">
             <p class="text-sm text-error mb-3">{error}</p>
-            <button onclick={fetchMedia} class="text-sm text-brand-400 hover:text-brand-300">Retry</button>
+            <button onclick={fetchMedia} class="text-sm text-accent hover:text-accent-strong">Retry</button>
           </div>
         {:else}
           <MediaGrid {items} {loading} selectable={true} onSelect={handleSelect} />

@@ -95,7 +95,7 @@
     <div class="opacity-0 group-hover:opacity-100 transition-opacity duration-150 flex items-center gap-1">
       {#if event.state === 'published' && event.postUrl}
         <a href={event.postUrl} target="_blank" rel="noopener noreferrer"
-           class="text-[8px] text-brand-400/60 hover:text-brand-300 px-1 py-0.5 rounded transition-colors"
+           class="text-[8px] text-accent/60 hover:text-accent-strong px-1 py-0.5 rounded transition-colors"
            title="View original post" onclick={(e) => e.stopPropagation()}>
           🔗
         </a>

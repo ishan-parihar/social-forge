@@ -26,7 +26,7 @@
     queued: "bg-warning/20 text-warning",
     published: "bg-success/20 text-success",
     error: "bg-error/20 text-error",
-    idea: "bg-purple-500/20 text-purple-300",
+    idea: "bg-hue-violet/20 text-hue-violet",
   };
 
   // Generic variant mapping (for non-post-state badges like "Active",

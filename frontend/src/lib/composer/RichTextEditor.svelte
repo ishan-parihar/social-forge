@@ -165,12 +165,12 @@
             placeholder="https://example.com/image.png"
             bind:value={imageUrl}
             onkeydown={handleImageKeydown}
-            class="flex-1 px-3 py-2 rounded text-sm bg-background-input border border-line text-content-secondary placeholder:text-muted-dark outline-none focus:border-brand-500 transition-colors"
+            class="flex-1 px-3 py-2 rounded text-sm bg-background-input border border-line text-content-secondary placeholder:text-faint outline-none focus:border-accent transition-colors"
           />
           <button
             onclick={insertImage}
             disabled={!imageUrl.trim()}
-            class="px-3 py-2 rounded text-xs font-medium bg-brand-500 text-white hover:bg-brand-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            class="px-3 py-2 rounded text-xs font-medium bg-accent-fill text-accent-fg hover:bg-accent-fill-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             aria-label="Insert image"
           >
             Insert
@@ -193,7 +193,7 @@
        integrationId is provided. -->
   <MentionPicker {editor} {integrationId} />
 
-  <div class="p-3 min-h-[200px] prose prose-invert max-w-none">
+  <div class="editor-body p-3 min-h-[200px]">
     {#if editor}
       <EditorContent {editor} />
     {/if}
@@ -222,11 +222,81 @@
     border-radius: 0.5rem;
     padding: 0.875rem;
     width: 24rem;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    box-shadow: var(--shadow-lg);
     z-index: 50;
   }
 
   .img-input-backdrop {
-    background: rgba(0, 0, 0, 0.3);
+    background: var(--overlay);
   }
+
+  /* v25 F1: the editor body was carrying `prose prose-invert`, but
+     @tailwindcss/typography is not installed — both classes compile to nothing.
+     The content was therefore rendering with browser-default styling: black text
+     on the dark `--bg-input` surface, i.e. unreadable in dark mode. These rules
+     replace the missing plugin with a scoped, token-driven equivalent: the post
+     body retheme correctly and headings/lists/links/blockquote all get the
+     contrast they need in either theme.
+     Scoped with :global() because ProseMirror injects its own DOM. */
+  .editor-body :global(.tiptap) {
+    color: var(--text);
+    font-size: 0.9375rem;
+    line-height: 1.65;
+    outline: none;
+    min-height: 200px;
+  }
+  .editor-body :global(.tiptap p) { margin: 0 0 0.75rem; }
+  .editor-body :global(.tiptap p:last-child) { margin-bottom: 0; }
+  .editor-body :global(.tiptap h1),
+  .editor-body :global(.tiptap h2),
+  .editor-body :global(.tiptap h3) {
+    color: var(--text);
+    font-weight: 600;
+    line-height: 1.3;
+    margin: 1rem 0 0.5rem;
+  }
+  .editor-body :global(.tiptap h1) { font-size: 1.5rem; }
+  .editor-body :global(.tiptap h2) { font-size: 1.25rem; }
+  .editor-body :global(.tiptap h3) { font-size: 1.0625rem; }
+  .editor-body :global(.tiptap ul),
+  .editor-body :global(.tiptap ol) { margin: 0 0 0.75rem; padding-left: 1.5rem; }
+  .editor-body :global(.tiptap ul) { list-style: disc; }
+  .editor-body :global(.tiptap ol) { list-style: decimal; }
+  .editor-body :global(.tiptap li) { margin-bottom: 0.25rem; }
+  .editor-body :global(.tiptap a) { color: var(--brand); text-decoration: underline; }
+  .editor-body :global(.tiptap blockquote) {
+    border-left: 3px solid var(--brand);
+    padding-left: 0.875rem;
+    margin: 0 0 0.75rem;
+    color: var(--text-secondary);
+  }
+  .editor-body :global(.tiptap code) {
+    background: var(--bg-hover);
+    color: var(--text);
+    padding: 0.125rem 0.35rem;
+    border-radius: 0.25rem;
+    font-size: 0.875em;
+  }
+  .editor-body :global(.tiptap pre) {
+    background: var(--bg-hover);
+    border: 1px solid var(--border);
+    padding: 0.75rem;
+    border-radius: var(--radius-md);
+    margin: 0 0 0.75rem;
+    overflow-x: auto;
+  }
+  .editor-body :global(.tiptap pre code) { background: transparent; padding: 0; }
+  .editor-body :global(.tiptap img) { max-width: 100%; border-radius: var(--radius-md); }
+  .editor-body :global(.tiptap hr) { border: none; border-top: 1px solid var(--border); margin: 1rem 0; }
+  /* TipTap's Placeholder extension renders this via a data attribute on the
+     first empty node. It needs a real token too, or the prompt is invisible on
+     a light surface. */
+  .editor-body :global(.tiptap p.is-editor-empty:first-child::before) {
+    content: attr(data-placeholder);
+    color: var(--text-faint);
+    float: left;
+    height: 0;
+    pointer-events: none;
+  }
+  .editor-body :global(.tiptap-focused) { outline: none; }
 </style>

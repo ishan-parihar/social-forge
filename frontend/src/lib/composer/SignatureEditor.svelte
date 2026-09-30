@@ -88,7 +88,7 @@
         <div class="text-sm text-error p-3">{error}</div>
       {:else if signatures.length === 0}
         <div class="text-sm text-muted p-4 text-center">
-          No signatures yet — <a href="/settings/signatures" class="text-brand-400 hover:underline" onclick={() => (open = false)}>create one</a> in Settings
+          No signatures yet — <a href="/settings/signatures" class="text-accent hover:underline" onclick={() => (open = false)}>create one</a> in Settings
         </div>
       {:else}
         <!-- Global signatures -->

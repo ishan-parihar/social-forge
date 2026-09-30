@@ -144,12 +144,12 @@ export function makeTouchDragHandler(config: TouchDragConfig) {
     ghostEl.style.zIndex = '9999';
     ghostEl.style.pointerEvents = 'none';
     ghostEl.style.opacity = '0.8';
-    ghostEl.style.background = 'var(--bg-card, #131720)';
-    ghostEl.style.border = '1px solid var(--border, #1e2435)';
+    ghostEl.style.background = 'var(--bg-card)';
+    ghostEl.style.border = '1px solid var(--border)';
     ghostEl.style.borderRadius = '4px';
     ghostEl.style.padding = '4px 8px';
     ghostEl.style.fontSize = '11px';
-    ghostEl.style.color = 'var(--text, #e8edf5)';
+    ghostEl.style.color = 'var(--text)';
     ghostEl.style.maxWidth = '200px';
     ghostEl.style.whiteSpace = 'nowrap';
     ghostEl.style.overflow = 'hidden';

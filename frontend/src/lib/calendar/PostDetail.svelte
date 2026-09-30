@@ -35,7 +35,7 @@
     >
       <div class="flex items-center justify-between mb-6">
         <h3 class="font-semibold">Post Details</h3>
-        <button onclick={onclose} aria-label="Close" class="text-muted hover:text-white text-xl">&times;</button>
+        <button onclick={onclose} aria-label="Close" class="text-muted hover:text-content text-xl">&times;</button>
       </div>
       <div class="space-y-4">
         <div>
@@ -67,7 +67,7 @@
               <!-- Positive feedback: likes/upvotes/reactions unified -->
               {#if event.likes != null}
                 <div class="bg-background-input border border-line rounded-lg p-2 text-center" title="{engagementLabel('likes', event.platform)}">
-                  <div class="text-xs text-pink-400">{engagementIcon('likes', event.platform)}</div>
+                  <div class="text-xs text-viz-like">{engagementIcon('likes', event.platform)}</div>
                   <div class="text-sm font-semibold">{event.likes.toLocaleString()}</div>
                   <div class="text-[10px] text-muted">{engagementLabel('likes', event.platform)}</div>
                 </div>
@@ -91,7 +91,7 @@
               <!-- Views/impressions unified -->
               {#if event.impressions != null}
                 <div class="bg-background-input border border-line rounded-lg p-2 text-center" title="{engagementLabel('impressions', event.platform)}">
-                  <div class="text-xs text-brand-400">{engagementIcon('impressions', event.platform)}</div>
+                  <div class="text-xs text-accent">{engagementIcon('impressions', event.platform)}</div>
                   <div class="text-sm font-semibold">{event.impressions.toLocaleString()}</div>
                   <div class="text-[10px] text-muted">{engagementLabel('impressions', event.platform)}</div>
                 </div>
@@ -100,21 +100,21 @@
           </div>
         {/if}
         {#if event.postUrl}
-          <a href={event.postUrl} target="_blank" class="inline-flex items-center gap-1.5 text-brand-400 text-sm hover:text-brand-300 hover:underline transition-colors">
+          <a href={event.postUrl} target="_blank" class="inline-flex items-center gap-1.5 text-accent text-sm hover:text-accent-strong hover:underline transition-colors">
             <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
               <path d="M6 3l5 5-5 5" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
             View original post &rarr;
           </a>
         {/if}
-        <button onclick={() => onDuplicate?.(event.id)} disabled={duplicating} class="w-full px-3 py-2 bg-surface-hover hover:bg-line-hover border border-line rounded-lg text-sm text-brand-400 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+        <button onclick={() => onDuplicate?.(event.id)} disabled={duplicating} class="w-full px-3 py-2 bg-surface-hover hover:bg-line-hover border border-line rounded-lg text-sm text-accent transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
           {#if duplicating}
             <span class="animate-spin">⏳</span> Duplicating...
           {:else}
             📋 Duplicate
           {/if}
         </button>
-        <button onclick={() => { if (event) { composer.openEdit(event.id); onclose(); } }} class="w-full px-3 py-2 bg-surface-hover hover:bg-line-hover border border-line rounded-lg text-sm text-brand-400 transition-colors flex items-center justify-center gap-2">
+        <button onclick={() => { if (event) { composer.openEdit(event.id); onclose(); } }} class="w-full px-3 py-2 bg-surface-hover hover:bg-line-hover border border-line rounded-lg text-sm text-accent transition-colors flex items-center justify-center gap-2">
           ✏️ Edit
         </button>
       </div>

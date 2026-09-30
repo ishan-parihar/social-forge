@@ -31,7 +31,7 @@
   {:else if tags.length === 0}
     <div class="text-sm text-muted py-2">
       No tags yet.
-      <a href="/tags" class="text-brand-400 hover:underline">Create some in the Tags page.</a>
+      <a href="/tags" class="text-accent hover:underline">Create some in the Tags page.</a>
     </div>
   {:else}
     <div class="flex flex-wrap gap-2">
@@ -42,7 +42,7 @@
           class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs border transition-colors
             {isSelected
               ? 'border-transparent text-white'
-              : 'border-line text-muted hover:text-white hover:bg-surface-hover'}"
+              : 'border-line text-muted hover:text-content hover:bg-surface-hover'}"
           style={isSelected ? `background: ${tag.color}; border-color: ${tag.color};` : ''}
           aria-label="{isSelected ? 'Remove' : 'Add'} tag {tag.name}"
         >

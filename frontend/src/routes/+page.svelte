@@ -1,5 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
+  import Skeleton from '$lib/ui/Skeleton.svelte';
+  import EmptyState from '$lib/ui/EmptyState.svelte';
   import { postsApi, type PostSummary } from '$lib/api/posts';
   import { analyticsApi, type AnalyticsSummary, type EngagementResponse, type AdherenceResponse, type CadenceResponse, type EventLogEntry } from '$lib/api/analytics';
   import { feedApi } from '$lib/api/feed';
@@ -175,7 +177,7 @@
       <p class="text-sm text-muted mt-1">Your social media command center</p>
     </div>
     <div class="flex gap-2">
-      <button onclick={() => composer.openCreate()} class="px-4 py-2 bg-brand-500 hover:bg-brand-600 rounded-lg text-sm font-medium transition-colors">
+      <button onclick={() => composer.openCreate()} class="px-4 py-2 bg-accent-fill hover:bg-accent-fill-hover rounded-lg text-sm font-medium transition-colors">
         + New Post
       </button>
       <button onclick={() => goto('/analytics')} class="px-4 py-2 bg-surface-hover hover:bg-line-hover border border-line rounded-lg text-sm transition-colors">
@@ -187,7 +189,7 @@
   {#if loading}
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
       {#each [1, 2, 3, 4] as _}
-        <div class="skeleton h-24 rounded-xl"></div>
+        <Skeleton height="6rem" rounded="lg" />
       {/each}
     </div>
   {:else}
@@ -208,14 +210,14 @@
       <div class="grid grid-cols-3 gap-4">
         <div class="stat-card bg-surface border border-line rounded-xl p-4">
           <div class="flex items-center gap-2">
-            <Icon name="heart" class="w-4 h-4 text-pink-400" />
+            <Icon name="heart" class="w-4 h-4 text-viz-like" />
             <div class="flex-1 min-w-0">
-              <div class="text-xl font-bold text-pink-400">{totalEngagement.likes.toLocaleString()}</div>
+              <div class="text-xl font-bold text-viz-like">{totalEngagement.likes.toLocaleString()}</div>
               <div class="text-[10px] text-muted uppercase tracking-wider">Likes (7d)</div>
             </div>
           </div>
           {#if engagementLikesSeries.length > 1}
-            <div class="mt-2 text-pink-400 w-full">
+            <div class="mt-2 text-viz-like w-full">
               <Sparkline data={engagementLikesSeries} width={200} height={24} class="w-full" ariaLabel="Likes per day, last 7 days" />
             </div>
           {/if}
@@ -277,7 +279,7 @@
               </div>
               <span class="text-sm font-medium text-success">{Math.round(adherenceData.adherence_rate)}%</span>
             </div>
-            <p class="text-[10px] text-muted-dark mt-2">Adherence rate: published / scheduled × 100</p>
+            <p class="text-[10px] text-faint mt-2">Adherence rate: published / scheduled × 100</p>
           </div>
         {/if}
         {#if cadenceData}
@@ -285,7 +287,7 @@
             <h3 class="font-medium text-sm mb-3">Posting Cadence (30d)</h3>
             <div class="grid grid-cols-3 gap-3 mb-3">
               <div class="text-center">
-                <div class="text-2xl font-bold text-brand-400">{cadenceData.actual_per_day.toFixed(1)}</div>
+                <div class="text-2xl font-bold text-accent">{cadenceData.actual_per_day.toFixed(1)}</div>
                 <div class="text-[10px] text-muted uppercase tracking-wider">Posts/day</div>
               </div>
               <div class="text-center">
@@ -298,19 +300,19 @@
               </div>
             </div>
             {#if cadenceSeries.length > 1}
-              <div class="text-brand-400 mb-3 w-full">
+              <div class="text-accent mb-3 w-full">
                 <Sparkline data={cadenceSeries} width={400} height={36} class="w-full" ariaLabel="Posts per day, last 30 days" />
               </div>
             {/if}
             {#if cadenceData.goal_per_day !== null}
               <div class="flex items-center gap-2">
                 <div class="flex-1 bg-background-input rounded-full h-2 overflow-hidden">
-                  <div class="h-full bg-brand-500 rounded-full transition-all duration-500" style="width: {Math.min(100, (cadenceData.actual_per_day / cadenceData.goal_per_day) * 100)}%"></div>
+                  <div class="h-full bg-accent-fill rounded-full transition-all duration-500" style="width: {Math.min(100, (cadenceData.actual_per_day / cadenceData.goal_per_day) * 100)}%"></div>
                 </div>
                 <span class="text-xs text-muted">Goal: {cadenceData.goal_per_day}/day</span>
               </div>
             {:else}
-              <p class="text-[10px] text-muted-dark">Set a posting-frequency goal in Brand Profile to track progress.</p>
+              <p class="text-[10px] text-faint">Set a posting-frequency goal in Brand Profile to track progress.</p>
             {/if}
           </div>
         {/if}
@@ -342,7 +344,7 @@
             {/each}
           </div>
         {:else}
-          <p class="text-sm text-muted py-4 text-center">No posts published yet</p>
+          <EmptyState icon="post" title="Nothing published yet" description="Your published posts will show up here." />
         {/if}
       </div>
 
@@ -403,21 +405,21 @@
             <a href="/posts/{post.id}" class="flex items-center gap-2 py-1.5 px-2 -mx-2 rounded-lg hover:bg-surface-hover transition-colors group">
               <span class="w-1.5 h-1.5 rounded-full bg-info shrink-0"></span>
               <span class="flex-1 text-xs truncate text-content-secondary group-hover:text-content">{post.content || post.title || '(no content)'}</span>
-              <span class="text-[10px] text-muted-dark">draft</span>
+              <span class="text-[10px] text-faint">draft</span>
             </a>
           {/each}
           {#if stats.error > 0}
             <a href="/posts?state=error" class="flex items-center gap-2 py-1.5 px-2 -mx-2 rounded-lg hover:bg-surface-hover transition-colors group">
               <span class="w-1.5 h-1.5 rounded-full bg-error shrink-0"></span>
               <span class="flex-1 text-xs text-error">{stats.error} failed post{stats.error > 1 ? 's' : ''} need{stats.error === 1 ? 's' : ''} retry</span>
-              <span class="text-[10px] text-muted-dark">→</span>
+              <span class="text-[10px] text-faint">→</span>
             </a>
           {/if}
           {#each integrations.filter(i => i.refresh_needed).slice(0, 3) as int (int.id)}
             <a href="/channels" class="flex items-center gap-2 py-1.5 px-2 -mx-2 rounded-lg hover:bg-surface-hover transition-colors group">
               <span class="w-1.5 h-1.5 rounded-full bg-warning shrink-0"></span>
               <span class="flex-1 text-xs text-warning truncate">{int.provider_name} token expiring</span>
-              <span class="text-[10px] text-muted-dark">→</span>
+              <span class="text-[10px] text-faint">→</span>
             </a>
           {/each}
         </div>
@@ -428,9 +430,9 @@
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <!-- Today's Schedule -->
       <div class="bg-surface border border-line rounded-xl p-5">
-        <h3 class="font-medium text-sm mb-3">Today's Schedule <span class="text-[10px] text-muted-dark">({timezone.value})</span></h3>
+        <h3 class="font-medium text-sm mb-3">Today's Schedule <span class="text-[10px] text-faint">({timezone.value})</span></h3>
         {#if todayPosts.length === 0}
-          <p class="text-sm text-muted py-4 text-center">No posts scheduled for today</p>
+          <EmptyState icon="calendar" title="Nothing scheduled for today" description="Pick a slot on the calendar to line up today's posts." />
         {:else}
           <div class="space-y-1">
             {#each todayPosts as post}
@@ -442,7 +444,7 @@
             {/each}
           </div>
           {#if allTodayPosts.length > 5}
-            <a href="/calendar" class="block text-center text-xs text-brand-400 hover:underline mt-2">
+            <a href="/calendar" class="block text-center text-xs text-accent hover:underline mt-2">
               View all ({allTodayPosts.length})
             </a>
           {/if}
@@ -453,7 +455,7 @@
       <div class="bg-surface border border-line rounded-xl p-5">
         <h3 class="font-medium text-sm mb-3">Recent Activity</h3>
         {#if recentPublished.length === 0}
-          <p class="text-sm text-muted py-4 text-center">No posts published yet</p>
+          <EmptyState icon="post" title="Nothing published yet" description="Recently published posts will show up here." />
         {:else}
           <div class="space-y-1">
             {#each recentPublished as post}
@@ -462,7 +464,7 @@
                 <span class="flex-1 text-sm truncate text-content-secondary">{post.content || post.title || '(no content)'}</span>
                 <div class="flex gap-2 text-[10px] text-muted">
                   {#if post.likes != null && post.likes > 0}
-                    <span class="flex items-center gap-0.5"><Icon name="heart" class="w-3 h-3 text-pink-400" /> {post.likes}</span>
+                    <span class="flex items-center gap-0.5"><Icon name="heart" class="w-3 h-3 text-viz-like" /> {post.likes}</span>
                   {/if}
                   {#if post.comments != null && post.comments > 0}
                     <span class="flex items-center gap-0.5"><Icon name="comment-bubble" class="w-3 h-3 text-info" /> {post.comments}</span>
@@ -503,7 +505,7 @@
                   {evt.event_type}
                 {/if}
               </span>
-              <span class="text-[10px] text-muted-dark">{new Date(evt.created_at).toLocaleTimeString()}</span>
+              <span class="text-[10px] text-faint">{new Date(evt.created_at).toLocaleTimeString()}</span>
             </div>
           {/each}
         </div>
@@ -512,7 +514,7 @@
 
     <!-- Quick Actions -->
     <div class="flex gap-3 flex-wrap">
-      <button onclick={() => composer.openCreate()} class="px-4 py-2 bg-brand-500 hover:bg-brand-600 rounded-lg text-sm font-medium transition-colors">
+      <button onclick={() => composer.openCreate()} class="px-4 py-2 bg-accent-fill hover:bg-accent-fill-hover rounded-lg text-sm font-medium transition-colors">
         <Icon name="post" class="w-4 h-4 inline" /> Compose Post
       </button>
       <button onclick={() => goto('/feed')} class="px-4 py-2 bg-surface-hover hover:bg-line-hover border border-line rounded-lg text-sm transition-colors">

@@ -5,6 +5,16 @@
   // area where each settings sub-page renders. Active tab highlighted;
   // URL syncs to /settings/{tab}. Mobile: sidebar collapses to a dropdown.
   //
+  // v25 F1: this is the ONE settings sidebar. The main app sidebar carries a
+  // single "Settings" entry that routes here, and this layout owns the
+  // sub-route tabs — no second list of the same 8 destinations exists
+  // anywhere else. That duplication was the worst UX defect in v22.
+  //
+  // Width: F1 dropped the `max-w-6xl mx-auto` this wrapper carried. The root
+  // layout already constrains and centers page content at `max-w-6xl`, so
+  // nesting a second identical max-width made the settings column narrower
+  // than every other page and shifted its left edge out of alignment.
+  //
   // Inspired by postiz-app's settings.component.tsx (2-column tab layout).
   // Adapted for Social Forge's single-user model — no Teams, no Approved Apps.
 
@@ -34,7 +44,7 @@
   }
 </script>
 
-<div class="page-enter flex flex-col lg:flex-row gap-6 max-w-6xl mx-auto">
+<div class="page-enter flex flex-col lg:flex-row gap-6">
   <!-- Sidebar (desktop) / Dropdown (mobile) -->
   <aside class="lg:w-56 lg:flex-shrink-0">
     <!-- Mobile: toggle button -->
@@ -59,7 +69,7 @@
           href={tab.href}
           class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors
             {isActive(tab.href, tab.exact)
-              ? 'bg-surface-hover text-brand-400 font-medium'
+              ? 'bg-surface-hover text-accent font-medium'
               : 'text-muted hover:text-content hover:bg-surface-hover'}"
         >
           <Icon name={tab.icon} class="w-4 h-4 flex-shrink-0" />
@@ -77,7 +87,7 @@
             onclick={() => mobileSidebarOpen = false}
             class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors
               {isActive(tab.href, tab.exact)
-                ? 'bg-surface-hover text-brand-400 font-medium'
+                ? 'bg-surface-hover text-accent font-medium'
                 : 'text-muted hover:text-content hover:bg-surface-hover'}"
           >
             <Icon name={tab.icon} class="w-4 h-4 flex-shrink-0" />

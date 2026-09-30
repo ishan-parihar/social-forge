@@ -121,7 +121,7 @@
         <p class="text-xs text-muted mb-3">Split your content into a multi-part thread, or add parts manually.</p>
         <button
           onclick={splitFromContent}
-          class="px-3 py-1.5 bg-brand-500 hover:bg-brand-600 rounded-lg text-xs text-white font-medium transition-colors"
+          class="px-3 py-1.5 bg-accent-fill hover:bg-accent-fill-hover rounded-lg text-xs text-accent-fg font-medium transition-colors"
         >
           ✂️ Split from content
         </button>
@@ -139,7 +139,7 @@
           <div class="border border-line rounded-lg p-3 space-y-2">
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-2">
-                <span class="text-xs font-medium text-brand-400">Part {i + 1}</span>
+                <span class="text-xs font-medium text-accent">Part {i + 1}</span>
                 <div class="flex items-center gap-0.5">
                   <button
                     onclick={() => movePart(i, 'up')}
@@ -170,7 +170,7 @@
               bind:value={parts[i]}
               oninput={(e) => updatePart(i, e.currentTarget.value)}
               rows="2"
-              class="w-full px-2 py-1.5 bg-background-input border border-line rounded text-sm text-content resize-y focus:border-brand-500 outline-none"
+              class="w-full px-2 py-1.5 bg-background-input border border-line rounded text-sm text-content resize-y focus:border-accent outline-none"
               placeholder="Thread part {i + 1} content..."
             ></textarea>
           </div>
@@ -186,7 +186,7 @@
         <button
           onclick={addPart}
           disabled={parts.length >= MAX_PARTS}
-          class="px-2 py-1 text-xs text-brand-400 hover:text-brand-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          class="px-2 py-1 text-xs text-accent hover:text-accent-strong disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >+ Add part</button>
         <div class="flex items-center gap-2">
           <label class="text-xs text-muted">Delay between parts:</label>
@@ -202,7 +202,7 @@
       </div>
 
       {#if delayMinutes > 0 && validParts.length > 1}
-        <p class="text-[10px] text-muted-dark">
+        <p class="text-[10px] text-faint">
           Part 1 posts at the scheduled time. Each subsequent part posts {delayMinutes} min after the previous.
         </p>
       {/if}
@@ -213,7 +213,7 @@
         <button
           onclick={handlePostThread}
           disabled={submitting || validParts.length === 0}
-          class="px-4 py-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm text-white font-medium transition-colors"
+          class="px-4 py-2 bg-accent-fill hover:bg-accent-fill-hover disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm text-accent-fg font-medium transition-colors"
         >
           {submitting ? 'Posting...' : `Post Thread (${validParts.length})`}
         </button>

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { toast } from "$lib/stores/toast";
+  import EmptyState from '$lib/ui/EmptyState.svelte';
   import { onMount } from 'svelte';
   import Button from '$lib/ui/Button.svelte';
   import Modal from '$lib/ui/Modal.svelte';
@@ -151,7 +152,7 @@
     <button
       onclick={() => (activeTab = 'keys')}
       class="px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px
-        {activeTab === 'keys' ? 'text-brand-400 border-brand-500' : 'text-muted border-transparent hover:text-content-secondary'}"
+        {activeTab === 'keys' ? 'text-accent border-accent' : 'text-muted border-transparent hover:text-content-secondary'}"
     >
       API Keys
     </button>
@@ -175,16 +176,16 @@
       {/if}
 
       {#if justCreatedKey}
-        <div class="bg-brand-500/10 border border-brand-500/30 rounded-xl p-4 space-y-2">
+        <div class="bg-accent-fill/10 border border-accent/30 rounded-xl p-4 space-y-2">
           <div class="flex items-start justify-between">
             <div>
-              <p class="text-sm font-medium text-brand-400">API Key Created</p>
+              <p class="text-sm font-medium text-accent">API Key Created</p>
               <p class="text-xs text-muted mt-1">Copy this key now — you won't be able to see it again.</p>
             </div>
-            <button onclick={dismissKeyAlert} aria-label="Dismiss" class="text-muted hover:text-white text-sm">&times;</button>
+            <button onclick={dismissKeyAlert} aria-label="Dismiss" class="text-muted hover:text-content text-sm">&times;</button>
           </div>
           <div class="flex items-center gap-2">
-            <code class="flex-1 px-3 py-2 bg-background-input border border-line rounded-lg text-sm font-mono text-brand-300 break-all">
+            <code class="flex-1 px-3 py-2 bg-background-input border border-line rounded-lg text-sm font-mono text-accent-strong break-all">
               {justCreatedKey.full_key}
             </code>
             <Button size="sm" onclick={() => copyToClipboard(justCreatedKey.full_key)}>
@@ -213,7 +214,7 @@
               type="text"
               bind:value={newKeyName}
               placeholder="e.g. CI/CD Pipeline"
-              class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-brand-500 outline-none"
+              class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none"
             />
           </div>
           <div>
@@ -223,7 +224,7 @@
               type="text"
               bind:value={newKeyExpiry}
               placeholder="e.g. 2027-01-01T00:00:00Z"
-              class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-brand-500 outline-none"
+              class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none"
             />
           </div>
           <Button onclick={handleCreateKey} disabled={creatingKey}>
@@ -238,9 +239,11 @@
           <Spinner size="lg" />
         </div>
       {:else if keys.length === 0 && !showKeyForm}
-        <div class="bg-surface border border-line rounded-xl p-8 text-center">
-          <p class="text-muted text-sm">No API keys yet. Create one to use the Social Forge API.</p>
-        </div>
+        <EmptyState
+          icon="developer"
+          title="No API keys yet"
+          description="Create one to call the Social Forge REST API or MCP server from your own tooling."
+        />
       {:else}
         <div class="bg-surface border border-line rounded-xl overflow-hidden">
           <table class="w-full text-sm">

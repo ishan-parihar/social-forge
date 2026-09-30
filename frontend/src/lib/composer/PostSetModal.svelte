@@ -120,10 +120,10 @@
     <button
       onclick={() => (tab = 'save')}
       class="pb-2 text-sm font-medium transition-colors"
-      class:text-brand-400={tab === 'save'}
+      class:text-accent={tab === 'save'}
       class:text-muted={tab !== 'save'}
       class:border-b-2={tab === 'save'}
-      class:border-brand-500={tab === 'save'}
+      class:border-accent={tab === 'save'}
       class:border-transparent={tab !== 'save'}
     >
       Save
@@ -131,10 +131,10 @@
     <button
       onclick={() => (tab = 'load')}
       class="pb-2 text-sm font-medium transition-colors"
-      class:text-brand-400={tab === 'load'}
+      class:text-accent={tab === 'load'}
       class:text-muted={tab !== 'load'}
       class:border-b-2={tab === 'load'}
-      class:border-brand-500={tab === 'load'}
+      class:border-accent={tab === 'load'}
       class:border-transparent={tab !== 'load'}
     >
       Load
@@ -153,7 +153,7 @@
           type="text"
           bind:value={saveName}
           placeholder="e.g. Weekly promotion"
-          class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-brand-500 outline-none"
+          class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none"
         />
       </div>
       <div>
@@ -163,7 +163,7 @@
           bind:value={saveDescription}
           placeholder="Describe this post set..."
           rows="2"
-          class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-brand-500 outline-none resize-y"
+          class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none resize-y"
         ></textarea>
       </div>
       <div class="text-xs text-muted">

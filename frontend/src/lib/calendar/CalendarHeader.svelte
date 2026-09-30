@@ -53,7 +53,7 @@
       <select
         value={selectedIntegrationId ?? ""}
         onchange={(e) => onIntegrationFilter(e.currentTarget.value || null)}
-        class="px-2 py-1.5 bg-background-input border border-line rounded-lg text-xs text-content focus:outline-none focus:border-brand-500"
+        class="px-2 py-1.5 bg-background-input border border-line rounded-lg text-xs text-content focus:outline-none focus:border-accent"
       >
         <option value="">All channels</option>
         {#each integrations as integ (integ.id)}
@@ -66,7 +66,7 @@
       <select
         value={selectedCampaignId ?? ""}
         onchange={(e) => onCampaignFilter(e.currentTarget.value || null)}
-        class="px-2 py-1.5 bg-background-input border border-line rounded-lg text-xs text-content focus:outline-none focus:border-brand-500"
+        class="px-2 py-1.5 bg-background-input border border-line rounded-lg text-xs text-content focus:outline-none focus:border-accent"
       >
         <option value="">All campaigns</option>
         {#each campaigns as camp (camp.id)}
@@ -78,7 +78,7 @@
       <select
         value={selectedTagId ?? ""}
         onchange={(e) => onTagFilter(e.currentTarget.value || null)}
-        class="px-2 py-1.5 bg-background-input border border-line rounded-lg text-xs text-content focus:outline-none focus:border-brand-500"
+        class="px-2 py-1.5 bg-background-input border border-line rounded-lg text-xs text-content focus:outline-none focus:border-accent"
       >
         <option value="">All tags</option>
         {#each tags as tag}
@@ -92,7 +92,7 @@
           onclick={() => onViewChange(v.key)}
           aria-label={`${v.label} view`}
           class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium capitalize transition-colors
-            {view === v.key ? 'bg-brand-500 text-white' : 'text-muted hover:text-content hover:bg-surface-hover'}"
+            {view === v.key ? 'bg-accent-fill text-accent-fg' : 'text-muted hover:text-content hover:bg-surface-hover'}"
         ><span aria-hidden="true">{v.icon}</span> {v.label}</button>
       {/each}
     </div>

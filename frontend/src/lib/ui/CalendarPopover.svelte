@@ -143,7 +143,7 @@
   <button
     type="button"
     onclick={toggle}
-    class="flex-1 px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-content-secondary hover:border-brand-500/50 transition-colors text-left {className}"
+    class="flex-1 px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-content-secondary hover:border-accent/50 transition-colors text-left {className}"
     aria-haspopup="dialog"
     aria-expanded={open}
   >
@@ -182,7 +182,7 @@
       <!-- Weekday headers -->
       <div class="grid grid-cols-7 gap-0.5 mb-1">
         {#each WEEKDAYS as wd}
-          <div class="text-center text-[10px] text-muted-dark font-medium py-1">{wd}</div>
+          <div class="text-center text-[10px] text-faint font-medium py-1">{wd}</div>
         {/each}
       </div>
 
@@ -194,9 +194,9 @@
             onclick={() => selectDate(cell.dateStr)}
             disabled={isDisabled(cell.dateStr)}
             class="aspect-square flex items-center justify-center rounded text-xs transition-colors
-              {cell.isCurrent ? 'text-content-secondary' : 'text-muted-dark'}
-              {cell.dateStr === value ? 'bg-brand-500 text-white font-bold' : ''}
-              {cell.dateStr === todayStr && cell.dateStr !== value ? 'ring-1 ring-brand-400' : ''}
+              {cell.isCurrent ? 'text-content-secondary' : 'text-faint'}
+              {cell.dateStr === value ? 'bg-accent-fill text-accent-fg font-bold' : ''}
+              {cell.dateStr === todayStr && cell.dateStr !== value ? 'ring-1 ring-accent' : ''}
               {isDisabled(cell.dateStr) ? 'opacity-30 cursor-not-allowed' : 'hover:bg-surface-hover'}
             "
             aria-label={cell.dateStr}
@@ -212,7 +212,7 @@
         <button
           type="button"
           onclick={() => selectDate(todayStr)}
-          class="text-xs text-brand-400 hover:underline"
+          class="text-xs text-accent hover:underline"
         >Today</button>
         {#if value}
           <button

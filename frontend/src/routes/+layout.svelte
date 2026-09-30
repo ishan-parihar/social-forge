@@ -13,10 +13,9 @@
   import { modals } from '$lib/stores/modals.svelte';
   import { composer } from '$lib/stores/composer.svelte';
   import ComposerModal from '$lib/composer/ComposerModal.svelte';
-  import NotificationBell from '$lib/notifications/NotificationBell.svelte';
-  import StreakBadge from '$lib/streak/StreakBadge.svelte';
   import OnboardingModal from '$lib/onboarding/OnboardingModal.svelte';
   import Icon from '$lib/ui/Icon.svelte';
+  import TopBar from '$lib/ui/TopBar.svelte';
   import { page } from '$app/stores';
   import { onMount, onDestroy } from 'svelte';
   import { browser } from '$app/environment';
@@ -173,8 +172,10 @@
   <div class="flex h-screen overflow-hidden bg-background">
     <!-- Mobile sidebar overlay: clicking outside the sidebar closes it -->
     {#if sidebarOpen}
+      <!-- F1: `bg-overlay` instead of `bg-black/60`. A pure-black scrim on a
+           light theme flattens the whole page behind it. -->
       <div
-        class="fixed inset-0 bg-black/60 z-30 lg:hidden"
+        class="fixed inset-0 bg-overlay z-30 lg:hidden"
         onclick={() => sidebarOpen = false}
         role="presentation"
       ></div>
@@ -183,26 +184,25 @@
       class="{sidebarCollapsed ? 'w-14' : 'w-56'} bg-background border-r border-line flex flex-col flex-shrink-0 overflow-y-auto fixed lg:static inset-y-0 left-0 z-40 transition-all duration-200
         {sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}"
     >
+      <!-- F1: the sidebar header carries the brand mark only. Streak + notifications
+           moved to the single top bar (below) — previously they were mounted here AND
+           in a duplicate lg:hidden bar, so the two instances could disagree. -->
       <div class="h-14 flex items-center justify-between px-{sidebarCollapsed ? '2' : '5'} border-b border-line sticky top-0 bg-background z-10">
         {#if sidebarCollapsed}
-          <button onclick={toggleSidebar} class="text-content hover:text-brand-400 transition-colors mx-auto" aria-label="Expand sidebar" title="Expand sidebar">
+          <button onclick={toggleSidebar} class="text-content hover:text-accent transition-colors mx-auto" aria-label="Expand sidebar" title="Expand sidebar">
             <Icon name="dashboard" class="w-5 h-5" />
           </button>
         {:else}
-          <span class="text-brand-400 font-bold text-lg">Social Forge</span>
-          <div class="flex items-center gap-2">
-            <StreakBadge />
-            <NotificationBell />
-            <button onclick={toggleSidebar} class="text-muted hover:text-content transition-colors p-1" aria-label="Collapse sidebar" title="Collapse sidebar">
-              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
-            </button>
-          </div>
+          <TopBar variant="rail" />
+          <button onclick={toggleSidebar} class="text-muted hover:text-content transition-colors p-1" aria-label="Collapse sidebar" title="Collapse sidebar">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+          </button>
         {/if}
       </div>
       <nav class="flex-1 py-3 px-2">
         {#each navSections as section}
           {#if section.title && !sidebarCollapsed}
-            <div class="px-3 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-dark">
+            <div class="px-3 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-wider text-faint">
               {section.title}
             </div>
           {/if}
@@ -210,7 +210,7 @@
             <a href={item.href}
               class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors duration-200 cursor-pointer {sidebarCollapsed ? 'justify-center' : ''}
                 {isActive(item.href, $page.url.pathname)
-                  ? 'bg-surface-hover text-brand-400 font-medium'
+                  ? 'bg-surface-hover text-accent font-medium'
                   : 'text-muted hover:text-content hover:bg-surface-hover'}"
               title={sidebarCollapsed ? item.label : undefined}
             >
@@ -224,11 +224,11 @@
       {#if !sidebarCollapsed}
         <div class="px-3 py-3 border-t border-line space-y-2">
           <div>
-            <label class="text-[10px] font-semibold uppercase tracking-wider text-muted-dark block mb-1">Timezone</label>
+            <label class="text-[10px] font-semibold uppercase tracking-wider text-faint block mb-1">Timezone</label>
             <select
               value={timezone.value}
               onchange={(e) => timezone.set(e.currentTarget.value)}
-              class="w-full px-2 py-1.5 bg-background-input border border-line rounded-lg text-xs text-content focus:outline-none focus:border-brand-500"
+              class="w-full px-2 py-1.5 bg-background-input border border-line rounded-lg text-xs text-content focus:outline-none focus:border-accent"
             >
               {#each timezone.commonTimezones as tz}
                 <option value={tz}>{tz}</option>
@@ -277,29 +277,15 @@
         </div>
       {/if}
     </aside>
-    <main class="flex-1 overflow-auto">
-      <!-- Mobile top bar with hamburger toggle (visible only < lg) -->
-      <div class="lg:hidden sticky top-0 z-20 bg-background border-b border-line px-4 py-3 flex items-center justify-between">
-        <button
-          onclick={() => sidebarOpen = !sidebarOpen}
-          class="text-content hover:text-brand-400 transition-colors p-1 -ml-1"
-          aria-label="Toggle navigation"
-        >
-          <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            {#if sidebarOpen}
-              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-            {:else}
-              <line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/>
-            {/if}
-          </svg>
-        </button>
-        <span class="text-brand-400 font-bold">Social Forge</span>
-        <div class="flex items-center gap-2">
-          <StreakBadge />
-          <NotificationBell />
-        </div>
+    <main class="flex-1 overflow-auto flex flex-col min-w-0">
+      <!-- F1: ONE top bar for every breakpoint. It sits above the page content
+           on desktop too, which is where an unread notification belongs — in the
+           sidebar it was off in the corner and easy to miss. The hamburger is
+           passed in only on mobile; on desktop the persistent sidebar is the nav. -->
+      <div class="sticky top-0 z-20">
+        <TopBar ontogglenav={sidebarOpen ? () => sidebarOpen = false : () => sidebarOpen = !sidebarOpen} />
       </div>
-      <div class="max-w-6xl mx-auto p-6">{@render children()}</div>
+      <div class="max-w-6xl mx-auto p-6 w-full">{@render children()}</div>
     </main>
   </div>
 {/if}

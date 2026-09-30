@@ -190,18 +190,18 @@
 
           <div class="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-line">
             <div>
-              <div class="text-[10px] text-muted-dark uppercase tracking-wider">Start</div>
+              <div class="text-[10px] text-faint uppercase tracking-wider">Start</div>
               <div class="text-sm">{campaign.start_date ? new Date(campaign.start_date).toLocaleDateString() : '—'}</div>
             </div>
             <div>
-              <div class="text-[10px] text-muted-dark uppercase tracking-wider">End</div>
+              <div class="text-[10px] text-faint uppercase tracking-wider">End</div>
               <div class="text-sm">{campaign.end_date ? new Date(campaign.end_date).toLocaleDateString() : '—'}</div>
             </div>
           </div>
 
           {#if campaign.goal}
             <div class="mt-4 pt-4 border-t border-line">
-              <div class="text-[10px] text-muted-dark uppercase tracking-wider mb-1">Goal</div>
+              <div class="text-[10px] text-faint uppercase tracking-wider mb-1">Goal</div>
               <div class="text-sm">{campaign.goal}</div>
             </div>
           {/if}
@@ -260,23 +260,23 @@
       <div class="bg-surface border border-line rounded-lg p-5 space-y-4 max-w-2xl">
         <div>
           <label class="block text-sm text-muted mb-1">Name</label>
-          <input type="text" bind:value={formName} class="w-full px-3 py-2 bg-background-input border border-line rounded text-sm focus:border-brand-500 outline-none" />
+          <input type="text" bind:value={formName} class="w-full px-3 py-2 bg-background-input border border-line rounded text-sm focus:border-accent outline-none" />
         </div>
         <div>
           <label class="block text-sm text-muted mb-1">Description</label>
-          <textarea bind:value={formDescription} rows="2" class="w-full px-3 py-2 bg-background-input border border-line rounded text-sm focus:border-brand-500 outline-none"></textarea>
+          <textarea bind:value={formDescription} rows="2" class="w-full px-3 py-2 bg-background-input border border-line rounded text-sm focus:border-accent outline-none"></textarea>
         </div>
         <div class="grid grid-cols-2 gap-4">
           <div>
             <label class="block text-sm text-muted mb-1">Color</label>
             <div class="flex items-center gap-2">
               <input type="color" bind:value={formColor} class="w-10 h-9 rounded cursor-pointer bg-transparent border border-line" />
-              <input type="text" bind:value={formColor} class="flex-1 px-3 py-2 bg-background-input border border-line rounded text-sm focus:border-brand-500 outline-none" />
+              <input type="text" bind:value={formColor} class="flex-1 px-3 py-2 bg-background-input border border-line rounded text-sm focus:border-accent outline-none" />
             </div>
           </div>
           <div>
             <label class="block text-sm text-muted mb-1">Status</label>
-            <select bind:value={formStatus} class="w-full px-3 py-2 bg-background-input border border-line rounded text-sm focus:border-brand-500 outline-none">
+            <select bind:value={formStatus} class="w-full px-3 py-2 bg-background-input border border-line rounded text-sm focus:border-accent outline-none">
               <option value="active">Active</option>
               <option value="paused">Paused</option>
               <option value="archived">Archived</option>
@@ -287,21 +287,21 @@
         <div class="grid grid-cols-2 gap-4">
           <div>
             <label class="block text-sm text-muted mb-1">Start Date</label>
-            <input type="date" bind:value={formStartDate} class="w-full px-3 py-2 bg-background-input border border-line rounded text-sm focus:border-brand-500 outline-none" />
+            <input type="date" bind:value={formStartDate} class="w-full px-3 py-2 bg-background-input border border-line rounded text-sm focus:border-accent outline-none" />
           </div>
           <div>
             <label class="block text-sm text-muted mb-1">End Date</label>
-            <input type="date" bind:value={formEndDate} class="w-full px-3 py-2 bg-background-input border border-line rounded text-sm focus:border-brand-500 outline-none" />
+            <input type="date" bind:value={formEndDate} class="w-full px-3 py-2 bg-background-input border border-line rounded text-sm focus:border-accent outline-none" />
           </div>
         </div>
         <div>
           <label class="block text-sm text-muted mb-1">Goal (free text)</label>
-          <input type="text" bind:value={formGoal} placeholder="e.g. 1000 new followers" class="w-full px-3 py-2 bg-background-input border border-line rounded text-sm focus:border-brand-500 outline-none" />
+          <input type="text" bind:value={formGoal} placeholder="e.g. 1000 new followers" class="w-full px-3 py-2 bg-background-input border border-line rounded text-sm focus:border-accent outline-none" />
         </div>
         <div class="grid grid-cols-2 gap-4">
           <div>
             <label class="block text-sm text-muted mb-1">Progress Metric</label>
-            <select bind:value={formProgressMetric} class="w-full px-3 py-2 bg-background-input border border-line rounded text-sm focus:border-brand-500 outline-none">
+            <select bind:value={formProgressMetric} class="w-full px-3 py-2 bg-background-input border border-line rounded text-sm focus:border-accent outline-none">
               <option value="">None</option>
               <option value="posts">Posts</option>
               <option value="engagement">Engagement</option>
@@ -312,14 +312,14 @@
           </div>
           <div>
             <label class="block text-sm text-muted mb-1">Progress Target</label>
-            <input type="number" bind:value={formProgressTarget} placeholder="e.g. 20" class="w-full px-3 py-2 bg-background-input border border-line rounded text-sm focus:border-brand-500 outline-none" />
+            <input type="number" bind:value={formProgressTarget} placeholder="e.g. 20" class="w-full px-3 py-2 bg-background-input border border-line rounded text-sm focus:border-accent outline-none" />
           </div>
         </div>
         <div class="flex items-center justify-between pt-4 border-t border-line">
           <button onclick={deleteCampaign} class="text-sm text-error hover:text-error/80 transition-colors">
             Archive Campaign
           </button>
-          <button onclick={saveSettings} disabled={saving || !formName.trim()} class="px-4 py-2 text-sm bg-brand-500 hover:bg-brand-600 disabled:opacity-50 rounded transition-colors">
+          <button onclick={saveSettings} disabled={saving || !formName.trim()} class="px-4 py-2 text-sm bg-accent-fill hover:bg-accent-fill-hover disabled:opacity-50 rounded transition-colors">
             {saving ? 'Saving...' : 'Save Changes'}
           </button>
         </div>

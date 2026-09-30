@@ -113,7 +113,7 @@
 
 <div class="page-enter space-y-6">
   <PageHeader title="Campaigns" subtitle="Strategic content campaigns with goals and progress tracking">
-    <button onclick={openCreateModal} class="px-4 py-2 bg-brand-500 hover:bg-brand-600 rounded-lg text-sm font-medium transition-colors">
+    <button onclick={openCreateModal} class="px-4 py-2 bg-accent-fill hover:bg-accent-fill-hover rounded-lg text-sm font-medium transition-colors">
       + New Campaign
     </button>
   </PageHeader>
@@ -123,7 +123,7 @@
     {#each ['all', 'active', 'paused', 'archived', 'completed'] as s (s)}
       <button
         onclick={() => statusFilter = s as typeof statusFilter}
-        class="px-3 py-1 text-xs rounded-md transition-colors {statusFilter === s ? 'bg-brand-500 text-white' : 'bg-surface-hover text-muted hover:text-content'}"
+        class="px-3 py-1 text-xs rounded-md transition-colors {statusFilter === s ? 'bg-accent-fill text-accent-fg' : 'bg-surface-hover text-muted hover:text-content'}"
       >
         {s.charAt(0).toUpperCase() + s.slice(1)}
       </button>
@@ -157,7 +157,7 @@
           <div class="flex items-start justify-between mb-3">
             <div class="flex items-center gap-2">
               <span class="w-3 h-3 rounded-full" style="background: {c.color}"></span>
-              <h3 class="font-medium text-content group-hover:text-brand-400 transition-colors">{c.name}</h3>
+              <h3 class="font-medium text-content group-hover:text-accent transition-colors">{c.name}</h3>
             </div>
             <Badge variant={statusVariant[c.status] || 'default'}>{c.status}</Badge>
           </div>
@@ -182,7 +182,7 @@
           {/if}
 
           <!-- Footer: dates + delete -->
-          <div class="flex items-center justify-between text-[10px] text-muted-dark">
+          <div class="flex items-center justify-between text-[10px] text-faint">
             <span>
               {#if c.start_date && c.end_date}
                 {new Date(c.start_date).toLocaleDateString()} → {new Date(c.end_date).toLocaleDateString()}
@@ -216,12 +216,12 @@
         bind:value={newCampaignName}
         onkeydown={(e) => { if (e.key === 'Enter') confirmCreate(); }}
         placeholder="Campaign name (e.g. Q4 Launch)"
-        class="w-full mb-4 px-3 py-2 bg-surface-hover border border-line rounded text-sm focus:border-brand-500 outline-none"
+        class="w-full mb-4 px-3 py-2 bg-surface-hover border border-line rounded text-sm focus:border-accent outline-none"
         autofocus
       />
       <div class="flex gap-3 justify-end">
         <button onclick={() => showCreateModal = false} class="px-4 py-2 text-sm text-muted hover:text-content">Cancel</button>
-        <button onclick={confirmCreate} disabled={creating || !newCampaignName.trim()} class="px-4 py-2 text-sm bg-brand-500 hover:bg-brand-600 disabled:opacity-50 rounded transition-colors">
+        <button onclick={confirmCreate} disabled={creating || !newCampaignName.trim()} class="px-4 py-2 text-sm bg-accent-fill hover:bg-accent-fill-hover disabled:opacity-50 rounded transition-colors">
           {creating ? 'Creating...' : 'Create'}
         </button>
       </div>

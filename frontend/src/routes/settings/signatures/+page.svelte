@@ -1,5 +1,8 @@
 <script lang="ts">
   import { toast } from "$lib/stores/toast";
+  import Skeleton from '$lib/ui/Skeleton.svelte';
+  import ErrorState from '$lib/ui/ErrorState.svelte';
+  import EmptyState from '$lib/ui/EmptyState.svelte';
   import { onMount } from 'svelte';
   import Button from '$lib/ui/Button.svelte';
   import Spinner from '$lib/ui/Spinner.svelte';
@@ -189,7 +192,7 @@
           type="text"
           bind:value={newName}
           placeholder="e.g. Standard CTA"
-          class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-brand-500 outline-none"
+          class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none"
         />
       </div>
       <div>
@@ -199,7 +202,7 @@
           bind:value={newContent}
           placeholder="Signature text (HTML supported)..."
           rows="4"
-          class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-brand-500 outline-none resize-y"
+          class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none resize-y"
         ></textarea>
       </div>
       <div>
@@ -209,7 +212,7 @@
           type="text"
           bind:value={newProvider}
           placeholder="e.g. x, linkedin, bluesky"
-          class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-brand-500 outline-none"
+          class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none"
         />
       </div>
       <Button onclick={handleCreate} disabled={creating}>
@@ -224,9 +227,11 @@
       <Spinner size="lg" />
     </div>
   {:else if signatures.length === 0 && !showForm}
-    <div class="bg-surface border border-line rounded-xl p-8 text-center">
-      <p class="text-muted text-sm">No signatures yet. Create one to quickly insert reusable content into your posts.</p>
-    </div>
+    <EmptyState
+      icon="signature"
+      title="No signatures yet"
+      description="A signature is reusable text or links you insert into posts in one click."
+    />
   {:else}
     <div class="page-enter space-y-3">
       {#each signatures as sig (sig.id)}
@@ -240,7 +245,7 @@
                   id="edit-name-{sig.id}"
                   type="text"
                   bind:value={editName}
-                  class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-brand-500 outline-none"
+                  class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none"
                 />
               </div>
               <div>
@@ -249,7 +254,7 @@
                   id="edit-content-{sig.id}"
                   bind:value={editContent}
                   rows="3"
-                  class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-brand-500 outline-none resize-y"
+                  class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none resize-y"
                 ></textarea>
               </div>
               <div>
@@ -259,7 +264,7 @@
                   type="text"
                   bind:value={editProvider}
                   placeholder="Global"
-                  class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-brand-500 outline-none"
+                  class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none"
                 />
               </div>
               <div class="flex gap-2">
@@ -276,12 +281,12 @@
                 <div class="flex items-center gap-2 flex-wrap">
                   <h4 class="text-sm font-medium">{sig.name}</h4>
                   {#if sig.provider}
-                    <span class="text-xs px-2 py-0.5 rounded-full bg-brand-500/10 text-brand-400 border border-brand-500/20">{sig.provider}</span>
+                    <span class="text-xs px-2 py-0.5 rounded-full bg-accent-fill/10 text-accent border border-accent/20">{sig.provider}</span>
                   {:else}
                     <span class="text-xs px-2 py-0.5 rounded-full bg-line text-muted">Global</span>
                   {/if}
                   {#if sig.is_default}
-                    <span class="text-xs px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" title="This signature is auto-appended to new posts for its provider (or globally if no provider)">
+                    <span class="text-xs px-2 py-0.5 rounded-full bg-success/10 text-success border border-success/20" title="This signature is auto-appended to new posts for its provider (or globally if no provider)">
                       ★ Default
                     </span>
                   {/if}

@@ -80,24 +80,24 @@
     <!-- Header with step indicator -->
     <div class="px-6 py-5 border-b border-line">
       <div class="flex items-center justify-between">
-        <h2 class="text-xl font-bold text-brand-400">
+        <h2 class="text-xl font-bold text-accent">
           {#if step === 1}
             Welcome to Social Forge
           {:else}
             Quick Tour
           {/if}
         </h2>
-        <button onclick={skip} class="text-muted hover:text-white text-sm">Skip</button>
+        <button onclick={skip} class="text-muted hover:text-content text-sm">Skip</button>
       </div>
       <!-- Step indicator -->
       <div class="flex items-center gap-2 mt-4">
         <div class="flex items-center gap-1.5">
-          <div class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold {step >= 1 ? 'bg-brand-500 text-white' : 'bg-surface-hover text-muted'}">1</div>
+          <div class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold {step >= 1 ? 'bg-accent-fill text-accent-fg' : 'bg-surface-hover text-muted'}">1</div>
           <span class="text-xs {step >= 1 ? 'text-content' : 'text-muted'}">Connect Channels</span>
         </div>
         <div class="flex-1 h-px bg-line"></div>
         <div class="flex items-center gap-1.5">
-          <div class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold {step >= 2 ? 'bg-brand-500 text-white' : 'bg-surface-hover text-muted'}">2</div>
+          <div class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold {step >= 2 ? 'bg-accent-fill text-accent-fg' : 'bg-surface-hover text-muted'}">2</div>
           <span class="text-xs {step >= 2 ? 'text-content' : 'text-muted'}">Quick Tour</span>
         </div>
       </div>
@@ -148,13 +148,13 @@
           <a
             href="/channels"
             onclick={skip}
-            class="block w-full text-center px-4 py-3 bg-brand-600 hover:bg-brand-500 text-white rounded-lg font-medium text-sm transition-colors"
+            class="block w-full text-center px-4 py-3 bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg font-medium text-sm transition-colors"
           >
             Connect a Channel
           </a>
           <button
             onclick={() => step = 2}
-            class="block w-full text-center px-4 py-2 mt-2 text-muted hover:text-white text-sm"
+            class="block w-full text-center px-4 py-2 mt-2 text-muted hover:text-content text-sm"
           >
             {#if integrations.length > 0}
               Continue to Quick Tour →
@@ -171,7 +171,7 @@
           </p>
           {#each tourSteps as item, i}
             <div class="flex items-start gap-3 p-3 bg-surface-hover rounded-lg">
-              <div class="w-10 h-10 rounded-lg bg-brand-500/20 flex items-center justify-center text-xl shrink-0">
+              <div class="w-10 h-10 rounded-lg bg-accent-fill/20 flex items-center justify-center text-xl shrink-0">
                 {item.icon}
               </div>
               <div class="flex-1">
@@ -183,7 +183,7 @@
         </div>
         <button
           onclick={finish}
-          class="block w-full text-center px-4 py-3 mt-5 bg-brand-600 hover:bg-brand-500 text-white rounded-lg font-medium text-sm transition-colors"
+          class="block w-full text-center px-4 py-3 mt-5 bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg font-medium text-sm transition-colors"
         >
           Get Started
         </button>

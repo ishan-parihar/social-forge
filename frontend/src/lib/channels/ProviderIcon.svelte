@@ -101,7 +101,12 @@
 
   // Fallback: first 2 letters of provider name in a colored circle.
   const fallbackText = provider.slice(0, 2).toUpperCase();
-  const bgColor = $derived(brandColors[provider] || "#1e2435");
+  // v25 F1: the fallback was a hardcoded `#1e2435` — a dark-mode border color
+  // used as a fill, so an unknown provider rendered as a near-invisible circle
+  // on a light page. `--surface-hover` is the neutral avatar fill for both
+  // themes. `brandColors` above stays literal on purpose: those ARE brand
+  // identities and must not retheme.
+  const bgColor = $derived(brandColors[provider] || "var(--surface-hover)");
   const logoPath = $derived(logos[provider]);
 </script>
 

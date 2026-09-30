@@ -169,13 +169,13 @@
 <div
   ondragover={(e) => e.preventDefault()}
   ondrop={handleDrop}
-  class="border-2 border-dashed border-line rounded-lg p-4 text-center hover:border-brand-500/50 transition-colors"
+  class="border-2 border-dashed border-line rounded-lg p-4 text-center hover:border-accent/50 transition-colors"
 >
   {#if items.length > 0}
     <div class="grid grid-cols-4 gap-2 mb-3">
       {#each items as item (item.id)}
         <div
-          class="relative group cursor-grab active:cursor-grabbing {dragOverId === item.id ? 'ring-2 ring-brand-500' : ''}"
+          class="relative group cursor-grab active:cursor-grabbing {dragOverId === item.id ? 'ring-2 ring-accent' : ''}"
           draggable={true}
           ondragstart={(e) => handleReorderDragStart(e, item.id)}
           ondragover={(e) => handleReorderDragOver(e, item.id)}
@@ -184,16 +184,16 @@
         >
           {#if editingAlt === item.id}
             <!-- Alt text edit popover -->
-            <div class="absolute inset-0 z-20 bg-surface border border-brand-500 rounded-lg p-2 flex flex-col gap-1">
+            <div class="absolute inset-0 z-20 bg-surface border border-accent rounded-lg p-2 flex flex-col gap-1">
               <input
                 type="text"
                 bind:value={altTextDraft}
                 placeholder="Alt text..."
-                class="w-full px-2 py-1 text-xs bg-background-input border border-line rounded focus:border-brand-500 outline-none"
+                class="w-full px-2 py-1 text-xs bg-background-input border border-line rounded focus:border-accent outline-none"
                 onkeydown={(e) => { if (e.key === 'Enter') saveAlt(); if (e.key === 'Escape') { editingAlt = null; } }}
               />
               <div class="flex gap-1">
-                <button onclick={saveAlt} class="flex-1 text-[10px] bg-brand-600 text-white rounded py-0.5">Save</button>
+                <button onclick={saveAlt} class="flex-1 text-[10px] bg-accent-fill text-accent-fg rounded py-0.5">Save</button>
                 <button onclick={() => editingAlt = null} class="flex-1 text-[10px] text-muted border border-line rounded py-0.5">Cancel</button>
               </div>
             </div>
@@ -210,7 +210,7 @@
             <button
               aria-label="Edit alt text"
               onclick={() => startEditAlt(item)}
-              class="w-5 h-5 bg-brand-600 text-white rounded-full text-[10px] flex items-center justify-center hover:bg-brand-500"
+              class="w-5 h-5 bg-accent-fill text-accent-fg rounded-full text-[10px] flex items-center justify-center hover:bg-accent-fill-hover"
               title="Edit alt text"
             >✎</button>
             <button
@@ -236,21 +236,21 @@
         <div class="flex items-center gap-2 text-xs text-muted">
           <span class="truncate flex-1">{name}</span>
           <div class="w-24 h-1.5 bg-surface-hover rounded-full overflow-hidden">
-            <div class="h-full bg-brand-500 rounded-full transition-all" style="width: {pct}%"></div>
+            <div class="h-full bg-accent-fill rounded-full transition-all" style="width: {pct}%"></div>
           </div>
         </div>
       {/each}
     </div>
   {:else}
     <div class="flex items-center justify-center gap-4">
-      <label class="cursor-pointer text-sm text-brand-400 hover:text-brand-300">
+      <label class="cursor-pointer text-sm text-accent hover:text-accent-strong">
         <input type="file" multiple accept="image/*,video/*" onchange={handleUpload} class="hidden" />
         {items.length > 0 ? "Add more media" : "Drop, paste, or click to upload"}
       </label>
       <span class="text-surface-hover">|</span>
       <button
         onclick={() => mediaPopoverOpen = true}
-        class="text-sm text-brand-400 hover:text-brand-300 cursor-pointer"
+        class="text-sm text-accent hover:text-accent-strong cursor-pointer"
       >
         Choose from library
       </button>

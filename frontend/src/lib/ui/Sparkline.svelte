@@ -4,14 +4,14 @@
   // Design goals:
   //   - Pure SVG, no Chart.js / D3 / visx dependency (per AGENTS.md §0.5.3
   //     "no new third-party frontend libs").
-  //   - Theme-aware via `currentColor` — set `text-brand-400`, `text-success`,
+  //   - Theme-aware via `currentColor` — set `text-accent`, `text-success`,
   //     etc. on the parent and the sparkline inherits it. Works in dark + light.
   //   - Accessible: role="img" + aria-label + <title> for hover tooltip.
   //   - Edge-case safe: handles empty array (renders nothing), single point
   //     (renders a dot), all-equal data (renders a flat baseline).
   //
   // Usage:
-  //   <Sparkline data={[1, 3, 2, 5, 4, 6]} class="text-brand-400 w-full h-8" />
+  //   <Sparkline data={[1, 3, 2, 5, 4, 6]} class="text-accent w-full h-8" />
   //   <Sparkline data={cadence.by_day.map(d => d.count)} ariaLabel="Posts per day, 30d" />
   //
   // The `class` prop is forwarded to the <svg> so callers can control width,

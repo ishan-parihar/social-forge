@@ -135,7 +135,7 @@
         </select>
         <button
           onclick={addSlot}
-          class="px-3 py-1.5 bg-brand-600 hover:bg-brand-500 text-white rounded-lg text-sm transition-colors"
+          class="px-3 py-1.5 bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg text-sm transition-colors"
         >Add</button>
       </div>
       <p class="text-xs text-muted mt-2">Preview: {formatTime(newHour * 60 + newMinute)}</p>
@@ -145,12 +145,12 @@
     <div class="flex justify-end gap-2 pt-4 border-t border-line">
       <button
         onclick={onclose}
-        class="px-4 py-2 text-sm text-muted hover:text-white border border-line rounded-lg transition-colors"
+        class="px-4 py-2 text-sm text-muted hover:text-content border border-line rounded-lg transition-colors"
       >Cancel</button>
       <button
         onclick={save}
         disabled={saving}
-        class="px-4 py-2 text-sm bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white rounded-lg transition-colors"
+        class="px-4 py-2 text-sm bg-accent-fill hover:bg-accent-fill-hover disabled:opacity-50 text-accent-fg rounded-lg transition-colors"
       >{saving ? 'Saving...' : 'Save'}</button>
     </div>
   {/if}

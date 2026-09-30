@@ -169,7 +169,7 @@
         <div class="px-4 py-8 text-center text-sm text-muted">No commands match "{query}"</div>
       {:else}
         {#each grouped as group}
-          <div class="px-4 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-dark">
+          <div class="px-4 py-1 text-[10px] font-semibold uppercase tracking-wider text-faint">
             {group.section}
           </div>
           {#each group.items as cmd, i}
@@ -178,12 +178,12 @@
               onclick={() => runCommand(cmd)}
               onmouseenter={() => (selectedIndex = flatIndex)}
               class="w-full flex items-center gap-3 px-4 py-2 text-sm transition-colors text-left
-                {selectedIndex === flatIndex ? 'bg-surface-hover text-brand-400' : 'text-content hover:bg-surface-hover'}"
+                {selectedIndex === flatIndex ? 'bg-surface-hover text-accent' : 'text-content hover:bg-surface-hover'}"
             >
               <Icon name={cmd.icon} class="w-4 h-4 flex-shrink-0 text-muted" />
               <span class="flex-1">{cmd.label}</span>
               {#if recentIds.includes(cmd.id)}
-                <span class="text-[10px] text-muted-dark">recent</span>
+                <span class="text-[10px] text-faint">recent</span>
               {/if}
             </button>
           {/each}
@@ -191,7 +191,7 @@
       {/if}
     </div>
     <!-- Footer -->
-    <div class="px-4 py-2 border-t border-line flex items-center justify-between text-[10px] text-muted-dark">
+    <div class="px-4 py-2 border-t border-line flex items-center justify-between text-[10px] text-faint">
       <span>↑↓ navigate · ↵ select · ESC close</span>
       <span>Cmd+K</span>
     </div>

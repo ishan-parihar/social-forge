@@ -14,7 +14,7 @@
   {#each tabs as tab (tab.id)}
     <button
       onclick={() => (value = tab.id)}
-      class="px-3 py-1.5 text-xs font-medium rounded-md transition-colors {value === tab.id ? 'bg-brand-500 text-white' : 'text-muted hover:text-content'}"
+      class="px-3 py-1.5 text-xs font-medium rounded-md transition-colors {value === tab.id ? 'bg-accent-fill text-accent-fg' : 'text-muted hover:text-content'}"
     >
       {tab.label}
     </button>

@@ -33,11 +33,11 @@ export interface ProviderMeta {
 // ProviderRegistry — adding to only one will cause drift.
 //
 // Tier-1 (12) = depth platforms; Tier-2 (14) = publish-maintained.
-// kick/vk/whop/lemmy were removed outright in v25 §1. farcaster is Tier-3
-// (archive) and so absent here — it renders with the fallback glyph, which is
+// kick/vk/whop/lemmy were removed in v25 §1. farcaster is Tier-3 (archive)
+// and therefore absent here — it renders with the fallback glyph, which is
 // correct, because it is not registered unless ENABLE_ARCHIVE_PROVIDERS is set.
-// Source of truth for membership: src/social/tier.rs, reported as a `tier`
-// field by `/api/providers`.
+// Source of truth for membership: src/social/tier.rs (backend), which
+// `/api/providers` reports as a `tier` field.
 export const PROVIDERS: Record<string, ProviderMeta> = {
   x:                    { label: 'X',          color: '#9ca3af', icon: 'X',   charLimit: 280 },
   reddit:               { label: 'Reddit',     color: '#fb923c', icon: 'R',   charLimit: 10000 },
@@ -70,6 +70,32 @@ export const PROVIDERS: Record<string, ProviderMeta> = {
 
 const FALLBACK_COLOR = '#818cf8'; // indigo-400
 const FALLBACK_ICON = '•';
+
+/**
+ * v25 F1: providers that must NOT appear in a human-facing list.
+ *
+ * The backend registry still resolves these (so an existing integration or a
+ * historic post keeps rendering — silently breaking those would lose data), but
+ * they are out of the supported set: a solo founder should not be offered a
+ * connect button for a platform the product no longer ships support for. This
+ * is the single place that decision is written down, so every UI list agrees.
+ *
+ * Deliberately a separate export rather than a deletion from `PROVIDERS`:
+ * `providerLabel`/`providerColor` must keep working for historical records, and
+ * B1 owns the backend-side tier work.
+ */
+export const HIDDEN_PROVIDERS: ReadonlySet<string> = new Set([
+  'kick',
+  'vk',
+  'whop',
+  'lemmy',
+]);
+
+/** Providers offered in UI pickers, connect dialogs and filter lists.
+ *  Insertion-ordered, so the list matches the map's authoring order. */
+export function visibleProviders(): string[] {
+  return Object.keys(PROVIDERS).filter((p) => !HIDDEN_PROVIDERS.has(p));
+}
 
 /** Full metadata for a provider. Falls back to a capitalized provider
  *  name and the default color/icon for unknown providers. */

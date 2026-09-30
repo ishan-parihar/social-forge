@@ -39,7 +39,7 @@
     onclick={() => onCurrentChange('global')}
     class="px-3 py-1.5 text-xs rounded-lg transition-colors flex items-center gap-1.5
       {current === 'global'
-        ? 'bg-brand-600 text-white'
+        ? 'bg-accent-fill text-accent-fg'
         : 'text-muted hover:bg-surface-hover border border-line'}"
     title="Shared content for all channels"
   >
@@ -56,14 +56,14 @@
       onclick={() => onCurrentChange(intId)}
       class="px-3 py-1.5 text-xs rounded-lg transition-colors flex items-center gap-1.5 relative
         {isActive
-          ? 'bg-brand-600 text-white'
+          ? 'bg-accent-fill text-accent-fg'
           : 'text-muted hover:bg-surface-hover border border-line'}"
       title={isDiverged ? 'Has per-channel override (diverged from global)' : 'Same as global'}
     >
       <span class="text-[10px] font-mono opacity-80">{providerIcon(provider)}</span>
       <span class="truncate max-w-[120px]">{integrationNames.get(intId) || providerLabel(provider)}</span>
       {#if isDiverged}
-        <span class="w-1.5 h-1.5 rounded-full bg-pink-400" title="Diverged from global"></span>
+        <span class="w-1.5 h-1.5 rounded-full bg-viz-like" title="Diverged from global"></span>
       {/if}
       {#if onRemoveIntegration}
         <span
@@ -71,7 +71,7 @@
           tabindex="0"
           onclick={(e) => { e.stopPropagation(); onRemoveIntegration(intId); }}
           onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); onRemoveIntegration(intId); } }}
-          class="ml-1 text-muted-dark hover:text-error text-sm leading-none"
+          class="ml-1 text-faint hover:text-error text-sm leading-none"
           title="Remove channel"
           aria-label="Remove channel"
         >&times;</span>

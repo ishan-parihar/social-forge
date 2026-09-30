@@ -66,7 +66,7 @@
         type="url"
         bind:value={feedUrl}
         placeholder="https://example.com/rss"
-        class="w-full bg-background border border-line rounded-lg px-3 py-2 text-sm text-content placeholder:text-muted-dark focus:outline-none focus:border-brand-500"
+        class="w-full bg-background border border-line rounded-lg px-3 py-2 text-sm text-content placeholder:text-faint focus:outline-none focus:border-accent"
         required
       />
     </div>
@@ -81,7 +81,7 @@
         <select
           id="integration"
           bind:value={integrationId}
-          class="w-full bg-background border border-line rounded-lg px-3 py-2 text-sm text-content focus:outline-none focus:border-brand-500"
+          class="w-full bg-background border border-line rounded-lg px-3 py-2 text-sm text-content focus:outline-none focus:border-accent"
           required
         >
           <option value="" disabled>Select integration</option>
@@ -101,7 +101,7 @@
         type="text"
         bind:value={title}
         placeholder="My RSS Feed"
-        class="w-full bg-background border border-line rounded-lg px-3 py-2 text-sm text-content placeholder:text-muted-dark focus:outline-none focus:border-brand-500"
+        class="w-full bg-background border border-line rounded-lg px-3 py-2 text-sm text-content placeholder:text-faint focus:outline-none focus:border-accent"
       />
     </div>
 
@@ -115,7 +115,7 @@
     {/if}
 
     <button type="submit" disabled={saving || loadingIntegrations}
-      class="px-4 py-2 text-sm font-medium bg-brand-500 hover:bg-brand-600 text-white rounded-lg disabled:opacity-50 transition-colors">
+      class="px-4 py-2 text-sm font-medium bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg disabled:opacity-50 transition-colors">
       {saving ? 'Adding...' : 'Add Feed'}
     </button>
   </form>

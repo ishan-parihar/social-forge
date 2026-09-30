@@ -20,4 +20,4 @@
   <div class="flex justify-between"><span class="text-muted">Show this help</span><kbd class="px-2 py-0.5 bg-surface-hover rounded text-xs font-mono">?</kbd></div>
   <div class="flex justify-between"><span class="text-muted">Close modal</span><kbd class="px-2 py-0.5 bg-surface-hover rounded text-xs font-mono">Esc</kbd></div>
 </div>
-<p class="text-xs text-muted-dark mt-4 text-center">Shortcuts are disabled while typing in inputs.</p>
+<p class="text-xs text-faint mt-4 text-center">Shortcuts are disabled while typing in inputs.</p>

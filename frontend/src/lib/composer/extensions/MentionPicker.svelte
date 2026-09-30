@@ -172,7 +172,7 @@
           {#if result.image}
             <img src={result.image} alt="" class="w-5 h-5 rounded-full shrink-0" />
           {:else}
-            <div class="w-5 h-5 rounded-full bg-brand-500/20 text-brand-400 text-xs flex items-center justify-center shrink-0 font-medium">
+            <div class="w-5 h-5 rounded-full bg-accent-fill/20 text-accent text-xs flex items-center justify-center shrink-0 font-medium">
               {result.label.charAt(0).toUpperCase()}
             </div>
           {/if}
@@ -180,7 +180,7 @@
             <div class="text-content truncate">{result.label}</div>
             <div class="text-[10px] text-muted truncate">{result.formatted}</div>
           </div>
-          <span class="text-[10px] text-muted-dark uppercase">{result.provider}</span>
+          <span class="text-[10px] text-faint uppercase">{result.provider}</span>
         </button>
       {/each}
     {/if}

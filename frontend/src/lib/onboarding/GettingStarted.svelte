@@ -101,10 +101,10 @@
 </script>
 
 {#if !loading && !dismissed && !allDone}
-  <div class="bg-gradient-to-br from-brand-500/10 to-purple-500/10 border border-brand-500/30 rounded-xl p-5">
+  <div class="bg-gradient-to-br from-accent/10 to-hue-violet/10 border border-accent/30 rounded-xl p-5">
     <div class="flex items-start justify-between mb-3">
       <div>
-        <h3 class="text-sm font-semibold text-brand-300">Getting Started</h3>
+        <h3 class="text-sm font-semibold text-accent-strong">Getting Started</h3>
         <p class="text-xs text-muted mt-0.5">{completedCount} of {checklist.length} complete</p>
       </div>
       <button
@@ -119,7 +119,7 @@
     <!-- Progress bar -->
     <div class="h-1.5 bg-background-input rounded-full overflow-hidden mb-4">
       <div
-        class="h-full bg-brand-500 rounded-full transition-all duration-500"
+        class="h-full bg-accent-fill rounded-full transition-all duration-500"
         style="width: {(completedCount / checklist.length) * 100}%"
       ></div>
     </div>
@@ -133,7 +133,7 @@
         >
           <div class="w-5 h-5 rounded-full flex items-center justify-center text-xs shrink-0
             {item.done
-              ? 'bg-emerald-500/20 text-emerald-400'
+              ? 'bg-success/20 text-success'
               : 'bg-surface-hover text-muted border border-line'}">
             {#if item.done}
               <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
@@ -155,10 +155,10 @@
   </div>
 {:else if !loading && !dismissed && allDone}
   <!-- All-done state: brief success banner before auto-dismiss -->
-  <div class="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4 flex items-center gap-3">
+  <div class="bg-success/10 border border-success/30 rounded-xl p-4 flex items-center gap-3">
     <span class="text-xl">🎉</span>
     <div class="flex-1">
-      <p class="text-sm text-emerald-300 font-medium">You're all set!</p>
+      <p class="text-sm text-success font-medium">You're all set!</p>
       <p class="text-xs text-muted">You've completed the getting started checklist.</p>
     </div>
   </div>

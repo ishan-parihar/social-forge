@@ -1,5 +1,8 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
+  import Skeleton from '$lib/ui/Skeleton.svelte';
+  import ErrorState from '$lib/ui/ErrorState.svelte';
+  import EmptyState from '$lib/ui/EmptyState.svelte';
   import { commentsApi, type Comment } from "$lib/api/comments";
   import { integrationsApi, type Integration } from "$lib/api/integrations";
   import { toast } from "$lib/stores/toast";
@@ -90,7 +93,7 @@
 <div class="page-enter space-y-6">
   <div class="flex items-center justify-between">
     <h2 class="text-xl font-semibold">Comments</h2>
-    <button onclick={load} class="px-3 py-1.5 text-sm text-muted hover:text-white border border-line rounded-lg transition-colors">Refresh</button>
+    <button onclick={load} class="px-3 py-1.5 text-sm text-muted hover:text-content border border-line rounded-lg transition-colors">Refresh</button>
   </div>
 
   <!-- Filters -->
@@ -101,7 +104,7 @@
       {#each platforms as p}
         <button
           onclick={() => { filterPlatform = p; load(); }}
-          class="px-3 py-1.5 text-xs capitalize rounded-lg transition-colors {filterPlatform === p ? 'bg-brand-600 text-white' : 'bg-surface text-muted hover:text-white border border-line'}"
+          class="px-3 py-1.5 text-xs capitalize rounded-lg transition-colors {filterPlatform === p ? 'bg-accent-fill text-accent-fg' : 'bg-surface text-muted hover:text-content border border-line'}"
         >{p}</button>
       {/each}
     </div>
@@ -111,7 +114,7 @@
       {#each statuses as s}
         <button
           onclick={() => { filterStatus = s; load(); }}
-          class="px-3 py-1.5 text-xs capitalize rounded-lg transition-colors {filterStatus === s ? 'bg-brand-600 text-white' : 'bg-surface text-muted hover:text-white border border-line'}"
+          class="px-3 py-1.5 text-xs capitalize rounded-lg transition-colors {filterStatus === s ? 'bg-accent-fill text-accent-fg' : 'bg-surface text-muted hover:text-content border border-line'}"
         >{s}</button>
       {/each}
     </div>
@@ -119,14 +122,15 @@
 
   <!-- Content -->
   {#if error}
-    <div class="text-center py-12 text-sm text-error">{error}</div>
+    <ErrorState message={error} actionLabel="Retry" onaction={load} />
   {:else if loading}
-    <div class="text-center py-12 text-sm text-muted">Loading comments...</div>
+    <Skeleton variant="row" rows={4} />
   {:else if comments.length === 0}
-    <div class="text-center py-12">
-      <p class="text-sm text-muted mb-2">No comments found</p>
-      <p class="text-xs text-muted-dark">Comments are fetched from connected platforms that support the comments API (Instagram, Facebook, LinkedIn).</p>
-    </div>
+    <EmptyState
+      icon="comment"
+      title="No comments found"
+      description="Comments come from connected platforms that expose a comments API — Instagram, Facebook, LinkedIn."
+    />
   {:else}
     <div class="bg-surface border border-line rounded-xl overflow-hidden">
       <div class="grid grid-cols-[40px_1fr_1.5fr_100px_100px_90px] gap-3 px-4 py-2 border-b border-line bg-background-input text-xs text-muted">
@@ -134,7 +138,7 @@
       </div>
       {#each comments as c (c.id)}
         <div class="grid grid-cols-[40px_1fr_1.5fr_100px_100px_90px] gap-3 px-4 py-3 border-b border-line last:border-0 hover:bg-surface-hover transition-colors items-center">
-          <span class="text-sm text-brand-400">{platformIcon(c.platform)}</span>
+          <span class="text-sm text-accent">{platformIcon(c.platform)}</span>
           <span class="text-sm truncate text-muted" title={c.post_content}>{c.post_content?.slice(0, 50) || c.post_id}</span>
           <span class="text-sm text-content-secondary truncate">{c.content}</span>
           <span class="text-xs text-muted truncate">{c.author || 'Unknown'}</span>
@@ -143,7 +147,7 @@
             {#if c.status !== 'resolved'}
               <span class="px-2 py-0.5 text-xs rounded bg-warning/20 text-warning">New</span>
               <button onclick={() => resolveComment(c.id)} class="text-xs text-muted hover:text-success" title="Resolve">✓</button>
-              <button onclick={() => replyModal = { comment: c, text: "" }} class="text-xs text-muted hover:text-brand-400" title="Reply">↩</button>
+              <button onclick={() => replyModal = { comment: c, text: "" }} class="text-xs text-muted hover:text-accent" title="Reply">↩</button>
             {:else}
               <span class="px-2 py-0.5 text-xs rounded bg-success/20 text-success">Resolved</span>
             {/if}
@@ -167,8 +171,8 @@
         class="w-full px-3 py-2 bg-surface-hover border border-line rounded text-sm mb-4"
       ></textarea>
       <div class="flex gap-3 justify-end">
-        <button onclick={() => replyModal = null} class="px-4 py-2 text-sm text-muted hover:text-white">Cancel</button>
-        <button onclick={sendReply} disabled={sending || !replyModal.text.trim()} class="px-4 py-2 text-sm bg-brand-600 hover:bg-brand-500 rounded disabled:opacity-50">
+        <button onclick={() => replyModal = null} class="px-4 py-2 text-sm text-muted hover:text-content">Cancel</button>
+        <button onclick={sendReply} disabled={sending || !replyModal.text.trim()} class="px-4 py-2 text-sm bg-accent-fill hover:bg-accent-fill-hover rounded disabled:opacity-50">
           {sending ? "Sending..." : "Reply"}
         </button>
       </div>

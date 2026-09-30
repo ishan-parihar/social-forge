@@ -22,7 +22,7 @@
     {t.type === 'success' ? 'bg-success text-success' : ''}
     {t.type === 'error' ? 'bg-error text-error' : ''}
     {t.type === 'warning' ? 'bg-warning text-warning' : ''}
-    {t.type === 'info' ? 'bg-blue-900 text-blue-200' : ''}"
+    {t.type === 'info' ? 'bg-hue-neutral/90 text-hue-neutral' : ''}"
   >
     {t.type === 'success' && '✅ '}{t.type === 'error' && '❌ '}{t.type === 'warning' && '⚠️ '}{t.type === 'info' && 'ℹ️ '}
     {t.message}

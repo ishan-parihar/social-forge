@@ -88,7 +88,7 @@
         <textarea
           bind:value={topic}
           placeholder="e.g., 'Tips for indie hackers launching their first product' or 'The future of AI in content creation'"
-          class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-brand-500 outline-none resize-none"
+          class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none resize-none"
           rows="3"
         ></textarea>
       </div>
@@ -96,7 +96,7 @@
       <div class="grid grid-cols-2 gap-3">
         <div>
           <label class="text-xs text-muted block mb-1">Format</label>
-          <select bind:value={format} class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-brand-500 outline-none">
+          <select bind:value={format} class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none">
             <option value="one_short">Single short post</option>
             <option value="one_long">Single long post</option>
             <option value="thread_short">Short thread (3 tweets)</option>
@@ -105,7 +105,7 @@
         </div>
         <div>
           <label class="text-xs text-muted block mb-1">Tone</label>
-          <select bind:value={tone} class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-brand-500 outline-none">
+          <select bind:value={tone} class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none">
             <option value="personal">Personal</option>
             <option value="company">Company</option>
           </select>
@@ -124,7 +124,7 @@
       <button
         onclick={generate}
         disabled={!topic.trim()}
-        class="w-full px-4 py-2.5 bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors"
+        class="w-full px-4 py-2.5 bg-accent-fill hover:bg-accent-fill-hover disabled:opacity-50 text-accent-fg rounded-lg text-sm font-medium transition-colors"
       >✨ Generate {count} Post{count > 1 ? 's' : ''}</button>
     </div>
   {:else if loading}
@@ -132,15 +132,15 @@
     <div class="text-center py-12 space-y-3">
       <div class="inline-block animate-spin text-3xl">✨</div>
       <div class="text-sm text-muted">Generating {count} {format.replace(/_/g, ' ')} post{count > 1 ? 's' : ''} about "{topic}"...</div>
-      <div class="text-xs text-muted-dark">This takes 10-30 seconds depending on the LLM.</div>
-      <button onclick={cancel} class="text-xs text-muted hover:text-white">Cancel</button>
+      <div class="text-xs text-faint">This takes 10-30 seconds depending on the LLM.</div>
+      <button onclick={cancel} class="text-xs text-muted hover:text-content">Cancel</button>
     </div>
   {:else if results}
     <!-- Results -->
     <div class="space-y-4">
       <div class="flex items-center justify-between">
         <h3 class="text-sm font-semibold">{results.posts.length} post{results.posts.length > 1 ? 's' : ''} generated</h3>
-        <button onclick={() => { results = null; }} class="text-xs text-muted hover:text-white">← Start over</button>
+        <button onclick={() => { results = null; }} class="text-xs text-muted hover:text-content">← Start over</button>
       </div>
 
       {#each results.posts as post, i (i)}
@@ -155,7 +155,7 @@
           <div class="flex gap-2">
             <button
               onclick={() => usePost(post, results.suggested_dates[i])}
-              class="px-3 py-1 text-xs bg-brand-600 hover:bg-brand-500 text-white rounded transition-colors"
+              class="px-3 py-1 text-xs bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded transition-colors"
             >Use this</button>
           </div>
         </div>
@@ -163,7 +163,7 @@
 
       <button
         onclick={useAll}
-        class="w-full px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-lg text-sm font-medium transition-colors"
+        class="w-full px-4 py-2 bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg text-sm font-medium transition-colors"
       >Use first post → schedule rest manually</button>
     </div>
   {/if}

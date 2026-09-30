@@ -8,6 +8,8 @@
   // kanban board for content ideation and pipeline management.
 
   import { onMount, onDestroy } from 'svelte';
+  import ErrorState from '$lib/ui/ErrorState.svelte';
+  import Skeleton from '$lib/ui/Skeleton.svelte';
   import { postsApi, type PostSummary } from '$lib/api/posts';
   import { campaignsApi, type Campaign } from '$lib/api/campaigns';
   import { integrationsApi, type Integration } from '$lib/api/integrations';
@@ -60,13 +62,22 @@
 
   let unsubscribers: (() => void)[] = [];
 
+  // v25 F1: this load previously discarded every response error — a failed
+  // board load rendered as an empty pipeline with no way to tell that apart
+  // from "you have no posts", and no way to retry. It now surfaces the first
+  // error so the board can show an ErrorState with a retry.
+  let loadError = $state('');
   async function load() {
     loading = true;
+    loadError = '';
     const [postsRes, campRes, integRes] = await Promise.all([
       postsApi.list({ limit: 200 }),
       campaignsApi.list(),
       integrationsApi.list(),
     ]);
+    if (postsRes.error) loadError = postsRes.error;
+    else if (campRes.error) loadError = campRes.error;
+    else if (integRes.error) loadError = integRes.error;
     if (postsRes.data) posts = postsRes.data.posts;
     if (campRes.data) campaigns = campRes.data;
     if (integRes.data) integrations = integRes.data.integrations.filter(i => !i.disabled);
@@ -368,7 +379,7 @@
   }
 
   // Due date → color based on how far out it is. Overdue = red, today =
-  // yellow, soon (≤3d) = muted, future = muted-dark. Returns just the
+  // yellow, soon (≤3d) = muted, future = faint. Returns just the
   // text color class; the caller wraps the icon + date.
   function dueDateClass(iso: string): string {
     const d = new Date(iso);
@@ -380,7 +391,7 @@
     if (diffDays < 0) return 'text-error font-medium';
     if (diffDays === 0) return 'text-warning font-medium';
     if (diffDays <= 3) return 'text-muted';
-    return 'text-muted-dark';
+    return 'text-faint';
   }
 
   // Substate → label + text color + dot color.
@@ -496,7 +507,7 @@
       <p class="text-sm text-muted mt-1">Drag posts between columns to move them through your content pipeline.</p>
     </div>
     <div class="flex gap-2">
-      <button onclick={openCreateCampaignModal} class="px-3 py-1.5 text-sm border border-line rounded-lg text-muted hover:text-white hover:bg-surface-hover transition-colors">
+      <button onclick={openCreateCampaignModal} class="px-3 py-1.5 text-sm border border-line rounded-lg text-muted hover:text-content hover:bg-surface-hover transition-colors">
         + Campaign
       </button>
     </div>
@@ -508,13 +519,13 @@
       <span class="text-xs text-muted">Campaign:</span>
       <button
         onclick={() => selectedCampaign = null}
-        class="px-3 py-1 text-xs rounded-lg transition-colors {!selectedCampaign ? 'bg-brand-600 text-white' : 'text-muted hover:bg-surface-hover border border-line'}"
+        class="px-3 py-1 text-xs rounded-lg transition-colors {!selectedCampaign ? 'bg-accent-fill text-accent-fg' : 'text-muted hover:bg-surface-hover border border-line'}"
       >All</button>
       {#each campaigns as c (c.id)}
         <div class="flex items-center gap-1">
           <button
             onclick={() => selectedCampaign = selectedCampaign === c.id ? null : c.id}
-            class="px-3 py-1 text-xs rounded-lg transition-colors flex items-center gap-1.5 {selectedCampaign === c.id ? 'bg-brand-600 text-white' : 'text-muted hover:bg-surface-hover border border-line'}"
+            class="px-3 py-1 text-xs rounded-lg transition-colors flex items-center gap-1.5 {selectedCampaign === c.id ? 'bg-accent-fill text-accent-fg' : 'text-muted hover:bg-surface-hover border border-line'}"
           >
             <span class="w-2 h-2 rounded-full" style="background: {c.color}"></span>
             {c.name}
@@ -540,17 +551,17 @@
         {#each [{ v: null, label: 'All' }, { v: 'urgent', label: 'Urgent' }, { v: 'high', label: 'High' }, { v: 'medium', label: 'Medium' }, { v: 'low', label: 'Low' }] as opt}
           <button
             onclick={() => priorityFilter = opt.v}
-            class="px-2 py-0.5 rounded transition-colors {priorityFilter === opt.v ? 'bg-brand-500 text-white' : 'text-muted hover:text-content hover:bg-surface-hover border border-line'}"
+            class="px-2 py-0.5 rounded transition-colors {priorityFilter === opt.v ? 'bg-accent-fill text-accent-fg' : 'text-muted hover:text-content hover:bg-surface-hover border border-line'}"
           >{opt.label}</button>
         {/each}
       </div>
-      <span class="text-muted-dark">·</span>
+      <span class="text-faint">·</span>
       <!-- Substate filter -->
       <div class="flex items-center gap-1">
         {#each [{ v: null, label: 'All' }, { v: 'ready_to_publish', label: 'Ready' }, { v: 'in_review', label: 'Review' }, { v: 'blocked', label: 'Blocked' }, { v: 'none', label: 'No substate' }] as opt}
           <button
             onclick={() => substateFilter = opt.v}
-            class="px-2 py-0.5 rounded transition-colors {substateFilter === opt.v ? 'bg-brand-500 text-white' : 'text-muted hover:text-content hover:bg-surface-hover border border-line'}"
+            class="px-2 py-0.5 rounded transition-colors {substateFilter === opt.v ? 'bg-accent-fill text-accent-fg' : 'text-muted hover:text-content hover:bg-surface-hover border border-line'}"
           >{opt.label}</button>
         {/each}
       </div>
@@ -564,12 +575,14 @@
 
   <!-- Kanban board -->
   {#if loading}
-    <div class="text-center py-12 text-sm text-muted">Loading...</div>
+    <Skeleton variant="card" rows={3} />
+  {:else if loadError}
+    <ErrorState message={loadError} actionLabel="Retry" onaction={load} />
   {:else}
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
       {#each columns as col (col.state)}
         <div
-          class="bg-surface border border-line rounded-xl overflow-hidden {col.color} border-t-4 {draggingId && dropTargetId === null && posts.find(p => p.id === draggingId)?.state === col.state ? 'ring-1 ring-brand-500/40' : ''}"
+          class="bg-surface border border-line rounded-xl overflow-hidden {col.color} border-t-4 {draggingId && dropTargetId === null && posts.find(p => p.id === draggingId)?.state === col.state ? 'ring-1 ring-accent/40' : ''}"
           ondragover={(e) => onDragOverColumn(e)}
           ondrop={(e) => onDrop(e, col.state)}
           role="region"
@@ -587,10 +600,10 @@
               <!-- v25-4: drop indicator line rendered BEFORE this card
                    when the cursor is in its top half. -->
               {#if dropTargetId === post.id && dropPosition === 'before' && draggingId !== post.id}
-                <div class="h-0.5 bg-brand-500 rounded-full -mx-2" aria-hidden="true"></div>
+                <div class="h-0.5 bg-accent-fill rounded-full -mx-2" aria-hidden="true"></div>
               {/if}
               <article
-                class="group bg-background-input border border-line rounded-lg cursor-grab active:cursor-grabbing hover:border-brand-500/50 transition-colors overflow-hidden {draggingId === post.id ? 'opacity-50' : ''} {priorityBorderClass(post.priority || 'medium')} {dropTargetId === post.id ? 'ring-1 ring-brand-500/50' : ''}"
+                class="group bg-background-input border border-line rounded-lg cursor-grab active:cursor-grabbing hover:border-accent/50 transition-colors overflow-hidden {draggingId === post.id ? 'opacity-50' : ''} {priorityBorderClass(post.priority || 'medium')} {dropTargetId === post.id ? 'ring-1 ring-accent/50' : ''}"
                 draggable={true}
                 ondragstart={(e) => onDragStart(e, post.id)}
                 ondragover={(e) => onDragOverCard(e, post)}
@@ -676,7 +689,7 @@
                             onclick={(e) => e.stopPropagation()}
                             onchange={(e) => { e.stopPropagation(); setDueDate(post, (e.target as HTMLInputElement).value); }}
                             onkeydown={(e) => e.stopPropagation()}
-                            class="flex-1 px-1.5 py-1 text-xs bg-background-input border border-line rounded focus:border-brand-500 outline-none"
+                            class="flex-1 px-1.5 py-1 text-xs bg-background-input border border-line rounded focus:border-accent outline-none"
                             draggable={false}
                           />
                           {#if post.due_date}
@@ -739,7 +752,7 @@
               <!-- v25-4: drop indicator line rendered AFTER this card
                    when the cursor is in its bottom half. -->
               {#if dropTargetId === post.id && dropPosition === 'after' && draggingId !== post.id}
-                <div class="h-0.5 bg-brand-500 rounded-full -mx-2" aria-hidden="true"></div>
+                <div class="h-0.5 bg-accent-fill rounded-full -mx-2" aria-hidden="true"></div>
               {/if}
             {/each}
 
@@ -759,12 +772,12 @@
                   onkeydown={(e) => { if (e.key === 'Enter') quickAddIdea(); }}
                   onfocus={() => { if (!showQuickAddIntegSelect) showQuickAddIntegSelect = true; }}
                   placeholder="Quick add idea..."
-                  class="flex-1 px-2 py-1 text-xs bg-background-input border border-line rounded focus:border-brand-500 outline-none"
+                  class="flex-1 px-2 py-1 text-xs bg-background-input border border-line rounded focus:border-accent outline-none"
                 />
                 <button
                   onclick={quickAddIdea}
                   disabled={!quickIdeaText.trim()}
-                  class="px-2 py-1 text-xs bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white rounded transition-colors"
+                  class="px-2 py-1 text-xs bg-accent-fill hover:bg-accent-fill-hover disabled:opacity-50 text-accent-fg rounded transition-colors"
                 >+</button>
               </div>
               <!-- v22 Phase 6: channel selector for quick-add. Previously
@@ -778,7 +791,7 @@
                 {:else}
                   <select
                     bind:value={quickIdeaIntegrationId}
-                    class="w-full px-2 py-1 text-xs bg-background-input border border-line rounded focus:border-brand-500 outline-none"
+                    class="w-full px-2 py-1 text-xs bg-background-input border border-line rounded focus:border-accent outline-none"
                   >
                     {#each integrations as int (int.id)}
                       <option value={int.id}>{int.provider_name || int.provider_identifier}</option>
@@ -815,7 +828,7 @@
         bind:value={newCampaignName}
         placeholder="e.g. Product launch Q3"
         autofocus
-        class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-brand-500 outline-none mb-4"
+        class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none mb-4"
         onkeydown={(e) => { if (e.key === 'Enter') confirmCreateCampaign(); if (e.key === 'Escape') createCampaignModalOpen = false; }}
       />
       <div class="flex items-center justify-end gap-2">
@@ -826,7 +839,7 @@
         <button
           onclick={confirmCreateCampaign}
           disabled={!newCampaignName.trim()}
-          class="px-3 py-1.5 text-sm bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white rounded-lg transition-colors"
+          class="px-3 py-1.5 text-sm bg-accent-fill hover:bg-accent-fill-hover disabled:opacity-50 text-accent-fg rounded-lg transition-colors"
         >Create</button>
       </div>
     </div>

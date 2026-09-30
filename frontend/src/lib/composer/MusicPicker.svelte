@@ -64,7 +64,7 @@
   <div class="bg-surface border border-line rounded-xl w-full max-w-md mx-4 overflow-hidden">
     <div class="flex items-center justify-between px-4 py-3 border-b border-line">
       <h3 class="text-sm font-semibold">🎵 Add Music</h3>
-      <button onclick={onclose} class="text-muted hover:text-white text-xl">&times;</button>
+      <button onclick={onclose} class="text-muted hover:text-content text-xl">&times;</button>
     </div>
 
     <div class="p-4 space-y-3">
@@ -73,7 +73,7 @@
         bind:value={query}
         oninput={handleInput}
         placeholder="Search trending music..."
-        class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-brand-500 outline-none"
+        class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none"
       />
 
       {#if error}
@@ -94,7 +94,7 @@
             <button
               onclick={() => handleSelect(track)}
               class="w-full flex items-center gap-3 p-2 rounded-lg transition-colors text-left
-                {selectedId === track.id ? 'bg-brand-500/20 ring-1 ring-brand-500' : 'hover:bg-surface-hover'}"
+                {selectedId === track.id ? 'bg-accent-fill/20 ring-1 ring-accent' : 'hover:bg-surface-hover'}"
             >
               {#if track.cover_url}
                 <img src={track.cover_url} alt="" class="w-10 h-10 rounded object-cover shrink-0" />
@@ -109,7 +109,7 @@
                 <span class="text-xs text-muted shrink-0">{formatDuration(track.duration_ms)}</span>
               {/if}
               {#if selectedId === track.id}
-                <span class="text-brand-400 text-sm shrink-0">✓</span>
+                <span class="text-accent text-sm shrink-0">✓</span>
               {/if}
             </button>
           {/each}
@@ -119,7 +119,7 @@
       {#if selectedId}
         <button
           onclick={onclose}
-          class="w-full px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-lg text-sm font-medium"
+          class="w-full px-4 py-2 bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg text-sm font-medium"
         >
           Done
         </button>

@@ -93,7 +93,7 @@
                         type="time"
                         value={minToTime(slot.time)}
                         oninput={(e) => updateSlot(i, e.currentTarget.value)}
-                        class="bg-surface-hover border border-line rounded-md px-3 py-1.5 text-sm text-content-secondary focus:outline-none focus:ring-1 focus:ring-brand-500"
+                        class="bg-surface-hover border border-line rounded-md px-3 py-1.5 text-sm text-content-secondary focus:outline-none focus:ring-1 focus:ring-accent"
                     />
                     <button
                         onclick={() => removeSlot(i)}
@@ -107,7 +107,7 @@
         {#if timeslots.length < 3}
             <button
                 onclick={addSlot}
-                class="text-sm text-brand-400 hover:text-brand-300 transition-colors"
+                class="text-sm text-accent hover:text-accent-strong transition-colors"
             >+ Add slot</button>
         {:else}
             <p class="text-xs text-muted">Maximum 3 slots reached.</p>
@@ -116,13 +116,13 @@
         <div class="flex justify-end gap-2 pt-2 border-t border-line">
             <button
                 onclick={onclose}
-                class="px-3 py-1.5 text-sm text-muted hover:text-white transition-colors"
+                class="px-3 py-1.5 text-sm text-muted hover:text-content transition-colors"
                 disabled={saving}
             >Cancel</button>
             <button
                 onclick={save}
                 disabled={saving}
-                class="px-3 py-1.5 text-sm bg-brand-600 text-white rounded-md hover:bg-brand-500 disabled:opacity-50 transition-colors"
+                class="px-3 py-1.5 text-sm bg-accent-fill text-accent-fg rounded-md hover:bg-accent-fill-hover disabled:opacity-50 transition-colors"
             >
                 {#if saving}
                     <Spinner size="sm" />

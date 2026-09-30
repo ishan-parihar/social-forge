@@ -41,8 +41,8 @@
     if (m === "api_key") return "text-warning border-warning/30 bg-warning/10";
     switch (authType) {
       case "api_key": return "text-warning border-warning/30 bg-warning/10";
-      case "web3": return "text-purple-400 border-purple-400/30 bg-purple-400/10";
-      case "extension": return "text-cyan-400 border-cyan-400/30 bg-cyan-400/10";
+      case "web3": return "text-viz-view border-hue-violet/30 bg-hue-violet/10";
+      case "extension": return "text-viz-click border-hue-cyan/30 bg-hue-cyan/10";
       default: return "";
     }
   });
@@ -86,7 +86,7 @@
     <div class="text-sm truncate flex items-center gap-2">
       {integration.profile_name || integration.provider_name}
       {#if integration.root_internal_id}
-        <span class="text-[10px] px-1.5 py-0.5 rounded border text-brand-400 border-brand-400/30 bg-brand-400/10">Page</span>
+        <span class="text-[10px] px-1.5 py-0.5 rounded border text-accent border-accent/30 bg-accent-fill/10">Page</span>
       {/if}
       {#if authTypeLabel}
         <span class="text-[10px] px-1.5 py-0.5 rounded border {authTypeColor}">{authTypeLabel}</span>

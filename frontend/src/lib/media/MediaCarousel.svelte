@@ -120,12 +120,17 @@
                 poster={item.poster_url ? proxyMediaUrl(item.poster_url) : ''}
               >
                 <a href={item.url} target="_blank" rel="noopener noreferrer"
-                  class="text-xs text-brand-400 hover:text-brand-300 underline p-2 block">
+                  class="text-xs text-accent hover:text-accent-hover underline p-2 block">
                   Download video
                 </a>
               </video>
               {#if !item.poster_url}
                 <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <!-- v25 F1: this disc is a fixed-contrast control laid over
+                       arbitrary user media, so it deliberately does NOT follow the
+                       theme — a near-white disc with a near-black glyph is the only
+                       pairing guaranteed to read against any photo. Tokens still
+                       apply everywhere the carousel sits on the app's own surface. -->
                   <div class="w-14 h-14 rounded-full bg-white/90 flex items-center justify-center shadow-lg">
                     <svg class="w-6 h-6 text-gray-900 ml-0.5" viewBox="0 0 24 24" fill="currentColor">
                       <path d="M8 5v14l11-7z"/>
@@ -163,7 +168,7 @@
             bg-black/50 hover:bg-black/70 text-white flex items-center justify-center
             opacity-0 group-hover:opacity-100 transition-all duration-200
             backdrop-blur-sm ring-1 ring-white/10
-            focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-brand-400"
+            focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-accent"
           aria-label="Previous slide"
         >
           <svg class="w-4 h-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
@@ -176,7 +181,7 @@
             bg-black/50 hover:bg-black/70 text-white flex items-center justify-center
             opacity-0 group-hover:opacity-100 transition-all duration-200
             backdrop-blur-sm ring-1 ring-white/10
-            focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-brand-400"
+            focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-accent"
           aria-label="Next slide"
         >
           <svg class="w-4 h-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
@@ -191,7 +196,7 @@
       <div class="flex items-center justify-center gap-1.5 px-4 py-2.5 bg-background-input/90 border-t border-line">
         <button
           onclick={prev}
-          class="p-1 text-muted-dark hover:text-muted transition-colors"
+          class="p-1 text-faint hover:text-muted transition-colors"
           aria-label="Previous slide"
         >
           <svg class="w-3 h-3" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
@@ -203,7 +208,7 @@
           {#each items as _, i (i)}
             <button
               onclick={() => goTo(i)}
-              class="rounded-full transition-all duration-300 {i === current ? 'w-2.5 h-2.5 bg-brand-400 shadow-[0_0_6px_rgb(var(--brand-rgb)/0.3)]' : 'w-2 h-2 bg-line-hover'}"
+              class="rounded-full transition-all duration-300 {i === current ? 'w-2.5 h-2.5 bg-accent shadow-[0_0_6px_rgb(var(--brand-rgb)/0.3)]' : 'w-2 h-2 bg-line-hover'}"
               aria-label={`Go to slide ${i + 1}`}
               aria-current={i === current ? 'true' : undefined}
             />
@@ -212,7 +217,7 @@
 
         <button
           onclick={next}
-          class="p-1 text-muted-dark hover:text-muted transition-colors"
+          class="p-1 text-faint hover:text-muted transition-colors"
           aria-label="Next slide"
         >
           <svg class="w-3 h-3" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">

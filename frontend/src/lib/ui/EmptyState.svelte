@@ -29,7 +29,7 @@
   {#if actionLabel && onaction}
     <button
       onclick={onaction}
-      class="mt-4 px-3 py-1.5 bg-brand-500 hover:bg-brand-600 text-white text-xs rounded-md transition-colors"
+      class="mt-4 px-3 py-1.5 bg-accent-fill hover:bg-accent-fill-hover text-accent-fg text-xs rounded-md transition-colors"
     >
       {actionLabel}
     </button>

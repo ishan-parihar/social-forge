@@ -1,5 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import Skeleton from '$lib/ui/Skeleton.svelte';
+  import ErrorState from '$lib/ui/ErrorState.svelte';
+  import EmptyState from '$lib/ui/EmptyState.svelte';
   import Button from '$lib/ui/Button.svelte';
   import Spinner from '$lib/ui/Spinner.svelte';
   import Modal from '$lib/ui/Modal.svelte';
@@ -113,14 +116,13 @@
       <Spinner size="lg" />
     </div>
   {:else if error}
-    <div class="bg-surface border border-error/30 rounded-xl p-5 text-sm text-error">
-      {error}
-      <button onclick={loadFeeds} class="ml-2 underline">Retry</button>
-    </div>
+    <ErrorState message={error} actionLabel="Retry" onaction={loadFeeds} />
   {:else if feeds.length === 0}
-    <div class="bg-surface border border-line rounded-xl p-8 text-center">
-      <p class="text-muted text-sm">No RSS feeds configured. Add a feed to automatically post new content.</p>
-    </div>
+    <EmptyState
+      icon="rss"
+      title="No RSS feeds configured"
+      description="Add a feed and new items become post drafts automatically."
+    />
   {:else}
     <div class="page-enter space-y-3">
       {#each feeds as feed (feed.id)}
@@ -143,9 +145,9 @@
       <Spinner />
     </div>
   {:else if itemsError}
-    <div class="text-sm text-error">{itemsError}</div>
+    <ErrorState message={itemsError} actionLabel="Retry" onaction={() => showItemsFor && handleViewItems(showItemsFor)} />
   {:else if items.length === 0}
-    <p class="text-sm text-muted">No items found for this feed.</p>
+    <EmptyState icon="rss" title="No items found for this feed" description="The feed has not published anything new yet." />
   {:else}
     <div class="page-enter space-y-2 max-h-96 overflow-y-auto">
       {#each items as item (item.guid)}

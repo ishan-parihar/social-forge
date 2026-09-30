@@ -6,7 +6,7 @@
   {#each [7, 30, 90] as days (days)}
     <button
       onclick={() => onChange(days)}
-      class="px-4 py-1.5 rounded-md text-sm font-medium transition-colors {selected === days ? 'bg-brand-500 text-white' : 'text-content-secondary hover:text-content hover:bg-surface-hover'}"
+      class="px-4 py-1.5 rounded-md text-sm font-medium transition-colors {selected === days ? 'bg-accent-fill text-accent-fg' : 'text-content-secondary hover:text-content hover:bg-surface-hover'}"
     >
       {days}d
     </button>

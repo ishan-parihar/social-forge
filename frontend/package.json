@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev --port 3000",
-    "build": "vite build",
+    "build": "node scripts/check-hex-tokens.mjs && vite build",
+    "check:tokens": "node scripts/check-hex-tokens.mjs",
     "preview": "vite preview --port 3000"
   },
   "devDependencies": {

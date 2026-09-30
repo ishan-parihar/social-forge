@@ -668,14 +668,14 @@
         {composer.mode === 'edit' ? 'Edit Post' : 'Create Post'}
       </h2>
       {#if composer.mode === 'edit'}
-        <span class="text-xs px-2 py-0.5 rounded-full bg-brand-500/20 text-brand-400">Editing</span>
+        <span class="text-xs px-2 py-0.5 rounded-full bg-accent-fill/20 text-accent">Editing</span>
       {/if}
       {#if draftSaved}
-        <span class="text-xs text-emerald-400 animate-pulse">✓ Draft saved</span>
+        <span class="text-xs text-success animate-pulse">✓ Draft saved</span>
       {/if}
     </div>
     <div class="flex items-center gap-3">
-      <span class="hidden lg:inline text-[10px] text-muted-dark" title="Keyboard shortcuts">
+      <span class="hidden lg:inline text-[10px] text-faint" title="Keyboard shortcuts">
         <kbd class="px-1 py-0.5 bg-surface-hover rounded">⌘</kbd>+<kbd class="px-1 py-0.5 bg-surface-hover rounded">↵</kbd> post ·
         <kbd class="px-1 py-0.5 bg-surface-hover rounded">⌘</kbd>+<kbd class="px-1 py-0.5 bg-surface-hover rounded">S</kbd> save
       </span>
@@ -710,14 +710,14 @@
               {#each groupPosts as part, i (part.id)}
                 <button
                   onclick={() => switchGroupPart(part.id)}
-                  class="px-2.5 py-1 text-xs rounded-lg transition-colors {part.id === editingGroupPostId ? 'bg-brand-600 text-white' : 'bg-surface-hover text-muted hover:text-content'}"
+                  class="px-2.5 py-1 text-xs rounded-lg transition-colors {part.id === editingGroupPostId ? 'bg-accent-fill text-accent-fg' : 'bg-surface-hover text-muted hover:text-content'}"
                   title={part.content ? (part.content.slice(0, 80) + (part.content.length > 80 ? '…' : '')) : `Part ${i + 1}`}
                 >
                   {i === 0 ? 'Main post' : `Part ${i + 1}`}
                 </button>
               {/each}
             </div>
-            <p class="text-[10px] text-muted-dark mt-1.5 px-1">Editing part {groupPosts.findIndex(p => p.id === editingGroupPostId) + 1} of {groupPosts.length}. Switching tabs preserves your unsaved edits per part.</p>
+            <p class="text-[10px] text-faint mt-1.5 px-1">Editing part {groupPosts.findIndex(p => p.id === editingGroupPostId) + 1} of {groupPosts.length}. Switching tabs preserves your unsaved edits per part.</p>
           </div>
         {/if}
 
@@ -725,7 +725,7 @@
         <div>
           <label class="text-sm text-muted block mb-1">Title (optional)</label>
           <input type="text" bind:value={title} placeholder="Post title..."
-            class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-brand-500 outline-none" />
+            class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none" />
         </div>
 
         <!-- Channel Selection -->
@@ -784,7 +784,7 @@
             <select
               value={selectedCampaignId || ''}
               onchange={(e) => selectedCampaignId = e.currentTarget.value || null}
-              class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-brand-500 outline-none"
+              class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none"
             >
               <option value="">No campaign</option>
               {#each allCampaigns as c (c.id)}
@@ -876,14 +876,14 @@
               <h3 class="text-sm font-semibold">🎵 Music</h3>
               <button
                 onclick={() => showMusicPicker = true}
-                class="text-xs px-3 py-1.5 bg-surface-hover hover:bg-line-hover rounded-lg text-muted hover:text-white transition-colors"
+                class="text-xs px-3 py-1.5 bg-surface-hover hover:bg-line-hover rounded-lg text-muted hover:text-content transition-colors"
               >
                 {selectedMusic ? 'Change' : 'Browse'}
               </button>
             </div>
             {#if selectedMusic}
               <div class="flex items-center gap-3 bg-surface-hover rounded-lg p-2">
-                <div class="w-8 h-8 rounded bg-brand-500/20 flex items-center justify-center text-brand-400 text-sm">🎵</div>
+                <div class="w-8 h-8 rounded bg-accent-fill/20 flex items-center justify-center text-accent text-sm">🎵</div>
                 <div class="flex-1 min-w-0">
                   <p class="text-sm font-medium truncate">{selectedMusic.title}</p>
                   <p class="text-xs text-muted truncate">{selectedMusic.artist}</p>
@@ -970,7 +970,7 @@
         <!-- Post Sets -->
         <button
           onclick={() => showPostSets = true}
-          class="w-full px-3 py-2 text-sm text-muted hover:text-white border border-line rounded-lg transition-colors"
+          class="w-full px-3 py-2 text-sm text-muted hover:text-content border border-line rounded-lg transition-colors"
         >Post Sets</button>
       </div>
     </div>
@@ -980,12 +980,12 @@
       <div class="flex items-center gap-2">
         <button
           onclick={() => showAi = !showAi}
-          class="px-3 py-1.5 text-sm border border-line rounded-lg transition-colors {showAi ? 'bg-brand-600/20 text-brand-400 border-brand-500/30' : 'text-muted hover:text-white'}"
+          class="px-3 py-1.5 text-sm border border-line rounded-lg transition-colors {showAi ? 'bg-accent-fill/20 text-accent border-accent/30' : 'text-muted hover:text-content'}"
         >✨ AI</button>
         <!-- Phase 8: mobile preview toggle -->
         <button
           onclick={() => showPreviewMobile = !showPreviewMobile}
-          class="lg:hidden px-3 py-1.5 text-sm border border-line rounded-lg transition-colors text-muted hover:text-white"
+          class="lg:hidden px-3 py-1.5 text-sm border border-line rounded-lg transition-colors text-muted hover:text-content"
         >{showPreviewMobile ? '✕ Preview' : '👁 Preview'}</button>
       </div>
       <div class="flex items-center gap-2 flex-wrap justify-end">
@@ -995,7 +995,7 @@
           <button
             onclick={saveAsDraft}
             disabled={submitting}
-            class="px-3 py-1.5 text-sm text-muted hover:text-white border border-line rounded-lg disabled:opacity-50 transition-colors"
+            class="px-3 py-1.5 text-sm text-muted hover:text-content border border-line rounded-lg disabled:opacity-50 transition-colors"
           >Save Draft</button>
         {/if}
         <button
@@ -1006,7 +1006,7 @@
         <button
           onclick={submit}
           disabled={submitting}
-          class="px-3 py-1.5 bg-brand-600 hover:bg-brand-500 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors"
+          class="px-3 py-1.5 bg-accent-fill hover:bg-accent-fill-hover disabled:opacity-50 rounded-lg text-sm font-medium transition-colors"
         >{submitting ? 'Scheduling...' : 'Schedule'}</button>
       </div>
     </div>

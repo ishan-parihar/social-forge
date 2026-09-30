@@ -43,7 +43,7 @@
       {#if title}
         <div class="flex items-center justify-between mb-4">
           <h3 class="text-lg font-semibold">{title}</h3>
-          <button onclick={onclose} aria-label="Close dialog" class="text-muted hover:text-white">&times;</button>
+          <button onclick={onclose} aria-label="Close dialog" class="text-muted hover:text-content">&times;</button>
         </div>
       {/if}
       {#if children}{@render children()}{/if}

@@ -95,10 +95,10 @@
         onkeydown={selectable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect?.(item); } } : undefined}
         class="relative group bg-surface border rounded-xl overflow-hidden transition-all duration-150"
         class:cursor-pointer={selectable}
-        class:border-brand-400={selectable && isSelected(item.id)}
+        class:border-accent={selectable && isSelected(item.id)}
         class:border-line={!selectable || !isSelected(item.id)}
         class:ring-1={selectable && isSelected(item.id)}
-        class:ring-brand-400={selectable && isSelected(item.id)}
+        class:ring-accent={selectable && isSelected(item.id)}
       >
         {#if item.mime_type.startsWith("image/")}
           <img
@@ -129,7 +129,7 @@
         {/if}
 
         {#if selectable && isSelected(item.id)}
-          <div class="absolute top-1.5 left-1.5 w-5 h-5 bg-brand-500 rounded-full flex items-center justify-center">
+          <div class="absolute top-1.5 left-1.5 w-5 h-5 bg-accent-fill rounded-full flex items-center justify-center">
             <span class="text-white text-[10px]">✓</span>
           </div>
         {/if}

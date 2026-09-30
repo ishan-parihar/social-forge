@@ -1,5 +1,8 @@
 <script lang="ts">
   import { integrationsApi, type Integration } from "$lib/api/integrations";
+  import Skeleton from '$lib/ui/Skeleton.svelte';
+  import ErrorState from '$lib/ui/ErrorState.svelte';
+  import EmptyState from '$lib/ui/EmptyState.svelte';
   import { onMount, onDestroy } from "svelte";
   import { toast } from "$lib/stores/toast";
   import { realtime } from "$lib/stores/realtime";
@@ -30,7 +33,7 @@
   // (e.g. "X (Twitter)" instead of "X", "Instagram (Standalone)" instead
   // of "Instagram") — those overrides live in PROVIDER_LABEL_OVERRIDES
   // below so the central map stays generic.
-  import { providerLabel as centralProviderLabel } from "$lib/providers";
+  import { providerLabel as centralProviderLabel, HIDDEN_PROVIDERS } from "$lib/providers";
   const PROVIDER_LABEL_OVERRIDES: Record<string, string> = {
     x: "X (Twitter)",
     "instagram-standalone": "Instagram (Standalone)",
@@ -45,15 +48,19 @@
   }
 
   // Connectable providers. Deliberately a superset of what the backend has
-  // registered: a provider must still be offered here before the user has
-  // supplied the credentials that make it register. Tier membership is defined
-  // once in src/social/tier.rs (v25 plan §1): kick/vk/whop/lemmy were removed
-  // outright, farcaster is Tier-3 (archive).
+  // registered: a provider still needs to be offered here before the user
+  // has supplied the credentials that make it register. Tier membership is
+  // defined in src/social/tier.rs (v25 plan §1) — kick/vk/whop/lemmy were
+  // removed outright, farcaster is Tier-3 (archive).
   //
-  // Tier-3 providers are hidden by default. To surface one, start the backend
-  // with ENABLE_ARCHIVE_PROVIDERS=1 AND add the id below — the flag is a
-  // server-side env var the frontend cannot read.
+  // Tier-3 archive providers are hidden by default. To surface one, start the
+  // backend with ENABLE_ARCHIVE_PROVIDERS=1 AND add the id below — the flag
+  // is a server-side env var the frontend cannot read.
   const ARCHIVE_PROVIDERS: string[] = [];
+  // F1: `.filter(...)` against the single HIDDEN_PROVIDERS set in $lib/providers
+  // so the tier rule is enforced in code, not only in this comment. Without it
+  // a future edit that re-adds kick/vk to the literal below would ship a
+  // connect button for a platform the product no longer supports.
   let availableProviders = $state([
     "x", "facebook", "instagram", "instagram-standalone", "threads",
     "linkedin", "linkedin-page",
@@ -67,7 +74,7 @@
     "github",
     "skool",
     ...ARCHIVE_PROVIDERS,
-  ]);
+  ].filter((p) => !HIDDEN_PROVIDERS.has(p)));
   let connecting = $state<string | null>(null);
   let connectProvider = $state<string | null>(null);
   let scheduleIntegration = $state<{ id: string; timeslots: import("$lib/api/integrations").TimeslotEntry[] } | null>(null);
@@ -323,11 +330,15 @@
   <div class="bg-surface border border-line rounded-xl p-4">
     <h3 class="text-sm font-semibold text-muted uppercase tracking-wider mb-3">Connected Channels</h3>
     {#if loading}
-      <div class="text-center text-sm text-muted py-8">Loading...</div>
+      <Skeleton variant="row" rows={4} />
     {:else if error}
-      <div class="text-center text-sm text-error py-4">{error}</div>
+      <ErrorState message={error} actionLabel="Retry" onaction={load} />
     {:else if integrations.length === 0}
-      <div class="text-center text-sm text-muted py-8">No channels connected yet. Select a provider below to connect.</div>
+      <EmptyState
+        icon="channel"
+        title="No channels connected yet"
+        description="Connect a platform below and it becomes available everywhere — composer, calendar, and analytics."
+      />
     {:else}
       {#each [...groups.entries()] as [name, ints] (name)}
         <div class="mb-4 last:mb-0">
@@ -358,7 +369,7 @@
         <button
           onclick={() => initiateConnect(provider)}
           disabled={connecting === provider}
-          class="flex flex-col items-center gap-2 p-4 bg-background-input border border-line rounded-xl hover:border-brand-500/50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          class="flex flex-col items-center gap-2 p-4 bg-background-input border border-line rounded-xl hover:border-accent/50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <ProviderIcon {provider} size="lg" />
           <span class="text-xs">{providerLabel(provider)}</span>
@@ -382,7 +393,7 @@
     <p class="text-sm text-muted mb-4">Choose how to connect:</p>
     <div class="flex flex-col gap-3">
       {#if connectChoice === "x"}
-        <button onclick={() => { const p = connectChoice; connectChoice = null; initiateOAuth(p!); }} class="px-4 py-3 bg-surface-hover border border-line rounded-lg hover:border-brand-500/50 text-left">
+        <button onclick={() => { const p = connectChoice; connectChoice = null; initiateOAuth(p!); }} class="px-4 py-3 bg-surface-hover border border-line rounded-lg hover:border-accent/50 text-left">
           <div class="text-sm font-medium">OAuth 2.0</div>
           <div class="text-xs text-muted">Standard login — limited to API scopes</div>
         </button>
@@ -391,7 +402,7 @@
           <div class="text-xs text-muted">Full access — DMs, analytics, advanced features</div>
         </button>
       {:else if connectChoice === "reddit"}
-        <button onclick={() => { const p = connectChoice; connectChoice = null; initiateOAuth(p!); }} class="px-4 py-3 bg-surface-hover border border-line rounded-lg hover:border-brand-500/50 text-left">
+        <button onclick={() => { const p = connectChoice; connectChoice = null; initiateOAuth(p!); }} class="px-4 py-3 bg-surface-hover border border-line rounded-lg hover:border-accent/50 text-left">
           <div class="text-sm font-medium">OAuth 2.0</div>
           <div class="text-xs text-muted">Standard Reddit API access</div>
         </button>
@@ -400,17 +411,17 @@
           <div class="text-xs text-muted">Full access — voting, moderation, all subreddits</div>
         </button>
       {:else if connectChoice === "telegram-bot"}
-        <button onclick={() => { const p = connectChoice; connectChoice = null; initiateOAuth(p!); }} class="px-4 py-3 bg-surface-hover border border-line rounded-lg hover:border-brand-500/50 text-left">
+        <button onclick={() => { const p = connectChoice; connectChoice = null; initiateOAuth(p!); }} class="px-4 py-3 bg-surface-hover border border-line rounded-lg hover:border-accent/50 text-left">
           <div class="text-sm font-medium">Use Configured Bot</div>
           <div class="text-xs text-muted">Connect a chat/channel to the bot already set up in .env</div>
         </button>
-        <button onclick={() => { connectChoice = null; credDialog = { provider: "telegram-bot", type: "pat" }; credFields = {}; }} class="px-4 py-3 bg-surface-hover border border-line rounded-lg hover:border-emerald-500/50 text-left">
+        <button onclick={() => { connectChoice = null; credDialog = { provider: "telegram-bot", type: "pat" }; credFields = {}; }} class="px-4 py-3 bg-surface-hover border border-line rounded-lg hover:border-success/50 text-left">
           <div class="text-sm font-medium">Add Custom Bot Token</div>
           <div class="text-xs text-muted">Paste a bot token from @BotFather</div>
         </button>
       {/if}
     </div>
-    <button onclick={() => connectChoice = null} class="mt-4 text-sm text-muted hover:text-white w-full text-center">Cancel</button>
+    <button onclick={() => connectChoice = null} class="mt-4 text-sm text-muted hover:text-content w-full text-center">Cancel</button>
   </div>
 </div>
 {/if}
@@ -431,7 +442,7 @@
       <label class="block text-sm text-muted mb-1">Cookie String</label>
       <textarea bind:value={credFields.cookie_string} placeholder="reddit_session=...; token_v2=...; csv=..." rows="4" class="w-full mb-4 px-3 py-2 bg-surface-hover border border-line rounded text-sm font-mono"></textarea>
     {:else if credDialog.provider === "telegram-bot"}
-      <p class="text-sm text-muted mb-3">Get a token from <a href="https://t.me/BotFather" target="_blank" class="text-brand-400 hover:text-brand-300">@BotFather</a> on Telegram.</p>
+      <p class="text-sm text-muted mb-3">Get a token from <a href="https://t.me/BotFather" target="_blank" class="text-accent hover:text-accent-strong">@BotFather</a> on Telegram.</p>
       <label class="block text-sm text-muted mb-1">Bot Token</label>
       <input type="password" bind:value={credFields.token} placeholder="123456:ABC-DEF..." class="w-full mb-4 px-3 py-2 bg-surface-hover border border-line rounded text-sm font-mono" />
     {:else if credDialog.provider === "github"}
@@ -442,8 +453,8 @@
     {/if}
     {#if error}<p class="text-error text-sm mb-3">{error}</p>{/if}
     <div class="flex gap-3 justify-end">
-      <button onclick={() => { credDialog = null; error = ""; }} class="px-4 py-2 text-sm text-muted hover:text-white">Cancel</button>
-      <button onclick={submitCredDialog} class="px-4 py-2 text-sm bg-brand-600 hover:bg-brand-500 rounded">Connect</button>
+      <button onclick={() => { credDialog = null; error = ""; }} class="px-4 py-2 text-sm text-muted hover:text-content">Cancel</button>
+      <button onclick={submitCredDialog} class="px-4 py-2 text-sm bg-accent-fill hover:bg-accent-fill-hover rounded">Connect</button>
     </div>
   </div>
 </div>
@@ -461,8 +472,8 @@
       <input type="tel" bind:value={onboardDialog.phone} placeholder="+1234567890" class="w-full mb-4 px-3 py-2 bg-surface-hover border border-line rounded text-sm" />
       {#if error}<p class="text-error text-sm mb-3">{error}</p>{/if}
       <div class="flex justify-end gap-2">
-        <button onclick={() => { onboardDialog = null; error = ""; }} class="px-4 py-2 text-sm text-muted hover:text-white">Cancel</button>
-        <button onclick={onboardSubmitPhone} disabled={!!connecting} class="px-4 py-2 text-sm bg-brand-600 hover:bg-brand-500 rounded disabled:opacity-50">
+        <button onclick={() => { onboardDialog = null; error = ""; }} class="px-4 py-2 text-sm text-muted hover:text-content">Cancel</button>
+        <button onclick={onboardSubmitPhone} disabled={!!connecting} class="px-4 py-2 text-sm bg-accent-fill hover:bg-accent-fill-hover rounded disabled:opacity-50">
           {connecting ? "Sending…" : "Next"}
         </button>
       </div>
@@ -474,9 +485,9 @@
         <span class="text-2xl font-mono font-bold tracking-[0.3em] text-white">{onboardDialog.pairCode}</span>
       </div>
       <p class="text-xs text-muted mb-3 text-center">Waiting for you to enter the code on your phone…</p>
-      <div class="flex justify-center"><div class="animate-spin h-5 w-5 border-2 border-brand-500 border-t-transparent rounded-full"></div></div>
+      <div class="flex justify-center"><div class="animate-spin h-5 w-5 border-2 border-accent border-t-transparent rounded-full"></div></div>
       <div class="flex justify-end mt-4">
-        <button onclick={() => { onboardDialog = null; error = ""; }} class="px-4 py-2 text-sm text-muted hover:text-white">Cancel</button>
+        <button onclick={() => { onboardDialog = null; error = ""; }} class="px-4 py-2 text-sm text-muted hover:text-content">Cancel</button>
       </div>
 
     {:else if onboardDialog.step === "sms_code"}
@@ -484,8 +495,8 @@
       <input type="text" bind:value={onboardDialog.code} placeholder="12345" class="w-full mb-4 px-3 py-2 bg-surface-hover border border-line rounded text-sm font-mono text-center text-lg tracking-widest" />
       {#if error}<p class="text-error text-sm mb-3">{error}</p>{/if}
       <div class="flex justify-end gap-2">
-        <button onclick={() => { onboardDialog = null; error = ""; }} class="px-4 py-2 text-sm text-muted hover:text-white">Cancel</button>
-        <button onclick={onboardSubmitCode} disabled={!!connecting} class="px-4 py-2 text-sm bg-brand-600 hover:bg-brand-500 rounded disabled:opacity-50">
+        <button onclick={() => { onboardDialog = null; error = ""; }} class="px-4 py-2 text-sm text-muted hover:text-content">Cancel</button>
+        <button onclick={onboardSubmitCode} disabled={!!connecting} class="px-4 py-2 text-sm bg-accent-fill hover:bg-accent-fill-hover rounded disabled:opacity-50">
           {connecting ? "Signing in…" : "Sign In"}
         </button>
       </div>
@@ -496,7 +507,7 @@
       {@const connectCmd = parts[1] ?? ""}
       <div class="page-enter space-y-3 mb-4">
         <p class="text-sm text-muted">1. Open this bot in Telegram:</p>
-        <a href="https://t.me/{botUsername.replace('@','')}" target="_blank" class="block text-center text-brand-400 hover:text-brand-300 font-medium">{botUsername}</a>
+        <a href="https://t.me/{botUsername.replace('@','')}" target="_blank" class="block text-center text-accent hover:text-accent-strong font-medium">{botUsername}</a>
         <p class="text-sm text-muted">2. Send this command to the bot or any group/channel it's in:</p>
         <div class="bg-surface-hover border border-line rounded-lg p-3 text-center">
           <code class="text-sm text-white font-mono">{connectCmd}</code>
@@ -505,8 +516,8 @@
       </div>
       {#if error}<p class="text-error text-sm mb-3">{error}</p>{/if}
       <div class="flex justify-end gap-2">
-        <button onclick={() => { onboardDialog = null; error = ""; }} class="px-4 py-2 text-sm text-muted hover:text-white">Cancel</button>
-        <button onclick={onboardSubmitCode} disabled={!!connecting} class="px-4 py-2 text-sm bg-brand-600 hover:bg-brand-500 rounded disabled:opacity-50">
+        <button onclick={() => { onboardDialog = null; error = ""; }} class="px-4 py-2 text-sm text-muted hover:text-content">Cancel</button>
+        <button onclick={onboardSubmitCode} disabled={!!connecting} class="px-4 py-2 text-sm bg-accent-fill hover:bg-accent-fill-hover rounded disabled:opacity-50">
           {connecting ? "Verifying…" : "Verify"}
         </button>
       </div>

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import Skeleton from '$lib/ui/Skeleton.svelte';
   import { toast } from "$lib/stores/toast";
   import { modals } from '$lib/stores/modals.svelte';
   import { profileApi, type BrandProfile } from '$lib/api/profile';
@@ -182,13 +183,13 @@
       <h2 class="text-xl font-semibold">Brand Profile</h2>
       <p class="text-sm text-muted mt-1">Define your brand voice, audience, and content strategy for AI-assisted posting</p>
     </div>
-    <button onclick={saveProfile} disabled={saving || loading} class="px-4 py-2 bg-brand-500 hover:bg-brand-600 rounded-lg text-sm font-medium transition-colors disabled:opacity-50">
+    <button onclick={saveProfile} disabled={saving || loading} class="px-4 py-2 bg-accent-fill hover:bg-accent-fill-hover rounded-lg text-sm font-medium transition-colors disabled:opacity-50">
       {saving ? "Saving..." : "Save Profile"}
     </button>
   </div>
 
   {#if loading}
-    <div class="text-center py-12 text-sm text-muted">Loading...</div>
+    <Skeleton variant="text" rows={5} />
   {:else}
     <!-- Brand Identity -->
     <div class="bg-surface border border-line rounded-xl p-5 space-y-4">
@@ -236,22 +237,22 @@
       <div>
         <label class="text-xs text-muted mb-1 block">Content Pillars (one per line)</label>
         <textarea bind:value={contentPillars} placeholder={"Product updates\nIndustry insights\nCustomer stories\nEducational tutorials"} rows="5" class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm resize-none font-mono"></textarea>
-        <p class="text-[10px] text-muted-dark mt-1">Topics you regularly post about. AI will use these to suggest content.</p>
+        <p class="text-[10px] text-faint mt-1">Topics you regularly post about. AI will use these to suggest content.</p>
       </div>
       <div>
         <label class="text-xs text-muted mb-1 block">Brand Keywords</label>
         <input bind:value={brandKeywords} placeholder="e.g. productivity, automation, SaaS, workflow" class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm" />
-        <p class="text-[10px] text-muted-dark mt-1">Comma-separated keywords that should appear in your content.</p>
+        <p class="text-[10px] text-faint mt-1">Comma-separated keywords that should appear in your content.</p>
       </div>
       <div>
         <label class="text-xs text-muted mb-1 block">Hashtag Sets (one set per line, space-separated)</label>
         <textarea bind:value={hashtagSets} placeholder={"#SaaS #Productivity #Startup\n#Automation #Workflow #Tech\n#Marketing #Growth #Business"} rows="4" class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm resize-none font-mono"></textarea>
-        <p class="text-[10px] text-muted-dark mt-1">Pre-defined hashtag groups for different content types.</p>
+        <p class="text-[10px] text-faint mt-1">Pre-defined hashtag groups for different content types.</p>
       </div>
       <div>
         <label class="text-xs text-muted mb-1 block">Topics to Avoid</label>
         <input bind:value={avoidTopics} placeholder="e.g. politics, controversial topics, competitor names" class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm" />
-        <p class="text-[10px] text-muted-dark mt-1">AI will avoid these topics when generating content.</p>
+        <p class="text-[10px] text-faint mt-1">AI will avoid these topics when generating content.</p>
       </div>
     </div>
 
@@ -260,7 +261,7 @@
       <button onclick={clearProfile} class="px-4 py-2 text-sm text-error hover:text-error/80 transition-colors">
         Clear All
       </button>
-      <button onclick={saveProfile} disabled={saving} class="px-4 py-2 bg-brand-500 hover:bg-brand-600 rounded-lg text-sm font-medium transition-colors disabled:opacity-50">
+      <button onclick={saveProfile} disabled={saving} class="px-4 py-2 bg-accent-fill hover:bg-accent-fill-hover rounded-lg text-sm font-medium transition-colors disabled:opacity-50">
         {saving ? "Saving..." : "Save Profile"}
       </button>
     </div>

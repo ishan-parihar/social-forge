@@ -1,5 +1,7 @@
 <script lang="ts">
   import { toast } from "$lib/stores/toast";
+  import Skeleton from '$lib/ui/Skeleton.svelte';
+  import EmptyState from '$lib/ui/EmptyState.svelte';
   import { onMount, onDestroy } from 'svelte';
   import { realtime } from '$lib/stores/realtime';
   import { tagsApi, type Tag } from '$lib/api/tags';
@@ -135,7 +137,7 @@
           bind:value={newName}
           placeholder="e.g. urgent, client, idea"
           onkeydown={(e) => e.key === 'Enter' && createTag()}
-          class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-brand-500 outline-none"
+          class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none"
         />
       </div>
       <div>
@@ -150,7 +152,7 @@
             {#each presetColors as c}
               <button
                 onclick={() => newColor = c}
-                class="w-5 h-5 rounded-full border border-line {newColor === c ? 'ring-2 ring-brand-400' : ''}"
+                class="w-5 h-5 rounded-full border border-line {newColor === c ? 'ring-2 ring-accent' : ''}"
                 style="background: {c}"
                 title={c}
                 aria-label="Select color {c}"
@@ -162,7 +164,7 @@
       <button
         onclick={createTag}
         disabled={creating || !newName.trim()}
-        class="px-4 py-2 bg-brand-600 hover:bg-brand-500 disabled:opacity-50 rounded-lg text-sm transition-colors"
+        class="px-4 py-2 bg-accent-fill hover:bg-accent-fill-hover disabled:opacity-50 rounded-lg text-sm transition-colors"
       >
         {creating ? '...' : 'Add'}
       </button>
@@ -174,11 +176,13 @@
     <h3 class="text-sm font-semibold mb-3">Your Tags</h3>
 
     {#if loading}
-      <div class="text-center py-8 text-sm text-muted">Loading tags...</div>
+      <Skeleton variant="row" rows={4} />
     {:else if tags.length === 0}
-      <div class="text-center py-8 text-sm text-muted">
-        No tags yet. Create one above.
-      </div>
+      <EmptyState
+        icon="tag"
+        title="No tags yet"
+        description="Tags colour-code posts on the calendar so a campaign reads at a glance."
+      />
     {:else}
       <div class="page-enter space-y-2">
         {#each tags as tag (tag.id)}
@@ -188,14 +192,14 @@
               <input
                 type="text"
                 bind:value={editName}
-                class="flex-1 px-2 py-1 bg-background-input border border-line rounded text-sm focus:border-brand-500 outline-none"
+                class="flex-1 px-2 py-1 bg-background-input border border-line rounded text-sm focus:border-accent outline-none"
               />
               <div class="flex items-center gap-1">
                 <input type="color" bind:value={editColor} class="w-7 h-7 rounded cursor-pointer bg-transparent border-0" />
                 {#each presetColors as c}
                   <button
                     onclick={() => editColor = c}
-                    class="w-4 h-4 rounded-full border border-line {editColor === c ? 'ring-2 ring-brand-400' : ''}"
+                    class="w-4 h-4 rounded-full border border-line {editColor === c ? 'ring-2 ring-accent' : ''}"
                     style="background: {c}"
                     aria-label="Select color {c}"
                   ></button>
@@ -207,7 +211,7 @@
               <!-- Display -->
               <span class="w-3 h-3 rounded-full flex-shrink-0" style="background: {tag.color}"></span>
               <span class="flex-1 text-sm">{tag.name}</span>
-              <button onclick={() => startEdit(tag)} class="text-xs text-muted hover:text-brand-400 px-1" title="Edit" aria-label="Edit tag">&#9998;</button>
+              <button onclick={() => startEdit(tag)} class="text-xs text-muted hover:text-accent px-1" title="Edit" aria-label="Edit tag">&#9998;</button>
               {#if deletingId === tag.id}
                 <span class="text-xs text-muted">Delete?</span>
                 <button onclick={() => confirmDelete(tag.id)} class="text-xs text-error hover:underline px-1">Yes</button>

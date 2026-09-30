@@ -1,5 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
+  import EmptyState from '$lib/ui/EmptyState.svelte';
+  import Skeleton from '$lib/ui/Skeleton.svelte';
   import { feedApi, proxyMediaUrl, type FeedPost, type FeedAccount } from "$lib/api/feed";
   import { integrationsApi } from "$lib/api/integrations";
   import EngagementCard from "$lib/components/EngagementCard.svelte";
@@ -395,12 +397,12 @@
       {#if activeFilterLabel}
         {@const chipMeta = selectedProvider ? providerMeta(selectedProvider) : null}
         <span class="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-medium rounded-lg
-          bg-brand-500/15 text-brand-300 border border-brand-500/25">
+          bg-accent-fill/15 text-accent-strong border border-accent/25">
           {#if chipMeta}
             <span class="w-1.5 h-1.5 rounded-full" style="background: {chipMeta.dot}" />
           {/if}
           {activeFilterLabel}
-          <button onclick={clearFilter} class="ml-0.5 hover:text-brand-200 transition-colors">
+          <button onclick={clearFilter} class="ml-0.5 hover:text-accent-strong transition-colors">
             <svg class="w-3 h-3" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M3 3l6 6M9 3l-6 6" stroke-linecap="round" />
             </svg>
@@ -415,7 +417,7 @@
             onclick={() => showFilter = !showFilter}
             class="flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-lg transition-all duration-200
               {showFilter || activeFilterLabel
-                ? 'bg-brand-500/20 text-brand-300 border border-brand-500/30 shadow-[0_0_12px_rgb(var(--brand-rgb)/0.1)]'
+                ? 'bg-accent-fill/20 text-accent-strong border border-accent/30 shadow-[0_0_12px_rgb(var(--brand-rgb)/0.1)]'
                 : 'bg-surface-hover text-muted border border-line hover:border-line hover:text-content'}"
           >
             <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -442,7 +444,7 @@
                 onclick={() => clearFilter()}
                 class="w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors duration-150 border-b border-line
                   {!selectedAccountHandle && !selectedProvider
-                    ? 'bg-brand-500/10 text-content'
+                    ? 'bg-accent-fill/10 text-content'
                     : 'text-muted hover:text-muted hover:bg-background-input'}"
               >
                 <svg class="w-4 h-4 flex-shrink-0" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -450,7 +452,7 @@
                 </svg>
                 <span class="text-sm font-medium">All channels</span>
                 {#if !selectedAccountHandle && !selectedProvider}
-                  <span class="ml-auto w-1.5 h-1.5 rounded-full bg-brand-400" />
+                  <span class="ml-auto w-1.5 h-1.5 rounded-full bg-accent-fill" />
                 {/if}
               </button>
 
@@ -470,7 +472,7 @@
                       onclick={() => selectAccount(acct.author_handle, acct.provider)}
                       class="w-full flex items-center gap-3 px-4 py-2 text-left transition-colors duration-150
                         {selectedAccountHandle === acct.author_handle
-                          ? 'bg-brand-500/10 text-content'
+                          ? 'bg-accent-fill/10 text-content'
                           : 'text-muted hover:text-content hover:bg-background-input'}"
                     >
                       {#if acct.author_avatar}
@@ -493,7 +495,7 @@
                         {/if}
                       </div>
                       {#if selectedAccountHandle === acct.author_handle}
-                        <span class="ml-auto w-1.5 h-1.5 rounded-full bg-brand-400 flex-shrink-0" />
+                        <span class="ml-auto w-1.5 h-1.5 rounded-full bg-accent-fill flex-shrink-0" />
                       {/if}
                     </button>
                   {/each}
@@ -524,78 +526,44 @@
 
   <!-- Loading skeleton -->
   {:else if loading}
-    <div class="page-enter space-y-3    motion-safe:animate-in duration-300">
-      {#each Array(5) as _, i (i)}
-        <div class="bg-surface rounded-xl p-5 border border-line space-y-3">
-          <div class="flex items-center gap-2.5">
-            <div class="w-6 h-6 rounded-full bg-line" />
-            <div class="h-3 bg-line rounded w-20" />
-            <div class="h-2.5 bg-line rounded w-16" />
-            <div class="ml-auto h-2.5 bg-line rounded w-12" />
-          </div>
-          <div class="page-enter space-y-2">
-            <div class="h-3 bg-line rounded w-full" />
-            <div class="h-3 bg-line rounded w-5/6" />
-            <div class="h-3 bg-line rounded w-2/3" />
-          </div>
-        </div>
-      {/each}
-    </div>
+    <Skeleton variant="card" rows={5} />
 
-  <!-- Empty state: importing for the first time -->
+
   {:else if importing}
     <div class="text-center py-20">
       <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-surface border border-line flex items-center justify-center">
-        <svg class="w-7 h-7 text-brand-400 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <svg class="w-7 h-7 text-accent animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" stroke-linecap="round" />
         </svg>
       </div>
       <p class="text-sm font-medium text-content">Importing your posts…</p>
       <p class="text-xs text-muted mt-1">Fetching recent posts from all your connected providers</p>
       <div class="mt-6 w-48 h-1 mx-auto bg-line rounded-full overflow-hidden">
-        <div class="h-full bg-brand-500/50 rounded-full animate-pulse" style="width: 60%" />
+        <div class="h-full bg-accent-fill/50 rounded-full animate-pulse" style="width: 60%" />
       </div>
     </div>
 
   <!-- Empty state (already attempted) -->
   {:else if !initialLoad && posts.length === 0 && attemptedImport}
-    <div class="text-center py-20">
-      <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-surface border border-line flex items-center justify-center">
-        <svg class="w-7 h-7 text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <path d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </div>
-      <p class="text-sm font-medium text-muted mb-1">No posts found</p>
-      <p class="text-xs text-muted mb-6">Connect a social media account to see your feed here</p>
-      <button
-        onclick={triggerImport}
-        class="inline-flex items-center gap-2 px-4 py-2 text-xs font-medium rounded-lg
-          bg-surface-hover text-muted hover:text-content hover:bg-line
-          border border-line transition-colors"
-      >
-        <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-          <path d="M2 8a6 6 0 0111.3-3M14 8a6 6 0 01-11.3 3" stroke-linecap="round" />
-          <path d="M13 2v3h-3M3 14v-3h3" stroke-linecap="round" stroke-linejoin="round" />
-        </svg>
-        Try again
-      </button>
-    </div>
+    <EmptyState
+      icon="feed"
+      title="No posts found"
+      description="Connect a social media account to see your feed here."
+      actionLabel="Try again"
+      onaction={triggerImport}
+    />
 
-  <!-- Filtered-empty state -->
+
   {:else if filteredPosts.length === 0 && posts.length > 0}
-    <div class="text-center py-20">
-      <div class="w-14 h-14 mx-auto mb-4 rounded-2xl bg-surface border border-line flex items-center justify-center">
-        <svg class="w-6 h-6 text-muted" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-          <path d="M2 4h12M4 8h8M6 12h4" stroke-linecap="round" />
-        </svg>
-      </div>
-      <p class="text-sm font-medium text-muted">No posts match your filters</p>
-      <button onclick={clearFilter} class="mt-3 text-xs text-brand-400 hover:text-brand-300 transition-colors">
-        Clear filters
-      </button>
-    </div>
+    <EmptyState
+      icon="search"
+      title="No posts match your filters"
+      description="Widen the provider or date filter to see more of your feed."
+      actionLabel="Clear filters"
+      onaction={clearFilter}
+    />
 
-  <!-- Post list -->
+
   {:else}
     <div class="page-enter space-y-2.5">
       {#each filteredPosts as post (post.id)}
@@ -644,7 +612,7 @@
 
             <!-- Content -->
             <p class="text-sm text-content-secondary leading-relaxed whitespace-pre-wrap break-words
-              selection:bg-brand-500/20 selection:text-brand-200">
+              selection:bg-accent-fill/20 selection:text-accent-strong">
               {post.text}
             </p>
 
@@ -693,7 +661,7 @@
                           poster={item.poster_url ? proxyMediaUrl(item.poster_url) : ''}
                         >
                           <a href={item.url} target="_blank" rel="noopener noreferrer"
-                            class="text-xs text-brand-400 hover:text-brand-300 underline p-2 block">
+                            class="text-xs text-accent hover:text-accent-strong underline p-2 block">
                             Download video
                           </a>
                         </video>
@@ -745,7 +713,7 @@
                 onclick={() => commentsOpenFor = commentsOpenFor === post.id ? null : post.id}
                 class="inline-flex items-center gap-1.5 text-xs font-medium transition-colors duration-150 px-2.5 py-1 rounded-lg
                   {commentsOpenFor === post.id
-                    ? 'bg-brand-500/15 text-brand-300 border border-brand-500/25'
+                    ? 'bg-accent-fill/15 text-accent-strong border border-accent/25'
                     : 'text-muted hover:text-muted hover:bg-background-input border border-transparent'}"
               >
                 <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -803,7 +771,7 @@
                      and made zero backend calls. -->
                 <button
                   onclick={() => openRepurposeModal(post)}
-                  class="text-xs text-brand-400 hover:text-brand-300 transition-colors"
+                  class="text-xs text-accent hover:text-accent-strong transition-colors"
                   title="Create a new Social Forge post from this content"
                 >
                   ✏️ Repurpose
@@ -813,7 +781,7 @@
                      errors without re-importing. -->
                 <button
                   onclick={() => openEditModal(post)}
-                  class="text-xs text-muted hover:text-emerald-400 transition-colors"
+                  class="text-xs text-muted hover:text-success transition-colors"
                   title="Edit the cached copy of this post"
                 >
                   Edit
@@ -852,7 +820,7 @@
       {#if hasMore}
         {#if loadingMore}
           <div class="flex items-center justify-center gap-2.5 py-4">
-            <div class="w-5 h-5 rounded-full border-2 border-brand-400/30 border-t-brand-400 animate-spin" />
+            <div class="w-5 h-5 rounded-full border-2 border-accent/30 border-t-brand-400 animate-spin" />
             <span class="text-xs text-muted font-mono">Loading more…</span>
           </div>
         {:else if nearBottom}
@@ -861,7 +829,7 @@
               onclick={loadMore}
               class="group flex items-center gap-2.5 px-6 py-3 text-sm font-medium rounded-xl
                 bg-surface-hover border border-line-hover text-content-secondary
-                hover:bg-line-hover hover:border-brand-500/30 hover:text-content
+                hover:bg-line-hover hover:border-accent/30 hover:text-content
                 transition-all duration-200 shadow-sm hover:shadow-[0_0_20px_rgb(var(--brand-rgb)/0.08)]"
             >
               <svg class="w-4 h-4 transition-transform group-hover:rotate-180 duration-300" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -875,13 +843,13 @@
           </div>
         {:else}
           <div class="flex justify-center">
-            <span class="text-[10px] text-muted-dark font-mono tracking-wider uppercase">Scroll down to load more</span>
+            <span class="text-[10px] text-faint font-mono tracking-wider uppercase">Scroll down to load more</span>
           </div>
         {/if}
       {:else if posts.length > 0}
         <div class="flex flex-col items-center gap-2 py-8">
           <div class="w-12 h-px bg-gradient-to-r from-transparent via-line to-transparent" />
-          <span class="text-[10px] text-muted-dark font-mono tracking-wider">You're all caught up</span>
+          <span class="text-[10px] text-faint font-mono tracking-wider">You're all caught up</span>
           <div class="w-12 h-px bg-gradient-to-r from-transparent via-line to-transparent" />
         </div>
       {/if}
@@ -913,7 +881,7 @@
       <select
         bind:value={repurposeTargetIntegration}
         disabled={repurposeSubmitting}
-        class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-brand-500 outline-none mb-4"
+        class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none mb-4"
       >
         <option value="">Select a channel…</option>
         {#each allIntegrations as int (int.id)}
@@ -929,7 +897,7 @@
         <button
           onclick={submitRepurpose}
           disabled={repurposeSubmitting || !repurposeTargetIntegration}
-          class="px-3 py-1.5 text-sm bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white rounded-lg transition-colors flex items-center gap-2"
+          class="px-3 py-1.5 text-sm bg-accent-fill hover:bg-accent-fill-hover disabled:opacity-50 text-accent-fg rounded-lg transition-colors flex items-center gap-2"
         >
           {#if repurposeSubmitting}
             <div class="w-3 h-3 rounded-full border-2 border-white/30 border-t-white animate-spin"></div>
@@ -965,7 +933,7 @@
         bind:value={editText}
         disabled={editSubmitting}
         rows="6"
-        class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-brand-500 outline-none mb-4 resize-y"
+        class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none mb-4 resize-y"
       ></textarea>
       <div class="flex items-center justify-end gap-2">
         <button
@@ -976,7 +944,7 @@
         <button
           onclick={submitEdit}
           disabled={editSubmitting || !editText.trim()}
-          class="px-3 py-1.5 text-sm bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-lg transition-colors flex items-center gap-2"
+          class="px-3 py-1.5 text-sm bg-success hover:bg-success disabled:opacity-50 text-white rounded-lg transition-colors flex items-center gap-2"
         >
           {#if editSubmitting}
             <div class="w-3 h-3 rounded-full border-2 border-white/30 border-t-white animate-spin"></div>

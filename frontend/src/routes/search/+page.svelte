@@ -1,5 +1,6 @@
 <script lang="ts">
   import Icon from "$lib/ui/Icon.svelte";
+  import Skeleton from '$lib/ui/Skeleton.svelte';
   import { onMount, onDestroy } from "svelte";
   import { feedApi, proxyMediaUrl, type FeedPost, type FeedAccount } from "$lib/api/feed";
   import { integrationsApi, type Integration } from "$lib/api/integrations";
@@ -216,7 +217,7 @@
         bind:value={searchQuery}
         oninput={onSearchInput}
         placeholder="Search posts, authors, hashtags..."
-        class="w-full px-4 py-2.5 pl-10 bg-background-input border border-line rounded-lg text-sm text-content-secondary placeholder-muted focus:border-brand-500 outline-none transition-colors"
+        class="w-full px-4 py-2.5 pl-10 bg-background-input border border-line rounded-lg text-sm text-content-secondary placeholder-muted focus:border-accent outline-none transition-colors"
       />
       <span class="absolute left-3 top-1/2 -translate-y-1/2 text-muted"><Icon name="search" class="w-4 h-4" /></span>
     </div>
@@ -235,10 +236,10 @@
     <div class="flex gap-2 flex-wrap">
       {#each savedSearches as term}
         <div class="flex items-center gap-1 px-3 py-1 bg-surface border border-line rounded-full text-xs">
-          <button onclick={() => { searchQuery = term; onSearchInput(); }} class="text-muted hover:text-brand-400 transition-colors">
+          <button onclick={() => { searchQuery = term; onSearchInput(); }} class="text-muted hover:text-accent transition-colors">
             {term}
           </button>
-          <button onclick={() => removeSearch(term)} class="text-muted-dark hover:text-error transition-colors ml-1">
+          <button onclick={() => removeSearch(term)} class="text-faint hover:text-error transition-colors ml-1">
             ✕
           </button>
         </div>
@@ -252,7 +253,7 @@
       <button
         onclick={() => selectedProvider = p.value}
         class="px-3 py-1.5 text-xs rounded-md transition-colors whitespace-nowrap flex items-center gap-1.5
-          {selectedProvider === p.value ? 'bg-brand-600 text-white' : 'text-muted hover:bg-surface-hover'}"
+          {selectedProvider === p.value ? 'bg-accent-fill text-accent-fg' : 'text-muted hover:bg-surface-hover'}"
       >
         <span>{p.icon}</span>
         {p.label}
@@ -267,7 +268,7 @@
       {searchQuery.trim() ? ` for "${searchQuery}"` : ''}
     </span>
     {#if accounts.length > 0}
-      <span class="text-xs text-muted-dark">{accounts.length} accounts tracked</span>
+      <span class="text-xs text-faint">{accounts.length} accounts tracked</span>
     {/if}
   </div>
 
@@ -275,7 +276,7 @@
   {#if loading}
     <div class="space-y-3">
       {#each [1, 2, 3] as _}
-        <div class="skeleton h-32 rounded-xl"></div>
+        <Skeleton height="8rem" rounded="lg" />
       {/each}
     </div>
   {:else if filteredPosts.length === 0}
@@ -289,7 +290,7 @@
         {/if}
       </p>
       {#if posts.length === 0}
-        <button onclick={importFeed} disabled={importing} class="mt-3 px-4 py-2 bg-brand-600 hover:bg-brand-500 rounded-lg text-sm transition-colors disabled:opacity-50">
+        <button onclick={importFeed} disabled={importing} class="mt-3 px-4 py-2 bg-accent-fill hover:bg-accent-fill-hover rounded-lg text-sm transition-colors disabled:opacity-50">
           {importing ? "Importing..." : "Import Feed"}
         </button>
       {/if}
@@ -316,7 +317,7 @@
                   <span class="text-xs text-muted">@{post.author_handle}</span>
                 {/if}
                 <span class="text-xs" style="color: {providerColor(post.provider)}">{providerIcon(post.provider)}</span>
-                <span class="text-xs text-muted-dark ml-auto">{formatTime(post.created_at)}</span>
+                <span class="text-xs text-faint ml-auto">{formatTime(post.created_at)}</span>
               </div>
 
               <!-- Text -->
@@ -335,7 +336,7 @@
                   <EngagementCard engagement={post.engagement} provider={post.provider} compact={true} />
                 {/if}
                 {#if post.url}
-                  <a href={post.url} target="_blank" rel="noopener" class="text-xs text-brand-400 hover:text-brand-300 transition-colors ml-auto">
+                  <a href={post.url} target="_blank" rel="noopener" class="text-xs text-accent hover:text-accent-strong transition-colors ml-auto">
                     View original →
                   </a>
                 {/if}
@@ -364,8 +365,8 @@
       <h3 class="text-lg font-semibold mb-2">Save Search</h3>
       <p class="text-sm text-muted mb-4">Save "{searchQuery}" for quick access later</p>
       <div class="flex gap-3 justify-end">
-        <button onclick={() => showSaveDialog = false} class="px-4 py-2 text-sm text-muted hover:text-white">Cancel</button>
-        <button onclick={saveSearch} class="px-4 py-2 text-sm bg-brand-600 hover:bg-brand-500 rounded-lg">Save</button>
+        <button onclick={() => showSaveDialog = false} class="px-4 py-2 text-sm text-muted hover:text-content">Cancel</button>
+        <button onclick={saveSearch} class="px-4 py-2 text-sm bg-accent-fill hover:bg-accent-fill-hover rounded-lg">Save</button>
       </div>
     </div>
   </div>

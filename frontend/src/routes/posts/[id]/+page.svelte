@@ -9,6 +9,8 @@
   // from anywhere.
 
   import { onMount, onDestroy } from 'svelte';
+  import Skeleton from '$lib/ui/Skeleton.svelte';
+  import ErrorState from '$lib/ui/ErrorState.svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   import { postsApi, type PostDetail } from '$lib/api/posts';
@@ -82,7 +84,7 @@
       <div class="flex gap-2">
         <button
           onclick={() => composer.openEdit(post.id)}
-          class="px-3 py-1.5 text-sm bg-brand-600 hover:bg-brand-500 rounded-lg transition-colors"
+          class="px-3 py-1.5 text-sm bg-accent-fill hover:bg-accent-fill-hover rounded-lg transition-colors"
         >✏️ Edit</button>
         <button
           onclick={handleDelete}
@@ -93,9 +95,9 @@
   </div>
 
   {#if loading}
-    <div class="text-center py-12 text-sm text-muted">Loading...</div>
+    <Skeleton variant="text" rows={6} />
   {:else if error}
-    <div class="text-center py-12 text-sm text-error">{error}</div>
+    <ErrorState message={error} actionLabel="Retry" onaction={load} />
   {:else if post}
     <div class="bg-surface border border-line rounded-xl p-5 space-y-4">
       <div class="flex items-center justify-between">
@@ -126,14 +128,16 @@
       {#if post.tags && post.tags.length > 0}
         <div class="flex gap-1 flex-wrap border-t border-line pt-3">
           {#each post.tags as tag (tag.id)}
-            <span class="px-2 py-0.5 rounded-full text-xs" style="background: {tag.color || '#4f46e5'}20; color: {tag.color || '#4f46e5'}">#{tag.name}</span>
+            <!-- F1: the no-color fallback is a token, not a literal. The `20`
+                 alpha suffix is only appended to a REAL stored tag color. -->
+            <span class="px-2 py-0.5 rounded-full text-xs" style="background: {tag.color ? tag.color + '20' : 'var(--brand-soft)'}; color: {tag.color || 'var(--accent)'}">#{tag.name}</span>
           {/each}
         </div>
       {/if}
 
       {#if post.platform_post_url}
         <div class="border-t border-line pt-3">
-          <a href={post.platform_post_url} target="_blank" rel="noopener" class="text-xs text-brand-400 hover:underline">
+          <a href={post.platform_post_url} target="_blank" rel="noopener" class="text-xs text-accent hover:underline">
             View original post →
           </a>
         </div>

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import Skeleton from '$lib/ui/Skeleton.svelte';
   import { webhooksApi, type Webhook, type WebhookDelivery } from "$lib/api/webhooks";
   import { toast } from "$lib/stores/toast";
   import { modals } from '$lib/stores/modals.svelte';
@@ -137,13 +138,13 @@
 <div class="page-enter space-y-6">
   <div class="flex items-center justify-between">
     <h2 class="text-xl font-semibold">Webhooks</h2>
-    <button onclick={openCreate} class="px-4 py-2 bg-brand-600 hover:bg-brand-500 rounded-lg text-sm transition-colors">
+    <button onclick={openCreate} class="px-4 py-2 bg-accent-fill hover:bg-accent-fill-hover rounded-lg text-sm transition-colors">
       + Add Webhook
     </button>
   </div>
 
   {#if loading}
-    <div class="text-center py-12 text-sm text-muted">Loading...</div>
+    <Skeleton variant="row" rows={4} />
   {:else if webhooks.length === 0}
     <div class="text-center py-12 text-sm text-muted">
       No webhooks configured. Create one to receive real-time event notifications.
@@ -158,24 +159,24 @@
               {#if wh.is_active}
                 <span class="px-2 py-0.5 text-xs rounded bg-success/20 text-success">Active</span>
               {:else}
-                <span class="px-2 py-0.5 text-xs rounded bg-gray-500/20 text-gray-400">Inactive</span>
+                <span class="px-2 py-0.5 text-xs rounded bg-hue-neutral/20 text-faint">Inactive</span>
               {/if}
             </div>
             <div class="flex gap-2">
-              <button onclick={() => testWebhook(wh.id)} class="text-xs px-2 py-1 text-muted hover:text-brand-400 border border-line rounded">Test</button>
-              <button onclick={() => viewDeliveries(wh.id)} class="text-xs px-2 py-1 text-muted hover:text-brand-400 border border-line rounded">Deliveries</button>
-              <button onclick={() => openEdit(wh)} class="text-xs px-2 py-1 text-muted hover:text-brand-400 border border-line rounded">Edit</button>
+              <button onclick={() => testWebhook(wh.id)} class="text-xs px-2 py-1 text-muted hover:text-accent border border-line rounded">Test</button>
+              <button onclick={() => viewDeliveries(wh.id)} class="text-xs px-2 py-1 text-muted hover:text-accent border border-line rounded">Deliveries</button>
+              <button onclick={() => openEdit(wh)} class="text-xs px-2 py-1 text-muted hover:text-accent border border-line rounded">Edit</button>
               <button onclick={() => deleteWebhook(wh.id)} class="text-xs px-2 py-1 text-muted hover:text-error border border-line rounded">Delete</button>
             </div>
           </div>
           <p class="text-xs text-muted truncate mb-2">{wh.url}</p>
           <div class="flex gap-1 flex-wrap">
             {#each wh.event_types as et}
-              <span class="px-2 py-0.5 text-[10px] rounded bg-brand-500/10 text-brand-400 border border-brand-500/20">{et}</span>
+              <span class="px-2 py-0.5 text-[10px] rounded bg-accent-fill/10 text-accent border border-accent/20">{et}</span>
             {/each}
           </div>
           {#if wh.last_triggered_at}
-            <p class="text-[10px] text-muted-dark mt-2">Last triggered: {new Date(wh.last_triggered_at).toLocaleString()}</p>
+            <p class="text-[10px] text-faint mt-2">Last triggered: {new Date(wh.last_triggered_at).toLocaleString()}</p>
           {/if}
         </div>
       {/each}
@@ -218,8 +219,8 @@
         </label>
       </div>
       <div class="flex gap-3 justify-end mt-6">
-        <button onclick={() => showModal = null} class="px-4 py-2 text-sm text-muted hover:text-white">Cancel</button>
-        <button onclick={saveWebhook} disabled={saving || !formName.trim() || !formUrl.trim()} class="px-4 py-2 text-sm bg-brand-600 hover:bg-brand-500 rounded disabled:opacity-50">
+        <button onclick={() => showModal = null} class="px-4 py-2 text-sm text-muted hover:text-content">Cancel</button>
+        <button onclick={saveWebhook} disabled={saving || !formName.trim() || !formUrl.trim()} class="px-4 py-2 text-sm bg-accent-fill hover:bg-accent-fill-hover rounded disabled:opacity-50">
           {saving ? "Saving..." : "Save"}
         </button>
       </div>
@@ -233,10 +234,10 @@
     <div class="bg-background-input border border-line rounded-xl p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
       <div class="flex items-center justify-between mb-4">
         <h3 class="text-lg font-semibold">Delivery History</h3>
-        <button onclick={() => showDeliveries = null} class="text-muted hover:text-white">✕</button>
+        <button onclick={() => showDeliveries = null} class="text-muted hover:text-content">✕</button>
       </div>
       {#if loadingDeliveries}
-        <div class="text-center py-8 text-sm text-muted">Loading...</div>
+        <Skeleton variant="row" rows={3} />
       {:else if deliveries.length === 0}
         <div class="text-center py-8 text-sm text-muted">No deliveries yet</div>
       {:else}
@@ -249,7 +250,7 @@
               </div>
               <p class="text-xs text-muted">{new Date(d.attempted_at).toLocaleString()}</p>
               {#if d.response_body}
-                <p class="text-xs text-muted-dark mt-1 truncate">Response: {d.response_body}</p>
+                <p class="text-xs text-faint mt-1 truncate">Response: {d.response_body}</p>
               {/if}
             </div>
           {/each}

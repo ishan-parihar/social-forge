@@ -100,7 +100,7 @@
 <div class="bg-surface border border-line rounded-xl p-4 space-y-4">
   <div class="flex items-center justify-between">
     <h3 class="text-sm font-semibold flex items-center gap-2">
-      <span class="text-brand-400">✨</span>
+      <span class="text-accent">✨</span>
       AI Assistant
     </h3>
   </div>
@@ -112,8 +112,8 @@
         onclick={() => { selectedTask = task; aiResult = null; aiError = null; }}
         class="px-3 py-1.5 text-xs rounded-lg border transition-colors
           {selectedTask === task
-            ? 'bg-brand-600/20 text-brand-400 border-brand-500/30'
-            : 'text-muted border-line hover:text-white hover:border-line-hover'}"
+            ? 'bg-accent-fill/20 text-accent border-accent/30'
+            : 'text-muted border-line hover:text-content hover:border-line-hover'}"
       >
         {task === "generate" ? "Generate" : task === "improve" ? "Improve" : task === "hashtags" ? "Hashtags" : task === "tone" ? "Tone" : "Summarize"}
       </button>
@@ -130,7 +130,7 @@
           type="text"
           bind:value={topic}
           placeholder="e.g. Our new product launch..."
-          class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-content-secondary focus:border-brand-500 outline-none"
+          class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-content-secondary focus:border-accent outline-none"
         />
       </div>
       <div class="flex gap-3">
@@ -139,7 +139,7 @@
           <select
             id="ai-tone"
             bind:value={tone}
-            class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-content-secondary focus:border-brand-500 outline-none"
+            class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-content-secondary focus:border-accent outline-none"
           >
             {#each tones as t (t)}
               <option value={t}>{t}</option>
@@ -151,7 +151,7 @@
           <select
             id="ai-length"
             bind:value={length}
-            class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-content-secondary focus:border-brand-500 outline-none"
+            class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-content-secondary focus:border-accent outline-none"
           >
             {#each lengths as l (l)}
               <option value={l}>{l}</option>
@@ -165,7 +165,7 @@
         <select
           id="ai-target-tone"
           bind:value={tone}
-          class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-content-secondary focus:border-brand-500 outline-none"
+          class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-content-secondary focus:border-accent outline-none"
         >
           {#each tones as t (t)}
             <option value={t}>{t}</option>
@@ -183,7 +183,7 @@
   <button
     onclick={handleGenerate}
     disabled={aiLoading}
-    class="w-full px-3 py-2 bg-brand-600 hover:bg-brand-500 disabled:opacity-50 rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
+    class="w-full px-3 py-2 bg-accent-fill hover:bg-accent-fill-hover disabled:opacity-50 rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
   >
     {#if aiLoading}
       <span class="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
@@ -207,13 +207,13 @@
       <div class="flex gap-2">
         <button
           onclick={handleInsert}
-          class="px-3 py-1.5 bg-brand-600 hover:bg-brand-500 rounded-lg text-xs transition-colors"
+          class="px-3 py-1.5 bg-accent-fill hover:bg-accent-fill-hover rounded-lg text-xs transition-colors"
         >
           Insert
         </button>
         <button
           onclick={() => { aiResult = null; }}
-          class="px-3 py-1.5 text-xs text-muted hover:text-white border border-line rounded-lg transition-colors"
+          class="px-3 py-1.5 text-xs text-muted hover:text-content border border-line rounded-lg transition-colors"
         >
           Discard
         </button>

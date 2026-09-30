@@ -1,5 +1,8 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
+  import Skeleton from '$lib/ui/Skeleton.svelte';
+  import ErrorState from '$lib/ui/ErrorState.svelte';
+  import EmptyState from '$lib/ui/EmptyState.svelte';
   import { automationApi, type AutomationRuleDisplay, type ExecutionLogDisplay, type CreateRulePayload } from "$lib/api/automation";
   import { integrationsApi, type Integration } from "$lib/api/integrations";
   import { toast } from "$lib/stores/toast";
@@ -182,15 +185,21 @@
 <div class="page-enter space-y-6">
   <div class="flex items-center justify-between">
     <h2 class="text-xl font-semibold">Automation Rules</h2>
-    <button onclick={openCreate} class="px-3 py-1.5 bg-brand-600 hover:bg-brand-500 rounded-lg text-sm transition-colors">+ New Rule</button>
+    <button onclick={openCreate} class="px-3 py-1.5 bg-accent-fill hover:bg-accent-fill-hover rounded-lg text-sm transition-colors">+ New Rule</button>
   </div>
 
   {#if error}
-    <div class="text-center py-12 text-sm text-error">{error}</div>
+    <ErrorState message={error} actionLabel="Retry" onaction={load} />
   {:else if loading}
-    <div class="text-center py-12 text-sm text-muted">Loading...</div>
+    <Skeleton variant="card" rows={3} />
   {:else if rules.length === 0}
-    <div class="text-center py-12 text-sm text-muted">No automation rules yet. Create one to get started.</div>
+    <EmptyState
+      icon="automation"
+      title="No automation rules yet"
+      description="Rules watch your accounts and act on their own — auto-reply, publish, or DM on trigger."
+      actionLabel="Create a rule"
+      onaction={() => showModal = true}
+    />
   {:else}
     <div class="bg-surface border border-line rounded-xl overflow-hidden">
       <div class="grid grid-cols-[1fr_100px_100px_100px_100px_120px] gap-3 px-4 py-2 border-b border-line bg-background-input text-xs text-muted">
@@ -204,7 +213,7 @@
               <div class="text-[10px] text-muted">Last: {new Date(rule.last_triggered).toLocaleDateString()}</div>
             {/if}
           </div>
-          <span class="text-xs text-brand-400 capitalize">{rule.platform}</span>
+          <span class="text-xs text-accent capitalize">{rule.platform}</span>
           <span class="text-xs text-muted capitalize">{rule.trigger_type}</span>
           <span class="text-xs text-muted capitalize">{rule.response_type.replace("_", " ")}</span>
           <button onclick={() => toggleActive(rule)} class="w-fit">
@@ -215,8 +224,8 @@
             {/if}
           </button>
           <div class="flex items-center gap-2">
-            <button onclick={() => openEdit(rule)} class="text-xs text-muted hover:text-brand-400">Edit</button>
-            <button onclick={() => viewLogs(rule.id)} class="text-xs text-muted hover:text-brand-400">Logs</button>
+            <button onclick={() => openEdit(rule)} class="text-xs text-muted hover:text-accent">Edit</button>
+            <button onclick={() => viewLogs(rule.id)} class="text-xs text-muted hover:text-accent">Logs</button>
             <button onclick={() => deleteRule(rule.id)} class="text-xs text-muted hover:text-error">Del</button>
           </div>
         </div>
@@ -274,8 +283,8 @@
       {#if error}<p class="text-error text-sm mb-3">{error}</p>{/if}
 
       <div class="flex gap-3 justify-end">
-        <button onclick={() => showModal = false} class="px-4 py-2 text-sm text-muted hover:text-white">Cancel</button>
-        <button onclick={saveRule} disabled={saving || !formName.trim()} class="px-4 py-2 text-sm bg-brand-600 hover:bg-brand-500 rounded disabled:opacity-50">
+        <button onclick={() => showModal = false} class="px-4 py-2 text-sm text-muted hover:text-content">Cancel</button>
+        <button onclick={saveRule} disabled={saving || !formName.trim()} class="px-4 py-2 text-sm bg-accent-fill hover:bg-accent-fill-hover rounded disabled:opacity-50">
           {saving ? "Saving..." : editingRule ? "Update" : "Create"}
         </button>
       </div>
@@ -289,12 +298,12 @@
     <div class="bg-background-input border border-line rounded-xl p-6 w-full max-w-lg max-h-[80vh] overflow-hidden flex flex-col">
       <div class="flex items-center justify-between mb-4">
         <h3 class="text-lg font-semibold">Execution Logs</h3>
-        <button onclick={() => showLogs = null} class="text-muted hover:text-white">✕</button>
+        <button onclick={() => showLogs = null} class="text-muted hover:text-content">✕</button>
       </div>
       {#if loadingLogs}
         <div class="text-center py-8 text-sm text-muted">Loading logs...</div>
       {:else if logs.length === 0}
-        <div class="text-center py-8 text-sm text-muted">No execution logs yet</div>
+        <Skeleton variant="row" rows={3} />
       {:else}
         <div class="flex-1 overflow-y-auto space-y-2">
           {#each logs as log (log.id)}

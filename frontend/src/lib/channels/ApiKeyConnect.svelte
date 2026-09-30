@@ -87,33 +87,33 @@
         type="password"
         bind:value={apiKey}
         placeholder="Enter your API key"
-        class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-white placeholder:text-muted-dark focus:outline-none focus:border-brand-500 transition-colors"
+        class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-white placeholder:text-faint focus:outline-none focus:border-accent transition-colors"
       />
     </div>
 
     <div>
       <label for="instance-url" class="block text-xs font-medium text-muted mb-1">
-        Instance URL <span class="text-muted-dark">(optional)</span>
+        Instance URL <span class="text-faint">(optional)</span>
       </label>
       <input
         id="instance-url"
         type="text"
         bind:value={instanceUrl}
         placeholder="https://your-instance.example.com"
-        class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-white placeholder:text-muted-dark focus:outline-none focus:border-brand-500 transition-colors"
+        class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-white placeholder:text-faint focus:outline-none focus:border-accent transition-colors"
       />
     </div>
 
     <div>
       <label for="label" class="block text-xs font-medium text-muted mb-1">
-        Label <span class="text-muted-dark">(optional)</span>
+        Label <span class="text-faint">(optional)</span>
       </label>
       <input
         id="label"
         type="text"
         bind:value={label}
         placeholder="e.g. My Blog"
-        class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-white placeholder:text-muted-dark focus:outline-none focus:border-brand-500 transition-colors"
+        class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-white placeholder:text-faint focus:outline-none focus:border-accent transition-colors"
       />
     </div>
 

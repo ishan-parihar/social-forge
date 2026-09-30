@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
+  import Skeleton from '$lib/ui/Skeleton.svelte';
   import { calendarApi } from "$lib/api/calendar";
   import { postsApi } from "$lib/api/posts";
   import { integrationsApi, type Integration } from "$lib/api/integrations";
@@ -423,10 +424,10 @@
     <div class="flex gap-2">
       <button
         onclick={() => modals.open(GeneratorModal, {}, { title: 'AI Post Generator', size: 'max-w-lg' })}
-        class="px-3 py-1.5 text-sm border border-line rounded-lg text-muted hover:text-white hover:bg-surface-hover transition-colors"
+        class="px-3 py-1.5 text-sm border border-line rounded-lg text-muted hover:text-content hover:bg-surface-hover transition-colors"
         title="Generate multiple posts from a topic using AI"
       >✨ Generate Posts</button>
-      <button onclick={() => composer.openCreate()} class="px-3 py-1.5 bg-brand-500 hover:bg-brand-600 rounded-lg text-sm transition-colors">
+      <button onclick={() => composer.openCreate()} class="px-3 py-1.5 bg-accent-fill hover:bg-accent-fill-hover rounded-lg text-sm transition-colors">
         + New Post
       </button>
     </div>
@@ -451,9 +452,9 @@
   />
 
   {#if selected.size > 0}
-    <div class="flex items-center gap-3 bg-brand-500/10 border border-brand-500/30 rounded-lg px-4 py-2">
-      <span class="text-sm text-brand-300">{selected.size} selected</span>
-      <button onclick={() => showBulkSchedule = !showBulkSchedule} disabled={bulkProcessing} class="px-3 py-1 text-xs bg-brand-500 hover:bg-brand-600 rounded disabled:opacity-50">Reschedule</button>
+    <div class="flex items-center gap-3 bg-accent-fill/10 border border-accent/30 rounded-lg px-4 py-2">
+      <span class="text-sm text-accent-strong">{selected.size} selected</span>
+      <button onclick={() => showBulkSchedule = !showBulkSchedule} disabled={bulkProcessing} class="px-3 py-1 text-xs bg-accent-fill hover:bg-accent-fill-hover rounded disabled:opacity-50">Reschedule</button>
       <button onclick={bulkDelete} disabled={bulkProcessing} class="px-3 py-1 text-xs bg-error hover:bg-error/90 rounded disabled:opacity-50">Delete</button>
       <button onclick={() => selected = new Set()} class="ml-auto text-xs text-muted hover:text-content">Clear</button>
     </div>
@@ -461,7 +462,7 @@
       <div class="flex items-center gap-2 bg-background-input border border-line rounded-lg p-3">
         <input type="date" bind:value={bulkScheduleDate} class="px-2 py-1 bg-surface border border-line rounded text-sm text-content-secondary" />
         <input type="time" bind:value={bulkScheduleTime} class="px-2 py-1 bg-surface border border-line rounded text-sm text-content-secondary" />
-        <button onclick={bulkReschedule} disabled={bulkProcessing || !bulkScheduleDate} class="px-3 py-1 bg-brand-500 hover:bg-brand-600 rounded text-xs disabled:opacity-50">Apply</button>
+        <button onclick={bulkReschedule} disabled={bulkProcessing || !bulkScheduleDate} class="px-3 py-1 bg-accent-fill hover:bg-accent-fill-hover rounded text-xs disabled:opacity-50">Apply</button>
       </div>
     {/if}
   {/if}
@@ -480,7 +481,7 @@
       <p class="text-xs text-muted mb-4 max-w-md">{fetchError}</p>
       <button
         onclick={retryFetch}
-        class="px-4 py-2 text-sm bg-brand-500 hover:bg-brand-600 text-white rounded-lg transition-colors flex items-center gap-2"
+        class="px-4 py-2 text-sm bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg transition-colors flex items-center gap-2"
       >
         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
           <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -491,7 +492,7 @@
   {:else if loading}
     <div class="grid grid-cols-7 gap-px">
       {#each Array(35) as _, i (i)}
-        <div class="h-24 bg-surface-hover animate-pulse rounded"></div>
+        <Skeleton variant="card" rows={2} />
       {/each}
     </div>
   {:else if calendarState.state.view === "month"}

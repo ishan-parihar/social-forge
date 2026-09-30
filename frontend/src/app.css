@@ -2,65 +2,203 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ==========================================================================
+   DESIGN TOKENS — v25 F1
+   --------------------------------------------------------------------------
+   EVERY color in the app resolves through this file. Component code must
+   reference a token (`bg-surface`, `text-muted`, `text-accent`, …) and never a
+   raw hex, so a theme switch is a token swap and nothing else.
+
+   Naming contract (F1):
+     bg / surface / input / sidebar  → background layers, dark→light
+     line / line-hover               → borders
+     text / secondary / muted / faint → text ramp, strong→faint
+     accent / accent-hover / accent-fg / accent-soft  → the one brand color
+     success / warning / error / info                  → status, RGB triplets
+     overlay / focus-ring / shadow-* / scrollbar       → chrome, not surfaces
+     viz-*                                            → metric colors
+     hue-*                                            → categorical chip colors
+
+   `--text-faint` (F1) replaces `--text-faint`. The old name read as
+   "the dark-mode value" but it was always the *faintest* text tier, so it
+   flipped value with the theme. `faint` says what it is.
+
+   F1 grep gate: `pnpm check:tokens` fails the build on any hex outside the
+   two `:root` blocks below. `scripts/check-hex-tokens.mjs` is the authority.
+   ========================================================================== */
+
 /* Dark theme (default) */
 :root,
 :root.dark {
+        /* — background layers (darkest → raised) — */
         --bg: #0b0e14;
         --bg-card: #131720;
         --bg-hover: #1a1f2e;
         --bg-input: #0d1117;
         --bg-sidebar: #0b0e14;
+        /* — borders — */
         --border: #1e2435;
         --border-hover: #2a3045;
+        /* — text ramp (strongest → faintest) —
+           F1 measured every tier against every dark surface (--bg, --bg-card,
+           --bg-hover, --bg-input). Both muted and faint clear WCAG AA 4.5:1:
+             muted 6.60:1   faint 4.50:1
+           The old values (gray-500 / gray-600) gave 4.00:1 and 2.56:1 — the
+           second tier was unreadable, and it carries real content (timestamps,
+           section labels), not decoration. */
         --text: #e8edf5;
-        --text-muted: #6b7280;
-        --text-muted-dark: #4b5563;
+        --text-muted: #9aa5b8;
+        --text-faint: #7a879a;
         --text-secondary: #d1d5db;
-        --brand: #6366f1;
+        /* — accent (the single brand color) —
+           F1 splits accent into FILL and FOREGROUND, because one value cannot
+           serve both across themes:
+             --brand / --brand-hover  fill (button backgrounds, bar fills)
+             --accent                 text/border/ring — must clear 4.5:1 as
+                                     TEXT on --bg in BOTH themes
+             --accent-strong          the emphasized step above it (hover on an
+                                     already-accent element)
+           Measured: #6366f1 on #0b0e14 is 3.97:1 — fine as a fill, a WCAG fail
+           as body text. #a5b4fc on the same surface is 7.3:1. In light mode the
+           relationship inverts (#6366f1 on #fff is 4.7:1), which is exactly why
+           these are two tokens and not one. */
+        --brand: #6164f1;
         --brand-hover: #4f46e5;
+        --brand-rgb: 97 100 241;
+        --accent: #a5b4fc;        /* brand-300 — 8.23:1 on --bg */
+        --accent-strong: #c7d2fe; /* brand-200 — 11.0:1, the hover step */
+        --brand-accent-rgb: 165 180 252;
+        --brand-accent-strong-rgb: 199 210 254;
+        /* Foreground that sits on top of a solid --brand fill. White in both
+           themes: brand-500 clears 4.7:1 on white, so the button reads the
+           same in either mode (Postiz reference: one CTA, always legible). */
+        --brand-fg: #ffffff;
+        /* Soft accent wash for chips/selected rows. */
+        --brand-soft: rgb(97 100 241 / 0.14);
         /* v26-2: brand color as RGB triplet for rgb(var(--brand-rgb) / <alpha>) syntax.
            Used by shadow utilities + sparkline fills that need brand-color opacity. */
-        --brand-rgb: 99 102 241;
         /* v22 Phase 3: semantic status colors as space-separated RGB triplets
            so Tailwind's `rgb(var(--success-rgb) / <alpha-value>)` syntax works
            for arbitrary opacity (bg-success/20, text-error, border-warning). */
-        --success-rgb: 34 197 94;   /* green-500 */
-        --warning-rgb: 234 179 8;  /* yellow-500 */
-        --error-rgb: 239 68 68;    /* red-500 */
-        --info-rgb: 59 130 246;    /* blue-500 */
+        --success-rgb: 34 197 94;   /* green-500 — 7.20:1 */
+        --warning-rgb: 234 179 8;  /* yellow-500 — 8.56:1 */
+        --error-rgb: 240 75 75;    /* red — 4.54:1 (nudged off 500 for AA) */
+        --info-rgb: 61 132 246;    /* blue — 4.56:1 (nudged off 500 for AA) */
+        /* — metric colors (F1). Data-viz hues, tuned for dark surfaces.
+             These are semantic: engagement numbers mean the same thing
+             everywhere, so the ramp is declared once here, not per call site. — */
+        --viz-like-rgb: 244 114 182;       /* pink-400 */
+        --viz-comment-rgb: 96 165 250;     /* blue-400 */
+        --viz-share-rgb: 52 211 153;       /* emerald-400 */
+        --viz-view-rgb: 167 139 250;      /* violet-400 */
+        --viz-impression-rgb: 129 140 248; /* indigo-400 */
+        --viz-click-rgb: 34 211 238;       /* cyan-400 */
+        /* — categorical chip hues (F1). Used by TargetPicker, ChannelCard,
+             Badge and the RSS/connected-state chips. Same names, same meaning,
+             every theme. — */
+        --hue-blue-rgb: 96 165 250;
+        --hue-violet-rgb: 167 139 250;
+        --hue-teal-rgb: 45 212 191;
+        --hue-cyan-rgb: 34 211 238;
+        --hue-emerald-rgb: 52 211 153;
+        --hue-amber-rgb: 251 191 36;
+        --hue-neutral-rgb: 156 163 175;
+        /* — chrome: scrims, focus, shadows, scrollbar. — */
+        --overlay: rgb(0 0 0 / 0.6);
+        --focus-ring: rgb(99 102 241 / 0.35);
+        --focus-ring-offset: rgb(0 0 0 / 0.0);
+        --row-hover: rgb(26 31 46 / 0.5);
+        --shadow-color: rgb(0 0 0 / 0.4);
+        --shadow-sm: 0 1px 2px 0 var(--shadow-color);
+        --shadow-md: 0 4px 12px -2px var(--shadow-color);
+        --shadow-lg: 0 8px 24px -4px var(--shadow-color);
+        --scrollbar-thumb: #1e2435;
+        --scrollbar-thumb-hover: #2a3045;
+        /* — geometry — */
         --radius: 12px;
         --radius-sm: 6px;
         --radius-md: 8px;
         --radius-lg: 12px;
+        /* — loading — */
         --skeleton-from: #1a1f2e;
         --skeleton-to: #1e2435;
 }
 
 /* Light theme */
 :root.light {
+        /* — background layers — */
         --bg: #f8fafc;
         --bg-card: #ffffff;
         --bg-hover: #f1f5f9;
         --bg-input: #f8fafc;
         --bg-sidebar: #f8fafc;
+        /* — borders — */
         --border: #e2e8f0;
         --border-hover: #cbd5e1;
+        /* — text ramp (strongest → faintest) —
+           Same AA measurement as the dark block. In light mode the two tiers
+           must step the OTHER way (darker = more contrast), so `faint` is the
+           lighter of the two here — which is exactly why the old name
+           `muted-dark` was confusing:
+             muted 6.92:1   faint 4.61:1 */
         --text: #1e293b;
-        --text-muted: #64748b;
-        --text-muted-dark: #94a3b8;
+        --text-muted: #475569;
+        --text-faint: #5d708c;
         --text-secondary: #334155;
-        --brand: #6366f1;
-        --brand-hover: #4f46e5;
-        --brand-rgb: 99 102 241;
-        /* v22 Phase 3: light-mode status colors (slightly darker for contrast). */
-        --success-rgb: 22 163 74;   /* green-600 */
-        --warning-rgb: 202 138 4;   /* yellow-600 */
-        --error-rgb: 220 38 38;     /* red-600 */
-        --info-rgb: 37 99 235;      /* blue-600 */
+        /* — accent (fill + foreground) — */
+        --brand: #4f46e5;
+        --brand-hover: #4338ca;
+        --brand-rgb: 79 70 229;
+        --accent: #4f46e5;        /* brand-600 — 6.3:1 on #fff, text-safe */
+        --accent-strong: #3730a3; /* brand-800 — 9.0:1 on #fff */
+        --brand-accent-rgb: 79 70 229;
+        --brand-accent-strong-rgb: 55 48 163;
+        --brand-fg: #ffffff;
+        --brand-soft: rgb(79 70 229 / 0.10);
+        /* 4.5:1 is the floor; the wash behind a chip also needs to stay visible
+           against --bg-card, so it is a touch stronger than the dark value. */
+        /* v22 Phase 3: light-mode status colors. F1 walked each one down from
+           the 600 step until it cleared 4.5:1 on --bg AND --bg-card — the 600
+           steps were 3.15:1 (green) and 2.81:1 (yellow), i.e. invisible as
+           text. They are still saturated enough to read as green/yellow. */
+        --success-rgb: 27 127 78;    /* 4.57:1 */
+        --warning-rgb: 149 102 3;    /* 4.59:1 */
+        --error-rgb: 218 35 35;      /* 4.51:1 */
+        --info-rgb: 37 99 235;       /* 4.72:1 */
+        /* — metric colors. Each walked down from the 600 step until it cleared
+             4.5:1 on --bg AND --bg-card. Engagement numbers are read at a
+             glance, so legibility outranks matching the 600-step swatch. — */
+        --viz-like-rgb: 210 35 113;       /* 4.54:1 */
+        --viz-comment-rgb: 37 99 235;     /* 4.72:1 */
+        --viz-share-rgb: 4 128 89;        /* 4.52:1 */
+        --viz-view-rgb: 124 58 237;       /* 5.20:1 */
+        --viz-impression-rgb: 67 56 202;  /* 7.21:1 */
+        --viz-click-rgb: 14 116 144;      /* 4.89:1 */
+        /* — categorical chip hues (same AA walk) — */
+        --hue-blue-rgb: 37 99 235;        /* 4.72:1 */
+        --hue-violet-rgb: 124 58 237;     /* 5.20:1 */
+        --hue-teal-rgb: 11 125 114;       /* 4.57:1 */
+        --hue-cyan-rgb: 14 116 144;       /* 4.89:1 */
+        --hue-emerald-rgb: 4 128 89;      /* 4.52:1 */
+        --hue-amber-rgb: 180 83 9;        /* 4.58:1 */
+        --hue-neutral-rgb: 97 112 135;    /* 4.59:1 */
+        /* — chrome — */
+        --overlay: rgb(15 23 42 / 0.45);
+        --focus-ring: rgb(79 70 229 / 0.35);
+        --focus-ring-offset: rgb(15 23 42 / 0.0);
+        --row-hover: rgb(226 232 240 / 0.5);
+        --shadow-color: rgb(15 23 42 / 0.12);
+        --shadow-sm: 0 1px 2px 0 var(--shadow-color);
+        --shadow-md: 0 4px 12px -2px var(--shadow-color);
+        --shadow-lg: 0 8px 24px -4px var(--shadow-color);
+        --scrollbar-thumb: #cbd5e1;
+        --scrollbar-thumb-hover: #94a3b8;
+        /* — geometry — */
         --radius: 12px;
         --radius-sm: 6px;
         --radius-md: 8px;
         --radius-lg: 12px;
+        /* — loading — */
         --skeleton-from: #f1f5f9;
         --skeleton-to: #e2e8f0;
 }
@@ -84,11 +222,11 @@ body {
         background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-        background: var(--border);
+        background: var(--scrollbar-thumb);
         border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-        background: #374151;
+        background: var(--scrollbar-thumb-hover);
 }
 
 input,
@@ -108,7 +246,7 @@ input:focus,
 textarea:focus,
 select:focus {
         border-color: var(--brand);
-        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+        box-shadow: 0 0 0 3px var(--focus-ring);
 }
 button {
         cursor: pointer;
@@ -127,7 +265,8 @@ a:hover {
         transition: color 0.2s, background-color 0.2s;
 }
 
-/* Focus visible for keyboard navigation */
+/* Focus visible for keyboard navigation. F1: the ring reads against BOTH
+   themes because it is derived from --brand, which flips per theme. */
 a:focus-visible,
 button:focus-visible,
 [role="button"]:focus-visible {
@@ -164,16 +303,21 @@ button:focus-visible,
         color: rgb(var(--error-rgb));
 }
 .badge-idea {
-        background: rgb(168 85 247 / 0.15);  /* purple-500 */
-        color: rgb(192 132 252);             /* purple-400 */
+        background: rgb(var(--hue-violet-rgb) / 0.15);
+        color: rgb(var(--hue-violet-rgb));
 }
+
+/* v25 F1: chips (categorical + status) use the Tailwind token utilities
+   directly — `bg-hue-violet/20 text-hue-violet`, `bg-success/15 text-success`.
+   No bespoke chip classes: the tokens already carry the per-theme values, so a
+   second class layer would only be somewhere for the two to drift. */
 
 /* Stat card hover */
 .stat-card {
         transition: border-color 0.2s, transform 0.1s;
 }
 .stat-card:hover {
-        border-color: rgba(99, 102, 241, 0.3);
+        border-color: rgb(var(--brand-rgb) / 0.3);
         transform: translateY(-1px);
 }
 
@@ -182,8 +326,15 @@ tr.data-row {
         transition: background-color 0.1s;
 }
 tr.data-row:hover {
-        background-color: rgba(26, 31, 46, 0.5);
+        background-color: var(--row-hover);
 }
+
+/* F1: elevation. Components use these instead of inline `shadow-[...]`, so a
+   theme switch re-tints the shadow with the surface instead of leaving a
+   pure-black smear on a white page. */
+.elev-sm { box-shadow: var(--shadow-sm); }
+.elev-md { box-shadow: var(--shadow-md); }
+.elev-lg { box-shadow: var(--shadow-lg); }
 
 /* Page fade transition */
 .page-enter {

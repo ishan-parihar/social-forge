@@ -99,8 +99,8 @@
            post-state Badge component (which would show "Published"/"Draft"
            — semantically wrong for an RSS feed that has no publication state). -->
       <span class="px-2 py-0.5 rounded text-[10px] font-medium border {feed.enabled
-        ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-        : 'bg-gray-500/10 border-gray-500/30 text-gray-400'}">
+        ? 'bg-success/10 border-success/30 text-success'
+        : 'bg-hue-neutral/10 border-hue-neutral/30 text-faint'}">
         {feed.enabled ? 'Enabled' : 'Disabled'}
       </span>
     </div>

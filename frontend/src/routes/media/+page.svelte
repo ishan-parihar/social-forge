@@ -1,5 +1,8 @@
 <script lang="ts">
   import { mediaApi, type MediaItem } from "$lib/api/media";
+  import Skeleton from '$lib/ui/Skeleton.svelte';
+  import ErrorState from '$lib/ui/ErrorState.svelte';
+  import EmptyState from '$lib/ui/EmptyState.svelte';
   import MediaGrid from "$lib/media/MediaGrid.svelte";
   import { toast } from "$lib/stores/toast";
 
@@ -90,7 +93,7 @@
 <div class="page-enter space-y-6">
   <div class="flex items-center justify-between">
     <h2 class="text-xl font-semibold text-content">Media Library</h2>
-    <label class="px-3 py-1.5 bg-brand-600 hover:bg-brand-500 rounded-lg text-sm cursor-pointer transition-colors disabled:opacity-50" class:opacity-50={uploading}>
+    <label class="px-3 py-1.5 bg-accent-fill hover:bg-accent-fill-hover rounded-lg text-sm cursor-pointer transition-colors disabled:opacity-50" class:opacity-50={uploading}>
       {uploading ? "Uploading..." : "+ Upload"}
       <input type="file" multiple accept="image/*,video/*,audio/*,.pdf" onchange={handleUpload} class="hidden" disabled={uploading} />
     </label>
@@ -101,7 +104,7 @@
       type="text"
       placeholder="Search media by name..."
       bind:value={search}
-      class="w-full px-3 py-2 pl-9 bg-background-input border border-line rounded-lg text-sm text-content-secondary placeholder-muted focus:border-brand-500 outline-none transition-colors"
+      class="w-full px-3 py-2 pl-9 bg-background-input border border-line rounded-lg text-sm text-content-secondary placeholder-muted focus:border-accent outline-none transition-colors"
     />
     <span class="absolute left-3 top-1/2 -translate-y-1/2 text-muted"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></span>
   </div>
@@ -109,10 +112,20 @@
   {#if error && !loading}
     <div class="bg-error/10 border border-error/30 text-error text-sm rounded-lg p-4 text-center">
       <p class="mb-2">{error}</p>
-      <button onclick={fetchMedia} class="text-brand-400 hover:text-brand-300 underline">Retry</button>
+      <button onclick={fetchMedia} class="text-accent hover:text-accent-strong underline">Retry</button>
     </div>
   {:else}
-    <MediaGrid {items} {loading} onDelete={handleDelete} />
+    {#if !loading && items.length === 0}
+      <EmptyState
+        icon="media"
+        title={search ? "No media matches that search" : "No media uploaded yet"}
+        description={search
+          ? "Try a different name, or clear the search to see everything in the library."
+          : "Upload an image, video, or GIF and it becomes available to every platform at once."}
+      />
+    {:else}
+      <MediaGrid {items} {loading} onDelete={handleDelete} />
+    {/if}
 
     {#if !loading && items.length > 0}
       <div class="flex items-center justify-center gap-3 pt-2">

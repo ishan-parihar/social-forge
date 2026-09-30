@@ -55,7 +55,7 @@
 {#if loading}
   <div class="bg-surface border border-line rounded-xl p-4">
     <div class="flex items-center gap-2 text-xs text-muted">
-      <span class="inline-block w-3 h-3 border-2 border-brand-400/30 border-t-brand-400 rounded-full animate-spin"></span>
+      <span class="inline-block w-3 h-3 border-2 border-accent/30 border-t-brand-400 rounded-full animate-spin"></span>
       Generating hashtag suggestions...
     </div>
   </div>
@@ -71,7 +71,7 @@
         <button
           onclick={() => onAddHashtag?.(tag)}
           aria-label="Add {tag} hashtag"
-          class="px-2.5 py-1 bg-surface-hover hover:bg-brand-600/20 text-xs text-content-secondary rounded-full transition-colors cursor-pointer"
+          class="px-2.5 py-1 bg-surface-hover hover:bg-accent-fill-hover/20 text-xs text-content-secondary rounded-full transition-colors cursor-pointer"
         >
           #{tag}
         </button>

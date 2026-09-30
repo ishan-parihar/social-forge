@@ -1,5 +1,6 @@
 <script lang="ts">
   import Icon from "$lib/ui/Icon.svelte";
+  import Skeleton from '$lib/ui/Skeleton.svelte';
   import { analyticsApi, type AnalyticsSummary } from '$lib/api/analytics';
   import { postsApi, type PostSummary } from '$lib/api/posts';
   import { feedApi } from '$lib/api/feed';
@@ -171,15 +172,15 @@
   {#if error}
     <div class="bg-error/20 border border-error/40 rounded-lg p-4">
       <p class="text-error text-sm">{error}</p>
-      <button onclick={() => fetchData()} class="mt-2 text-sm text-brand-400 hover:text-brand-300">Retry</button>
+      <button onclick={() => fetchData()} class="mt-2 text-sm text-accent hover:text-accent-strong">Retry</button>
     </div>
   {:else if loading}
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
       {#each [1, 2, 3, 4] as _}
-        <div class="skeleton h-24 rounded-xl"></div>
+        <Skeleton height="6rem" rounded="lg" />
       {/each}
     </div>
-    <div class="skeleton h-48 rounded-xl"></div>
+    <Skeleton height="12rem" rounded="lg" />
   {:else if data && data.total_posts === 0 && (!feedEngagement || feedEngagement.posts_with_engagement === 0)}
     <div class="text-center py-16">
       <p class="text-content-secondary mb-4">No analytics data yet. Import your feed or start posting!</p>
@@ -187,7 +188,7 @@
         <a href="/feed" class="inline-flex items-center gap-2 px-4 py-2 bg-surface-hover text-content rounded-lg hover:bg-line-hover transition-colors text-sm">
           Import Feed
         </a>
-        <a href="/posts/new" class="inline-flex items-center gap-2 px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-500 transition-colors text-sm">
+        <a href="/posts/new" class="inline-flex items-center gap-2 px-4 py-2 bg-accent-fill text-accent-fg rounded-lg hover:bg-accent-fill-hover transition-colors text-sm">
           Create Post
         </a>
       </div>
@@ -199,7 +200,7 @@
         <h3 class="text-sm font-semibold mb-3">Imported Post Engagement ({days}d)</h3>
         <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
           <div>
-            <div class="text-xl font-bold text-brand-400">{feedEngagement.posts_with_engagement}</div>
+            <div class="text-xl font-bold text-accent">{feedEngagement.posts_with_engagement}</div>
             <div class="text-xs text-muted">Posts w/ Engagement</div>
           </div>
           <div>
@@ -207,7 +208,7 @@
             <div class="text-xs text-muted">Total Likes</div>
           </div>
           <div>
-            <div class="text-xl font-bold text-blue-400">{feedEngagement.total_comments?.toLocaleString() ?? 0}</div>
+            <div class="text-xl font-bold text-viz-comment">{feedEngagement.total_comments?.toLocaleString() ?? 0}</div>
             <div class="text-xs text-muted">Total Comments</div>
           </div>
           <div>
@@ -215,7 +216,7 @@
             <div class="text-xs text-muted">Total Shares</div>
           </div>
           <div>
-            <div class="text-xl font-bold text-purple-400">{feedEngagement.total_views?.toLocaleString() ?? 0}</div>
+            <div class="text-xl font-bold text-viz-view">{feedEngagement.total_views?.toLocaleString() ?? 0}</div>
             <div class="text-xs text-muted">Total Views</div>
           </div>
         </div>
@@ -225,7 +226,7 @@
     <!-- Summary Cards -->
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
       <div class="stat-card bg-surface border border-line rounded-xl p-4">
-        <div class="text-2xl font-bold text-brand-400">{data.total_posts}</div>
+        <div class="text-2xl font-bold text-accent">{data.total_posts}</div>
         <div class="text-xs text-muted mt-1 uppercase tracking-wider">Scheduled Posts</div>
       </div>
       <div class="stat-card bg-surface border border-line rounded-xl p-4">
@@ -245,20 +246,20 @@
     <!-- Engagement Stats (if available) -->
     {#if totalEngagement.likes > 0 || totalEngagement.comments > 0 || totalEngagement.shares > 0}
       <div class="grid grid-cols-3 gap-4">
-        <div class="stat-card bg-surface border border-line rounded-xl p-4 bg-pink-500/5">
+        <div class="stat-card bg-surface border border-line rounded-xl p-4 bg-viz-like/5">
           <div class="flex items-center gap-2">
-            <Icon name="heart" class="w-4 h-4 text-pink-400" />
+            <Icon name="heart" class="w-4 h-4 text-viz-like" />
             <div>
-              <div class="text-xl font-bold text-pink-400">{totalEngagement.likes.toLocaleString()}</div>
+              <div class="text-xl font-bold text-viz-like">{totalEngagement.likes.toLocaleString()}</div>
               <div class="text-[10px] text-muted uppercase tracking-wider">Total Likes</div>
             </div>
           </div>
         </div>
-        <div class="stat-card bg-surface border border-line rounded-xl p-4 bg-blue-500/5">
+        <div class="stat-card bg-surface border border-line rounded-xl p-4 bg-viz-comment/5">
           <div class="flex items-center gap-2">
-            <Icon name="comment-bubble" class="w-4 h-4 text-blue-400" />
+            <Icon name="comment-bubble" class="w-4 h-4 text-viz-comment" />
             <div>
-              <div class="text-xl font-bold text-blue-400">{totalEngagement.comments.toLocaleString()}</div>
+              <div class="text-xl font-bold text-viz-comment">{totalEngagement.comments.toLocaleString()}</div>
               <div class="text-[10px] text-muted uppercase tracking-wider">Total Comments</div>
             </div>
           </div>
@@ -285,7 +286,7 @@
           {#each data.posts_by_day as day (day.date)}
             <div class="flex-1 flex flex-col items-center justify-end h-full">
               <div
-                class="w-full bg-brand-500/80 rounded-t hover:bg-brand-400 transition-colors min-h-[4px]"
+                class="w-full bg-accent-fill/80 rounded-t hover:bg-accent-fill transition-colors min-h-[4px]"
                 style="height: {(day.count / maxCount) * 100}%"
                 title="{day.date}: {day.count} posts"
               ></div>
@@ -321,14 +322,14 @@
                 {#each metric.data.slice(-14) as point}
                   <div class="flex-1 flex flex-col items-center justify-end h-full">
                     <div
-                      class="w-full bg-brand-500/60 rounded-t hover:bg-brand-400 transition-colors min-h-[2px]"
+                      class="w-full bg-accent-fill/60 rounded-t hover:bg-accent-fill transition-colors min-h-[2px]"
                       style="height: {Math.max((parseFloat(point.total) || 0) / Math.max(...metric.data.map(d => parseFloat(d.total) || 0), 1)) * 100}%"
                       title="{point.date}: {point.total}"
                     ></div>
                   </div>
                 {/each}
               </div>
-              <div class="text-xs text-muted-dark mt-1">
+              <div class="text-xs text-faint mt-1">
                 Latest: {metric.data[metric.data.length - 1]?.total || '0'}
               </div>
             </div>
@@ -351,7 +352,7 @@
                 <span class="text-xs text-muted w-24 truncate">{prov.provider}</span>
                 <div class="flex-1 bg-background-input rounded-full h-6 overflow-hidden">
                   <div
-                    class="h-full bg-brand-500/60 rounded-full transition-all duration-500 flex items-center justify-end px-2"
+                    class="h-full bg-accent-fill/60 rounded-full transition-all duration-500 flex items-center justify-end px-2"
                     style="width: {(prov.count / maxProviderCount) * 100}%"
                   >
                     <span class="text-[10px] font-medium text-white">{prov.count}</span>
@@ -372,16 +373,16 @@
           <div class="space-y-2">
             {#each topPosts as post, i (post.id)}
               <div class="flex items-start gap-3 py-2 border-b border-line last:border-0">
-                <span class="text-xs text-muted-dark w-4 mt-0.5">{i + 1}</span>
+                <span class="text-xs text-faint w-4 mt-0.5">{i + 1}</span>
                 <div class="flex-1 min-w-0">
                   <p class="text-sm text-content-secondary truncate">{post.content || post.title || '(no content)'}</p>
                   <div class="flex gap-3 mt-1 text-[10px] text-muted">
                     <span>{post.integration_name}</span>
                     {#if post.likes != null && post.likes > 0}
-                      <span class="flex items-center gap-0.5 text-pink-400"><Icon name="heart" class="w-3 h-3" /> {post.likes}</span>
+                      <span class="flex items-center gap-0.5 text-viz-like"><Icon name="heart" class="w-3 h-3" /> {post.likes}</span>
                     {/if}
                     {#if post.comments != null && post.comments > 0}
-                      <span class="flex items-center gap-0.5 text-blue-400"><Icon name="comment-bubble" class="w-3 h-3" /> {post.comments}</span>
+                      <span class="flex items-center gap-0.5 text-viz-comment"><Icon name="comment-bubble" class="w-3 h-3" /> {post.comments}</span>
                     {/if}
                     {#if post.shares != null && post.shares > 0}
                       <span class="flex items-center gap-0.5 text-success"><Icon name="share" class="w-3 h-3" /> {post.shares}</span>
