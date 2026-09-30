@@ -597,18 +597,10 @@ impl SocialProvider for FacebookProvider {
 
     /// TargetPicker reads the same `/me/accounts` listing as `pages()`.
     async fn targets(&self, access_token: &str) -> Result<Vec<TargetInfo>, ProviderError> {
-        Ok(self
-            .pages(access_token)
-            .await?
-            .into_iter()
-            .map(|p| TargetInfo {
-                id: p.id,
-                name: p.name,
-                target_type: "page".into(),
-                picture: p.picture,
-                metadata: p.username.map(|u| serde_json::json!({ "username": u })),
-            })
-            .collect())
+        Ok(super::pages_to_targets(
+            &self.pages(access_token).await?,
+            "page",
+        ))
     }
 
     /// Facebook exposes no member search to a page token, so @-autocomplete

@@ -1168,18 +1168,10 @@ impl SocialProvider for YoutubeProvider {
 
     /// Channels are the posting targets, same listing as `pages()`.
     async fn targets(&self, access_token: &str) -> Result<Vec<TargetInfo>, ProviderError> {
-        Ok(self
-            .pages(access_token)
-            .await?
-            .into_iter()
-            .map(|p| TargetInfo {
-                id: p.id,
-                name: p.name,
-                target_type: "channel".into(),
-                picture: p.picture,
-                metadata: p.username.map(|u| serde_json::json!({ "custom_url": u })),
-            })
-            .collect())
+        Ok(super::pages_to_targets(
+            &self.pages(access_token).await?,
+            "channel",
+        ))
     }
 
     async fn reply_to_comment(

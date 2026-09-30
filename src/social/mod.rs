@@ -896,6 +896,31 @@ pub(crate) fn metrics_series(
         .collect()
 }
 
+/// Reshape a provider's `pages()` listing into TargetPicker targets (v25 §2
+/// row 7).
+///
+/// Facebook Pages, LinkedIn organizations, YouTube channels and Pinterest
+/// boards are all discovered by the same `pages()` call, so each provider only
+/// supplies its own `target_type` instead of re-writing the field mapping.
+/// `PageInfo::username` is the platform's own handle for the target (a FB
+/// username, a LinkedIn vanity name, a YouTube custom URL), published under
+/// the neutral `handle` key so consumers do not branch per platform.
+pub(crate) fn pages_to_targets(pages: &[PageInfo], target_type: &str) -> Vec<TargetInfo> {
+    pages
+        .iter()
+        .map(|p| TargetInfo {
+            id: p.id.clone(),
+            name: p.name.clone(),
+            target_type: target_type.to_string(),
+            picture: p.picture.clone(),
+            metadata: p
+                .username
+                .as_ref()
+                .map(|u| serde_json::json!({ "handle": u })),
+        })
+        .collect()
+}
+
 /// Parse a Meta Graph API comments payload into `CommentData` (v25 §2 row 5).
 ///
 /// Facebook, Instagram, Instagram-standalone and Threads all expose the same
@@ -1767,5 +1792,56 @@ mod insights_tests {
     #[test]
     fn parse_should_read_no_linkedin_connections_from_error_body() {
         assert!(parse_linkedin_connections(&serde_json::json!({ "message": "Not Found" }), "").is_empty());
+    }
+
+    // ── pages_to_targets ─────────────────────────────────────
+
+    fn page(id: &str, name: &str, username: Option<&str>) -> PageInfo {
+        PageInfo {
+            id: id.into(),
+            name: name.into(),
+            access_token: None,
+            picture: None,
+            username: username.map(String::from),
+        }
+    }
+
+    #[test]
+    fn parse_should_map_pages_onto_targets_with_the_given_type() {
+        let targets = pages_to_targets(&[page("p1", "Acme", None)], "page");
+        assert_eq!(targets.len(), 1);
+        assert_eq!(targets[0].id, "p1");
+        assert_eq!(targets[0].name, "Acme");
+        assert_eq!(targets[0].target_type, "page");
+    }
+
+    #[test]
+    fn parse_should_pass_through_the_target_type_each_provider_asks_for() {
+        for (kind, pages) in [
+            ("page", vec![page("p1", "Acme", None)]),
+            ("channel", vec![page("c1", "Rust Lang", None)]),
+            ("board", vec![page("b1", "Recipes", None)]),
+        ] {
+            assert_eq!(pages_to_targets(&pages, kind)[0].target_type, kind);
+        }
+    }
+
+    #[test]
+    fn parse_should_publish_page_username_as_a_handle_in_target_metadata() {
+        // One neutral key for the FB username / LI vanity name / YT custom URL
+        // so TargetPicker does not branch per platform.
+        let targets = pages_to_targets(&[page("p1", "Acme", Some("acme"))], "page");
+        assert_eq!(targets[0].metadata.as_ref().unwrap()["handle"], "acme");
+    }
+
+    #[test]
+    fn parse_should_omit_target_metadata_when_the_page_has_no_username() {
+        let targets = pages_to_targets(&[page("p1", "Acme", None)], "page");
+        assert!(targets[0].metadata.is_none());
+    }
+
+    #[test]
+    fn parse_should_read_no_targets_from_an_empty_page_listing() {
+        assert!(pages_to_targets(&[], "board").is_empty());
     }
 }
