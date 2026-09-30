@@ -296,6 +296,75 @@ pub async fn get_summary(
 #[derive(Debug, Deserialize)]
 pub struct AnalyticsDaysQuery {
     pub days: Option<i32>,
+    /// Optional per-day posting goal. Honored by the endpoints that measure
+    /// against a goal (adherence, cadence); see [`resolve_goal_per_day`].
+    /// Ignored by the endpoints that have no goal notion.
+    pub goal_per_day: Option<f64>,
+}
+
+/// Resolve the per-day posting goal for one request.
+///
+/// Precedence: an explicit `?goal_per_day=N` wins for the current request and
+/// is persisted to `brand_profiles.posts_per_day_goal` (the column exists for
+/// exactly this widget — migration 036) so the goal sticks across requests and
+/// devices instead of living in frontend localStorage. With no param, the
+/// stored value is returned. `None` when neither is set, which preserves the
+/// pre-goal behavior of every caller.
+async fn resolve_goal_per_day(
+    db: &crate::db::PgPool,
+    user_id: Uuid,
+    requested: Option<f64>,
+) -> Option<f64> {
+    // A goal of 0 or negative is meaningless as an adherence basis, so it is
+    // ignored rather than persisted.
+    if let Some(goal) = requested.filter(|g| g.is_finite() && *g > 0.0) {
+        if let Err(e) = sqlx::query(
+            r#"INSERT INTO brand_profiles (user_id, posts_per_day_goal)
+               VALUES ($1, $2)
+               ON CONFLICT (user_id) DO UPDATE
+                   SET posts_per_day_goal = EXCLUDED.posts_per_day_goal,
+                       updated_at = NOW()"#,
+        )
+        .bind(user_id)
+        .bind(goal)
+        .execute(db)
+        .await
+        {
+            // Never fail the read because the goal could not be saved — the
+            // requested goal still applies to this response.
+            tracing::warn!("could not persist goal_per_day: {e}");
+        }
+        return Some(goal);
+    }
+
+    sqlx::query_scalar::<_, Option<f64>>(
+        "SELECT posts_per_day_goal FROM brand_profiles WHERE user_id = $1",
+    )
+    .bind(user_id)
+    .fetch_optional(db)
+    .await
+    .ok()
+    .flatten()
+    .flatten()
+}
+
+/// Adherence percentage for a window.
+///
+/// The expectation is the larger of what was actually planned (`scheduled`) and
+/// what the goal implies over the window, so a plan that sits below the goal
+/// still surfaces the shortfall rather than reporting 100%. With no goal the
+/// expectation is the plan alone — the original rate.
+///
+/// Clamped to 0..=100 because the dashboard renders this value as a bar width.
+fn adherence_percent(scheduled: i64, published: i64, goal: Option<f64>, days: i64) -> f64 {
+    let expected = match goal {
+        Some(g) => (scheduled as f64).max(g * days as f64),
+        None => scheduled as f64,
+    };
+    if expected <= 0.0 {
+        return 100.0;
+    }
+    ((published as f64 / expected) * 100.0).clamp(0.0, 100.0)
 }
 
 #[derive(Debug, Serialize)]
@@ -412,13 +481,18 @@ pub struct AdherenceResponse {
     pub scheduled: i64,
     pub published: i64,
     pub failed: i64,
-    pub adherence_rate: f64, // published / scheduled * 100
+    pub adherence_rate: f64, // published / max(scheduled, goal * days) * 100
 }
 
-/// GET /api/analytics/adherence?days=7
+/// GET /api/analytics/adherence?days=7[&goal_per_day=N]
 ///
 /// Returns scheduled-vs-actual adherence: how many posts were scheduled,
 /// how many actually published, how many failed, and the adherence rate.
+///
+/// `goal_per_day` sets (and persists) the per-day posting goal; the rate is
+/// then measured against the larger of the plan and the goal for the window.
+/// Omitting it uses the stored goal, and with no goal stored the rate is
+/// exactly what it was before goals existed.
 pub async fn get_adherence(
     State(state): State<AppState>,
     auth: AuthenticatedUser,
@@ -441,12 +515,10 @@ pub async fn get_adherence(
     .fetch_one(&state.db)
     .await?;
 
+    let goal = resolve_goal_per_day(&state.db, auth.user_id, query.goal_per_day).await;
+
     let (scheduled, published, failed) = row;
-    let adherence_rate = if scheduled > 0 {
-        (published as f64 / scheduled as f64) * 100.0
-    } else {
-        100.0
-    };
+    let adherence_rate = adherence_percent(scheduled, published, goal, days);
 
     Ok(Json(AdherenceResponse {
         scheduled,
@@ -465,12 +537,12 @@ pub struct CadenceResponse {
     pub by_day: Vec<DayCount>,
 }
 
-/// GET /api/analytics/cadence?days=30
+/// GET /api/analytics/cadence?days=30[&goal_per_day=N]
 ///
-/// Returns posting cadence: posts per day (actual vs goal if set in
-/// brand profile), streak, and per-day breakdown. The "goal" comes
-/// from the brand profile's posting_frequency field (stored in
-/// localStorage on the frontend — TODO: sync to backend in v24).
+/// Returns posting cadence: posts per day (actual vs goal), streak, and
+/// per-day breakdown. The goal comes from the brand profile
+/// (`brand_profiles.posts_per_day_goal`, migration 036); `?goal_per_day=N`
+/// sets and persists it. `None` when no goal was ever set.
 pub async fn get_cadence(
     State(state): State<AppState>,
     auth: AuthenticatedUser,
@@ -503,13 +575,15 @@ pub async fn get_cadence(
     // at least one published post.
     let streak_days = calculate_streak(&state.db, auth.user_id).await;
 
+    let goal = resolve_goal_per_day(&state.db, auth.user_id, query.goal_per_day).await;
+
     let by_day: Vec<DayCount> = day_rows
         .into_iter()
         .map(|(date, count)| DayCount { date, count })
         .collect();
 
     Ok(Json(CadenceResponse {
-        goal_per_day: None, // TODO: read from brand profile when backend-synced
+        goal_per_day: goal,
         actual_per_day,
         streak_days,
         total_posts,
@@ -603,4 +677,38 @@ pub async fn get_recent_events(
     .fetch_all(&state.db)
     .await?;
     Ok(Json(entries))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::adherence_percent;
+
+    #[test]
+    fn no_goal_keeps_plan_only_rate() {
+        // 7 of 10 shipped, nothing scheduled against a goal → 70%.
+        assert_eq!(adherence_percent(10, 7, None, 7), 70.0);
+    }
+
+    #[test]
+    fn no_goal_and_nothing_planned_is_vacuously_full() {
+        assert_eq!(adherence_percent(0, 0, None, 7), 100.0);
+    }
+
+    #[test]
+    fn goal_above_plan_surfaces_the_shortfall() {
+        // Plan of 5 over 7 days, goal of 3/day (21 expected), 7 published.
+        assert!((adherence_percent(5, 7, Some(3.0), 7) - 33.333).abs() < 0.01);
+    }
+
+    #[test]
+    fn plan_above_goal_keeps_plan_as_expectation() {
+        // 12 planned, goal only implies 7 → the plan still wins, 100%.
+        assert_eq!(adherence_percent(12, 12, Some(1.0), 7), 100.0);
+    }
+
+    #[test]
+    fn rate_is_clamped_to_a_renderable_width() {
+        // Goal 1/day over 1 day but 3 published: >100% must not reach the bar.
+        assert_eq!(adherence_percent(3, 3, Some(1.0), 1), 100.0);
+    }
 }
