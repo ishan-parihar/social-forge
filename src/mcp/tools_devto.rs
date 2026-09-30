@@ -80,9 +80,7 @@ pub async fn handle_dv_create_post(
         content: input.content.clone(),
         media: vec![],
         settings,
-    in_reply_to: None,
-    idempotency_key: None,
-    delay_minutes: None,
+        ..Default::default()
     };
 
     let result = provider

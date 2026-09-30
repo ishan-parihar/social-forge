@@ -1049,9 +1049,7 @@ async fn publish_post(
                             content: comment_text.clone(),
                             media: vec![],
                             settings: serde_json::json!({}),
-                            in_reply_to: None,
-                            idempotency_key: None,
-                            delay_minutes: None,
+                            ..Default::default()
                         };
                         if let Err(e) = provider.comment(
                             &access_token,

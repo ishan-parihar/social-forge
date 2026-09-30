@@ -75,6 +75,7 @@ fn test_whatsapp_provider_metadata() {
         content: "Hello WhatsApp".into(),
         media: vec![],
         settings: serde_json::json!({}),
+        ..Default::default()
     };
     let publish = rt.block_on(wa.publish("test-jid", &post));
     assert!(publish.is_err(), "publish without daemon should fail");

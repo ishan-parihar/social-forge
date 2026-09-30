@@ -222,6 +222,7 @@ async fn test_ias_social_provider_publish_with_bad_token() {
             poster_url: None,
         }],
         settings: serde_json::Value::Object(serde_json::Map::new()),
+        ..Default::default()
     };
 
     let result = provider.publish(BAD_TOKEN, &post).await;
@@ -399,6 +400,7 @@ async fn test_threads_social_provider_publish_with_bad_token() {
         content: "Test post from social-forge integration test".into(),
         media: vec![],
         settings: serde_json::Value::Object(serde_json::Map::new()),
+        ..Default::default()
     };
 
     let result = provider.publish(BAD_TOKEN, &post).await;
@@ -535,6 +537,7 @@ async fn test_linkedin_publish_with_bad_token() {
         content: "Test LinkedIn post from integration test".into(),
         media: vec![],
         settings: serde_json::Value::Object(serde_json::Map::new()),
+        ..Default::default()
     };
 
     let result = provider.publish(LINKEDIN_BAD_TOKEN, &post).await;

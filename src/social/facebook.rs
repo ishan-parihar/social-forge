@@ -1269,9 +1269,7 @@ mod tests {
                 })
                 .collect(),
             settings: serde_json::json!({}),
-            in_reply_to: None,
-            idempotency_key: None,
-            delay_minutes: None,
+            ..Default::default()
         }
     }
 

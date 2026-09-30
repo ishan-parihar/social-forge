@@ -62,7 +62,7 @@ pub struct AuthToken {
     pub picture: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 pub struct PostContent {
     pub content: String,
     pub media: Vec<MediaAttachment>,

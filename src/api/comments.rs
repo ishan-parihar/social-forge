@@ -155,9 +155,7 @@ pub async fn reply(
             content: body.content.clone(),
             media: vec![],
             settings: serde_json::json!({}),
-            in_reply_to: None,
-            idempotency_key: None,
-            delay_minutes: None
+            ..Default::default()
         };
         provider.reply_to_comment(&access_token, &comment_id, &content)
             .await
@@ -200,9 +198,7 @@ pub async fn reply(
                     content: body.content.clone(),
                     media: vec![],
                     settings: serde_json::json!({}),
-                in_reply_to: None,
-                idempotency_key: None,
-            delay_minutes: None
+                    ..Default::default()
                 };
                 provider.reply_to_comment(&access_token, &comment_id, &content)
                     .await

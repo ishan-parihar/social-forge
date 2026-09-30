@@ -326,6 +326,7 @@ async fn test_linkedin_mcp_tool_handler_full_chain() {
         content: "End-to-end test post".into(),
         media: vec![],
         settings: serde_json::Value::Object(serde_json::Map::new()),
+        ..Default::default()
     };
 
     // With a bad token, should return TokenExpired
@@ -353,11 +354,12 @@ async fn test_linkedin_mcp_tool_handler_full_chain() {
         content: "End-to-end page test post".into(),
         media: vec![],
         settings: serde_json::Value::Object(serde_json::Map::new()),
+        ..Default::default()
     };
     let lip_result = lip_provider.publish("INVALID_TOKEN", &lip_post).await;
     assert!(lip_result.is_err(), "Page publish with invalid token should fail");
     let lip_err = lip_result.unwrap_err();
-    assert!(lip_format!("{err}").contains("token") || format!("{err}").contains("expired") || format!("{err}").contains("401") || format!("{lip_err}").contains("error"),
+    assert!(format!("{lip_err}").contains("token") || format!("{lip_err}").contains("expired") || format!("{lip_err}").contains("401") || format!("{lip_err}").contains("error"),
         "Should get TokenExpired or API error: {lip_err}");
 
     println!("✅ LinkedIn MCP tool handler full chain verified");
@@ -533,6 +535,7 @@ async fn test_linkedin_publish_full_flow() {
             content: "E2E test - personal publish".into(),
             media: vec![],
             settings: serde_json::Value::Object(serde_json::Map::new()),
+            ..Default::default()
         };
         let result = provider.publish("BAD_TOKEN", &post).await;
         assert!(result.is_err(), "Personal publish with bad token should fail");
@@ -546,6 +549,7 @@ async fn test_linkedin_publish_full_flow() {
             content: "E2E test - page publish".into(),
             media: vec![],
             settings: serde_json::Value::Object(serde_json::Map::new()),
+            ..Default::default()
         };
         let result = provider.publish("BAD_TOKEN", &post).await;
         assert!(result.is_err(), "Page publish with bad token should fail");
@@ -561,6 +565,7 @@ async fn test_linkedin_publish_full_flow() {
             content: "".into(), // LinkedIn allows non-empty but SocialProvider doesn't validate emptiness
             media: vec![],
             settings: serde_json::Value::Object(serde_json::Map::new()),
+            ..Default::default()
         };
 
         // Empty content should at least fail at API call (not crash)
@@ -573,6 +578,7 @@ async fn test_linkedin_publish_full_flow() {
             content: long_content,
             media: vec![],
             settings: serde_json::Value::Object(serde_json::Map::new()),
+            ..Default::default()
         };
         let validation = provider.validate_post(&long_post);
         assert!(validation.is_err(), "Content exceeding max_length should fail validation");

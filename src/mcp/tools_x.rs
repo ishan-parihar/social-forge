@@ -624,9 +624,7 @@ pub async fn x_create_tweet(
         content: input.content.clone(),
         media,
         settings: serde_json::json!({}),
-    in_reply_to: None,
-    idempotency_key: None,
-    delay_minutes: None,
+        ..Default::default()
     };
 
     let result = provider
@@ -652,9 +650,7 @@ pub async fn x_reply_tweet(
         content: input.content.clone(),
         media: vec![],
         settings: serde_json::json!({}),
-    in_reply_to: None,
-    idempotency_key: None,
-    delay_minutes: None,
+        ..Default::default()
     };
     let result = provider
         .reply_to_comment(&token, &input.tweet_id, &post_content)
@@ -689,9 +685,7 @@ pub async fn x_send_dm(
         content: input.content.clone(),
         media: vec![],
         settings: serde_json::json!({}),
-    in_reply_to: None,
-    idempotency_key: None,
-    delay_minutes: None,
+        ..Default::default()
     };
     let result = provider
         .send_dm(&token, &input.recipient_id, &post_content)

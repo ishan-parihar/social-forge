@@ -81,9 +81,7 @@ pub async fn handle_sl_send_message(
         settings: json!({
             "channel": input.channel,
         }),
-    in_reply_to: None,
-    idempotency_key: None,
-    delay_minutes: None,
+        ..Default::default()
     };
 
     let result = provider

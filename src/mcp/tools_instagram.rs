@@ -487,9 +487,7 @@ pub async fn handle_ig_send_dm(
         content: input.content.clone(),
         media: vec![],
         settings: serde_json::json!({}),
-    in_reply_to: None,
-    idempotency_key: None,
-    delay_minutes: None,
+        ..Default::default()
     };
     let result = provider.send_dm(&token, &input.recipient_id, &post).await
         .map_err(|e| format!("Instagram send DM failed: {e}"))?;

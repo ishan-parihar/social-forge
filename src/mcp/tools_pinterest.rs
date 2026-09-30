@@ -252,9 +252,7 @@ pub async fn handle_pi_create_pin(
         content: input.content.clone(),
         media,
         settings,
-    in_reply_to: None,
-    idempotency_key: None,
-    delay_minutes: None,
+        ..Default::default()
     };
 
     let result = provider

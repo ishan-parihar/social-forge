@@ -1278,9 +1278,7 @@ fn validate_posts_for_integrations(
             content: clean.to_string(),
             media: media.to_vec(),
             settings: settings.clone(),
-            in_reply_to: None,
-            idempotency_key: None,
-            delay_minutes: None
+            ..Default::default()
         };
 
         if let Err(e) = crate::social::validate_media_limits(&integ.provider_identifier, &post_content) {
