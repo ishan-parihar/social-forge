@@ -8,6 +8,7 @@ pub mod crypto;
 pub mod db;
 pub mod error;
 pub mod feed;
+pub mod lease;
 pub mod mcp;
 pub mod realtime;
 pub mod rss;

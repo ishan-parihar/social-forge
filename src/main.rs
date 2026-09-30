@@ -87,6 +87,18 @@ async fn main() -> anyhow::Result<()> {
         tracing::warn!("Failed to ensure local user row: {e} — DB inserts may fail");
     }
 
+    // ── Leader election ──────────────────────────────────────
+    // Several replicas may share this database, but the six background
+    // pollers must run on exactly one of them — N replicas otherwise mean
+    // N concurrent publishes and N× the platform API traffic. A follower
+    // still serves the full REST + MCP surface; it just doesn't poll.
+    // With a single instance this always resolves to leader, so behavior is
+    // unchanged.
+    let leader_lease = social_forge::lease::try_acquire_leader(&db)
+        .await
+        .context("Failed to acquire scheduler lease")?;
+    let is_leader = leader_lease.is_some();
+
     // ── Realtime broadcaster ──────────────────────────────────
     let broadcaster = Broadcaster::new();
 
@@ -184,62 +196,74 @@ async fn main() -> anyhow::Result<()> {
     let state_for_mcp = state.clone();
 
     // ── Start scheduler ───────────────────────────────────────
+    // The six pollers below are leader-only. Loop bodies are untouched —
+    // this is the single gate that decides who runs them.
     let (shutdown_tx, _) = tokio::sync::watch::channel(false);
-    let scheduler_rx = shutdown_tx.subscribe();
-    scheduler::start_scheduler(
-        db.clone(),
-        providers_arc.clone(),
-        broadcaster.clone(),
-        token_key,
-        scheduler_rx,
-    );
+    if is_leader {
+        let scheduler_rx = shutdown_tx.subscribe();
+        scheduler::start_scheduler(
+            db.clone(),
+            providers_arc.clone(),
+            broadcaster.clone(),
+            token_key,
+            scheduler_rx,
+        );
 
-    // ── Start RSS poller ─────────────────────────────────────
-    let rss_rx = shutdown_tx.subscribe();
-    rss::start_rss_poller(
-        db.clone(),
-        providers_arc.clone(),
-        Arc::new(config.clone()),
-        rss_rx,
-    );
+        // ── Start RSS poller ─────────────────────────────────────
+        let rss_rx = shutdown_tx.subscribe();
+        rss::start_rss_poller(
+            db.clone(),
+            providers_arc.clone(),
+            Arc::new(config.clone()),
+            rss_rx,
+        );
 
-    // ── Start analytics cache refresh ─────────────────────────
-    let cache_db = db.clone();
-    let cache_providers = providers_arc.clone();
-    let cache_shutdown = shutdown_tx.subscribe();
-    let cache_token_key = token_key;
-    tokio::spawn(async move {
-        scheduler::run_analytics_cache_refresh(
-            cache_db,
-            cache_providers,
-            cache_token_key,
-            cache_shutdown,
-        )
-        .await;
-    });
+        // ── Start analytics cache refresh ─────────────────────────
+        let cache_db = db.clone();
+        let cache_providers = providers_arc.clone();
+        let cache_shutdown = shutdown_tx.subscribe();
+        let cache_token_key = token_key;
+        tokio::spawn(async move {
+            scheduler::run_analytics_cache_refresh(
+                cache_db,
+                cache_providers,
+                cache_token_key,
+                cache_shutdown,
+            )
+            .await;
+        });
 
-    // ── Start feed refresher ────────────────────────────────────
-    let feed_rx = shutdown_tx.subscribe();
-    social_forge::feed::start_feed_refresher(
-        db.clone(),
-        providers_arc.clone(),
-        broadcaster.clone(),
-        token_key,
-        feed_rx,
-    );
+        // ── Start feed refresher ────────────────────────────────────
+        let feed_rx = shutdown_tx.subscribe();
+        social_forge::feed::start_feed_refresher(
+            db.clone(),
+            providers_arc.clone(),
+            broadcaster.clone(),
+            token_key,
+            feed_rx,
+        );
 
-    // ── Start streak reset checker ────────────────────────────
-    let streak_rx = shutdown_tx.subscribe();
-    scheduler::start_streak_reset(db.clone(), streak_rx);
+        // ── Start streak reset checker ────────────────────────────
+        let streak_rx = shutdown_tx.subscribe();
+        scheduler::start_streak_reset(db.clone(), streak_rx);
 
-    // ── Start plug runner (outbound post-publish automations) ──
-    let plug_rx = shutdown_tx.subscribe();
-    social_forge::services::plugs::start_plug_runner(
-        db.clone(),
-        providers_arc.clone(),
-        token_key,
-        plug_rx,
-    );
+        // ── Start plug runner (outbound post-publish automations) ──
+        let plug_rx = shutdown_tx.subscribe();
+        social_forge::services::plugs::start_plug_runner(
+            db.clone(),
+            providers_arc.clone(),
+            token_key,
+            plug_rx,
+        );
+    } else {
+        tracing::info!(
+            "Standby instance: REST + MCP served, 6 background pollers not started \
+             (another replica holds the scheduler lease)"
+        );
+    }
+    // The lease is held for the process lifetime: dropping it would release
+    // the advisory lock and let a second replica start polling alongside us.
+    let _leader_lease = leader_lease;
 
     // ── Build HTTP router ─────────────────────────────────────
     let app = api::build_router(state);
