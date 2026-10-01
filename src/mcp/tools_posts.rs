@@ -428,7 +428,7 @@ pub async fn stage_post(
 
     crate::services::staging::validate_staging_request(&request)?;
 
-    let result = crate::services::staging::stage_post(&state.db, user_id, request).await?;
+    let result = crate::services::staging::stage_post(&state.db, &state.providers, user_id, request).await?;
 
     let staged = result.staged.into_iter().map(|s| StagedPostInfo {
         post_id: s.post_id.to_string(),

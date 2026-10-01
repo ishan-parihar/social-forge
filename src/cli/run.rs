@@ -129,6 +129,58 @@ pub(crate) fn pick_target_interactive(targets: &[TargetInfo], provider: &str) ->
     Ok(targets[choice - 1].id.clone())
 }
 
+// ── Platform → integration targeting ──────────────────────────
+
+/// Provider identifiers that are a strict prefix of another registered
+/// provider. `--platforms instagram` used to match BOTH `instagram` and
+/// `instagram-standalone` (and `--platforms linkedin` both `linkedin` and
+/// `linkedin-page`), which silently staged TWO drafts per target — the
+/// double-draft bug. Reported by `social-forge audit`.
+pub const PLATFORM_COLLISIONS: &[(&str, &str)] = &[
+    ("instagram", "instagram-standalone"),
+    ("linkedin", "linkedin-page"),
+];
+
+/// Resolve a `--platforms` list to integration IDs.
+///
+/// Exact identifier match always wins. A prefix match (`telegram` →
+/// `telegram-bot` / `telegram-user`) applies ONLY to names that have no exact
+/// match, so a real provider is never shadowed by its own `-suffix` variant.
+/// See [`PLATFORM_COLLISIONS`].
+pub(crate) fn resolve_platform_integrations<'a, I>(
+    integrations: I,
+    platforms: &str,
+) -> Vec<Uuid>
+where
+    I: Iterator<Item = &'a crate::db::models::Integration>,
+{
+    let all: Vec<&crate::db::models::Integration> = integrations.collect();
+    let requested: Vec<&str> = platforms
+        .split(',')
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .collect();
+    let exact: Vec<&str> = requested
+        .iter()
+        .copied()
+        .filter(|p| all.iter().any(|i| i.provider_identifier == *p))
+        .collect();
+
+    all.iter()
+        .filter(|i| {
+            requested.iter().any(|p| {
+                if i.provider_identifier == *p {
+                    return true;
+                }
+                // Prefix fallback, but never for a name that resolved exactly
+                // to a different provider.
+                !exact.contains(p) && i.provider_identifier.starts_with(&format!("{p}-"))
+            })
+        })
+        .map(|i| i.id)
+        .collect()
+}
+
 // ── Lightweight State Init ───────────────────────────────────
 
 async fn init_state() -> anyhow::Result<AppState> {
@@ -261,35 +313,384 @@ pub(crate) async fn find_facebook_page_token(state: &AppState, user_id: Uuid, pa
     Ok(token)
 }
 
+// ── Audit Handler ────────────────────────────────────────────
+
+/// Read-only health audit for the two failure modes that are invisible from
+/// the happy path: integrations that exist but are disabled (so drafts can
+/// never publish), and platform names that fan out to more than one provider
+/// (so `--platforms X` stages two drafts). Also reports the live
+/// single-writer/busy-timeout posture of the SQLite pool.
+async fn handle_audit_with_state(state: &AppState) -> anyhow::Result<()> {
+    let user_id = resolve_user(state).await?;
+    let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
+
+    let disabled: Vec<serde_json::Value> = integrations
+        .iter()
+        .filter(|i| i.disabled)
+        .map(|i| {
+            serde_json::json!({
+                "provider": i.provider_identifier,
+                "name": i.profile_name,
+                "integration_id": i.id.to_string(),
+                "impact": "drafts staged against this integration cannot publish",
+            })
+        })
+        .collect();
+    let enabled: Vec<&str> = integrations
+        .iter()
+        .filter(|i| !i.disabled)
+        .map(|i| i.provider_identifier.as_str())
+        .collect();
+
+    // Which connected providers would a bare `--platforms X` fan out to.
+    let collisions: Vec<serde_json::Value> = PLATFORM_COLLISIONS
+        .iter()
+        .map(|(base, variant)| {
+            let base_connected = integrations
+                .iter()
+                .any(|i| i.provider_identifier == *base && !i.disabled);
+            let variant_connected = integrations
+                .iter()
+                .any(|i| i.provider_identifier == *variant && !i.disabled);
+            serde_json::json!({
+                "platform": base,
+                "also_matches": variant,
+                "connected": [base_connected, variant_connected],
+                "both_connected": base_connected && variant_connected,
+                "guidance": format!(
+                    "--platforms {base} targets ONLY {base}. To target both, pass \
+                     --platforms {base},{variant} — or use --integrations <uuid,...> \
+                     to pick exact integrations."
+                ),
+            })
+        })
+        .collect();
+    let live_collisions = collisions
+        .iter()
+        .filter(|c| c["both_connected"] == serde_json::json!(true))
+        .count();
+
+    // Live single-writer posture, read back from the open pool.
+    let (journal_mode, busy_timeout_ms): (String, i64) = sqlx::query_as(
+        "SELECT (SELECT * FROM pragma_journal_mode) AS jm, \
+         (SELECT * FROM pragma_busy_timeout) AS bt",
+    )
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or_else(|e| (format!("unavailable: {e}"), -1));
+
+    let findings: Vec<serde_json::Value> = [
+        if disabled.is_empty() {
+            serde_json::json!({"id": "disabled_integrations", "status": "ok",
+                "detail": "no disabled integrations"})
+        } else {
+            serde_json::json!({"id": "disabled_integrations", "status": "warn",
+                "detail": format!("{} integration(s) disabled=1 — drafts against them will not publish",
+                    disabled.len()),
+                "integration_ids": disabled.iter().map(|d| d["integration_id"].clone()).collect::<Vec<_>>()})
+        },
+        if live_collisions == 0 {
+            serde_json::json!({"id": "platform_collisions", "status": "ok",
+                "detail": "no prefix-colliding platform pair is simultaneously connected"})
+        } else {
+            serde_json::json!({"id": "platform_collisions", "status": "warn",
+                "detail": format!("{live_collisions} colliding pair(s) both connected — \
+                    name the variant explicitly or use --integrations")})
+        },
+        if busy_timeout_ms >= 1000 {
+            serde_json::json!({"id": "writer_discipline", "status": "ok",
+                "detail": format!("journal_mode={journal_mode} busy_timeout={busy_timeout_ms}ms max_connections=1")})
+        } else {
+            serde_json::json!({"id": "writer_discipline", "status": "fail",
+                "detail": format!("busy_timeout={busy_timeout_ms}ms — concurrent writers will fail fast with SQLITE_BUSY")})
+        },
+    ]
+    .into_iter()
+    .collect();
+
+    let warn_count = findings
+        .iter()
+        .filter(|f| f["status"] != "ok")
+        .count();
+
+    output_json(&serde_json::json!({
+        "status": if warn_count == 0 { "clean" } else { "warn" },
+        "findings": findings,
+        "counts": {
+            "integrations": integrations.len(),
+            "enabled": enabled.len(),
+            "disabled": disabled.len(),
+            "colliding_pairs_both_connected": live_collisions,
+        },
+        "disabled_integrations": disabled,
+        "enabled_providers": enabled,
+        "platform_collisions": collisions,
+        "writer_discipline": {
+            "max_connections": 1,
+            "journal_mode": journal_mode,
+            "busy_timeout_ms": busy_timeout_ms,
+            "note": "SQLite is single-writer. Run one long-lived process (serve or mcp) \
+                     per database; short CLI invocations are fine alongside it.",
+        },
+        "help": [
+            "Run 'social-forge providers' for the full integration list",
+            "Pass --integrations <uuid,...> to target an exact integration",
+        ],
+    }));
+    Ok(())
+}
+
 // ── Providers / Connect ──────────────────────────────────────
+
+/// Timestamp for the readiness matrix. ISO-8601 UTC so an agent can diff two
+/// runs without parsing.
+fn checked_at() -> String {
+    chrono::Utc::now().to_rfc3339()
+}
+
+/// The two readiness flags that need no network and no credential.
+///
+/// `live_verified` is deliberately absent: it is only ever set from an
+/// authenticated round-trip, so there is no code path where a provider looks
+/// verified because a flag was on disk. Returns `(draft_ok, publish_capable,
+/// reason_when_not_publish_capable)`.
+fn readiness_flags(
+    registry: &ProviderRegistry,
+    provider_id: &str,
+) -> (bool, bool, Option<String>) {
+    let Some(provider) = registry.get(provider_id) else {
+        return (
+            false,
+            false,
+            Some(format!(
+                "{provider_id} is not registered in this build — nothing can publish to it"
+            )),
+        );
+    };
+    let publish_capable = provider.publish_capable();
+    (
+        true,
+        publish_capable,
+        (!publish_capable).then(|| {
+            format!(
+                "{provider_id} has no post-publish surface (content limit 0) — staged drafts \
+                 are stored but never go live"
+            )
+        }),
+    )
+}
+
+/// Env var names each provider reads. Names only.
+///
+/// The audit reports *where* a credential comes from so a "configured"
+/// claim can be traced to the DB row or the env file it was read from,
+/// without this function ever returning a value to the caller.
+fn credential_env_names(provider_id: &str) -> &'static [&'static str] {
+    match provider_id {
+        "x" => &["X_CLIENT_ID", "X_CLIENT_SECRET", "X_AUTH_TOKEN", "X_CT0"],
+        "linkedin" | "linkedin-page" => &["LINKEDIN_CLIENT_ID", "LINKEDIN_CLIENT_SECRET"],
+        "bluesky" => &["BLUESKY_HANDLE", "BLUESKY_APP_PASSWORD"],
+        "facebook" | "instagram" => &["FACEBOOK_CLIENT_ID", "FACEBOOK_CLIENT_SECRET"],
+        "instagram-standalone" => &["INSTAGRAM_APP_ID", "INSTAGRAM_APP_SECRET"],
+        "threads" => &["THREADS_APP_ID", "THREADS_APP_SECRET"],
+        "reddit" => &[
+            "REDDIT_CLIENT_ID",
+            "REDDIT_CLIENT_SECRET",
+            "REDDIT_USERNAME",
+            "REDDIT_PASSWORD",
+            "REDDIT_ACCESS_TOKEN",
+            "REDDIT_REFRESH_TOKEN",
+        ],
+        "youtube" | "google" | "google_my_business" => &["YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET"],
+        "discord" => &["DISCORD_CLIENT_ID", "DISCORD_CLIENT_SECRET", "DISCORD_BOT_TOKEN"],
+        "telegram-bot" => &["TELEGRAM_BOT_TOKENS"],
+        "telegram-user" => &["TELEGRAM_API_ID", "TELEGRAM_API_HASH", "TELEGRAM_SESSION_DIR"],
+        "pinterest" => &["PINTEREST_CLIENT_ID", "PINTEREST_CLIENT_SECRET"],
+        "tiktok" => &["TIKTOK_CLIENT_ID", "TIKTOK_CLIENT_SECRET"],
+        "mastodon" => &[
+            "MASTODON_CLIENT_ID",
+            "MASTODON_CLIENT_SECRET",
+            "MASTODON_INSTANCE_URL",
+        ],
+        "medium" => &["MEDIUM_ACCESS_TOKEN"],
+        "devto" => &["DEVTO_API_KEY"],
+        "hashnode" => &["HASHNODE_API_KEY"],
+        "github" => &["GITHUB_TOKEN"],
+        "whatsapp" => &["WHATSAPP_STORE_DIR"],
+        "slack" => &["SLACK_CLIENT_ID", "SLACK_CLIENT_SECRET"],
+        _ => &[],
+    }
+}
+
+/// Resolution order is DB row → browser extraction → env, so a connected
+/// account with env vars also set reports `db`: the token actually used is
+/// the one in the row.
+fn credential_source(provider_id: &str, db_rows: usize, config: &Config) -> &'static str {
+    if db_rows > 0 {
+        "db"
+    } else if config.provider_credentials(provider_id).is_some() {
+        "env"
+    } else {
+        "none"
+    }
+}
+
+/// Pre-check stored media against APP_URL reachability.
+///
+/// Fails fast, and structurally: no server is started and no request is made.
+/// The failure this exists to catch — a platform that cannot fetch
+/// `http://localhost:6543/api/media/<id>` — is decided by the URL shape, not
+/// by whether anything answers right now, so a network probe would only add
+/// a way to be wrong.
+async fn media_preflight(
+    state: &AppState,
+    user_id: Uuid,
+    integrations: &[Integration],
+) -> serde_json::Value {
+    let app_url = state.config.app_url.trim_end_matches('/').to_string();
+    let app_host = url::Url::parse(&app_url)
+        .ok()
+        .and_then(|u| u.host_str().map(str::to_string));
+    // An unparseable APP_URL is treated as local: that is the safe direction,
+    // since it must not be reported as publicly reachable.
+    let app_public = app_host
+        .as_deref()
+        .is_some_and(|h| !crate::social::is_host_local(h));
+
+    let fetchers: Vec<&str> = integrations
+        .iter()
+        .map(|i| i.provider_identifier.as_str())
+        .filter(|p| crate::social::fetches_media_server_side(p))
+        .collect();
+    let media_count = crate::db::queries::list_media(&state.db, user_id, 200, 0, None)
+        .await
+        .map(|m| m.len())
+        .unwrap_or(0);
+
+    let mut problems: Vec<serde_json::Value> = Vec::new();
+    if media_count > 0 && !fetchers.is_empty() {
+        if !app_public {
+            problems.push(serde_json::json!({
+                "kind": "app_url_not_public",
+                "detail": format!(
+                    "{media_count} media object(s) stored and {} fetch media server-side, but \
+                     APP_URL is `{app_url}` — a host-local address the platform cannot reach",
+                    fetchers.join(", ")
+                ),
+                "fix": "Set APP_URL to a publicly reachable https:// URL (tunnel or reverse \
+                        proxy) and restart; media URLs are built as {APP_URL}/api/media/{id}",
+            }));
+        }
+        problems.push(serde_json::json!({
+            "kind": "relative_media_url",
+            "detail": format!(
+                "stored media is served as the relative path `/api/media/{{id}}`; server-side \
+                 fetchers receive it verbatim and cannot resolve it against {app_url}"
+            ),
+            "fix": "pass absolute https:// URLs in the post's media array, or serve uploads from a \
+                    public host",
+        }));
+    }
+
+    let ok = problems.is_empty();
+    serde_json::json!({
+        "status": if ok { "ok" } else { "unreachable" },
+        "ok": ok,
+        "checked_at": checked_at(),
+        "app_url": app_url,
+        "app_host": app_host,
+        "app_url_public": app_public,
+        "media_objects": media_count,
+        "server_fetch_providers": fetchers,
+        "problems": problems,
+    })
+}
 
 async fn handle_providers_with_state(state: &AppState) -> anyhow::Result<()> {let user_id = resolve_user(&state).await?;
     let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
-    let list: Vec<serde_json::Value> = integrations.iter().map(|i| {
-        serde_json::json!({
+    let db_counts: std::collections::HashMap<&str, usize> = integrations.iter().fold(
+        std::collections::HashMap::new(),
+        |mut acc: std::collections::HashMap<&str, usize>, i| {
+            *acc.entry(i.provider_identifier.as_str()).or_default() += 1;
+            acc
+        },
+    );
+
+    // `configured` was the only word this surface had, and it is the wrong
+    // one: a row in `integrations` proves a form was filled in, not that the
+    // token authenticates. Each row now separates what the build knows
+    // (draft_ok / publish_capable) from what only a live call can prove
+    // (live_verified), and this command makes no calls — so
+    // `live_verified` is always false here with a reason, never guessed.
+    let started_at = checked_at();
+    let mut list: Vec<serde_json::Value> = Vec::new();
+    for i in &integrations {
+        let (draft_ok, publish_capable, reason) = readiness_flags(&state.providers, &i.provider_identifier);
+        let mut row = serde_json::json!({
             "provider": i.provider_identifier,
             "name": i.profile_name,
             "internal_id": i.internal_id,
             "disabled": i.disabled,
-        })
-    }).collect();
+            "draft_ok": draft_ok,
+            "publish_capable": publish_capable,
+            "live_verified": false,
+            "live_verified_at": serde_json::Value::Null,
+            "checked_at": started_at,
+            "credential_source": credential_source(
+                &i.provider_identifier,
+                db_counts.get(i.provider_identifier.as_str()).copied().unwrap_or(0),
+                &state.config,
+            ),
+        });
+        if let Some(reason) = reason {
+            row["reason"] = serde_json::Value::String(reason);
+        }
+        list.push(row);
+    }
     let active = list.iter().filter(|p| p["disabled"] != true).count();
     let disabled = list.len() - active;
-    // AXI §5: Definitive empty state
+    let draft_ok = list.iter().filter(|p| p["draft_ok"] == true).count();
+    let publish_capable = list.iter().filter(|p| p["publish_capable"] == true).count();
+    // AXI §5: Definitive empty state. An empty list here means "no account is
+    // connected", which is the single most common reason a publish silently
+    // does nothing — so it is a warning, not just a message.
     if list.is_empty() {
         output_json(&serde_json::json!({
             "providers": [],
             "count": 0,
+            "draft_ok": 0,
+            "publish_capable": 0,
+            "live_verified": 0,
+            "warnings": ["No provider is connected: a staged post has nowhere to go. \
+                          Run 'social-forge connect <provider>' or visit /setup."],
             "message": "No providers connected. Run 'social-forge connect <provider>' or visit /setup to get started.",
             "help": "Run 'social-forge connect --help' to see all supported providers.",
         }));
     } else {
+        let mut warnings: Vec<String> = Vec::new();
+        if publish_capable < list.len() {
+            warnings.push(format!(
+                "{}/{} connected account(s) have no post-publish surface — drafts stored \
+                 against them will never go live.",
+                list.len() - publish_capable,
+                list.len()
+            ));
+        }
+        warnings.push(
+            "live_verified is false for every row: this command makes no platform calls. \
+             Run 'social-forge doctor' for an authenticated round-trip."
+                .into(),
+        );
         // AXI §4: Pre-computed aggregates
         output_json(&serde_json::json!({
             "count": list.len(),
             "active": active,
             "disabled": disabled,
+            "draft_ok": draft_ok,
+            "publish_capable": publish_capable,
+            "live_verified": 0,
             "providers": list,
+            "warnings": warnings,
         }));
     }
     Ok(())
@@ -814,6 +1215,7 @@ async fn handle_doctor_with_state(state: &AppState) -> anyhow::Result<()> {let u
         .await
         .map_err(|e| anyhow::anyhow!("Failed to list integrations: {e}"))?;
 
+    let started_at = checked_at();
     let mut checks: Vec<serde_json::Value> = Vec::new();
 
     // Check each connected provider by making a lightweight API call
@@ -824,11 +1226,18 @@ async fn handle_doctor_with_state(state: &AppState) -> anyhow::Result<()> {let u
 
         let (status, detail) = match provider_id.as_str() {
             "x" => {
-                let mut p = crate::social::x::XProvider::new(&state.config);
-                p.prepare_from_token(&token);
-                match p.get_me(&token).await {
-                    Ok(_) => ("healthy".to_string(), None),
-                    Err(e) => ("error".to_string(), Some(format!("{e}"))),
+                // `prepare_from_token` silently no-ops on anything that is not
+                // a cookie pair, which then surfaces as an opaque HTTP error
+                // from GraphQL. Name the actual cause instead.
+                if !crate::social::x::XProvider::is_cookie_auth_static(&token) {
+                    ("error".to_string(), Some("stored token is not an X cookie pair — it must carry both auth_token and ct0. Re-import with 'social-forge connect x'".to_string()))
+                } else {
+                    let mut p = crate::social::x::XProvider::new(&state.config);
+                    p.prepare_from_token(&token);
+                    match p.get_me(&token).await {
+                        Ok(_) => ("healthy".to_string(), None),
+                        Err(e) => ("error".to_string(), Some(format!("{e}"))),
+                    }
                 }
             }
             "reddit" => {
@@ -837,6 +1246,38 @@ async fn handle_doctor_with_state(state: &AppState) -> anyhow::Result<()> {let u
                 match p.get_www("/api/me.json", &[]).await {
                     Ok(_) => ("healthy".to_string(), None),
                     Err(e) => ("error".to_string(), Some(format!("{e}"))),
+                }
+            }
+            "github" => {
+                // GITHUB_TOKEN was never read back, so a configured-but-dead
+                // PAT reported as healthy for as long as it stayed in the env
+                // file. `/user` is the cheapest call that proves the token
+                // authenticates; fall back to config because the provider
+                // itself sources the PAT from env, not from the DB row.
+                let pat = if token.is_empty() {
+                    state.config.github_token.clone().unwrap_or_default()
+                } else {
+                    token.clone()
+                };
+                if pat.is_empty() {
+                    ("error".to_string(), Some("no GitHub PAT found — set GITHUB_TOKEN in ~/.social-forge/.env".to_string()))
+                } else {
+                    let url = "https://api.github.com/user";
+                    match reqwest::Client::new()
+                        .get(url)
+                        .header("Authorization", format!("Bearer {pat}"))
+                        .header("Accept", "application/vnd.github+json")
+                        .header("User-Agent", "social-forge-doctor")
+                        .send().await
+                    {
+                        Ok(r) if r.status().is_success() => ("healthy".to_string(), None),
+                        Ok(r) => {
+                            let status = r.status();
+                            let body = r.text().await.unwrap_or_default();
+                            ("error".to_string(), Some(format!("HTTP {}: {}", status, body.chars().take(200).collect::<String>())))
+                        }
+                        Err(e) => ("error".to_string(), Some(format!("{e}"))),
+                    }
                 }
             }
             "linkedin" => {
@@ -877,17 +1318,31 @@ async fn handle_doctor_with_state(state: &AppState) -> anyhow::Result<()> {let u
                     Err(e) => ("error".to_string(), Some(format!("{e}"))),
                 }
             }
-            _ => ("skipped".to_string(), Some("No health check available for this provider".to_string())),
+            _ => ("unverified".to_string(), Some("No live health check exists for this provider — its credential is unread, not proven".to_string())),
         };
 
+        let live_verified = status == "healthy";
+        let (draft_ok, publish_capable, reason) = readiness_flags(&state.providers, provider_id);
         let mut check = serde_json::json!({
             "provider": provider_id,
             "name": name,
             "internal_id": integration.internal_id,
             "status": status,
+            "draft_ok": draft_ok,
+            "publish_capable": publish_capable,
+            "live_verified": live_verified,
+            "live_verified_at": if live_verified {
+                serde_json::Value::String(started_at.clone())
+            } else {
+                serde_json::Value::Null
+            },
+            "checked_at": started_at,
         });
         if let Some(d) = detail {
             check["detail"] = serde_json::Value::String(d);
+        }
+        if let Some(r) = reason {
+            check["reason"] = serde_json::Value::String(r);
         }
         checks.push(check);
     }
@@ -911,13 +1366,95 @@ async fn handle_doctor_with_state(state: &AppState) -> anyhow::Result<()> {let u
 
     let healthy = checks.iter().filter(|c| c["status"] == "healthy").count();
     let errored = checks.iter().filter(|c| c["status"] == "error").count();
+    let live_verified = checks.iter().filter(|c| c["live_verified"] == true).count();
+    let unverified = checks.iter().filter(|c| c["live_verified"] != true).count();
+    let draft_ok = checks.iter().filter(|c| c["draft_ok"] == true).count();
+    let publish_capable = checks.iter().filter(|c| c["publish_capable"] == true).count();
+
+    // ── Credential audit (names only) ───────────────────────────
+    // `configured` could never be traced: it said a credential existed but
+    // not whether it came from the DB row or the env file, so a stale value
+    // in one place looked identical to a fresh one in the other. This lists
+    // the source per provider and the env var *names* it would read. No value
+    // is read into the output — `provider_credentials().is_some()` answers
+    // presence without unwrapping anything.
+    let db_counts: std::collections::HashMap<&str, usize> =
+        integrations.iter().fold(std::collections::HashMap::new(), |mut acc, i| {
+            *acc.entry(i.provider_identifier.as_str()).or_default() += 1;
+            acc
+        });
+    let credentials: Vec<serde_json::Value> = integrations
+        .iter()
+        .map(|i| {
+            let id = i.provider_identifier.as_str();
+            let db_rows = db_counts.get(id).copied().unwrap_or(0);
+            let env_vars = credential_env_names(id);
+            let source = credential_source(id, db_rows, &state.config);
+            serde_json::json!({
+                "provider": id,
+                "source": source,
+                "db_rows": db_rows,
+                "env_vars": env_vars,
+                "env_present": env_vars
+                    .iter()
+                    .filter(|k| std::env::var(k).map(|v| !v.is_empty()).unwrap_or(false))
+                    .count(),
+                "note": match source {
+                    "none" if env_vars.is_empty() =>
+                        "per-account credential only (URL + app password, or a browser-extension cookie) — lives on the integration row".to_string(),
+                    "none" => format!(
+                        "no credential found: set {} in ~/.social-forge/.env, or connect the account",
+                        env_vars.join(" / ")
+                    ),
+                    _ => "source only — this audit never reads or prints a credential value".to_string(),
+                },
+            })
+        })
+        .collect();
+
+    let media = media_preflight(state, user_id, &integrations).await;
+
+    let mut warnings: Vec<String> = Vec::new();
+    if checks.is_empty() {
+        warnings.push(
+            "No provider is connected, so nothing here has been verified against a platform."
+                .into(),
+        );
+    }
+    if unverified > 0 {
+        warnings.push(format!(
+            "{unverified}/{} connected account(s) are live_verified=false — a stored credential is \
+             not proof the platform will accept it.",
+            checks.len()
+        ));
+    }
+    if publish_capable < draft_ok {
+        warnings.push(format!(
+            "{}/{} connected account(s) have no post-publish surface.",
+            draft_ok - publish_capable,
+            draft_ok
+        ));
+    }
+    if media["ok"] != true {
+        warnings.push(format!(
+            "media reachability pre-check failed: {}",
+            media["problems"][0]["kind"]
+        ));
+    }
 
     output_json(&serde_json::json!({
+        "checked_at": started_at,
         "healthy": healthy,
         "errors": errored,
         "connected": checks.len(),
+        "draft_ok": draft_ok,
+        "publish_capable": publish_capable,
+        "live_verified": live_verified,
         "providers": checks,
+        "credentials": credentials,
+        "media": media,
         "missing_oauth": missing_providers,
+        "warnings": warnings,
     }));
     Ok(())
 }
@@ -1589,10 +2126,9 @@ async fn handle_post_with_state(state: &AppState, text: &str,
     let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
 
     let integration_ids: Vec<String> = if let Some(platforms_str) = platforms {
-        let requested: Vec<&str> = platforms_str.split(',').map(|s| s.trim()).collect();
-        integrations.iter()
-            .filter(|i| requested.iter().any(|p| i.provider_identifier == *p))
-            .map(|i| i.id.to_string())
+        resolve_platform_integrations(integrations.iter(), platforms_str)
+            .into_iter()
+            .map(|id| id.to_string())
             .collect()
     } else {
         integrations.iter().map(|i| i.id.to_string()).collect()
@@ -1638,13 +2174,7 @@ async fn handle_stage_with_state(state: &AppState, text: &str,
             .map(|s| Uuid::parse_str(s).map_err(|_| anyhow::anyhow!("Invalid integration_id: {s}")))
             .collect::<Result<_, _>>()?
     } else if let Some(plats) = platforms_str {
-        let platform_names: Vec<&str> = plats.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
-        all_integrations.iter()
-            .filter(|i| platform_names.iter().any(|p| {
-                i.provider_identifier == *p || i.provider_identifier.starts_with(&format!("{p}-"))
-            }))
-            .map(|i| i.id)
-            .collect()
+        resolve_platform_integrations(all_integrations.iter(), plats)
     } else {
         all_integrations.iter().map(|i| i.id).collect()
     };
@@ -1687,7 +2217,7 @@ async fn handle_stage_with_state(state: &AppState, text: &str,
         first_comment: first_comment.map(String::from),
     };
     crate::services::staging::validate_staging_request(&request).map_err(|e| anyhow::anyhow!("Validation failed: {e}"))?;
-    let result = crate::services::staging::stage_post(&state.db, user_id, request).await.map_err(|e| anyhow::anyhow!("Staging failed: {e}"))?;
+    let result = crate::services::staging::stage_post(&state.db, &state.providers, user_id, request).await.map_err(|e| anyhow::anyhow!("Staging failed: {e}"))?;
     let staged: Vec<serde_json::Value> = result.staged.into_iter().map(|s| {
         serde_json::json!({"post_id": s.post_id.to_string(), "provider": s.provider, "sequence": s.sequence, "total_segments": s.total_segments, "state": s.state})
     }).collect();
@@ -2135,6 +2665,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
         }
 
         Command::Providers => handle_providers_with_state(&state).await,
+        Command::Audit => handle_audit_with_state(&state).await,
         Command::Connect { provider } => handle_connect_with_state(&state, &provider).await,
         Command::Doctor => handle_doctor_with_state(&state).await,
         Command::Setup => handle_setup().await,
@@ -2219,5 +2750,110 @@ mod tests {
         let val = serde_json::json!({"key": "value"});
         assert!(format_text(&val, "json").starts_with('{'));
         assert!(!format_text(&val, "toon").starts_with('{'));
+    }
+
+    // ── G-10: --platforms must not fan out to a colliding variant ───────────
+
+    fn fake_integration(provider: &str) -> crate::db::models::Integration {
+        crate::db::models::Integration {
+            id: Uuid::new_v4(),
+            user_id: Uuid::new_v4(),
+            provider_identifier: provider.to_string(),
+            provider_name: provider.to_string(),
+            internal_id: provider.to_string(),
+            access_token: "{}".to_string(),
+            refresh_token: None,
+            token_expires_at: None,
+            profile_name: None,
+            profile_picture: None,
+            profile_url: None,
+            disabled: false,
+            refresh_needed: false,
+            root_internal_id: None,
+            posting_times: serde_json::json!({}),
+            auth_method: "test".to_string(),
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+        }
+    }
+
+    fn providers(integrations: &[crate::db::models::Integration], platforms: &str) -> Vec<String> {
+        let mut out: Vec<String> =
+            resolve_platform_integrations(integrations.iter(), platforms)
+                .into_iter()
+                .map(|id| {
+                    integrations
+                        .iter()
+                        .find(|i| i.id == id)
+                        .map(|i| i.provider_identifier.clone())
+                        .unwrap_or_default()
+                })
+                .collect();
+        out.sort();
+        out
+    }
+
+    /// The double-draft regression: `instagram` must NOT also select
+    /// `instagram-standalone`, and `linkedin` must NOT also select
+    /// `linkedin-page`, even with both connected.
+    #[test]
+    fn platforms_exact_match_does_not_sweep_the_variant() {
+        let igs = [
+            fake_integration("instagram"),
+            fake_integration("instagram-standalone"),
+        ];
+        assert_eq!(providers(&igs, "instagram"), vec!["instagram".to_string()]);
+
+        let lis = [fake_integration("linkedin"), fake_integration("linkedin-page")];
+        assert_eq!(providers(&lis, "linkedin"), vec!["linkedin".to_string()]);
+
+        // Every documented collision pair behaves the same way.
+        for (base, variant) in PLATFORM_COLLISIONS {
+            let both = [fake_integration(base), fake_integration(variant)];
+            assert_eq!(
+                providers(&both, base),
+                vec![base.to_string()],
+                "--platforms {base} must target only {base}"
+            );
+            // Naming the variant explicitly still works.
+            assert_eq!(
+                providers(&both, &format!("{base},{variant}")).len(),
+                2,
+                "explicit '{base},{variant}' must target both"
+            );
+        }
+    }
+
+    /// The prefix fallback must survive for names with NO exact match —
+    /// otherwise `--platforms telegram` reaches nothing.
+    #[test]
+    fn platforms_prefix_fallback_still_fans_out_when_no_exact_match() {
+        let tgs = [
+            fake_integration("telegram-bot"),
+            fake_integration("telegram-user"),
+        ];
+        assert_eq!(providers(&tgs, "telegram").len(), 2);
+    }
+
+    /// A prefix match must not leak across an unrelated request: only the
+    /// requested platform is selected.
+    #[test]
+    fn platforms_selection_is_scoped_to_the_request() {
+        let all = [
+            fake_integration("x"),
+            fake_integration("bluesky"),
+            fake_integration("reddit"),
+        ];
+        assert_eq!(providers(&all, "x"), vec!["x".to_string()]);
+        assert_eq!(providers(&all, "x,bluesky").len(), 2);
+        assert!(providers(&all, "tiktok").is_empty(), "no match → no targets");
+    }
+
+    /// Whitespace and empty entries in the list must not create blank targets.
+    #[test]
+    fn platforms_tolerates_whitespace_and_empty_entries() {
+        let all = [fake_integration("x"), fake_integration("bluesky")];
+        assert_eq!(providers(&all, " x , , bluesky ").len(), 2);
+        assert!(providers(&all, " , ").is_empty());
     }
 }

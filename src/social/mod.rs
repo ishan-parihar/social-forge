@@ -612,17 +612,25 @@ pub trait SocialProvider: Send + Sync {
         }
     }
 
+    /// Can this provider ever put a post on a feed?
+    ///
+    /// Derived from `max_content_length() == 0`, which is how a provider
+    /// declares "I have no post surface" (GitHub: issues/PRs/repos only —
+    /// its `publish()` is a documented error stub). Storing a draft against
+    /// such a provider looks identical to a normal draft until the scheduler
+    /// fails it, so callers that report readiness ask this first.
+    fn publish_capable(&self) -> bool {
+        self.max_content_length() > 0
+    }
+
     /// Validate content against platform-specific limits before publishing.
+    ///
+    /// A zero content limit is reported as a capability gap rather than as
+    /// "content too long": the length is irrelevant when the provider cannot
+    /// publish at all, and "Maximum is 0 chars" reads like a bug in the
+    /// staged draft rather than a property of the provider.
     fn validate_post(&self, post: &PostContent) -> Result<(), String> {
-        if post.content.len() > self.max_content_length() {
-            return Err(format!(
-                "Content too long ({} chars). Maximum is {} chars for {}.",
-                post.content.len(),
-                self.max_content_length(),
-                self.name()
-            ));
-        }
-        Ok(())
+        validate_post_rules(self.name(), self.max_content_length(), &post.content)
     }
 
     /// Validate media attachments against platform-specific limits.
@@ -782,7 +790,116 @@ pub fn validate_media_limits(identifier: &str, post: &PostContent) -> Result<(),
     Ok(())
 }
 
+/// Providers that fetch every attachment from its URL themselves.
+///
+/// They are handed a URL, not bytes, so the URL must resolve from the
+/// public internet — a filesystem path or a loopback address fails at
+/// publish time no matter how the post itself is delivered. See
+/// `SocialProvider::resolve_media_url`, which exists for exactly this.
+pub fn fetches_media_server_side(identifier: &str) -> bool {
+    matches!(
+        identifier,
+        "instagram" | "instagram-standalone" | "instagram_standalone" | "facebook" | "threads"
+    )
+}
+
+/// True when `host` only resolves from this machine or a private LAN
+/// (`localhost`, loopback, RFC1918, `.local`), so a remote platform server
+/// cannot fetch a URL built on it.
+pub fn is_host_local(host: &str) -> bool {
+    let h = host.trim_matches(|c| c == '[' || c == ']').to_ascii_lowercase();
+    if h == "localhost"
+        || h == "::1"
+        || h == "0.0.0.0"
+        || h.ends_with(".localhost")
+        || h.ends_with(".local")
+        || h.ends_with(".internal")
+        || h.starts_with("127.")
+        || h.starts_with("10.")
+        || h.starts_with("192.168.")
+    {
+        return true;
+    }
+    let mut octets = h.split('.');
+    match (octets.next(), octets.next()) {
+        (Some(a), Some(b)) => {
+            a.parse::<u8>().is_ok_and(|o| o == 172)
+                && b.parse::<u8>().is_ok_and(|o| (16..=31).contains(&o))
+        }
+        _ => false,
+    }
+}
+
+/// Why `identifier` cannot fetch the media at `url`, or `None` when it can.
+///
+/// Three ways a provider obtains the bytes, three rules:
+///   - server-side fetchers need a publicly resolvable http(s) URL;
+///   - X downloads the URL or reads the file itself, so a local path is
+///     fine but a path that does not exist is not;
+///   - everything else passes the URL through, which is the caller's call.
+///
+/// Pure so the pre-check needs no network and no server — the point is to
+/// catch an unreachable URL *before* a publish burns a retry budget.
+pub fn media_url_problem(identifier: &str, url: &str) -> Option<String> {
+    let trimmed = url.trim();
+    if trimmed.is_empty() {
+        return Some("media attachment has an empty URL".into());
+    }
+    let is_http = trimmed.starts_with("http://") || trimmed.starts_with("https://");
+    if is_http {
+        let Ok(parsed) = url::Url::parse(trimmed) else {
+            return Some(format!("`{trimmed}` is not a parseable URL"));
+        };
+        if fetches_media_server_side(identifier) {
+            let host = parsed.host_str().unwrap_or_default();
+            if is_host_local(host) {
+                return Some(format!(
+                    "{identifier} fetches media server-side, so it cannot reach host `{host}`"
+                ));
+            }
+        }
+        return None;
+    }
+    if fetches_media_server_side(identifier) {
+        return Some(format!(
+            "{identifier} fetches media server-side and cannot read the local path `{trimmed}`"
+        ));
+    }
+    if identifier == "x" && !std::path::Path::new(trimmed).exists() {
+        return Some(format!(
+            "X accepts an http(s) URL or an existing local file; `{trimmed}` is neither"
+        ));
+    }
+    None
+}
+
 // ── Error Types ─────────────────────────────────────────────
+
+/// The length + capability half of [`SocialProvider::validate_post`], as a
+/// free function so an override can run the same rules: calling
+/// `SocialProvider::validate_post(self, …)` from inside an impl resolves to
+/// the override again and recurses forever.
+pub fn validate_post_rules(
+    provider_name: &str,
+    max_len: usize,
+    content: &str,
+) -> Result<(), String> {
+    if max_len == 0 {
+        return Err(format!(
+            "{provider_name} has no post-publish surface (content limit is 0) — a staged draft \
+             for it is stored but can never go live. Use the provider's own API (issues, PRs, \
+             repository files) instead."
+        ));
+    }
+    if content.len() > max_len {
+        return Err(format!(
+            "Content too long ({} chars). Maximum is {} chars for {provider_name}.",
+            content.len(),
+            max_len
+        ));
+    }
+    Ok(())
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum ProviderError {

@@ -294,19 +294,92 @@ impl SocialProvider for SkoolProvider {
     }
 
     fn validate_post(&self, post: &PostContent) -> Result<(), String> {
-        if post.content.len() > self.max_content_length() {
-            return Err(format!(
-                "Content too long ({} chars). Maximum is {} chars for Skool.",
-                post.content.len(),
-                self.max_content_length()
-            ));
-        }
-        let title = post.settings.get("title")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
-        if title.is_empty() {
-            return Err("Skool posts require a 'title' in settings.".into());
+        // Shared length + capability check first.
+        super::validate_post_rules(self.name(), self.max_content_length(), &post.content)?;
+
+        // `publish` reads both keys straight out of settings and silently
+        // substitutes empty strings, which produces a 4xx from api2.skool.com
+        // only at publish time. Catch both here so staging can warn instead.
+        for (key, why) in [
+            ("title", "Skool renders every post with a title line"),
+            ("groupId", "groupId selects the community to post into"),
+        ] {
+            let value = post.settings.get(key).and_then(|v| v.as_str()).unwrap_or("");
+            if value.trim().is_empty() {
+                return Err(format!(
+                    "Skool posts require a non-empty '{key}' in settings — {why}, and a post \
+                     without it cannot be published."
+                ));
+            }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::social::test_config;
+
+    fn post(settings: serde_json::Value) -> PostContent {
+        PostContent {
+            content: "body".into(),
+            settings,
+            ..Default::default()
+        }
+    }
+
+    /// `publish` reads `title`/`groupId` out of settings and substitutes empty
+    /// strings, so a missing key only fails as a 4xx at publish time. Both
+    /// must be caught by `validate_post` while staging still holds the post.
+    #[test]
+    fn validate_post_requires_title_then_group_id() {
+        let p = SkoolProvider::new();
+
+        let no_settings = p.validate_post(&post(serde_json::json!({}))).unwrap_err();
+        assert!(no_settings.contains("'title'"), "got: {no_settings}");
+
+        let no_group = p
+            .validate_post(&post(serde_json::json!({ "title": "T" })))
+            .unwrap_err();
+        assert!(no_group.contains("'groupId'"), "got: {no_group}");
+
+        let blank_group = p
+            .validate_post(&post(serde_json::json!({ "title": "T", "groupId": "  " })))
+            .unwrap_err();
+        assert!(blank_group.contains("'groupId'"), "got: {blank_group}");
+
+        assert!(p
+            .validate_post(&post(serde_json::json!({ "title": "T", "groupId": "g1" })))
+            .is_ok());
+    }
+
+    /// The shared length rule still runs before the Skool-specific ones, so
+    /// an over-long body is not reported as a missing title.
+    #[test]
+    fn validate_post_reports_length_before_settings() {
+        let p = SkoolProvider::new();
+        let long = PostContent {
+            content: "a".repeat(20_000),
+            settings: serde_json::json!({}),
+            ..Default::default()
+        };
+        assert!(p.validate_post(&long).unwrap_err().contains("too long"));
+    }
+
+    /// A provider with a zero content limit has no post surface at all
+    /// (GitHub: issues/PRs only). `publish_capable` and `validate_post` must
+    /// both say so instead of quoting "Maximum is 0 chars".
+    #[test]
+    fn zero_content_length_means_not_publish_capable() {
+        let gh = crate::social::github::GithubProvider::new(&test_config());
+        assert!(!gh.publish_capable());
+        let err = gh
+            .validate_post(&post(serde_json::json!({ "title": "T", "groupId": "g" })))
+            .unwrap_err();
+        assert!(err.contains("no post-publish surface"), "got: {err}");
+
+        let skool = SkoolProvider::new();
+        assert!(skool.publish_capable());
     }
 }

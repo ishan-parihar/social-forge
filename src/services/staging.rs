@@ -6,6 +6,7 @@ use uuid::Uuid;
 use sqlx::SqlitePool;
 use crate::db::queries;
 use crate::services::content_splitter;
+use crate::social::{self, MediaAttachment, PostContent, registry::ProviderRegistry};
 
 #[derive(Debug)]
 pub struct StagingRequest {
@@ -33,13 +34,92 @@ pub struct StagingResult {
     pub warnings: Vec<String>,
 }
 
+/// Read the request's `media` array into the shape `validate_media_limits`
+/// and provider `validate_media` expect. Fields the caller omitted (the CLI
+/// only ever supplies `url`) come through empty rather than being invented —
+/// the pre-check is advisory, so a missing mime must not fabricate one.
+fn parse_media(value: &serde_json::Value) -> Vec<MediaAttachment> {
+    value
+        .as_array()
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|m| {
+                    Some(MediaAttachment {
+                        url: m.get("url")?.as_str()?.to_string(),
+                        mime_type: m
+                            .get("mime_type")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or_default()
+                            .to_string(),
+                        alt: m.get("alt").and_then(|v| v.as_str()).map(String::from),
+                        poster_url: m
+                            .get("poster_url")
+                            .and_then(|v| v.as_str())
+                            .map(String::from),
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Everything the scheduler would otherwise only discover at publish time.
+///
+/// One line per distinct failure rather than a single boolean, so a caller
+/// can see *which* rule the post breaks instead of being told that it does.
+///
+fn publish_readiness(
+    provider_id: &str,
+    post: &PostContent,
+    registry: &ProviderRegistry,
+) -> Vec<String> {
+    let Some(provider) = registry.get(provider_id) else {
+        return vec![format!(
+            "{provider_id} is not registered in this build — the draft is stored but nothing can publish it"
+        )];
+    };
+
+    let mut out = Vec::new();
+    if let Err(e) = provider.validate_post(post) {
+        out.push(format!("{provider_id}: {e}"));
+    }
+    if let Err(e) = social::validate_media_limits(provider_id, post) {
+        out.push(format!("{provider_id}: {e}"));
+    }
+    for attachment in &post.media {
+        if let Some(problem) = social::media_url_problem(provider_id, &attachment.url) {
+            let url = &attachment.url;
+            out.push(format!("{provider_id}: media `{url}` — {problem}"));
+        }
+    }
+    out
+}
+
+/// Stage `request` against every integration, splitting content per platform.
+///
+/// The provider registry is required, not optional: a draft that cannot
+/// publish is stored exactly like one that can, so the only place the
+/// difference is visible is here — before the scheduler spends a retry
+/// budget discovering it.
 pub async fn stage_post(
     pool: &SqlitePool,
+    registry: &ProviderRegistry,
     user_id: Uuid,
     request: StagingRequest,
 ) -> Result<StagingResult, String> {
     let mut staged = Vec::new();
     let mut warnings = Vec::new();
+
+    let media = parse_media(&request.media);
+    let preflight = PostContent {
+        content: request.content.clone(),
+        media,
+        settings: request.settings.clone(),
+        in_reply_to: None,
+        idempotency_key: None,
+        delay_minutes: None,
+    };
 
     for integration_id in &request.integration_ids {
         let integration = queries::get_integration(pool, *integration_id, user_id)
@@ -48,6 +128,13 @@ pub async fn stage_post(
             .ok_or_else(|| format!("Integration {} not found", integration_id))?;
 
         let provider = integration.provider_identifier.clone();
+
+        // Validate the whole request, not the first segment: a split that
+        // brings every chunk under the limit says nothing about whether the
+        // provider accepts the post at all (a missing Skool title, GitHub's
+        // zero content limit).
+        warnings.extend(publish_readiness(&provider, &preflight, registry));
+
         let segments = content_splitter::split_content(&request.content, &provider, 4);
 
         if segments.len() > 1 {
