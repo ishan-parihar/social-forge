@@ -116,6 +116,43 @@ TOKEN_ENCRYPTION_KEY=<64 hex chars>     # AES-256-GCM for tokens at rest
 | `social-forge analytics get` | Get analytics |
 | `social-forge mcp` | Start MCP server (stdio) |
 | `social-forge config set KEY VALUE` | Manage config |
+| `social-forge audit` | Disabled integrations, `--platforms` prefix collisions, writer-lock posture |
+
+### Targeting: `--platforms` collisions and `--integrations`
+
+Two registered providers are a strict prefix of another, so platform **names are
+matched exactly**:
+
+| `--platforms` value | Targets | Does NOT also target |
+|---|---|---|
+| `instagram` | `instagram` | `instagram-standalone` |
+| `linkedin` | `linkedin` | `linkedin-page` |
+
+```bash
+# Exact names only — no double drafts
+social-forge post "hello" --platforms instagram
+
+# Name a suffixed variant explicitly to include it
+social-forge post "hello" --platforms instagram,instagram-standalone
+
+# Or skip name resolution entirely and pick exact accounts
+social-forge providers                                   # get integration UUIDs
+social-forge stage "hello" --integrations 6f1c...-...     # mutually exclusive with --platforms
+```
+
+`telegram` still fans out to `telegram-bot` and `telegram-user`, because no
+integration is registered under the bare name `telegram`.
+
+### Single-writer rule
+
+SQLite admits one writer per file. `serve` and `mcp` both run the publish
+scheduler, so exactly one long-lived process may own a given `DATABASE_URL` —
+the second one fails at boot on an exclusive lock file rather than silently
+double-publishing. Short CLI reads (`providers`, `posts list`, `audit`) never
+take the lock. `social-forge audit` reports the live `journal_mode` /
+`busy_timeout` alongside the disabled-integration inventory.
+
+Full detail: [`docs/planning/TARGETING_AND_WRITER_DISCIPLINE.md`](docs/planning/TARGETING_AND_WRITER_DISCIPLINE.md).
 
 ---
 

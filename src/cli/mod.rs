@@ -48,6 +48,10 @@ pub enum Command {
     /// Check health of all connected providers and report status
     Doctor,
 
+    /// Read-only audit: disabled integrations, --platforms prefix collisions,
+    /// and the live single-writer/busy-timeout posture of the SQLite pool
+    Audit,
+
     /// Full guided onboarding: check status, import cookies, connect providers
     Setup,
 
@@ -163,8 +167,13 @@ pub enum Command {
     Post {
         /// Post text content
         text: String,
-        /// Target platforms (comma-separated: x,bluesky,linkedin,reddit,...). Uses all connected if omitted.
-        #[arg(long)]
+    /// Target platforms (comma-separated: x,bluesky,linkedin,reddit,...). Uses all connected if omitted.
+    ///
+    /// EXACT identifier match wins: `instagram` targets ONLY `instagram`
+    /// (not `instagram-standalone`), `linkedin` ONLY `linkedin` (not
+    /// `linkedin-page`). To hit a suffixed variant name it explicitly
+    /// (`instagram,instagram-standalone`) or use `--integrations <uuid,...>`.
+    #[arg(long)]
         platforms: Option<String>,
         /// Media URLs to attach (comma-separated)
         #[arg(long)]
@@ -182,9 +191,18 @@ pub enum Command {
         /// Post text content
         text: String,
         /// Target integration IDs (comma-separated UUIDs). Uses all connected if omitted.
+        /// Bypasses platform-name resolution entirely — the precise way to
+        /// target one of a colliding pair.
         #[arg(long, conflicts_with = "platforms")]
         integrations: Option<String>,
         /// Target platforms (comma-separated: x,linkedin,bluesky,...). Filters by provider name.
+        ///
+        /// EXACT identifier match wins. `instagram` targets ONLY `instagram`
+        /// and `linkedin` ONLY `linkedin` — the `-standalone` / `-page`
+        /// variants are separate providers and are NOT swept in. Name them
+        /// explicitly (`--platforms instagram,instagram-standalone`) or use
+        /// `--integrations` with the exact UUIDs. `social-forge audit` reports
+        /// which colliding pairs are currently connected.
         #[arg(long, conflicts_with = "integrations")]
         platforms: Option<String>,
         /// Media URLs to attach (comma-separated)

@@ -10,10 +10,42 @@
 // never URL query params:
 //   journal_mode = WAL         — readers don't block the writer
 //   synchronous  = NORMAL      — durable enough under WAL, much faster
-//   busy_timeout = 5s          — wait instead of immediately SQLITE_BUSY
+//   busy_timeout = 15s         — wait instead of immediately SQLITE_BUSY
 //   foreign_keys = ON          — SQLite defaults this OFF per connection
+//
+// SINGLE-WRITER DISCIPLINE (G-08). Two distinct layers matter:
+//
+//  1. IN-PROCESS — `max_connections(1)`. One connection, so no two statements
+//     in this process can race for the write lock.
+//  2. CROSS-PROCESS — `busy_timeout`. Every process (serve, mcp, and each
+//     short-lived CLI invocation) opens its own pool against the same file, so
+//     `max_connections(1)` does nothing across them; the 15s timeout is what
+//     makes a concurrent writer WAIT instead of failing with SQLITE_BUSY.
+//     The default was 5s, which the publish scheduler could exceed mid-batch
+//     (a slow platform write holding the lock) and then drop a queued post.
+//     15s covers the longest single publish transaction with headroom.
+//
+// Because cross-process writers queue rather than fail, run ONE long-lived
+// process per database file. Two `social-forge serve` instances on the same
+// `DATABASE_URL` will both hold the scheduler and double-publish. `social-forge
+// audit` reports the live `journal_mode` / `busy_timeout` read back from the
+// open pool, and `WRITER_MODE` records which process owns the file.
 
+use std::fs::{self, File, OpenOptions};
+use std::path::PathBuf;
 use std::str::FromStr;
+use std::time::Duration;
+
+/// How long a writer waits for the file lock before SQLITE_BUSY. Sized above
+/// the worst-case single publish transaction (network write + post + analytics)
+/// so a queued post is never dropped just because another process held the lock.
+pub const BUSY_TIMEOUT: Duration = Duration::from_secs(15);
+
+/// Advisory lock file sitting next to the database file. Held with `O_EXCL`
+/// semantics by long-lived processes so a SECOND `serve` on the same
+/// `DATABASE_URL` fails loudly at boot instead of silently double-publishing.
+/// The actual name is `<db-file>.writer.lock` (see `claim_writer_role`).
+const WRITER_MODE: &str = "writer.lock";
 
 pub use sqlx::SqlitePool;
 
@@ -28,7 +60,7 @@ pub async fn create_pool(database_url: &str) -> anyhow::Result<SqlitePool> {
         .create_if_missing(true)
         .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
         .synchronous(sqlx::sqlite::SqliteSynchronous::Normal)
-        .busy_timeout(std::time::Duration::from_secs(5))
+        .busy_timeout(BUSY_TIMEOUT)
         .foreign_keys(true);
 
     // sqlx does not create the parent directory for a file-backed SQLite
@@ -46,8 +78,60 @@ pub async fn create_pool(database_url: &str) -> anyhow::Result<SqlitePool> {
         .await?;
 
     sqlx::migrate!("./migrations").run(&pool).await?;
-    tracing::info!("Database connected — sqlite pool: max_connections=1, WAL. Migrations applied.");
+    tracing::info!(
+        "Database connected — sqlite pool: max_connections=1, WAL, busy_timeout={}s. Migrations applied.",
+        BUSY_TIMEOUT.as_secs()
+    );
     Ok(pool)
+}
+
+/// Claim the single-writer role for `database_url`'s file by creating an
+/// exclusive lock file next to it.
+///
+/// Call this ONLY from long-lived processes (`serve`, `mcp`) — the ones that
+/// run the publish scheduler. A short-lived CLI read (`providers`, `posts
+/// list`) must not take the lock, or it would block the daemon it is querying.
+///
+/// The path is derived from the PARSED connect options, never from string
+/// surgery on the URL: `Path::new("sqlite://data/app.db").parent()` yields the
+/// literal `sqlite:/data`, which silently created a bogus lock directory.
+/// `SqliteConnectOptions::get_filename()` returns the real file path.
+///
+/// ponytail: `O_EXCL` + PID in the file, released on process exit. If a stale
+/// lock survives a `kill -9`, delete `data/.social-forge-writer.lock` by hand.
+/// A PID-liveness probe is the upgrade if stale locks actually show up.
+pub fn claim_writer_role(database_url: &str) -> anyhow::Result<File> {
+    let options = sqlx::sqlite::SqliteConnectOptions::from_str(database_url)
+        .map_err(|e| anyhow::anyhow!("Invalid DATABASE_URL for writer lock: {e}"))?;
+    let filename = options.get_filename().to_path_buf();
+
+    // An in-memory database has no file to lock — nothing to coordinate.
+    if filename.as_os_str().is_empty() {
+        tracing::info!("In-memory SQLite — no writer lock required");
+        return Ok(File::open("/dev/null")?);
+    }
+
+    let path = PathBuf::from(filename).with_extension(WRITER_MODE);
+    if let Some(parent) = path.parent() {
+        if !parent.as_os_str().is_empty() && !parent.exists() {
+            fs::create_dir_all(parent)?;
+        }
+    }
+    match OpenOptions::new().write(true).create_new(true).open(&path) {
+        Ok(mut f) => {
+            use std::io::Write as _;
+            writeln!(f, "{}", std::process::id())?;
+            tracing::info!("Single-writer lock acquired: {}", path.display());
+            Ok(f)
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => Err(anyhow::anyhow!(
+            "Another social-forge process already owns the writer lock for this database \
+             ({}). SQLite is single-writer: run ONE long-lived process per \
+             DATABASE_URL, or delete the lock if that process is gone.",
+            path.display()
+        )),
+        Err(e) => Err(anyhow::anyhow!("Cannot claim writer lock {}: {e}", path.display())),
+    }
 }
 
 /// Ensure the single local user row exists. Social Forge is a

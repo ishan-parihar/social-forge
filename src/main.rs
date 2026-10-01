@@ -148,10 +148,17 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("Configuration loaded");
 
     // ── Database ──────────────────────────────────────────────
+    // Single-writer discipline (G-08): this process runs the publish scheduler,
+    // so it must be the ONLY long-lived writer on `database_url`. Claim the
+    // lock BEFORE opening the pool — a second `serve` on the same DATABASE_URL
+    // then fails loudly here instead of silently double-publishing.
+    let _writer_lock = db::claim_writer_role(&config.database_url)
+        .context("Failed to claim the SQLite single-writer lock")?;
+
     let db = db::create_pool(&config.database_url)
         .await
         .context("Failed to create database pool")?;
-    tracing::info!("Database connected");
+    tracing::info!("Database connected (single-writer lock held)");
 
     // Ensure the single local user row exists (needed for FK constraints)
     if let Err(e) = db::ensure_local_user(&db).await {
