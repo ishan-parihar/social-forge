@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ─── Social Forge Installer ────────────────────────────────────────────────────
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/ishan-parihar/social-forge/main/scripts/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/ishan-parihar/social-forge/master/scripts/install.sh | bash
 #   # or with options:
 #   INSTALL_DIR=~/my-dir SKIP_SERVICE=true bash install.sh
 #
@@ -33,8 +33,8 @@ set -euo pipefail
 
 REPO="ishan-parihar/social-forge"
 APP_NAME="social-forge"
-SCRIPTS_RAW="https://raw.githubusercontent.com/${REPO}/main/scripts"
-REPO_RAW="https://raw.githubusercontent.com/${REPO}/main"
+SCRIPTS_RAW="https://raw.githubusercontent.com/${REPO}/master/scripts"
+REPO_RAW="https://raw.githubusercontent.com/${REPO}/master"
 
 # ── Colors ──────────────────────────────────────────────────────────────────
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
@@ -51,7 +51,7 @@ if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
 Social Forge Installer
 
 Usage:
-  curl -fsSL https://raw.githubusercontent.com/${REPO}/main/scripts/install.sh | bash
+  curl -fsSL https://raw.githubusercontent.com/${REPO}/master/scripts/install.sh | bash
 
 Environment variables:
   INSTALL_DIR     Installation directory     (default: \$HOME/social-forge)

@@ -489,7 +489,7 @@ Social Forge ships an installable AI agent skill that provides ambient context a
 npx skills add ishan-parihar/social-forge --skill social-forge
 
 # Or download manually (installed automatically by install.sh unless SKIP_SKILL=true)
-curl -fsSL https://raw.githubusercontent.com/ishan-parihar/social-forge/main/SKILL.md \
+curl -fsSL https://raw.githubusercontent.com/ishan-parihar/social-forge/master/SKILL.md \
   -o ~/.agents/skills/social-forge/SKILL.md
 ```
 
