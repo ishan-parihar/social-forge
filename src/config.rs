@@ -25,6 +25,8 @@ pub fn load_dotenv() {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Config {
+    /// SQLite connection string. Defaults to a local file so the binary
+    /// runs with no Postgres to provision.
     pub database_url: String,
     /// HMAC secret for signing session cookies AND OAuth state tokens.
     /// If unset, derived from `app_password` at startup (see `Config::from_env`).
@@ -193,7 +195,9 @@ impl Config {
         };
 
         Ok(Self {
-            database_url: env("DATABASE_URL")?,
+            database_url: opt("DATABASE_URL")
+                .filter(|v| !v.is_empty())
+                .unwrap_or_else(|| "sqlite://data/social-forge.db".to_string()),
             jwt_secret,
             app_password,
             app_url,

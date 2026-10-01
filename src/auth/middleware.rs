@@ -28,7 +28,7 @@ use sqlx::Row;
 use uuid::Uuid;
 
 use crate::auth::jwt;
-use crate::db::PgPool;
+use sqlx::SqlitePool;
 
 /// The single local user. All data in the DB is owned by this id.
 /// Kept as a stable constant so existing rows survive restarts and
@@ -53,7 +53,7 @@ pub struct AuthenticatedUser {
 #[derive(Clone)]
 pub struct AuthState {
     pub session_secret: String,
-    pub db: PgPool,
+    pub db: SqlitePool,
 }
 
 /// The single SHA-256 scheme for API keys at rest. Shared by issuance
@@ -68,7 +68,7 @@ pub fn hash_api_key(raw_key: &str) -> String {
 
 /// Verify a raw `sf_…` key against `api_keys` and stamp `last_used_at`.
 ///
-/// Postgres does the digest equality (`key_hash = $1`), so a Rust-side
+/// The database does the digest equality (`key_hash = ?`), so a Rust-side
 /// constant-time compare would be redundant — and the compared value is
 /// a 256-bit digest, never a usable credential, so a timing signal on
 /// the digest does not leak the key.
@@ -79,14 +79,14 @@ pub fn hash_api_key(raw_key: &str) -> String {
 /// ponytail: no index on `key_hash` (migration 011 only indexes user_id).
 /// Seq scan over a handful of keys is fine; add a unique index if an
 /// operator ever holds thousands.
-pub async fn verify_api_key(pool: &PgPool, raw_key: &str) -> Option<Uuid> {
+pub async fn verify_api_key(pool: &SqlitePool, raw_key: &str) -> Option<Uuid> {
     let row = sqlx::query(
         r#"
         UPDATE api_keys
-        SET last_used_at = NOW()
-        WHERE key_hash = $1
+        SET last_used_at = unixepoch()
+        WHERE key_hash = ?
           AND is_active = true
-          AND (expires_at IS NULL OR expires_at > NOW())
+          AND (expires_at IS NULL OR expires_at > unixepoch())
         RETURNING user_id
         "#,
     )

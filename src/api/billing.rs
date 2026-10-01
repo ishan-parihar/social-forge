@@ -100,18 +100,18 @@ fn verify_webhook_signature(
 // ── Query helpers ─────────────────────────────────────────────
 
 async fn upsert_subscription(
-    pool: &sqlx::PgPool,
+    pool: &sqlx::SqlitePool,
     user_id: Uuid,
     stripe_subscription_id: &str,
     stripe_customer_id: &str,
     plan: &str,
     status: &str,
-    period_start: Option<DateTime<Utc>>,
-    period_end: Option<DateTime<Utc>>,
+    period_start: Option<i64>,
+    period_end: Option<i64>,
 ) -> Result<Subscription, AppError> {
     sqlx::query_as::<_, Subscription>(
         r#"INSERT INTO subscriptions (user_id, stripe_subscription_id, stripe_customer_id, plan, status, current_period_start, current_period_end)
-        VALUES ($1, $2, $3, $4::subscription_plan, $5::subscription_status, $6, $7)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT (user_id)
         DO UPDATE SET
             stripe_subscription_id = EXCLUDED.stripe_subscription_id,
@@ -120,8 +120,8 @@ async fn upsert_subscription(
             status = EXCLUDED.status,
             current_period_start = EXCLUDED.current_period_start,
             current_period_end = EXCLUDED.current_period_end,
-            updated_at = NOW()
-        RETURNING id, user_id, stripe_subscription_id, stripe_customer_id, plan::text, status::text, current_period_start, current_period_end, cancel_at_period_end, created_at, updated_at"#,
+            updated_at = unixepoch()
+        RETURNING id, user_id, stripe_subscription_id, stripe_customer_id, plan, status, current_period_start, current_period_end, cancel_at_period_end, created_at, updated_at"#,
     )
     .bind(user_id)
     .bind(stripe_subscription_id)
@@ -136,15 +136,15 @@ async fn upsert_subscription(
 }
 
 async fn update_subscription_status(
-    pool: &sqlx::PgPool,
+    pool: &sqlx::SqlitePool,
     stripe_subscription_id: &str,
     status: &str,
-    period_start: Option<DateTime<Utc>>,
-    period_end: Option<DateTime<Utc>>,
+    period_start: Option<i64>,
+    period_end: Option<i64>,
     cancel_at_period_end: bool,
 ) -> Result<(), AppError> {
     sqlx::query(
-        "UPDATE subscriptions SET status = $1::subscription_status, current_period_start = $2, current_period_end = $3, cancel_at_period_end = $4, updated_at = NOW() WHERE stripe_subscription_id = $5",
+        "UPDATE subscriptions SET status = ?, current_period_start = ?, current_period_end = ?, cancel_at_period_end = ?, updated_at = unixepoch() WHERE stripe_subscription_id = ?",
     )
     .bind(status)
     .bind(period_start)
@@ -158,7 +158,7 @@ async fn update_subscription_status(
 }
 
 async fn insert_invoice(
-    pool: &sqlx::PgPool,
+    pool: &sqlx::SqlitePool,
     user_id: Uuid,
     subscription_id: Option<Uuid>,
     stripe_invoice_id: &str,
@@ -166,10 +166,10 @@ async fn insert_invoice(
     currency: &str,
     status: &str,
     invoice_url: Option<&str>,
-    paid_at: Option<DateTime<Utc>>,
+    paid_at: Option<i64>,
 ) -> Result<(), AppError> {
     sqlx::query(
-        "INSERT INTO invoices (user_id, subscription_id, stripe_invoice_id, amount, currency, status, invoice_url, paid_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+        "INSERT INTO invoices (user_id, subscription_id, stripe_invoice_id, amount, currency, status, invoice_url, paid_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(user_id)
     .bind(subscription_id)
@@ -186,11 +186,11 @@ async fn insert_invoice(
 }
 
 async fn set_subscription_plan_free(
-    pool: &sqlx::PgPool,
+    pool: &sqlx::SqlitePool,
     stripe_subscription_id: &str,
 ) -> Result<(), AppError> {
     sqlx::query(
-        "UPDATE subscriptions SET plan = 'free', status = 'canceled', updated_at = NOW() WHERE stripe_subscription_id = $1",
+        "UPDATE subscriptions SET plan = 'free', status = 'canceled', updated_at = unixepoch() WHERE stripe_subscription_id = ?",
     )
     .bind(stripe_subscription_id)
     .execute(pool)
@@ -306,11 +306,7 @@ pub async fn stripe_webhook(
                 .unwrap_or("paid");
             let paid_at = invoice
                 .get("paid_at")
-                .and_then(|p| p.as_i64())
-                .map(|ts| {
-                    DateTime::from_timestamp(ts, 0)
-                        .unwrap_or_else(|| DateTime::from_timestamp(0, 0).unwrap())
-                });
+                .and_then(|p| p.as_i64());
 
             let period_start = invoice
                 .get("lines")
@@ -319,8 +315,7 @@ pub async fn stripe_webhook(
                 .and_then(|arr| arr.first())
                 .and_then(|line| line.get("period"))
                 .and_then(|p| p.get("start"))
-                .and_then(|s| s.as_i64())
-                .map(|ts| DateTime::from_timestamp(ts, 0).unwrap_or_else(|| DateTime::from_timestamp(0, 0).unwrap()));
+                .and_then(|s| s.as_i64());
 
             let period_end = invoice
                 .get("lines")
@@ -329,12 +324,11 @@ pub async fn stripe_webhook(
                 .and_then(|arr| arr.first())
                 .and_then(|line| line.get("period"))
                 .and_then(|p| p.get("end"))
-                .and_then(|e| e.as_i64())
-                .map(|ts| DateTime::from_timestamp(ts, 0).unwrap_or_else(|| DateTime::from_timestamp(0, 0).unwrap()));
+                .and_then(|e| e.as_i64());
 
             let user_id = if let Some(sid) = subscription_id {
                 let sub: Option<Subscription> = sqlx::query_as::<_, Subscription>(
-                    "SELECT id, user_id, stripe_subscription_id, stripe_customer_id, plan::text, status::text, current_period_start, current_period_end, cancel_at_period_end, created_at, updated_at FROM subscriptions WHERE stripe_subscription_id = $1",
+                    "SELECT id, user_id, stripe_subscription_id, stripe_customer_id, plan, status, current_period_start, current_period_end, cancel_at_period_end, created_at, updated_at FROM subscriptions WHERE stripe_subscription_id = ?",
                 )
                 .bind(sid)
                 .fetch_optional(&state.db)
@@ -343,7 +337,7 @@ pub async fn stripe_webhook(
                 sub.map(|s| (s.id, s.user_id))
             } else {
                 let sub: Option<Subscription> = sqlx::query_as::<_, Subscription>(
-                    "SELECT id, user_id, stripe_subscription_id, stripe_customer_id, plan::text, status::text, current_period_start, current_period_end, cancel_at_period_end, created_at, updated_at FROM subscriptions WHERE stripe_customer_id = $1",
+                    "SELECT id, user_id, stripe_subscription_id, stripe_customer_id, plan, status, current_period_start, current_period_end, cancel_at_period_end, created_at, updated_at FROM subscriptions WHERE stripe_customer_id = ?",
                 )
                 .bind(customer_id)
                 .fetch_optional(&state.db)
@@ -400,13 +394,11 @@ pub async fn stripe_webhook(
 
             let period_start = sub_obj
                 .get("current_period_start")
-                .and_then(|p| p.as_i64())
-                .map(|ts| DateTime::from_timestamp(ts, 0).unwrap_or_else(|| DateTime::from_timestamp(0, 0).unwrap()));
+                .and_then(|p| p.as_i64());
 
             let period_end = sub_obj
                 .get("current_period_end")
-                .and_then(|p| p.as_i64())
-                .map(|ts| DateTime::from_timestamp(ts, 0).unwrap_or_else(|| DateTime::from_timestamp(0, 0).unwrap()));
+                .and_then(|p| p.as_i64());
 
             update_subscription_status(
                 &state.db,

@@ -1,6 +1,6 @@
 // ─── Live Integration Tests: Threads + Instagram Standalone ──
 // Run: cargo test --test live_threads_ias_test -- --nocapture
-// Requires: Docker (postgres + redis), .env with INSTAGRAM_APP_ID,
+// Requires: SQLite file, .env with INSTAGRAM_APP_ID,
 //   THREADS_APP_ID, and real OAuth tokens in the DB for dev@social-forge.dev.
 
 use social_forge::config::Config;
@@ -71,7 +71,7 @@ fn get_ias_provider(config: &Config) -> InstagramStandaloneProvider {
     InstagramStandaloneProvider::new(config)
 }
 
-async fn get_token(config: &Config, pool: &sqlx::PgPool, provider_identifier: &str) -> (String, String) {
+async fn get_token(config: &Config, pool: &sqlx::SqlitePool, provider_identifier: &str) -> (String, String) {
     let user = queries::get_user_by_email(pool, "dev@social-forge.dev")
         .await
         .expect("DB query")

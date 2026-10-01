@@ -7,12 +7,12 @@ use tracing;
 
 use crate::config::Config;
 use crate::db::models::PostState;
-use crate::db::PgPool;
+use sqlx::SqlitePool;
 use crate::poll::{spawn_poll, FirstTick};
 use crate::social::registry::ProviderRegistry;
 
 pub fn start_rss_poller(
-    db: PgPool,
+    db: SqlitePool,
     _providers: Arc<ProviderRegistry>,
     config: Arc<Config>,
     shutdown_rx: watch::Receiver<bool>,
@@ -36,7 +36,7 @@ pub fn start_rss_poller(
 }
 
 async fn poll_all_feeds(
-    db: &PgPool,
+    db: &SqlitePool,
     config: &Config,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let feeds = crate::db::queries::get_feeds_due_for_polling(db).await?;

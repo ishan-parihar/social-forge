@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE tags SET name = ?, color = ?, updated_at = unixepoch() WHERE id = ? AND user_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "582cd912440de5ca986a8091f8c96eace32c5e61015c37be01c43b76637337ac"
+}

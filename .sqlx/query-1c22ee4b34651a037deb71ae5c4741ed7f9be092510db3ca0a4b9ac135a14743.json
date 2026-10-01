@@ -1,0 +1,44 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id as \"id!: String\", name, color,\n                  created_at as \"created_at: EpochUtc\",\n                  updated_at as \"updated_at: EpochUtc\"\n           FROM tags WHERE user_id = ? ORDER BY name ASC",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!: String",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "name",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "color",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_at: EpochUtc",
+        "ordinal": 3,
+        "type_info": "Integer"
+      },
+      {
+        "name": "updated_at: EpochUtc",
+        "ordinal": 4,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "1c22ee4b34651a037deb71ae5c4741ed7f9be092510db3ca0a4b9ac135a14743"
+}

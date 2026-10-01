@@ -1,0 +1,68 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id as \"id!: Uuid\", user_id as \"user_id!: Uuid\",\n                original_name, storage_path, mime_type, file_size,\n                width as \"width?: i32\", height as \"height?: i32\",\n                created_at as \"created_at!: DateTime<Utc>\"\n         FROM media WHERE id = ? AND user_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!: Uuid",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "user_id!: Uuid",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "original_name",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "storage_path",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "mime_type",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "file_size",
+        "ordinal": 5,
+        "type_info": "Integer"
+      },
+      {
+        "name": "width?: i32",
+        "ordinal": 6,
+        "type_info": "Integer"
+      },
+      {
+        "name": "height?: i32",
+        "ordinal": 7,
+        "type_info": "Integer"
+      },
+      {
+        "name": "created_at!: DateTime<Utc>",
+        "ordinal": 8,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "922f1a4add02a848be3d9d66d4873f7ff26a8b3c4bfd60426a2ffc255ceea8b4"
+}

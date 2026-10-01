@@ -32,13 +32,14 @@ use social_forge::services::telegram_client::TelegramClientManager;
 use social_forge::social::registry::ProviderRegistry;
 use social_forge::wa::WhaClient;
 
-/// Start the six leader-only background pollers. One call site at boot,
-/// one in the re-election watchdog: a standby that later wins the lease
-/// starts the exact same set, so promotion needs no second spawn list.
-/// Loop bodies are untouched — only the gate moved.
+/// Start the six background pollers. One call site at boot. Loop bodies
+/// are untouched. There is no leader gate: SQLite is a single-writer
+/// store, so this binary is the only process that can hold the write
+/// lock, and running the pollers unconditionally is what makes a
+/// single instance behave exactly as it did before.
 #[allow(clippy::too_many_arguments)]
 fn spawn_pollers(
-    db: db::PgPool,
+    db: db::SqlitePool,
     providers_arc: Arc<ProviderRegistry>,
     broadcaster: Broadcaster,
     token_key: Option<[u8; 32]>,
@@ -157,19 +158,6 @@ async fn main() -> anyhow::Result<()> {
         tracing::warn!("Failed to ensure local user row: {e} — DB inserts may fail");
     }
 
-    // ── Leader election ──────────────────────────────────────
-    // Several replicas may share this database, but the six background
-    // pollers must run on exactly one of them — N replicas otherwise mean
-    // N concurrent publishes and N× the platform API traffic. A follower
-    // still serves the full REST + MCP surface; it just doesn't poll.
-    // With a single instance this always resolves to leader, so behavior is
-    // unchanged.
-    let leader_lease = social_forge::lease::try_acquire_leader(&db)
-        .await
-        .context("Failed to acquire scheduler lease")?;
-    // `is_leader` is decided inside the gate below from the lease slot, so a
-    // standby can be promoted later without restarting.
-
     // ── Realtime broadcaster ──────────────────────────────────
     let broadcaster = Broadcaster::new();
 
@@ -267,76 +255,15 @@ async fn main() -> anyhow::Result<()> {
     let state_for_mcp = state.clone();
 
     // ── Start scheduler ───────────────────────────────────────
-    // The six pollers below are leader-only. Loop bodies are untouched —
-    // this is the single gate that decides who runs them. A standby that
-    // later wins the lease starts the identical set via the watchdog, so
-    // promotion needs no second spawn list.
     let (shutdown_tx, _) = tokio::sync::watch::channel(false);
-    let lease_slot: std::sync::Arc<
-        tokio::sync::Mutex<Option<social_forge::lease::LeaderLease>>,
-    > = std::sync::Arc::new(tokio::sync::Mutex::new(leader_lease));
-    {
-        let slot = lease_slot.clone();
-        let already_leader = slot.lock().await.is_some();
-        if already_leader {
-            spawn_pollers(
-                db.clone(),
-                providers_arc.clone(),
-                broadcaster.clone(),
-                token_key,
-                config.clone(),
-                &shutdown_tx,
-            );
-        } else {
-            tracing::info!(
-                "Standby instance: REST + MCP served, 6 background pollers not started \
-                 (another replica holds the scheduler lease) — re-election watchdog running"
-            );
-            let db_w = db.clone();
-            let prov_w = providers_arc.clone();
-            let bc_w = broadcaster.clone();
-            let cfg_w = config.clone();
-            let tx_w = shutdown_tx.clone();
-            tokio::spawn(async move {
-                let mut tick =
-                    tokio::time::interval(std::time::Duration::from_secs(30));
-                tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-                let mut stop = tx_w.subscribe();
-                loop {
-                    tokio::select! {
-                        _ = stop.changed() => break,
-                        _ = tick.tick() => {
-                            let mut g = slot.lock().await;
-                            if g.is_none() {
-                                match social_forge::lease::try_acquire_leader(&db_w).await {
-                                    Ok(Some(lease)) => {
-                                        tracing::info!(
-                                            "Scheduler lease acquired — promoted to leader, starting background pollers"
-                                        );
-                                        *g = Some(lease);
-                                        spawn_pollers(
-                                            db_w.clone(),
-                                            prov_w.clone(),
-                                            bc_w.clone(),
-                                            token_key,
-                                            cfg_w.clone(),
-                                            &tx_w,
-                                        );
-                                        break;
-                                    }
-                                    Ok(None) => {}
-                                    Err(e) => tracing::warn!("Re-election attempt failed: {e}"),
-                                }
-                            }
-                        }
-                    }
-                }
-            });
-        }
-    }
-    // The lease slot lives to the end of main: dropping the LeaderLease
-    // would release the advisory lock and let a second replica start
-    // polling alongside us.
+    spawn_pollers(
+        db.clone(),
+        providers_arc.clone(),
+        broadcaster.clone(),
+        token_key,
+        config.clone(),
+        &shutdown_tx,
+    );
 
     // ── Build HTTP router ─────────────────────────────────────
     let app = api::build_router(state);

@@ -107,10 +107,10 @@ pub async fn list(
                   c.progress_metric, c.progress_target, c.audience_persona,
                   c.content_pillars, c.budget_cents, c.kpi_targets,
                   c.sort_order, c.deleted_at, c.created_at, c.updated_at,
-                  COUNT(p.id)::bigint AS post_count
+                  COUNT(p.id) AS post_count
            FROM campaigns c
            LEFT JOIN posts p ON p.campaign_id = c.id AND p.deleted_at IS NULL
-           WHERE c.user_id = $1 AND c.deleted_at IS NULL
+           WHERE c.user_id = ? AND c.deleted_at IS NULL
            GROUP BY c.id
            ORDER BY c.sort_order ASC, c.created_at DESC"#,
     )
@@ -147,11 +147,11 @@ pub async fn create(
                status, progress_metric, progress_target, audience_persona,
                content_pillars, budget_cents, kpi_targets
            )
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            RETURNING id, user_id, name, description, color, start_date, end_date, goal,
                      status, progress_metric, progress_target, audience_persona,
                      content_pillars, budget_cents, kpi_targets, sort_order,
-                     deleted_at, created_at, updated_at, NULL::bigint AS post_count"#,
+                     deleted_at, created_at, updated_at, NULL AS post_count"#,
     )
     .bind(auth.user_id)
     .bind(&body.name)
@@ -199,30 +199,30 @@ pub async fn update(
         }
     }
 
+    // SQLite has no `$N` positional params — `?` is positional in textual
+    // order, so the SET placeholders come before the WHERE ones.
     let campaign: Campaign = sqlx::query_as(
         r#"UPDATE campaigns SET
-             name = COALESCE($3, name),
-             description = COALESCE($4, description),
-             color = COALESCE($5, color),
-             start_date = COALESCE($6, start_date),
-             end_date = COALESCE($7, end_date),
-             goal = COALESCE($8, goal),
-             status = COALESCE($9, status),
-             progress_metric = COALESCE($10, progress_metric),
-             progress_target = COALESCE($11, progress_target),
-             audience_persona = COALESCE($12, audience_persona),
-             content_pillars = COALESCE($13, content_pillars),
-             budget_cents = COALESCE($14, budget_cents),
-             kpi_targets = COALESCE($15, kpi_targets),
-             updated_at = NOW()
-           WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL
+             name = COALESCE(?, name),
+             description = COALESCE(?, description),
+             color = COALESCE(?, color),
+             start_date = COALESCE(?, start_date),
+             end_date = COALESCE(?, end_date),
+             goal = COALESCE(?, goal),
+             status = COALESCE(?, status),
+             progress_metric = COALESCE(?, progress_metric),
+             progress_target = COALESCE(?, progress_target),
+             audience_persona = COALESCE(?, audience_persona),
+             content_pillars = COALESCE(?, content_pillars),
+             budget_cents = COALESCE(?, budget_cents),
+             kpi_targets = COALESCE(?, kpi_targets),
+             updated_at = unixepoch()
+           WHERE id = ? AND user_id = ? AND deleted_at IS NULL
            RETURNING id, user_id, name, description, color, start_date, end_date, goal,
                      status, progress_metric, progress_target, audience_persona,
                      content_pillars, budget_cents, kpi_targets, sort_order,
-                     deleted_at, created_at, updated_at, NULL::bigint AS post_count"#,
+                     deleted_at, created_at, updated_at, NULL AS post_count"#,
     )
-    .bind(id)
-    .bind(auth.user_id)
     .bind(&body.name)
     .bind(&body.description)
     .bind(&body.color)
@@ -236,6 +236,8 @@ pub async fn update(
     .bind(&body.content_pillars)
     .bind(body.budget_cents)
     .bind(&body.kpi_targets)
+    .bind(id)
+    .bind(auth.user_id)
     .fetch_one(&state.db)
     .await
     .map_err(|e| AppError::Internal(format!("Failed to update campaign: {e}")))?;
@@ -258,7 +260,7 @@ pub async fn delete(
     auth: AuthenticatedUser,
     Path(id): Path<Uuid>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    sqlx::query("UPDATE campaigns SET deleted_at = NOW(), status = 'archived', updated_at = NOW() WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL")
+    sqlx::query("UPDATE campaigns SET deleted_at = unixepoch(), status = 'archived', updated_at = unixepoch() WHERE id = ? AND user_id = ? AND deleted_at IS NULL")
         .bind(id)
         .bind(auth.user_id)
         .execute(&state.db)
@@ -301,7 +303,7 @@ pub async fn update_stage(
 
     // v25-3: validate kanban metadata fields if provided. The DB has CHECK
     // constraints (migration 034) but we want a friendly error before the
-    // UPDATE rather than a raw Postgres violation.
+    // UPDATE rather than a raw CHECK violation.
     if let Some(ref sub) = body.kanban_substate {
         if !["ready_to_publish", "in_review", "blocked"].contains(&sub.as_str()) {
             return Err(AppError::BadRequest(format!(
@@ -316,22 +318,21 @@ pub async fn update_stage(
             )));
         }
     }
-    // Parse due_date if provided (RFC3339 → DateTime<Utc>). An empty string
-    // is treated as "clear" (set to NULL).
-    let due_date_dt: Option<Option<chrono::DateTime<chrono::Utc>>> = match &body.due_date {
+    // Parse due_date if provided (RFC3339 → epoch i64; the column is an
+    // INTEGER epoch). An empty string is treated as "clear" (set to NULL).
+    let due_date_dt: Option<Option<i64>> = match &body.due_date {
         None => None, // don't touch the field
         Some(s) if s.trim().is_empty() => Some(None), // explicit clear
         Some(s) => {
             let dt = chrono::DateTime::parse_from_rfc3339(s)
-                .map_err(|_| AppError::BadRequest("Invalid due_date format, use ISO8601/RFC3339".into()))?
-                .with_timezone(&chrono::Utc);
-            Some(Some(dt))
+                .map_err(|_| AppError::BadRequest("Invalid due_date format, use ISO8601/RFC3339".into()))?;
+            Some(Some(dt.timestamp()))
         }
     };
 
     // Fetch the current state to validate the transition.
     let current_state: Option<String> = sqlx::query_scalar(
-        r#"SELECT state::text FROM posts WHERE id = $1 AND user_id = $2"#,
+        r#"SELECT state FROM posts WHERE id = ? AND user_id = ?"#,
     )
     .bind(id)
     .bind(auth.user_id)
@@ -353,12 +354,12 @@ pub async fn update_stage(
             // Explicit set or clear.
             sqlx::query(
                 r#"UPDATE posts SET
-                     campaign_id = $3,
-                     kanban_substate = COALESCE($4, kanban_substate),
-                     priority = COALESCE($5, priority),
-                     due_date = $6,
-                     updated_at = NOW()
-                   WHERE id = $1 AND user_id = $2"#,
+                     campaign_id = ?,
+                     kanban_substate = COALESCE(?, kanban_substate),
+                     priority = COALESCE(?, priority),
+                     due_date = ?,
+                     updated_at = unixepoch()
+                   WHERE id = ? AND user_id = ?"#,
             )
             .bind(id)
             .bind(auth.user_id)
@@ -373,11 +374,11 @@ pub async fn update_stage(
             // Leave due_date unchanged.
             sqlx::query(
                 r#"UPDATE posts SET
-                     campaign_id = $3,
-                     kanban_substate = COALESCE($4, kanban_substate),
-                     priority = COALESCE($5, priority),
-                     updated_at = NOW()
-                   WHERE id = $1 AND user_id = $2"#,
+                     campaign_id = ?,
+                     kanban_substate = COALESCE(?, kanban_substate),
+                     priority = COALESCE(?, priority),
+                     updated_at = unixepoch()
+                   WHERE id = ? AND user_id = ?"#,
             )
             .bind(id)
             .bind(auth.user_id)
@@ -443,13 +444,13 @@ pub async fn update_stage(
     if due_date_dt.is_some() {
         sqlx::query(
             r#"UPDATE posts SET
-                 state = $3::post_state,
-                 campaign_id = $4,
-                 kanban_substate = COALESCE($5, kanban_substate),
-                 priority = COALESCE($6, priority),
-                 due_date = $7,
-                 updated_at = NOW()
-               WHERE id = $1 AND user_id = $2"#,
+                 state = ?,
+                 campaign_id = ?,
+                 kanban_substate = COALESCE(?, kanban_substate),
+                 priority = COALESCE(?, priority),
+                 due_date = ?,
+                 updated_at = unixepoch()
+               WHERE id = ? AND user_id = ?"#,
         )
         .bind(id)
         .bind(auth.user_id)
@@ -464,12 +465,12 @@ pub async fn update_stage(
     } else {
         sqlx::query(
             r#"UPDATE posts SET
-                 state = $3::post_state,
-                 campaign_id = $4,
-                 kanban_substate = COALESCE($5, kanban_substate),
-                 priority = COALESCE($6, priority),
-                 updated_at = NOW()
-               WHERE id = $1 AND user_id = $2"#,
+                 state = ?,
+                 campaign_id = ?,
+                 kanban_substate = COALESCE(?, kanban_substate),
+                 priority = COALESCE(?, priority),
+                 updated_at = unixepoch()
+               WHERE id = ? AND user_id = ?"#,
         )
         .bind(id)
         .bind(auth.user_id)

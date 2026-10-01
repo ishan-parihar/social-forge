@@ -3,7 +3,7 @@
 // Used by both `api/integrations.rs` (HTTP) and `mcp/tools_integrations.rs` (MCP).
 
 use chrono::Utc;
-use sqlx::PgPool;
+use sqlx::SqlitePool;
 use uuid::Uuid;
 
 use crate::db::models::Integration;
@@ -28,7 +28,7 @@ pub struct IntegrationService;
 impl IntegrationService {
     /// Initiate OAuth flow for a provider
     pub async fn initiate_connect(
-        db: &PgPool,
+        db: &SqlitePool,
         registry: &ProviderRegistry,
         user_id: Uuid,
         provider_identifier: &str,
@@ -74,7 +74,7 @@ impl IntegrationService {
     /// Extracts provider_identifier and user_id from the stored OAuth state.
     /// Encrypts tokens at rest when token_key is configured.
     pub async fn complete_connect(
-        db: &PgPool,
+        db: &SqlitePool,
         registry: &ProviderRegistry,
         broadcaster: &Broadcaster,
         state: &str,
@@ -164,7 +164,7 @@ impl IntegrationService {
 
     /// List all integrations for a user
     pub async fn list(
-        db: &PgPool,
+        db: &SqlitePool,
         user_id: Uuid,
     ) -> ServiceResult<Vec<Integration>> {
         queries::list_integrations(db, user_id)
@@ -174,7 +174,7 @@ impl IntegrationService {
 
     /// Disconnect (delete) an integration
     pub async fn disconnect(
-        db: &PgPool,
+        db: &SqlitePool,
         broadcaster: &Broadcaster,
         user_id: Uuid,
         integration_id: Uuid,

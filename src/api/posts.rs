@@ -179,7 +179,7 @@ pub struct FindSlotResponse {
 // ── Helpers ──────────────────────────────────────────────────
 
 /// Fetch and convert tags for a post. Logs DB errors instead of silently swallowing them.
-async fn enrich_post_tags(db: &crate::db::PgPool, post_id: Uuid, user_id: Uuid) -> Vec<TagResponse> {
+async fn enrich_post_tags(db: &crate::db::SqlitePool, post_id: Uuid, user_id: Uuid) -> Vec<TagResponse> {
     match queries::get_tags_for_post(db, post_id, user_id).await {
         Ok(rows) => rows
             .into_iter()
@@ -200,15 +200,21 @@ async fn enrich_post_tags(db: &crate::db::PgPool, post_id: Uuid, user_id: Uuid) 
 
 /// Verify that all tag_ids belong to the given user.
 async fn verify_tag_ownership(
-    db: &crate::db::PgPool,
+    db: &crate::db::SqlitePool,
     tag_ids: &[Uuid],
     user_id: Uuid,
 ) -> Result<(), crate::error::AppError> {
+    // `id = ANY($1)` was Postgres-only. sqlite has no array type, so the id
+    // list travels as a JSON array and `json_each` fans it back out.
+    let tag_ids_json = serde_json::to_value(tag_ids)
+        .map_err(|e| crate::error::AppError::Internal(format!("Failed to encode tag_ids: {e}")))?;
     let count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*)::bigint FROM tags WHERE id = ANY($1) AND user_id = $2",
+        "SELECT COUNT(*) FROM tags
+         WHERE user_id = ?
+           AND id IN (SELECT value FROM json_each(?))",
     )
-    .bind(tag_ids)
     .bind(user_id)
+    .bind(tag_ids_json)
     .fetch_one(db)
     .await?;
     if (count as usize) != tag_ids.len() {
@@ -976,27 +982,33 @@ pub async fn kanban_reorder(
     let mut tx = state.db.begin().await
         .map_err(|e| crate::error::AppError::Internal(format!("Failed to begin tx: {e}")))?;
 
-    // Update each post's kanban_sort_order to its index. We use a CTE that
-    // unnests the array with ordinality so we can do this in a single SQL
-    // statement rather than N round-trips.
+    // Update each post's kanban_sort_order to its index in one statement
+    // rather than N round-trips. Postgres did this with
+    // `unnest($1::uuid[]) WITH ORDINALITY`; sqlite has no arrays, so the id
+    // list travels as a JSON array and `json_each` supplies both the value
+    // and the zero-based `key` we turn into a 1-based ordinal — preserving
+    // the original WITH ORDINALITY numbering.
     //
-    // Security: the WHERE user_id = $2 AND state = $3 clause ensures the
-    // caller can only reorder their OWN posts in the specified column —
-    // even if they send a foreign user's post ID, it won't match.
+    // Security: the WHERE user_id = ? AND state = ? clause ensures the caller
+    // can only reorder their OWN posts in the specified column — even if they
+    // send a foreign user's post ID, it won't match.
+    let deduped_json = serde_json::to_value(&deduped)
+        .map_err(|e| crate::error::AppError::Internal(format!("Failed to encode post ids: {e}")))?;
     let result = sqlx::query(
         r#"WITH ordered AS (
-             SELECT * FROM unnest($1::uuid[]) WITH ORDINALITY AS t(id, ord)
+             SELECT value AS id, key + 1 AS ord FROM json_each(?)
            )
-           UPDATE posts p
-           SET kanban_sort_order = ordered.ord::int,
-               updated_at = NOW()
-           FROM ordered
-           WHERE p.id = ordered.id
-             AND p.user_id = $2
-             AND p.state = $3::post_state
-             AND p.deleted_at IS NULL"#,
+           UPDATE posts
+           SET kanban_sort_order = (
+                   SELECT ord FROM ordered WHERE ordered.id = posts.id
+               ),
+               updated_at = unixepoch()
+           WHERE user_id = ?
+             AND state = ?
+             AND deleted_at IS NULL
+             AND id IN (SELECT id FROM ordered)"#,
     )
-    .bind(&deduped)
+    .bind(deduped_json)
     .bind(auth.user_id)
     .bind(&body.state)
     .execute(&mut *tx)

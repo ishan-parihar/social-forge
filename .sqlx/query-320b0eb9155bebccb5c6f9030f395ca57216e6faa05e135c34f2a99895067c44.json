@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM oauth_states WHERE state = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "320b0eb9155bebccb5c6f9030f395ca57216e6faa05e135c34f2a99895067c44"
+}

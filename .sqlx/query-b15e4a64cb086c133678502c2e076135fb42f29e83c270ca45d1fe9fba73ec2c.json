@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT access_token FROM integrations WHERE user_id = ? AND provider_identifier = ? LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "name": "access_token",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "b15e4a64cb086c133678502c2e076135fb42f29e83c270ca45d1fe9fba73ec2c"
+}

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE integrations SET refresh_needed = true, updated_at = unixepoch() WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "56e78d0d3e1d923e6a4212dcba0dcdb5cbc2304901bc3293692bfa8a0a83bb79"
+}

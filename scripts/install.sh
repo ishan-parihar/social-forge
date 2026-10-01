@@ -8,18 +8,16 @@
 # What this script does:
 #   1. Detects OS/arch, downloads the pre-built musl binary from GitHub Releases
 #   2. Creates the install directory structure
-#   3. Creates a .env from the embedded template (DATABASE_URL uses correct port 5433)
-#   4. Downloads docker-compose.yml and migrations
+#   3. Creates a .env from the embedded template (SQLite DATABASE_URL)
+#   4. Downloads the startup script
 #   5. Installs the systemd service (Linux only, unless SKIP_SERVICE=true)
 #   6. Installs the AI agent skill (unless SKIP_SKILL=true)
-#   7. Installs postgresql-client for pg_isready (unless SKIP_PG_CLIENT=true)
 #
 # Environment variables:
 #   INSTALL_DIR      Installation directory (default: $HOME/social-forge)
 #   BIN_DIR          Binary install path   (default: /usr/local/bin)
 #   SKIP_SERVICE     Skip systemd service  (default: false)
 #   SKIP_SKILL       Skip AI agent skill   (default: false)
-#   SKIP_PG_CLIENT   Skip postgresql-client install (default: false)
 #   SERVE_FRONTEND   Set to false to disable the embedded web UI (default: true)
 #   VERSION          Specific tag to install (default: latest)
 # ───────────────────────────────────────────────────────────────────────────────
@@ -52,7 +50,6 @@ Environment variables:
   BIN_DIR         Binary directory           (default: /usr/local/bin)
   SKIP_SERVICE    Skip systemd service       (default: false)
   SKIP_SKILL      Skip AI agent skill        (default: false)
-  SKIP_PG_CLIENT  Skip postgresql-client     (default: false)
   SERVE_FRONTEND  Disable embedded web UI    (default: true)
   VERSION         Specific version to install (default: latest)
 
@@ -94,7 +91,6 @@ INSTALL_DIR="${INSTALL_DIR:-${HOME}/social-forge}"
 BIN_DIR="${BIN_DIR:-/usr/local/bin}"
 SKIP_SERVICE="${SKIP_SERVICE:-false}"
 SKIP_SKILL="${SKIP_SKILL:-false}"
-SKIP_PG_CLIENT="${SKIP_PG_CLIENT:-false}"
 SERVE_FRONTEND="${SERVE_FRONTEND:-true}"
 VERSION="${VERSION:-latest}"
 
@@ -168,31 +164,9 @@ if ! "${BIN_DIR}/${APP_NAME}" --version &>/dev/null && \
     warn "Binary installed but couldn't run --version (may be a cross-arch issue or expected)"
 fi
 
-# ── Install postgresql-client (for pg_isready in start script) ───────────────
-if [ "$OS" = "linux" ] && [ "$SKIP_PG_CLIENT" != "true" ]; then
-    if ! command -v pg_isready &>/dev/null; then
-        head "Installing postgresql-client (for pg_isready)..."
-        if command -v apt-get &>/dev/null; then
-            $SUDO apt-get update -qq && $SUDO apt-get install -y -qq postgresql-client 2>/dev/null && \
-                log "postgresql-client installed" || \
-                warn "Could not install postgresql-client — TCP fallback will be used"
-        elif command -v yum &>/dev/null; then
-            $SUDO yum install -y -q postgresql &>/dev/null && \
-                log "postgresql installed" || \
-                warn "Could not install postgresql — TCP fallback will be used"
-        else
-            warn "Could not detect package manager — install postgresql-client manually for pg_isready"
-        fi
-    else
-        log "pg_isready already available"
-    fi
-fi
-
 # ── Create .env from template ─────────────────────────────────────────────────
 head "Configuration..."
 if [ ! -f "${INSTALL_DIR}/.env" ]; then
-    # Note: DATABASE_URL uses port 5433 — the host-mapped port from docker-compose.yml
-    # (Docker maps host:5433 → container:5432)
     SERVE_FRONTEND_LINE=""
     if [ "$SERVE_FRONTEND" = "false" ]; then
         SERVE_FRONTEND_LINE="SERVE_FRONTEND=false"
@@ -204,8 +178,8 @@ if [ ! -f "${INSTALL_DIR}/.env" ]; then
 # Edit this file to add your platform API credentials.
 
 # ── Database ─────────────────────────────────────────────────────────────────
-# Port 5433 = host-side Docker port mapping (container runs on 5432 internally)
-DATABASE_URL=postgres://social_forge:social_forge@localhost:5433/social_forge
+# SQLite file, created and migrated automatically on first run.
+DATABASE_URL=sqlite://${INSTALL_DIR}/data/social-forge.db?mode=rwc
 
 # ── Server ───────────────────────────────────────────────────────────────────
 # Your public-facing URL. Used for OAuth callback URIs.
@@ -286,14 +260,6 @@ ENVEOF
     warn "Edit ${INSTALL_DIR}/.env with your platform credentials before starting"
 else
     warn "Skipped .env — already exists at ${INSTALL_DIR}/.env"
-fi
-
-# ── Download docker-compose.yml ───────────────────────────────────────────────
-if [ ! -f "${INSTALL_DIR}/docker-compose.yml" ]; then
-    curl -fsSL -o "${INSTALL_DIR}/docker-compose.yml" \
-        "${REPO_RAW}/docker-compose.yml" 2>/dev/null && \
-        log "Downloaded docker-compose.yml" || \
-        warn "Failed to download docker-compose.yml — download it manually from https://github.com/${REPO}"
 fi
 
 # ── Download startup script ───────────────────────────────────────────────────
@@ -384,20 +350,17 @@ echo ""
 echo "  1. Edit your config:"
 echo "       nano ${INSTALL_DIR}/.env"
 echo ""
-echo "  2. Start PostgreSQL (Docker):"
-echo "       cd ${INSTALL_DIR} && docker compose up -d postgres"
-echo ""
 if [ "$OS" = "linux" ] && [ "$SKIP_SERVICE" != "true" ]; then
-  echo "  3. Start the service:"
+  echo "  2. Start the service:"
   echo "       sudo systemctl enable ${APP_NAME} --now"
   echo ""
-  echo "  4. Open the dashboard:"
+  echo "  3. Open the dashboard:"
   echo "       https://localhost:6543"
 else
-  echo "  3. Start the server:"
+  echo "  2. Start the server:"
   echo "       ${BIN_DIR}/${APP_NAME} serve"
   echo ""
-  echo "  4. Open the dashboard:"
+  echo "  3. Open the dashboard:"
   echo "       https://localhost:6543"
 fi
 echo ""

@@ -13,7 +13,7 @@ use serde::Serialize;
 use tokio::sync::broadcast;
 use uuid::Uuid;
 
-use crate::db::PgPool;
+use sqlx::SqlitePool;
 
 /// An event emitted by the system
 #[derive(Debug, Clone, Serialize)]
@@ -59,7 +59,7 @@ impl Broadcaster {
     /// best-effort — failures are logged but don't break the broadcast.
     pub async fn send_and_log(
         &self,
-        db: &PgPool,
+        db: &SqlitePool,
         user_id: Uuid,
         event: &'static str,
         data: &impl Serialize,
@@ -72,7 +72,7 @@ impl Broadcaster {
         // Persist to events_log (best-effort).
         let _ = sqlx::query(
             r#"INSERT INTO events_log (user_id, event_type, payload)
-               VALUES ($1, $2, $3)"#,
+               VALUES (?, ?, ?)"#,
         )
         .bind(user_id)
         .bind(event)

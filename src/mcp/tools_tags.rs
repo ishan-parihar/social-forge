@@ -5,6 +5,8 @@ use rmcp::{Json, schemars::JsonSchema};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::db::types::EpochUtc;
+
 use crate::api::AppState;
 
 // ── Input Types ──────────────────────────────────────────────
@@ -55,12 +57,14 @@ pub async fn handle_tag_create(
     if name.is_empty() {
         return Err("Tag name cannot be empty".into());
     }
-    let color = input.color.as_deref().unwrap_or("#6366f1");
+    let color = input.color.as_deref().unwrap_or("#6366f1").to_string();
 
     let tag = sqlx::query!(
         r#"INSERT INTO tags (user_id, name, color)
-           VALUES ($1, $2, $3)
-           RETURNING id, name, color, created_at, updated_at"#,
+           VALUES (?, ?, ?)
+           RETURNING id as "id!: String", name, color,
+                     created_at as "created_at: EpochUtc",
+                     updated_at as "updated_at: EpochUtc""#,
         user_id,
         name,
         color,
@@ -71,11 +75,11 @@ pub async fn handle_tag_create(
 
     Ok(Json(serde_json::json!({
         "data": {
-            "id": tag.id.to_string(),
+            "id": tag.id,
             "name": tag.name,
             "color": tag.color,
-            "created_at": tag.created_at.to_rfc3339(),
-            "updated_at": tag.updated_at.to_rfc3339(),
+            "created_at": tag.created_at.0.to_rfc3339(),
+            "updated_at": tag.updated_at.0.to_rfc3339(),
         }
     })))
 }
@@ -88,8 +92,10 @@ pub async fn handle_tag_list(
     let user_id = super::tools_posts::resolve_first_user(state).await?;
 
     let tags = sqlx::query!(
-        r#"SELECT id, name, color, created_at, updated_at
-           FROM tags WHERE user_id = $1 ORDER BY name ASC"#,
+        r#"SELECT id as "id!: String", name, color,
+                  created_at as "created_at: EpochUtc",
+                  updated_at as "updated_at: EpochUtc"
+           FROM tags WHERE user_id = ? ORDER BY name ASC"#,
         user_id,
     )
     .fetch_all(&state.db)
@@ -100,11 +106,11 @@ pub async fn handle_tag_list(
         .into_iter()
         .map(|t| {
             serde_json::json!({
-                "id": t.id.to_string(),
+                "id": t.id,
                 "name": t.name,
                 "color": t.color,
-                "created_at": t.created_at.to_rfc3339(),
-                "updated_at": t.updated_at.to_rfc3339(),
+                "created_at": t.created_at.0.to_rfc3339(),
+                "updated_at": t.updated_at.0.to_rfc3339(),
             })
         })
         .collect();
@@ -122,8 +128,10 @@ pub async fn handle_tag_get(
         .map_err(|_| format!("Invalid tag ID: {}", input.tag_id))?;
 
     let tag = sqlx::query!(
-        r#"SELECT id, name, color, created_at, updated_at
-           FROM tags WHERE id = $1 AND user_id = $2"#,
+        r#"SELECT id as "id!: String", name, color,
+                  created_at as "created_at: EpochUtc",
+                  updated_at as "updated_at: EpochUtc"
+           FROM tags WHERE id = ? AND user_id = ?"#,
         tag_id,
         user_id,
     )
@@ -134,11 +142,11 @@ pub async fn handle_tag_get(
 
     Ok(Json(serde_json::json!({
         "data": {
-            "id": tag.id.to_string(),
+            "id": tag.id,
             "name": tag.name,
             "color": tag.color,
-            "created_at": tag.created_at.to_rfc3339(),
-            "updated_at": tag.updated_at.to_rfc3339(),
+            "created_at": tag.created_at.0.to_rfc3339(),
+            "updated_at": tag.updated_at.0.to_rfc3339(),
         }
     })))
 }
@@ -152,17 +160,21 @@ pub async fn handle_tag_update(
     let tag_id = Uuid::parse_str(&input.tag_id)
         .map_err(|_| format!("Invalid tag ID: {}", input.tag_id))?;
 
+    let new_name = input.name.clone();
+    let new_color = input.color.clone();
     let tag = sqlx::query!(
         r#"UPDATE tags SET
-              name = COALESCE($3, name),
-              color = COALESCE($4, color),
-              updated_at = now()
-           WHERE id = $1 AND user_id = $2
-           RETURNING id, name, color, created_at, updated_at"#,
+              name = COALESCE(?, name),
+              color = COALESCE(?, color),
+              updated_at = unixepoch()
+           WHERE id = ? AND user_id = ?
+           RETURNING id as "id!: String", name, color,
+                     created_at as "created_at: EpochUtc",
+                     updated_at as "updated_at: EpochUtc""#,
         tag_id,
         user_id,
-        input.name.as_deref(),
-        input.color.as_deref(),
+        new_name,
+        new_color,
     )
     .fetch_optional(&state.db)
     .await
@@ -171,11 +183,11 @@ pub async fn handle_tag_update(
 
     Ok(Json(serde_json::json!({
         "data": {
-            "id": tag.id.to_string(),
+            "id": tag.id,
             "name": tag.name,
             "color": tag.color,
-            "created_at": tag.created_at.to_rfc3339(),
-            "updated_at": tag.updated_at.to_rfc3339(),
+            "created_at": tag.created_at.0.to_rfc3339(),
+            "updated_at": tag.updated_at.0.to_rfc3339(),
         }
     })))
 }
@@ -190,7 +202,7 @@ pub async fn handle_tag_delete(
         .map_err(|_| format!("Invalid tag ID: {}", input.tag_id))?;
 
     let result = sqlx::query!(
-        "DELETE FROM tags WHERE id = $1 AND user_id = $2",
+        "DELETE FROM tags WHERE id = ? AND user_id = ?",
         tag_id,
         user_id,
     )

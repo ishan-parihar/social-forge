@@ -124,7 +124,7 @@ pub async fn create(
     let row: ApiKeyRow = sqlx::query_as(
         r#"
         INSERT INTO api_keys (user_id, name, key_prefix, key_hash, expires_at)
-        VALUES ($1, $2, $3, $4, $5)
+        VALUES (?, ?, ?, ?, ?)
         RETURNING id, name, key_prefix, last_used_at, expires_at, is_active, created_at
         "#,
     )
@@ -155,7 +155,7 @@ pub async fn list(
         r#"
         SELECT id, name, key_prefix, last_used_at, expires_at, is_active, created_at
         FROM api_keys
-        WHERE user_id = $1
+        WHERE user_id = ?
         ORDER BY created_at DESC
         "#,
     )
@@ -174,7 +174,7 @@ pub async fn revoke(
     Path(id): Path<Uuid>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     let result = sqlx::query(
-        "UPDATE api_keys SET is_active = false WHERE id = $1 AND user_id = $2",
+        "UPDATE api_keys SET is_active = false WHERE id = ? AND user_id = ?",
     )
     .bind(id)
     .bind(auth.user_id)
@@ -200,7 +200,7 @@ pub async fn regenerate(
         r#"
         SELECT id, name, key_prefix, last_used_at, expires_at, is_active, created_at
         FROM api_keys
-        WHERE id = $1 AND user_id = $2 AND is_active = true
+        WHERE id = ? AND user_id = ? AND is_active = true
         "#,
     )
     .bind(id)
@@ -214,8 +214,8 @@ pub async fn regenerate(
     let row: ApiKeyRow = sqlx::query_as(
         r#"
         UPDATE api_keys
-        SET key_prefix = $1, key_hash = $2
-        WHERE id = $3 AND user_id = $4
+        SET key_prefix = ?, key_hash = ?
+        WHERE id = ? AND user_id = ?
         RETURNING id, name, key_prefix, last_used_at, expires_at, is_active, created_at
         "#,
     )

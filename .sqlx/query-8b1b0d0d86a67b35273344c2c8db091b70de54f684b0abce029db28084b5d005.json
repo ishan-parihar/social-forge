@@ -1,0 +1,56 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id as \"id!: Uuid\", state, provider, code_verifier, redirect_uri,\n                  created_at as \"created_at!: DateTime<Utc>\",\n                  expires_at as \"expires_at!: DateTime<Utc>\"\n         FROM oauth_states WHERE state = ? AND expires_at > unixepoch()",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!: Uuid",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "state",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "provider",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "code_verifier",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "redirect_uri",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_at!: DateTime<Utc>",
+        "ordinal": 5,
+        "type_info": "Integer"
+      },
+      {
+        "name": "expires_at!: DateTime<Utc>",
+        "ordinal": 6,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "8b1b0d0d86a67b35273344c2c8db091b70de54f684b0abce029db28084b5d005"
+}

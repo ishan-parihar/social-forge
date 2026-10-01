@@ -68,7 +68,7 @@ pub async fn list(
 ) -> Result<Json<Vec<TagResponse>>, AppError> {
     let tags = sqlx::query_as::<_, Tag>(
         r#"SELECT id, user_id, name, color, created_at, updated_at
-           FROM tags WHERE user_id = $1 ORDER BY name ASC"#,
+           FROM tags WHERE user_id = ? ORDER BY name ASC"#,
     )
     .bind(auth.user_id)
     .fetch_all(&state.db)
@@ -91,7 +91,7 @@ pub async fn create(
 
     let tag = sqlx::query_as::<_, Tag>(
         r#"INSERT INTO tags (user_id, name, color)
-           VALUES ($1, $2, $3)
+           VALUES (?, ?, ?)
            RETURNING id, user_id, name, color, created_at, updated_at"#,
     )
     .bind(auth.user_id)
@@ -111,7 +111,7 @@ pub async fn get(
 ) -> Result<Json<TagResponse>, AppError> {
     let tag = sqlx::query_as::<_, Tag>(
         r#"SELECT id, user_id, name, color, created_at, updated_at
-           FROM tags WHERE id = $1 AND user_id = $2"#,
+           FROM tags WHERE id = ? AND user_id = ?"#,
     )
     .bind(id)
     .bind(auth.user_id)
@@ -131,7 +131,7 @@ pub async fn update(
 ) -> Result<Json<TagResponse>, AppError> {
     // First check tag exists and belongs to user
     let _existing = sqlx::query_scalar::<_, Uuid>(
-        "SELECT id FROM tags WHERE id = $1 AND user_id = $2",
+        "SELECT id FROM tags WHERE id = ? AND user_id = ?",
     )
     .bind(id)
     .bind(auth.user_id)
@@ -145,10 +145,10 @@ pub async fn update(
 
     let tag = sqlx::query_as::<_, Tag>(
         r#"UPDATE tags SET
-              name = COALESCE($3, name),
-              color = COALESCE($4, color),
-              updated_at = now()
-           WHERE id = $1 AND user_id = $2
+              name = COALESCE(?, name),
+              color = COALESCE(?, color),
+              updated_at = unixepoch()
+           WHERE id = ? AND user_id = ?
            RETURNING id, user_id, name, color, created_at, updated_at"#,
     )
     .bind(id)
@@ -168,7 +168,7 @@ pub async fn delete(
     Path(id): Path<Uuid>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     let result = sqlx::query(
-        "DELETE FROM tags WHERE id = $1 AND user_id = $2",
+        "DELETE FROM tags WHERE id = ? AND user_id = ?",
     )
     .bind(id)
     .bind(auth.user_id)

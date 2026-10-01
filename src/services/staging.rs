@@ -3,7 +3,7 @@
 // Takes a single post intent and creates appropriate posts per platform.
 
 use uuid::Uuid;
-use sqlx::PgPool;
+use sqlx::SqlitePool;
 use crate::db::queries;
 use crate::services::content_splitter;
 
@@ -34,7 +34,7 @@ pub struct StagingResult {
 }
 
 pub async fn stage_post(
-    pool: &PgPool,
+    pool: &SqlitePool,
     user_id: Uuid,
     request: StagingRequest,
 ) -> Result<StagingResult, String> {

@@ -213,10 +213,10 @@ pub async fn get_summary(
     Query(query): Query<AnalyticsSummaryQuery>,
 ) -> Result<Json<AnalyticsSummaryResponse>, AppError> {
     let days = query.days.unwrap_or(30).max(1);
-    let cutoff = chrono::Utc::now() - chrono::Duration::days(days as i64);
+    let cutoff = (chrono::Utc::now() - chrono::Duration::days(days as i64)).timestamp();
 
     let state_rows: Vec<(String, i64)> = sqlx::query_as(
-        "SELECT state::text, COUNT(*)::bigint FROM posts WHERE user_id = $1 AND created_at >= $2 GROUP BY state",
+        "SELECT state, COUNT(*) FROM posts WHERE user_id = ? AND created_at >= ? GROUP BY state",
     )
     .bind(auth.user_id)
     .bind(cutoff)
@@ -224,11 +224,11 @@ pub async fn get_summary(
     .await?;
 
     let provider_rows: Vec<(String, i64)> = sqlx::query_as(
-        "SELECT i.provider_identifier, COUNT(*)::bigint \
+        "SELECT i.provider_identifier, COUNT(*) \
          FROM posts p JOIN integrations i ON p.integration_id = i.id \
-         WHERE p.user_id = $1 AND p.created_at >= $2 \
+         WHERE p.user_id = ? AND p.created_at >= ? \
          GROUP BY i.provider_identifier \
-         ORDER BY COUNT(*)::bigint DESC",
+         ORDER BY COUNT(*) DESC",
     )
     .bind(auth.user_id)
     .bind(cutoff)
@@ -236,10 +236,10 @@ pub async fn get_summary(
     .await?;
 
     let day_rows: Vec<(String, i64)> = sqlx::query_as(
-        "SELECT DATE(p.created_at)::text, COUNT(*)::bigint \
-         FROM posts p WHERE p.user_id = $1 AND p.created_at >= $2 \
-         GROUP BY DATE(p.created_at) \
-         ORDER BY DATE(p.created_at) ASC",
+        "SELECT date(p.created_at, 'unixepoch'), COUNT(*) \
+         FROM posts p WHERE p.user_id = ? AND p.created_at >= ? \
+         GROUP BY date(p.created_at, 'unixepoch') \
+         ORDER BY date(p.created_at, 'unixepoch') ASC",
     )
     .bind(auth.user_id)
     .bind(cutoff)
@@ -311,7 +311,7 @@ pub struct AnalyticsDaysQuery {
 /// stored value is returned. `None` when neither is set, which preserves the
 /// pre-goal behavior of every caller.
 async fn resolve_goal_per_day(
-    db: &crate::db::PgPool,
+    db: &sqlx::SqlitePool,
     user_id: Uuid,
     requested: Option<f64>,
 ) -> Option<f64> {
@@ -320,10 +320,10 @@ async fn resolve_goal_per_day(
     if let Some(goal) = requested.filter(|g| g.is_finite() && *g > 0.0) {
         if let Err(e) = sqlx::query(
             r#"INSERT INTO brand_profiles (user_id, posts_per_day_goal)
-               VALUES ($1, $2)
+               VALUES (?, ?)
                ON CONFLICT (user_id) DO UPDATE
                    SET posts_per_day_goal = EXCLUDED.posts_per_day_goal,
-                       updated_at = NOW()"#,
+                       updated_at = unixepoch()"#,
         )
         .bind(user_id)
         .bind(goal)
@@ -338,7 +338,7 @@ async fn resolve_goal_per_day(
     }
 
     sqlx::query_scalar::<_, Option<f64>>(
-        "SELECT posts_per_day_goal FROM brand_profiles WHERE user_id = $1",
+        "SELECT posts_per_day_goal FROM brand_profiles WHERE user_id = ?",
     )
     .bind(user_id)
     .fetch_optional(db)
@@ -403,21 +403,21 @@ pub async fn get_engagement(
 ) -> Result<Json<EngagementResponse>, AppError> {
     let days = query.days.unwrap_or(7).max(1) as i64;
     let now = chrono::Utc::now();
-    let cutoff = now - chrono::Duration::days(days);
-    let prev_cutoff = cutoff - chrono::Duration::days(days);
+    let cutoff = (now - chrono::Duration::days(days)).timestamp();
+    let prev_cutoff = cutoff - days * 86400;
 
     // Current period totals.
     let current: DayEngagement = sqlx::query_as(
         r#"SELECT
-            COALESCE(SUM(pe.likes), 0)::bigint as likes,
-            COALESCE(SUM(pe.comments), 0)::bigint as comments,
-            COALESCE(SUM(pe.shares), 0)::bigint as shares,
-            COALESCE(SUM(pe.impressions), 0)::bigint as impressions,
+            COALESCE(SUM(pe.likes), 0) as likes,
+            COALESCE(SUM(pe.comments), 0) as comments,
+            COALESCE(SUM(pe.shares), 0) as shares,
+            COALESCE(SUM(pe.impressions), 0) as impressions,
             '' as date
            FROM post_engagement pe
            JOIN posts p ON pe.post_id = p.id
-           WHERE p.user_id = $1 AND p.deleted_at IS NULL
-             AND pe.created_at >= $2"#,
+           WHERE p.user_id = ? AND p.deleted_at IS NULL
+             AND pe.created_at >= ?"#,
     )
     .bind(auth.user_id)
     .bind(cutoff)
@@ -427,15 +427,15 @@ pub async fn get_engagement(
     // Previous period totals (for delta calculation).
     let prev: DayEngagement = sqlx::query_as(
         r#"SELECT
-            COALESCE(SUM(pe.likes), 0)::bigint as likes,
-            COALESCE(SUM(pe.comments), 0)::bigint as comments,
-            COALESCE(SUM(pe.shares), 0)::bigint as shares,
-            COALESCE(SUM(pe.impressions), 0)::bigint as impressions,
+            COALESCE(SUM(pe.likes), 0) as likes,
+            COALESCE(SUM(pe.comments), 0) as comments,
+            COALESCE(SUM(pe.shares), 0) as shares,
+            COALESCE(SUM(pe.impressions), 0) as impressions,
             '' as date
            FROM post_engagement pe
            JOIN posts p ON pe.post_id = p.id
-           WHERE p.user_id = $1 AND p.deleted_at IS NULL
-             AND pe.created_at >= $2 AND pe.created_at < $3"#,
+           WHERE p.user_id = ? AND p.deleted_at IS NULL
+             AND pe.created_at >= ? AND pe.created_at < ?"#,
     )
     .bind(auth.user_id)
     .bind(prev_cutoff)
@@ -446,17 +446,17 @@ pub async fn get_engagement(
     // Per-day breakdown for sparkline.
     let by_day: Vec<DayEngagement> = sqlx::query_as(
         r#"SELECT
-            DATE(pe.created_at)::text as date,
-            COALESCE(SUM(pe.likes), 0)::bigint as likes,
-            COALESCE(SUM(pe.comments), 0)::bigint as comments,
-            COALESCE(SUM(pe.shares), 0)::bigint as shares,
-            COALESCE(SUM(pe.impressions), 0)::bigint as impressions
+            date(pe.created_at, 'unixepoch') as date,
+            COALESCE(SUM(pe.likes), 0) as likes,
+            COALESCE(SUM(pe.comments), 0) as comments,
+            COALESCE(SUM(pe.shares), 0) as shares,
+            COALESCE(SUM(pe.impressions), 0) as impressions
            FROM post_engagement pe
            JOIN posts p ON pe.post_id = p.id
-           WHERE p.user_id = $1 AND p.deleted_at IS NULL
-             AND pe.created_at >= $2
-           GROUP BY DATE(pe.created_at)
-           ORDER BY DATE(pe.created_at) ASC"#,
+           WHERE p.user_id = ? AND p.deleted_at IS NULL
+             AND pe.created_at >= ?
+           GROUP BY date(pe.created_at, 'unixepoch')
+           ORDER BY date(pe.created_at, 'unixepoch') ASC"#,
     )
     .bind(auth.user_id)
     .bind(cutoff)
@@ -499,16 +499,16 @@ pub async fn get_adherence(
     Query(query): Query<AnalyticsDaysQuery>,
 ) -> Result<Json<AdherenceResponse>, AppError> {
     let days = query.days.unwrap_or(7).max(1) as i64;
-    let cutoff = chrono::Utc::now() - chrono::Duration::days(days);
+    let cutoff = (chrono::Utc::now() - chrono::Duration::days(days)).timestamp();
 
     let row: (i64, i64, i64) = sqlx::query_as(
         r#"SELECT
-            COUNT(*) FILTER (WHERE state IN ('published', 'error', 'publishing'))::bigint as scheduled,
-            COUNT(*) FILTER (WHERE state = 'published')::bigint as published,
-            COUNT(*) FILTER (WHERE state = 'error')::bigint as failed
+            COUNT(*) FILTER (WHERE state IN ('published', 'error', 'publishing')) as scheduled,
+            COUNT(*) FILTER (WHERE state = 'published') as published,
+            COUNT(*) FILTER (WHERE state = 'error') as failed
            FROM posts
-           WHERE user_id = $1 AND deleted_at IS NULL
-             AND scheduled_at >= $2"#,
+           WHERE user_id = ? AND deleted_at IS NULL
+             AND scheduled_at >= ?"#,
     )
     .bind(auth.user_id)
     .bind(cutoff)
@@ -549,15 +549,15 @@ pub async fn get_cadence(
     Query(query): Query<AnalyticsDaysQuery>,
 ) -> Result<Json<CadenceResponse>, AppError> {
     let days = query.days.unwrap_or(30).max(1) as i64;
-    let cutoff = chrono::Utc::now() - chrono::Duration::days(days);
+    let cutoff = (chrono::Utc::now() - chrono::Duration::days(days)).timestamp();
 
     let day_rows: Vec<(String, i64)> = sqlx::query_as(
-        r#"SELECT DATE(p.published_at)::text, COUNT(*)::bigint
+        r#"SELECT date(p.published_at, 'unixepoch'), COUNT(*)
            FROM posts p
-           WHERE p.user_id = $1 AND p.deleted_at IS NULL
-             AND p.state = 'published' AND p.published_at >= $2
-           GROUP BY DATE(p.published_at)
-           ORDER BY DATE(p.published_at) ASC"#,
+           WHERE p.user_id = ? AND p.deleted_at IS NULL
+             AND p.state = 'published' AND p.published_at >= ?
+           GROUP BY date(p.published_at, 'unixepoch')
+           ORDER BY date(p.published_at, 'unixepoch') ASC"#,
     )
     .bind(auth.user_id)
     .bind(cutoff)
@@ -593,13 +593,13 @@ pub async fn get_cadence(
 
 /// Calculate the current posting streak: consecutive days (ending today
 /// or yesterday) with at least one published post.
-async fn calculate_streak(db: &crate::db::PgPool, user_id: Uuid) -> i64 {
+async fn calculate_streak(db: &sqlx::SqlitePool, user_id: Uuid) -> i64 {
     let rows: Vec<(String,)> = sqlx::query_as(
-        r#"SELECT DISTINCT DATE(p.published_at)::text
+        r#"SELECT DISTINCT date(p.published_at, 'unixepoch')
            FROM posts p
-           WHERE p.user_id = $1 AND p.deleted_at IS NULL
+           WHERE p.user_id = ? AND p.deleted_at IS NULL
              AND p.state = 'published' AND p.published_at IS NOT NULL
-           ORDER BY DATE(p.published_at) DESC
+           ORDER BY date(p.published_at, 'unixepoch') DESC
            LIMIT 400"#, // cap at ~13 months
     )
     .bind(user_id)
@@ -668,9 +668,9 @@ pub async fn get_recent_events(
     let entries: Vec<EventLogEntry> = sqlx::query_as(
         r#"SELECT id, event_type, payload, created_at
            FROM events_log
-           WHERE user_id = $1
+           WHERE user_id = ?
            ORDER BY created_at DESC
-           LIMIT $2"#,
+           LIMIT ?"#,
     )
     .bind(auth.user_id)
     .bind(limit)

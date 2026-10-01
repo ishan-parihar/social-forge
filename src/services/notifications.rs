@@ -3,7 +3,7 @@ use uuid::Uuid;
 use crate::api::AppState;
 use crate::db::queries;
 use crate::db::models::NotificationPublic;
-use crate::db::PgPool;
+use sqlx::SqlitePool;
 use crate::error::AppError;
 use crate::realtime::Broadcaster;
 
@@ -38,7 +38,7 @@ impl NotificationService {
     /// tasks in `src/scheduler/` have no HTTP state. Keeps a single
     /// implementation of the notify-then-broadcast path.
     pub async fn create_via(
-        pool: &PgPool,
+        pool: &SqlitePool,
         broadcast: &Broadcaster,
         user_id: Uuid,
         title: &str,

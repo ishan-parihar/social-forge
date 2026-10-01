@@ -8,7 +8,7 @@ use std::time::Duration;
 use chrono::Utc;
 
 use crate::db::models::{PostState, PostWithIntegration};
-use crate::db::PgPool;
+use crate::db::SqlitePool;
 use crate::poll::{spawn_poll, FirstTick};
 use crate::realtime::Broadcaster;
 use crate::social::registry::ProviderRegistry;
@@ -46,7 +46,7 @@ const POSTING_GAP_LIMIT: i64 = 20;
 /// Start the scheduler background task.
 /// Pass a watch::Receiver that resolves to `true` to trigger graceful shutdown.
 pub fn start_scheduler(
-    db: PgPool,
+    db: SqlitePool,
     providers: Arc<ProviderRegistry>,
     broadcaster: Broadcaster,
     token_key: Option<[u8; 32]>,
@@ -181,14 +181,15 @@ pub fn start_scheduler(
                     .ok()
                     .and_then(|s| s.parse().ok())
                     .unwrap_or(7);
-                // `$1` binds as bigint; make_interval's `days` arg is int and
-                // bigint->int is an assignment-only cast, so Postgres raises
-                // 42883 "function make_interval(days => bigint) does not exist"
-                // without the explicit cast.
+                // Timestamps are INTEGER unix-epoch seconds, so the cutoff is
+                // computed in Rust and bound as one integer. (The old
+                // `make_interval(days => ?::int)` was a Postgres-only function
+                // whose bigint->int cast was itself load-bearing.)
+                let cutoff = Utc::now().timestamp() - retention_days * 86_400;
                 match sqlx::query(
-                    "DELETE FROM events_log WHERE created_at < NOW() - make_interval(days => $1::int)",
+                    "DELETE FROM events_log WHERE created_at < ?",
                 )
-                .bind(retention_days)
+                .bind(cutoff)
                 .execute(&db)
                 .await
                 {
@@ -209,7 +210,7 @@ pub fn start_scheduler(
 
 /// Proactive token refresh: refreshes tokens expiring within 24h for providers that need cron refresh
 async fn proactive_token_refresh(
-    db: &PgPool,
+    db: &SqlitePool,
     providers: &ProviderRegistry,
     token_key: Option<[u8; 32]>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -372,7 +373,7 @@ async fn proactive_token_refresh(
 /// before calling `provider.publish()`, so 30 queued posts for the
 /// same X account serialize instead of all hitting the API at once.
 async fn process_due_posts(
-    db: &PgPool,
+    db: &SqlitePool,
     providers: &ProviderRegistry,
     broadcaster: &Broadcaster,
     token_key: Option<[u8; 32]>,
@@ -411,7 +412,7 @@ async fn process_due_posts(
             if !cb.allow_request() {
                 // Circuit is open — push this post back to queued
                 let _ = sqlx::query(
-                    "UPDATE posts SET state = 'queued', updated_at = NOW() WHERE id = $1",
+                    "UPDATE posts SET state = 'queued', updated_at = unixepoch() WHERE id = ?",
                 )
                 .bind(post.id)
                 .execute(db)
@@ -587,24 +588,27 @@ async fn process_due_posts(
 /// - Each retry attempts the `posts` UPDATE again.
 /// - On success, `completed_at` is set.
 /// - On failure, `attempts` is incremented and `next_attempt_at` is
-///   set to NOW() + 30s (exponential backoff could be added later).
+///   set to now + 30s (exponential backoff could be added later).
 /// - Rows with `attempts >= 5` are abandoned (logged as CRITICAL).
 ///
 /// This closes the "publish succeeded but DB write failed" publish-
 /// orphan gap identified in the v22 audit (Part D.2).
-async fn drain_publish_outbox(db: &PgPool) -> Result<(), sqlx::Error> {
-    // Claim pending rows (FOR UPDATE SKIP LOCKED so multiple instances
-    // don't double-process).
+async fn drain_publish_outbox(db: &SqlitePool) -> Result<(), sqlx::Error> {
+    // Claim pending rows. Postgres used `FOR UPDATE SKIP LOCKED`; sqlite has
+    // no row locks, so the claim is a compare-and-set on the `posts` UPDATE
+    // itself: every drain writes `WHERE id = ? AND state != 'published'`, so
+    // whichever instance lands first wins and the loser matches 0 rows and
+    // leaves the row for the next tick. `attempts` is bumped only by the
+    // winner's failure path, so a contended row is never double-counted.
     let pending: Vec<PublishOutboxRow> = sqlx::query_as(
         r#"SELECT id, post_id, platform_post_id, platform_post_url,
                   published_at, error_message
            FROM publish_outbox
            WHERE completed_at IS NULL
-             AND next_attempt_at <= NOW()
+             AND next_attempt_at <= unixepoch()
              AND attempts < 5
            ORDER BY created_at ASC
-           LIMIT 50
-           FOR UPDATE SKIP LOCKED"#,
+           LIMIT 50"#,
     )
     .fetch_all(db)
     .await?;
@@ -620,12 +624,12 @@ async fn drain_publish_outbox(db: &PgPool) -> Result<(), sqlx::Error> {
             let result = sqlx::query(
                 r#"UPDATE posts SET
                      state = 'published',
-                     platform_post_id = $2,
-                     platform_post_url = $3,
-                     published_at = $4,
+                     platform_post_id = ?,
+                     platform_post_url = ?,
+                     published_at = ?,
                      error_message = NULL,
-                     updated_at = NOW()
-                   WHERE id = $1 AND state != 'published'"#,
+                     updated_at = unixepoch()
+                   WHERE id = ? AND state != 'published'"#,
             )
             .bind(row.post_id)
             .bind(platform_post_id)
@@ -638,7 +642,7 @@ async fn drain_publish_outbox(db: &PgPool) -> Result<(), sqlx::Error> {
                 Ok(_) => {
                     // Success — mark the outbox row as completed.
                     let _ = sqlx::query(
-                        "UPDATE publish_outbox SET completed_at = NOW() WHERE id = $1",
+                        "UPDATE publish_outbox SET completed_at = unixepoch() WHERE id = ?",
                     )
                     .bind(row.id)
                     .execute(db)
@@ -657,8 +661,8 @@ async fn drain_publish_outbox(db: &PgPool) -> Result<(), sqlx::Error> {
                     let _ = sqlx::query(
                         r#"UPDATE publish_outbox
                            SET attempts = attempts + 1,
-                               next_attempt_at = NOW() + INTERVAL '30 seconds'
-                           WHERE id = $1"#,
+                               next_attempt_at = unixepoch() + 30
+                           WHERE id = ?"#,
                     )
                     .bind(row.id)
                     .execute(db)
@@ -670,9 +674,9 @@ async fn drain_publish_outbox(db: &PgPool) -> Result<(), sqlx::Error> {
             let result = sqlx::query(
                 r#"UPDATE posts SET
                      state = 'error',
-                     error_message = $2,
-                     updated_at = NOW()
-                   WHERE id = $1 AND state NOT IN ('error', 'published')"#,
+                     error_message = ?,
+                     updated_at = unixepoch()
+                   WHERE id = ? AND state NOT IN ('error', 'published')"#,
             )
             .bind(row.post_id)
             .bind(err)
@@ -682,7 +686,7 @@ async fn drain_publish_outbox(db: &PgPool) -> Result<(), sqlx::Error> {
             match result {
                 Ok(_) => {
                     let _ = sqlx::query(
-                        "UPDATE publish_outbox SET completed_at = NOW() WHERE id = $1",
+                        "UPDATE publish_outbox SET completed_at = unixepoch() WHERE id = ?",
                     )
                     .bind(row.id)
                     .execute(db)
@@ -696,8 +700,8 @@ async fn drain_publish_outbox(db: &PgPool) -> Result<(), sqlx::Error> {
                     let _ = sqlx::query(
                         r#"UPDATE publish_outbox
                            SET attempts = attempts + 1,
-                               next_attempt_at = NOW() + INTERVAL '30 seconds'
-                           WHERE id = $1"#,
+                               next_attempt_at = unixepoch() + 30
+                           WHERE id = ?"#,
                     )
                     .bind(row.id)
                     .execute(db)
@@ -725,7 +729,7 @@ struct PublishOutboxRow {
 /// Called by the scheduler after a successful publish (or after a
 /// final failure). The drain loop later applies the result to `posts`.
 async fn write_to_outbox(
-    db: &PgPool,
+    db: &SqlitePool,
     post_id: Uuid,
     idempotency_key: Uuid,
     platform_post_id: Option<&str>,
@@ -737,11 +741,14 @@ async fn write_to_outbox(
     } else {
         None
     };
+    // `publish_outbox.id` is TEXT with no DB-side default — SQLite has no
+    // gen_random_uuid(), so Rust generates the value.
     let _ = sqlx::query(
         r#"INSERT INTO publish_outbox
-           (post_id, idempotency_key, platform_post_id, platform_post_url, published_at, error_message)
-           VALUES ($1, $2, $3, $4, $5, $6)"#,
+           (id, post_id, idempotency_key, platform_post_id, platform_post_url, published_at, error_message)
+           VALUES (?, ?, ?, ?, ?, ?, ?)"#,
     )
+    .bind(Uuid::new_v4())
     .bind(post_id)
     .bind(idempotency_key)
     .bind(platform_post_id)
@@ -769,7 +776,7 @@ async fn write_to_outbox(
 /// After `MAX_RETRIES` exhausted, the post is marked `Error` and the
 /// caller broadcasts `post_failed` + fires webhooks.
 async fn publish_post(
-    db: &PgPool,
+    db: &SqlitePool,
     provider: &dyn SocialProvider,
     post: &PostWithIntegration,
     broadcaster: &Broadcaster,
@@ -801,8 +808,8 @@ async fn publish_post(
             match sqlx::query_scalar::<_, Option<String>>(
                 r#"SELECT platform_post_id
                    FROM posts
-                   WHERE group_id = $1
-                     AND sequence = $2
+                   WHERE group_id = ?
+                     AND sequence = ?
                      AND state = 'published'
                      AND platform_post_id IS NOT NULL
                    LIMIT 1"#,
@@ -1231,10 +1238,10 @@ async fn publish_post(
 ///
 /// We can't use `services::webhook_dispatcher::dispatch_event` directly
 /// because it requires a full `&AppState` (which the scheduler doesn't
-/// have — it only has `&PgPool`). Instead we inline a minimal version
+/// have — it only has `&SqlitePool`). Instead we inline a minimal version
 /// that does the same DB query + HTTP send, spawned as a detached
 /// task so the scheduler tick isn't delayed by webhook delivery.
-fn dispatch_webhook_background(db: &PgPool, user_id: uuid::Uuid, event_type: &str, payload: &serde_json::Value) {
+fn dispatch_webhook_background(db: &SqlitePool, user_id: uuid::Uuid, event_type: &str, payload: &serde_json::Value) {
     let db = db.clone();
     let user_id = user_id;
     let event_type = event_type.to_string();
@@ -1242,8 +1249,12 @@ fn dispatch_webhook_background(db: &PgPool, user_id: uuid::Uuid, event_type: &st
     tokio::spawn(async move {
         // Fetch active webhooks matching this event type for the user.
         let webhooks: Vec<(uuid::Uuid, String, Option<String>)> = match sqlx::query_as(
-            r#"SELECT id, url, secret FROM webhooks
-               WHERE user_id = $1 AND is_active = true AND $2 = ANY(event_types)"#,
+            r#"SELECT w.id, w.url, w.secret FROM webhooks w
+               WHERE w.user_id = ? AND w.is_active = 1
+                 AND EXISTS (
+                   SELECT 1 FROM webhook_event_types t
+                   WHERE t.webhook_id = w.id AND t.event_type = ?
+                 )"#,
         )
         .bind(user_id)
         .bind(&event_type)
@@ -1279,9 +1290,10 @@ fn dispatch_webhook_background(db: &PgPool, user_id: uuid::Uuid, event_type: &st
             // Record delivery attempt.
             let _ = sqlx::query(
                 r#"INSERT INTO webhook_deliveries
-                   (webhook_id, event_type, status, status_code, response_body, attempted_at)
-                   VALUES ($1, $2, $3, $4, $5, NOW())"#,
+                   (id, webhook_id, event_type, status, status_code, response_body, attempted_at)
+                   VALUES (?, ?, ?, ?, ?, ?, unixepoch())"#,
             )
+            .bind(Uuid::new_v4())
             .bind(webhook_id)
             .bind(&event_type)
             .bind(status)
@@ -1304,7 +1316,7 @@ fn dispatch_webhook_background(db: &PgPool, user_id: uuid::Uuid, event_type: &st
 /// this path stored the raw token — a silent at-rest encryption
 /// downgrade on every scheduler-triggered refresh.
 async fn resolve_token(
-    db: &PgPool,
+    db: &SqlitePool,
     provider: &dyn SocialProvider,
     post: &PostWithIntegration,
     token_key: Option<[u8; 32]>,
@@ -1356,7 +1368,7 @@ async fn resolve_token(
 }
 
 /// Mark a post as error
-async fn mark_post_error(db: &PgPool, post_id: uuid::Uuid, error: &str) {
+async fn mark_post_error(db: &SqlitePool, post_id: uuid::Uuid, error: &str) {
     if let Err(e) = queries::update_post_state(db, post_id, PostState::Error, None, None, Some(error)).await {
         tracing::error!("Failed to mark post {post_id} as error: {e}");
     }
@@ -1397,7 +1409,7 @@ fn format_overdue(overdue: chrono::Duration) -> String {
 /// Read-only — it never advances the state machine, so a stuck post is
 /// still the operator's to re-queue or cancel.
 async fn check_posting_gaps(
-    db: &PgPool,
+    db: &SqlitePool,
     broadcast: &Broadcaster,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let stuck = queries::find_stuck_posts(db, POSTING_GAP_GRACE_SECS, POSTING_GAP_LIMIT).await?;
@@ -1460,9 +1472,9 @@ async fn check_posting_gaps(
 ///   streak_days += 1, streak_since = NOW
 /// - If last post was today (streak_since > NOW - 24h) → no change (already counted)
 /// - The daily reset cron handles the "no post in 24h → reset" case
-async fn update_streak_on_publish(db: &PgPool, user_id: uuid::Uuid) {
+async fn update_streak_on_publish(db: &SqlitePool, user_id: uuid::Uuid) {
     let now = Utc::now();
-    let row = sqlx::query("SELECT streak_since, streak_days FROM users WHERE id = $1")
+    let row = sqlx::query("SELECT streak_since, streak_days FROM users WHERE id = ?")
         .bind(user_id)
         .fetch_optional(db)
         .await;
@@ -1475,7 +1487,7 @@ async fn update_streak_on_publish(db: &PgPool, user_id: uuid::Uuid) {
 
             if streak_since.is_none() {
                 // First ever post
-                let _ = sqlx::query("UPDATE users SET streak_since = $1, streak_days = 1 WHERE id = $2")
+                let _ = sqlx::query("UPDATE users SET streak_since = ?, streak_days = 1 WHERE id = ?")
                     .bind(now)
                     .bind(user_id)
                     .execute(db)
@@ -1485,7 +1497,7 @@ async fn update_streak_on_publish(db: &PgPool, user_id: uuid::Uuid) {
                 let elapsed = now - since;
                 if elapsed.num_hours() >= 24 {
                     let new_streak = streak_days + 1;
-                    let _ = sqlx::query("UPDATE users SET streak_since = $1, streak_days = $2 WHERE id = $3")
+                    let _ = sqlx::query("UPDATE users SET streak_since = ?, streak_days = ? WHERE id = ?")
                         .bind(now)
                         .bind(new_streak)
                         .bind(user_id)
@@ -1505,7 +1517,7 @@ async fn update_streak_on_publish(db: &PgPool, user_id: uuid::Uuid) {
 /// Daily streak reset: checks all users. If streak_since is more than
 /// 48 hours ago (missed a full day), reset streak_days to 0.
 /// Runs every hour (lightweight query).
-pub fn start_streak_reset(db: PgPool, shutdown: tokio::sync::watch::Receiver<bool>) {
+pub fn start_streak_reset(db: SqlitePool, shutdown: tokio::sync::watch::Receiver<bool>) {
     tracing::info!("Streak reset checker started (interval: 1 hour)");
     spawn_poll(
         Duration::from_secs(3600), // every hour
@@ -1523,7 +1535,7 @@ pub fn start_streak_reset(db: PgPool, shutdown: tokio::sync::watch::Receiver<boo
     );
 }
 
-async fn reset_expired_streaks(db: &PgPool) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn reset_expired_streaks(db: &SqlitePool) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Reset streaks where no post has been published in the last 48 hours.
     // (48h gives a grace period so a streak isn't lost if you post at 11pm
     // one day and 1am the next — those are ~2h apart but count as 2 days.)
@@ -1531,7 +1543,7 @@ async fn reset_expired_streaks(db: &PgPool) -> Result<(), Box<dyn std::error::Er
         "UPDATE users
          SET streak_days = 0, streak_since = NULL
          WHERE streak_since IS NOT NULL
-           AND streak_since < NOW() - INTERVAL '48 hours'",
+           AND streak_since < unixepoch() - 172800",
     )
     .execute(db)
     .await?;
@@ -1551,7 +1563,7 @@ const ANALYTICS_REFRESH_INTERVAL_SECS: u64 = 1800; // 30 minutes
 /// and upserts them into the analytics_cache.
 /// Also cleans up expired cache entries each cycle.
 pub async fn run_analytics_cache_refresh(
-    db: PgPool,
+    db: SqlitePool,
     providers: Arc<ProviderRegistry>,
     token_key: Option<[u8; 32]>,
     mut shutdown: tokio::sync::watch::Receiver<bool>,
@@ -1577,7 +1589,7 @@ pub async fn run_analytics_cache_refresh(
     }
 }
 
-async fn refresh_cache_cycle(db: &PgPool, providers: &ProviderRegistry, token_key: Option<[u8; 32]>) {
+async fn refresh_cache_cycle(db: &SqlitePool, providers: &ProviderRegistry, token_key: Option<[u8; 32]>) {
     // Clean up expired entries first
     if let Ok(count) = queries::delete_expired_analytics_cache(db).await {
         if count > 0 {

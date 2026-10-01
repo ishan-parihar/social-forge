@@ -307,7 +307,7 @@ fn handle_init() -> anyhow::Result<()> {
         }));
     } else {
         let template = r#"# ─── Server ──────────────────────────────────────────────
-DATABASE_URL=postgres://social_forge:social_forge@localhost:5432/social_forge
+DATABASE_URL=sqlite://data/social-forge.db?mode=rwc
 JWT_SECRET=change-me-to-a-random-secret
 
 # ─── X/Twitter ────────────────────────────────────────────
@@ -869,7 +869,7 @@ async fn handle_setup() -> anyhow::Result<()> {
         "step": 2,
         "name": "database",
         "status": if db_ok { "ok" } else { "error" },
-        "detail": if db_ok { "PostgreSQL connection successful." } else { "Cannot connect to PostgreSQL. Check DATABASE_URL in ~/.social-forge/.env" },
+        "detail": if db_ok { "SQLite connection successful." } else { "Cannot open the SQLite database. Check DATABASE_URL in ~/.social-forge/.env" },
     }));
 
     // If DB failed, we can still report config + cookie status
@@ -893,7 +893,7 @@ async fn handle_setup() -> anyhow::Result<()> {
                 "status": "setup_incomplete",
                 "steps": steps,
                 "next_actions": {
-                    "fix_db": "Set DATABASE_URL in ~/.social-forge/.env and ensure PostgreSQL is running",
+                    "fix_db": "Set DATABASE_URL in ~/.social-forge/.env to a writable SQLite path (e.g. sqlite://data/social-forge.db?mode=rwc)",
                     "init": "social-forge init",
                 },
             }));

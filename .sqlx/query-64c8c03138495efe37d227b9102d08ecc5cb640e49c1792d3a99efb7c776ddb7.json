@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE integrations SET access_token = ?, refresh_token = ?,\n         token_expires_at = ?, refresh_needed = false, updated_at = unixepoch()\n         WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "64c8c03138495efe37d227b9102d08ecc5cb640e49c1792d3a99efb7c776ddb7"
+}

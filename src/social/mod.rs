@@ -1397,7 +1397,13 @@ pub struct EngagementRow {
 /// instead of each carrying its own ~60-line copy. No credentials, no DB.
 pub(crate) fn test_config() -> crate::config::Config {
     crate::config::Config {
-        database_url: "postgres://test:test@localhost:5432/test".into(),
+        database_url: format!(
+            "sqlite://{}?mode=rwc",
+            std::env::temp_dir()
+                .join(format!("social-forge-test-{}.db", uuid::Uuid::new_v4()))
+                .display()
+        )
+        .into(),
         jwt_secret: "test".into(),
         app_password: "test".into(),
         app_url: "http://localhost:3000".into(),

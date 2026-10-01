@@ -99,7 +99,7 @@ See `.env.example` for the full documented list. The only required value
 is `DATABASE_URL`; everything else has defaults:
 
 ```bash
-DATABASE_URL=postgres://user:pass@localhost:5432/social_forge
+DATABASE_URL=sqlite://data/social-forge.db?mode=rwc
 APP_PASSWORD=choose-a-strong-password   # single-user gate for the WebUI
 APP_URL=http://localhost:6543           # public URL (OAuth redirects)
 TOKEN_ENCRYPTION_KEY=<64 hex chars>     # AES-256-GCM for tokens at rest
@@ -148,7 +148,7 @@ TOKEN_ENCRYPTION_KEY=<64 hex chars>     # AES-256-GCM for tokens at rest
 │  │  Realtime → SSE broadcast (tokio::sync::broadcast)       │   │
 │  └──────────────────────────────────────────────────────────┘   │
 ├─────────────────────────────────────────────────────────────────┤
-│                         PostgreSQL                                │
+│                    SQLite (single .db file)                      │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -308,7 +308,7 @@ The only required variable is `DATABASE_URL`. Everything else has sensible defau
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `DATABASE_URL` | *(required)* | PostgreSQL connection string (`postgres://user:pass@host:5432/db`) |
+| `DATABASE_URL` | *(required)* | SQLite file path (`sqlite://data/social-forge.db?mode=rwc`) |
 | `APP_URL` | `https://localhost:6543` | Public URL of your instance. Used for OAuth redirect URIs. |
 | `FRONTEND_URL` | Same as `APP_URL` | CORS allowed origin. Set separately only if frontend is on a different domain. |
 | `JWT_SECRET` | Auto-generated | Secret for signing auth tokens. Set a strong value in production. |
@@ -404,7 +404,7 @@ For example:
 
 - **Language**: Rust (Edition 2021)
 - **Web Framework**: Axum 0.8
-- **Database**: PostgreSQL via sqlx (compile-time checked queries)
+- **Database**: SQLite via sqlx (compile-time checked queries)
 - **MCP**: rmcp 1.6 with 327 tools (41 modules)
 - **CLI**: clap 4 with derive macros
 - **TLS Fingerprinting**: wreq (Chrome 131 emulation for X/Twitter)
@@ -457,7 +457,6 @@ social-forge/
 │   │   ├── lib/             # Components, API client
 │   │   └── app.html         # HTML shell
 │   └── package.json
-├── docker-compose.yml       # Postgres + social-forge
 ├── Dockerfile               # Multi-stage: downloads pre-built binary
 ├── .env.example             # All config variables documented
 └── Cargo.toml               # Rust dependencies
@@ -468,8 +467,8 @@ social-forge/
 ## Requirements
 
 - Rust 1.85+ (backend), Node 20+ with pnpm (frontend)
-- PostgreSQL 14+
 - Platform API credentials
+- No database server — SQLite is embedded (the `.db` file is created and migrated on first run)
 
 ---
 

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE automation_rules\n           SET name = COALESCE(?, name),\n               trigger_filter = COALESCE(?, trigger_filter),\n               response_template = COALESCE(?, response_template),\n               response_type = COALESCE(?, response_type),\n               ai_model = COALESCE(?, ai_model),\n               is_active = COALESCE(?, is_active),\n               cooldown_minutes = COALESCE(?, cooldown_minutes),\n               max_responses_per_hour = COALESCE(?, max_responses_per_hour),\n               updated_at = unixepoch()\n           WHERE id = ? AND user_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 10
+    },
+    "nullable": []
+  },
+  "hash": "e1d38915452215235b89f3db1d134bc5759e92ef5aedfc9dc72149ca4f66e687"
+}

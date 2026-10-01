@@ -19,7 +19,7 @@ struct FrontendAssets;
 
 use crate::auth::middleware::{auth_middleware, AuthState};
 use crate::config::Config;
-use crate::db::PgPool;
+use sqlx::SqlitePool;
 use crate::realtime::Broadcaster;
 use crate::services::telegram_client::OptionalTelegramClient;
 use crate::social::registry::ProviderRegistry;
@@ -55,7 +55,7 @@ mod campaigns;
 /// Shared application state available to all handlers
 #[derive(Clone)]
 pub struct AppState {
-    pub db: PgPool,
+    pub db: SqlitePool,
     pub config: Config,
     pub broadcast: Broadcaster,
     pub providers: ProviderRegistry,
@@ -453,7 +453,7 @@ pub fn set_draining() {
 
 /// Readiness check — pings the DB with `SELECT 1` to verify the
 /// connection pool is healthy. Container orchestrators should probe
-/// `/ready` (not `/health`) before routing traffic, so a postgress
+/// `/ready` (not `/health`) before routing traffic, so a database
 /// outage takes the instance out of rotation without killing the
 /// process (which would prevent it from reconnecting).
 ///
@@ -461,7 +461,7 @@ pub fn set_draining() {
 /// the load balancer stops sending new traffic. Existing in-flight
 /// requests continue to be served — only new connections are
 /// de-registered by the LB.
-async fn ready_check(db: PgPool) -> Result<axum::Json<serde_json::Value>, (StatusCode, axum::Json<serde_json::Value>)> {
+async fn ready_check(db: SqlitePool) -> Result<axum::Json<serde_json::Value>, (StatusCode, axum::Json<serde_json::Value>)> {
     // If we're draining, return 503 immediately — don't even ping the DB.
     if DRAINING.load(std::sync::atomic::Ordering::SeqCst) {
         return Err((
@@ -501,7 +501,7 @@ async fn ready_check(db: PgPool) -> Result<axum::Json<serde_json::Value>, (Statu
 /// Uses runtime `sqlx::query` (not the `query!` macro) so the build
 /// doesn't require a live DB or the .sqlx offline cache for these
 /// new aggregate queries.
-async fn metrics_check(db: PgPool) -> axum::Json<serde_json::Value> {
+async fn metrics_check(db: SqlitePool) -> axum::Json<serde_json::Value> {
     #[derive(Default, sqlx::FromRow)]
     struct PostCounts {
         draft: i64,
@@ -543,7 +543,7 @@ async fn metrics_check(db: PgPool) -> axum::Json<serde_json::Value> {
             COUNT(*) as total,
             COUNT(*) FILTER (WHERE disabled = true) as disabled,
             COUNT(*) FILTER (WHERE refresh_needed = true) as refresh_needed,
-            COUNT(*) FILTER (WHERE token_expires_at IS NOT NULL AND token_expires_at < NOW() + INTERVAL '24 hours') as expiring_soon
+             COUNT(*) FILTER (WHERE token_expires_at IS NOT NULL AND token_expires_at < unixepoch() + 86400) as expiring_soon
            FROM integrations",
     )
     .fetch_one(&db)
@@ -555,7 +555,7 @@ async fn metrics_check(db: PgPool) -> axum::Json<serde_json::Value> {
             COUNT(*) FILTER (WHERE status = 'success') as success,
             COUNT(*) FILTER (WHERE status = 'failed') as failed
            FROM publish_attempts
-           WHERE started_at > NOW() - INTERVAL '1 hour'",
+           WHERE started_at > unixepoch() - 3600",
     )
     .fetch_one(&db)
     .await
@@ -586,11 +586,11 @@ async fn metrics_check(db: PgPool) -> axum::Json<serde_json::Value> {
 
 /// Streak endpoint — returns the user's current posting streak.
 /// Used by the frontend flame icon in the top bar.
-async fn streak_check(db: PgPool) -> axum::Json<serde_json::Value> {
+async fn streak_check(db: SqlitePool) -> axum::Json<serde_json::Value> {
     use sqlx::Row;
     let user_id = crate::auth::middleware::DEFAULT_USER_ID;
     let row = sqlx::query(
-        "SELECT streak_days, streak_since FROM users WHERE id = $1",
+        "SELECT streak_days, streak_since FROM users WHERE id = ?",
     )
     .bind(user_id)
     .fetch_optional(&db)

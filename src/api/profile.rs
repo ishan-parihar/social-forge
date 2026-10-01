@@ -63,7 +63,7 @@ pub async fn get_profile(
         r#"SELECT user_id, brand_name, description, tone_of_voice, audience,
                   content_pillars, keywords, hashtag_sets, avoid_topics,
                   posting_frequency, posts_per_day_goal, created_at, updated_at
-           FROM brand_profiles WHERE user_id = $1"#,
+           FROM brand_profiles WHERE user_id = ?"#,
     )
     .bind(auth.user_id)
     .fetch_optional(&state.db)
@@ -83,7 +83,7 @@ pub async fn update_profile(
                user_id, brand_name, description, tone_of_voice, audience,
                content_pillars, keywords, hashtag_sets, avoid_topics,
                posting_frequency, posts_per_day_goal
-           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT (user_id) DO UPDATE SET
                brand_name = COALESCE(EXCLUDED.brand_name, brand_profiles.brand_name),
                description = COALESCE(EXCLUDED.description, brand_profiles.description),
@@ -95,7 +95,7 @@ pub async fn update_profile(
                avoid_topics = COALESCE(EXCLUDED.avoid_topics, brand_profiles.avoid_topics),
                posting_frequency = COALESCE(EXCLUDED.posting_frequency, brand_profiles.posting_frequency),
                posts_per_day_goal = COALESCE(EXCLUDED.posts_per_day_goal, brand_profiles.posts_per_day_goal),
-               updated_at = NOW()
+               updated_at = unixepoch()
            RETURNING user_id, brand_name, description, tone_of_voice, audience,
                      content_pillars, keywords, hashtag_sets, avoid_topics,
                      posting_frequency, posts_per_day_goal, created_at, updated_at"#,

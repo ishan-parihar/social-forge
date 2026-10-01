@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT scheduled_at FROM posts\n               WHERE user_id = ? AND state != 'error'\n               AND scheduled_at >= ? AND scheduled_at <= ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "scheduled_at",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "d47f63b50471e0aaca71a34466ee8a56a690f12e3b448b6909e76f8f2f999927"
+}

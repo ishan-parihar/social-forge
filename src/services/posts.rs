@@ -4,7 +4,7 @@
 
 use chrono::{DateTime, Utc};
 use serde_json::Value;
-use sqlx::PgPool;
+use sqlx::SqlitePool;
 use uuid::Uuid;
 
 use crate::db::models::{Post, PostState, PostWithIntegration};
@@ -73,7 +73,7 @@ impl PostService {
 
     /// Create a new post
     pub async fn create(
-        db: &PgPool,
+        db: &SqlitePool,
         broadcaster: &Broadcaster,
         input: CreatePostInput,
     ) -> ServiceResult<Post> {
@@ -113,7 +113,7 @@ impl PostService {
 
     /// List posts with optional state filtering and pagination
     pub async fn list(
-        db: &PgPool,
+        db: &SqlitePool,
         user_id: Uuid,
         state_filter: Option<&str>,
         limit: i64,
@@ -139,7 +139,7 @@ impl PostService {
 
     /// Get a single post by ID (verifies ownership)
     pub async fn get(
-        db: &PgPool,
+        db: &SqlitePool,
         user_id: Uuid,
         post_id: Uuid,
     ) -> ServiceResult<Post> {
@@ -153,7 +153,7 @@ impl PostService {
 
     /// Update a post (verifies ownership)
     pub async fn update(
-        db: &PgPool,
+        db: &SqlitePool,
         broadcaster: &Broadcaster,
         user_id: Uuid,
         post_id: Uuid,
@@ -185,7 +185,7 @@ impl PostService {
 
     /// Schedule a post (verifies ownership)
     pub async fn schedule(
-        db: &PgPool,
+        db: &SqlitePool,
         broadcaster: &Broadcaster,
         user_id: Uuid,
         post_id: Uuid,
@@ -207,9 +207,9 @@ impl PostService {
         Ok(post)
     }
 
-    /// Delete a post (ownership verified via WHERE user_id = $2 in query)
+    /// Delete a post (ownership verified via `WHERE user_id = ?` in the query)
     pub async fn delete(
-        db: &PgPool,
+        db: &SqlitePool,
         broadcaster: &Broadcaster,
         user_id: Uuid,
         post_id: Uuid,
@@ -228,7 +228,7 @@ impl PostService {
 
     /// Find next available time slot
     pub async fn find_slot(
-        db: &PgPool,
+        db: &SqlitePool,
         user_id: Uuid,
         integration_id: Option<Uuid>,
     ) -> ServiceResult<DateTime<Utc>> {
@@ -247,7 +247,7 @@ impl PostService {
     /// scheduler's behavior. When `None`, tokens are stored as-is
     /// (legacy/dev mode).
     pub async fn publish(
-        db: &PgPool,
+        db: &SqlitePool,
         providers: &ProviderRegistry,
         broadcaster: &Broadcaster,
         user_id: Uuid,
@@ -296,7 +296,7 @@ impl PostService {
             if seq > 1 {
                 match sqlx::query_scalar::<_, Option<String>>(
                     r#"SELECT platform_post_id FROM posts
-                       WHERE group_id = $1 AND sequence = $2
+                       WHERE group_id = ? AND sequence = ?
                          AND state = 'published' AND platform_post_id IS NOT NULL
                        LIMIT 1"#,
                 )
@@ -404,7 +404,7 @@ impl PostService {
     /// path stored the raw token, silently downgrading at-rest
     /// encryption on every manual publish.
     async fn resolve_token(
-        db: &PgPool,
+        db: &SqlitePool,
         provider: &dyn SocialProvider,
         post: &PostWithIntegration,
         token_key: Option<[u8; 32]>,
@@ -459,7 +459,7 @@ impl PostService {
 
     /// Get calendar posts by date range
     pub async fn calendar(
-        db: &PgPool,
+        db: &SqlitePool,
         user_id: Uuid,
         start: DateTime<Utc>,
         end: DateTime<Utc>,

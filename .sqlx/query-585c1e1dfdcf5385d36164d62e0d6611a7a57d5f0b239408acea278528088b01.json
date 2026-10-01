@@ -1,0 +1,122 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id as \"id!: Uuid\", user_id as \"user_id!: Uuid\",\n                provider_identifier, provider_name, internal_id,\n                access_token, refresh_token,\n                token_expires_at as \"token_expires_at?: DateTime<Utc>\",\n                profile_name, profile_picture, profile_url,\n                disabled as \"disabled!: bool\",\n                refresh_needed as \"refresh_needed!: bool\",\n                root_internal_id, posting_times, auth_method,\n                created_at as \"created_at!: DateTime<Utc>\",\n                updated_at as \"updated_at!: DateTime<Utc>\"\n         FROM integrations WHERE disabled = false ORDER BY user_id, provider_identifier",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!: Uuid",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "user_id!: Uuid",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "provider_identifier",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "provider_name",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "internal_id",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "access_token",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "refresh_token",
+        "ordinal": 6,
+        "type_info": "Text"
+      },
+      {
+        "name": "token_expires_at?: DateTime<Utc>",
+        "ordinal": 7,
+        "type_info": "Integer"
+      },
+      {
+        "name": "profile_name",
+        "ordinal": 8,
+        "type_info": "Text"
+      },
+      {
+        "name": "profile_picture",
+        "ordinal": 9,
+        "type_info": "Text"
+      },
+      {
+        "name": "profile_url",
+        "ordinal": 10,
+        "type_info": "Text"
+      },
+      {
+        "name": "disabled!: bool",
+        "ordinal": 11,
+        "type_info": "Integer"
+      },
+      {
+        "name": "refresh_needed!: bool",
+        "ordinal": 12,
+        "type_info": "Integer"
+      },
+      {
+        "name": "root_internal_id",
+        "ordinal": 13,
+        "type_info": "Text"
+      },
+      {
+        "name": "posting_times",
+        "ordinal": 14,
+        "type_info": "Text"
+      },
+      {
+        "name": "auth_method",
+        "ordinal": 15,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_at!: DateTime<Utc>",
+        "ordinal": 16,
+        "type_info": "Integer"
+      },
+      {
+        "name": "updated_at!: DateTime<Utc>",
+        "ordinal": 17,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "585c1e1dfdcf5385d36164d62e0d6611a7a57d5f0b239408acea278528088b01"
+}

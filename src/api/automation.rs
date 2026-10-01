@@ -9,18 +9,22 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::auth::middleware::AuthenticatedUser;
+use crate::db::types::EpochUtc;
 use crate::error::AppError;
 
 use super::AppState;
 
+/// `id` is TEXT and `created_at` an INTEGER epoch. sqlx cannot decode `Uuid`
+/// from TEXT (it wants 16 raw blob bytes, SQLite stores 36), so both come
+/// back in their storage types and are rendered here.
 #[derive(Debug, sqlx::FromRow)]
 struct RuleRow {
-    id: Uuid,
+    id: String,
     name: String,
     trigger_type: String,
     response_type: String,
-    is_active: Option<bool>,
-    created_at: Option<chrono::DateTime<chrono::Utc>>,
+    is_active: Option<i64>,
+    created_at: Option<EpochUtc>,
 }
 
 // ── Request Types ───────────────────────────────────────────
@@ -125,9 +129,11 @@ pub async fn list_rules(
     let rules: Vec<RuleRow> = if let Some(integration_id) = query.integration_id {
         sqlx::query_as!(
             RuleRow,
-            r#"SELECT id, name, trigger_type, response_type, is_active, created_at
+            r#"SELECT id as "id!: String", name, trigger_type, response_type,
+                      is_active as "is_active: i64",
+                      created_at as "created_at: EpochUtc"
                FROM automation_rules
-               WHERE user_id = $1 AND integration_id = $2
+               WHERE user_id = ? AND integration_id = ?
                ORDER BY created_at DESC"#,
             auth.user_id,
             integration_id,
@@ -137,9 +143,11 @@ pub async fn list_rules(
     } else {
         sqlx::query_as!(
             RuleRow,
-            r#"SELECT id, name, trigger_type, response_type, is_active, created_at
+            r#"SELECT id as "id!: String", name, trigger_type, response_type,
+                      is_active as "is_active: i64",
+                      created_at as "created_at: EpochUtc"
                FROM automation_rules
-               WHERE user_id = $1
+               WHERE user_id = ?
                ORDER BY created_at DESC"#,
             auth.user_id,
         )
@@ -150,15 +158,12 @@ pub async fn list_rules(
     let rule_responses: Vec<RuleResponse> = rules
         .into_iter()
         .map(|r| RuleResponse {
-            id: r.id.to_string(),
+            id: r.id,
             name: r.name,
             trigger_type: r.trigger_type,
             response_type: r.response_type,
-            is_active: r.is_active.unwrap_or(true),
-            created_at: r
-                .created_at
-                .unwrap_or_else(chrono::Utc::now)
-                .to_rfc3339(),
+            is_active: r.is_active.map_or(true, |v| v != 0),
+            created_at: r.created_at.unwrap_or_else(EpochUtc::now).0.to_rfc3339(),
         })
         .collect();
 
@@ -183,8 +188,8 @@ pub async fn create_rule(
         r#"INSERT INTO automation_rules
            (user_id, integration_id, name, trigger_type, trigger_filter,
             response_template, response_type, ai_model, cooldown_minutes, max_responses_per_hour)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-           RETURNING id, name, is_active"#,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           RETURNING id as "id!: String", name, is_active as "is_active: i64""#,
         auth.user_id,
         request.integration_id,
         request.name,
@@ -201,9 +206,9 @@ pub async fn create_rule(
     .map_err(|e| AppError::Internal(format!("Failed to create rule: {e}")))?;
 
     Ok(Json(CreateRuleResponse {
-        id: rule.id.to_string(),
+        id: rule.id,
         name: rule.name,
-        is_active: rule.is_active.unwrap_or(true),
+        is_active: rule.is_active.map_or(true, |v| v != 0),
     }))
 }
 
@@ -216,7 +221,7 @@ pub async fn update_rule(
 ) -> Result<Json<SuccessResponse>, AppError> {
     // Verify ownership
     let existing = sqlx::query!(
-        r#"SELECT id FROM automation_rules WHERE id = $1 AND user_id = $2"#,
+        r#"SELECT id as "id!: String" FROM automation_rules WHERE id = ? AND user_id = ?"#,
         rule_id,
         auth.user_id,
     )
@@ -227,18 +232,19 @@ pub async fn update_rule(
         return Err(AppError::NotFound("Rule not found".into()));
     }
 
+    let request_active_i64 = request.is_active.map(i64::from);
     sqlx::query!(
         r#"UPDATE automation_rules
-           SET name = COALESCE($3, name),
-               trigger_filter = COALESCE($4, trigger_filter),
-               response_template = COALESCE($5, response_template),
-               response_type = COALESCE($6, response_type),
-               ai_model = COALESCE($7, ai_model),
-               is_active = COALESCE($8, is_active),
-               cooldown_minutes = COALESCE($9, cooldown_minutes),
-               max_responses_per_hour = COALESCE($10, max_responses_per_hour),
-               updated_at = NOW()
-           WHERE id = $1 AND user_id = $2"#,
+           SET name = COALESCE(?, name),
+               trigger_filter = COALESCE(?, trigger_filter),
+               response_template = COALESCE(?, response_template),
+               response_type = COALESCE(?, response_type),
+               ai_model = COALESCE(?, ai_model),
+               is_active = COALESCE(?, is_active),
+               cooldown_minutes = COALESCE(?, cooldown_minutes),
+               max_responses_per_hour = COALESCE(?, max_responses_per_hour),
+               updated_at = unixepoch()
+           WHERE id = ? AND user_id = ?"#,
         rule_id,
         auth.user_id,
         request.name,
@@ -246,7 +252,7 @@ pub async fn update_rule(
         request.response_template,
         request.response_type,
         request.ai_model,
-        request.is_active,
+        request_active_i64,
         request.cooldown_minutes,
         request.max_responses_per_hour,
     )
@@ -267,7 +273,7 @@ pub async fn delete_rule(
     Path(rule_id): Path<Uuid>,
 ) -> Result<Json<SuccessResponse>, AppError> {
     let result = sqlx::query!(
-        r#"DELETE FROM automation_rules WHERE id = $1 AND user_id = $2"#,
+        r#"DELETE FROM automation_rules WHERE id = ? AND user_id = ?"#,
         rule_id,
         auth.user_id,
     )
@@ -294,7 +300,7 @@ pub async fn get_logs(
 ) -> Result<Json<GetLogsResponse>, AppError> {
     // Verify ownership
     let existing = sqlx::query!(
-        r#"SELECT id FROM automation_rules WHERE id = $1 AND user_id = $2"#,
+        r#"SELECT id as "id!: String" FROM automation_rules WHERE id = ? AND user_id = ?"#,
         rule_id,
         auth.user_id,
     )
@@ -306,11 +312,12 @@ pub async fn get_logs(
     }
 
     let logs = sqlx::query!(
-        r#"SELECT id, trigger_id, trigger_type, response, status, error_message, created_at
+        r#"SELECT id as "id!: String", trigger_id, trigger_type, response, status, error_message,
+                  created_at as "created_at: EpochUtc"
            FROM automation_logs
-           WHERE rule_id = $1
+           WHERE rule_id = ?
            ORDER BY created_at DESC
-           LIMIT $2"#,
+           LIMIT ?"#,
         rule_id,
         query.limit,
     )
@@ -321,16 +328,13 @@ pub async fn get_logs(
     let log_responses: Vec<LogEntryResponse> = logs
         .into_iter()
         .map(|l| LogEntryResponse {
-            id: l.id.to_string(),
+            id: l.id,
             trigger_id: l.trigger_id,
             trigger_type: l.trigger_type,
             response: l.response,
             status: l.status,
             error_message: l.error_message,
-            created_at: l
-                .created_at
-                .unwrap_or_else(chrono::Utc::now)
-                .to_rfc3339(),
+            created_at: l.created_at.unwrap_or_else(EpochUtc::now).0.to_rfc3339(),
         })
         .collect();
 

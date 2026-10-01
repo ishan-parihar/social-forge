@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM automation_rules WHERE id = ? AND user_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "f2fb3a39ffdb0f174c126439c3744d40041e446c2dc24f37a9a5dbeb9f7e057f"
+}

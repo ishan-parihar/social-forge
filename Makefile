@@ -66,8 +66,8 @@ status:
 	@echo "=== systemd ==="
 	systemctl status $(APP_NAME) --no-pager || true
 	@echo ""
-	@echo "=== Docker ==="
-	docker compose ps
+	@echo "=== database ==="
+	@echo "$(APP_DIR)/data/social-forge.db"
 
 logs:
 	journalctl -u $(APP_NAME) -n 50 --no-pager -f

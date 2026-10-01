@@ -1,0 +1,44 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT t.id as \"id!: Uuid\", t.name, t.color,\n                  t.created_at as \"created_at!: DateTime<Utc>\",\n                  t.updated_at as \"updated_at!: DateTime<Utc>\"\n           FROM post_tags pt\n           JOIN tags t ON pt.tag_id = t.id\n           WHERE pt.post_id = ? AND t.user_id = ?\n           ORDER BY t.name",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!: Uuid",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "name",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "color",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_at!: DateTime<Utc>",
+        "ordinal": 3,
+        "type_info": "Integer"
+      },
+      {
+        "name": "updated_at!: DateTime<Utc>",
+        "ordinal": 4,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "0182974b88b3b06747d0ed28f3e82af15c6b8a3304dcd16e522ffb625da63905"
+}

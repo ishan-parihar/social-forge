@@ -87,8 +87,6 @@ rules:
       - "bun.lock"
       - "capacitor.config.json"
       - "clippy.toml"
-      - "docker-compose.yaml"
-      - "docker-compose.yml"
       - "go.mod"
       - "go.sum"
       - "install.sh"

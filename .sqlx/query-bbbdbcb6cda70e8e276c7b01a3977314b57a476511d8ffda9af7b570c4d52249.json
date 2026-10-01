@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM oauth_states WHERE expires_at < unixepoch()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": []
+  },
+  "hash": "bbbdbcb6cda70e8e276c7b01a3977314b57a476511d8ffda9af7b570c4d52249"
+}

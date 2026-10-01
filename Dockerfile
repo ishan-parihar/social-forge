@@ -1,8 +1,7 @@
 # ─── Social Forge Docker Image ───────────────────────────────
 # Multi-stage build: Rust binary from local source + frontend.
 #
-# Build: docker compose build
-# Run:   docker compose up -d
+# Build: docker build -t social-forge .
 
 # ─── Rust Build ─────────────────────────────────────────────
 # Slim base keeps the build layer small while still providing

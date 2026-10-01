@@ -6,22 +6,26 @@ use serde::Serialize;
 use uuid::Uuid;
 
 use super::models::*;
-use super::PgPool;
+use super::types::EpochUtc;
+use super::SqlitePool;
 
 // ══════════════════════════════════════════════════════════════
 // USERS
 // ══════════════════════════════════════════════════════════════
 
 pub async fn create_user(
-    pool: &PgPool,
+    pool: &SqlitePool,
     email: &str,
     password_hash: &str,
     name: &str,
 ) -> Result<User, sqlx::Error> {
     sqlx::query_as!(
         User,
-        "INSERT INTO users (email, password, name) VALUES ($1, $2, $3)
-         RETURNING id, email, password, name, timezone, created_at, updated_at",
+        r#"INSERT INTO users (email, password, name) VALUES (?, ?, ?)
+         RETURNING id as "id!: Uuid", email, password, name,
+                   timezone as "timezone!: i32",
+                   created_at as "created_at!: DateTime<Utc>",
+                   updated_at as "updated_at!: DateTime<Utc>""#,
         email,
         password_hash,
         name,
@@ -31,7 +35,7 @@ pub async fn create_user(
 }
 
 pub async fn create_user_with_id(
-    pool: &PgPool,
+    pool: &SqlitePool,
     id: Uuid,
     email: &str,
     password_hash: &str,
@@ -39,9 +43,12 @@ pub async fn create_user_with_id(
 ) -> Result<User, sqlx::Error> {
     sqlx::query_as!(
         User,
-        "INSERT INTO users (id, email, password, name) VALUES ($1, $2, $3, $4)
+        r#"INSERT INTO users (id, email, password, name) VALUES (?, ?, ?, ?)
          ON CONFLICT (email) DO UPDATE SET id = EXCLUDED.id, password = EXCLUDED.password, name = EXCLUDED.name
-         RETURNING id, email, password, name, timezone, created_at, updated_at",
+         RETURNING id as "id!: Uuid", email, password, name,
+                   timezone as "timezone!: i32",
+                   created_at as "created_at!: DateTime<Utc>",
+                   updated_at as "updated_at!: DateTime<Utc>""#,
         id,
         email,
         password_hash,
@@ -51,22 +58,28 @@ pub async fn create_user_with_id(
     .await
 }
 
-pub async fn get_user_by_email(pool: &PgPool, email: &str) -> Result<Option<User>, sqlx::Error> {
+pub async fn get_user_by_email(pool: &SqlitePool, email: &str) -> Result<Option<User>, sqlx::Error> {
     sqlx::query_as!(
         User,
-        "SELECT id, email, password, name, timezone, created_at, updated_at
-         FROM users WHERE email = $1",
+        r#"SELECT id as "id!: Uuid", email, password, name,
+                  timezone as "timezone!: i32",
+                  created_at as "created_at!: DateTime<Utc>",
+                  updated_at as "updated_at!: DateTime<Utc>"
+         FROM users WHERE email = ?"#,
         email,
     )
     .fetch_optional(pool)
     .await
 }
 
-pub async fn get_user_by_id(pool: &PgPool, id: Uuid) -> Result<Option<User>, sqlx::Error> {
+pub async fn get_user_by_id(pool: &SqlitePool, id: Uuid) -> Result<Option<User>, sqlx::Error> {
     sqlx::query_as!(
         User,
-        "SELECT id, email, password, name, timezone, created_at, updated_at
-         FROM users WHERE id = $1",
+        r#"SELECT id as "id!: Uuid", email, password, name,
+                  timezone as "timezone!: i32",
+                  created_at as "created_at!: DateTime<Utc>",
+                  updated_at as "updated_at!: DateTime<Utc>"
+         FROM users WHERE id = ?"#,
         id,
     )
     .fetch_optional(pool)
@@ -78,7 +91,7 @@ pub async fn get_user_by_id(pool: &PgPool, id: Uuid) -> Result<Option<User>, sql
 // ══════════════════════════════════════════════════════════════
 
 pub async fn create_integration(
-    pool: &PgPool,
+    pool: &SqlitePool,
     user_id: Uuid,
     provider_identifier: &str,
     provider_name: &str,
@@ -100,23 +113,39 @@ pub async fn create_integration(
             access_token, refresh_token, token_expires_at,
             profile_name, profile_picture, profile_url,
             root_internal_id, auth_method)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT (user_id, provider_identifier, internal_id)
-           DO UPDATE SET access_token = $5, refresh_token = $6,
-             token_expires_at = $7, profile_name = $8,
-             profile_picture = $9, profile_url = $10,
-             root_internal_id = COALESCE($11, integrations.root_internal_id),
-             auth_method = $12,
+           DO UPDATE SET access_token = ?, refresh_token = ?,
+             token_expires_at = ?, profile_name = ?,
+             profile_picture = ?, profile_url = ?,
+             root_internal_id = COALESCE(?, integrations.root_internal_id),
+             auth_method = ?,
              refresh_needed = false, disabled = false,
-             updated_at = now()
-           RETURNING id, user_id, provider_identifier, provider_name,
-             internal_id, access_token, refresh_token, token_expires_at,
-             profile_name, profile_picture, profile_url, disabled,
-             refresh_needed, root_internal_id, posting_times, auth_method, created_at, updated_at"#,
+             updated_at = unixepoch()
+           RETURNING id as "id!: Uuid", user_id as "user_id!: Uuid",
+             provider_identifier, provider_name, internal_id,
+             access_token, refresh_token,
+             token_expires_at as "token_expires_at?: DateTime<Utc>",
+             profile_name, profile_picture, profile_url,
+             disabled as "disabled!: bool",
+             refresh_needed as "refresh_needed!: bool",
+             root_internal_id, posting_times, auth_method,
+             created_at as "created_at!: DateTime<Utc>",
+             updated_at as "updated_at!: DateTime<Utc>""#,
         user_id,
         provider_identifier,
         provider_name,
         internal_id,
+        access_token,
+        refresh_token,
+        token_expires_at,
+        profile_name,
+        profile_picture,
+        profile_url,
+        root_internal_id,
+        method,
+        // SQLite has no numbered params: the ON CONFLICT DO UPDATE arm
+        // repeats the tail binds positionally (13..20).
         access_token,
         refresh_token,
         token_expires_at,
@@ -131,16 +160,22 @@ pub async fn create_integration(
 }
 
 pub async fn list_integrations(
-    pool: &PgPool,
+    pool: &SqlitePool,
     user_id: Uuid,
 ) -> Result<Vec<Integration>, sqlx::Error> {
     sqlx::query_as!(
         Integration,
-        "SELECT id, user_id, provider_identifier, provider_name, internal_id,
-                access_token, refresh_token, token_expires_at,
-                profile_name, profile_picture, profile_url, disabled,
-                refresh_needed, root_internal_id, posting_times, auth_method, created_at, updated_at
-         FROM integrations WHERE user_id = $1 ORDER BY created_at DESC",
+        r#"SELECT id as "id!: Uuid", user_id as "user_id!: Uuid",
+                provider_identifier, provider_name, internal_id,
+                access_token, refresh_token,
+                token_expires_at as "token_expires_at?: DateTime<Utc>",
+                profile_name, profile_picture, profile_url,
+                disabled as "disabled!: bool",
+                refresh_needed as "refresh_needed!: bool",
+                root_internal_id, posting_times, auth_method,
+                created_at as "created_at!: DateTime<Utc>",
+                updated_at as "updated_at!: DateTime<Utc>"
+         FROM integrations WHERE user_id = ? ORDER BY created_at DESC"#,
         user_id,
     )
     .fetch_all(pool)
@@ -149,32 +184,44 @@ pub async fn list_integrations(
 
 /// List all non-disabled integrations across all users
 pub async fn list_all_integrations_across_users(
-    pool: &PgPool,
+    pool: &SqlitePool,
 ) -> Result<Vec<Integration>, sqlx::Error> {
     sqlx::query_as!(
         Integration,
-        "SELECT id, user_id, provider_identifier, provider_name, internal_id,
-                access_token, refresh_token, token_expires_at,
-                profile_name, profile_picture, profile_url, disabled,
-                refresh_needed, root_internal_id, posting_times, auth_method, created_at, updated_at
-         FROM integrations WHERE disabled = false ORDER BY user_id, provider_identifier",
+        r#"SELECT id as "id!: Uuid", user_id as "user_id!: Uuid",
+                provider_identifier, provider_name, internal_id,
+                access_token, refresh_token,
+                token_expires_at as "token_expires_at?: DateTime<Utc>",
+                profile_name, profile_picture, profile_url,
+                disabled as "disabled!: bool",
+                refresh_needed as "refresh_needed!: bool",
+                root_internal_id, posting_times, auth_method,
+                created_at as "created_at!: DateTime<Utc>",
+                updated_at as "updated_at!: DateTime<Utc>"
+         FROM integrations WHERE disabled = false ORDER BY user_id, provider_identifier"#,
     )
     .fetch_all(pool)
     .await
 }
 
 pub async fn get_integration(
-    pool: &PgPool,
+    pool: &SqlitePool,
     id: Uuid,
     user_id: Uuid,
 ) -> Result<Option<Integration>, sqlx::Error> {
     sqlx::query_as!(
         Integration,
-        "SELECT id, user_id, provider_identifier, provider_name, internal_id,
-                access_token, refresh_token, token_expires_at,
-                profile_name, profile_picture, profile_url, disabled,
-                refresh_needed, root_internal_id, posting_times, auth_method, created_at, updated_at
-         FROM integrations WHERE id = $1 AND user_id = $2",
+        r#"SELECT id as "id!: Uuid", user_id as "user_id!: Uuid",
+                provider_identifier, provider_name, internal_id,
+                access_token, refresh_token,
+                token_expires_at as "token_expires_at?: DateTime<Utc>",
+                profile_name, profile_picture, profile_url,
+                disabled as "disabled!: bool",
+                refresh_needed as "refresh_needed!: bool",
+                root_internal_id, posting_times, auth_method,
+                created_at as "created_at!: DateTime<Utc>",
+                updated_at as "updated_at!: DateTime<Utc>"
+         FROM integrations WHERE id = ? AND user_id = ?"#,
         id,
         user_id,
     )
@@ -183,16 +230,16 @@ pub async fn get_integration(
 }
 
 pub async fn update_integration_token(
-    pool: &PgPool,
+    pool: &SqlitePool,
     id: Uuid,
     access_token: &str,
     refresh_token: Option<&str>,
     token_expires_at: Option<DateTime<Utc>>,
 ) -> Result<(), sqlx::Error> {
     sqlx::query!(
-        "UPDATE integrations SET access_token = $1, refresh_token = $2,
-         token_expires_at = $3, refresh_needed = false, updated_at = now()
-         WHERE id = $4",
+        "UPDATE integrations SET access_token = ?, refresh_token = ?,
+         token_expires_at = ?, refresh_needed = false, updated_at = unixepoch()
+         WHERE id = ?",
         access_token,
         refresh_token,
         token_expires_at,
@@ -205,11 +252,11 @@ pub async fn update_integration_token(
 
 /// Mark an integration as needing reconnection (e.g. scope mismatch, revoked token).
 pub async fn mark_integration_refresh_needed(
-    pool: &PgPool,
+    pool: &SqlitePool,
     id: Uuid,
 ) -> Result<(), sqlx::Error> {
     sqlx::query!(
-        "UPDATE integrations SET refresh_needed = true, updated_at = now() WHERE id = $1",
+        "UPDATE integrations SET refresh_needed = true, updated_at = unixepoch() WHERE id = ?",
         id,
     )
     .execute(pool)
@@ -219,24 +266,30 @@ pub async fn mark_integration_refresh_needed(
 
 /// Get integrations that need proactive token refresh (tokens expiring within `window_hours`)
 pub async fn get_integrations_needing_refresh(
-    pool: &PgPool,
+    pool: &SqlitePool,
     provider_identifier: &str,
     window_hours: i64,
 ) -> Result<Vec<Integration>, sqlx::Error> {
     let cutoff_time = chrono::Utc::now() + chrono::Duration::hours(window_hours);
     sqlx::query_as!(
         Integration,
-        r#"SELECT id, user_id, provider_identifier, provider_name, internal_id,
-                access_token, refresh_token, token_expires_at,
-                profile_name, profile_picture, profile_url, disabled,
-                refresh_needed, root_internal_id, posting_times, auth_method, created_at, updated_at
+        r#"SELECT id as "id!: Uuid", user_id as "user_id!: Uuid",
+                provider_identifier, provider_name, internal_id,
+                access_token, refresh_token,
+                token_expires_at as "token_expires_at?: DateTime<Utc>",
+                profile_name, profile_picture, profile_url,
+                disabled as "disabled!: bool",
+                refresh_needed as "refresh_needed!: bool",
+                root_internal_id, posting_times, auth_method,
+                created_at as "created_at!: DateTime<Utc>",
+                updated_at as "updated_at!: DateTime<Utc>"
          FROM integrations
-         WHERE provider_identifier = $1
+         WHERE provider_identifier = ?
            AND disabled = false
            AND refresh_needed = false
            AND refresh_token IS NOT NULL
            AND token_expires_at IS NOT NULL
-           AND token_expires_at <= $2"#,
+           AND token_expires_at <= ?"#,
         provider_identifier,
         cutoff_time,
     )
@@ -245,12 +298,12 @@ pub async fn get_integrations_needing_refresh(
 }
 
 pub async fn delete_integration(
-    pool: &PgPool,
+    pool: &SqlitePool,
     id: Uuid,
     user_id: Uuid,
 ) -> Result<bool, sqlx::Error> {
     let r = sqlx::query!(
-        "DELETE FROM integrations WHERE id = $1 AND user_id = $2",
+        "DELETE FROM integrations WHERE id = ? AND user_id = ?",
         id,
         user_id,
     )
@@ -265,7 +318,7 @@ pub async fn delete_integration(
 
 /// Batch-create posts for multiple integrations in a single transaction.
 pub async fn create_posts_for_integrations(
-    pool: &PgPool,
+    pool: &SqlitePool,
     user_id: Uuid,
     integration_ids: &[Uuid],
     content: &str,
@@ -285,7 +338,7 @@ pub async fn create_posts_for_integrations(
         let post = sqlx::query_as::<_, Post>(
             r#"INSERT INTO posts
                (user_id, integration_id, content, title, media, settings, scheduled_at, state, first_comment, sequence)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                RETURNING id, user_id, integration_id, state,
                  content, title, media, settings, scheduled_at, published_at,
                  platform_post_id, platform_post_url, error_message,
@@ -313,7 +366,7 @@ pub async fn create_posts_for_integrations(
 }
 
 pub async fn create_post(
-    pool: &PgPool,
+    pool: &SqlitePool,
     user_id: Uuid,
     integration_id: Uuid,
     content: &str,
@@ -331,7 +384,7 @@ pub async fn create_post(
     sqlx::query_as::<_, Post>(
         r#"INSERT INTO posts
            (user_id, integration_id, content, title, media, settings, scheduled_at, state, first_comment, sequence)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            RETURNING id, user_id, integration_id, state as "state: PostState",
               content, title, media, settings, scheduled_at, published_at,
               platform_post_id, platform_post_url, error_message,
@@ -355,7 +408,7 @@ pub async fn create_post(
 
 /// Create thread posts (multiple content parts sharing a group_id)
 pub async fn create_thread_posts(
-    pool: &PgPool,
+    pool: &SqlitePool,
     user_id: Uuid,
     integration_ids: &[Uuid],
     content_parts: &[String],
@@ -389,7 +442,7 @@ pub async fn create_thread_posts(
             let post = sqlx::query_as::<_, Post>(
                 r#"INSERT INTO posts
                    (user_id, integration_id, content, title, media, settings, scheduled_at, state, first_comment, sequence, group_id)
-                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                    RETURNING id, user_id, integration_id, state,
                      content, title, media, settings, scheduled_at, published_at,
                      platform_post_id, platform_post_url, error_message,
@@ -427,7 +480,7 @@ pub async fn create_thread_posts(
 
 /// Get all posts sharing a group_id (for thread display)
 pub async fn get_posts_by_group_id(
-    pool: &PgPool,
+    pool: &SqlitePool,
     user_id: Uuid,
     group_id: Uuid,
 ) -> Result<Vec<Post>, sqlx::Error> {
@@ -438,7 +491,7 @@ pub async fn get_posts_by_group_id(
            created_at, updated_at,
            repeat_interval_days, repeat_end_date, group_id,
            first_comment, sequence, idempotency_key
-         FROM posts WHERE user_id = $1 AND group_id = $2
+         FROM posts WHERE user_id = ? AND group_id = ?
          ORDER BY sequence ASC, created_at ASC"#,
     )
         .bind(user_id)
@@ -448,7 +501,7 @@ pub async fn get_posts_by_group_id(
 }
 
 pub async fn list_posts(
-    pool: &PgPool,
+    pool: &SqlitePool,
     user_id: Uuid,
     state_filter: Option<&str>,
     limit: i64,
@@ -476,9 +529,9 @@ pub async fn list_posts(
                first_comment, sequence, idempotency_key,
                campaign_id,
                kanban_sort_order, kanban_substate, due_date, priority
-             FROM posts WHERE user_id = $1 AND state = $2 AND deleted_at IS NULL
+             FROM posts WHERE user_id = ? AND state = ? AND deleted_at IS NULL
              ORDER BY scheduled_at DESC NULLS LAST, created_at DESC
-             LIMIT $3 OFFSET $4"#,
+             LIMIT ? OFFSET ?"#
         )
         .bind(user_id)
         .bind(ps)
@@ -493,7 +546,7 @@ pub async fn list_posts(
 
 /// Count posts for a user, optionally filtered by state
 pub async fn count_posts_by_user(
-    pool: &PgPool,
+    pool: &SqlitePool,
     user_id: Uuid,
     state_filter: Option<&str>,
 ) -> Result<i64, sqlx::Error> {
@@ -506,7 +559,7 @@ pub async fn count_posts_by_user(
             "error" => PostState::Error,
             _ => {
                 let row: (Option<i64>,) = sqlx::query_as(
-                    "SELECT COUNT(*)::bigint FROM posts WHERE user_id = $1 AND deleted_at IS NULL"
+                    "SELECT COUNT(*) FROM posts WHERE user_id = ? AND deleted_at IS NULL"
                 )
                 .bind(user_id)
                 .fetch_one(pool)
@@ -515,7 +568,7 @@ pub async fn count_posts_by_user(
             }
         };
         let row: (Option<i64>,) = sqlx::query_as(
-            "SELECT COUNT(*)::bigint FROM posts WHERE user_id = $1 AND state = $2 AND deleted_at IS NULL"
+            "SELECT COUNT(*) FROM posts WHERE user_id = ? AND state = ? AND deleted_at IS NULL"
         )
         .bind(user_id)
         .bind(ps)
@@ -524,7 +577,7 @@ pub async fn count_posts_by_user(
         Ok(row.0.unwrap_or(0))
     } else {
         let row: (Option<i64>,) = sqlx::query_as(
-            "SELECT COUNT(*)::bigint FROM posts WHERE user_id = $1 AND deleted_at IS NULL"
+            "SELECT COUNT(*) FROM posts WHERE user_id = ? AND deleted_at IS NULL"
         )
         .bind(user_id)
         .fetch_one(pool)
@@ -534,7 +587,7 @@ pub async fn count_posts_by_user(
 }
 
 async fn list_posts_all(
-    pool: &PgPool,
+    pool: &SqlitePool,
     user_id: Uuid,
     limit: i64,
     offset: i64,
@@ -549,9 +602,9 @@ async fn list_posts_all(
             first_comment, sequence, idempotency_key,
             campaign_id,
             kanban_sort_order, kanban_substate, due_date, priority
-          FROM posts WHERE user_id = $1 AND deleted_at IS NULL
-          ORDER BY scheduled_at DESC NULLS LAST, created_at DESC
-          LIMIT $2 OFFSET $3"#,
+           FROM posts WHERE user_id = ? AND deleted_at IS NULL
+           ORDER BY scheduled_at DESC NULLS LAST, created_at DESC
+           LIMIT ? OFFSET ?"#
      )
      .bind(user_id)
      .bind(limit)
@@ -565,6 +618,16 @@ async fn list_posts_all(
 // These support the new ListPostsQuery params: q, integration_ids,
 // tag_ids, sort. The original list_posts / list_posts_all are kept
 // for backward compatibility (MCP/CLI use them).
+
+/// SQLite has no array type, so `IN (?, ?, ?)` id lists are bound as a
+/// JSON array of strings and expanded with `json_each(?)`. `None` binds
+/// SQL NULL, which the `? IS NULL` guard in the query short-circuits on.
+fn ids_json(ids: Option<&[Uuid]>) -> Option<String> {
+    ids.map(|v| {
+        serde_json::to_string(&v.iter().map(|u| u.to_string()).collect::<Vec<_>>())
+            .unwrap_or_else(|_| "[]".to_string())
+    })
+}
 
 /// Build the ORDER BY clause from a sort string.
 /// Supported: "scheduled_date" (default), "created_date", "engagement".
@@ -590,7 +653,7 @@ fn sort_to_order_by(sort: &str) -> &'static str {
 /// list endpoint. All params are optional; passing None for a filter
 /// means "no filter on this field".
 pub async fn list_posts_search(
-    pool: &PgPool,
+    pool: &SqlitePool,
     user_id: Uuid,
     state_filter: Option<&str>,
     q: Option<&str>,
@@ -612,6 +675,11 @@ pub async fn list_posts_search(
 
     let sql: String = if sort == "engagement" {
         // Engagement sort needs a LEFT JOIN to post_engagement.
+        // SQLite has no uuid[] arrays: the id lists are bound as JSON
+        // text and expanded with json_each(...). `? IS NULL` is how the
+        // optional filters are skipped, and ILIKE becomes LIKE with an
+        // explicit ESCAPE so the Rust-side backslash escaping still works
+        // (SQLite LIKE is case-insensitive for ASCII by default).
         r#"SELECT p.id, p.user_id, p.integration_id, p.state as "state: PostState",
                   p.content, p.title, p.media, p.settings, p.scheduled_at, p.published_at,
                   p.platform_post_id, p.platform_post_url, p.error_message,
@@ -622,16 +690,16 @@ pub async fn list_posts_search(
                   p.kanban_sort_order, p.kanban_substate, p.due_date, p.priority
            FROM posts p
            LEFT JOIN post_engagement pe ON pe.post_id = p.id
-           WHERE p.user_id = $1
+           WHERE p.user_id = ?
              AND p.deleted_at IS NULL
-             AND ($2::text IS NULL OR p.state::text = $2::text)
-             AND ($3::text IS NULL OR p.content ILIKE $3 OR p.title ILIKE $3)
-             AND ($4::uuid[] IS NULL OR p.integration_id = ANY($4::uuid[]))
-             AND ($5::uuid[] IS NULL OR p.id IN (
-               SELECT post_id FROM post_tags WHERE tag_id = ANY($5::uuid[])
+             AND (? IS NULL OR p.state = ?)
+             AND (? IS NULL OR p.content LIKE ? ESCAPE '\' OR p.title LIKE ? ESCAPE '\')
+             AND (? IS NULL OR p.integration_id IN (SELECT value FROM json_each(?)))
+             AND (? IS NULL OR p.id IN (
+               SELECT post_id FROM post_tags WHERE tag_id IN (SELECT value FROM json_each(?))
              ))
            ORDER BY (COALESCE(pe.likes, 0) + COALESCE(pe.comments, 0) + COALESCE(pe.shares, 0)) DESC NULLS LAST
-           LIMIT $6 OFFSET $7"#.to_string()
+           LIMIT ? OFFSET ?"#.to_string()
     } else {
         format!(r#"SELECT id, user_id, integration_id, state as "state: PostState",
                   content, title, media, settings, scheduled_at, published_at,
@@ -642,39 +710,38 @@ pub async fn list_posts_search(
                   campaign_id,
                   kanban_sort_order, kanban_substate, due_date, priority
            FROM posts
-           WHERE user_id = $1
+           WHERE user_id = ?
              AND deleted_at IS NULL
-             AND ($2::text IS NULL OR state::text = $2::text)
-             AND ($3::text IS NULL OR content ILIKE $3 OR title ILIKE $3)
-             AND ($4::uuid[] IS NULL OR integration_id = ANY($4::uuid[]))
-             AND ($5::uuid[] IS NULL OR id IN (
-               SELECT post_id FROM post_tags WHERE tag_id = ANY($5::uuid[])
+             AND (? IS NULL OR state = ?)
+             AND (? IS NULL OR content LIKE ? ESCAPE '\' OR title LIKE ? ESCAPE '\')
+             AND (? IS NULL OR integration_id IN (SELECT value FROM json_each(?)))
+             AND (? IS NULL OR id IN (
+               SELECT post_id FROM post_tags WHERE tag_id IN (SELECT value FROM json_each(?))
              ))
-           ORDER BY {} LIMIT $6 OFFSET $7"#, order_by)
+           ORDER BY {} LIMIT ? OFFSET ?"#, order_by)
     };
 
     let mut q_builder = sqlx::query_as::<_, Post>(&sql)
         .bind(user_id)
         .bind(state_filter)
-        .bind(q_pattern);
-    // Bind integration_ids as a Vec<Uuid> (sqlx maps this to uuid[])
-    q_builder = if let Some(ids) = integration_ids {
-        q_builder.bind(ids)
-    } else {
-        q_builder.bind(None::<&[Uuid]>)
-    };
-    q_builder = if let Some(ids) = tag_ids {
-        q_builder.bind(ids)
-    } else {
-        q_builder.bind(None::<&[Uuid]>)
-    };
+        .bind(state_filter)
+        .bind(&q_pattern)
+        .bind(&q_pattern)
+        .bind(&q_pattern);
+    // Bind integration_ids / tag_ids as JSON text; json_each expands them
+    // back into a row set. `None` binds SQL NULL, which the `? IS NULL`
+    // guard above short-circuits on.
+    q_builder = q_builder
+        .bind(ids_json(integration_ids))
+        .bind(ids_json(integration_ids));
+    q_builder = q_builder.bind(ids_json(tag_ids)).bind(ids_json(tag_ids));
     q_builder = q_builder.bind(limit).bind(offset);
     q_builder.fetch_all(pool).await
 }
 
 /// Count posts matching the search + filter criteria (for pagination total).
 pub async fn count_posts_search(
-    pool: &PgPool,
+    pool: &SqlitePool,
     user_id: Uuid,
     state_filter: Option<&str>,
     q: Option<&str>,
@@ -687,27 +754,32 @@ pub async fn count_posts_search(
     });
 
     let row: (Option<i64>,) = sqlx::query_as(
-        r#"SELECT COUNT(*)::bigint FROM posts
-           WHERE user_id = $1
-             AND ($2::text IS NULL OR state::text = $2::text)
-             AND ($3::text IS NULL OR content ILIKE $3 OR title ILIKE $3)
-             AND ($4::uuid[] IS NULL OR integration_id = ANY($4::uuid[]))
-             AND ($5::uuid[] IS NULL OR id IN (
-               SELECT post_id FROM post_tags WHERE tag_id = ANY($5::uuid[])
+        r#"SELECT COUNT(*) FROM posts
+           WHERE user_id = ?
+             AND (? IS NULL OR state = ?)
+             AND (? IS NULL OR content LIKE ? ESCAPE '\' OR title LIKE ? ESCAPE '\')
+             AND (? IS NULL OR integration_id IN (SELECT value FROM json_each(?)))
+             AND (? IS NULL OR id IN (
+               SELECT post_id FROM post_tags WHERE tag_id IN (SELECT value FROM json_each(?))
              ))"#,
     )
     .bind(user_id)
     .bind(state_filter)
-    .bind(q_pattern)
-    .bind(integration_ids)
-    .bind(tag_ids)
+    .bind(state_filter)
+    .bind(&q_pattern)
+    .bind(&q_pattern)
+    .bind(&q_pattern)
+    .bind(ids_json(integration_ids))
+    .bind(ids_json(integration_ids))
+    .bind(ids_json(tag_ids))
+    .bind(ids_json(tag_ids))
     .fetch_one(pool)
     .await?;
     Ok(row.0.unwrap_or(0))
 }
 
  pub async fn get_post(
-    pool: &PgPool,
+    pool: &SqlitePool,
     id: Uuid,
     user_id: Uuid,
 ) -> Result<Option<Post>, sqlx::Error> {
@@ -721,7 +793,7 @@ pub async fn count_posts_search(
             first_comment, sequence, idempotency_key,
             campaign_id,
             kanban_sort_order, kanban_substate, due_date, priority
-          FROM posts WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL"#,
+          FROM posts WHERE id = ? AND user_id = ? AND deleted_at IS NULL"#,
      )
      .bind(id)
      .bind(user_id)
@@ -730,7 +802,7 @@ pub async fn count_posts_search(
  }
 
  pub async fn update_post_content(
-    pool: &PgPool,
+    pool: &SqlitePool,
     id: Uuid,
     user_id: Uuid,
     content: &str,
@@ -739,9 +811,9 @@ pub async fn count_posts_search(
     settings: &serde_json::Value,
 ) -> Result<Option<Post>, sqlx::Error> {
     sqlx::query_as::<_, Post>(
-        r#"UPDATE posts SET content = $1, title = $2, media = $3, settings = $4,
-            updated_at = now()
-            WHERE id = $5 AND user_id = $6
+        r#"UPDATE posts SET content = ?, title = ?, media = ?, settings = ?,
+            updated_at = unixepoch()
+            WHERE id = ? AND user_id = ?
             RETURNING id, user_id, integration_id, state as "state: PostState",
                content, title, media, settings, scheduled_at, published_at,
                platform_post_id, platform_post_url, error_message,
@@ -765,7 +837,7 @@ pub async fn count_posts_search(
  /// adds first_comment to the UPDATE so the composer's edit-mode can
  /// persist first-comment changes.
  pub async fn update_post_full(
-    pool: &PgPool,
+    pool: &SqlitePool,
     id: Uuid,
     user_id: Uuid,
     content: &str,
@@ -776,10 +848,10 @@ pub async fn count_posts_search(
  ) -> Result<Option<Post>, sqlx::Error> {
     sqlx::query_as::<_, Post>(
         r#"UPDATE posts SET
-             content = $1, title = $2, media = $3, settings = $4,
-             first_comment = $5,
-             updated_at = now()
-           WHERE id = $6 AND user_id = $7
+             content = ?, title = ?, media = ?, settings = ?,
+             first_comment = ?,
+             updated_at = unixepoch()
+           WHERE id = ? AND user_id = ?
            RETURNING id, user_id, integration_id, state as "state: PostState",
                content, title, media, settings, scheduled_at, published_at,
                platform_post_id, platform_post_url, error_message,
@@ -799,15 +871,15 @@ pub async fn count_posts_search(
   }
 
   pub async fn schedule_post(
-    pool: &PgPool,
+    pool: &SqlitePool,
     id: Uuid,
     user_id: Uuid,
     scheduled_at: DateTime<Utc>,
 ) -> Result<Option<Post>, sqlx::Error> {
     sqlx::query_as::<_, Post>(
-        r#"UPDATE posts SET scheduled_at = $1, state = 'queued',
-            updated_at = now()
-            WHERE id = $2 AND user_id = $3
+        r#"UPDATE posts SET scheduled_at = ?, state = 'queued',
+            updated_at = unixepoch()
+            WHERE id = ? AND user_id = ?
             RETURNING id, user_id, integration_id, state as "state: PostState",
                content, title, media, settings, scheduled_at, published_at,
                platform_post_id, platform_post_url, error_message,
@@ -828,15 +900,15 @@ pub async fn count_posts_search(
   /// Closes the ComposerModal TODO at line 551 which used the "100 years
   /// in the future" hack to effectively unschedule.
   pub async fn unschedule_post(
-    pool: &PgPool,
+    pool: &SqlitePool,
     id: Uuid,
     user_id: Uuid,
 ) -> Result<Option<Post>, sqlx::Error> {
     sqlx::query_as::<_, Post>(
         r#"UPDATE posts SET scheduled_at = NULL, state = 'draft',
             error_message = NULL,
-            updated_at = now()
-            WHERE id = $1 AND user_id = $2
+            updated_at = unixepoch()
+            WHERE id = ? AND user_id = ?
               AND state IN ('queued', 'draft', 'error')
             RETURNING id, user_id, integration_id, state as "state: PostState",
                content, title, media, settings, scheduled_at, published_at,
@@ -865,14 +937,14 @@ pub async fn count_posts_search(
   /// Uses a runtime query (not query_as!) because we don't have a live
   /// Postgres to regenerate the .sqlx offline cache with this new SQL.
   pub async fn reset_post_for_republish(
-      pool: &PgPool,
+      pool: &SqlitePool,
       id: Uuid,
       user_id: Uuid,
       scheduled_at: DateTime<Utc>,
   ) -> Result<Option<Post>, sqlx::Error> {
       sqlx::query_as::<_, Post>(
           r#"UPDATE posts SET
-              scheduled_at = $1,
+              scheduled_at = ?,
               state = 'queued',
               platform_post_id = NULL,
               platform_post_url = NULL,
@@ -884,10 +956,11 @@ pub async fn count_posts_search(
               -- so the provider treats it as a fresh post (not a retry
               -- of the original publish). Without this, a re-publish
               -- would be deduplicated by the provider and no new post
-              -- would be created.
-              idempotency_key = gen_random_uuid(),
-              updated_at = now()
-             WHERE id = $2 AND user_id = $3
+              -- would be created. SQLite has no gen_random_uuid(), so the
+              -- key is generated in Rust and bound as a TEXT param.
+              idempotency_key = ?,
+              updated_at = unixepoch()
+             WHERE id = ? AND user_id = ?
              RETURNING id, user_id, integration_id, state as "state: PostState",
                content, title, media, settings, scheduled_at, published_at,
                platform_post_id, platform_post_url, error_message,
@@ -896,6 +969,7 @@ pub async fn count_posts_search(
                first_comment, sequence, idempotency_key"#,
       )
       .bind(scheduled_at)
+      .bind(Uuid::new_v4())
       .bind(id)
       .bind(user_id)
       .fetch_optional(pool)
@@ -911,14 +985,14 @@ pub async fn count_posts_search(
   /// Leaves `state`, `platform_post_id`, `platform_post_url`,
   /// `published_at` untouched. Only `scheduled_at` and `updated_at` change.
   pub async fn update_post_date_only(
-      pool: &PgPool,
+      pool: &SqlitePool,
       id: Uuid,
       user_id: Uuid,
       scheduled_at: DateTime<Utc>,
   ) -> Result<Option<Post>, sqlx::Error> {
       sqlx::query_as::<_, Post>(
-          r#"UPDATE posts SET scheduled_at = $1, updated_at = now()
-             WHERE id = $2 AND user_id = $3
+          r#"UPDATE posts SET scheduled_at = ?, updated_at = unixepoch()
+             WHERE id = ? AND user_id = ?
              RETURNING id, user_id, integration_id, state as "state: PostState",
                content, title, media, settings, scheduled_at, published_at,
                platform_post_id, platform_post_url, error_message,
@@ -934,7 +1008,7 @@ pub async fn count_posts_search(
   }
 
   pub async fn update_post_state(
-    pool: &PgPool,
+    pool: &SqlitePool,
     id: Uuid,
     state: PostState,
     platform_post_id: Option<&str>,
@@ -946,14 +1020,18 @@ pub async fn count_posts_search(
     } else {
         None
     };
+    // SQLite stores timestamps as INTEGER epoch, so the bind is EpochUtc.
+    let published_at = now.map(EpochUtc::from);
+    // `state` is already a PostState; the old `state as PostState` cast was a
+    // PG-shaped no-op that created a temporary the macro could not outlive.
     sqlx::query!(
-        r#"UPDATE posts SET state = $1, published_at = COALESCE($2, published_at),
-           platform_post_id = COALESCE($3, platform_post_id),
-           platform_post_url = COALESCE($4, platform_post_url),
-           error_message = $5, updated_at = now()
-           WHERE id = $6"#,
-        state as PostState,
-        now,
+        r#"UPDATE posts SET state = ?, published_at = COALESCE(?, published_at),
+           platform_post_id = COALESCE(?, platform_post_id),
+           platform_post_url = COALESCE(?, platform_post_url),
+           error_message = ?, updated_at = unixepoch()
+           WHERE id = ?"#,
+        state,
+        published_at,
         platform_post_id,
         platform_post_url,
         error_message,
@@ -964,7 +1042,7 @@ pub async fn count_posts_search(
     Ok(())
 }
 
-pub async fn delete_post(pool: &PgPool, id: Uuid, user_id: Uuid) -> Result<bool, sqlx::Error> {
+pub async fn delete_post(pool: &SqlitePool, id: Uuid, user_id: Uuid) -> Result<bool, sqlx::Error> {
     // Soft-delete: set deleted_at = NOW() on the post AND on every post
     // sharing the same group_id (if any). This makes the delete reversible
     // and keeps the calendar / posts-list queries clean (they filter
@@ -973,12 +1051,14 @@ pub async fn delete_post(pool: &PgPool, id: Uuid, user_id: Uuid) -> Result<bool,
     // If the post has no group_id, only the single row is soft-deleted.
     // Runtime query (see note in list_posts above).
     let r = sqlx::query(
-        r#"UPDATE posts SET deleted_at = NOW()
-           WHERE user_id = $2 AND deleted_at IS NULL AND (
-             id = $1
-             OR (group_id IS NOT NULL AND group_id = (SELECT group_id FROM posts WHERE id = $1 AND user_id = $2))
+        r#"UPDATE posts SET deleted_at = unixepoch()
+           WHERE user_id = ? AND deleted_at IS NULL AND (
+             id = ?
+             OR (group_id IS NOT NULL AND group_id = (SELECT group_id FROM posts WHERE id = ? AND user_id = ?))
            )"#,
     )
+    .bind(user_id)
+    .bind(id)
     .bind(id)
     .bind(user_id)
     .execute(pool)
@@ -987,15 +1067,17 @@ pub async fn delete_post(pool: &PgPool, id: Uuid, user_id: Uuid) -> Result<bool,
 }
 
 /// Hard-undelete a post (and its group). Useful for a future "Trash" UI.
-pub async fn undelete_post(pool: &PgPool, id: Uuid, user_id: Uuid) -> Result<bool, sqlx::Error> {
+pub async fn undelete_post(pool: &SqlitePool, id: Uuid, user_id: Uuid) -> Result<bool, sqlx::Error> {
     // Runtime query (see note in list_posts above).
     let r = sqlx::query(
         r#"UPDATE posts SET deleted_at = NULL
-           WHERE user_id = $2 AND deleted_at IS NOT NULL AND (
-             id = $1
-             OR (group_id IS NOT NULL AND group_id = (SELECT group_id FROM posts WHERE id = $1 AND user_id = $2))
+           WHERE user_id = ? AND deleted_at IS NOT NULL AND (
+             id = ?
+             OR (group_id IS NOT NULL AND group_id = (SELECT group_id FROM posts WHERE id = ? AND user_id = ?))
            )"#,
     )
+    .bind(user_id)
+    .bind(id)
     .bind(id)
     .bind(user_id)
     .execute(pool)
@@ -1007,7 +1089,7 @@ pub async fn undelete_post(pool: &PgPool, id: Uuid, user_id: Uuid) -> Result<boo
 /// Returns empty vec if group_id is None or no posts match.
 /// Excludes soft-deleted posts.
 pub async fn list_posts_by_group(
-    pool: &PgPool,
+    pool: &SqlitePool,
     user_id: Uuid,
     group_id: Uuid,
 ) -> Result<Vec<Post>, sqlx::Error> {
@@ -1020,7 +1102,7 @@ pub async fn list_posts_by_group(
            repeat_interval_days, repeat_end_date, group_id,
            first_comment, sequence, idempotency_key
          FROM posts
-         WHERE user_id = $1 AND group_id = $2 AND deleted_at IS NULL
+         WHERE user_id = ? AND group_id = ? AND deleted_at IS NULL
          ORDER BY sequence ASC, created_at ASC"#,
     )
     .bind(user_id)
@@ -1031,7 +1113,7 @@ pub async fn list_posts_by_group(
 
 /// Get a single post with its integration details (used for retry/publish now)
 pub async fn get_post_with_integration(
-    pool: &PgPool,
+    pool: &SqlitePool,
     post_id: Uuid,
     user_id: Uuid,
 ) -> Result<Option<PostWithIntegration>, sqlx::Error> {
@@ -1050,7 +1132,7 @@ pub async fn get_post_with_integration(
              i.refresh_needed as "integration_refresh_needed"
            FROM posts p
            JOIN integrations i ON p.integration_id = i.id
-           WHERE p.id = $1 AND p.user_id = $2"#,
+           WHERE p.id = ? AND p.user_id = ?"#,
     )
         .bind(post_id)
         .bind(user_id)
@@ -1065,7 +1147,7 @@ pub async fn get_post_with_integration(
 /// the same post. Rows are still returned in `state = 'queued'`; the caller
 /// is expected to commit/rollback to release the lock.
 pub async fn get_due_posts(
-    pool: &PgPool,
+    pool: &SqlitePool,
     limit: i64,
 ) -> Result<Vec<PostWithIntegration>, sqlx::Error> {
     // Atomically claim due posts by transitioning them
@@ -1087,24 +1169,43 @@ pub async fn get_due_posts(
     // runtime deserialization.
     let mut tx = pool.begin().await?;
 
-    let sql = r#"WITH claimed AS (
-        UPDATE posts
-        SET state = 'publishing',
-            updated_at = NOW()
-        WHERE id IN (
-            SELECT p.id
-            FROM posts p
-            JOIN integrations i ON p.integration_id = i.id
-            WHERE p.state = 'queued'
-              AND p.scheduled_at <= NOW()
-              AND i.disabled = false
-            ORDER BY p.scheduled_at ASC
-            LIMIT $1
-            FOR UPDATE SKIP LOCKED
-        )
-        RETURNING id
-    )
-    SELECT p.id, p.user_id, p.integration_id,
+    // SQLite has neither data-modifying CTEs (`WITH x AS (UPDATE ...)`)
+    // nor `FOR UPDATE SKIP LOCKED`. The pool opens transactions with
+    // BEGIN IMMEDIATE (see db::create_pool), so the three steps below run
+    // inside one write transaction and the claim is still atomic:
+    // collect the due ids, flip them to 'publishing', read them back.
+    let sql = r#"SELECT p.id
+           FROM posts p
+           JOIN integrations i ON p.integration_id = i.id
+           WHERE p.state = 'queued'
+             AND p.scheduled_at <= unixepoch()
+             AND i.disabled = false
+           ORDER BY p.scheduled_at ASC
+           LIMIT ?"#;
+
+    let ids: Vec<(Uuid,)> = sqlx::query_as(sql).bind(limit).fetch_all(&mut *tx).await?;
+
+    if ids.is_empty() {
+        tx.commit().await?;
+        return Ok(Vec::new());
+    }
+
+    let holes = std::iter::repeat_n("?", ids.len())
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    let claim_sql = format!(
+        "UPDATE posts SET state = 'publishing', updated_at = unixepoch()
+         WHERE id IN ({holes})"
+    );
+    let mut claim = sqlx::query(&claim_sql);
+    for (id,) in &ids {
+        claim = claim.bind(id);
+    }
+    claim.execute(&mut *tx).await?;
+
+    let rows_sql = format!(
+        r#"SELECT p.id, p.user_id, p.integration_id,
         p.state,
         p.content, p.title, p.media, p.settings,
         p.scheduled_at, p.published_at,
@@ -1118,12 +1219,13 @@ pub async fn get_due_posts(
         i.refresh_needed as integration_refresh_needed
       FROM posts p
       JOIN integrations i ON p.integration_id = i.id
-      JOIN claimed ON p.id = claimed.id"#;
-
-    let rows: Vec<PostWithIntegration> = sqlx::query_as(sql)
-        .bind(limit)
-        .fetch_all(&mut *tx)
-        .await?;
+      WHERE p.id IN ({holes})"#
+    );
+    let mut rows_query = sqlx::query_as::<_, PostWithIntegration>(&rows_sql);
+    for (id,) in &ids {
+        rows_query = rows_query.bind(id);
+    }
+    let rows: Vec<PostWithIntegration> = rows_query.fetch_all(&mut *tx).await?;
 
     tx.commit().await?;
     Ok(rows)
@@ -1135,18 +1237,25 @@ pub async fn get_due_posts(
 /// should manually review reclaimed posts before re-queuing, since
 /// the platform API may have actually accepted the publish.
 pub async fn reclaim_stuck_publishing(
-    pool: &PgPool,
+    pool: &SqlitePool,
     stuck_after_secs: i64,
 ) -> Result<u64, sqlx::Error> {
+    // SQLite has no make_interval() and stores timestamps as INTEGER
+    // epoch, so the cutoff is computed in Rust.
+    // TODO(seam): wrap in db::types::EpochUtc once the seam lane lands it.
+    let cutoff = (Utc::now() - chrono::Duration::seconds(stuck_after_secs)).timestamp();
+    let message =
+        format!("Post was stuck in publishing state for > {stuck_after_secs} seconds -- manual review required");
     let result = sqlx::query(
         "UPDATE posts
          SET state = 'error',
-             error_message = CONCAT('Post was stuck in publishing state for > ', $1::text, ' seconds -- manual review required'),
-             updated_at = NOW()
+             error_message = ?,
+             updated_at = unixepoch()
          WHERE state = 'publishing'
-           AND updated_at < NOW() - make_interval(secs => $1::double precision)",
+           AND updated_at < ?",
     )
-    .bind(stuck_after_secs as f64)
+    .bind(message)
+    .bind(cutoff)
     .execute(pool)
     .await?;
     Ok(result.rows_affected())
@@ -1180,31 +1289,34 @@ pub struct StuckPost {
 /// Runtime `sqlx::query_as` (not the `query_as!` macro) so the build
 /// needs no live DB or `.sqlx` cache entry.
 pub async fn find_stuck_posts(
-    pool: &PgPool,
+    pool: &SqlitePool,
     grace_secs: i64,
     limit: i64,
 ) -> Result<Vec<StuckPost>, sqlx::Error> {
+    // SQLite has no make_interval(); the cutoff is computed in Rust and
+    // bound as an INTEGER epoch. TODO(seam): wrap in db::types::EpochUtc.
+    let cutoff = (Utc::now() - chrono::Duration::seconds(grace_secs)).timestamp();
     sqlx::query_as::<_, StuckPost>(
         r#"SELECT p.id, p.user_id,
-                  p.state::text AS state,
-                  LEFT(p.content, 120) AS content_preview,
+                  p.state AS state,
+                  substr(p.content, 1, 120) AS content_preview,
                   p.scheduled_at
            FROM posts p
            WHERE p.state IN ('queued', 'publishing')
              AND p.deleted_at IS NULL
              AND p.scheduled_at IS NOT NULL
-             AND p.scheduled_at < NOW() - make_interval(secs => $1::double precision)
+             AND p.scheduled_at < ?
              AND NOT EXISTS (
                  SELECT 1 FROM notifications n
                  WHERE n.user_id = p.user_id
                    AND n.notification_type = 'post_publishing_gap'
-                   AND n.reference_id = p.id::text
+                   AND n.reference_id = p.id
                    AND n.is_read = false
              )
            ORDER BY p.scheduled_at ASC
-           LIMIT $2"#,
+           LIMIT ?"#,
     )
-    .bind(grace_secs as f64)
+    .bind(cutoff)
     .bind(limit)
     .fetch_all(pool)
     .await
@@ -1214,7 +1326,7 @@ pub async fn find_stuck_posts(
 /// table. Called by the scheduler on every publish call (success or
 /// failure) so the operator has a full history.
 pub async fn record_publish_attempt(
-    pool: &PgPool,
+    pool: &SqlitePool,
     post_id: Uuid,
     attempt_number: i32,
     status: &str,
@@ -1224,7 +1336,7 @@ pub async fn record_publish_attempt(
     sqlx::query(
         "INSERT INTO publish_attempts
          (post_id, attempt_number, status, error_message, started_at, finished_at)
-         VALUES ($1, $2, $3, $4, $5, NOW())",
+         VALUES (?, ?, ?, ?, ?, unixepoch())",
     )
     .bind(post_id)
     .bind(attempt_number)
@@ -1250,16 +1362,18 @@ pub struct PostTagRow {
 }
 
 pub async fn get_tags_for_post(
-    pool: &PgPool,
+    pool: &SqlitePool,
     post_id: Uuid,
     user_id: Uuid,
 ) -> Result<Vec<PostTagRow>, sqlx::Error> {
     sqlx::query_as!(
         PostTagRow,
-        r#"SELECT t.id, t.name, t.color, t.created_at, t.updated_at
+        r#"SELECT t.id as "id!: Uuid", t.name, t.color,
+                  t.created_at as "created_at!: DateTime<Utc>",
+                  t.updated_at as "updated_at!: DateTime<Utc>"
            FROM post_tags pt
            JOIN tags t ON pt.tag_id = t.id
-           WHERE pt.post_id = $1 AND t.user_id = $2
+           WHERE pt.post_id = ? AND t.user_id = ?
            ORDER BY t.name"#,
         post_id,
         user_id,
@@ -1269,14 +1383,14 @@ pub async fn get_tags_for_post(
 }
 
 pub async fn set_post_tags(
-    pool: &PgPool,
+    pool: &SqlitePool,
     post_id: Uuid,
     tag_ids: &[Uuid],
 ) -> Result<(), sqlx::Error> {
     let mut tx = pool.begin().await?;
 
     // Delete existing post_tags for this post
-    sqlx::query("DELETE FROM post_tags WHERE post_id = $1")
+    sqlx::query("DELETE FROM post_tags WHERE post_id = ?")
         .bind(post_id)
         .execute(&mut *tx)
         .await?;
@@ -1284,7 +1398,7 @@ pub async fn set_post_tags(
     // Insert new post_tags (only if tag_ids is non-empty)
     for &tag_id in tag_ids {
         sqlx::query(
-            "INSERT INTO post_tags (post_id, tag_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+            "INSERT INTO post_tags (post_id, tag_id) VALUES (?, ?) ON CONFLICT DO NOTHING",
         )
         .bind(post_id)
         .bind(tag_id)
@@ -1298,7 +1412,7 @@ pub async fn set_post_tags(
 
 /// Get posts for a date range (calendar view)
 pub async fn get_posts_by_date_range(
-    pool: &PgPool,
+    pool: &SqlitePool,
     user_id: Uuid,
     start: DateTime<Utc>,
     end: DateTime<Utc>,
@@ -1311,11 +1425,11 @@ pub async fn get_posts_by_date_range(
             repeat_interval_days, repeat_end_date, group_id,
             first_comment, sequence, idempotency_key
           FROM posts
-          WHERE user_id = $1
-            AND scheduled_at IS NOT NULL
-            AND scheduled_at >= $2
-            AND scheduled_at <= $3
-          ORDER BY scheduled_at ASC"#,
+           WHERE user_id = ?
+             AND scheduled_at IS NOT NULL
+             AND scheduled_at >= ?
+             AND scheduled_at <= ?
+           ORDER BY scheduled_at ASC"#,
     )
         .bind(user_id)
         .bind(start)
@@ -1326,7 +1440,7 @@ pub async fn get_posts_by_date_range(
 
 /// Get posts for a date range with engagement metrics from analytics_cache
 pub async fn get_calendar_posts_with_metrics(
-    pool: &PgPool,
+    pool: &SqlitePool,
     user_id: Uuid,
     start_date: DateTime<Utc>,
     end_date: DateTime<Utc>,
@@ -1342,23 +1456,24 @@ pub async fn get_calendar_posts_with_metrics(
     // (user_id, start_date, end_date). We build a parameter list and
     // bind them in order.
     let mut where_clauses: Vec<String> = vec![
-        "p.user_id = $1".into(),
+        "p.user_id = ?".into(),
         "p.deleted_at IS NULL".into(),
-        "(p.state != 'published' AND p.scheduled_at >= $2 AND p.scheduled_at <= $3) \
-         OR (p.state = 'published' AND p.published_at >= $2 AND p.published_at <= $3)".into(),
+        "(p.state != 'published' AND p.scheduled_at >= ? AND p.scheduled_at <= ?) \
+         OR (p.state = 'published' AND p.published_at >= ? AND p.published_at <= ?)"
+            .into(),
     ];
-    let mut param_idx = 4usize; // next param index after $1/$2/$3
-
+    // SQLite has no array type: the integration_id list is bound as JSON
+    // text and expanded by json_each (? IS NULL disables the filter).
+    let mut has_ids = false;
     if let Some(ref ids) = integration_ids {
         if !ids.is_empty() {
-            where_clauses.push(format!("p.integration_id = ANY(${param_idx})"));
-            param_idx += 1;
+            where_clauses
+                .push("p.integration_id IN (SELECT value FROM json_each(?))".into());
+            has_ids = true;
         }
     }
-    if let Some(cid) = campaign_id {
-        let _ = cid; // suppress unused warning; bound below
-        where_clauses.push(format!("p.campaign_id = ${param_idx}"));
-        param_idx += 1;
+    if let Some(_cid) = campaign_id {
+        where_clauses.push("p.campaign_id = ?".into());
     }
 
     let where_sql = where_clauses.join(" AND ");
@@ -1366,7 +1481,7 @@ pub async fn get_calendar_posts_with_metrics(
     let sql = format!(
         r#"SELECT
            p.id, p.user_id, p.integration_id,
-           p.state::text as state,
+           p.state as state,
            p.content, p.title, p.media,
            p.scheduled_at, p.published_at,
            p.platform_post_id, p.platform_post_url,
@@ -1376,10 +1491,10 @@ pub async fn get_calendar_posts_with_metrics(
            p.group_id, p.first_comment, p.sequence,
            p.campaign_id,
            i.provider_name as integration_name,
-           NULL::bigint as likes,
-           NULL::bigint as comments,
-           NULL::bigint as shares,
-           NULL::bigint as impressions
+           NULL as likes,
+           NULL as comments,
+           NULL as shares,
+           NULL as impressions
          FROM posts p
          LEFT JOIN integrations i ON p.integration_id = i.id
          WHERE {where_sql}
@@ -1390,12 +1505,12 @@ pub async fn get_calendar_posts_with_metrics(
     let mut q = sqlx::query_as::<_, CalendarPostWithMetrics>(&sql)
         .bind(user_id)
         .bind(start_date)
+        .bind(end_date)
+        .bind(start_date)
         .bind(end_date);
 
-    if let Some(ids) = integration_ids {
-        if !ids.is_empty() {
-            q = q.bind(ids);
-        }
+    if has_ids {
+        q = q.bind(ids_json(integration_ids));
     }
     if let Some(cid) = campaign_id {
         q = q.bind(cid);
@@ -1406,7 +1521,7 @@ pub async fn get_calendar_posts_with_metrics(
 
 /// Find next free time slot for scheduling
 pub async fn find_next_free_slot(
-    pool: &PgPool,
+    pool: &SqlitePool,
     user_id: Uuid,
     integration_id: Option<Uuid>,
 ) -> Result<Option<DateTime<Utc>>, sqlx::Error> {
@@ -1415,7 +1530,7 @@ pub async fn find_next_free_slot(
     // Get posting_times from integration if provided
     let posting_times: Vec<i64> = if let Some(iid) = integration_id {
         let integration = sqlx::query_scalar!(
-            r#"SELECT posting_times FROM integrations WHERE id = $1 AND user_id = $2"#,
+            r#"SELECT posting_times as "posting_times: serde_json::Value" FROM integrations WHERE id = ? AND user_id = ?"#,
             iid,
             user_id
         )
@@ -1438,50 +1553,66 @@ pub async fn find_next_free_slot(
     if posting_times.is_empty() {
         let last: Option<DateTime<Utc>> = if let Some(iid) = integration_id {
             sqlx::query_scalar!(
-                r#"SELECT MAX(scheduled_at) FROM posts
-                   WHERE user_id = $1 AND integration_id = $2 AND state != 'error'"#,
+               r#"SELECT MAX(scheduled_at) as "max: Option<EpochUtc>" FROM posts
+                  WHERE user_id = ? AND integration_id = ? AND state != 'error'"#,
                 user_id,
                 iid
             )
             .fetch_one(pool)
             .await?
+            .flatten()
+            .map(|e| e.0)
         } else {
             sqlx::query_scalar!(
-                r#"SELECT MAX(scheduled_at) FROM posts
-                   WHERE user_id = $1 AND state != 'error'"#,
+               r#"SELECT MAX(scheduled_at) as "max: Option<EpochUtc>" FROM posts
+                  WHERE user_id = ? AND state != 'error'"#,
                 user_id,
             )
             .fetch_one(pool)
             .await?
+            .flatten()
+            .map(|e| e.0)
         };
         return Ok(Some(last.unwrap_or(now) + chrono::Duration::hours(2)));
     }
 
     // Get scheduled posts for the next 14 days
     let end = now + chrono::Duration::days(14);
+    // Bind to a `let` first: `EpochUtc::from(now)` as an inline argument is a
+    // temporary, and the macro holds a reference to it across the `.await`.
+    let now_epoch = EpochUtc::from(now);
+    let end_epoch = EpochUtc::from(end);
     let scheduled: Vec<DateTime<Utc>> = if let Some(iid) = integration_id {
         sqlx::query_scalar!(
-            r#"SELECT scheduled_at as "scheduled_at!" FROM posts
-               WHERE user_id = $1 AND integration_id = $2 AND state != 'error'
-               AND scheduled_at >= $3 AND scheduled_at <= $4"#,
+            r#"SELECT scheduled_at FROM posts
+               WHERE user_id = ? AND integration_id = ? AND state != 'error'
+               AND scheduled_at >= ? AND scheduled_at <= ?"#,
             user_id,
             iid,
-            now,
-            end
+            now_epoch,
+            end_epoch
         )
         .fetch_all(pool)
         .await?
+        .into_iter()
+        .flatten()
+        .filter_map(|secs| DateTime::from_timestamp(secs, 0))
+        .collect()
     } else {
         sqlx::query_scalar!(
-            r#"SELECT scheduled_at as "scheduled_at!" FROM posts
-               WHERE user_id = $1 AND state != 'error'
-               AND scheduled_at >= $2 AND scheduled_at <= $3"#,
+            r#"SELECT scheduled_at FROM posts
+               WHERE user_id = ? AND state != 'error'
+               AND scheduled_at >= ? AND scheduled_at <= ?"#,
             user_id,
-            now,
-            end
+            now_epoch,
+            end_epoch
         )
         .fetch_all(pool)
         .await?
+        .into_iter()
+        .flatten()
+        .filter_map(|secs| DateTime::from_timestamp(secs, 0))
+        .collect()
     };
 
     // Walk forward day by day, checking each posting_time slot
@@ -1531,7 +1662,7 @@ pub async fn find_next_free_slot(
 // ══════════════════════════════════════════════════════════════
 
 pub async fn create_media(
-    pool: &PgPool,
+    pool: &SqlitePool,
     user_id: Uuid,
     original_name: &str,
     storage_path: &str,
@@ -1542,10 +1673,12 @@ pub async fn create_media(
 ) -> Result<MediaEntry, sqlx::Error> {
     sqlx::query_as!(
         MediaEntry,
-        "INSERT INTO media (user_id, original_name, storage_path, mime_type, file_size, width, height)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
-         RETURNING id, user_id, original_name, storage_path, mime_type,
-           file_size, width, height, created_at",
+        r#"INSERT INTO media (user_id, original_name, storage_path, mime_type, file_size, width, height)
+         VALUES (?, ?, ?, ?, ?, ?, ?)
+         RETURNING id as "id!: Uuid", user_id as "user_id!: Uuid",
+           original_name, storage_path, mime_type, file_size,
+           width as "width?: i32", height as "height?: i32",
+           created_at as "created_at!: DateTime<Utc>""#,
         user_id,
         original_name,
         storage_path,
@@ -1559,7 +1692,7 @@ pub async fn create_media(
 }
 
 pub async fn list_media(
-    pool: &PgPool,
+    pool: &SqlitePool,
     user_id: Uuid,
     limit: i64,
     offset: i64,
@@ -1567,17 +1700,31 @@ pub async fn list_media(
 ) -> Result<Vec<MediaEntry>, sqlx::Error> {
     match search {
         Some(query) => {
+            // SQLite's LIKE is case-insensitive for ASCII, which is what ILIKE
+            // gave us. LIKE metacharacters are escaped so the user's search
+            // text stays literal. Bound to a `let` first: `format!` as an
+            // inline macro argument is a temporary, and the macro holds a
+            // reference to it across the `.await`.
+            let pattern = format!(
+                "%{}%",
+                query
+                    .replace('\\', "\\\\")
+                    .replace('%', "\\%")
+                    .replace('_', "\\_")
+            );
             sqlx::query_as!(
                 MediaEntry,
-                "SELECT id, user_id, original_name, storage_path, mime_type,
-                        file_size, width, height, created_at
-                 FROM media WHERE user_id = $1 AND original_name ILIKE $4
+                r#"SELECT id as "id!: Uuid", user_id as "user_id!: Uuid",
+                        original_name, storage_path, mime_type, file_size,
+                        width as "width?: i32", height as "height?: i32",
+                        created_at as "created_at!: DateTime<Utc>"
+                 FROM media WHERE user_id = ? AND original_name LIKE ? ESCAPE '\'
                  ORDER BY created_at DESC
-                 LIMIT $2 OFFSET $3",
+                 LIMIT ? OFFSET ?"#,
                 user_id,
                 limit,
                 offset,
-                format!("%{}%", query),
+                pattern,
             )
             .fetch_all(pool)
             .await
@@ -1585,11 +1732,13 @@ pub async fn list_media(
         None => {
             sqlx::query_as!(
                 MediaEntry,
-                "SELECT id, user_id, original_name, storage_path, mime_type,
-                        file_size, width, height, created_at
-                 FROM media WHERE user_id = $1
+                r#"SELECT id as "id!: Uuid", user_id as "user_id!: Uuid",
+                        original_name, storage_path, mime_type, file_size,
+                        width as "width?: i32", height as "height?: i32",
+                        created_at as "created_at!: DateTime<Utc>"
+                 FROM media WHERE user_id = ?
                  ORDER BY created_at DESC
-                 LIMIT $2 OFFSET $3",
+                 LIMIT ? OFFSET ?"#,
                 user_id,
                 limit,
                 offset,
@@ -1600,12 +1749,14 @@ pub async fn list_media(
     }
 }
 
-pub async fn delete_media(pool: &PgPool, id: Uuid, user_id: Uuid) -> Result<Option<MediaEntry>, sqlx::Error> {
+pub async fn delete_media(pool: &SqlitePool, id: Uuid, user_id: Uuid) -> Result<Option<MediaEntry>, sqlx::Error> {
     sqlx::query_as!(
         MediaEntry,
-        "DELETE FROM media WHERE id = $1 AND user_id = $2
-         RETURNING id, user_id, original_name, storage_path, mime_type,
-           file_size, width, height, created_at",
+        r#"DELETE FROM media WHERE id = ? AND user_id = ?
+         RETURNING id as "id!: Uuid", user_id as "user_id!: Uuid",
+           original_name, storage_path, mime_type, file_size,
+           width as "width?: i32", height as "height?: i32",
+           created_at as "created_at!: DateTime<Utc>""#,
         id,
         user_id,
     )
@@ -1613,12 +1764,14 @@ pub async fn delete_media(pool: &PgPool, id: Uuid, user_id: Uuid) -> Result<Opti
     .await
 }
 
-pub async fn get_media(pool: &PgPool, id: Uuid) -> Result<Option<MediaEntry>, sqlx::Error> {
+pub async fn get_media(pool: &SqlitePool, id: Uuid) -> Result<Option<MediaEntry>, sqlx::Error> {
     sqlx::query_as!(
         MediaEntry,
-        "SELECT id, user_id, original_name, storage_path, mime_type,
-                file_size, width, height, created_at
-         FROM media WHERE id = $1",
+        r#"SELECT id as "id!: Uuid", user_id as "user_id!: Uuid",
+                original_name, storage_path, mime_type, file_size,
+                width as "width?: i32", height as "height?: i32",
+                created_at as "created_at!: DateTime<Utc>"
+         FROM media WHERE id = ?"#,
         id,
     )
     .fetch_optional(pool)
@@ -1626,15 +1779,17 @@ pub async fn get_media(pool: &PgPool, id: Uuid) -> Result<Option<MediaEntry>, sq
 }
 
 pub async fn get_media_user(
-    pool: &PgPool,
+    pool: &SqlitePool,
     id: Uuid,
     user_id: Uuid,
 ) -> Result<Option<MediaEntry>, sqlx::Error> {
     sqlx::query_as!(
         MediaEntry,
-        "SELECT id, user_id, original_name, storage_path, mime_type,
-                file_size, width, height, created_at
-         FROM media WHERE id = $1 AND user_id = $2",
+        r#"SELECT id as "id!: Uuid", user_id as "user_id!: Uuid",
+                original_name, storage_path, mime_type, file_size,
+                width as "width?: i32", height as "height?: i32",
+                created_at as "created_at!: DateTime<Utc>"
+         FROM media WHERE id = ? AND user_id = ?"#,
         id,
         user_id,
     )
@@ -1647,7 +1802,7 @@ pub async fn get_media_user(
 // ══════════════════════════════════════════════════════════════
 
 pub async fn save_oauth_state(
-    pool: &PgPool,
+    pool: &SqlitePool,
     state: &str,
     provider: &str,
     code_verifier: &str,
@@ -1655,7 +1810,7 @@ pub async fn save_oauth_state(
 ) -> Result<(), sqlx::Error> {
     sqlx::query!(
         "INSERT INTO oauth_states (state, provider, code_verifier, redirect_uri)
-         VALUES ($1, $2, $3, $4)",
+         VALUES (?, ?, ?, ?)",
         state,
         provider,
         code_verifier,
@@ -1666,26 +1821,28 @@ pub async fn save_oauth_state(
     Ok(())
 }
 
-pub async fn get_oauth_state(pool: &PgPool, state: &str) -> Result<Option<OAuthState>, sqlx::Error> {
+pub async fn get_oauth_state(pool: &SqlitePool, state: &str) -> Result<Option<OAuthState>, sqlx::Error> {
     sqlx::query_as!(
         OAuthState,
-        "SELECT id, state, provider, code_verifier, redirect_uri, created_at, expires_at
-         FROM oauth_states WHERE state = $1 AND expires_at > NOW()",
+        r#"SELECT id as "id!: Uuid", state, provider, code_verifier, redirect_uri,
+                  created_at as "created_at!: DateTime<Utc>",
+                  expires_at as "expires_at!: DateTime<Utc>"
+         FROM oauth_states WHERE state = ? AND expires_at > unixepoch()"#,
         state,
     )
     .fetch_optional(pool)
     .await
 }
 
-pub async fn delete_oauth_state(pool: &PgPool, state: &str) -> Result<(), sqlx::Error> {
-    sqlx::query!("DELETE FROM oauth_states WHERE state = $1", state)
+pub async fn delete_oauth_state(pool: &SqlitePool, state: &str) -> Result<(), sqlx::Error> {
+    sqlx::query!("DELETE FROM oauth_states WHERE state = ?", state)
         .execute(pool)
         .await?;
     Ok(())
 }
 
-pub async fn cleanup_expired_oauth_states(pool: &PgPool) -> Result<u64, sqlx::Error> {
-    let r = sqlx::query!("DELETE FROM oauth_states WHERE expires_at < NOW()")
+pub async fn cleanup_expired_oauth_states(pool: &SqlitePool) -> Result<u64, sqlx::Error> {
+    let r = sqlx::query!("DELETE FROM oauth_states WHERE expires_at < unixepoch()")
         .execute(pool)
         .await?;
     Ok(r.rows_affected())
@@ -1696,7 +1853,7 @@ pub async fn cleanup_expired_oauth_states(pool: &PgPool) -> Result<u64, sqlx::Er
 // ══════════════════════════════════════════════════════════════
 
 pub async fn create_notification(
-    pool: &PgPool,
+    pool: &SqlitePool,
     user_id: Uuid,
     title: &str,
     body: &str,
@@ -1706,7 +1863,7 @@ pub async fn create_notification(
 ) -> Result<Notification, sqlx::Error> {
     sqlx::query_as::<_, Notification>(
         r#"INSERT INTO notifications (user_id, title, body, notification_type, reference_type, reference_id)
-           VALUES ($1, $2, $3, $4, $5, $6)
+           VALUES (?, ?, ?, ?, ?, ?)
            RETURNING id, user_id, title, body, notification_type, reference_type, reference_id, is_read, created_at"#,
     )
     .bind(user_id)
@@ -1720,16 +1877,16 @@ pub async fn create_notification(
 }
 
 pub async fn list_notifications(
-    pool: &PgPool,
+    pool: &SqlitePool,
     user_id: Uuid,
     limit: i64,
     offset: i64,
 ) -> Result<Vec<Notification>, sqlx::Error> {
     sqlx::query_as::<_, Notification>(
         r#"SELECT id, user_id, title, body, notification_type, reference_type, reference_id, is_read, created_at
-           FROM notifications WHERE user_id = $1
+           FROM notifications WHERE user_id = ?
            ORDER BY created_at DESC
-           LIMIT $2 OFFSET $3"#,
+           LIMIT ? OFFSET ?"#,
     )
     .bind(user_id)
     .bind(limit)
@@ -1738,9 +1895,9 @@ pub async fn list_notifications(
     .await
 }
 
-pub async fn count_unread_notifications(pool: &PgPool, user_id: Uuid) -> Result<i64, sqlx::Error> {
+pub async fn count_unread_notifications(pool: &SqlitePool, user_id: Uuid) -> Result<i64, sqlx::Error> {
     let row: Option<i64> = sqlx::query_scalar(
-        r#"SELECT COUNT(*)::bigint FROM notifications WHERE user_id = $1 AND is_read = false"#,
+        r#"SELECT COUNT(*) FROM notifications WHERE user_id = ? AND is_read = false"#,
     )
     .bind(user_id)
     .fetch_one(pool)
@@ -1749,13 +1906,13 @@ pub async fn count_unread_notifications(pool: &PgPool, user_id: Uuid) -> Result<
 }
 
 pub async fn mark_notification_read(
-    pool: &PgPool,
+    pool: &SqlitePool,
     id: Uuid,
     user_id: Uuid,
 ) -> Result<Option<Notification>, sqlx::Error> {
     sqlx::query_as::<_, Notification>(
         r#"UPDATE notifications SET is_read = true
-           WHERE id = $1 AND user_id = $2
+           WHERE id = ? AND user_id = ?
            RETURNING id, user_id, title, body, notification_type, reference_type, reference_id, is_read, created_at"#,
     )
     .bind(id)
@@ -1764,9 +1921,9 @@ pub async fn mark_notification_read(
     .await
 }
 
-pub async fn mark_all_notifications_read(pool: &PgPool, user_id: Uuid) -> Result<u64, sqlx::Error> {
+pub async fn mark_all_notifications_read(pool: &SqlitePool, user_id: Uuid) -> Result<u64, sqlx::Error> {
     let r = sqlx::query(
-        r#"UPDATE notifications SET is_read = true WHERE user_id = $1 AND is_read = false"#,
+        r#"UPDATE notifications SET is_read = true WHERE user_id = ? AND is_read = false"#,
     )
     .bind(user_id)
     .execute(pool)
@@ -1779,7 +1936,7 @@ pub async fn mark_all_notifications_read(pool: &PgPool, user_id: Uuid) -> Result
 // ══════════════════════════════════════════════════════════════
 
 pub async fn create_repeated_post(
-    pool: &PgPool,
+    pool: &SqlitePool,
     user_id: Uuid,
     original_id: Uuid,
     scheduled_at: &DateTime<Utc>,
@@ -1787,8 +1944,8 @@ pub async fn create_repeated_post(
 ) -> Result<Post, sqlx::Error> {
     sqlx::query_as::<_, Post>(
         r#"INSERT INTO posts (user_id, integration_id, title, content, media, settings, scheduled_at, state, repeat_interval_days, repeat_end_date, group_id)
-           SELECT p.user_id, p.integration_id, p.title, p.content, p.media, p.settings, $1, p.state, NULL::int4, NULL::timestamptz, $3
-           FROM posts p WHERE p.id = $2 AND p.user_id = $4
+           SELECT p.user_id, p.integration_id, p.title, p.content, p.media, p.settings, ?, p.state, NULL, NULL, ?
+           FROM posts p WHERE p.id = ? AND p.user_id = ?
            RETURNING id, user_id, integration_id, state as "state: PostState",
              content, title, media, settings, scheduled_at, published_at,
              platform_post_id, platform_post_url, error_message,
@@ -1797,15 +1954,15 @@ pub async fn create_repeated_post(
              first_comment, sequence, idempotency_key"#,
     )
         .bind(scheduled_at)
-        .bind(original_id)
         .bind(group_id)
+        .bind(original_id)
         .bind(user_id)
     .fetch_one(pool)
     .await
 }
 
 pub async fn set_post_recurring(
-    pool: &PgPool,
+    pool: &SqlitePool,
     id: Uuid,
     user_id: Uuid,
     interval_days: i32,
@@ -1813,9 +1970,9 @@ pub async fn set_post_recurring(
     group_id: Uuid,
 ) -> Result<Option<Post>, sqlx::Error> {
     sqlx::query_as::<_, Post>(
-        r#"UPDATE posts SET repeat_interval_days = $1, repeat_end_date = $2, group_id = $3,
-            updated_at = now()
-            WHERE id = $4 AND user_id = $5
+        r#"UPDATE posts SET repeat_interval_days = ?, repeat_end_date = ?, group_id = ?,
+            updated_at = unixepoch()
+            WHERE id = ? AND user_id = ?
             RETURNING id, user_id, integration_id, state as "state: PostState",
               content, title, media, settings, scheduled_at, published_at,
               platform_post_id, platform_post_url, error_message,
@@ -1833,7 +1990,7 @@ pub async fn set_post_recurring(
 }
 
 pub async fn set_post_recurring_with_copies(
-    pool: &PgPool,
+    pool: &SqlitePool,
     id: Uuid,
     user_id: Uuid,
     interval_days: i32,
@@ -1844,9 +2001,9 @@ pub async fn set_post_recurring_with_copies(
     let mut tx = pool.begin().await?;
 
     sqlx::query_as::<_, Post>(
-        r#"UPDATE posts SET repeat_interval_days = $1, repeat_end_date = $2, group_id = $3,
-           updated_at = now()
-           WHERE id = $4 AND user_id = $5
+        r#"UPDATE posts SET repeat_interval_days = ?, repeat_end_date = ?, group_id = ?,
+           updated_at = unixepoch()
+           WHERE id = ? AND user_id = ?
            RETURNING id, user_id, integration_id, state as "state: PostState",
               content, title, media, settings, scheduled_at, published_at,
               platform_post_id, platform_post_url, error_message,
@@ -1871,8 +2028,8 @@ pub async fn set_post_recurring_with_copies(
         // Runtime query (Phase v22 — idempotency_key column added).
         let copy = sqlx::query_as::<_, Post>(
             r#"INSERT INTO posts (user_id, integration_id, title, content, media, settings, scheduled_at, state, repeat_interval_days, repeat_end_date, group_id)
-               SELECT p.user_id, p.integration_id, p.title, p.content, p.media, p.settings, $1, p.state, NULL::int4, NULL::timestamptz, $3
-               FROM posts p WHERE p.id = $2 AND p.user_id = $4
+               SELECT p.user_id, p.integration_id, p.title, p.content, p.media, p.settings, ?, p.state, NULL, NULL, ?
+               FROM posts p WHERE p.id = ? AND p.user_id = ?
                RETURNING id, user_id, integration_id, state as "state: PostState",
                  content, title, media, settings, scheduled_at, published_at,
                  platform_post_id, platform_post_url, error_message,
@@ -1881,8 +2038,8 @@ pub async fn set_post_recurring_with_copies(
                  first_comment, sequence, idempotency_key"#,
         )
         .bind(&current)
-        .bind(id)
         .bind(group_id)
+        .bind(id)
         .bind(user_id)
         .fetch_one(&mut *tx)
         .await?;
@@ -1901,7 +2058,7 @@ pub async fn set_post_recurring_with_copies(
 // ══════════════════════════════════════════════════════════════
 
 pub async fn create_rss_feed(
-    pool: &PgPool,
+    pool: &SqlitePool,
     user_id: Uuid,
     feed_url: &str,
     integration_id: Uuid,
@@ -1911,7 +2068,7 @@ pub async fn create_rss_feed(
 ) -> Result<RssFeed, sqlx::Error> {
     sqlx::query_as::<_, RssFeed>(
         r#"INSERT INTO rss_feeds (user_id, feed_url, integration_id, title, use_ai_summary, enabled)
-           VALUES ($1, $2, $3, $4, $5, $6)
+           VALUES (?, ?, ?, ?, ?, ?)
            RETURNING id, user_id, feed_url, integration_id, title,
              last_polled_at, poll_interval_min, enabled, use_ai_summary,
              created_at, updated_at"#,
@@ -1926,12 +2083,12 @@ pub async fn create_rss_feed(
     .await
 }
 
-pub async fn list_rss_feeds(pool: &PgPool, user_id: Uuid) -> Result<Vec<RssFeed>, sqlx::Error> {
+pub async fn list_rss_feeds(pool: &SqlitePool, user_id: Uuid) -> Result<Vec<RssFeed>, sqlx::Error> {
     sqlx::query_as::<_, RssFeed>(
         r#"SELECT id, user_id, feed_url, integration_id, title,
            last_polled_at, poll_interval_min, enabled, use_ai_summary,
            created_at, updated_at
-           FROM rss_feeds WHERE user_id = $1
+           FROM rss_feeds WHERE user_id = ?
            ORDER BY created_at DESC"#,
     )
     .bind(user_id)
@@ -1939,12 +2096,12 @@ pub async fn list_rss_feeds(pool: &PgPool, user_id: Uuid) -> Result<Vec<RssFeed>
     .await
 }
 
-pub async fn get_rss_feed(pool: &PgPool, feed_id: Uuid, user_id: Uuid) -> Result<Option<RssFeed>, sqlx::Error> {
+pub async fn get_rss_feed(pool: &SqlitePool, feed_id: Uuid, user_id: Uuid) -> Result<Option<RssFeed>, sqlx::Error> {
     sqlx::query_as::<_, RssFeed>(
         r#"SELECT id, user_id, feed_url, integration_id, title,
            last_polled_at, poll_interval_min, enabled, use_ai_summary,
            created_at, updated_at
-           FROM rss_feeds WHERE id = $1 AND user_id = $2"#,
+           FROM rss_feeds WHERE id = ? AND user_id = ?"#,
     )
     .bind(feed_id)
     .bind(user_id)
@@ -1952,9 +2109,9 @@ pub async fn get_rss_feed(pool: &PgPool, feed_id: Uuid, user_id: Uuid) -> Result
     .await
 }
 
-pub async fn delete_rss_feed(pool: &PgPool, feed_id: Uuid, user_id: Uuid) -> Result<u64, sqlx::Error> {
+pub async fn delete_rss_feed(pool: &SqlitePool, feed_id: Uuid, user_id: Uuid) -> Result<u64, sqlx::Error> {
     let r = sqlx::query(
-        "DELETE FROM rss_feeds WHERE id = $1 AND user_id = $2",
+        "DELETE FROM rss_feeds WHERE id = ? AND user_id = ?",
     )
     .bind(feed_id)
     .bind(user_id)
@@ -1963,10 +2120,10 @@ pub async fn delete_rss_feed(pool: &PgPool, feed_id: Uuid, user_id: Uuid) -> Res
     Ok(r.rows_affected())
 }
 
-pub async fn toggle_rss_feed(pool: &PgPool, feed_id: Uuid, user_id: Uuid) -> Result<Option<RssFeed>, sqlx::Error> {
+pub async fn toggle_rss_feed(pool: &SqlitePool, feed_id: Uuid, user_id: Uuid) -> Result<Option<RssFeed>, sqlx::Error> {
     sqlx::query_as::<_, RssFeed>(
-        r#"UPDATE rss_feeds SET enabled = NOT enabled, updated_at = NOW()
-           WHERE id = $1 AND user_id = $2
+        r#"UPDATE rss_feeds SET enabled = NOT enabled, updated_at = unixepoch()
+           WHERE id = ? AND user_id = ?
            RETURNING id, user_id, feed_url, integration_id, title,
              last_polled_at, poll_interval_min, enabled, use_ai_summary,
              created_at, updated_at"#,
@@ -1977,17 +2134,22 @@ pub async fn toggle_rss_feed(pool: &PgPool, feed_id: Uuid, user_id: Uuid) -> Res
     .await
 }
 
-pub async fn get_feeds_due_for_polling(pool: &PgPool) -> Result<Vec<RssFeed>, sqlx::Error> {
+pub async fn get_feeds_due_for_polling(pool: &SqlitePool) -> Result<Vec<RssFeed>, sqlx::Error> {
+    // SQLite has no interval arithmetic, so the Postgres form
+    // `last_polled_at + (poll_interval_min::text || ' minutes')::interval < NOW()`
+    // cannot be expressed in SQL. The filter is equivalent to
+    // `last_polled_at + poll_interval_min * 60 < now`, which SQLite can do
+    // with plain integer seconds.
     sqlx::query_as::<_, RssFeed>(
-        "SELECT id, user_id, feed_url, integration_id, title, last_polled_at, poll_interval_min, enabled, use_ai_summary, created_at, updated_at FROM rss_feeds WHERE enabled = true AND (last_polled_at IS NULL OR last_polled_at + (poll_interval_min::text || ' minutes')::interval < NOW())"
+        "SELECT id, user_id, feed_url, integration_id, title, last_polled_at, poll_interval_min, enabled, use_ai_summary, created_at, updated_at FROM rss_feeds WHERE enabled = true AND (last_polled_at IS NULL OR last_polled_at + poll_interval_min * 60 < unixepoch())"
     )
     .fetch_all(pool)
     .await
 }
 
-pub async fn update_feed_last_polled(pool: &PgPool, feed_id: Uuid) -> Result<u64, sqlx::Error> {
+pub async fn update_feed_last_polled(pool: &SqlitePool, feed_id: Uuid) -> Result<u64, sqlx::Error> {
     let r = sqlx::query(
-        "UPDATE rss_feeds SET last_polled_at = NOW(), updated_at = NOW() WHERE id = $1",
+        "UPDATE rss_feeds SET last_polled_at = unixepoch(), updated_at = unixepoch() WHERE id = ?",
     )
     .bind(feed_id)
     .execute(pool)
@@ -1996,7 +2158,7 @@ pub async fn update_feed_last_polled(pool: &PgPool, feed_id: Uuid) -> Result<u64
 }
 
 pub async fn insert_rss_post(
-    pool: &PgPool,
+    pool: &SqlitePool,
     feed_id: Uuid,
     guid: &str,
     title: &str,
@@ -2006,7 +2168,7 @@ pub async fn insert_rss_post(
 ) -> Result<(), sqlx::Error> {
     sqlx::query(
         r#"INSERT INTO rss_posts (feed_id, guid, title, url, published_at, content_hash)
-           VALUES ($1, $2, $3, $4, $5, $6)
+           VALUES (?, ?, ?, ?, ?, ?)
            ON CONFLICT (feed_id, guid) DO NOTHING"#,
     )
     .bind(feed_id)
@@ -2020,9 +2182,9 @@ pub async fn insert_rss_post(
     Ok(())
 }
 
-pub async fn check_rss_post_exists(pool: &PgPool, feed_id: Uuid, content_hash: &str) -> Result<bool, sqlx::Error> {
+pub async fn check_rss_post_exists(pool: &SqlitePool, feed_id: Uuid, content_hash: &str) -> Result<bool, sqlx::Error> {
     let count: Option<i64> = sqlx::query_scalar(
-        "SELECT COUNT(*)::bigint FROM rss_posts WHERE feed_id = $1 AND content_hash = $2",
+        "SELECT COUNT(*) FROM rss_posts WHERE feed_id = ? AND content_hash = ?",
     )
     .bind(feed_id)
     .bind(content_hash)
@@ -2032,7 +2194,7 @@ pub async fn check_rss_post_exists(pool: &PgPool, feed_id: Uuid, content_hash: &
 }
 
 pub async fn list_rss_feed_items(
-    pool: &PgPool,
+    pool: &SqlitePool,
     feed_id: Uuid,
     user_id: Uuid,
     limit: i64,
@@ -2043,9 +2205,9 @@ pub async fn list_rss_feed_items(
            rp.published_at, rp.content_hash, rp.is_imported, rp.created_at
            FROM rss_posts rp
            JOIN rss_feeds rf ON rp.feed_id = rf.id
-           WHERE rf.id = $1 AND rf.user_id = $2
+           WHERE rf.id = ? AND rf.user_id = ?
            ORDER BY rp.created_at DESC
-           LIMIT $3 OFFSET $4"#,
+           LIMIT ? OFFSET ?"#,
     )
     .bind(feed_id)
     .bind(user_id)
@@ -2055,9 +2217,9 @@ pub async fn list_rss_feed_items(
     .await
 }
 
-pub async fn update_rss_post_post_id(pool: &PgPool, rss_post_id: Uuid, post_id: Uuid) -> Result<u64, sqlx::Error> {
+pub async fn update_rss_post_post_id(pool: &SqlitePool, rss_post_id: Uuid, post_id: Uuid) -> Result<u64, sqlx::Error> {
     let r = sqlx::query(
-        "UPDATE rss_posts SET post_id = $1, is_imported = true WHERE id = $2",
+        "UPDATE rss_posts SET post_id = ?, is_imported = true WHERE id = ?",
     )
     .bind(post_id)
     .bind(rss_post_id)
@@ -2066,10 +2228,10 @@ pub async fn update_rss_post_post_id(pool: &PgPool, rss_post_id: Uuid, post_id: 
     Ok(r.rows_affected())
 }
 
-pub async fn get_rss_post_by_hash(pool: &PgPool, feed_id: Uuid, content_hash: &str) -> Result<Option<RssPost>, sqlx::Error> {
+pub async fn get_rss_post_by_hash(pool: &SqlitePool, feed_id: Uuid, content_hash: &str) -> Result<Option<RssPost>, sqlx::Error> {
     sqlx::query_as::<_, RssPost>(
         r#"SELECT id, feed_id, post_id, guid, title, url, published_at, content_hash, is_imported, created_at
-           FROM rss_posts WHERE feed_id = $1 AND content_hash = $2"#,
+           FROM rss_posts WHERE feed_id = ? AND content_hash = ?"#,
     )
     .bind(feed_id)
     .bind(content_hash)
@@ -2078,12 +2240,12 @@ pub async fn get_rss_post_by_hash(pool: &PgPool, feed_id: Uuid, content_hash: &s
 }
 
 pub async fn delete_notification(
-    pool: &PgPool,
+    pool: &SqlitePool,
     id: Uuid,
     user_id: Uuid,
 ) -> Result<bool, sqlx::Error> {
     let r = sqlx::query(
-        r#"DELETE FROM notifications WHERE id = $1 AND user_id = $2"#,
+        r#"DELETE FROM notifications WHERE id = ? AND user_id = ?"#,
     )
     .bind(id)
     .bind(user_id)
@@ -2099,7 +2261,7 @@ pub async fn delete_notification(
 /// Upsert post_engagement for an external post.
 /// Inserts a new row or updates the existing one on conflict (post_id).
 pub async fn upsert_post_engagement(
-    pool: &PgPool,
+    pool: &SqlitePool,
     post_id: Uuid,
     data: &crate::social::EngagementRow,
 ) -> Result<PostEngagement, sqlx::Error> {
@@ -2107,7 +2269,7 @@ pub async fn upsert_post_engagement(
         r#"INSERT INTO post_engagement
            (post_id, likes, comments, shares, views, saves, quotes, reposts, replies,
             reactions, upvotes, downvotes, upvote_ratio, awards, raw, fetched_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW())
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, unixepoch())
            ON CONFLICT (post_id) DO UPDATE SET
              likes = EXCLUDED.likes,
              comments = EXCLUDED.comments,
@@ -2123,8 +2285,8 @@ pub async fn upsert_post_engagement(
              upvote_ratio = EXCLUDED.upvote_ratio,
              awards = EXCLUDED.awards,
              raw = EXCLUDED.raw,
-             fetched_at = NOW(),
-             updated_at = NOW()
+              fetched_at = unixepoch(),
+              updated_at = unixepoch()
            RETURNING id, post_id, likes, comments, shares, views, saves, quotes, reposts, replies,
              reactions, upvotes, downvotes, upvote_ratio, awards, raw, fetched_at, created_at, updated_at"#,
     )
@@ -2149,13 +2311,13 @@ pub async fn upsert_post_engagement(
 
 /// Get engagement data for a specific post.
 pub async fn get_post_engagement_by_post_id(
-    pool: &PgPool,
+    pool: &SqlitePool,
     post_id: Uuid,
 ) -> Result<Option<PostEngagement>, sqlx::Error> {
     sqlx::query_as::<_, PostEngagement>(
         r#"SELECT id, post_id, likes, comments, shares, views, saves, quotes, reposts, replies,
            reactions, upvotes, downvotes, upvote_ratio, awards, raw, fetched_at, created_at, updated_at
-         FROM post_engagement WHERE post_id = $1"#,
+         FROM post_engagement WHERE post_id = ?"#
     )
     .bind(post_id)
     .fetch_optional(pool)
@@ -2165,7 +2327,7 @@ pub async fn get_post_engagement_by_post_id(
 /// List external posts with their engagement data LEFT JOINed.
 /// Returns posts with engagement_* prefixed fields.
 pub async fn list_all_external_posts_with_engagement(
-    pool: &PgPool,
+    pool: &SqlitePool,
     user_id: Uuid,
     provider: Option<&str>,
     author_handle: Option<&str>,
@@ -2194,16 +2356,18 @@ pub async fn list_all_external_posts_with_engagement(
                pe.fetched_at AS engagement_fetched_at
              FROM external_posts ep
              LEFT JOIN post_engagement pe ON pe.post_id = ep.id
-             WHERE ep.user_id = $1 AND ep.provider = $2
-               AND ep.hidden_at IS NULL
-               AND ($3::timestamptz IS NULL OR ep.created_at < $3)
-               AND ($4::text IS NULL OR ep.author_handle = $4)
-             ORDER BY ep.created_at DESC
-             LIMIT $5"#,
+              WHERE ep.user_id = ? AND ep.provider = ?
+                AND ep.hidden_at IS NULL
+                AND (? IS NULL OR ep.created_at < ?)
+                AND (? IS NULL OR ep.author_handle = ?)
+              ORDER BY ep.created_at DESC
+              LIMIT ?"#,
         )
         .bind(user_id)
         .bind(provider)
         .bind(cursor)
+        .bind(cursor)
+        .bind(author_handle)
         .bind(author_handle)
         .bind(limit)
         .fetch_all(pool)
@@ -2230,15 +2394,17 @@ pub async fn list_all_external_posts_with_engagement(
                pe.fetched_at AS engagement_fetched_at
              FROM external_posts ep
              LEFT JOIN post_engagement pe ON pe.post_id = ep.id
-             WHERE ep.user_id = $1
-               AND ep.hidden_at IS NULL
-               AND ($2::timestamptz IS NULL OR ep.created_at < $2)
-               AND ($3::text IS NULL OR ep.author_handle = $3)
-             ORDER BY ep.created_at DESC
-             LIMIT $4"#,
+              WHERE ep.user_id = ?
+                AND ep.hidden_at IS NULL
+                AND (? IS NULL OR ep.created_at < ?)
+                AND (? IS NULL OR ep.author_handle = ?)
+              ORDER BY ep.created_at DESC
+              LIMIT ?"#,
         )
         .bind(user_id)
         .bind(cursor)
+        .bind(cursor)
+        .bind(author_handle)
         .bind(author_handle)
         .bind(limit)
         .fetch_all(pool)
@@ -2261,7 +2427,7 @@ pub struct EngagementSummary {
 }
 
 pub async fn get_engagement_summary(
-    pool: &PgPool,
+    pool: &SqlitePool,
     user_id: Uuid,
     provider: Option<&str>,
     cutoff: Option<DateTime<Utc>>,
@@ -2270,43 +2436,45 @@ pub async fn get_engagement_summary(
     if let Some(provider) = provider {
         sqlx::query_as::<_, EngagementSummary>(
             r#"SELECT
-               SUM(pe.likes)::bigint AS total_likes,
-               SUM(pe.comments)::bigint AS total_comments,
-               SUM(pe.shares)::bigint AS total_shares,
-               SUM(pe.views)::bigint AS total_views,
-               SUM(pe.reposts)::bigint AS total_reposts,
-               SUM(pe.replies)::bigint AS total_replies,
-               SUM(pe.upvotes)::bigint AS total_upvotes,
-               SUM(pe.awards)::bigint AS total_awards,
-               COUNT(pe.id)::bigint AS posts_with_engagement
+               SUM(pe.likes) AS total_likes,
+               SUM(pe.comments) AS total_comments,
+               SUM(pe.shares) AS total_shares,
+               SUM(pe.views) AS total_views,
+               SUM(pe.reposts) AS total_reposts,
+               SUM(pe.replies) AS total_replies,
+               SUM(pe.upvotes) AS total_upvotes,
+               SUM(pe.awards) AS total_awards,
+               COUNT(pe.id) AS posts_with_engagement
              FROM external_posts ep
              INNER JOIN post_engagement pe ON pe.post_id = ep.id
-             WHERE ep.user_id = $1 AND ep.provider = $2
-               AND ($3::timestamptz IS NULL OR ep.created_at >= $3)"#,
+             WHERE ep.user_id = ? AND ep.provider = ?
+               AND (? IS NULL OR ep.created_at >= ?)"#,
         )
         .bind(user_id)
         .bind(provider)
+        .bind(cutoff)
         .bind(cutoff)
         .fetch_one(pool)
         .await
     } else {
         sqlx::query_as::<_, EngagementSummary>(
             r#"SELECT
-               SUM(pe.likes)::bigint AS total_likes,
-               SUM(pe.comments)::bigint AS total_comments,
-               SUM(pe.shares)::bigint AS total_shares,
-               SUM(pe.views)::bigint AS total_views,
-               SUM(pe.reposts)::bigint AS total_reposts,
-               SUM(pe.replies)::bigint AS total_replies,
-               SUM(pe.upvotes)::bigint AS total_upvotes,
-               SUM(pe.awards)::bigint AS total_awards,
-               COUNT(pe.id)::bigint AS posts_with_engagement
+               SUM(pe.likes) AS total_likes,
+               SUM(pe.comments) AS total_comments,
+               SUM(pe.shares) AS total_shares,
+               SUM(pe.views) AS total_views,
+               SUM(pe.reposts) AS total_reposts,
+               SUM(pe.replies) AS total_replies,
+               SUM(pe.upvotes) AS total_upvotes,
+               SUM(pe.awards) AS total_awards,
+               COUNT(pe.id) AS posts_with_engagement
              FROM external_posts ep
              INNER JOIN post_engagement pe ON pe.post_id = ep.id
-             WHERE ep.user_id = $1
-               AND ($2::timestamptz IS NULL OR ep.created_at >= $2)"#,
+             WHERE ep.user_id = ?
+               AND (? IS NULL OR ep.created_at >= ?)"#,
         )
         .bind(user_id)
+        .bind(cutoff)
         .bind(cutoff)
         .fetch_one(pool)
         .await
@@ -2318,7 +2486,7 @@ pub async fn get_engagement_summary(
 // ══════════════════════════════════════════════════════════════
 
 pub async fn list_signatures(
-    pool: &PgPool,
+    pool: &SqlitePool,
     user_id: Uuid,
 ) -> Result<Vec<Signature>, sqlx::Error> {
     // Runtime query (Phase v21/v22 — is_default column added, can't
@@ -2326,7 +2494,7 @@ pub async fn list_signatures(
     sqlx::query_as::<_, Signature>(
         r#"SELECT id, user_id, name, content, provider, is_default,
            created_at, updated_at
-           FROM signatures WHERE user_id = $1
+           FROM signatures WHERE user_id = ?
            ORDER BY is_default DESC, created_at DESC"#,
     )
     .bind(user_id)
@@ -2335,7 +2503,7 @@ pub async fn list_signatures(
 }
 
 pub async fn create_signature(
-    pool: &PgPool,
+    pool: &SqlitePool,
     user_id: Uuid,
     name: &str,
     content: &str,
@@ -2343,7 +2511,7 @@ pub async fn create_signature(
 ) -> Result<Signature, sqlx::Error> {
     sqlx::query_as::<_, Signature>(
         r#"INSERT INTO signatures (user_id, name, content, provider, is_default)
-           VALUES ($1, $2, $3, $4, FALSE)
+           VALUES (?, ?, ?, ?, FALSE)
            RETURNING id, user_id, name, content, provider, is_default,
              created_at, updated_at"#,
     )
@@ -2356,7 +2524,7 @@ pub async fn create_signature(
 }
 
 pub async fn update_signature(
-    pool: &PgPool,
+    pool: &SqlitePool,
     id: Uuid,
     user_id: Uuid,
     name: Option<&str>,
@@ -2365,19 +2533,19 @@ pub async fn update_signature(
 ) -> Result<Option<Signature>, sqlx::Error> {
     sqlx::query_as::<_, Signature>(
         r#"UPDATE signatures SET
-           name = COALESCE($3, name),
-           content = COALESCE($4, content),
-           provider = COALESCE($5, provider),
-           updated_at = now()
-           WHERE id = $1 AND user_id = $2
+           name = COALESCE(?, name),
+           content = COALESCE(?, content),
+           provider = COALESCE(?, provider),
+           updated_at = unixepoch()
+           WHERE id = ? AND user_id = ?
            RETURNING id, user_id, name, content, provider, is_default,
              created_at, updated_at"#,
     )
-    .bind(id)
-    .bind(user_id)
-    .bind(name)
-    .bind(content)
-    .bind(provider)
+        .bind(name)
+        .bind(content)
+        .bind(provider)
+        .bind(id)
+        .bind(user_id)
     .fetch_optional(pool)
     .await
 }
@@ -2392,7 +2560,7 @@ pub async fn update_signature(
 /// at-most-one-default per (user_id, provider) at the DB level — this
 /// function clears the old default first to avoid a constraint violation.
 pub async fn set_default_signature(
-    pool: &PgPool,
+    pool: &SqlitePool,
     id: Uuid,
     user_id: Uuid,
 ) -> Result<Option<Signature>, sqlx::Error> {
@@ -2400,7 +2568,7 @@ pub async fn set_default_signature(
 
     // 1. Fetch the target signature to get its provider.
     let target: Option<(Option<String>,)> = sqlx::query_as(
-        "SELECT provider FROM signatures WHERE id = $1 AND user_id = $2",
+        "SELECT provider FROM signatures WHERE id = ? AND user_id = ?",
     )
     .bind(id)
     .bind(user_id)
@@ -2418,8 +2586,8 @@ pub async fn set_default_signature(
     // 2. Clear is_default on all other signatures with the same (user_id, provider).
     sqlx::query(
         r#"UPDATE signatures SET is_default = FALSE
-           WHERE user_id = $1 AND is_default = TRUE
-             AND (provider IS NOT DISTINCT FROM $2)"#,
+           WHERE user_id = ? AND is_default = TRUE
+             AND (provider IS ?)"#,
     )
     .bind(user_id)
     .bind(&target)
@@ -2428,8 +2596,8 @@ pub async fn set_default_signature(
 
     // 3. Set is_default = TRUE on the target.
     let updated = sqlx::query_as::<_, Signature>(
-        r#"UPDATE signatures SET is_default = TRUE, updated_at = now()
-           WHERE id = $1 AND user_id = $2
+        r#"UPDATE signatures SET is_default = TRUE, updated_at = unixepoch()
+           WHERE id = ? AND user_id = ?
            RETURNING id, user_id, name, content, provider, is_default,
              created_at, updated_at"#,
     )
@@ -2449,7 +2617,7 @@ pub async fn set_default_signature(
 /// Used by the composer's auto-append flow: when creating a new post,
 /// the frontend calls this to get the signature to append.
 pub async fn get_default_signature(
-    pool: &PgPool,
+    pool: &SqlitePool,
     user_id: Uuid,
     provider: Option<&str>,
 ) -> Result<Option<Signature>, sqlx::Error> {
@@ -2459,7 +2627,7 @@ pub async fn get_default_signature(
             r#"SELECT id, user_id, name, content, provider, is_default,
                created_at, updated_at
                FROM signatures
-               WHERE user_id = $1 AND provider = $2 AND is_default = TRUE"#,
+               WHERE user_id = ? AND provider = ? AND is_default = TRUE"#,
         )
         .bind(user_id)
         .bind(p)
@@ -2474,7 +2642,7 @@ pub async fn get_default_signature(
         r#"SELECT id, user_id, name, content, provider, is_default,
            created_at, updated_at
            FROM signatures
-           WHERE user_id = $1 AND provider IS NULL AND is_default = TRUE"#,
+           WHERE user_id = ? AND provider IS NULL AND is_default = TRUE"#,
     )
     .bind(user_id)
     .fetch_optional(pool)
@@ -2482,12 +2650,12 @@ pub async fn get_default_signature(
 }
 
 pub async fn delete_signature(
-    pool: &PgPool,
+    pool: &SqlitePool,
     id: Uuid,
     user_id: Uuid,
 ) -> Result<bool, sqlx::Error> {
     let r = sqlx::query!(
-        "DELETE FROM signatures WHERE id = $1 AND user_id = $2",
+        "DELETE FROM signatures WHERE id = ? AND user_id = ?",
         id,
         user_id,
     )
@@ -2501,10 +2669,14 @@ pub async fn delete_signature(
 // ══════════════════════════════════════════════════════════════
 
 /// Get all users (for background cache refresh)
-pub async fn list_all_users(pool: &PgPool) -> Result<Vec<User>, sqlx::Error> {
+pub async fn list_all_users(pool: &SqlitePool) -> Result<Vec<User>, sqlx::Error> {
     sqlx::query_as!(
         User,
-        "SELECT id, email, password, name, timezone, created_at, updated_at FROM users"
+        r#"SELECT id as "id!: Uuid", email, password, name,
+                  timezone as "timezone!: i32",
+                  created_at as "created_at!: DateTime<Utc>",
+                  updated_at as "updated_at!: DateTime<Utc>"
+           FROM users"#
     )
     .fetch_all(pool)
     .await
@@ -2513,7 +2685,7 @@ pub async fn list_all_users(pool: &PgPool) -> Result<Vec<User>, sqlx::Error> {
 /// Upsert analytics cache: deletes existing entry for (user_id, provider, platform_post_id)
 /// then inserts a fresh one, all in a transaction.
 pub async fn upsert_analytics_cache(
-    pool: &PgPool,
+    pool: &SqlitePool,
     user_id: Uuid,
     provider: &str,
     platform_post_id: Option<&str>,
@@ -2522,18 +2694,19 @@ pub async fn upsert_analytics_cache(
     let mut tx = pool.begin().await?;
 
     sqlx::query(
-        "DELETE FROM analytics_cache WHERE user_id = $1 AND provider = $2 \
-         AND (platform_post_id = $3 OR ($3 IS NULL AND platform_post_id IS NULL))",
+        "DELETE FROM analytics_cache WHERE user_id = ? AND provider = ? \
+         AND (platform_post_id = ? OR (? IS NULL AND platform_post_id IS NULL))",
     )
     .bind(user_id)
     .bind(provider)
+    .bind(platform_post_id)
     .bind(platform_post_id)
     .execute(&mut *tx)
     .await?;
 
     let result = sqlx::query_as::<_, AnalyticsCache>(
         "INSERT INTO analytics_cache (user_id, provider, platform_post_id, data) \
-         VALUES ($1, $2, $3, $4) \
+         VALUES (?, ?, ?, ?) \
          RETURNING id, user_id, provider, platform_post_id, data, cached_at, expires_at",
     )
     .bind(user_id)
@@ -2549,7 +2722,7 @@ pub async fn upsert_analytics_cache(
 
 /// Get non-expired account-level analytics for (user_id, provider)
 pub async fn get_cached_analytics(
-    pool: &PgPool,
+    pool: &SqlitePool,
     user_id: Uuid,
     provider: &str,
     now: DateTime<Utc>,
@@ -2557,7 +2730,7 @@ pub async fn get_cached_analytics(
     sqlx::query_as::<_, AnalyticsCache>(
         "SELECT id, user_id, provider, platform_post_id, data, cached_at, expires_at \
          FROM analytics_cache \
-         WHERE user_id = $1 AND provider = $2 AND platform_post_id IS NULL AND expires_at > $3 \
+         WHERE user_id = ? AND provider = ? AND platform_post_id IS NULL AND expires_at > ? \
          ORDER BY provider",
     )
     .bind(user_id)
@@ -2569,7 +2742,7 @@ pub async fn get_cached_analytics(
 
 /// Get a specific cached analytics entry for a post
 pub async fn get_single_cached_analytics(
-    pool: &PgPool,
+    pool: &SqlitePool,
     user_id: Uuid,
     provider: &str,
     platform_post_id: &str,
@@ -2577,7 +2750,7 @@ pub async fn get_single_cached_analytics(
     sqlx::query_as::<_, AnalyticsCache>(
         "SELECT id, user_id, provider, platform_post_id, data, cached_at, expires_at \
          FROM analytics_cache \
-         WHERE user_id = $1 AND provider = $2 AND platform_post_id = $3 AND expires_at > NOW()",
+         WHERE user_id = ? AND provider = ? AND platform_post_id = ? AND expires_at > unixepoch()",
     )
     .bind(user_id)
     .bind(provider)
@@ -2587,8 +2760,8 @@ pub async fn get_single_cached_analytics(
 }
 
 /// Delete all expired analytics cache entries. Returns count of deleted rows.
-pub async fn delete_expired_analytics_cache(pool: &PgPool) -> Result<u64, sqlx::Error> {
-    let r = sqlx::query("DELETE FROM analytics_cache WHERE expires_at < NOW()")
+pub async fn delete_expired_analytics_cache(pool: &SqlitePool) -> Result<u64, sqlx::Error> {
+    let r = sqlx::query("DELETE FROM analytics_cache WHERE expires_at < unixepoch()")
         .execute(pool)
         .await?;
     Ok(r.rows_affected())
@@ -2600,7 +2773,7 @@ pub async fn delete_expired_analytics_cache(pool: &PgPool) -> Result<u64, sqlx::
 /// Insert an external post, updating on conflict (provider + platform_post_id).
 /// Returns `Some(post)` always — either the newly inserted or the updated record.
 pub async fn insert_external_post(
-    pool: &PgPool,
+    pool: &SqlitePool,
     user_id: Uuid,
     provider: &str,
     platform_post_id: &str,
@@ -2620,7 +2793,7 @@ pub async fn insert_external_post(
     let result = sqlx::query_as::<_, ExternalPost>(
         "INSERT INTO external_posts \
          (user_id, provider, platform_post_id, text, author_name, author_handle, author_avatar, created_at, url, media, metadata) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) \
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
          ON CONFLICT (provider, platform_post_id) DO UPDATE SET \
            text = EXCLUDED.text, \
            author_name = COALESCE(EXCLUDED.author_name, external_posts.author_name), \
@@ -2630,7 +2803,7 @@ pub async fn insert_external_post(
            url = EXCLUDED.url, \
            media = EXCLUDED.media, \
            metadata = EXCLUDED.metadata, \
-           imported_at = now() \
+           imported_at = unixepoch() \
          RETURNING id, user_id, provider, platform_post_id, text,
            author_name, author_handle, author_avatar,
            created_at, url, media, metadata, imported_at",
@@ -2661,12 +2834,12 @@ pub async fn insert_external_post(
 
 /// Update the metadata JSON of an external post (used for engagement updates).
 pub async fn update_external_post_metadata(
-    pool: &PgPool,
+    pool: &SqlitePool,
     id: Uuid,
     metadata: &serde_json::Value,
 ) -> Result<ExternalPost, sqlx::Error> {
     sqlx::query_as::<_, ExternalPost>(
-        "UPDATE external_posts SET metadata = $1 WHERE id = $2 \
+        "UPDATE external_posts SET metadata = ? WHERE id = ? \
          RETURNING id, user_id, provider, platform_post_id, text,\
            author_name, author_handle, author_avatar,\
            created_at, url, media, metadata, imported_at",
@@ -2679,7 +2852,7 @@ pub async fn update_external_post_metadata(
 
 /// Get a single external post by ID and user_id.
 pub async fn get_external_post_by_id(
-    pool: &PgPool,
+    pool: &SqlitePool,
     user_id: Uuid,
     post_id: Uuid,
 ) -> Result<Option<ExternalPost>, sqlx::Error> {
@@ -2687,7 +2860,7 @@ pub async fn get_external_post_by_id(
         "SELECT id, user_id, provider, platform_post_id, text,\
            author_name, author_handle, author_avatar,\
            created_at, url, media, metadata, imported_at \
-         FROM external_posts WHERE id = $1 AND user_id = $2",
+         FROM external_posts WHERE id = ? AND user_id = ?",
     )
     .bind(post_id)
     .bind(user_id)
@@ -2697,7 +2870,7 @@ pub async fn get_external_post_by_id(
 
 /// List external posts for a user + provider, newest first.
 pub async fn list_external_posts(
-    pool: &PgPool,
+    pool: &SqlitePool,
     user_id: Uuid,
     provider: &str,
     limit: i64,
@@ -2706,8 +2879,8 @@ pub async fn list_external_posts(
         "SELECT id, user_id, provider, platform_post_id, text,\
            author_name, author_handle, author_avatar,\
            created_at, url, media, metadata, imported_at \
-         FROM external_posts WHERE user_id = $1 AND provider = $2 \
-         ORDER BY created_at DESC LIMIT $3",
+         FROM external_posts WHERE user_id = ? AND provider = ? \
+           ORDER BY created_at DESC LIMIT ?",
     )
     .bind(user_id)
     .bind(provider)
@@ -2719,7 +2892,7 @@ pub async fn list_external_posts(
 /// List all external posts for a user across all providers, cursor-paginated by created_at DESC.
 /// Pass cursor = None for the first page, then use the last post's created_at as the next cursor.
 pub async fn list_all_external_posts(
-    pool: &PgPool,
+    pool: &SqlitePool,
     user_id: Uuid,
     provider: Option<&str>,
     cursor: Option<DateTime<Utc>>,
@@ -2731,12 +2904,13 @@ pub async fn list_all_external_posts(
                author_name, author_handle, author_avatar,\
                created_at, url, media, metadata, imported_at \
              FROM external_posts \
-             WHERE user_id = $1 AND provider = $2 \
-               AND ($3::timestamptz IS NULL OR created_at < $3) \
-             ORDER BY created_at DESC LIMIT $4",
+              WHERE user_id = ? AND provider = ? \
+                AND (? IS NULL OR created_at < ?) \
+              ORDER BY created_at DESC LIMIT ?",
         )
         .bind(user_id)
         .bind(provider)
+        .bind(cursor)
         .bind(cursor)
         .bind(limit)
         .fetch_all(pool)
@@ -2747,11 +2921,12 @@ pub async fn list_all_external_posts(
                author_name, author_handle, author_avatar,\
                created_at, url, media, metadata, imported_at \
              FROM external_posts \
-             WHERE user_id = $1 \
-               AND ($2::timestamptz IS NULL OR created_at < $2) \
-             ORDER BY created_at DESC LIMIT $3",
+              WHERE user_id = ? \
+                AND (? IS NULL OR created_at < ?) \
+              ORDER BY created_at DESC LIMIT ?",
         )
         .bind(user_id)
+        .bind(cursor)
         .bind(cursor)
         .bind(limit)
         .fetch_all(pool)
@@ -2768,7 +2943,7 @@ pub async fn list_all_external_posts(
 /// LIKE metacharacters (%, _, \) in the query are escaped so user input
 /// is treated literally.
 pub async fn search_all_external_posts_with_engagement(
-    pool: &PgPool,
+    pool: &SqlitePool,
     user_id: Uuid,
     q: &str,
     provider: Option<&str>,
@@ -2800,15 +2975,18 @@ pub async fn search_all_external_posts_with_engagement(
                pe.fetched_at AS engagement_fetched_at
              FROM external_posts ep
              LEFT JOIN post_engagement pe ON pe.post_id = ep.id
-             WHERE ep.user_id = $1 AND ep.provider = $2
-               AND ($3::timestamptz IS NULL OR ep.created_at < $3)
-               AND (ep.text ILIKE $4 OR ep.author_name ILIKE $4 OR ep.author_handle ILIKE $4)
-             ORDER BY ep.created_at DESC
-             LIMIT $5"#,
+              WHERE ep.user_id = ? AND ep.provider = ?
+                AND (? IS NULL OR ep.created_at < ?)
+                AND (ep.text LIKE ? ESCAPE '\' OR ep.author_name LIKE ? ESCAPE '\' OR ep.author_handle LIKE ? ESCAPE '\')
+              ORDER BY ep.created_at DESC
+              LIMIT ?"#,
         )
         .bind(user_id)
         .bind(provider)
         .bind(cursor)
+        .bind(cursor)
+        .bind(&pattern)
+        .bind(&pattern)
         .bind(&pattern)
         .bind(limit)
         .fetch_all(pool)
@@ -2835,14 +3013,17 @@ pub async fn search_all_external_posts_with_engagement(
                pe.fetched_at AS engagement_fetched_at
              FROM external_posts ep
              LEFT JOIN post_engagement pe ON pe.post_id = ep.id
-             WHERE ep.user_id = $1
-               AND ($2::timestamptz IS NULL OR ep.created_at < $2)
-               AND (ep.text ILIKE $3 OR ep.author_name ILIKE $3 OR ep.author_handle ILIKE $3)
-             ORDER BY ep.created_at DESC
-             LIMIT $4"#,
+              WHERE ep.user_id = ?
+                AND (? IS NULL OR ep.created_at < ?)
+                AND (ep.text LIKE ? ESCAPE '\' OR ep.author_name LIKE ? ESCAPE '\' OR ep.author_handle LIKE ? ESCAPE '\')
+              ORDER BY ep.created_at DESC
+              LIMIT ?"#,
         )
         .bind(user_id)
         .bind(cursor)
+        .bind(cursor)
+        .bind(&pattern)
+        .bind(&pattern)
         .bind(&pattern)
         .bind(limit)
         .fetch_all(pool)
@@ -2859,14 +3040,14 @@ pub async fn search_all_external_posts_with_engagement(
 /// resolved, the row is touched (resolved_at refreshed) but no error
 /// is returned.
 pub async fn resolve_comment(
-    pool: &PgPool,
+    pool: &SqlitePool,
     user_id: Uuid,
     comment_id: &str,
 ) -> Result<(), sqlx::Error> {
     sqlx::query(
         "INSERT INTO resolved_comments (user_id, comment_id, resolved_at) \
-         VALUES ($1, $2, NOW()) \
-         ON CONFLICT (user_id, comment_id) DO UPDATE SET resolved_at = NOW()",
+         VALUES (?, ?, unixepoch()) \
+         ON CONFLICT (user_id, comment_id) DO UPDATE SET resolved_at = unixepoch()",
     )
     .bind(user_id)
     .bind(comment_id)
@@ -2877,12 +3058,12 @@ pub async fn resolve_comment(
 
 /// Unmark a comment as resolved (re-open it). Idempotent.
 pub async fn unresolve_comment(
-    pool: &PgPool,
+    pool: &SqlitePool,
     user_id: Uuid,
     comment_id: &str,
 ) -> Result<(), sqlx::Error> {
     sqlx::query(
-        "DELETE FROM resolved_comments WHERE user_id = $1 AND comment_id = $2",
+        "DELETE FROM resolved_comments WHERE user_id = ? AND comment_id = ?",
     )
     .bind(user_id)
     .bind(comment_id)
@@ -2895,11 +3076,11 @@ pub async fn unresolve_comment(
 /// Used by the comments list endpoint to flag each CommentItem.status
 /// as "resolved" instead of always "new".
 pub async fn list_resolved_comment_ids(
-    pool: &PgPool,
+    pool: &SqlitePool,
     user_id: Uuid,
 ) -> Result<std::collections::HashSet<String>, sqlx::Error> {
     let rows: Vec<(String,)> = sqlx::query_as(
-        "SELECT comment_id FROM resolved_comments WHERE user_id = $1",
+        "SELECT comment_id FROM resolved_comments WHERE user_id = ?",
     )
     .bind(user_id)
     .fetch_all(pool)
@@ -2942,7 +3123,7 @@ pub struct CachedComment {
 ///
 /// `fetched_at` is set to NOW() for all rows in this batch.
 pub async fn upsert_cached_comments(
-    pool: &PgPool,
+    pool: &SqlitePool,
     user_id: Uuid,
     post_id: Uuid,
     provider: &str,
@@ -2960,7 +3141,7 @@ pub async fn upsert_cached_comments(
                  (user_id, comment_id, post_id, provider,
                   author_name, author_handle, author_avatar,
                   text, created_at, fetched_at)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, unixepoch())
                ON CONFLICT (user_id, comment_id) DO UPDATE SET
                  post_id = EXCLUDED.post_id,
                  provider = EXCLUDED.provider,
@@ -2969,7 +3150,7 @@ pub async fn upsert_cached_comments(
                  author_avatar = EXCLUDED.author_avatar,
                  text = EXCLUDED.text,
                  created_at = EXCLUDED.created_at,
-                 fetched_at = NOW()"#,
+                  fetched_at = unixepoch()"#,
         )
         .bind(user_id)
         .bind(comment_id)
@@ -2990,7 +3171,7 @@ pub async fn upsert_cached_comments(
 /// List cached comments for a user, newest first, with the post text
 /// joined in. Optional provider filter. Limited to `limit` rows.
 pub async fn list_cached_comments(
-    pool: &PgPool,
+    pool: &SqlitePool,
     user_id: Uuid,
     provider: Option<&str>,
     limit: i64,
@@ -3003,9 +3184,9 @@ pub async fn list_cached_comments(
                       ep.text AS post_text
                FROM cached_comments cc
                LEFT JOIN external_posts ep ON ep.id = cc.post_id
-               WHERE cc.user_id = $1 AND cc.provider = $2
+               WHERE cc.user_id = ? AND cc.provider = ?
                ORDER BY cc.created_at DESC
-               LIMIT $3"#,
+               LIMIT ? "#,
         )
         .bind(user_id)
         .bind(provider)
@@ -3020,9 +3201,9 @@ pub async fn list_cached_comments(
                       ep.text AS post_text
                FROM cached_comments cc
                LEFT JOIN external_posts ep ON ep.id = cc.post_id
-               WHERE cc.user_id = $1
+               WHERE cc.user_id = ?
                ORDER BY cc.created_at DESC
-               LIMIT $2"#,
+               LIMIT ? "#,
         )
         .bind(user_id)
         .bind(limit)
@@ -3036,7 +3217,7 @@ pub async fn list_cached_comments(
 /// miss (handled by the caller). Returns newest-first, no limit (the
 /// background refresher caps the cache size per post).
 pub async fn list_cached_comments_for_post(
-    pool: &PgPool,
+    pool: &SqlitePool,
     user_id: Uuid,
     post_id: Uuid,
 ) -> Result<Vec<CachedComment>, sqlx::Error> {
@@ -3047,7 +3228,7 @@ pub async fn list_cached_comments_for_post(
                   ep.text AS post_text
            FROM cached_comments cc
            LEFT JOIN external_posts ep ON ep.id = cc.post_id
-           WHERE cc.user_id = $1 AND cc.post_id = $2
+           WHERE cc.user_id = ? AND cc.post_id = ?
            ORDER BY cc.created_at ASC"#,
     )
     .bind(user_id)

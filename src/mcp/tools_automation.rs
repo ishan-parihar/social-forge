@@ -6,15 +6,19 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::api::AppState;
+use crate::db::types::EpochUtc;
 
+/// SQLite stores `id` as TEXT and `created_at` as an INTEGER epoch. `Uuid`
+/// cannot decode a TEXT column (sqlx expects 16 raw blob bytes), so `id`
+/// comes back as `String` and the timestamp as `EpochUtc`.
 #[derive(Debug, sqlx::FromRow)]
 struct RuleRow {
-    id: Uuid,
+    id: String,
     name: String,
     trigger_type: String,
     response_type: String,
-    is_active: Option<bool>,
-    created_at: Option<chrono::DateTime<chrono::Utc>>,
+    is_active: Option<i64>,
+    created_at: Option<EpochUtc>,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
@@ -114,8 +118,8 @@ pub async fn create_rule(
         r#"INSERT INTO automation_rules
            (user_id, integration_id, name, trigger_type, trigger_filter,
             response_template, response_type, ai_model, cooldown_minutes, max_responses_per_hour)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-           RETURNING id, name, is_active"#,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           RETURNING id as "id!: String", name, is_active as "is_active: i64""#,
         user_id,
         integration_id,
         input.name,
@@ -132,9 +136,9 @@ pub async fn create_rule(
     .map_err(|e| format!("Failed to create rule: {e}"))?;
 
     Ok(Json(CreateRuleOutput {
-        id: rule.id.to_string(),
+        id: rule.id,
         name: rule.name,
-        is_active: rule.is_active.unwrap_or(true),
+        is_active: rule.is_active.map_or(true, |v| v != 0),
     }))
 }
 
@@ -149,9 +153,11 @@ pub async fn list_rules(
             .map_err(|_| "Invalid integration_id format")?;
         sqlx::query_as!(
             RuleRow,
-            r#"SELECT id, name, trigger_type, response_type, is_active, created_at
+            r#"SELECT id as "id!: String", name, trigger_type, response_type,
+                      is_active as "is_active: i64",
+                      created_at as "created_at: EpochUtc"
                FROM automation_rules
-               WHERE user_id = $1 AND integration_id = $2
+               WHERE user_id = ? AND integration_id = ?
                ORDER BY created_at DESC"#,
             user_id,
             integration_id,
@@ -162,9 +168,11 @@ pub async fn list_rules(
     } else {
         sqlx::query_as!(
             RuleRow,
-            r#"SELECT id, name, trigger_type, response_type, is_active, created_at
+            r#"SELECT id as "id!: String", name, trigger_type, response_type,
+                      is_active as "is_active: i64",
+                      created_at as "created_at: EpochUtc"
                FROM automation_rules
-               WHERE user_id = $1
+               WHERE user_id = ?
                ORDER BY created_at DESC"#,
             user_id,
         )
@@ -174,12 +182,12 @@ pub async fn list_rules(
     };
 
     let rule_infos: Vec<RuleInfo> = rules.into_iter().map(|r| RuleInfo {
-        id: r.id.to_string(),
+        id: r.id,
         name: r.name,
         trigger_type: r.trigger_type,
         response_type: r.response_type,
-        is_active: r.is_active.unwrap_or(true),
-        created_at: r.created_at.unwrap_or_else(chrono::Utc::now).to_rfc3339(),
+        is_active: r.is_active.map_or(true, |v| v != 0),
+        created_at: r.created_at.unwrap_or_else(EpochUtc::now).0.to_rfc3339(),
     }).collect();
 
     let total = rule_infos.len();
@@ -194,25 +202,26 @@ pub async fn update_rule(
     let rule_id = Uuid::parse_str(&input.rule_id)
         .map_err(|_| "Invalid rule_id format")?;
 
+    let input_active_i64 = input.is_active.map(i64::from);
     sqlx::query!(
         r#"UPDATE automation_rules
-           SET name = COALESCE($2, name),
-               trigger_filter = COALESCE($3, trigger_filter),
-               response_template = COALESCE($4, response_template),
-               response_type = COALESCE($5, response_type),
-               ai_model = COALESCE($6, ai_model),
-               is_active = COALESCE($7, is_active),
-               cooldown_minutes = COALESCE($8, cooldown_minutes),
-               max_responses_per_hour = COALESCE($9, max_responses_per_hour),
-               updated_at = NOW()
-           WHERE id = $1"#,
+           SET name = COALESCE(?, name),
+               trigger_filter = COALESCE(?, trigger_filter),
+               response_template = COALESCE(?, response_template),
+               response_type = COALESCE(?, response_type),
+               ai_model = COALESCE(?, ai_model),
+               is_active = COALESCE(?, is_active),
+               cooldown_minutes = COALESCE(?, cooldown_minutes),
+               max_responses_per_hour = COALESCE(?, max_responses_per_hour),
+               updated_at = unixepoch()
+           WHERE id = ?"#,
         rule_id,
         input.name,
         input.trigger_filter,
         input.response_template,
         input.response_type,
         input.ai_model,
-        input.is_active,
+        input_active_i64,
         input.cooldown_minutes,
         input.max_responses_per_hour,
     )
@@ -231,7 +240,7 @@ pub async fn delete_rule(
         .map_err(|_| "Invalid rule_id format")?;
 
     sqlx::query!(
-        r#"DELETE FROM automation_rules WHERE id = $1"#,
+        r#"DELETE FROM automation_rules WHERE id = ?"#,
         rule_id,
     )
     .execute(&state.db)
@@ -250,11 +259,12 @@ pub async fn get_logs(
     let limit = input.limit.unwrap_or(50);
 
     let logs = sqlx::query!(
-        r#"SELECT id, trigger_id, trigger_type, response, status, error_message, created_at
+        r#"SELECT id as "id!: String", trigger_id, trigger_type, response, status, error_message,
+                  created_at as "created_at: EpochUtc"
            FROM automation_logs
-           WHERE rule_id = $1
+           WHERE rule_id = ?
            ORDER BY created_at DESC
-           LIMIT $2"#,
+           LIMIT ?"#,
         rule_id,
         limit,
     )
@@ -263,13 +273,13 @@ pub async fn get_logs(
     .map_err(|e| format!("Failed to get logs: {e}"))?;
 
     let log_entries: Vec<LogEntry> = logs.into_iter().map(|l| LogEntry {
-        id: l.id.to_string(),
+        id: l.id,
         trigger_id: l.trigger_id,
         trigger_type: l.trigger_type,
         response: l.response,
         status: l.status,
         error_message: l.error_message,
-        created_at: l.created_at.unwrap_or_else(chrono::Utc::now).to_rfc3339(),
+        created_at: l.created_at.unwrap_or_else(EpochUtc::now).0.to_rfc3339(),
     }).collect();
 
     let total = log_entries.len();

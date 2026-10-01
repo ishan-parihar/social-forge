@@ -16,19 +16,34 @@ use super::AppState;
 
 // ── Database Row Types ──────────────────────────────────────
 
-#[derive(Debug, FromRow, Serialize)]
-pub struct WebhookRow {
-    pub id: Uuid,
-    #[serde(skip)]
-    pub user_id: Uuid,
-    pub name: String,
-    pub url: String,
-    pub secret: Option<String>,
-    pub event_types: Vec<String>,
-    pub is_active: bool,
-    pub last_triggered_at: Option<DateTime<Utc>>,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
+/// A `webhooks` row. The event-type list is NOT a column on the table any
+/// more — it lives in `webhook_event_types(webhook_id, event_type)`, so it is
+/// fetched separately and stitched on by [`load_event_types`].
+#[derive(Debug, FromRow)]
+struct WebhookBaseRow {
+    id: Uuid,
+    user_id: Uuid,
+    name: String,
+    url: String,
+    secret: Option<String>,
+    is_active: bool,
+    last_triggered_at: Option<DateTime<Utc>>,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
+}
+
+/// A webhook row plus its event types, in the shape the API serialises.
+#[derive(Debug)]
+struct WebhookWithEvents {
+    base: WebhookBaseRow,
+    event_types: Vec<String>,
+}
+
+impl WebhookBaseRow {
+    /// Columns shared by every webhook SELECT/RETURNING so the call sites
+    /// can't drift apart.
+    const SELECT_COLS: &'static str = "id, user_id, name, url, secret, is_active, \
+         last_triggered_at, created_at, updated_at";
 }
 
 #[derive(Debug, FromRow, Serialize)]
@@ -113,14 +128,15 @@ pub struct WebhookTestResult {
 
 // ── Helpers ─────────────────────────────────────────────────
 
-fn webhook_to_response(w: WebhookRow) -> WebhookResponse {
+fn webhook_to_response(w: WebhookWithEvents) -> WebhookResponse {
+    let WebhookWithEvents { base: w, event_types } = w;
     WebhookResponse {
         id: w.id,
         user_id: w.user_id,
         name: w.name,
         url: w.url,
         secret: w.secret,
-        event_types: w.event_types,
+        event_types,
         is_active: w.is_active,
         last_triggered_at: w.last_triggered_at.map(|dt| dt.to_rfc3339()),
         created_at: w.created_at.to_rfc3339(),
@@ -128,12 +144,13 @@ fn webhook_to_response(w: WebhookRow) -> WebhookResponse {
     }
 }
 
-fn webhook_to_response_public(w: WebhookRow) -> WebhookResponsePublic {
+fn webhook_to_response_public(w: WebhookWithEvents) -> WebhookResponsePublic {
+    let WebhookWithEvents { base: w, event_types } = w;
     WebhookResponsePublic {
         id: w.id,
         name: w.name,
         url: w.url,
-        event_types: w.event_types,
+        event_types,
         is_active: w.is_active,
         last_triggered_at: w.last_triggered_at.map(|dt| dt.to_rfc3339()),
         created_at: w.created_at.to_rfc3339(),
@@ -152,6 +169,81 @@ fn delivery_to_response(d: WebhookDeliveryRow) -> WebhookDeliveryResponse {
         attempted_at: d.attempted_at.to_rfc3339(),
         delivered_at: d.delivered_at.map(|dt| dt.to_rfc3339()),
     }
+}
+
+/// Read one webhook's event types from `webhook_event_types`.
+async fn load_event_types(
+    db: &crate::db::SqlitePool,
+    webhook_id: Uuid,
+) -> Result<Vec<String>, crate::error::AppError> {
+    let types: Vec<String> = sqlx::query_scalar(
+        "SELECT event_type FROM webhook_event_types
+         WHERE webhook_id = ? ORDER BY event_type",
+    )
+    .bind(webhook_id)
+    .fetch_all(db)
+    .await?;
+    Ok(types)
+}
+
+/// Fetch every webhook owned by `user_id`, newest first, with each row's
+/// event types stitched on.
+async fn list_webhooks(
+    db: &crate::db::SqlitePool,
+    user_id: Uuid,
+) -> Result<Vec<WebhookWithEvents>, crate::error::AppError> {
+    let sql = format!(
+        "SELECT {} FROM webhooks WHERE user_id = ? ORDER BY created_at DESC",
+        WebhookBaseRow::SELECT_COLS
+    );
+    let rows: Vec<WebhookBaseRow> = sqlx::query_as(&sql).bind(user_id).fetch_all(db).await?;
+    let mut out = Vec::with_capacity(rows.len());
+    for base in rows {
+        let event_types = load_event_types(db, base.id).await?;
+        out.push(WebhookWithEvents { base, event_types });
+    }
+    Ok(out)
+}
+
+/// Fetch a single webhook by id scoped to `user_id`; `None` when absent.
+async fn fetch_webhook(
+    db: &crate::db::SqlitePool,
+    id: Uuid,
+    user_id: Uuid,
+) -> Result<Option<WebhookWithEvents>, crate::error::AppError> {
+    let sql = format!(
+        "SELECT {} FROM webhooks WHERE id = ? AND user_id = ?",
+        WebhookBaseRow::SELECT_COLS
+    );
+    let base: Option<WebhookBaseRow> =
+        sqlx::query_as(&sql).bind(id).bind(user_id).fetch_optional(db).await?;
+    match base {
+        Some(base) => {
+            let event_types = load_event_types(db, id).await?;
+            Ok(Some(WebhookWithEvents { base, event_types }))
+        }
+        None => Ok(None),
+    }
+}
+
+/// Replace a webhook's event types wholesale, inside the caller's transaction.
+async fn replace_event_types(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    webhook_id: Uuid,
+    event_types: &[String],
+) -> Result<(), crate::error::AppError> {
+    sqlx::query("DELETE FROM webhook_event_types WHERE webhook_id = ?")
+        .bind(webhook_id)
+        .execute(&mut **tx)
+        .await?;
+    for event_type in event_types {
+        sqlx::query("INSERT INTO webhook_event_types (webhook_id, event_type) VALUES (?, ?)")
+            .bind(webhook_id)
+            .bind(event_type)
+            .execute(&mut **tx)
+            .await?;
+    }
+    Ok(())
 }
 
 // ── Handlers ─────────────────────────────────────────────────
@@ -173,23 +265,40 @@ pub async fn create(
         ));
     }
 
-    let row: WebhookRow = sqlx::query_as(
-        r#"
-        INSERT INTO webhooks (user_id, name, url, secret, event_types)
-        VALUES ($1, $2, $3, $4, $5)
-        RETURNING id, user_id, name, url, secret, event_types, is_active,
-                  last_triggered_at, created_at, updated_at
-        "#,
-    )
-    .bind(auth.user_id)
-    .bind(body.name.trim())
-    .bind(body.url.trim())
-    .bind(body.secret)
-    .bind(&body.event_types)
-    .fetch_one(&state.db)
-    .await?;
+    // The event types are a second table now, so the row and its
+    // `webhook_event_types` lines go in one transaction — a partial write
+    // would leave a webhook that never fires.
+    let mut tx = state
+        .db
+        .begin()
+        .await
+        .map_err(|e| crate::error::AppError::Internal(format!("Failed to begin tx: {e}")))?;
 
-    Ok(Json(webhook_to_response(row)))
+    let sql = format!(
+        "INSERT INTO webhooks (id, user_id, name, url, secret)
+         VALUES (?, ?, ?, ?, ?)
+         RETURNING {}",
+        WebhookBaseRow::SELECT_COLS
+    );
+    // `webhooks.id` is TEXT with no DB-side default — SQLite has no
+    // gen_random_uuid(), so Rust generates the value.
+    let base: WebhookBaseRow = sqlx::query_as(&sql)
+        .bind(Uuid::new_v4())
+        .bind(auth.user_id)
+        .bind(body.name.trim())
+        .bind(body.url.trim())
+        .bind(body.secret)
+        .fetch_one(&mut *tx)
+        .await?;
+
+    replace_event_types(&mut tx, base.id, &body.event_types).await?;
+
+    tx.commit()
+        .await
+        .map_err(|e| crate::error::AppError::Internal(format!("Failed to commit webhook: {e}")))?;
+
+    let event_types = load_event_types(&state.db, base.id).await?;
+    Ok(Json(webhook_to_response(WebhookWithEvents { base, event_types })))
 }
 
 /// GET /api/webhooks
@@ -197,19 +306,7 @@ pub async fn list(
     State(state): State<AppState>,
     auth: AuthenticatedUser,
 ) -> Result<Json<Vec<WebhookResponsePublic>>, crate::error::AppError> {
-    let rows: Vec<WebhookRow> = sqlx::query_as(
-        r#"
-        SELECT id, user_id, name, url, secret, event_types, is_active,
-               last_triggered_at, created_at, updated_at
-        FROM webhooks
-        WHERE user_id = $1
-        ORDER BY created_at DESC
-        "#,
-    )
-    .bind(auth.user_id)
-    .fetch_all(&state.db)
-    .await?;
-
+    let rows = list_webhooks(&state.db, auth.user_id).await?;
     Ok(Json(rows.into_iter().map(webhook_to_response_public).collect()))
 }
 
@@ -219,19 +316,9 @@ pub async fn get(
     auth: AuthenticatedUser,
     Path(id): Path<Uuid>,
 ) -> Result<Json<WebhookResponsePublic>, crate::error::AppError> {
-    let row: WebhookRow = sqlx::query_as(
-        r#"
-        SELECT id, user_id, name, url, secret, event_types, is_active,
-               last_triggered_at, created_at, updated_at
-        FROM webhooks
-        WHERE id = $1 AND user_id = $2
-        "#,
-    )
-    .bind(id)
-    .bind(auth.user_id)
-    .fetch_optional(&state.db)
-    .await?
-    .ok_or_else(|| crate::error::AppError::NotFound("Webhook not found".into()))?;
+    let row = fetch_webhook(&state.db, id, auth.user_id)
+        .await?
+        .ok_or_else(|| crate::error::AppError::NotFound("Webhook not found".into()))?;
 
     Ok(Json(webhook_to_response_public(row)))
 }
@@ -244,47 +331,53 @@ pub async fn update(
     Json(body): Json<WebhookUpdateRequest>,
 ) -> Result<Json<WebhookResponsePublic>, crate::error::AppError> {
     // Fetch current row first to merge with updates
-    let current: WebhookRow = sqlx::query_as(
-        r#"
-        SELECT id, user_id, name, url, secret, event_types, is_active,
-               last_triggered_at, created_at, updated_at
-        FROM webhooks
-        WHERE id = $1 AND user_id = $2
-        "#,
-    )
-    .bind(id)
-    .bind(auth.user_id)
-    .fetch_optional(&state.db)
-    .await?
-    .ok_or_else(|| crate::error::AppError::NotFound("Webhook not found".into()))?;
+    let current = fetch_webhook(&state.db, id, auth.user_id)
+        .await?
+        .ok_or_else(|| crate::error::AppError::NotFound("Webhook not found".into()))?;
+    let WebhookWithEvents { base: current, event_types: current_event_types } = current;
 
     let new_name = body.name.unwrap_or(current.name);
     let new_url = body.url.unwrap_or(current.url);
     let new_secret = body.secret.or(current.secret);
-    let new_event_types = body.event_types.unwrap_or(current.event_types);
+    let new_event_types = body.event_types.unwrap_or(current_event_types);
     let new_is_active = body.is_active.unwrap_or(current.is_active);
 
-    let row: WebhookRow = sqlx::query_as(
-        r#"
-        UPDATE webhooks
-        SET name = $1, url = $2, secret = $3, event_types = $4, is_active = $5,
-            updated_at = now()
-        WHERE id = $6 AND user_id = $7
-        RETURNING id, user_id, name, url, secret, event_types, is_active,
-                  last_triggered_at, created_at, updated_at
-        "#,
-    )
-    .bind(new_name.trim())
-    .bind(new_url.trim())
-    .bind(new_secret)
-    .bind(&new_event_types)
-    .bind(new_is_active)
-    .bind(id)
-    .bind(auth.user_id)
-    .fetch_one(&state.db)
-    .await?;
+    let mut tx = state
+        .db
+        .begin()
+        .await
+        .map_err(|e| crate::error::AppError::Internal(format!("Failed to begin tx: {e}")))?;
 
-    Ok(Json(webhook_to_response_public(row)))
+    // `event_types` is no longer a column on `webhooks`, so the base UPDATE
+    // drops it and the list is rewritten separately in the same tx.
+    let sql = format!(
+        "UPDATE webhooks
+         SET name = ?, url = ?, secret = ?, is_active = ?,
+             updated_at = unixepoch()
+         WHERE id = ? AND user_id = ?
+         RETURNING {}",
+        WebhookBaseRow::SELECT_COLS
+    );
+    let base: WebhookBaseRow = sqlx::query_as(&sql)
+        .bind(new_name.trim())
+        .bind(new_url.trim())
+        .bind(new_secret)
+        .bind(new_is_active)
+        .bind(id)
+        .bind(auth.user_id)
+        .fetch_one(&mut *tx)
+        .await?;
+
+    replace_event_types(&mut tx, id, &new_event_types).await?;
+
+    tx.commit()
+        .await
+        .map_err(|e| crate::error::AppError::Internal(format!("Failed to commit webhook: {e}")))?;
+
+    Ok(Json(webhook_to_response_public(WebhookWithEvents {
+        base,
+        event_types: new_event_types,
+    })))
 }
 
 /// DELETE /api/webhooks/:id
@@ -293,7 +386,7 @@ pub async fn delete(
     auth: AuthenticatedUser,
     Path(id): Path<Uuid>,
 ) -> Result<Json<serde_json::Value>, crate::error::AppError> {
-    let result = sqlx::query("DELETE FROM webhooks WHERE id = $1 AND user_id = $2")
+    let result = sqlx::query("DELETE FROM webhooks WHERE id = ? AND user_id = ?")
         .bind(id)
         .bind(auth.user_id)
         .execute(&state.db)
@@ -320,7 +413,7 @@ pub async fn deliveries(
                d.response_body, d.attempted_at, d.delivered_at
         FROM webhook_deliveries d
         JOIN webhooks w ON w.id = d.webhook_id
-        WHERE d.webhook_id = $1 AND w.user_id = $2
+        WHERE d.webhook_id = ? AND w.user_id = ?
         ORDER BY d.attempted_at DESC
         LIMIT 50
         "#,
@@ -341,19 +434,9 @@ pub async fn test(
     Path(id): Path<Uuid>,
 ) -> Result<Json<WebhookTestResult>, crate::error::AppError> {
     // Fetch the webhook
-    let row: WebhookRow = sqlx::query_as(
-        r#"
-        SELECT id, user_id, name, url, secret, event_types, is_active,
-               last_triggered_at, created_at, updated_at
-        FROM webhooks
-        WHERE id = $1 AND user_id = $2
-        "#,
-    )
-    .bind(id)
-    .bind(auth.user_id)
-    .fetch_optional(&state.db)
-    .await?
-    .ok_or_else(|| crate::error::AppError::NotFound("Webhook not found".into()))?;
+    let row = fetch_webhook(&state.db, id, auth.user_id)
+        .await?
+        .ok_or_else(|| crate::error::AppError::NotFound("Webhook not found".into()))?;
 
     // Build test payload
     let payload = serde_json::json!({
@@ -366,8 +449,8 @@ pub async fn test(
 
     // Send the test via the dispatcher
     let result = crate::services::webhook_dispatcher::send_webhook(
-        &row.url,
-        row.secret.as_deref(),
+        &row.base.url,
+        row.base.secret.as_deref(),
         "test",
         &payload,
     )
@@ -380,11 +463,12 @@ pub async fn test(
     let delivered_dt = if status_code >= 200 && status_code < 300 { Some(Utc::now()) } else { None };
     let delivery_row: WebhookDeliveryRow = sqlx::query_as(
         r#"
-        INSERT INTO webhook_deliveries (webhook_id, event_type, payload, status, status_code, response_body, delivered_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        INSERT INTO webhook_deliveries (id, webhook_id, event_type, payload, status, status_code, response_body, delivered_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         RETURNING id, webhook_id, event_type, status, status_code, response_body, attempted_at, delivered_at
         "#,
     )
+    .bind(Uuid::new_v4())
     .bind(id)
     .bind("test")
     .bind(&payload)
@@ -396,7 +480,7 @@ pub async fn test(
     .await?;
 
     // Update last_triggered_at
-    if let Err(e) = sqlx::query("UPDATE webhooks SET last_triggered_at = now() WHERE id = $1")
+    if let Err(e) = sqlx::query("UPDATE webhooks SET last_triggered_at = unixepoch() WHERE id = ?")
         .bind(id)
         .execute(&state.db)
         .await

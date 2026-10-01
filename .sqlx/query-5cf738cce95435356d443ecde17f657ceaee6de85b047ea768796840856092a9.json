@@ -1,0 +1,56 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id as \"id!: String\", trigger_id, trigger_type, response, status, error_message,\n                  created_at as \"created_at: EpochUtc\"\n           FROM automation_logs\n           WHERE rule_id = ?\n           ORDER BY created_at DESC\n           LIMIT ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!: String",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "trigger_id",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "trigger_type",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "response",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "status",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "error_message",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_at: EpochUtc",
+        "ordinal": 6,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      true,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "5cf738cce95435356d443ecde17f657ceaee6de85b047ea768796840856092a9"
+}

@@ -13,13 +13,13 @@ use std::sync::Arc;
 use chrono::Utc;
 use uuid::Uuid;
 
-use crate::db::PgPool;
+use crate::db::SqlitePool;
 use crate::poll::{spawn_poll, FirstTick};
 use crate::social::registry::ProviderRegistry;
 
 /// Start the plug runner background task. Polls every 60 seconds.
 pub fn start_plug_runner(
-    db: PgPool,
+    db: SqlitePool,
     providers: Arc<ProviderRegistry>,
     token_key: Option<[u8; 32]>,
     shutdown: tokio::sync::watch::Receiver<bool>,
@@ -42,9 +42,18 @@ pub fn start_plug_runner(
     );
 }
 
+/// `config->>'interval_minutes'` on Postgres is `json_extract(config,
+/// '$.interval_minutes')` on SQLite; both are NULL when the key is absent.
+fn interval_minutes(config: &serde_json::Value) -> i64 {
+    config
+        .get("interval_minutes")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(360)
+}
+
 /// Query all due plugs and execute them.
 async fn process_due_plugs(
-    db: &PgPool,
+    db: &SqlitePool,
     providers: &ProviderRegistry,
     token_key: Option<[u8; 32]>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -54,7 +63,7 @@ async fn process_due_plugs(
         "SELECT id, user_id, post_id, integration_id, plug_type, config,
                 runs_so_far, max_runs, next_run_at
          FROM post_plugs
-         WHERE completed = false AND next_run_at <= NOW()
+         WHERE completed = 0 AND next_run_at <= unixepoch()
          ORDER BY next_run_at ASC
          LIMIT 50",
     )
@@ -96,13 +105,13 @@ async fn process_due_plugs(
                     Utc::now()
                 } else {
                     // Schedule next run based on interval from config
-                    let interval_mins = config["interval_minutes"].as_i64().unwrap_or(360);
+                    let interval_mins = interval_minutes(&config);
                     Utc::now() + chrono::Duration::minutes(interval_mins)
                 };
 
                 let _ = sqlx::query(
-                    "UPDATE post_plugs SET runs_so_far = $1, next_run_at = $2, fired_at = $3,
-                     completed = $4, updated_at = NOW() WHERE id = $5",
+                    "UPDATE post_plugs SET runs_so_far = ?, next_run_at = ?, fired_at = ?,
+                     completed = ?, updated_at = unixepoch() WHERE id = ?",
                 )
                 .bind(new_runs)
                 .bind(next_run)
@@ -119,10 +128,10 @@ async fn process_due_plugs(
             Err(e) => {
                 tracing::warn!("Plug {} failed: {e}", plug_id);
                 // Reschedule for next interval
-                let interval_mins = config["interval_minutes"].as_i64().unwrap_or(360);
+                let interval_mins = interval_minutes(&config);
                 let next_run = Utc::now() + chrono::Duration::minutes(interval_mins);
                 let _ = sqlx::query(
-                    "UPDATE post_plugs SET next_run_at = $1, updated_at = NOW() WHERE id = $2",
+                    "UPDATE post_plugs SET next_run_at = ?, updated_at = unixepoch() WHERE id = ?",
                 )
                 .bind(next_run)
                 .bind(plug_id)
@@ -138,7 +147,7 @@ async fn process_due_plugs(
 /// Execute a single plug. Returns Ok(true) if the plug fired (action taken),
 /// Ok(false) if conditions not met yet, Err on failure.
 async fn execute_plug(
-    db: &PgPool,
+    db: &SqlitePool,
     providers: &ProviderRegistry,
     token_key: Option<[u8; 32]>,
     plug_type: &str,
@@ -157,7 +166,7 @@ async fn execute_plug(
             let post_row = sqlx::query(
                 "SELECT p.platform_post_id, p.state, i.provider_identifier, i.access_token
                  FROM posts p JOIN integrations i ON p.integration_id = i.id
-                 WHERE p.id = $1",
+                 WHERE p.id = ?",
             )
             .bind(post_id)
             .fetch_one(db)
@@ -203,7 +212,7 @@ async fn execute_plug(
                     let _user_id_str = crate::auth::middleware::DEFAULT_USER_ID.to_string();
                     // XProvider::retweet needs the X user ID, not our internal UUID.
                     // We'll use the integration's internal_id which is the X user ID.
-                    let internal_id_row = sqlx::query("SELECT internal_id FROM integrations WHERE id = $1")
+                    let internal_id_row = sqlx::query("SELECT internal_id FROM integrations WHERE id = ?")
                         .bind(integration_id)
                         .fetch_one(db)
                         .await?;
@@ -237,7 +246,7 @@ async fn execute_plug(
             // Check if original post is published
             let post_row = sqlx::query(
                 "SELECT platform_post_id, state, content, title, media, settings
-                 FROM posts WHERE id = $1",
+                 FROM posts WHERE id = ?",
             )
             .bind(post_id)
             .fetch_one(db)
@@ -251,7 +260,7 @@ async fn execute_plug(
 
             // Check if the cross-post was already created (avoid duplicates)
             let existing = sqlx::query_scalar::<_, i64>(
-                "SELECT COUNT(*) FROM posts WHERE integration_id = $1 AND content = $2 AND created_at > NOW() - INTERVAL '24 hours'",
+                "SELECT COUNT(*) FROM posts WHERE integration_id = ? AND content = ? AND created_at > unixepoch() - 86400",
             )
             .bind(secondary_integration_id)
             .bind(post_row.try_get::<String, _>("content")?)

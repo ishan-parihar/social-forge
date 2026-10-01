@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT MAX(scheduled_at) as \"max: Option<EpochUtc>\" FROM posts\n                  WHERE user_id = ? AND integration_id = ? AND state != 'error'",
+  "describe": {
+    "columns": [
+      {
+        "name": "max: Option<EpochUtc>",
+        "ordinal": 0,
+        "type_info": "Null"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "f83ea72ac693efa972b80de2eeee89f1018220829fdbbcc9bee91ebe19c52523"
+}

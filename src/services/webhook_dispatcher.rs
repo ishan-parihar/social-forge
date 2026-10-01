@@ -95,11 +95,14 @@ pub async fn dispatch_event(
 ) {
     let webhooks = match sqlx::query_as::<_, WebhookDispatchRow>(
         r#"
-        SELECT id, url, secret
-        FROM webhooks
-        WHERE user_id = $1
-          AND is_active = true
-          AND $2 = ANY(event_types)
+        SELECT w.id, w.url, w.secret
+        FROM webhooks w
+        WHERE w.user_id = ?
+          AND w.is_active = 1
+          AND EXISTS (
+            SELECT 1 FROM webhook_event_types t
+            WHERE t.webhook_id = w.id AND t.event_type = ?
+          )
         "#,
     )
     .bind(user_id)
@@ -146,10 +149,11 @@ pub async fn dispatch_event(
 
         if let Err(e) = sqlx::query(
             r#"
-            INSERT INTO webhook_deliveries (webhook_id, event_type, payload, status, status_code, response_body, delivered_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            INSERT INTO webhook_deliveries (id, webhook_id, event_type, payload, status, status_code, response_body, delivered_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             "#,
         )
+        .bind(Uuid::new_v4())
         .bind(webhook_id)
         .bind(event_type)
         .bind(&payload_json)
@@ -163,7 +167,7 @@ pub async fn dispatch_event(
             tracing::error!("Failed to record webhook delivery: {e}");
         }
 
-        if let Err(e) = sqlx::query("UPDATE webhooks SET last_triggered_at = now() WHERE id = $1")
+        if let Err(e) = sqlx::query("UPDATE webhooks SET last_triggered_at = unixepoch() WHERE id = ?")
             .bind(webhook_id)
             .execute(&state.db)
             .await

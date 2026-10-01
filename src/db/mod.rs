@@ -1,58 +1,52 @@
 // ─── Database Pool ─────────────────────────────────────────────
-// Creates and manages a sqlx PgPool with connection migration.
+// Creates and manages a sqlx SqlitePool with connection migration.
 //
-// Pool sizing is env-configurable so operators can tune for their
-// workload and DB instance class:
-//   DB_MAX_CONNECTIONS  (default 20)  — max simultaneous DB connections
-//   DB_ACQUIRE_TIMEOUT  (default 5)   — seconds to wait for a connection
-//   DB_MAX_LIFETIME     (default 3600)— seconds before a conn is recycled
-//   DB_IDLE_TIMEOUT     (default 600) — seconds before an idle conn is closed
+// SQLite is a single-writer store, so the pool is deliberately sized to
+// one connection: more writers would only serialize on the file lock,
+// and WAL still lets readers run concurrently with the one writer.
+// Migrations run once on boot via `sqlx::migrate!`.
 //
-// Without these knobs the pool used sqlx's defaults (10 conns, 30s
-// acquire, no max_lifetime) which caused two production issues:
-//   (a) under load, requests blocked on acquire_timeout because 10
-//       conns wasn't enough for the scheduler + RSS + feed + HTTP
-//       workers all competing for connections;
-//   (b) after a postgres restart, stale connections weren't recycled
-//       (no max_lifetime) so the first query on each one failed.
+// Connection tuning is done through `SqliteConnectOptions` (the builder),
+// never URL query params:
+//   journal_mode = WAL         — readers don't block the writer
+//   synchronous  = NORMAL      — durable enough under WAL, much faster
+//   busy_timeout = 5s          — wait instead of immediately SQLITE_BUSY
+//   foreign_keys = ON          — SQLite defaults this OFF per connection
 
-pub use sqlx::PgPool;
+use std::str::FromStr;
+
+pub use sqlx::SqlitePool;
 
 pub mod models;
 pub mod queries;
+pub mod types;
 
 /// Create a connection pool and run migrations.
-pub async fn create_pool(database_url: &str) -> anyhow::Result<PgPool> {
-    let max_connections: u32 = std::env::var("DB_MAX_CONNECTIONS")
-        .ok()
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(20);
-    let acquire_timeout_secs: u64 = std::env::var("DB_ACQUIRE_TIMEOUT")
-        .ok()
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(5);
-    let max_lifetime_secs: u64 = std::env::var("DB_MAX_LIFETIME")
-        .ok()
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(3600);
-    let idle_timeout_secs: u64 = std::env::var("DB_IDLE_TIMEOUT")
-        .ok()
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(600);
+pub async fn create_pool(database_url: &str) -> anyhow::Result<SqlitePool> {
+    let options = sqlx::sqlite::SqliteConnectOptions::from_str(database_url)
+        .map_err(|e| anyhow::anyhow!("Invalid DATABASE_URL `{database_url}`: {e}"))?
+        .create_if_missing(true)
+        .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
+        .synchronous(sqlx::sqlite::SqliteSynchronous::Normal)
+        .busy_timeout(std::time::Duration::from_secs(5))
+        .foreign_keys(true);
 
-    let pool = sqlx::postgres::PgPoolOptions::new()
-        .max_connections(max_connections)
-        .acquire_timeout(std::time::Duration::from_secs(acquire_timeout_secs))
-        .max_lifetime(std::time::Duration::from_secs(max_lifetime_secs))
-        .idle_timeout(std::time::Duration::from_secs(idle_timeout_secs))
-        .connect(database_url)
+    // sqlx does not create the parent directory for a file-backed SQLite
+    // database, and `data/` is gitignored — so the default DATABASE_URL
+    // needs this to work on a fresh clone.
+    if let Some(parent) = options.get_filename().parent() {
+        if !parent.as_os_str().is_empty() && !parent.exists() {
+            std::fs::create_dir_all(parent)?;
+        }
+    }
+
+    let pool = sqlx::sqlite::SqlitePoolOptions::new()
+        .max_connections(1)
+        .connect_with(options)
         .await?;
 
     sqlx::migrate!("./migrations").run(&pool).await?;
-    tracing::info!(
-        "Database connected — pool: max={max_connections}, acquire_timeout={acquire_timeout_secs}s, \
-         max_lifetime={max_lifetime_secs}s, idle_timeout={idle_timeout_secs}s. Migrations applied."
-    );
+    tracing::info!("Database connected — sqlite pool: max_connections=1, WAL. Migrations applied.");
     Ok(pool)
 }
 
@@ -62,14 +56,13 @@ pub async fn create_pool(database_url: &str) -> anyhow::Result<PgPool> {
 /// satisfy foreign-key constraints; the `password` column is unused
 /// (auth is via `APP_PASSWORD` env var + signed session cookie, not
 /// the DB), so we store a random invalid hash to make that explicit.
-pub async fn ensure_local_user(pool: &PgPool) -> anyhow::Result<()> {
+pub async fn ensure_local_user(pool: &SqlitePool) -> anyhow::Result<()> {
     let id = crate::auth::middleware::DEFAULT_USER_ID;
-    let exists = sqlx::query_scalar::<_, bool>(
-        "SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)",
-    )
-    .bind(id)
-    .fetch_one(pool)
-    .await?;
+    let exists =
+        sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM users WHERE id = ?)")
+            .bind(id)
+            .fetch_one(pool)
+            .await?;
 
     if !exists {
         // Random invalid hash — DB password is never checked. The
@@ -78,7 +71,7 @@ pub async fn ensure_local_user(pool: &PgPool) -> anyhow::Result<()> {
         let placeholder_hash =
             "$argon2id$v=19$m=19456,t=2,p=1$cmFuZG9tc2FsdA$invalidplaceholderhash";
         sqlx::query(
-            "INSERT INTO users (id, email, password, name) VALUES ($1, $2, $3, $4)
+            "INSERT INTO users (id, email, password, name) VALUES (?, ?, ?, ?)
              ON CONFLICT (id) DO NOTHING",
         )
         .bind(id)

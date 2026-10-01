@@ -53,11 +53,11 @@ jobs:
 
       # Only check that our source files parse — full compile happens in release.yml
       - name: Syntax check (rustfmt parse only)
-        run: cargo fmt --all -- --check 2>/dev/null || true
+        run: cargo fmt --all -- --check
         # Note: format diffs are informational only; pre-existing formatting is not
         # blocked here. The release build is the authoritative compile check.
 
       - name: Library tests (no DB required)
-        run: cargo test --lib 2>&1 || true
-        # Best-effort: tests that require DB will fail without a connection,
-        # which is expected in CI. Release build is the compile gate.
+        run: cargo test --lib
+        # Library tests use the committed .sqlx/ cache (SQLX_OFFLINE=true above),
+        # so they need no database — a failure here is a real failure.

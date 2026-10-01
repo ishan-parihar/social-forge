@@ -27,7 +27,8 @@ pub struct FeedQuery {
     pub provider: Option<String>,
     /// Optional author handle filter
     pub author_handle: Option<String>,
-    /// Optional full-text search query (ILIKE on text/author_name/author_handle).
+    /// Optional full-text search query (case-insensitive LIKE on
+    /// text/author_name/author_handle).
     /// When present, switches the underlying query from `list_all_external_posts`
     /// to `search_all_external_posts`. Empty string is treated as None.
     pub q: Option<String>,
@@ -109,8 +110,8 @@ pub async fn get(
         .map(str::trim)
         .filter(|s| !s.is_empty());
 
-    // If a search query is present, use the ILIKE search path; otherwise
-    // use the regular list path. The search path ignores author_handle
+    // If a search query is present, use the case-insensitive LIKE search path;
+    // otherwise use the regular list path. The search path ignores author_handle
     // (searching text/author_name/author_handle is more useful).
     let posts = if let Some(q) = q {
         queries::search_all_external_posts_with_engagement(
@@ -220,14 +221,14 @@ pub async fn accounts(
          FROM (
            SELECT provider, author_name, author_handle, author_avatar
            FROM external_posts
-           WHERE user_id = $1
+           WHERE user_id = ?
            UNION ALL
            SELECT provider_identifier AS provider,
              profile_name AS author_name,
-             NULL::text AS author_handle,
+             NULL AS author_handle,
              profile_picture AS author_avatar
            FROM integrations
-           WHERE user_id = $1 AND disabled = false
+           WHERE user_id = ? AND disabled = false
          ) AS combined
          ORDER BY provider, author_handle, author_name",
     )
@@ -382,14 +383,14 @@ pub async fn get_comments(
 }
 
 /// DELETE /api/feed/{post_id} — soft-hide an imported feed post.
-/// Phase 3: changed from hard DELETE to UPDATE hidden_at = NOW() so the
+/// Phase 3: changed from hard DELETE to UPDATE hidden_at so the
 /// hide persists across refresh cycles (re-import won't clear it).
 pub async fn delete_post(
     State(state): State<AppState>,
     Path(post_id): Path<Uuid>,
     auth: AuthenticatedUser,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    sqlx::query("UPDATE external_posts SET hidden_at = NOW() WHERE id = $1 AND user_id = $2")
+    sqlx::query("UPDATE external_posts SET hidden_at = unixepoch() WHERE id = ? AND user_id = ?")
         .bind(post_id)
         .bind(auth.user_id)
         .execute(&state.db)
@@ -405,7 +406,7 @@ pub async fn save_post(
     Path(post_id): Path<Uuid>,
     auth: AuthenticatedUser,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    sqlx::query("UPDATE external_posts SET saved_at = NOW() WHERE id = $1 AND user_id = $2")
+    sqlx::query("UPDATE external_posts SET saved_at = unixepoch() WHERE id = ? AND user_id = ?")
         .bind(post_id)
         .bind(auth.user_id)
         .execute(&state.db)
@@ -421,7 +422,7 @@ pub async fn unsave_post(
     Path(post_id): Path<Uuid>,
     auth: AuthenticatedUser,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    sqlx::query("UPDATE external_posts SET saved_at = NULL WHERE id = $1 AND user_id = $2")
+    sqlx::query("UPDATE external_posts SET saved_at = NULL WHERE id = ? AND user_id = ?")
         .bind(post_id)
         .bind(auth.user_id)
         .execute(&state.db)
@@ -485,8 +486,8 @@ pub async fn update_post(
     let new_metadata = body.metadata.unwrap_or(current.metadata);
 
     let updated: Option<(Uuid, String, serde_json::Value, serde_json::Value)> = sqlx::query_as(
-        "UPDATE external_posts SET text = $1, media = $2, metadata = $3 \
-         WHERE id = $4 AND user_id = $5 \
+        "UPDATE external_posts SET text = ?, media = ?, metadata = ? \
+         WHERE id = ? AND user_id = ? \
          RETURNING id, text, media, metadata",
     )
     .bind(&new_text)
@@ -576,8 +577,8 @@ pub async fn repurpose_post(
         r#"INSERT INTO posts
            (user_id, integration_id, content, title, media, settings,
             scheduled_at, state, source_external_post_id)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-           RETURNING id, user_id, integration_id, state as "state: PostState",
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+           RETURNING id, user_id, integration_id, state,
               content, title, media, settings, scheduled_at, published_at,
               platform_post_id, platform_post_url, error_message,
               created_at, updated_at,
@@ -591,7 +592,7 @@ pub async fn repurpose_post(
     .bind(&source.media)
     .bind(serde_json::json!({}))
     .bind(scheduled_at)
-    .bind(state_enum)
+    .bind(state_enum.to_string())
     .bind(post_id)
     .fetch_one(&state.db)
     .await?;

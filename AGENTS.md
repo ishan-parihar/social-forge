@@ -16,7 +16,7 @@
 
 3. **NEVER skip the security review.** Every change that touches HTML interpolation, file upload, auth, or SQL must be reviewed against the security rules in §6. The v7-v9 audit history is full of XSS and encryption-bypass bugs that were introduced by agents who didn't read this file.
 
-4. **NEVER use `sqlx::query!` / `query_as!` macros for NEW queries** unless you have a running Postgres + can regenerate the `.sqlx/` offline cache. Use runtime `sqlx::query()` / `sqlx::query_as()` with `FromRow` structs instead. See §5 for details.
+4. **NEVER use `sqlx::query!` / `query_as!` macros for NEW queries** unless you can regenerate the `.sqlx/` offline cache against a local SQLite file. Use runtime `sqlx::query()` / `sqlx::query_as()` with `FromRow` structs instead. See §5 for details.
 
 5. **NEVER commit secrets.** The `.env` file is gitignored. `.env.example` is the template. API keys, OAuth secrets, and `APP_PASSWORD` values must never appear in code or commits.
 
@@ -41,8 +41,8 @@ These are the core design decisions that define social-forge's identity. They we
 
 ### 3. Local-deployment first, single binary
 - The app runs as a **single Rust binary** on a VPS or local machine. No microservices, no orchestrator process, no Temporal server, no Redis.
-- The only external dependency is PostgreSQL (which can run in Docker).
-- Do NOT suggest adding Temporal.io, Redis, or splitting the app into multiple processes. The single-binary design is a feature, not a limitation.
+- **SQLite is the only supported database. There is no Postgres fallback, no server, and no Docker.** Storage is one local `.db` file, created and migrated automatically on first run.
+- Do NOT suggest adding a Postgres server, Temporal.io, Redis, or splitting the app into multiple processes. The single-binary design is a feature, not a limitation.
 - Background tasks (scheduler, RSS poller, feed refresher, analytics cache) run as `tokio::spawn` tasks within the single binary.
 
 ### 4. Triple interface: CLI + REST API + MCP server
@@ -108,7 +108,7 @@ Load the `rust-best-practices` skill (`/home/ishanp/.agents/skills/rust-best-pra
 
 Social Forge is a **single-user, self-hosted social media management platform** designed for AI agents. It provides a triple interface — CLI, REST API, and MCP server — over 26 social platforms (X, Reddit, LinkedIn, Facebook, Instagram, YouTube, Threads, TikTok, Bluesky, Pinterest, Discord, Slack, Telegram, WhatsApp, WordPress, Medium, Dev.to, Hashnode, GitHub, etc.).
 
-**Architecture in one paragraph:** A single Rust binary (`social-forge`) runs an axum HTTP server (REST API + embedded SvelteKit frontend), an rmcp MCP server (stdio, for AI agents like Claude/Cursor), an in-process scheduler (polls for due posts every 30s), an SSE broadcaster (realtime updates to the frontend), and background tasks (RSS poller, feed refresher, analytics cache refresher). All state lives in PostgreSQL. OAuth tokens are AES-256-GCM encrypted at rest when `TOKEN_ENCRYPTION_KEY` is set.
+**Architecture in one paragraph:** A single Rust binary (`social-forge`) runs an axum HTTP server (REST API + embedded SvelteKit frontend), an rmcp MCP server (stdio, for AI agents like Claude/Cursor), an in-process scheduler (polls for due posts every 30s), an SSE broadcaster (realtime updates to the frontend), and background tasks (RSS poller, feed refresher, analytics cache refresher). All state lives in a local SQLite file. OAuth tokens are AES-256-GCM encrypted at rest when `TOKEN_ENCRYPTION_KEY` is set.
 
 **Key numbers (as of v11):**
 - 327 MCP tools across 41 files in `src/mcp/`
@@ -157,7 +157,7 @@ social-forge/
 │   │   ├── reddit.rs        # Reddit (OAuth + cookie auth, ~1500 LOC)
 │   │   └── ...              # linkedin, facebook, instagram, threads, youtube, tiktok, bluesky, mastodon, pinterest, discord, slack, telegram_bot, telegram_user, whatsapp, wordpress, medium, devto, hashnode, github, google, vk, kick, whop, skool, lemmy, farcaster, google_my_business
 │   ├── db/
-│   │   ├── mod.rs           # create_pool() — PgPoolOptions with env-configurable limits
+│   │   ├── mod.rs           # create_pool() — SqlitePoolOptions with env-configurable limits
 │   │   ├── models.rs        # PostState enum (Draft/Queued/Publishing/Published/Error), Post, PostWithIntegration, Integration, etc.
 │   │   └── queries.rs       # All SQL queries (~2100 LOC)
 │   ├── scheduler/
@@ -192,7 +192,6 @@ social-forge/
 │   ├── social-forge.service # systemd unit
 │   └── social-forge-start.sh
 ├── Dockerfile               # Multi-stage: rust:1.94-slim-bookworm → debian:bookworm-slim (non-root)
-├── docker-compose.yml       # Postgres-only (app runs via systemd)
 ├── Makefile                 # build, deploy, redeploy, restart, logs, watch
 ├── Cargo.toml               # Rust dependencies
 ├── .env.example             # Template for .env (all env vars documented)
@@ -225,7 +224,7 @@ cargo check --lib --bin social-forge
 cargo build --release
 
 # If you get "SQLX_OFFLINE=true but there is no cached data for this query":
-# Either (a) run against a live DB with DATABASE_URL set, or
+# Either (a) regenerate .sqlx/ against a local SQLite file (see §5.1), or
 #        (b) use runtime sqlx::query() instead of sqlx::query! macro (see §5)
 
 # Run unit tests (fast, no DB needed for most):
@@ -259,8 +258,7 @@ make redeploy    # cargo zigbuild --release + install binary + restart
 ### 3.5 Running locally
 
 ```bash
-# Start postgres:
-docker compose up -d postgres
+# No database server to start — SQLite creates and migrates the .db file on first run.
 
 # Run the server (HTTP, no TLS, loopback only):
 BIND_HOST=127.0.0.1 APP_URL=http://localhost:6543 cargo run -- serve
@@ -324,7 +322,15 @@ This repo uses a single `master` branch. No feature branches, no PRs — commit 
 
 ### 5.1 The `.sqlx/` offline cache problem
 
-`sqlx::query!` and `sqlx::query_as!` macros require **either** a live database connection at compile time (via `DATABASE_URL`) **or** pre-generated offline cache files in `.sqlx/`. If you add a new query using these macros, the build will fail with:
+`sqlx::query!` and `sqlx::query_as!` macros require **either** a live SQLite connection at compile time (via `DATABASE_URL`) **or** pre-generated offline cache files in `.sqlx/`. To regenerate the cache against a throwaway SQLite file:
+
+```bash
+rm -f /tmp/sf-dev.db
+DATABASE_URL="sqlite:///tmp/sf-dev.db?mode=rwc" cargo sqlx run --source migrations/
+DATABASE_URL="sqlite:///tmp/sf-dev.db?mode=rwc" cargo sqlx prepare -- --lib --bins
+```
+
+If you add a new query using these macros without regenerating the cache, the build will fail with:
 
 ```
 error: `SQLX_OFFLINE=true` but there is no cached data for this query
@@ -335,8 +341,8 @@ error: `SQLX_OFFLINE=true` but there is no cached data for this query
 | Situation | Use |
 |---|---|
 | Modifying an EXISTING `query!` macro query | Keep the macro form — the cache entry already exists |
-| Adding a NEW query, and you have a live DB | `sqlx::query!` macro + run `cargo sqlx prepare` to update `.sqlx/` |
-| Adding a NEW query, and you DON'T have a live DB | **Runtime `sqlx::query()` / `sqlx::query_as()` with `FromRow` structs** |
+| Adding a NEW query, and you ran `cargo sqlx prepare` | `sqlx::query!` macro + run `cargo sqlx prepare` to update `.sqlx/` |
+| Adding a NEW query, and you DIDN'T regenerate `.sqlx/` | **Runtime `sqlx::query()` / `sqlx::query_as()` with `FromRow` structs** |
 
 ### 5.3 Runtime query pattern
 
@@ -553,7 +559,7 @@ In sandboxed environments without root, you can sometimes extract the `.deb` fil
 ### 9.5 SQLX offline cache
 
 If you add a `sqlx::query!` macro and the build fails with "no cached data", either:
-- Run `cargo sqlx prepare` against a live DB (requires `cargo install sqlx-cli`), OR
+- Run `cargo sqlx prepare` against a local SQLite file (requires `cargo install sqlx-cli --no-default-features --features sqlite`), OR
 - Convert the query to runtime `sqlx::query()` form (see §5.3)
 
 ### 9.6 Svelte 5 runes
@@ -579,15 +585,14 @@ See `.env.example` for the full list. Critical ones:
 
 | Var | Required | Default | Purpose |
 |---|---|---|---|
-| `DATABASE_URL` | Yes | — | Postgres connection string |
+| `DATABASE_URL` | Yes | — | SQLite file URL (`sqlite://data/social-forge.db?mode=rwc`) |
 | `APP_PASSWORD` | No | auto-generated | Single-user password gate (persisted to `~/.social-forge/.env`) |
 | `APP_URL` | No | `https://localhost:6543` | Public URL (used for OAuth redirect URIs + TLS decision) |
 | `BIND_HOST` | No | `127.0.0.1` | Network interface to bind (`0.0.0.0` for LAN) |
 | `FRONTEND_URL` | No | = `APP_URL` | CORS allow-list + CSRF origin |
 | `JWT_SECRET` | No | derived from `APP_PASSWORD` | HMAC key for session cookies |
 | `TOKEN_ENCRYPTION_KEY` | No | — | 64 hex chars (32 bytes) for AES-256-GCM token encryption at rest |
-| `DB_MAX_CONNECTIONS` | No | `20` | PgPool max connections |
-| `DB_ACQUIRE_TIMEOUT` | No | `5` | seconds to wait for a pool connection |
+| `DB_MAX_CONNECTIONS` | No | `1` | SqlitePool max connections (kept at 1 — the pool serializes writers) |
 | `PROVIDER_CONCURRENCY_X` | No | `1` | Per-provider concurrent publish limit (override) |
 | `PROVIDER_CB_THRESHOLD_X` | No | `5` | Per-provider circuit breaker failure threshold (v10) |
 | `PROVIDER_CB_COOLDOWN_X` | No | `60` | Per-provider circuit breaker cooldown seconds (v10) |

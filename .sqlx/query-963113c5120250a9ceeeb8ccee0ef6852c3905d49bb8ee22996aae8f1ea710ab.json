@@ -1,0 +1,122 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO integrations\n           (user_id, provider_identifier, provider_name, internal_id,\n            access_token, refresh_token, token_expires_at,\n            profile_name, profile_picture, profile_url,\n            root_internal_id, auth_method)\n           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)\n           ON CONFLICT (user_id, provider_identifier, internal_id)\n           DO UPDATE SET access_token = ?, refresh_token = ?,\n             token_expires_at = ?, profile_name = ?,\n             profile_picture = ?, profile_url = ?,\n             root_internal_id = COALESCE(?, integrations.root_internal_id),\n             auth_method = ?,\n             refresh_needed = false, disabled = false,\n             updated_at = unixepoch()\n           RETURNING id as \"id!: Uuid\", user_id as \"user_id!: Uuid\",\n             provider_identifier, provider_name, internal_id,\n             access_token, refresh_token,\n             token_expires_at as \"token_expires_at?: DateTime<Utc>\",\n             profile_name, profile_picture, profile_url,\n             disabled as \"disabled!: bool\",\n             refresh_needed as \"refresh_needed!: bool\",\n             root_internal_id, posting_times, auth_method,\n             created_at as \"created_at!: DateTime<Utc>\",\n             updated_at as \"updated_at!: DateTime<Utc>\"",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!: Uuid",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "user_id!: Uuid",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "provider_identifier",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "provider_name",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "internal_id",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "access_token",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "refresh_token",
+        "ordinal": 6,
+        "type_info": "Text"
+      },
+      {
+        "name": "token_expires_at?: DateTime<Utc>",
+        "ordinal": 7,
+        "type_info": "Integer"
+      },
+      {
+        "name": "profile_name",
+        "ordinal": 8,
+        "type_info": "Text"
+      },
+      {
+        "name": "profile_picture",
+        "ordinal": 9,
+        "type_info": "Text"
+      },
+      {
+        "name": "profile_url",
+        "ordinal": 10,
+        "type_info": "Text"
+      },
+      {
+        "name": "disabled!: bool",
+        "ordinal": 11,
+        "type_info": "Integer"
+      },
+      {
+        "name": "refresh_needed!: bool",
+        "ordinal": 12,
+        "type_info": "Integer"
+      },
+      {
+        "name": "root_internal_id",
+        "ordinal": 13,
+        "type_info": "Text"
+      },
+      {
+        "name": "posting_times",
+        "ordinal": 14,
+        "type_info": "Text"
+      },
+      {
+        "name": "auth_method",
+        "ordinal": 15,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_at!: DateTime<Utc>",
+        "ordinal": 16,
+        "type_info": "Integer"
+      },
+      {
+        "name": "updated_at!: DateTime<Utc>",
+        "ordinal": 17,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 20
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "963113c5120250a9ceeeb8ccee0ef6852c3905d49bb8ee22996aae8f1ea710ab"
+}

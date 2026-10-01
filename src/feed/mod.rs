@@ -6,7 +6,7 @@ use std::time::Duration;
 use uuid::Uuid;
 
 use crate::crypto;
-use crate::db::PgPool;
+use sqlx::SqlitePool;
 use crate::realtime::Broadcaster;
 use crate::social::registry::ProviderRegistry;
 use crate::social::{SocialProvider, ProviderError};
@@ -29,7 +29,7 @@ const COMMENTS_REFRESH_POST_LIMIT: i64 = 20;
 /// Start the feed refresher background task.
 /// Polls all integrations for new posts and periodically fetches engagement data.
 pub fn start_feed_refresher(
-    db: PgPool,
+    db: SqlitePool,
     providers: Arc<ProviderRegistry>,
     broadcaster: Broadcaster,
     token_key: Option<[u8; 32]>,
@@ -86,7 +86,7 @@ pub fn start_feed_refresher(
 /// Attempt to auto-refresh an expired token and re-fetch posts.
 /// Returns Some(posts) on success, None if refresh fails.
 async fn try_refresh_and_fetch(
-    db: &PgPool,
+    db: &SqlitePool,
     provider: &Arc<dyn SocialProvider>,
     integration: &crate::db::models::Integration,
     token_key: Option<[u8; 32]>,
@@ -127,7 +127,7 @@ async fn try_refresh_and_fetch(
 /// Poll all non-disabled integrations for a specific user and import their recent posts.
 /// Returns the count of newly imported posts.
 pub async fn refresh_user_posts(
-    db: &PgPool,
+    db: &SqlitePool,
     user_id: Uuid,
     providers: &ProviderRegistry,
     broadcaster: &Broadcaster,
@@ -237,7 +237,7 @@ pub async fn refresh_user_posts(
 
 /// Poll all non-disabled integrations for new posts and import them.
 async fn refresh_all_posts(
-    db: &PgPool,
+    db: &SqlitePool,
     providers: &ProviderRegistry,
     broadcaster: &Broadcaster,
     token_key: Option<[u8; 32]>,
@@ -361,7 +361,7 @@ async fn refresh_all_posts(
 /// Uses the SocialProvider::fetch_engagement() method to get normalized EngagementData,
 /// then upserts into the post_engagement table.
 async fn refresh_all_engagement(
-    db: &PgPool,
+    db: &SqlitePool,
     providers: &ProviderRegistry,
     broadcaster: &Broadcaster,
     token_key: Option<[u8; 32]>,
@@ -438,7 +438,7 @@ async fn refresh_all_engagement(
 /// Failures are logged and skipped — one provider being down shouldn't
 /// prevent the cache from being refreshed for other providers.
 async fn refresh_all_comments(
-    db: &PgPool,
+    db: &SqlitePool,
     providers: &ProviderRegistry,
     broadcaster: &Broadcaster,
     token_key: Option<[u8; 32]>,

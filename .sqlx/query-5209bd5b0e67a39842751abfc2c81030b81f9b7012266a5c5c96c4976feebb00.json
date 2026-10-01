@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT posting_times as \"posting_times: serde_json::Value\" FROM integrations WHERE id = ? AND user_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "posting_times: serde_json::Value",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "5209bd5b0e67a39842751abfc2c81030b81f9b7012266a5c5c96c4976feebb00"
+}
