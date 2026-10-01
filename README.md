@@ -95,8 +95,8 @@ The remaining 68 are cross-platform: `posts_*`, `analytics_*`, `feed_*`, `integr
 ## Configuration
 
 All config lives in `~/.social-forge/.env` (created by `social-forge init`).
-See `.env.example` for the full documented list. The only required value
-is `DATABASE_URL`; everything else has defaults:
+See `.env.example` for the full documented list. Nothing is required — every
+value has a default:
 
 ```bash
 DATABASE_URL=sqlite://data/social-forge.db?mode=rwc
@@ -304,11 +304,11 @@ Priority resolution: `DB cookie tokens → Browser extraction → OAuth tokens �
 
 ### Environment Variables
 
-The only required variable is `DATABASE_URL`. Everything else has sensible defaults:
+Every variable has a sensible default, so none is required:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `DATABASE_URL` | *(required)* | SQLite file path (`sqlite://data/social-forge.db?mode=rwc`) |
+| `DATABASE_URL` | `sqlite://data/social-forge.db` | SQLite file path. SQLite-only: a `postgres://` (or any other) scheme is rejected at startup. |
 | `APP_URL` | `https://localhost:6543` | Public URL of your instance. Used for OAuth redirect URIs. |
 | `FRONTEND_URL` | Same as `APP_URL` | CORS allowed origin. Set separately only if frontend is on a different domain. |
 | `JWT_SECRET` | Auto-generated | Secret for signing auth tokens. Set a strong value in production. |

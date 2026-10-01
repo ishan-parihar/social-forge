@@ -347,6 +347,47 @@ impl PostService {
             .await
             .map_err(|e| format!("Publish failed: {e}"))?;
 
+        // G-01: a provider can report success and hand back no post id.
+        // X's GraphQL CreateTweet answers 200 with no `rest_id` when the
+        // tweet was never created, and the provider maps that to
+        // `platform_post_id: ""` with `status: "published"`. The
+        // scheduler's terminal-state check cannot catch this — the status
+        // literally reads "published" — so the empty id is the only signal
+        // left. Recording that row as published is the false success: the
+        // DB claims the post is live, nothing is live, and no retry runs.
+        //
+        // An empty id is never a publish receipt, so refuse to transition
+        // state and leave the row retryable.
+        if result.platform_post_id.trim().is_empty() {
+            let err = format!(
+                "Publish failed: {} reported success but returned no platform_post_id",
+                post.provider_identifier
+            );
+            tracing::error!("Post {}: {err}", post_id);
+
+            // Same audit contract as the scheduler: one row per publish call.
+            let _ = queries::record_publish_attempt(db, post_id, 1, "failed", Some(&err), Utc::now())
+                .await;
+
+            // Write the reason onto the row while keeping its incoming
+            // state (queued/error) — the post was never published, and the
+            // scheduler or the operator still has to retry it.
+            if let Err(e) = queries::update_post_state(
+                db,
+                post_id,
+                post.state.clone(),
+                None,
+                None,
+                Some(&err),
+            )
+            .await
+            {
+                tracing::error!("Failed to record publish error for post {post_id}: {e}");
+            }
+
+            return Err(err);
+        }
+
         // Update state
         queries::update_post_state(
             db,
@@ -467,5 +508,214 @@ impl PostService {
         queries::get_posts_by_date_range(db, user_id, start, end)
             .await
             .map_err(|e| format!("Database error: {e}"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::social::{AuthToken, AuthUrlResponse, PageInfo, ProviderError, PublishResult};
+    use std::sync::Arc;
+
+    /// Returns whatever `PublishResult` the test hands it — including the
+    /// G-01 shape, where the provider claims `published` but has no id.
+    struct FakeProvider {
+        result: PublishResult,
+    }
+
+    #[async_trait::async_trait]
+    impl SocialProvider for FakeProvider {
+        fn identifier(&self) -> &'static str {
+            "fake"
+        }
+        fn name(&self) -> &'static str {
+            "Fake"
+        }
+        fn scopes(&self) -> Vec<String> {
+            vec![]
+        }
+        fn max_content_length(&self) -> usize {
+            5000
+        }
+
+        async fn generate_auth_url(
+            &self,
+            _s: &str,
+            _v: &str,
+            _r: &str,
+        ) -> Result<AuthUrlResponse, ProviderError> {
+            unimplemented!()
+        }
+        async fn exchange_code(
+            &self,
+            _c: &str,
+            _v: &str,
+            _r: &str,
+        ) -> Result<AuthToken, ProviderError> {
+            unimplemented!()
+        }
+        async fn refresh_token(&self, _r: &str) -> Result<AuthToken, ProviderError> {
+            unimplemented!()
+        }
+        async fn fetch_page_info(
+            &self,
+            _t: &str,
+            _p: &str,
+        ) -> Result<PageInfo, ProviderError> {
+            unimplemented!()
+        }
+        async fn publish(
+            &self,
+            _t: &str,
+            _p: &PostContent,
+        ) -> Result<PublishResult, ProviderError> {
+            Ok(self.result.clone())
+        }
+    }
+
+    /// In-memory SQLite carrying the real schema, so `publish` runs against
+    /// the same columns and constraints production uses.
+    async fn test_pool() -> SqlitePool {
+        let pool = sqlx::sqlite::SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(sqlx::sqlite::SqliteConnectOptions::new().in_memory(true))
+            .await
+            .expect("in-memory sqlite pool");
+        sqlx::migrate!("./migrations")
+            .run(&pool)
+            .await
+            .expect("migrations");
+        pool
+    }
+
+    /// A user + integration + `queued` post wired to the `fake` provider,
+    /// i.e. exactly what `posts publish` is pointed at.
+    async fn queued_post(pool: &SqlitePool) -> (Uuid, Uuid) {
+        let user = queries::create_user(pool, "publish-guard@test.local", "hash", "Guard")
+            .await
+            .expect("user");
+        let integration = queries::create_integration(
+            pool,
+            user.id,
+            "fake",
+            "Fake",
+            "acct-1",
+            "access-token",
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await
+        .expect("integration");
+        let post = queries::create_post(
+            pool,
+            user.id,
+            integration.id,
+            "hello from the forge",
+            None,
+            &serde_json::json!([]),
+            &serde_json::json!({}),
+            None,
+            Some(PostState::Queued),
+            None,
+            0,
+        )
+        .await
+        .expect("post");
+        (user.id, post.id)
+    }
+
+    fn registry(result: PublishResult) -> ProviderRegistry {
+        ProviderRegistry::with_providers(vec![(
+            "fake",
+            Arc::new(FakeProvider { result }) as Arc<dyn SocialProvider>,
+        )])
+    }
+
+    /// G-01: X's GraphQL CreateTweet answered 200 with no `rest_id`, so the
+    /// provider returned `platform_post_id: ""` alongside
+    /// `status: "published"`. The post was never created, but before the
+    /// empty-id guard this wrote the row as published with a phantom id —
+    /// a silent loss the operator only found by searching X.
+    #[tokio::test]
+    async fn publish_rejects_a_success_that_carries_no_platform_post_id() {
+        let pool = test_pool().await;
+        let (user_id, post_id) = queued_post(&pool).await;
+        let providers = registry(PublishResult {
+            platform_post_id: String::new(),
+            platform_post_url: None,
+            status: "published".into(),
+        });
+
+        let err = PostService::publish(&pool, &providers, &Broadcaster::new(), user_id, post_id, None)
+            .await
+            .expect_err("an empty platform_post_id is not a publish receipt");
+        assert!(err.contains("platform_post_id"), "error must name the cause: {err}");
+
+        let post = queries::get_post(&pool, post_id, user_id)
+            .await
+            .expect("read back")
+            .expect("row still exists");
+
+        // The post never went live, so the row must not claim it did.
+        assert_ne!(
+            post.state,
+            PostState::Published,
+            "row was marked published for a post that was never created"
+        );
+        assert!(post.published_at.is_none(), "published_at must stay unset");
+        assert!(
+            post.platform_post_id.as_deref().unwrap_or("").is_empty(),
+            "platform_post_id must stay empty, got {:?}",
+            post.platform_post_id
+        );
+        // Row keeps its retryable incoming state, with the reason attached.
+        assert_eq!(post.state, PostState::Queued);
+        assert!(
+            post.error_message.as_deref().unwrap_or("").contains("platform_post_id"),
+            "error_message must explain the failure, got {:?}",
+            post.error_message
+        );
+
+        // Audit trail: one failed attempt, so this is not invisible.
+        let attempts: Vec<(i32, String, Option<String>)> =
+            sqlx::query_as("SELECT attempt_number, status, error_message FROM publish_attempts WHERE post_id = ?")
+                .bind(post_id)
+                .fetch_all(&pool)
+                .await
+                .expect("attempts");
+        assert_eq!(attempts.len(), 1, "expected one attempt row, got {attempts:?}");
+        assert_eq!(attempts[0].0, 1);
+        assert_eq!(attempts[0].1, "failed");
+        assert!(attempts[0].2.as_deref().unwrap_or("").contains("platform_post_id"));
+    }
+
+    /// The control: a real id still publishes, and the id is what lands.
+    #[tokio::test]
+    async fn publish_records_the_platform_post_id_when_the_platform_returns_one() {
+        let pool = test_pool().await;
+        let (user_id, post_id) = queued_post(&pool).await;
+        let providers = registry(PublishResult {
+            platform_post_id: "tweet-123".into(),
+            platform_post_url: Some("https://x.com/i/status/tweet-123".into()),
+            status: "published".into(),
+        });
+
+        let url = PostService::publish(&pool, &providers, &Broadcaster::new(), user_id, post_id, None)
+            .await
+            .expect("a real platform_post_id must publish");
+        assert_eq!(url, "https://x.com/i/status/tweet-123");
+
+        let post = queries::get_post(&pool, post_id, user_id)
+            .await
+            .expect("read back")
+            .expect("row still exists");
+        assert_eq!(post.state, PostState::Published);
+        assert_eq!(post.platform_post_id.as_deref(), Some("tweet-123"));
+        assert!(post.published_at.is_some(), "published_at must be stamped");
     }
 }

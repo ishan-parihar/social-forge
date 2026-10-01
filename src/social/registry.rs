@@ -428,6 +428,34 @@ impl ProviderRegistry {
         }
     }
 
+    /// Build a registry holding only the given providers.
+    ///
+    /// `new()` always registers the 26 real providers, so a service-level
+    /// test that routes through it would hit a live platform API. This
+    /// injects a fake `SocialProvider` instead, letting `PostService`
+    /// be exercised offline. The limiter and breaker are still populated
+    /// so a test touching them behaves like production.
+    #[cfg(test)]
+    pub fn with_providers(providers: Vec<(&'static str, Arc<dyn SocialProvider>)>) -> Self {
+        let mut map: HashMap<&'static str, Arc<dyn SocialProvider>> = HashMap::new();
+        for (id, provider) in providers {
+            map.insert(id, provider);
+        }
+        let concurrency = map
+            .keys()
+            .map(|id| (*id, Arc::new(tokio::sync::Semaphore::new(1))))
+            .collect();
+        let circuit_breakers = map
+            .keys()
+            .map(|id| (*id, Arc::new(CircuitBreaker::new(5, 60))))
+            .collect();
+        Self {
+            providers: Arc::new(map),
+            concurrency: Arc::new(concurrency),
+            circuit_breakers: Arc::new(circuit_breakers),
+        }
+    }
+
     /// Get a provider by identifier
     pub fn get(&self, identifier: &str) -> Option<Arc<dyn SocialProvider>> {
         self.providers.get(identifier).cloned()

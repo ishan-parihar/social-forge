@@ -594,7 +594,7 @@ pub async fn repurpose_post(
     .bind(body.title.as_deref())
     .bind(&source.media)
     .bind(serde_json::json!({}))
-    .bind(scheduled_at)
+    .bind(scheduled_at.map(crate::db::types::EpochUtc::from))
     .bind(state_enum.to_string())
     .bind(post_id)
     .bind(uuid::Uuid::new_v4())

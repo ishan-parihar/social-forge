@@ -23,10 +23,49 @@ pub fn load_dotenv() {
     }
 }
 
+/// Fallback when `DATABASE_URL` is unset. Relative to the process CWD, which
+/// is the install/serve directory. Must stay in sync with the value written by
+/// `social-forge init`, `.env.example`, and the installer.
+pub const DEFAULT_DATABASE_URL: &str = "sqlite://data/social-forge.db";
+
+/// SQLite-only guard for `DATABASE_URL`.
+///
+/// `sqlx`'s `SqliteConnectOptions::from_str` just `trim_start_matches("sqlite:")`
+/// and treats *everything else* as a bare filename — so a stale
+/// `postgres://user:pass@host:5432/db` is not rejected by sqlx, it becomes a
+/// path and fails much later with an opaque filesystem error. Social Forge
+/// links no Postgres driver, so reject the URL here, at config load, before
+/// anything opens a connection or a socket.
+///
+/// The offending value is deliberately not echoed back: a database URL
+/// normally carries credentials in its userinfo section.
+fn ensure_sqlite_url(database_url: &str) -> anyhow::Result<()> {
+    let url = database_url.trim();
+    // sqlx only understands `sqlite:`; a value with no `://` is read as a bare
+    // filename, which keeps working, so it passes through untouched.
+    if url.starts_with("sqlite:") || !url.contains("://") {
+        return Ok(());
+    }
+    let scheme = url
+        .split("://")
+        .next()
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    Err(anyhow::anyhow!(
+        "DATABASE_URL uses the `{scheme}` scheme, but Social Forge is SQLite-only \
+         (no Postgres driver is linked into this binary).\n\
+         Set it to a SQLite file URL, e.g. {DEFAULT_DATABASE_URL}\n\
+         Sources are tried in order: environment, then ./.env, then ~/.social-forge/.env.\n\
+         Fix it with:  social-forge config set DATABASE_URL {DEFAULT_DATABASE_URL}\n\
+         or edit the file directly."
+    ))
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct Config {
     /// SQLite connection string. Defaults to a local file so the binary
-    /// runs with no Postgres to provision.
+    /// runs with no Postgres to provision. Any non-sqlite scheme is rejected
+    /// by `ensure_sqlite_url` at load time.
     pub database_url: String,
     /// HMAC secret for signing session cookies AND OAuth state tokens.
     /// If unset, derived from `app_password` at startup (see `Config::from_env`).
@@ -194,10 +233,12 @@ impl Config {
             _ => format!("sf-session-{}", app_password),
         };
 
+        let database_url =
+            opt("DATABASE_URL").unwrap_or_else(|| DEFAULT_DATABASE_URL.to_string());
+        ensure_sqlite_url(&database_url)?;
+
         Ok(Self {
-            database_url: opt("DATABASE_URL")
-                .filter(|v| !v.is_empty())
-                .unwrap_or_else(|| "sqlite://data/social-forge.db".to_string()),
+            database_url,
             jwt_secret,
             app_password,
             app_url,
@@ -397,4 +438,52 @@ pub(crate) fn persist_app_password(password: &str) -> anyhow::Result<std::path::
     let body = lines.join("\n") + "\n";
     std::fs::write(&env_path, body)?;
     Ok(env_path)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ensure_sqlite_url;
+
+    #[test]
+    fn accepts_sqlite_urls_and_bare_paths() {
+        for ok in [
+            "sqlite://data/social-forge.db",
+            "sqlite://data/social-forge.db?mode=rwc",
+            "sqlite::memory:",
+            // sqlx reads a scheme-less value as a filename — still valid.
+            "data/social-forge.db",
+            "/var/lib/social-forge.db",
+        ] {
+            assert!(
+                ensure_sqlite_url(ok).is_ok(),
+                "expected `{ok}` to be accepted"
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_non_sqlite_schemes() {
+        for bad in [
+            "postgres://social_forge:pw@localhost:5433/social_forge",
+            "postgresql://localhost/db",
+            "mysql://root@localhost:3306/social_forge",
+        ] {
+            let err = ensure_sqlite_url(bad)
+                .expect_err(&format!("expected `{bad}` to be rejected"))
+                .to_string();
+            assert!(err.contains("SQLite-only"), "unhelpful error: {err}");
+            assert!(err.contains("sqlite://data/social-forge.db"));
+        }
+    }
+
+    /// Credentials live in the URL's userinfo section, so the error must name
+    /// the scheme without echoing the value.
+    #[test]
+    fn error_does_not_echo_credentials() {
+        let err = ensure_sqlite_url("postgres://user:hunter2@db:5432/app")
+            .expect_err("postgres must be rejected")
+            .to_string();
+        assert!(!err.contains("hunter2"), "leaked password: {err}");
+        assert!(err.contains("postgres"), "scheme not named: {err}");
+    }
 }

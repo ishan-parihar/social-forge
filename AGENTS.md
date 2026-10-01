@@ -585,7 +585,7 @@ See `.env.example` for the full list. Critical ones:
 
 | Var | Required | Default | Purpose |
 |---|---|---|---|
-| `DATABASE_URL` | Yes | — | SQLite file URL (`sqlite://data/social-forge.db?mode=rwc`) |
+| `DATABASE_URL` | No | `sqlite://data/social-forge.db` | SQLite file URL (SQLite-only; non-sqlite schemes are rejected at startup) |
 | `APP_PASSWORD` | No | auto-generated | Single-user password gate (persisted to `~/.social-forge/.env`) |
 | `APP_URL` | No | `https://localhost:6543` | Public URL (used for OAuth redirect URIs + TLS decision) |
 | `BIND_HOST` | No | `127.0.0.1` | Network interface to bind (`0.0.0.0` for LAN) |

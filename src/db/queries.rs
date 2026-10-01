@@ -358,7 +358,7 @@ pub async fn create_posts_for_integrations(
         .bind(title)
         .bind(media)
         .bind(settings)
-        .bind(scheduled_at)
+        .bind(scheduled_at.map(EpochUtc::from))
         .bind(&st)
         .bind(first_comment)
         .bind(sequence)
@@ -407,7 +407,7 @@ pub async fn create_post(
     .bind(title)
     .bind(media)
     .bind(settings)
-    .bind(scheduled_at)
+    .bind(scheduled_at.map(EpochUtc::from))
     .bind(st)
     .bind(first_comment)
     .bind(sequence)
@@ -474,7 +474,7 @@ pub async fn create_thread_posts(
             } else {
                 serde_json::json!({})
             })
-            .bind(part_scheduled_at)
+            .bind(part_scheduled_at.map(EpochUtc::from))
             .bind(&st)
             .bind(None::<&str>)
             .bind(seq)
@@ -904,9 +904,9 @@ pub async fn count_posts_search(
                first_comment, sequence, idempotency_key,
                campaign_id, kanban_substate, due_date"#,
     )
-        .bind(scheduled_at)
-        .bind(id)
-        .bind(user_id)
+.bind(EpochUtc::from(scheduled_at))
+    .bind(id)
+    .bind(user_id)
       .fetch_optional(pool)
       .await
   }
@@ -987,7 +987,7 @@ pub async fn count_posts_search(
                first_comment, sequence, idempotency_key,
                campaign_id, kanban_substate, due_date"#,
       )
-      .bind(scheduled_at)
+      .bind(EpochUtc::from(scheduled_at))
       .bind(Uuid::new_v4())
       .bind(id)
       .bind(user_id)
@@ -1020,7 +1020,7 @@ pub async fn count_posts_search(
                first_comment, sequence, idempotency_key,
                campaign_id, kanban_substate, due_date"#,
       )
-      .bind(scheduled_at)
+      .bind(EpochUtc::from(scheduled_at))
       .bind(id)
       .bind(user_id)
       .fetch_optional(pool)
@@ -1161,6 +1161,31 @@ pub async fn get_post_with_integration(
     .await
 }
 
+/// `posts.scheduled_at` compared as epoch seconds, whichever storage class
+/// the row happens to use.
+///
+/// G-02: the column is `INTEGER` epoch, but sqlx's `DateTime<Utc>`
+/// *encoder* emits RFC3339 TEXT, so older rows hold a TEXT value. SQLite
+/// orders INTEGER before TEXT, so a plain `scheduled_at <= unixepoch()`
+/// is **always false** for those rows and the scheduler never claimed them
+/// (symptom: a `queued` post scheduled long ago that simply never
+/// publishes). Writes now bind [`EpochUtc`], and migration 0002 rewrites
+/// the existing TEXT rows — this expression keeps the *read* correct even
+/// for a row that predates both.
+///
+/// `typeof` has to be checked explicitly: `strftime('%s', <integer>)` is
+/// NULL (SQLite reads a bare number as a Julian day), and a plain
+/// `CAST(<text> AS INTEGER)` yields the leading numeric prefix, i.e. the
+/// year `2030`, not the epoch — which would mark a 2030 post as
+/// long-past-due. Only TEXT is parsed here.
+///
+/// ponytail: wrapping the column defeats `idx_posts_scheduled`. Fine on a
+/// single-user `posts` table; revert to a bare `p.scheduled_at` if that
+/// index ever needs to be a covering scan.
+const SCHEDULED_AT_EPOCH: &str = "CASE WHEN typeof(p.scheduled_at) = 'integer' \
+        THEN p.scheduled_at \
+        ELSE CAST(strftime('%s', p.scheduled_at) AS INTEGER) END";
+
 /// Get posts due for publishing.
 ///
 /// Uses `FOR UPDATE SKIP LOCKED` to claim rows atomically so multiple
@@ -1195,16 +1220,21 @@ pub async fn get_due_posts(
     // BEGIN IMMEDIATE (see db::create_pool), so the three steps below run
     // inside one write transaction and the claim is still atomic:
     // collect the due ids, flip them to 'publishing', read them back.
-    let sql = r#"SELECT p.id
+    let sql = format!(
+        r#"SELECT p.id
            FROM posts p
            JOIN integrations i ON p.integration_id = i.id
            WHERE p.state = 'queued'
-             AND p.scheduled_at <= unixepoch()
+             AND {SCHEDULED_AT_EPOCH} <= unixepoch()
              AND i.disabled = false
-           ORDER BY p.scheduled_at ASC
-           LIMIT ?"#;
+           ORDER BY {SCHEDULED_AT_EPOCH} ASC
+           LIMIT ?"#
+    );
 
-    let ids: Vec<(Uuid,)> = sqlx::query_as(sql).bind(limit).fetch_all(&mut *tx).await?;
+    let ids: Vec<(Uuid,)> = sqlx::query_as(&sql)
+        .bind(limit)
+        .fetch_all(&mut *tx)
+        .await?;
 
     if ids.is_empty() {
         tx.commit().await?;
@@ -1983,7 +2013,7 @@ pub async fn create_repeated_post(
              campaign_id, kanban_substate, due_date"#,
     )
         .bind(Uuid::new_v4())
-        .bind(scheduled_at)
+        .bind(EpochUtc::from(*scheduled_at))
         .bind(group_id)
         .bind(Uuid::new_v4())
         .bind(original_id)
@@ -2072,7 +2102,7 @@ pub async fn set_post_recurring_with_copies(
                  campaign_id, kanban_substate, due_date"#,
         )
         .bind(Uuid::new_v4())
-        .bind(&current)
+        .bind(EpochUtc::from(current))
         .bind(group_id)
         .bind(Uuid::new_v4())
         .bind(id)
@@ -3277,4 +3307,118 @@ pub async fn list_cached_comments_for_post(
     .bind(post_id)
     .fetch_all(pool)
     .await
+}
+#[cfg(test)]
+mod g02_tests {
+    //! Regression coverage for G-02: `posts.scheduled_at` is an INTEGER
+    //! epoch column, but sqlx's `DateTime<Utc>` encoder emits RFC3339 TEXT.
+    //! SQLite sorts TEXT after INTEGER, so `scheduled_at <= unixepoch()` was
+    //! permanently false for those rows and the scheduler never claimed them.
+    use super::*;
+
+    async fn fixture() -> (SqlitePool, Uuid) {
+        let pool = crate::db::create_pool("sqlite::memory:").await.unwrap();
+        let user_id = crate::auth::middleware::DEFAULT_USER_ID;
+        crate::db::ensure_local_user(&pool).await.unwrap();
+        sqlx::query(
+            "INSERT INTO integrations
+                (id, user_id, provider_identifier, provider_name, internal_id,
+                 access_token, disabled, refresh_needed, posting_times, auth_method)
+             VALUES (?, ?, 'x', 'X', 'x', 'tok', 0, 0, '[]', 'oauth')",
+        )
+        .bind(Uuid::new_v4())
+        .bind(user_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+        (pool, user_id)
+    }
+
+    async fn insert(pool: &SqlitePool, at: Option<DateTime<Utc>>) -> Uuid {
+        let post = create_post(
+            pool,
+            crate::auth::middleware::DEFAULT_USER_ID,
+            sqlx::query_scalar::<_, Uuid>("SELECT id FROM integrations")
+                .fetch_one(pool)
+                .await
+                .unwrap(),
+            "g02",
+            None,
+            &serde_json::json!([]),
+            &serde_json::json!({}),
+            at,
+            Some(PostState::Queued),
+            None,
+            0,
+        )
+        .await
+        .unwrap();
+        post.id
+    }
+
+    #[tokio::test]
+    async fn a_scheduled_post_is_stored_as_epoch_integer_not_rfc3339_text() {
+        let (pool, _) = fixture().await;
+        let at = Utc::now() - chrono::Duration::days(1);
+        let id = insert(&pool, Some(at)).await;
+
+        let ty: String = sqlx::query_scalar("SELECT typeof(scheduled_at) FROM posts WHERE id = ?")
+            .bind(id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(ty, "integer", "scheduled_at must land as INTEGER epoch");
+
+        // And it round-trips back to the same instant through `Post`.
+        let stored: Post = sqlx::query_as("SELECT * FROM posts WHERE id = ?")
+            .bind(id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(stored.scheduled_at.unwrap().timestamp(), at.timestamp());
+    }
+
+    #[tokio::test]
+    async fn the_scheduler_claims_past_due_and_ignores_the_future() {
+        let (pool, _) = fixture().await;
+        let past = insert(&pool, Some(Utc::now() - chrono::Duration::days(1))).await;
+        let _future = insert(&pool, Some(Utc::now() + chrono::Duration::days(1))).await;
+
+        let due = get_due_posts(&pool, 10).await.unwrap();
+        assert_eq!(due.len(), 1, "only the past-due post is claimed");
+        assert_eq!(due[0].id, past);
+        // The claim is what actually drives publishing — not just a read.
+        let state: String = sqlx::query_scalar("SELECT state FROM posts WHERE id = ?")
+            .bind(past)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(state, "publishing");
+    }
+
+    #[tokio::test]
+    async fn a_legacy_text_row_is_still_claimed() {
+        // Defence in depth for rows written before migration 0002: the
+        // predicate parses TEXT instead of relying on the migration alone.
+        let (pool, user_id) = fixture().await;
+        let id = Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO posts (id, user_id, integration_id, state, content, media,
+                                settings, scheduled_at, idempotency_key)
+             VALUES (?, ?, (SELECT id FROM integrations), 'queued', 'legacy text row',
+                     '[]', '{}', ?, ?)",
+        )
+        .bind(id)
+        .bind(user_id)
+        .bind((Utc::now() - chrono::Duration::days(2))
+            .to_rfc3339_opts(chrono::SecondsFormat::Secs, true))
+        .bind(Uuid::new_v4())
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let due = get_due_posts(&pool, 10).await.unwrap();
+        assert_eq!(due.len(), 1, "the TEXT row is claimed, not silently starved");
+        assert_eq!(due[0].id, id);
+    }
 }
