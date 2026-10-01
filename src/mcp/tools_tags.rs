@@ -58,13 +58,15 @@ pub async fn handle_tag_create(
         return Err("Tag name cannot be empty".into());
     }
     let color = input.color.as_deref().unwrap_or("#6366f1").to_string();
+    let id = Uuid::new_v4();
 
     let tag = sqlx::query!(
-        r#"INSERT INTO tags (user_id, name, color)
-           VALUES (?, ?, ?)
+        r#"INSERT INTO tags (id, user_id, name, color)
+           VALUES (?, ?, ?, ?)
            RETURNING id as "id!: String", name, color,
                      created_at as "created_at: EpochUtc",
                      updated_at as "updated_at: EpochUtc""#,
+        id,
         user_id,
         name,
         color,

@@ -113,13 +113,15 @@ pub async fn create_rule(
 
     let cooldown = input.cooldown_minutes.unwrap_or(0);
     let max_per_hour = input.max_responses_per_hour.unwrap_or(10);
+    let id = Uuid::new_v4();
 
     let rule = sqlx::query!(
         r#"INSERT INTO automation_rules
-           (user_id, integration_id, name, trigger_type, trigger_filter,
+           (id, user_id, integration_id, name, trigger_type, trigger_filter,
             response_template, response_type, ai_model, cooldown_minutes, max_responses_per_hour)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            RETURNING id as "id!: String", name, is_active as "is_active: i64""#,
+        id,
         user_id,
         integration_id,
         input.name,

@@ -19,13 +19,15 @@ pub async fn create_user(
     password_hash: &str,
     name: &str,
 ) -> Result<User, sqlx::Error> {
+    let id = Uuid::new_v4();
     sqlx::query_as!(
         User,
-        r#"INSERT INTO users (email, password, name) VALUES (?, ?, ?)
+        r#"INSERT INTO users (id, email, password, name) VALUES (?, ?, ?, ?)
          RETURNING id as "id!: Uuid", email, password, name,
                    timezone as "timezone!: i32",
                    created_at as "created_at!: DateTime<Utc>",
                    updated_at as "updated_at!: DateTime<Utc>""#,
+        id,
         email,
         password_hash,
         name,
@@ -106,14 +108,15 @@ pub async fn create_integration(
     auth_method: Option<&str>,
 ) -> Result<Integration, sqlx::Error> {
     let method = auth_method.unwrap_or("oauth");
+    let id = Uuid::new_v4();
     sqlx::query_as!(
         Integration,
-        r#"INSERT INTO integrations
-           (user_id, provider_identifier, provider_name, internal_id,
-            access_token, refresh_token, token_expires_at,
-            profile_name, profile_picture, profile_url,
-            root_internal_id, auth_method)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+r#"INSERT INTO integrations
+           (id, user_id, provider_identifier, provider_name, internal_id,
+             access_token, refresh_token, token_expires_at,
+             profile_name, profile_picture, profile_url,
+             root_internal_id, auth_method)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT (user_id, provider_identifier, internal_id)
            DO UPDATE SET access_token = ?, refresh_token = ?,
              token_expires_at = ?, profile_name = ?,
@@ -132,6 +135,7 @@ pub async fn create_integration(
              root_internal_id, posting_times, auth_method,
              created_at as "created_at!: DateTime<Utc>",
              updated_at as "updated_at!: DateTime<Utc>""#,
+        id,
         user_id,
         provider_identifier,
         provider_name,
@@ -337,15 +341,17 @@ pub async fn create_posts_for_integrations(
     for &integration_id in integration_ids {
         let post = sqlx::query_as::<_, Post>(
             r#"INSERT INTO posts
-               (user_id, integration_id, content, title, media, settings, scheduled_at, state, first_comment, sequence)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               (id, user_id, integration_id, content, title, media, settings, scheduled_at, state, first_comment, sequence, idempotency_key)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                RETURNING id, user_id, integration_id, state,
                  content, title, media, settings, scheduled_at, published_at,
                  platform_post_id, platform_post_url, error_message,
                  created_at, updated_at,
                  repeat_interval_days, repeat_end_date, group_id,
-                 first_comment, sequence, idempotency_key"#,
+                 first_comment, sequence, idempotency_key,
+                 campaign_id, kanban_substate, due_date"#,
         )
+        .bind(Uuid::new_v4())
         .bind(user_id)
         .bind(integration_id)
         .bind(content)
@@ -356,6 +362,7 @@ pub async fn create_posts_for_integrations(
         .bind(&st)
         .bind(first_comment)
         .bind(sequence)
+        .bind(Uuid::new_v4())
         .fetch_one(&mut *tx)
         .await?;
         posts.push(post);
@@ -383,15 +390,17 @@ pub async fn create_post(
     // regenerate .sqlx offline cache without a live Postgres).
     sqlx::query_as::<_, Post>(
         r#"INSERT INTO posts
-           (user_id, integration_id, content, title, media, settings, scheduled_at, state, first_comment, sequence)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-           RETURNING id, user_id, integration_id, state as "state: PostState",
+           (id, user_id, integration_id, content, title, media, settings, scheduled_at, state, first_comment, sequence, idempotency_key)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           RETURNING id, user_id, integration_id, state,
               content, title, media, settings, scheduled_at, published_at,
               platform_post_id, platform_post_url, error_message,
               created_at, updated_at,
               repeat_interval_days, repeat_end_date, group_id,
-              first_comment, sequence, idempotency_key"#,
+              first_comment, sequence, idempotency_key,
+              campaign_id, kanban_substate, due_date"#,
     )
+    .bind(Uuid::new_v4())
     .bind(user_id)
     .bind(integration_id)
     .bind(content)
@@ -402,6 +411,7 @@ pub async fn create_post(
     .bind(st)
     .bind(first_comment)
     .bind(sequence)
+    .bind(Uuid::new_v4())
     .fetch_one(pool)
     .await
 }
@@ -441,15 +451,17 @@ pub async fn create_thread_posts(
         for &integration_id in integration_ids {
             let post = sqlx::query_as::<_, Post>(
                 r#"INSERT INTO posts
-                   (user_id, integration_id, content, title, media, settings, scheduled_at, state, first_comment, sequence, group_id)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   (id, user_id, integration_id, content, title, media, settings, scheduled_at, state, first_comment, sequence, group_id, idempotency_key)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                    RETURNING id, user_id, integration_id, state,
                      content, title, media, settings, scheduled_at, published_at,
                      platform_post_id, platform_post_url, error_message,
                      created_at, updated_at,
                      repeat_interval_days, repeat_end_date, group_id,
-                     first_comment, sequence, idempotency_key"#,
+                     first_comment, sequence, idempotency_key,
+                     campaign_id, kanban_substate, due_date"#,
             )
+            .bind(Uuid::new_v4())
             .bind(user_id)
             .bind(integration_id)
             .bind(part)
@@ -467,6 +479,7 @@ pub async fn create_thread_posts(
             .bind(None::<&str>)
             .bind(seq)
             .bind(group_id)
+            .bind(Uuid::new_v4())
             .fetch_one(&mut *tx)
             .await?;
             posts.push(post);
@@ -485,12 +498,13 @@ pub async fn get_posts_by_group_id(
     group_id: Uuid,
 ) -> Result<Vec<Post>, sqlx::Error> {
     sqlx::query_as::<_, Post>(
-        r#"SELECT id, user_id, integration_id, state as "state: PostState",
+        r#"SELECT id, user_id, integration_id, state,
            content, title, media, settings, scheduled_at, published_at,
            platform_post_id, platform_post_url, error_message,
            created_at, updated_at,
            repeat_interval_days, repeat_end_date, group_id,
-           first_comment, sequence, idempotency_key
+           first_comment, sequence, idempotency_key,
+           campaign_id, kanban_substate, due_date
          FROM posts WHERE user_id = ? AND group_id = ?
          ORDER BY sequence ASC, created_at ASC"#,
     )
@@ -521,7 +535,7 @@ pub async fn list_posts(
         // is identical to the cached version except for the added
         // `AND deleted_at IS NULL` filter.
         sqlx::query_as::<_, Post>(
-            r#"SELECT id, user_id, integration_id, state as "state: PostState",
+            r#"SELECT id, user_id, integration_id, state,
                content, title, media, settings, scheduled_at, published_at,
                platform_post_id, platform_post_url, error_message,
                created_at, updated_at,
@@ -594,7 +608,7 @@ async fn list_posts_all(
 ) -> Result<Vec<Post>, sqlx::Error> {
     // Runtime query (see note in list_posts above).
     sqlx::query_as::<_, Post>(
-         r#"SELECT id, user_id, integration_id, state as "state: PostState",
+         r#"SELECT id, user_id, integration_id, state,
             content, title, media, settings, scheduled_at, published_at,
             platform_post_id, platform_post_url, error_message,
             created_at, updated_at,
@@ -680,7 +694,7 @@ pub async fn list_posts_search(
         // optional filters are skipped, and ILIKE becomes LIKE with an
         // explicit ESCAPE so the Rust-side backslash escaping still works
         // (SQLite LIKE is case-insensitive for ASCII by default).
-        r#"SELECT p.id, p.user_id, p.integration_id, p.state as "state: PostState",
+        r#"SELECT p.id, p.user_id, p.integration_id, p.state,
                   p.content, p.title, p.media, p.settings, p.scheduled_at, p.published_at,
                   p.platform_post_id, p.platform_post_url, p.error_message,
                   p.created_at, p.updated_at,
@@ -701,7 +715,7 @@ pub async fn list_posts_search(
            ORDER BY (COALESCE(pe.likes, 0) + COALESCE(pe.comments, 0) + COALESCE(pe.shares, 0)) DESC NULLS LAST
            LIMIT ? OFFSET ?"#.to_string()
     } else {
-        format!(r#"SELECT id, user_id, integration_id, state as "state: PostState",
+        format!(r#"SELECT id, user_id, integration_id, state,
                   content, title, media, settings, scheduled_at, published_at,
                   platform_post_id, platform_post_url, error_message,
                   created_at, updated_at,
@@ -785,7 +799,7 @@ pub async fn count_posts_search(
 ) -> Result<Option<Post>, sqlx::Error> {
     // Runtime query (see note in list_posts above).
     sqlx::query_as::<_, Post>(
-         r#"SELECT id, user_id, integration_id, state as "state: PostState",
+         r#"SELECT id, user_id, integration_id, state,
             content, title, media, settings, scheduled_at, published_at,
             platform_post_id, platform_post_url, error_message,
             created_at, updated_at,
@@ -814,12 +828,13 @@ pub async fn count_posts_search(
         r#"UPDATE posts SET content = ?, title = ?, media = ?, settings = ?,
             updated_at = unixepoch()
             WHERE id = ? AND user_id = ?
-            RETURNING id, user_id, integration_id, state as "state: PostState",
+            RETURNING id, user_id, integration_id, state,
                content, title, media, settings, scheduled_at, published_at,
                platform_post_id, platform_post_url, error_message,
                created_at, updated_at,
                repeat_interval_days, repeat_end_date, group_id,
-               first_comment, sequence, idempotency_key"#,
+               first_comment, sequence, idempotency_key,
+               campaign_id, kanban_substate, due_date"#,
     )
         .bind(content)
         .bind(title)
@@ -852,12 +867,13 @@ pub async fn count_posts_search(
              first_comment = ?,
              updated_at = unixepoch()
            WHERE id = ? AND user_id = ?
-           RETURNING id, user_id, integration_id, state as "state: PostState",
+           RETURNING id, user_id, integration_id, state,
                content, title, media, settings, scheduled_at, published_at,
                platform_post_id, platform_post_url, error_message,
                created_at, updated_at,
                repeat_interval_days, repeat_end_date, group_id,
-               first_comment, sequence, idempotency_key"#,
+               first_comment, sequence, idempotency_key,
+               campaign_id, kanban_substate, due_date"#,
     )
         .bind(content)
         .bind(title)
@@ -880,12 +896,13 @@ pub async fn count_posts_search(
         r#"UPDATE posts SET scheduled_at = ?, state = 'queued',
             updated_at = unixepoch()
             WHERE id = ? AND user_id = ?
-            RETURNING id, user_id, integration_id, state as "state: PostState",
+            RETURNING id, user_id, integration_id, state,
                content, title, media, settings, scheduled_at, published_at,
                platform_post_id, platform_post_url, error_message,
                created_at, updated_at,
                repeat_interval_days, repeat_end_date, group_id,
-               first_comment, sequence, idempotency_key"#,
+               first_comment, sequence, idempotency_key,
+               campaign_id, kanban_substate, due_date"#,
     )
         .bind(scheduled_at)
         .bind(id)
@@ -910,12 +927,13 @@ pub async fn count_posts_search(
             updated_at = unixepoch()
             WHERE id = ? AND user_id = ?
               AND state IN ('queued', 'draft', 'error')
-            RETURNING id, user_id, integration_id, state as "state: PostState",
+            RETURNING id, user_id, integration_id, state,
                content, title, media, settings, scheduled_at, published_at,
                platform_post_id, platform_post_url, error_message,
                created_at, updated_at,
                repeat_interval_days, repeat_end_date, group_id,
-               first_comment, sequence, idempotency_key"#,
+               first_comment, sequence, idempotency_key,
+               campaign_id, kanban_substate, due_date"#,
     )
         .bind(id)
         .bind(user_id)
@@ -961,12 +979,13 @@ pub async fn count_posts_search(
               idempotency_key = ?,
               updated_at = unixepoch()
              WHERE id = ? AND user_id = ?
-             RETURNING id, user_id, integration_id, state as "state: PostState",
+             RETURNING id, user_id, integration_id, state,
                content, title, media, settings, scheduled_at, published_at,
                platform_post_id, platform_post_url, error_message,
                created_at, updated_at,
                repeat_interval_days, repeat_end_date, group_id,
-               first_comment, sequence, idempotency_key"#,
+               first_comment, sequence, idempotency_key,
+               campaign_id, kanban_substate, due_date"#,
       )
       .bind(scheduled_at)
       .bind(Uuid::new_v4())
@@ -993,12 +1012,13 @@ pub async fn count_posts_search(
       sqlx::query_as::<_, Post>(
           r#"UPDATE posts SET scheduled_at = ?, updated_at = unixepoch()
              WHERE id = ? AND user_id = ?
-             RETURNING id, user_id, integration_id, state as "state: PostState",
+             RETURNING id, user_id, integration_id, state,
                content, title, media, settings, scheduled_at, published_at,
                platform_post_id, platform_post_url, error_message,
                created_at, updated_at,
                repeat_interval_days, repeat_end_date, group_id,
-               first_comment, sequence, idempotency_key"#,
+               first_comment, sequence, idempotency_key,
+               campaign_id, kanban_substate, due_date"#,
       )
       .bind(scheduled_at)
       .bind(id)
@@ -1095,12 +1115,13 @@ pub async fn list_posts_by_group(
 ) -> Result<Vec<Post>, sqlx::Error> {
     // Runtime query (see note in list_posts above).
     sqlx::query_as::<_, Post>(
-        r#"SELECT id, user_id, integration_id, state as "state: PostState",
+        r#"SELECT id, user_id, integration_id, state,
            content, title, media, settings, scheduled_at, published_at,
            platform_post_id, platform_post_url, error_message,
            created_at, updated_at,
            repeat_interval_days, repeat_end_date, group_id,
-           first_comment, sequence, idempotency_key
+           first_comment, sequence, idempotency_key,
+           campaign_id, kanban_substate, due_date
          FROM posts
          WHERE user_id = ? AND group_id = ? AND deleted_at IS NULL
          ORDER BY sequence ASC, created_at ASC"#,
@@ -1119,7 +1140,7 @@ pub async fn get_post_with_integration(
 ) -> Result<Option<PostWithIntegration>, sqlx::Error> {
     sqlx::query_as::<_, PostWithIntegration>(
         r#"SELECT p.id, p.user_id, p.integration_id,
-             p.state as "state: PostState",
+             p.state,
              p.content, p.title, p.media, p.settings,
              p.scheduled_at, p.published_at,
              p.platform_post_id, p.platform_post_url, p.error_message,
@@ -1335,9 +1356,10 @@ pub async fn record_publish_attempt(
 ) -> Result<(), sqlx::Error> {
     sqlx::query(
         "INSERT INTO publish_attempts
-         (post_id, attempt_number, status, error_message, started_at, finished_at)
-         VALUES (?, ?, ?, ?, ?, unixepoch())",
+         (id, post_id, attempt_number, status, error_message, started_at, finished_at)
+         VALUES (?, ?, ?, ?, ?, ?, unixepoch())",
     )
+    .bind(Uuid::new_v4())
     .bind(post_id)
     .bind(attempt_number)
     .bind(status)
@@ -1418,12 +1440,13 @@ pub async fn get_posts_by_date_range(
     end: DateTime<Utc>,
 ) -> Result<Vec<Post>, sqlx::Error> {
     sqlx::query_as::<_, Post>(
-        r#"SELECT id, user_id, integration_id, state as "state: PostState",
+        r#"SELECT id, user_id, integration_id, state,
             content, title, media, settings, scheduled_at, published_at,
             platform_post_id, platform_post_url, error_message,
             created_at, updated_at,
             repeat_interval_days, repeat_end_date, group_id,
-            first_comment, sequence, idempotency_key
+            first_comment, sequence, idempotency_key,
+            campaign_id, kanban_substate, due_date
           FROM posts
            WHERE user_id = ?
              AND scheduled_at IS NOT NULL
@@ -1671,14 +1694,16 @@ pub async fn create_media(
     width: Option<i32>,
     height: Option<i32>,
 ) -> Result<MediaEntry, sqlx::Error> {
+    let id = Uuid::new_v4();
     sqlx::query_as!(
         MediaEntry,
-        r#"INSERT INTO media (user_id, original_name, storage_path, mime_type, file_size, width, height)
-         VALUES (?, ?, ?, ?, ?, ?, ?)
+        r#"INSERT INTO media (id, user_id, original_name, storage_path, mime_type, file_size, width, height)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
          RETURNING id as "id!: Uuid", user_id as "user_id!: Uuid",
            original_name, storage_path, mime_type, file_size,
            width as "width?: i32", height as "height?: i32",
            created_at as "created_at!: DateTime<Utc>""#,
+        id,
         user_id,
         original_name,
         storage_path,
@@ -1808,9 +1833,11 @@ pub async fn save_oauth_state(
     code_verifier: &str,
     redirect_uri: Option<&str>,
 ) -> Result<(), sqlx::Error> {
+    let id = Uuid::new_v4();
     sqlx::query!(
-        "INSERT INTO oauth_states (state, provider, code_verifier, redirect_uri)
-         VALUES (?, ?, ?, ?)",
+        "INSERT INTO oauth_states (id, state, provider, code_verifier, redirect_uri)
+         VALUES (?, ?, ?, ?, ?)",
+        id,
         state,
         provider,
         code_verifier,
@@ -1862,10 +1889,11 @@ pub async fn create_notification(
     reference_id: Option<&str>,
 ) -> Result<Notification, sqlx::Error> {
     sqlx::query_as::<_, Notification>(
-        r#"INSERT INTO notifications (user_id, title, body, notification_type, reference_type, reference_id)
-           VALUES (?, ?, ?, ?, ?, ?)
+        r#"INSERT INTO notifications (id, user_id, title, body, notification_type, reference_type, reference_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?)
            RETURNING id, user_id, title, body, notification_type, reference_type, reference_id, is_read, created_at"#,
     )
+    .bind(Uuid::new_v4())
     .bind(user_id)
     .bind(title)
     .bind(body)
@@ -1943,18 +1971,21 @@ pub async fn create_repeated_post(
     group_id: Uuid,
 ) -> Result<Post, sqlx::Error> {
     sqlx::query_as::<_, Post>(
-        r#"INSERT INTO posts (user_id, integration_id, title, content, media, settings, scheduled_at, state, repeat_interval_days, repeat_end_date, group_id)
-           SELECT p.user_id, p.integration_id, p.title, p.content, p.media, p.settings, ?, p.state, NULL, NULL, ?
+        r#"INSERT INTO posts (id, user_id, integration_id, title, content, media, settings, scheduled_at, state, repeat_interval_days, repeat_end_date, group_id, idempotency_key)
+           SELECT ?, p.user_id, p.integration_id, p.title, p.content, p.media, p.settings, ?, p.state, NULL, NULL, ?, ?
            FROM posts p WHERE p.id = ? AND p.user_id = ?
-           RETURNING id, user_id, integration_id, state as "state: PostState",
+           RETURNING id, user_id, integration_id, state,
              content, title, media, settings, scheduled_at, published_at,
              platform_post_id, platform_post_url, error_message,
              created_at, updated_at,
              repeat_interval_days, repeat_end_date, group_id,
-             first_comment, sequence, idempotency_key"#,
+             first_comment, sequence, idempotency_key,
+             campaign_id, kanban_substate, due_date"#,
     )
+        .bind(Uuid::new_v4())
         .bind(scheduled_at)
         .bind(group_id)
+        .bind(Uuid::new_v4())
         .bind(original_id)
         .bind(user_id)
     .fetch_one(pool)
@@ -1973,12 +2004,13 @@ pub async fn set_post_recurring(
         r#"UPDATE posts SET repeat_interval_days = ?, repeat_end_date = ?, group_id = ?,
             updated_at = unixepoch()
             WHERE id = ? AND user_id = ?
-            RETURNING id, user_id, integration_id, state as "state: PostState",
+            RETURNING id, user_id, integration_id, state,
               content, title, media, settings, scheduled_at, published_at,
               platform_post_id, platform_post_url, error_message,
               created_at, updated_at,
               repeat_interval_days, repeat_end_date, group_id,
-              first_comment, sequence, idempotency_key"#,
+              first_comment, sequence, idempotency_key,
+              campaign_id, kanban_substate, due_date"#,
     )
         .bind(interval_days)
         .bind(end_date)
@@ -2004,12 +2036,13 @@ pub async fn set_post_recurring_with_copies(
         r#"UPDATE posts SET repeat_interval_days = ?, repeat_end_date = ?, group_id = ?,
            updated_at = unixepoch()
            WHERE id = ? AND user_id = ?
-           RETURNING id, user_id, integration_id, state as "state: PostState",
+           RETURNING id, user_id, integration_id, state,
               content, title, media, settings, scheduled_at, published_at,
               platform_post_id, platform_post_url, error_message,
               created_at, updated_at,
               repeat_interval_days, repeat_end_date, group_id,
-              first_comment, sequence, idempotency_key"#,
+              first_comment, sequence, idempotency_key,
+              campaign_id, kanban_substate, due_date"#,
     )
         .bind(interval_days)
         .bind(end_date)
@@ -2027,18 +2060,21 @@ pub async fn set_post_recurring_with_copies(
     while current <= *end_date {
         // Runtime query (Phase v22 — idempotency_key column added).
         let copy = sqlx::query_as::<_, Post>(
-            r#"INSERT INTO posts (user_id, integration_id, title, content, media, settings, scheduled_at, state, repeat_interval_days, repeat_end_date, group_id)
-               SELECT p.user_id, p.integration_id, p.title, p.content, p.media, p.settings, ?, p.state, NULL, NULL, ?
+            r#"INSERT INTO posts (id, user_id, integration_id, title, content, media, settings, scheduled_at, state, repeat_interval_days, repeat_end_date, group_id, idempotency_key)
+               SELECT ?, p.user_id, p.integration_id, p.title, p.content, p.media, p.settings, ?, p.state, NULL, NULL, ?, ?
                FROM posts p WHERE p.id = ? AND p.user_id = ?
-               RETURNING id, user_id, integration_id, state as "state: PostState",
+               RETURNING id, user_id, integration_id, state,
                  content, title, media, settings, scheduled_at, published_at,
                  platform_post_id, platform_post_url, error_message,
                  created_at, updated_at,
                  repeat_interval_days, repeat_end_date, group_id,
-                 first_comment, sequence, idempotency_key"#,
+                 first_comment, sequence, idempotency_key,
+                 campaign_id, kanban_substate, due_date"#,
         )
+        .bind(Uuid::new_v4())
         .bind(&current)
         .bind(group_id)
+        .bind(Uuid::new_v4())
         .bind(id)
         .bind(user_id)
         .fetch_one(&mut *tx)
@@ -2067,12 +2103,13 @@ pub async fn create_rss_feed(
     enabled: bool,
 ) -> Result<RssFeed, sqlx::Error> {
     sqlx::query_as::<_, RssFeed>(
-        r#"INSERT INTO rss_feeds (user_id, feed_url, integration_id, title, use_ai_summary, enabled)
-           VALUES (?, ?, ?, ?, ?, ?)
+        r#"INSERT INTO rss_feeds (id, user_id, feed_url, integration_id, title, use_ai_summary, enabled)
+           VALUES (?, ?, ?, ?, ?, ?, ?)
            RETURNING id, user_id, feed_url, integration_id, title,
              last_polled_at, poll_interval_min, enabled, use_ai_summary,
              created_at, updated_at"#,
     )
+    .bind(Uuid::new_v4())
     .bind(user_id)
     .bind(feed_url)
     .bind(integration_id)
@@ -2167,10 +2204,11 @@ pub async fn insert_rss_post(
     content_hash: &str,
 ) -> Result<(), sqlx::Error> {
     sqlx::query(
-        r#"INSERT INTO rss_posts (feed_id, guid, title, url, published_at, content_hash)
-           VALUES (?, ?, ?, ?, ?, ?)
+        r#"INSERT INTO rss_posts (id, feed_id, guid, title, url, published_at, content_hash)
+           VALUES (?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT (feed_id, guid) DO NOTHING"#,
     )
+    .bind(Uuid::new_v4())
     .bind(feed_id)
     .bind(guid)
     .bind(title)
@@ -2267,9 +2305,9 @@ pub async fn upsert_post_engagement(
 ) -> Result<PostEngagement, sqlx::Error> {
     sqlx::query_as::<_, PostEngagement>(
         r#"INSERT INTO post_engagement
-           (post_id, likes, comments, shares, views, saves, quotes, reposts, replies,
+           (id, post_id, likes, comments, shares, views, saves, quotes, reposts, replies,
             reactions, upvotes, downvotes, upvote_ratio, awards, raw, fetched_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, unixepoch())
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, unixepoch())
            ON CONFLICT (post_id) DO UPDATE SET
              likes = EXCLUDED.likes,
              comments = EXCLUDED.comments,
@@ -2290,6 +2328,7 @@ pub async fn upsert_post_engagement(
            RETURNING id, post_id, likes, comments, shares, views, saves, quotes, reposts, replies,
              reactions, upvotes, downvotes, upvote_ratio, awards, raw, fetched_at, created_at, updated_at"#,
     )
+    .bind(Uuid::new_v4())
     .bind(post_id)
     .bind(data.likes)
     .bind(data.comments)
@@ -2510,11 +2549,12 @@ pub async fn create_signature(
     provider: Option<&str>,
 ) -> Result<Signature, sqlx::Error> {
     sqlx::query_as::<_, Signature>(
-        r#"INSERT INTO signatures (user_id, name, content, provider, is_default)
-           VALUES (?, ?, ?, ?, FALSE)
+        r#"INSERT INTO signatures (id, user_id, name, content, provider, is_default)
+           VALUES (?, ?, ?, ?, ?, FALSE)
            RETURNING id, user_id, name, content, provider, is_default,
              created_at, updated_at"#,
     )
+    .bind(Uuid::new_v4())
     .bind(user_id)
     .bind(name)
     .bind(content)
@@ -2705,10 +2745,11 @@ pub async fn upsert_analytics_cache(
     .await?;
 
     let result = sqlx::query_as::<_, AnalyticsCache>(
-        "INSERT INTO analytics_cache (user_id, provider, platform_post_id, data) \
-         VALUES (?, ?, ?, ?) \
+        "INSERT INTO analytics_cache (id, user_id, provider, platform_post_id, data) \
+         VALUES (?, ?, ?, ?, ?) \
          RETURNING id, user_id, provider, platform_post_id, data, cached_at, expires_at",
     )
+    .bind(Uuid::new_v4())
     .bind(user_id)
     .bind(provider)
     .bind(platform_post_id)
@@ -2792,8 +2833,8 @@ pub async fn insert_external_post(
     );
     let result = sqlx::query_as::<_, ExternalPost>(
         "INSERT INTO external_posts \
-         (user_id, provider, platform_post_id, text, author_name, author_handle, author_avatar, created_at, url, media, metadata) \
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
+         (id, user_id, provider, platform_post_id, text, author_name, author_handle, author_avatar, created_at, url, media, metadata) \
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
          ON CONFLICT (provider, platform_post_id) DO UPDATE SET \
            text = EXCLUDED.text, \
            author_name = COALESCE(EXCLUDED.author_name, external_posts.author_name), \
@@ -2808,6 +2849,7 @@ pub async fn insert_external_post(
            author_name, author_handle, author_avatar,
            created_at, url, media, metadata, imported_at",
     )
+    .bind(Uuid::new_v4())
     .bind(user_id)
     .bind(provider)
     .bind(platform_post_id)

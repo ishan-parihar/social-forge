@@ -71,9 +71,10 @@ impl Broadcaster {
         }
         // Persist to events_log (best-effort).
         let _ = sqlx::query(
-            r#"INSERT INTO events_log (user_id, event_type, payload)
-               VALUES (?, ?, ?)"#,
+            r#"INSERT INTO events_log (id, user_id, event_type, payload)
+               VALUES (?, ?, ?, ?)"#,
         )
+        .bind(Uuid::new_v4())
         .bind(user_id)
         .bind(event)
         .bind(&data_value)

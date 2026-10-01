@@ -306,75 +306,159 @@ fn handle_init() -> anyhow::Result<()> {
             "message": "Config already exists. Edit it with your preferred editor."
         }));
     } else {
-        let template = r#"# ─── Server ──────────────────────────────────────────────
-DATABASE_URL=sqlite://data/social-forge.db?mode=rwc
-JWT_SECRET=change-me-to-a-random-secret
+        let template = r#"# ─── Social Forge — created by `social-forge init` ───────────
+# The binary reads $CWD/.env, then ~/.social-forge/.env, and
+# `social-forge config set` writes to this file. Keep it as the single
+# source of truth — every name below is one the binary actually reads.
 
-# ─── X/Twitter ────────────────────────────────────────────
+# ── Core ───────────────────────────────────────────────────────
+# SQLite only. The file is created and migrated on first run.
+DATABASE_URL=sqlite://data/social-forge.db?mode=rwc
+
+# Single-user WebUI password. Auto-generated and persisted here on first
+# run when unset. Re-roll it with: social-forge config reset-password
+# APP_PASSWORD=
+
+# Public URL of this instance, used for OAuth redirect URIs
+# ({APP_URL}/api/auth/callback). Instagram-Standalone and Threads require
+# https:// — the server self-signs a cert when APP_URL starts with https.
+APP_URL=https://localhost:6543
+
+# CORS origin + CSRF allow-list. Defaults to APP_URL.
+# FRONTEND_URL=https://localhost:6543
+
+# Network interface to bind: 127.0.0.1 (default, loopback only) or 0.0.0.0.
+# BIND_HOST=127.0.0.1
+
+# Session cookie / OAuth state secret. Derived from APP_PASSWORD if unset.
+# JWT_SECRET=
+
+# 64 hex chars (32 bytes) — encrypts provider tokens at rest.
+# TOKEN_ENCRYPTION_KEY=
+
+# Embedded web UI: SERVE_FRONTEND=false runs API-only, FRONTEND_DIR serves
+# a SvelteKit build from disk (dev).
+# SERVE_FRONTEND=true
+# FRONTEND_DIR=./frontend/build
+
+# Media uploads directory.
+# MEDIA_DIR=./uploads
+
+# ── X / Twitter ────────────────────────────────────────────────
+# Cookie auth (recommended — unlocks the GraphQL API)
 # X_AUTH_TOKEN=
 # X_CT0=
+# OAuth (API v2 only)
+# X_CLIENT_ID=
+# X_CLIENT_SECRET=
 
-# ─── Reddit ───────────────────────────────────────────────
+# ── Reddit ────────────────────────────────────────────────────
+# Cookie auth is auto-imported from your browser (`social-forge connect reddit`)
 # REDDIT_CLIENT_ID=
 # REDDIT_CLIENT_SECRET=
-# REDDIT_REDIRECT_URI=http://localhost:3444/api/auth/reddit/callback
+# REDDIT_USERNAME=
+# REDDIT_PASSWORD=
+# REDDIT_ACCESS_TOKEN=
+# REDDIT_REFRESH_TOKEN=
 
-# ─── LinkedIn ─────────────────────────────────────────────
+# ── LinkedIn (personal + company pages) ───────────────────────
 # LINKEDIN_CLIENT_ID=
 # LINKEDIN_CLIENT_SECRET=
-# LINKEDIN_REDIRECT_URI=http://localhost:3444/api/auth/linkedin/callback
 
-# ─── Facebook / Instagram / Threads ───────────────────────
-# META_CLIENT_ID=
-# META_CLIENT_SECRET=
-# META_REDIRECT_URI=http://localhost:3444/api/auth/meta/callback
+# ── Facebook ──────────────────────────────────────────────────
+# FACEBOOK_CLIENT_ID=
+# FACEBOOK_CLIENT_SECRET=
 
-# ─── GitHub ───────────────────────────────────────────────
-# GITHUB_TOKEN=
+# ── Instagram ─────────────────────────────────────────────────
+# Graph API provider (`instagram`) reads the CLIENT_ID pair — normally the
+# same Meta app id/secret as FACEBOOK_CLIENT_ID / FACEBOOK_CLIENT_SECRET.
+# INSTAGRAM_CLIENT_ID=
+# INSTAGRAM_CLIENT_SECRET=
+# Standalone provider (`instagram-standalone`) reads the APP_ID pair.
+# INSTAGRAM_APP_ID=
+# INSTAGRAM_APP_SECRET=
 
-# ─── Dev.to ───────────────────────────────────────────────
-# DEVTO_API_KEY=
+# ── Threads ───────────────────────────────────────────────────
+# THREADS_APP_ID=
+# THREADS_APP_SECRET=
 
-# ─── Mastodon ─────────────────────────────────────────────
-# MASTODON_ACCESS_TOKEN=
-# MASTODON_INSTANCE_URL=
+# ── YouTube / Google (Gmail, Calendar, Drive) ─────────────────
+# YOUTUBE_CLIENT_ID=
+# YOUTUBE_CLIENT_SECRET=
 
-# ─── Medium ───────────────────────────────────────────────
-# MEDIUM_TOKEN=
+# ── Bluesky ───────────────────────────────────────────────────
+# BLUESKY_HANDLE=
+# BLUESKY_APP_PASSWORD=
 
-# ─── WordPress ────────────────────────────────────────────
-# WORDPRESS_SITE_URL=
-# WORDPRESS_USERNAME=
-# WORDPRESS_PASSWORD=
+# ── Discord ───────────────────────────────────────────────────
+# DISCORD_CLIENT_ID=
+# DISCORD_CLIENT_SECRET=
+# DISCORD_BOT_TOKEN=
 
-# ─── YouTube ──────────────────────────────────────────────
-# YOUTUBE_API_KEY=
+# ── Slack ─────────────────────────────────────────────────────
+# SLACK_CLIENT_ID=
+# SLACK_CLIENT_SECRET=
 
-# ─── Pinterest ────────────────────────────────────────────
-# PINTEREST_APP_ID=
-# PINTEREST_APP_SECRET=
-
-# ─── TikTok ───────────────────────────────────────────────
-# TIKTOK_CLIENT_KEY=
-# TIKTOK_CLIENT_SECRET=
-
-# ─── Hashnode ─────────────────────────────────────────────
-# HASHNODE_PAT=
-
-# ─── Bluesky ──────────────────────────────────────────────
-# BLUESKY_IDENTIFIER=
-# BLUESKY_PASSWORD=
-
-# ─── Telegram ─────────────────────────────────────────────
+# ── Telegram ──────────────────────────────────────────────────
+# Bot API (comma-separated tokens for multi-bot)
+# TELEGRAM_BOT_TOKENS=
+# User client (MTProto — personal account automation)
 # TELEGRAM_API_ID=
 # TELEGRAM_API_HASH=
-# TELEGRAM_PHONE=
+# TELEGRAM_SESSION_DIR=./data/telegram
+
+# ── TikTok ────────────────────────────────────────────────────
+# TIKTOK_CLIENT_ID=
+# TIKTOK_CLIENT_SECRET=
+
+# ── Pinterest ─────────────────────────────────────────────────
+# PINTEREST_CLIENT_ID=
+# PINTEREST_CLIENT_SECRET=
+
+# ── Mastodon ──────────────────────────────────────────────────
+# MASTODON_CLIENT_ID=
+# MASTODON_CLIENT_SECRET=
+# MASTODON_INSTANCE_URL=
+
+# ── API-key providers ─────────────────────────────────────────
+# MEDIUM_ACCESS_TOKEN=
+# DEVTO_API_KEY=
+# HASHNODE_API_KEY=
+# GITHUB_TOKEN=
+
+# ── WhatsApp (native client — pair by QR in /setup) ───────────
+# WHATSAPP_STORE_DIR=./data/whatsapp
+
+# ── Farcaster (Tier-3 archive — off unless the flag is set) ───
+# ENABLE_ARCHIVE_PROVIDERS=1
+# NEYNAR_API_KEY=
+
+# ── Automation / housekeeping ─────────────────────────────────
+# Auto-reply and content generation need an OpenAI-compatible endpoint.
+# LLM_ENDPOINT=
+# LLM_MODEL=
+# Shorten links in post bodies via Dub.co, and strip them from X posts.
+# DUB_CO_API_KEY=
+# DUB_CO_WORKSPACE=
+# STRIP_LINKS_FROM_X=false
+# FEED_REFRESH_INTERVAL_SECONDS=900
+# EVENTS_LOG_RETENTION_DAYS=30
+
+# ── Stripe (optional billing) ─────────────────────────────────
+# STRIPE_SECRET_KEY=
+# STRIPE_WEBHOOK_SECRET=
+# STRIPE_PRICE_FREE=
+# STRIPE_PRICE_PRO_MONTHLY=
+# STRIPE_PRICE_PRO_ANNUAL=
+# STRIPE_PRICE_BUSINESS_MONTHLY=
+# STRIPE_PRICE_BUSINESS_ANNUAL=
 "#;
         std::fs::write(&env_path, template)?;
         output_json(&serde_json::json!({
             "status": "created",
             "path": env_path.display().to_string(),
-            "message": "Config created. Edit ~/.social-forge/.env with your API keys and DATABASE_URL."
+            "message": "Config created. DATABASE_URL is set; add APP_PASSWORD and platform credentials as needed.",
+            "help": "Set a value any time with 'social-forge config set KEY VALUE'. Never commit this file."
         }));
     }
     Ok(())

@@ -123,11 +123,12 @@ pub async fn create(
 
     let row: ApiKeyRow = sqlx::query_as(
         r#"
-        INSERT INTO api_keys (user_id, name, key_prefix, key_hash, expires_at)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO api_keys (id, user_id, name, key_prefix, key_hash, expires_at)
+        VALUES (?, ?, ?, ?, ?, ?)
         RETURNING id, name, key_prefix, last_used_at, expires_at, is_active, created_at
         "#,
     )
+    .bind(Uuid::new_v4())
     .bind(auth.user_id)
     .bind(&name)
     .bind(&prefix)

@@ -90,10 +90,11 @@ pub async fn create(
     let color = input.color.unwrap_or_else(|| "#6366f1".into());
 
     let tag = sqlx::query_as::<_, Tag>(
-        r#"INSERT INTO tags (user_id, name, color)
-           VALUES (?, ?, ?)
+        r#"INSERT INTO tags (id, user_id, name, color)
+           VALUES (?, ?, ?, ?)
            RETURNING id, user_id, name, color, created_at, updated_at"#,
     )
+    .bind(uuid::Uuid::new_v4())
     .bind(auth.user_id)
     .bind(&name)
     .bind(&color)
@@ -151,10 +152,10 @@ pub async fn update(
            WHERE id = ? AND user_id = ?
            RETURNING id, user_id, name, color, created_at, updated_at"#,
     )
-    .bind(id)
-    .bind(auth.user_id)
     .bind(name)
     .bind(color)
+    .bind(id)
+    .bind(auth.user_id)
     .fetch_one(&state.db)
     .await?;
 

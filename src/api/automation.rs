@@ -183,13 +183,15 @@ pub async fn create_rule(
 ) -> Result<Json<CreateRuleResponse>, AppError> {
     let cooldown = request.cooldown_minutes.unwrap_or(0);
     let max_per_hour = request.max_responses_per_hour.unwrap_or(10);
+    let id = uuid::Uuid::new_v4();
 
     let rule = sqlx::query!(
         r#"INSERT INTO automation_rules
-           (user_id, integration_id, name, trigger_type, trigger_filter,
+           (id, user_id, integration_id, name, trigger_type, trigger_filter,
             response_template, response_type, ai_model, cooldown_minutes, max_responses_per_hour)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            RETURNING id as "id!: String", name, is_active as "is_active: i64""#,
+        id,
         auth.user_id,
         request.integration_id,
         request.name,

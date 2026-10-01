@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "INSERT INTO tags (user_id, name, color)\n           VALUES (?, ?, ?)\n           RETURNING id as \"id!: String\", name, color,\n                     created_at as \"created_at: EpochUtc\",\n                     updated_at as \"updated_at: EpochUtc\"",
+  "query": "INSERT INTO tags (id, user_id, name, color)\n           VALUES (?, ?, ?, ?)\n           RETURNING id as \"id!: String\", name, color,\n                     created_at as \"created_at: EpochUtc\",\n                     updated_at as \"updated_at: EpochUtc\"",
   "describe": {
     "columns": [
       {
@@ -30,7 +30,7 @@
       }
     ],
     "parameters": {
-      "Right": 3
+      "Right": 4
     },
     "nullable": [
       true,
@@ -40,5 +40,5 @@
       false
     ]
   },
-  "hash": "69727729e9ae249233870b0a01982196021e5575ed22d866226600402413641e"
+  "hash": "b07b78be9379c29a08d9b6883b6dcf67386475a48683e57d9040d00918524476"
 }

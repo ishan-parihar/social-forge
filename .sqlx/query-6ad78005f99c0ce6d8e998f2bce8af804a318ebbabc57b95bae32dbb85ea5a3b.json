@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "INSERT INTO automation_rules\n           (user_id, integration_id, name, trigger_type, trigger_filter,\n            response_template, response_type, ai_model, cooldown_minutes, max_responses_per_hour)\n           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)\n           RETURNING id as \"id!: String\", name, is_active as \"is_active: i64\"",
+  "query": "INSERT INTO automation_rules\n           (id, user_id, integration_id, name, trigger_type, trigger_filter,\n            response_template, response_type, ai_model, cooldown_minutes, max_responses_per_hour)\n           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)\n           RETURNING id as \"id!: String\", name, is_active as \"is_active: i64\"",
   "describe": {
     "columns": [
       {
@@ -20,7 +20,7 @@
       }
     ],
     "parameters": {
-      "Right": 10
+      "Right": 11
     },
     "nullable": [
       true,
@@ -28,5 +28,5 @@
       true
     ]
   },
-  "hash": "56d4051f47f8b40c27987d58ed728901239d44127aaed65c364c1b8f86395653"
+  "hash": "6ad78005f99c0ce6d8e998f2bce8af804a318ebbabc57b95bae32dbb85ea5a3b"
 }

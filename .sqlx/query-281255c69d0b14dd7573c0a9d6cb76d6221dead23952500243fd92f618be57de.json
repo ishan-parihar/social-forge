@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "INSERT INTO users (email, password, name) VALUES (?, ?, ?)\n         RETURNING id as \"id!: Uuid\", email, password, name,\n                   timezone as \"timezone!: i32\",\n                   created_at as \"created_at!: DateTime<Utc>\",\n                   updated_at as \"updated_at!: DateTime<Utc>\"",
+  "query": "INSERT INTO users (id, email, password, name) VALUES (?, ?, ?, ?)\n         RETURNING id as \"id!: Uuid\", email, password, name,\n                   timezone as \"timezone!: i32\",\n                   created_at as \"created_at!: DateTime<Utc>\",\n                   updated_at as \"updated_at!: DateTime<Utc>\"",
   "describe": {
     "columns": [
       {
@@ -40,7 +40,7 @@
       }
     ],
     "parameters": {
-      "Right": 3
+      "Right": 4
     },
     "nullable": [
       true,
@@ -52,5 +52,5 @@
       false
     ]
   },
-  "hash": "bc0f8ce315c9e776c43e5e5e4e06f5a3e5189ec1e4b8be9d2f9a7ed77019a11f"
+  "hash": "281255c69d0b14dd7573c0a9d6cb76d6221dead23952500243fd92f618be57de"
 }

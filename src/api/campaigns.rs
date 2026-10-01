@@ -143,16 +143,17 @@ pub async fn create(
 
     let campaign: Campaign = sqlx::query_as(
         r#"INSERT INTO campaigns (
-               user_id, name, description, color, start_date, end_date, goal,
+               id, user_id, name, description, color, start_date, end_date, goal,
                status, progress_metric, progress_target, audience_persona,
                content_pillars, budget_cents, kpi_targets
            )
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            RETURNING id, user_id, name, description, color, start_date, end_date, goal,
                      status, progress_metric, progress_target, audience_persona,
                      content_pillars, budget_cents, kpi_targets, sort_order,
                      deleted_at, created_at, updated_at, NULL AS post_count"#,
     )
+    .bind(Uuid::new_v4())
     .bind(auth.user_id)
     .bind(&body.name)
     .bind(&body.description)

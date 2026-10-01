@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "INSERT INTO media (user_id, original_name, storage_path, mime_type, file_size, width, height)\n         VALUES (?, ?, ?, ?, ?, ?, ?)\n         RETURNING id as \"id!: Uuid\", user_id as \"user_id!: Uuid\",\n           original_name, storage_path, mime_type, file_size,\n           width as \"width?: i32\", height as \"height?: i32\",\n           created_at as \"created_at!: DateTime<Utc>\"",
+  "query": "INSERT INTO media (id, user_id, original_name, storage_path, mime_type, file_size, width, height)\n         VALUES (?, ?, ?, ?, ?, ?, ?, ?)\n         RETURNING id as \"id!: Uuid\", user_id as \"user_id!: Uuid\",\n           original_name, storage_path, mime_type, file_size,\n           width as \"width?: i32\", height as \"height?: i32\",\n           created_at as \"created_at!: DateTime<Utc>\"",
   "describe": {
     "columns": [
       {
@@ -50,7 +50,7 @@
       }
     ],
     "parameters": {
-      "Right": 7
+      "Right": 8
     },
     "nullable": [
       true,
@@ -64,5 +64,5 @@
       false
     ]
   },
-  "hash": "188b34c6be93ac6a35c19fae626f92e3d316380c8d7ccea7772ff119c0ce66e4"
+  "hash": "6dbc92bedffd7511d5bcc53608052e7d3024e8a7bace9cad1efc731ae131bc10"
 }

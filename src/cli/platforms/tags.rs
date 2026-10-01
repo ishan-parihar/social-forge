@@ -31,12 +31,13 @@ pub async fn handle(action: TagsAction, state: &AppState) -> anyhow::Result<()> 
                 Err(e) => return Err(anyhow::anyhow!("Auth error: {e}")),
             };
             let tag_color = color.as_deref().unwrap_or("#6366f1").to_string();
+            let id = uuid::Uuid::new_v4();
             let tag = match sqlx::query!(
-                r#"INSERT INTO tags (user_id, name, color) VALUES (?, ?, ?)
+                r#"INSERT INTO tags (id, user_id, name, color) VALUES (?, ?, ?, ?)
                    RETURNING id as "id!: String", name, color,
                              created_at as "created_at: EpochUtc",
                              updated_at as "updated_at: EpochUtc""#,
-                user_id, name, tag_color,
+                id, user_id, name, tag_color,
             ).fetch_one(&state.db).await
             {
                 Ok(t) => t,

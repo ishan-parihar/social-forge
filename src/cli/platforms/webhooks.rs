@@ -34,11 +34,12 @@ pub async fn handle(action: WebhooksAction, state: &AppState) -> anyhow::Result<
                 Ok(id) => id,
                 Err(e) => return Err(anyhow::anyhow!("Auth error: {e}")),
             };
+            let id = uuid::Uuid::new_v4();
             let row = match sqlx::query!(
-                r#"INSERT INTO webhooks (user_id, name, url) VALUES (?, ?, ?)
+                r#"INSERT INTO webhooks (id, user_id, name, url) VALUES (?, ?, ?, ?)
                  RETURNING id as "id!: String", name, url, is_active as "is_active!: i64",
                            created_at as "created_at: EpochUtc""#,
-                user_id, name, url,
+                id, user_id, name, url,
             )
             .fetch_one(&state.db)
             .await

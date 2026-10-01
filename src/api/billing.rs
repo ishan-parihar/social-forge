@@ -110,8 +110,8 @@ async fn upsert_subscription(
     period_end: Option<i64>,
 ) -> Result<Subscription, AppError> {
     sqlx::query_as::<_, Subscription>(
-        r#"INSERT INTO subscriptions (user_id, stripe_subscription_id, stripe_customer_id, plan, status, current_period_start, current_period_end)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        r#"INSERT INTO subscriptions (id, user_id, stripe_subscription_id, stripe_customer_id, plan, status, current_period_start, current_period_end)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT (user_id)
         DO UPDATE SET
             stripe_subscription_id = EXCLUDED.stripe_subscription_id,
@@ -123,6 +123,7 @@ async fn upsert_subscription(
             updated_at = unixepoch()
         RETURNING id, user_id, stripe_subscription_id, stripe_customer_id, plan, status, current_period_start, current_period_end, cancel_at_period_end, created_at, updated_at"#,
     )
+    .bind(Uuid::new_v4())
     .bind(user_id)
     .bind(stripe_subscription_id)
     .bind(stripe_customer_id)
@@ -169,8 +170,9 @@ async fn insert_invoice(
     paid_at: Option<i64>,
 ) -> Result<(), AppError> {
     sqlx::query(
-        "INSERT INTO invoices (user_id, subscription_id, stripe_invoice_id, amount, currency, status, invoice_url, paid_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO invoices (id, user_id, subscription_id, stripe_invoice_id, amount, currency, status, invoice_url, paid_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
+    .bind(Uuid::new_v4())
     .bind(user_id)
     .bind(subscription_id)
     .bind(stripe_invoice_id)

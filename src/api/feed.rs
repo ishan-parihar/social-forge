@@ -233,6 +233,7 @@ pub async fn accounts(
          ORDER BY provider, author_handle, author_name",
     )
     .bind(auth.user_id)
+    .bind(auth.user_id)
     .fetch_all(&state.db)
     .await?;
     Ok(Json(rows))
@@ -575,16 +576,18 @@ pub async fn repurpose_post(
     // 4. Insert the new post with source_external_post_id set
     let post: crate::db::models::Post = sqlx::query_as::<_, crate::db::models::Post>(
         r#"INSERT INTO posts
-           (user_id, integration_id, content, title, media, settings,
-            scheduled_at, state, source_external_post_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+           (id, user_id, integration_id, content, title, media, settings,
+            scheduled_at, state, source_external_post_id, idempotency_key)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            RETURNING id, user_id, integration_id, state,
               content, title, media, settings, scheduled_at, published_at,
               platform_post_id, platform_post_url, error_message,
               created_at, updated_at,
               repeat_interval_days, repeat_end_date, group_id,
-              first_comment, sequence"#,
+              first_comment, sequence, idempotency_key,
+              campaign_id, kanban_substate, due_date"#,
     )
+    .bind(uuid::Uuid::new_v4())
     .bind(auth.user_id)
     .bind(integration.id)
     .bind(&content)
@@ -594,6 +597,7 @@ pub async fn repurpose_post(
     .bind(scheduled_at)
     .bind(state_enum.to_string())
     .bind(post_id)
+    .bind(uuid::Uuid::new_v4())
     .fetch_one(&state.db)
     .await?;
 

@@ -321,10 +321,11 @@ pub async fn handle_signatures_create(
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let sig: SignatureRow = sqlx::query_as(
-        "INSERT INTO signatures (user_id, name, content, provider)
-         VALUES (?, ?, ?, ?)
+        "INSERT INTO signatures (id, user_id, name, content, provider)
+         VALUES (?, ?, ?, ?, ?)
          RETURNING id, name, content, provider, created_at, updated_at",
     )
+    .bind(Uuid::new_v4())
     .bind(user_id)
     .bind(&input.name)
     .bind(&input.content)
