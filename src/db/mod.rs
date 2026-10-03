@@ -32,7 +32,7 @@
 // open pool, and `WRITER_MODE` records which process owns the file.
 
 use std::fs::{self, File, OpenOptions};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::Duration;
 
@@ -124,12 +124,35 @@ pub fn claim_writer_role(database_url: &str) -> anyhow::Result<File> {
             tracing::info!("Single-writer lock acquired: {}", path.display());
             Ok(f)
         }
-        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => Err(anyhow::anyhow!(
-            "Another social-forge process already owns the writer lock for this database \
-             ({}). SQLite is single-writer: run ONE long-lived process per \
-             DATABASE_URL, or delete the lock if that process is gone.",
-            path.display()
-        )),
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+            // PID-liveness probe: a lock whose recorded PID is gone is stale
+            // (a graceful shutdown does not delete the file, and neither does
+            // kill -9). Take it over once; a live owner keeps failing loudly.
+            // unwrap_or(true) fails safe — an unreadable lock is treated as held.
+            let owner_alive = fs::read_to_string(&path)
+                .ok()
+                .and_then(|s| s.trim().parse::<i32>().ok())
+                .map(|pid| Path::new("/proc").join(pid.to_string()).exists())
+                .unwrap_or(true);
+            if owner_alive {
+                return Err(anyhow::anyhow!(
+                    "Another social-forge process already owns the writer lock for this database \
+                     ({}). SQLite is single-writer: run ONE long-lived process per \
+                     DATABASE_URL, or delete the lock if that process is gone.",
+                    path.display()
+                ));
+            }
+            tracing::warn!(
+                "Writer lock {} is stale (owner gone) — taking it over",
+                path.display()
+            );
+            fs::remove_file(&path)?;
+            let mut f = OpenOptions::new().write(true).create_new(true).open(&path)?;
+            use std::io::Write as _;
+            writeln!(f, "{}", std::process::id())?;
+            tracing::info!("Single-writer lock acquired: {}", path.display());
+            Ok(f)
+        }
         Err(e) => Err(anyhow::anyhow!("Cannot claim writer lock {}: {e}", path.display())),
     }
 }

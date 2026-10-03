@@ -302,9 +302,11 @@ fn extract_chrome() -> Option<(String, String, String)> {
 
 fn extract_brave() -> Option<(String, String, String)> {
     let home = home_dir();
-    // Try standard Brave profile first, then Origin Beta
+    // Brave ships several profile-dir spellings; Brave-Origin is the current
+    // stable layout on Linux (seen holding the only live session on this host).
     let profiles = [
         chrome_default_profile(&home, "BraveSoftware/Brave-Browser"),
+        chrome_default_profile(&home, "BraveSoftware/Brave-Origin"),
         chrome_default_profile(&home, "BraveSoftware/Brave-Origin-Beta"),
     ];
     for profile in &profiles {

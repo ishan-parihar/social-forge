@@ -865,6 +865,14 @@ APP_URL=https://localhost:6543
     Ok(())
 }
 
+/// An integration row that can actually authenticate: enabled and holding a
+/// credential. Placeholder rows with an empty `access_token` (and any row the
+/// user disabled) must NOT make `connect` report `already_connected` — that
+/// blocks reconnect forever with no way out short of SQL.
+fn is_credential_row(i: &crate::db::models::Integration) -> bool {
+    !i.disabled && !i.access_token.is_empty()
+}
+
 async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::Result<()> {let user_id = resolve_user(&state).await?;
 
     match provider {
@@ -872,8 +880,8 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
         "x" => {
             // Check if already connected
             let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
-            if integrations.iter().any(|i| i.provider_identifier == "x") {
-                let existing: Vec<_> = integrations.iter().filter(|i| i.provider_identifier == "x").collect();
+            if integrations.iter().any(|i| i.provider_identifier == "x" && is_credential_row(i)) {
+                let existing: Vec<_> = integrations.iter().filter(|i| i.provider_identifier == "x" && is_credential_row(i)).collect();
                 output_json(&serde_json::json!({
                     "status": "already_connected",
                     "provider": "x",
@@ -887,61 +895,83 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
                 return Ok(());
             }
 
-            // Try auto-import from browser
-            match crate::social::x_cookies::extract_x_cookies() {
-                Some(cookies) => {
-                    let token_str = crate::social::x_cookies::build_cookie_token(
+            // Try auto-import from the browser first, then env-var cookies
+            // (X_AUTH_TOKEN + X_CT0). Both paths share the same get_me
+            // validation — a credential that cannot authenticate never becomes
+            // an integration row.
+            let imported = crate::social::x_cookies::extract_x_cookies().map(|cookies| {
+                (
+                    crate::social::x_cookies::build_cookie_token(
                         &cookies.auth_token, &cookies.ct0, Some(&cookies.cookie_string)
-                    );
+                    ),
+                    "browser-import".to_string(),
+                    cookies.source,
+                )
+            });
 
-                    // Validate by calling get_me
-                    let mut provider_obj = crate::social::x::XProvider::new(&state.config);
-                    provider_obj.prepare_from_token(&token_str);
-                    match provider_obj.get_me(&token_str).await {
-                        Ok(json) => {
-                            let data = json.get("data");
-                            let name = data.and_then(|d| d.get("name")).and_then(|s| s.as_str()).unwrap_or("X User");
-                            let username = data.and_then(|d| d.get("username")).and_then(|s| s.as_str()).unwrap_or("");
-                            let avatar = data.and_then(|d| d.get("profile_image_url")).and_then(|s| s.as_str());
-                            let id = data.and_then(|d| d.get("id")).and_then(|s| s.as_str()).unwrap_or("").to_string();
-
-                            crate::db::queries::create_integration(
-                                &state.db, user_id, "x", "X (Twitter)", &id, &token_str,
-                                None, None, Some(name), None, avatar, None, None,
-                            ).await?;
-
+            let (token_str, method, source) = match imported {
+                Some(v) => v,
+                None => {
+                    let (at, ct0) = (&state.config.x_auth_token, &state.config.x_ct0);
+                    match (at, ct0) {
+                        (Some(at), Some(ct0)) if !at.is_empty() && !ct0.is_empty() => (
+                            crate::social::x_cookies::build_cookie_token(at, ct0, None),
+                            "env-cookies".to_string(),
+                            "X_AUTH_TOKEN+X_CT0".to_string(),
+                        ),
+                        _ => {
                             output_json(&serde_json::json!({
-                                "status": "connected",
+                                "status": "no_browser_cookies",
                                 "provider": "x",
-                                "method": "browser-import",
-                                "source": cookies.source,
-                                "name": name,
-                                "username": username,
-                                "id": id,
+                                "error": "No X/Twitter cookies found in any browser or .env.",
+                                "hints": [
+                                    "Log into x.com in Chrome, Brave, Firefox, or Zen browser",
+                                    "Then run 'social-forge connect x' again",
+                                    "Or set X_AUTH_TOKEN + X_CT0 in ~/.social-forge/.env",
+                                    "Or visit http://localhost:6543/api/public/connect/x-cookies for manual entry",
+                                ],
                             }));
-                        }
-                        Err(e) => {
-                            output_json(&serde_json::json!({
-                                "status": "error",
-                                "provider": "x",
-                                "error": format!("Cookie import succeeded but validation failed: {e}. The cookies may be expired."),
-                                "hint": "Log into x.com in your browser, then run this command again.",
-                            }));
+                            return Ok(());
                         }
                     }
                 }
-                None => {
-                    output_json(&serde_json::json!({
-                        "status": "no_browser_cookies",
-                        "provider": "x",
-                        "error": "No X/Twitter cookies found in any browser.",
-                        "hints": [
-                            "Log into x.com in Chrome, Brave, Firefox, or Zen browser",
-                            "Then run 'social-forge connect x' again",
-                            "Or set X_AUTH_TOKEN + X_CT0 in ~/.social-forge/.env",
-                            "Or visit http://localhost:6543/api/public/connect/x-cookies for manual entry",
-                        ],
-                    }));
+            };
+
+            // Validate by calling get_me
+            {
+                let mut provider_obj = crate::social::x::XProvider::new(&state.config);
+                provider_obj.prepare_from_token(&token_str);
+                match provider_obj.get_me(&token_str).await {
+                    Ok(json) => {
+                        let data = json.get("data");
+                        let name = data.and_then(|d| d.get("name")).and_then(|s| s.as_str()).unwrap_or("X User");
+                        let username = data.and_then(|d| d.get("username")).and_then(|s| s.as_str()).unwrap_or("");
+                        let avatar = data.and_then(|d| d.get("profile_image_url")).and_then(|s| s.as_str());
+                        let id = data.and_then(|d| d.get("id")).and_then(|s| s.as_str()).unwrap_or("").to_string();
+
+                        crate::db::queries::create_integration(
+                            &state.db, user_id, "x", "X (Twitter)", &id, &token_str,
+                            None, None, Some(name), None, avatar, None, None,
+                        ).await?;
+
+                        output_json(&serde_json::json!({
+                            "status": "connected",
+                            "provider": "x",
+                            "method": method,
+                            "source": source,
+                            "name": name,
+                            "username": username,
+                            "id": id,
+                        }));
+                    }
+                    Err(e) => {
+                        output_json(&serde_json::json!({
+                            "status": "error",
+                            "provider": "x",
+                            "error": format!("Cookie import succeeded but validation failed: {e}. The cookies may be expired."),
+                            "hint": "Log into x.com in your browser (or refresh X_AUTH_TOKEN + X_CT0 in .env), then run this command again.",
+                        }));
+                    }
                 }
             }
         }
@@ -949,8 +979,8 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
         // ── Reddit: auto-import from browser ──────────────────
         "reddit" => {
             let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
-            if integrations.iter().any(|i| i.provider_identifier == "reddit") {
-                let existing: Vec<_> = integrations.iter().filter(|i| i.provider_identifier == "reddit").collect();
+            if integrations.iter().any(|i| i.provider_identifier == "reddit" && is_credential_row(i)) {
+                let existing: Vec<_> = integrations.iter().filter(|i| i.provider_identifier == "reddit" && is_credential_row(i)).collect();
                 output_json(&serde_json::json!({
                     "status": "already_connected",
                     "provider": "reddit",
@@ -1023,7 +1053,7 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
         "linkedin" | "linkedin-page" => {
             let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
             let connected: Vec<_> = integrations.iter()
-                .filter(|i| i.provider_identifier == "linkedin" || i.provider_identifier == "linkedin-page")
+                .filter(|i| (i.provider_identifier == "linkedin" || i.provider_identifier == "linkedin-page") && is_credential_row(i))
                 .collect();
             let app_url = &state.config.app_url;
             output_json(&serde_json::json!({
@@ -1043,7 +1073,7 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
         "facebook" | "instagram" | "instagram-standalone" => {
             let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
             let connected: Vec<_> = integrations.iter()
-                .filter(|i| i.provider_identifier == provider)
+                .filter(|i| i.provider_identifier == provider && is_credential_row(i))
                 .collect();
             let app_url = &state.config.app_url;
             output_json(&serde_json::json!({
@@ -1064,8 +1094,8 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
         // ── Env-var credential providers ─────────────────────
         "bluesky" => {
             let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
-            if integrations.iter().any(|i| i.provider_identifier == "bluesky") {
-                let existing: Vec<_> = integrations.iter().filter(|i| i.provider_identifier == "bluesky").collect();
+            if integrations.iter().any(|i| i.provider_identifier == "bluesky" && is_credential_row(i)) {
+                let existing: Vec<_> = integrations.iter().filter(|i| i.provider_identifier == "bluesky" && is_credential_row(i)).collect();
                 output_json(&serde_json::json!({"status": "already_connected", "provider": "bluesky", "count": existing.len()}));
             } else if state.config.bluesky_handle.is_some() && state.config.bluesky_app_password.is_some() {
                 output_json(&serde_json::json!({"status": "configured", "provider": "bluesky", "method": "env_vars", "hint": "BLUESKY_HANDLE + BLUESKY_APP_PASSWORD are set. The provider will connect automatically on first use."}));
@@ -1075,7 +1105,7 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
         }
         "github" => {
             let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
-            if integrations.iter().any(|i| i.provider_identifier == "github") {
+            if integrations.iter().any(|i| i.provider_identifier == "github" && is_credential_row(i)) {
                 output_json(&serde_json::json!({"status": "already_connected", "provider": "github"}));
             } else if state.config.github_token.is_some() {
                 output_json(&serde_json::json!({"status": "configured", "provider": "github", "method": "env_vars", "hint": "GITHUB_TOKEN is set. The provider will connect automatically on first use."}));
@@ -1085,7 +1115,7 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
         }
         "telegram-bot" | "telegram" => {
             let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
-            if integrations.iter().any(|i| i.provider_identifier == "telegram-bot") {
+            if integrations.iter().any(|i| i.provider_identifier == "telegram-bot" && is_credential_row(i)) {
                 output_json(&serde_json::json!({"status": "already_connected", "provider": "telegram-bot"}));
             } else if state.config.telegram_bot_tokens.is_some() {
                 output_json(&serde_json::json!({"status": "configured", "provider": "telegram-bot", "method": "env_vars", "hint": "TELEGRAM_BOT_TOKENS is set. The provider will connect automatically on first use."}));
@@ -1095,7 +1125,7 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
         }
         "discord" => {
             let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
-            if integrations.iter().any(|i| i.provider_identifier == "discord") {
+            if integrations.iter().any(|i| i.provider_identifier == "discord" && is_credential_row(i)) {
                 output_json(&serde_json::json!({"status": "already_connected", "provider": "discord"}));
             } else if state.config.discord_client_id.is_some() && state.config.discord_client_secret.is_some() {
                 output_json(&serde_json::json!({"status": "configured", "provider": "discord", "method": "oauth", "hint": "DISCORD_CLIENT_ID + DISCORD_CLIENT_SECRET are set. Authorize via the web UI."}));
@@ -1105,7 +1135,7 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
         }
         "slack" => {
             let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
-            if integrations.iter().any(|i| i.provider_identifier == "slack") {
+            if integrations.iter().any(|i| i.provider_identifier == "slack" && is_credential_row(i)) {
                 output_json(&serde_json::json!({"status": "already_connected", "provider": "slack"}));
             } else if state.config.slack_client_id.is_some() && state.config.slack_client_secret.is_some() {
                 output_json(&serde_json::json!({"status": "configured", "provider": "slack", "method": "oauth", "hint": "SLACK_CLIENT_ID + SLACK_CLIENT_SECRET are set. Authorize via the web UI."}));
@@ -1115,7 +1145,7 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
         }
         "pinterest" => {
             let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
-            if integrations.iter().any(|i| i.provider_identifier == "pinterest") {
+            if integrations.iter().any(|i| i.provider_identifier == "pinterest" && is_credential_row(i)) {
                 output_json(&serde_json::json!({"status": "already_connected", "provider": "pinterest"}));
             } else if state.config.pinterest_client_id.is_some() && state.config.pinterest_client_secret.is_some() {
                 output_json(&serde_json::json!({"status": "configured", "provider": "pinterest", "method": "oauth"}));
@@ -1125,7 +1155,7 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
         }
         "tiktok" => {
             let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
-            if integrations.iter().any(|i| i.provider_identifier == "tiktok") {
+            if integrations.iter().any(|i| i.provider_identifier == "tiktok" && is_credential_row(i)) {
                 output_json(&serde_json::json!({"status": "already_connected", "provider": "tiktok"}));
             } else if state.config.tiktok_client_id.is_some() && state.config.tiktok_client_secret.is_some() {
                 output_json(&serde_json::json!({"status": "configured", "provider": "tiktok", "method": "oauth"}));
@@ -1135,7 +1165,7 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
         }
         "mastodon" => {
             let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
-            if integrations.iter().any(|i| i.provider_identifier == "mastodon") {
+            if integrations.iter().any(|i| i.provider_identifier == "mastodon" && is_credential_row(i)) {
                 output_json(&serde_json::json!({"status": "already_connected", "provider": "mastodon"}));
             } else if state.config.mastodon_client_id.is_some() && state.config.mastodon_client_secret.is_some() && state.config.mastodon_instance_url.is_some() {
                 output_json(&serde_json::json!({"status": "configured", "provider": "mastodon", "method": "oauth"}));
@@ -1145,7 +1175,7 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
         }
         "youtube" | "google" => {
             let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
-            let connected = integrations.iter().any(|i| i.provider_identifier == "youtube" || i.provider_identifier == "google");
+            let connected = integrations.iter().any(|i| (i.provider_identifier == "youtube" || i.provider_identifier == "google") && is_credential_row(i));
             if connected {
                 output_json(&serde_json::json!({"status": "already_connected", "provider": "youtube"}));
             } else if state.config.youtube_client_id.is_some() && state.config.youtube_client_secret.is_some() {

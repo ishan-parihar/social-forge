@@ -249,9 +249,11 @@ fn extract_chrome() -> Option<ExtractedRedditCookies> {
 
 fn extract_brave() -> Option<ExtractedRedditCookies> {
     let home = home_dir();
-    // Try standard Brave profile first, then Origin Beta
+    // Keep in sync with x_cookies::extract_brave — Brave-Origin is the
+    // current stable Linux profile-dir spelling.
     let profiles = [
         chrome_default_profile(&home, "BraveSoftware/Brave-Browser"),
+        chrome_default_profile(&home, "BraveSoftware/Brave-Origin"),
         chrome_default_profile(&home, "BraveSoftware/Brave-Origin-Beta"),
     ];
     for profile in &profiles {
