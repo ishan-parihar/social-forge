@@ -23,10 +23,7 @@ pub struct TelegramUserProvider {
 }
 
 impl TelegramUserProvider {
-    pub fn new(
-        _config: &Config,
-        client_manager: Option<Arc<TelegramClientManager>>,
-    ) -> Self {
+    pub fn new(_config: &Config, client_manager: Option<Arc<TelegramClientManager>>) -> Self {
         Self { client_manager }
     }
 }
@@ -72,9 +69,7 @@ impl SocialProvider for TelegramUserProvider {
         _redirect_uri: &str,
     ) -> Result<AuthUrlResponse, ProviderError> {
         // MTProto-based auth — no OAuth URL
-        Ok(AuthUrlResponse {
-            url: String::new(),
-        })
+        Ok(AuthUrlResponse { url: String::new() })
     }
 
     async fn exchange_code(
@@ -83,12 +78,12 @@ impl SocialProvider for TelegramUserProvider {
         _code_verifier: &str,
         _redirect_uri: &str,
     ) -> Result<AuthToken, ProviderError> {
-        let mgr = self
-            .client_manager
-            .as_ref()
-            .ok_or_else(|| ProviderError::Api(
-                "Telegram user client not configured. Set TELEGRAM_API_ID and TELEGRAM_API_HASH.".into(),
-            ))?;
+        let mgr = self.client_manager.as_ref().ok_or_else(|| {
+            ProviderError::Api(
+                "Telegram user client not configured. Set TELEGRAM_API_ID and TELEGRAM_API_HASH."
+                    .into(),
+            )
+        })?;
 
         let is_auth = mgr
             .is_authenticated()
@@ -135,23 +130,24 @@ impl SocialProvider for TelegramUserProvider {
         _access_token: &str,
         post: &PostContent,
     ) -> Result<PublishResult, ProviderError> {
-        let mgr = self
-            .client_manager
-            .as_ref()
-            .ok_or_else(|| {
-                ProviderError::Api(
-                    "Telegram user client not configured. Set TELEGRAM_API_ID and TELEGRAM_API_HASH."
-                        .into(),
-                )
-            })?;
-
-        let target = post.settings.get("target").and_then(|t| t.as_str()).ok_or_else(|| {
+        let mgr = self.client_manager.as_ref().ok_or_else(|| {
             ProviderError::Api(
-                "No target peer specified. Add 'target' field in post settings \
-                 (e.g., username, phone number, or chat name)."
+                "Telegram user client not configured. Set TELEGRAM_API_ID and TELEGRAM_API_HASH."
                     .into(),
             )
         })?;
+
+        let target = post
+            .settings
+            .get("target")
+            .and_then(|t| t.as_str())
+            .ok_or_else(|| {
+                ProviderError::Api(
+                    "No target peer specified. Add 'target' field in post settings \
+                 (e.g., username, phone number, or chat name)."
+                        .into(),
+                )
+            })?;
 
         if post.media.is_empty() {
             let result = mgr
@@ -202,18 +198,18 @@ impl SocialProvider for TelegramUserProvider {
             .as_array()
             .map(|arr| {
                 arr.iter()
-                    .filter_map(|d| {
+                    .map(|d| {
                         let id = d["id"].to_string();
                         let name = d["name"].as_str().unwrap_or("Unknown").to_string();
                         let target_type = d["type"].as_str().unwrap_or("peer").to_string();
 
-                        Some(TargetInfo {
+                        TargetInfo {
                             id,
                             name,
                             target_type,
                             picture: None,
                             metadata: None,
-                        })
+                        }
                     })
                     .collect::<Vec<_>>()
             })

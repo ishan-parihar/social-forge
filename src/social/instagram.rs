@@ -22,9 +22,8 @@ pub struct InstagramProvider {
 impl InstagramProvider {
     pub fn new(config: &Config) -> Self {
         // Instagram Graph API uses Facebook Login OAuth — needs Facebook App credentials
-        let (client_id, client_secret) = config
-            .provider_credentials("facebook")
-            .unwrap_or_default();
+        let (client_id, client_secret) =
+            config.provider_credentials("facebook").unwrap_or_default();
         Self {
             client_id,
             client_secret,
@@ -65,7 +64,9 @@ impl SocialProvider for InstagramProvider {
         ]
     }
 
-    fn is_between_steps(&self) -> bool { true }
+    fn is_between_steps(&self) -> bool {
+        true
+    }
 
     fn max_content_length(&self) -> usize {
         2200
@@ -90,13 +91,13 @@ impl SocialProvider for InstagramProvider {
             ("response_type", "code"),
         ];
 
-        let url = url::Url::parse_with_params(
-            "https://www.facebook.com/v21.0/dialog/oauth",
-            &params,
-        )
-        .map_err(|e| ProviderError::Auth(format!("URL parse: {e}")))?;
+        let url =
+            url::Url::parse_with_params("https://www.facebook.com/v21.0/dialog/oauth", &params)
+                .map_err(|e| ProviderError::Auth(format!("URL parse: {e}")))?;
 
-        Ok(AuthUrlResponse { url: url.to_string() })
+        Ok(AuthUrlResponse {
+            url: url.to_string(),
+        })
     }
 
     async fn exchange_code(
@@ -152,7 +153,10 @@ impl SocialProvider for InstagramProvider {
         // Get Facebook user info for display
         let me: serde_json::Value = self
             .http
-            .get(format!("{}/me?fields=id,name,picture.type(large)", self.graph_url()))
+            .get(format!(
+                "{}/me?fields=id,name,picture.type(large)",
+                self.graph_url()
+            ))
             .query(&[("access_token", &access_token)])
             .send()
             .await?
@@ -165,8 +169,8 @@ impl SocialProvider for InstagramProvider {
 
         // Return user-level token so pages() + page-picker can discover IG accounts
         Ok(AuthToken {
-            access_token,             // user-level token for page discovery
-            refresh_token: None,      // page token will be set when user picks an account
+            access_token,        // user-level token for page discovery
+            refresh_token: None, // page token will be set when user picks an account
             expires_in,
             provider_user_id: fb_id,
             name: fb_name,
@@ -175,10 +179,7 @@ impl SocialProvider for InstagramProvider {
         })
     }
 
-    async fn refresh_token(
-        &self,
-        _refresh_token: &str,
-    ) -> Result<AuthToken, ProviderError> {
+    async fn refresh_token(&self, _refresh_token: &str) -> Result<AuthToken, ProviderError> {
         Err(ProviderError::Auth(
             "Instagram tokens last 60 days. Reconnect the channel.".into(),
         ))
@@ -191,21 +192,33 @@ impl SocialProvider for InstagramProvider {
     ) -> Result<PublishResult, ProviderError> {
         if post.media.is_empty() {
             return Err(ProviderError::InvalidRequest(
-                "Instagram Feed posts require at least one media attachment (image or video).".into()
+                "Instagram Feed posts require at least one media attachment (image or video)."
+                    .into(),
             ));
         }
 
-        let ig_id = self.resolve_ig_business_account(access_token).await
+        let ig_id = self
+            .resolve_ig_business_account(access_token)
+            .await
             .map_err(|e| ProviderError::Api(format!("Cannot resolve IG business account: {e}")))?;
 
         if post.media.len() == 1 {
             // Single image: simpler IMAGE container
-            let container_id = self.create_single_media_container(
-                &ig_id, access_token, &post.media[0].url, &post.content, false,
-            ).await?;
+            let container_id = self
+                .create_single_media_container(
+                    &ig_id,
+                    access_token,
+                    &post.media[0].url,
+                    &post.content,
+                    false,
+                )
+                .await?;
 
-            self.await_container_ready(access_token, &container_id).await?;
-            let platform_post_id = self.publish_container(&ig_id, access_token, &container_id).await?;
+            self.await_container_ready(access_token, &container_id)
+                .await?;
+            let platform_post_id = self
+                .publish_container(&ig_id, access_token, &container_id)
+                .await?;
             Ok(PublishResult {
                 platform_post_url: Some(format!("https://instagram.com/p/{platform_post_id}")),
                 platform_post_id,
@@ -215,9 +228,9 @@ impl SocialProvider for InstagramProvider {
             // Multiple images: CAROUSEL flow
             let mut children_ids = Vec::with_capacity(post.media.len());
             for media in &post.media {
-                let child_id = self.create_single_media_container(
-                    &ig_id, access_token, &media.url, "", true,
-                ).await?;
+                let child_id = self
+                    .create_single_media_container(&ig_id, access_token, &media.url, "", true)
+                    .await?;
                 children_ids.push(child_id);
             }
 
@@ -252,16 +265,21 @@ impl SocialProvider for InstagramProvider {
 
             let carousel_id = carousel_json["id"]
                 .as_str()
-                .ok_or_else(|| ProviderError::Api(
-                    format!("Instagram did not return carousel container ID: {carousel_json:?}")
-                ))?
+                .ok_or_else(|| {
+                    ProviderError::Api(format!(
+                        "Instagram did not return carousel container ID: {carousel_json:?}"
+                    ))
+                })?
                 .to_string();
 
             // Polling the CAROUSEL container also covers the children: Instagram
             // only marks a carousel FINISHED once every child has finished its
             // own processing, so one wait replaces N per-child waits.
-            self.await_container_ready(access_token, &carousel_id).await?;
-            let platform_post_id = self.publish_container(&ig_id, access_token, &carousel_id).await?;
+            self.await_container_ready(access_token, &carousel_id)
+                .await?;
+            let platform_post_id = self
+                .publish_container(&ig_id, access_token, &carousel_id)
+                .await?;
             Ok(PublishResult {
                 platform_post_url: Some(format!("https://instagram.com/p/{platform_post_id}")),
                 platform_post_id,
@@ -297,7 +315,8 @@ impl SocialProvider for InstagramProvider {
         access_token: &str,
         platform_post_id: &str,
     ) -> Result<PublishResult, ProviderError> {
-        self.media_publish_state(access_token, platform_post_id).await
+        self.media_publish_state(access_token, platform_post_id)
+            .await
     }
 
     /// List Instagram Business accounts from the user's Facebook pages.
@@ -311,7 +330,8 @@ impl SocialProvider for InstagramProvider {
     /// endpoint) and resolves IG account details.
     async fn pages(&self, access_token: &str) -> Result<Vec<PageInfo>, ProviderError> {
         let fields = "id,instagram_business_account,access_token,username,name,picture.type(large)";
-        let mut pages_map: std::collections::HashMap<String, serde_json::Value> = std::collections::HashMap::new();
+        let mut pages_map: std::collections::HashMap<String, serde_json::Value> =
+            std::collections::HashMap::new();
 
         // ── Helper: paginated fetch ──────────────────────────────────────────
         async fn collect_pages(
@@ -333,7 +353,11 @@ impl SocialProvider for InstagramProvider {
 
                 if let Some(err) = json["error"].as_object() {
                     // Non-fatal: skip this endpoint (e.g. /me/businesses may not be available)
-                    tracing::warn!("collect_pages skipped ({:?}): {}", url, err["message"].as_str().unwrap_or(""));
+                    tracing::warn!(
+                        "collect_pages skipped ({:?}): {}",
+                        url,
+                        err["message"].as_str().unwrap_or("")
+                    );
                     return Ok(());
                 }
 
@@ -386,14 +410,19 @@ impl SocialProvider for InstagramProvider {
                             "{}/{biz_id}/{endpoint}?fields={fields}&limit=100",
                             self.graph_url(),
                         );
-                        if let Err(e) = collect_pages(&self.http, &biz_url, access_token, &mut pages_map).await {
+                        if let Err(e) =
+                            collect_pages(&self.http, &biz_url, access_token, &mut pages_map).await
+                        {
                             tracing::warn!("Business Manager {endpoint} for {biz_id}: {e:?}");
                         }
                     }
                 }
             }
         } else {
-            tracing::debug!("/me/businesses not available: {:?}", biz_json["error"]["message"]);
+            tracing::debug!(
+                "/me/businesses not available: {:?}",
+                biz_json["error"]["message"]
+            );
         }
 
         // ── Resolve IG Business accounts from collected pages ─────────────────
@@ -446,7 +475,10 @@ impl SocialProvider for InstagramProvider {
                 let ig_json: serde_json::Value = ig_resp.json().await?;
 
                 if let Some(e) = ig_json["error"].as_object() {
-                    tracing::warn!("IG detail fetch for {ig_id}: {}", e["message"].as_str().unwrap_or(""));
+                    tracing::warn!(
+                        "IG detail fetch for {ig_id}: {}",
+                        e["message"].as_str().unwrap_or("")
+                    );
                     continue;
                 }
 
@@ -482,7 +514,9 @@ impl SocialProvider for InstagramProvider {
             Err(e) => {
                 // If we have an internal_id (page-scoped), use that directly
                 if _internal_id.is_empty() || _internal_id == access_token {
-                    return Err(ProviderError::Api(format!("Cannot resolve IG business account: {e}")));
+                    return Err(ProviderError::Api(format!(
+                        "Cannot resolve IG business account: {e}"
+                    )));
                 }
                 // The internal_id might already be the IG business account ID
                 // Try fetching IG media directly with it
@@ -578,12 +612,14 @@ impl SocialProvider for InstagramProvider {
                             _ => "image/jpeg",
                         };
                         media_url
-                            .map(|u| vec![MediaAttachment {
-                                url: u,
-                                mime_type: mime_type.into(),
-                                alt: None,
-                                poster_url: None,
-                            }])
+                            .map(|u| {
+                                vec![MediaAttachment {
+                                    url: u,
+                                    mime_type: mime_type.into(),
+                                    alt: None,
+                                    poster_url: None,
+                                }]
+                            })
                             .unwrap_or_default()
                     }
                 };
@@ -649,7 +685,9 @@ impl SocialProvider for InstagramProvider {
         access_token: &str,
         platform_post_id: &str,
     ) -> Result<Option<serde_json::Value>, ProviderError> {
-        let detail = self.get_ig_media_detail(access_token, platform_post_id).await?;
+        let detail = self
+            .get_ig_media_detail(access_token, platform_post_id)
+            .await?;
         // If the response has a top-level error or no id, treat as not found
         if detail.get("error").is_some() || detail.get("id").is_none() {
             return Ok(None);
@@ -662,7 +700,9 @@ impl SocialProvider for InstagramProvider {
         access_token: &str,
         platform_post_id: &str,
     ) -> Result<Vec<CommentData>, ProviderError> {
-        let json = self.get_ig_media_comments(access_token, platform_post_id).await?;
+        let json = self
+            .get_ig_media_comments(access_token, platform_post_id)
+            .await?;
         Ok(super::parse_graph_comments(&json))
     }
 
@@ -676,7 +716,9 @@ impl SocialProvider for InstagramProvider {
         let ig_id = self
             .resolve_ig_business_account(access_token)
             .await
-            .map_err(|e| ProviderError::Api(format!("Failed to resolve IG business account: {e}")))?;
+            .map_err(|e| {
+                ProviderError::Api(format!("Failed to resolve IG business account: {e}"))
+            })?;
         let json = self.get_mentions(access_token, &ig_id).await?;
         Ok(super::parse_graph_mentions(&json, query))
     }
@@ -688,7 +730,10 @@ impl SocialProvider for InstagramProvider {
     ) -> Result<PageInfo, ProviderError> {
         let resp = self
             .http
-            .get(format!("{}/{page_id}?fields=id,username,name,profile_picture_url", self.graph_url()))
+            .get(format!(
+                "{}/{page_id}?fields=id,username,name,profile_picture_url",
+                self.graph_url()
+            ))
             .query(&[("access_token", access_token)])
             .send()
             .await?;
@@ -711,7 +756,9 @@ impl SocialProvider for InstagramProvider {
         let ig_id = self
             .resolve_ig_business_account(access_token)
             .await
-            .map_err(|e| ProviderError::Api(format!("Failed to resolve IG business account: {e}")))?;
+            .map_err(|e| {
+                ProviderError::Api(format!("Failed to resolve IG business account: {e}"))
+            })?;
 
         let since = chrono::Utc::now()
             .checked_sub_signed(chrono::Duration::days(days as i64))
@@ -807,7 +854,10 @@ impl SocialProvider for InstagramProvider {
         } else if status == 401 {
             Err(ProviderError::TokenExpired)
         } else {
-            let detail = json["error"]["message"].as_str().unwrap_or("Instagram reply failed").to_string();
+            let detail = json["error"]["message"]
+                .as_str()
+                .unwrap_or("Instagram reply failed")
+                .to_string();
             Err(ProviderError::Api(detail))
         }
     }
@@ -843,7 +893,10 @@ impl SocialProvider for InstagramProvider {
         } else if status == 401 {
             Err(ProviderError::TokenExpired)
         } else {
-            let detail = json["error"]["message"].as_str().unwrap_or("Instagram send DM failed").to_string();
+            let detail = json["error"]["message"]
+                .as_str()
+                .unwrap_or("Instagram send DM failed")
+                .to_string();
             Err(ProviderError::Api(detail))
         }
     }
@@ -857,7 +910,10 @@ impl SocialProvider for InstagramProvider {
         let resp = self
             .http
             .get(&url)
-            .query(&[("fields", "id,snippet,updated_time,unread"), ("limit", &limit.min(50).to_string())])
+            .query(&[
+                ("fields", "id,snippet,updated_time,unread"),
+                ("limit", &limit.min(50).to_string()),
+            ])
             .header("Authorization", format!("Bearer {access_token}"))
             .send()
             .await?;
@@ -867,7 +923,8 @@ impl SocialProvider for InstagramProvider {
             for conv in data {
                 let id = conv["id"].as_str().unwrap_or("").to_string();
                 let last_message = conv["snippet"].as_str().map(|s| s.to_string());
-                let last_message_at = conv["updated_time"].as_str()
+                let last_message_at = conv["updated_time"]
+                    .as_str()
                     .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
                     .map(|dt| dt.with_timezone(&chrono::Utc));
                 let unread = conv["unread"].as_bool().unwrap_or(false);
@@ -895,7 +952,10 @@ impl SocialProvider for InstagramProvider {
         let resp = self
             .http
             .get(&url)
-            .query(&[("fields", "id,from,message,created_time"), ("limit", &limit.min(50).to_string())])
+            .query(&[
+                ("fields", "id,from,message,created_time"),
+                ("limit", &limit.min(50).to_string()),
+            ])
             .header("Authorization", format!("Bearer {access_token}"))
             .send()
             .await?;
@@ -911,7 +971,8 @@ impl SocialProvider for InstagramProvider {
                     .unwrap_or("")
                     .to_string();
                 let content = msg["message"].as_str().unwrap_or("").to_string();
-                let created_at = msg["created_time"].as_str()
+                let created_at = msg["created_time"]
+                    .as_str()
                     .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
                     .map(|dt| dt.with_timezone(&chrono::Utc))
                     .unwrap_or_else(chrono::Utc::now);
@@ -941,10 +1002,7 @@ impl InstagramProvider {
         caption: &str,
         is_carousel_item: bool,
     ) -> Result<String, ProviderError> {
-        let mut params = vec![
-            ("image_url", media_url),
-            ("access_token", access_token),
-        ];
+        let mut params = vec![("image_url", media_url), ("access_token", access_token)];
         if is_carousel_item {
             params.push(("is_carousel_item", "true"));
         } else {
@@ -961,16 +1019,15 @@ impl InstagramProvider {
         let json: serde_json::Value = resp.json().await?;
 
         if let Some(err) = json["error"].as_object() {
-            let msg = err["message"].as_str().unwrap_or("Container creation failed");
+            let msg = err["message"]
+                .as_str()
+                .unwrap_or("Container creation failed");
             return Err(ProviderError::Api(msg.to_string()));
         }
 
-        json["id"]
-            .as_str()
-            .map(String::from)
-            .ok_or_else(|| {
-                ProviderError::Api(format!("Instagram did not return container ID: {json:?}"))
-            })
+        json["id"].as_str().map(String::from).ok_or_else(|| {
+            ProviderError::Api(format!("Instagram did not return container ID: {json:?}"))
+        })
     }
 
     /// Publish a container (single image or carousel) and return the IG media ID.
@@ -983,10 +1040,7 @@ impl InstagramProvider {
         let resp = self
             .http
             .post(format!("{}/{}/media_publish", self.graph_url(), ig_id))
-            .form(&[
-                ("creation_id", creation_id),
-                ("access_token", access_token),
-            ])
+            .form(&[("creation_id", creation_id), ("access_token", access_token)])
             .send()
             .await?;
 
@@ -997,12 +1051,9 @@ impl InstagramProvider {
             return Err(ProviderError::Api(msg.to_string()));
         }
 
-        json["id"]
-            .as_str()
-            .map(String::from)
-            .ok_or_else(|| {
-                ProviderError::Api(format!("Instagram publish unexpected response: {json:?}"))
-            })
+        json["id"].as_str().map(String::from).ok_or_else(|| {
+            ProviderError::Api(format!("Instagram publish unexpected response: {json:?}"))
+        })
     }
 
     /// Block until `container_id` is ready to publish.
@@ -1062,13 +1113,11 @@ impl InstagramProvider {
                 // Terminal: retrying the same container can never succeed.
                 "ERROR" | "EXPIRED" | "MEDIA_ERROR" => {
                     let reason = json["status"].as_str().unwrap_or("no reason given");
-                    let raw = format!(
-                        "Instagram container {container_id} is {seen}: {reason}"
-                    );
+                    let raw = format!("Instagram container {container_id} is {seen}: {reason}");
                     return Err(ProviderError::Api(friendly_error(None, &raw)));
                 }
                 // IN_PROGRESS and anything Instagram adds later.
-                other if other.is_empty() => "not reported yet".to_string(),
+                "" => "not reported yet".to_string(),
                 other => other.to_string(),
             };
 
@@ -1097,7 +1146,9 @@ impl InstagramProvider {
             .await
             .map_err(|e| format!("Failed to get Facebook pages: {e}"))?;
 
-        let accounts: serde_json::Value = resp.json().await
+        let accounts: serde_json::Value = resp
+            .json()
+            .await
             .map_err(|e| format!("Failed to parse pages response: {e}"))?;
 
         if let Some(err) = accounts["error"].as_object() {
@@ -1107,7 +1158,8 @@ impl InstagramProvider {
             ));
         }
 
-        let pages = accounts["data"].as_array()
+        let pages = accounts["data"]
+            .as_array()
             .ok_or_else(|| "No Facebook pages found for this token.".to_string())?;
 
         for page in pages {
@@ -1116,7 +1168,10 @@ impl InstagramProvider {
 
             let ig: serde_json::Value = self
                 .http
-                .get(format!("{}/{page_id}/instagram_business_account", self.graph_url()))
+                .get(format!(
+                    "{}/{page_id}/instagram_business_account",
+                    self.graph_url()
+                ))
                 .query(&[("access_token", page_token)])
                 .send()
                 .await
@@ -1133,12 +1188,20 @@ impl InstagramProvider {
             }
         }
 
-        Err("No Instagram Business account found. Link Instagram to a Facebook Page first.".to_string())
+        Err(
+            "No Instagram Business account found. Link Instagram to a Facebook Page first."
+                .to_string(),
+        )
     }
 }
 
 impl InstagramProvider {
-    pub async fn get_ig_media(&self, access_token: &str, ig_id: &str, limit: u32) -> Result<serde_json::Value, ProviderError> {
+    pub async fn get_ig_media(
+        &self,
+        access_token: &str,
+        ig_id: &str,
+        limit: u32,
+    ) -> Result<serde_json::Value, ProviderError> {
         let limit = limit.min(100);
         let url = format!("{}/{ig_id}/media", self.graph_url());
         let resp = self
@@ -1153,16 +1216,25 @@ impl InstagramProvider {
         if status.is_success() {
             Ok(json)
         } else if status == 429 {
-            Err(ProviderError::RateLimited("Instagram API rate limit".into()))
+            Err(ProviderError::RateLimited(
+                "Instagram API rate limit".into(),
+            ))
         } else if status == 401 {
             Err(ProviderError::TokenExpired)
         } else {
-            let detail = json["error"]["message"].as_str().unwrap_or("Instagram API error").to_string();
+            let detail = json["error"]["message"]
+                .as_str()
+                .unwrap_or("Instagram API error")
+                .to_string();
             Err(ProviderError::Api(detail))
         }
     }
 
-    pub async fn get_ig_media_detail(&self, access_token: &str, media_id: &str) -> Result<serde_json::Value, ProviderError> {
+    pub async fn get_ig_media_detail(
+        &self,
+        access_token: &str,
+        media_id: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
         let url = format!("{}/{media_id}", self.graph_url());
         let resp = self
             .http
@@ -1176,16 +1248,25 @@ impl InstagramProvider {
         if status.is_success() {
             Ok(json)
         } else if status == 429 {
-            Err(ProviderError::RateLimited("Instagram API rate limit".into()))
+            Err(ProviderError::RateLimited(
+                "Instagram API rate limit".into(),
+            ))
         } else if status == 401 {
             Err(ProviderError::TokenExpired)
         } else {
-            let detail = json["error"]["message"].as_str().unwrap_or("Instagram API error").to_string();
+            let detail = json["error"]["message"]
+                .as_str()
+                .unwrap_or("Instagram API error")
+                .to_string();
             Err(ProviderError::Api(detail))
         }
     }
 
-    pub async fn get_ig_media_comments(&self, access_token: &str, media_id: &str) -> Result<serde_json::Value, ProviderError> {
+    pub async fn get_ig_media_comments(
+        &self,
+        access_token: &str,
+        media_id: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
         let url = format!("{}/{media_id}/comments", self.graph_url());
         let resp = self
             .http
@@ -1199,16 +1280,26 @@ impl InstagramProvider {
         if status.is_success() {
             Ok(json)
         } else if status == 429 {
-            Err(ProviderError::RateLimited("Instagram API rate limit".into()))
+            Err(ProviderError::RateLimited(
+                "Instagram API rate limit".into(),
+            ))
         } else if status == 401 {
             Err(ProviderError::TokenExpired)
         } else {
-            let detail = json["error"]["message"].as_str().unwrap_or("Instagram API error").to_string();
+            let detail = json["error"]["message"]
+                .as_str()
+                .unwrap_or("Instagram API error")
+                .to_string();
             Err(ProviderError::Api(detail))
         }
     }
 
-    pub async fn search_hashtag(&self, access_token: &str, ig_id: &str, query: &str) -> Result<serde_json::Value, ProviderError> {
+    pub async fn search_hashtag(
+        &self,
+        access_token: &str,
+        ig_id: &str,
+        query: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
         let url = format!("{}/ig_hashtag_search", self.graph_url());
         let resp = self
             .http
@@ -1222,21 +1313,33 @@ impl InstagramProvider {
         if status.is_success() {
             Ok(json)
         } else if status == 429 {
-            Err(ProviderError::RateLimited("Instagram API rate limit".into()))
+            Err(ProviderError::RateLimited(
+                "Instagram API rate limit".into(),
+            ))
         } else if status == 401 {
             Err(ProviderError::TokenExpired)
         } else {
-            let detail = json["error"]["message"].as_str().unwrap_or("Instagram API error").to_string();
+            let detail = json["error"]["message"]
+                .as_str()
+                .unwrap_or("Instagram API error")
+                .to_string();
             Err(ProviderError::Api(detail))
         }
     }
 
-    pub async fn get_hashtag_media(&self, access_token: &str, hashtag_id: &str) -> Result<serde_json::Value, ProviderError> {
+    pub async fn get_hashtag_media(
+        &self,
+        access_token: &str,
+        hashtag_id: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
         let url = format!("{}/{hashtag_id}/recent_media", self.graph_url());
         let resp = self
             .http
             .get(&url)
-            .query(&[("fields", "id,caption,media_type,media_url,permalink,timestamp,like_count,comments_count")])
+            .query(&[(
+                "fields",
+                "id,caption,media_type,media_url,permalink,timestamp,like_count,comments_count",
+            )])
             .header("Authorization", format!("Bearer {access_token}"))
             .send()
             .await?;
@@ -1245,16 +1348,27 @@ impl InstagramProvider {
         if status.is_success() {
             Ok(json)
         } else if status == 429 {
-            Err(ProviderError::RateLimited("Instagram API rate limit".into()))
+            Err(ProviderError::RateLimited(
+                "Instagram API rate limit".into(),
+            ))
         } else if status == 401 {
             Err(ProviderError::TokenExpired)
         } else {
-            let detail = json["error"]["message"].as_str().unwrap_or("Instagram API error").to_string();
+            let detail = json["error"]["message"]
+                .as_str()
+                .unwrap_or("Instagram API error")
+                .to_string();
             Err(ProviderError::Api(detail))
         }
     }
 
-    pub async fn get_ig_insights(&self, access_token: &str, ig_id: &str, metric: &str, period: &str) -> Result<serde_json::Value, ProviderError> {
+    pub async fn get_ig_insights(
+        &self,
+        access_token: &str,
+        ig_id: &str,
+        metric: &str,
+        period: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
         let url = format!("{}/{ig_id}/insights", self.graph_url());
         let resp = self
             .http
@@ -1268,11 +1382,16 @@ impl InstagramProvider {
         if status.is_success() {
             Ok(json)
         } else if status == 429 {
-            Err(ProviderError::RateLimited("Instagram API rate limit".into()))
+            Err(ProviderError::RateLimited(
+                "Instagram API rate limit".into(),
+            ))
         } else if status == 401 {
             Err(ProviderError::TokenExpired)
         } else {
-            let detail = json["error"]["message"].as_str().unwrap_or("Instagram API error").to_string();
+            let detail = json["error"]["message"]
+                .as_str()
+                .unwrap_or("Instagram API error")
+                .to_string();
             Err(ProviderError::Api(detail))
         }
     }
@@ -1288,10 +1407,7 @@ impl InstagramProvider {
         let resp = self
             .http
             .get(url)
-            .query(&[(
-                "fields",
-                "id,username,profile_picture_url,text,timestamp",
-            )])
+            .query(&[("fields", "id,username,profile_picture_url,text,timestamp")])
             .header("Authorization", format!("Bearer {access_token}"))
             .send()
             .await?;
@@ -1300,7 +1416,9 @@ impl InstagramProvider {
         if status.is_success() {
             Ok(json)
         } else if status == 429 {
-            Err(ProviderError::RateLimited("Instagram API rate limit".into()))
+            Err(ProviderError::RateLimited(
+                "Instagram API rate limit".into(),
+            ))
         } else if status == 401 {
             Err(ProviderError::TokenExpired)
         } else {
@@ -1313,12 +1431,19 @@ impl InstagramProvider {
         }
     }
 
-    pub async fn get_ig_tagged(&self, access_token: &str, ig_id: &str) -> Result<serde_json::Value, ProviderError> {
+    pub async fn get_ig_tagged(
+        &self,
+        access_token: &str,
+        ig_id: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
         let url = format!("{}/{ig_id}/tagged", self.graph_url());
         let resp = self
             .http
             .get(&url)
-            .query(&[("fields", "id,caption,media_type,media_url,permalink,timestamp")])
+            .query(&[(
+                "fields",
+                "id,caption,media_type,media_url,permalink,timestamp",
+            )])
             .header("Authorization", format!("Bearer {access_token}"))
             .send()
             .await?;
@@ -1327,16 +1452,28 @@ impl InstagramProvider {
         if status.is_success() {
             Ok(json)
         } else if status == 429 {
-            Err(ProviderError::RateLimited("Instagram API rate limit".into()))
+            Err(ProviderError::RateLimited(
+                "Instagram API rate limit".into(),
+            ))
         } else if status == 401 {
             Err(ProviderError::TokenExpired)
         } else {
-            let detail = json["error"]["message"].as_str().unwrap_or("Instagram API error").to_string();
+            let detail = json["error"]["message"]
+                .as_str()
+                .unwrap_or("Instagram API error")
+                .to_string();
             Err(ProviderError::Api(detail))
         }
     }
 
-    pub async fn create_ig_container(&self, access_token: &str, ig_id: &str, media_type: &str, media_url: &str, caption: &str) -> Result<serde_json::Value, ProviderError> {
+    pub async fn create_ig_container(
+        &self,
+        access_token: &str,
+        ig_id: &str,
+        media_type: &str,
+        media_url: &str,
+        caption: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
         let url = format!("{}/{ig_id}/media", self.graph_url());
         let mut params = vec![
             ("media_type", media_type),
@@ -1360,16 +1497,26 @@ impl InstagramProvider {
         if status.is_success() {
             Ok(json)
         } else if status == 429 {
-            Err(ProviderError::RateLimited("Instagram API rate limit".into()))
+            Err(ProviderError::RateLimited(
+                "Instagram API rate limit".into(),
+            ))
         } else if status == 401 {
             Err(ProviderError::TokenExpired)
         } else {
-            let detail = json["error"]["message"].as_str().unwrap_or("Instagram API error").to_string();
+            let detail = json["error"]["message"]
+                .as_str()
+                .unwrap_or("Instagram API error")
+                .to_string();
             Err(ProviderError::Api(detail))
         }
     }
 
-    pub async fn publish_ig_container(&self, access_token: &str, ig_id: &str, creation_id: &str) -> Result<serde_json::Value, ProviderError> {
+    pub async fn publish_ig_container(
+        &self,
+        access_token: &str,
+        ig_id: &str,
+        creation_id: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
         let url = format!("{}/{ig_id}/media_publish", self.graph_url());
         let resp = self
             .http
@@ -1383,16 +1530,26 @@ impl InstagramProvider {
         if status.is_success() {
             Ok(json)
         } else if status == 429 {
-            Err(ProviderError::RateLimited("Instagram API rate limit".into()))
+            Err(ProviderError::RateLimited(
+                "Instagram API rate limit".into(),
+            ))
         } else if status == 401 {
             Err(ProviderError::TokenExpired)
         } else {
-            let detail = json["error"]["message"].as_str().unwrap_or("Instagram API error").to_string();
+            let detail = json["error"]["message"]
+                .as_str()
+                .unwrap_or("Instagram API error")
+                .to_string();
             Err(ProviderError::Api(detail))
         }
     }
 
-    pub async fn reply_to_ig_comment(&self, access_token: &str, comment_id: &str, message: &str) -> Result<serde_json::Value, ProviderError> {
+    pub async fn reply_to_ig_comment(
+        &self,
+        access_token: &str,
+        comment_id: &str,
+        message: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
         let url = format!("{}/{comment_id}/replies", self.graph_url());
         let resp = self
             .http
@@ -1406,21 +1563,36 @@ impl InstagramProvider {
         if status.is_success() {
             Ok(json)
         } else if status == 429 {
-            Err(ProviderError::RateLimited("Instagram API rate limit".into()))
+            Err(ProviderError::RateLimited(
+                "Instagram API rate limit".into(),
+            ))
         } else if status == 401 {
             Err(ProviderError::TokenExpired)
         } else {
-            let detail = json["error"]["message"].as_str().unwrap_or("Instagram API error").to_string();
+            let detail = json["error"]["message"]
+                .as_str()
+                .unwrap_or("Instagram API error")
+                .to_string();
             Err(ProviderError::Api(detail))
         }
     }
 
-    pub async fn get_ig_reels(&self, access_token: &str, ig_id: &str) -> Result<serde_json::Value, ProviderError> {
+    pub async fn get_ig_reels(
+        &self,
+        access_token: &str,
+        ig_id: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
         let url = format!("{}/{ig_id}/media", self.graph_url());
         let resp = self
             .http
             .get(&url)
-            .query(&[("fields", "id,caption,media_type,media_url,permalink,timestamp"), ("media_type", "REELS")])
+            .query(&[
+                (
+                    "fields",
+                    "id,caption,media_type,media_url,permalink,timestamp",
+                ),
+                ("media_type", "REELS"),
+            ])
             .header("Authorization", format!("Bearer {access_token}"))
             .send()
             .await?;
@@ -1429,16 +1601,25 @@ impl InstagramProvider {
         if status.is_success() {
             Ok(json)
         } else if status == 429 {
-            Err(ProviderError::RateLimited("Instagram API rate limit".into()))
+            Err(ProviderError::RateLimited(
+                "Instagram API rate limit".into(),
+            ))
         } else if status == 401 {
             Err(ProviderError::TokenExpired)
         } else {
-            let detail = json["error"]["message"].as_str().unwrap_or("Instagram API error").to_string();
+            let detail = json["error"]["message"]
+                .as_str()
+                .unwrap_or("Instagram API error")
+                .to_string();
             Err(ProviderError::Api(detail))
         }
     }
 
-    pub async fn get_ig_stories(&self, access_token: &str, ig_id: &str) -> Result<serde_json::Value, ProviderError> {
+    pub async fn get_ig_stories(
+        &self,
+        access_token: &str,
+        ig_id: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
         let url = format!("{}/{ig_id}/stories", self.graph_url());
         let resp = self
             .http
@@ -1452,11 +1633,16 @@ impl InstagramProvider {
         if status.is_success() {
             Ok(json)
         } else if status == 429 {
-            Err(ProviderError::RateLimited("Instagram API rate limit".into()))
+            Err(ProviderError::RateLimited(
+                "Instagram API rate limit".into(),
+            ))
         } else if status == 401 {
             Err(ProviderError::TokenExpired)
         } else {
-            let detail = json["error"]["message"].as_str().unwrap_or("Instagram API error").to_string();
+            let detail = json["error"]["message"]
+                .as_str()
+                .unwrap_or("Instagram API error")
+                .to_string();
             Err(ProviderError::Api(detail))
         }
     }
@@ -1492,12 +1678,19 @@ impl InstagramProvider {
         Ok((name, username, avatar))
     }
 
-    pub async fn get_ig_followers(&self, access_token: &str, ig_id: &str) -> Result<serde_json::Value, ProviderError> {
+    pub async fn get_ig_followers(
+        &self,
+        access_token: &str,
+        ig_id: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
         let url = format!("{}/{ig_id}", self.graph_url());
         let resp = self
             .http
             .get(&url)
-            .query(&[("fields", "name,username,followers_count,follows_count,media_count,profile_picture_url")])
+            .query(&[(
+                "fields",
+                "name,username,followers_count,follows_count,media_count,profile_picture_url",
+            )])
             .header("Authorization", format!("Bearer {access_token}"))
             .send()
             .await?;
@@ -1506,16 +1699,26 @@ impl InstagramProvider {
         if status.is_success() {
             Ok(json)
         } else if status == 429 {
-            Err(ProviderError::RateLimited("Instagram API rate limit".into()))
+            Err(ProviderError::RateLimited(
+                "Instagram API rate limit".into(),
+            ))
         } else if status == 401 {
             Err(ProviderError::TokenExpired)
         } else {
-            let detail = json["error"]["message"].as_str().unwrap_or("Instagram API error").to_string();
+            let detail = json["error"]["message"]
+                .as_str()
+                .unwrap_or("Instagram API error")
+                .to_string();
             Err(ProviderError::Api(detail))
         }
     }
 
-    pub async fn get_ig_business_discovery(&self, access_token: &str, ig_id: &str, target_username: &str) -> Result<serde_json::Value, ProviderError> {
+    pub async fn get_ig_business_discovery(
+        &self,
+        access_token: &str,
+        ig_id: &str,
+        target_username: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
         let url = format!("{}/{ig_id}/business_discovery", self.graph_url());
         let resp = self
             .http
@@ -1529,21 +1732,33 @@ impl InstagramProvider {
         if status.is_success() {
             Ok(json)
         } else if status == 429 {
-            Err(ProviderError::RateLimited("Instagram API rate limit".into()))
+            Err(ProviderError::RateLimited(
+                "Instagram API rate limit".into(),
+            ))
         } else if status == 401 {
             Err(ProviderError::TokenExpired)
         } else {
-            let detail = json["error"]["message"].as_str().unwrap_or("Instagram API error").to_string();
+            let detail = json["error"]["message"]
+                .as_str()
+                .unwrap_or("Instagram API error")
+                .to_string();
             Err(ProviderError::Api(detail))
         }
     }
 
-    pub async fn get_ig_mentions(&self, access_token: &str, ig_id: &str) -> Result<serde_json::Value, ProviderError> {
+    pub async fn get_ig_mentions(
+        &self,
+        access_token: &str,
+        ig_id: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
         let url = format!("{}/{ig_id}/mentions", self.graph_url());
         let resp = self
             .http
             .get(&url)
-            .query(&[("fields", "id,caption,media_type,media_url,permalink,timestamp")])
+            .query(&[(
+                "fields",
+                "id,caption,media_type,media_url,permalink,timestamp",
+            )])
             .header("Authorization", format!("Bearer {access_token}"))
             .send()
             .await?;
@@ -1552,21 +1767,36 @@ impl InstagramProvider {
         if status.is_success() {
             Ok(json)
         } else if status == 429 {
-            Err(ProviderError::RateLimited("Instagram API rate limit".into()))
+            Err(ProviderError::RateLimited(
+                "Instagram API rate limit".into(),
+            ))
         } else if status == 401 {
             Err(ProviderError::TokenExpired)
         } else {
-            let detail = json["error"]["message"].as_str().unwrap_or("Instagram API error").to_string();
+            let detail = json["error"]["message"]
+                .as_str()
+                .unwrap_or("Instagram API error")
+                .to_string();
             Err(ProviderError::Api(detail))
         }
     }
 
-    pub async fn get_ig_insights_audience(&self, access_token: &str, ig_id: &str) -> Result<serde_json::Value, ProviderError> {
+    pub async fn get_ig_insights_audience(
+        &self,
+        access_token: &str,
+        ig_id: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
         let url = format!("{}/{ig_id}/insights", self.graph_url());
         let resp = self
             .http
             .get(&url)
-            .query(&[("metric", "audience_city,audience_country,audience_gender,audience_age_range"), ("period", "lifetime")])
+            .query(&[
+                (
+                    "metric",
+                    "audience_city,audience_country,audience_gender,audience_age_range",
+                ),
+                ("period", "lifetime"),
+            ])
             .header("Authorization", format!("Bearer {access_token}"))
             .send()
             .await?;
@@ -1575,11 +1805,16 @@ impl InstagramProvider {
         if status.is_success() {
             Ok(json)
         } else if status == 429 {
-            Err(ProviderError::RateLimited("Instagram API rate limit".into()))
+            Err(ProviderError::RateLimited(
+                "Instagram API rate limit".into(),
+            ))
         } else if status == 401 {
             Err(ProviderError::TokenExpired)
         } else {
-            let detail = json["error"]["message"].as_str().unwrap_or("Instagram API error").to_string();
+            let detail = json["error"]["message"]
+                .as_str()
+                .unwrap_or("Instagram API error")
+                .to_string();
             Err(ProviderError::Api(detail))
         }
     }
@@ -1599,12 +1834,12 @@ impl InstagramProvider {
             .await?;
         let json: serde_json::Value = resp.json().await?;
         if let Some(err) = json["error"].as_object() {
-            let msg = err["message"].as_str().unwrap_or("Container status check failed");
+            let msg = err["message"]
+                .as_str()
+                .unwrap_or("Container status check failed");
             return Err(ProviderError::Api(msg.to_string()));
         }
-        let status_code = json["status_code"]
-            .as_str()
-            .unwrap_or("IN_PROGRESS");
+        let status_code = json["status_code"].as_str().unwrap_or("IN_PROGRESS");
         Ok(status_code.to_string())
     }
 

@@ -2,7 +2,6 @@
 // Splits post content based on platform character limits.
 // Handles thread creation for X/Twitter, Bluesky, etc.
 
-
 /// Character limits per platform.
 ///
 /// TODO: this duplicates `SocialProvider::max_content_length()`. The
@@ -54,9 +53,13 @@ pub struct SplitSegment {
 
 /// Split content for a specific platform, respecting character limits.
 /// Returns one or more segments. For thread-capable platforms, adds numbering.
-pub fn split_content(content: &str, provider: &str, _max_media_per_post: usize) -> Vec<SplitSegment> {
+pub fn split_content(
+    content: &str,
+    provider: &str,
+    _max_media_per_post: usize,
+) -> Vec<SplitSegment> {
     let limit = platform_limit(provider);
-    
+
     // If content fits, return as-is
     if content.len() <= limit {
         return vec![SplitSegment {
@@ -65,27 +68,35 @@ pub fn split_content(content: &str, provider: &str, _max_media_per_post: usize) 
             total: 1,
         }];
     }
-    
+
     // Account for thread numbering overhead when splitting
     // Format: "(N/M)\n" adds ~7 chars for single-digit, ~9 for double-digit
     let overhead = if supports_threads(provider) { 10 } else { 0 };
-    let effective_limit = if overhead > 0 { limit.saturating_sub(overhead) } else { limit };
-    
+    let effective_limit = if overhead > 0 {
+        limit.saturating_sub(overhead)
+    } else {
+        limit
+    };
+
     let chunks = smart_split(content, effective_limit);
     let total = chunks.len();
-    
-    chunks.into_iter().enumerate().map(|(i, chunk)| {
-        let mut segment = chunk;
-        // Add thread numbering for thread-capable platforms
-        if supports_threads(provider) && total > 1 {
-            segment = format!("({}/{})\n{}", i + 1, total, segment);
-        }
-        SplitSegment {
-            content: segment,
-            sequence: i + 1,
-            total,
-        }
-    }).collect()
+
+    chunks
+        .into_iter()
+        .enumerate()
+        .map(|(i, chunk)| {
+            let mut segment = chunk;
+            // Add thread numbering for thread-capable platforms
+            if supports_threads(provider) && total > 1 {
+                segment = format!("({}/{})\n{}", i + 1, total, segment);
+            }
+            SplitSegment {
+                content: segment,
+                sequence: i + 1,
+                total,
+            }
+        })
+        .collect()
 }
 
 /// Smart split: try paragraph boundaries first, then sentence boundaries, then word boundaries.
@@ -93,23 +104,23 @@ fn smart_split(content: &str, max_len: usize) -> Vec<String> {
     if content.len() <= max_len {
         return vec![content.to_string()];
     }
-    
+
     let mut result = Vec::new();
     let mut remaining = content;
-    
+
     while !remaining.is_empty() {
         if remaining.len() <= max_len {
             result.push(remaining.to_string());
             break;
         }
-        
+
         // Try to find a good break point within the limit
         let break_at = find_break_point(remaining, max_len);
         let chunk = remaining[..break_at].to_string();
         result.push(chunk);
-        remaining = &remaining[break_at..].trim_start();
+        remaining = remaining[break_at..].trim_start();
     }
-    
+
     result
 }
 
@@ -117,12 +128,12 @@ fn smart_split(content: &str, max_len: usize) -> Vec<String> {
 /// Priority: paragraph > sentence > comma > word > hard cut
 fn find_break_point(text: &str, max_len: usize) -> usize {
     let search_zone = &text[..max_len];
-    
+
     // Try paragraph break
     if let Some(pos) = search_zone.rfind("\n\n") {
         return pos + 2;
     }
-    
+
     // Try sentence break
     if let Some(pos) = search_zone.rfind(". ") {
         return pos + 2;
@@ -133,17 +144,17 @@ fn find_break_point(text: &str, max_len: usize) -> usize {
     if let Some(pos) = search_zone.rfind("? ") {
         return pos + 2;
     }
-    
+
     // Try comma break
     if let Some(pos) = search_zone.rfind(", ") {
         return pos + 2;
     }
-    
+
     // Try word break
     if let Some(pos) = search_zone.rfind(' ') {
         return pos + 1;
     }
-    
+
     // Hard cut at limit
     max_len
 }
@@ -155,16 +166,19 @@ pub fn needs_splitting(content: &str, provider: &str) -> bool {
 
 /// Get a summary of how content will be split across platforms
 pub fn preview_split(content: &str, providers: &[&str]) -> Vec<(String, usize, usize)> {
-    providers.iter().map(|&p| {
-        let segments = split_content(content, p, 4);
-        (p.to_string(), segments.len(), platform_limit(p))
-    }).collect()
+    providers
+        .iter()
+        .map(|&p| {
+            let segments = split_content(content, p, 4);
+            (p.to_string(), segments.len(), platform_limit(p))
+        })
+        .collect()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_no_split_needed() {
         let content = "Short post";
@@ -172,7 +186,7 @@ mod tests {
         assert_eq!(segments.len(), 1);
         assert_eq!(segments[0].content, "Short post");
     }
-    
+
     #[test]
     fn test_split_long_content() {
         let content = "a".repeat(5000);
@@ -182,7 +196,7 @@ mod tests {
             assert!(seg.content.len() <= 4000);
         }
     }
-    
+
     #[test]
     fn test_bluesky_thread() {
         let content = "a".repeat(500);
@@ -190,7 +204,7 @@ mod tests {
         assert!(segments.len() > 1);
         assert!(segments[0].content.starts_with("(1/"));
     }
-    
+
     #[test]
     fn test_platform_limits() {
         assert_eq!(platform_limit("x"), 4000);

@@ -25,7 +25,10 @@ impl PinterestProvider {
         }
     }
 
-    pub async fn get_user_account(&self, access_token: &str) -> Result<serde_json::Value, ProviderError> {
+    pub async fn get_user_account(
+        &self,
+        access_token: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
         let resp = self
             .http
             .get("https://api.pinterest.com/v5/user_account")
@@ -40,7 +43,10 @@ impl PinterestProvider {
         } else if status == 401 {
             Err(ProviderError::TokenExpired)
         } else {
-            let msg = json["message"].as_str().unwrap_or("Pinterest API error").to_string();
+            let msg = json["message"]
+                .as_str()
+                .unwrap_or("Pinterest API error")
+                .to_string();
             Err(ProviderError::Api(msg))
         }
     }
@@ -65,7 +71,10 @@ impl PinterestProvider {
         } else if status == 401 {
             Err(ProviderError::TokenExpired)
         } else {
-            let msg = json["message"].as_str().unwrap_or("Pinterest API error").to_string();
+            let msg = json["message"]
+                .as_str()
+                .unwrap_or("Pinterest API error")
+                .to_string();
             Err(ProviderError::Api(msg))
         }
     }
@@ -92,7 +101,10 @@ impl PinterestProvider {
         } else if status == 401 {
             Err(ProviderError::TokenExpired)
         } else {
-            let msg = json["message"].as_str().unwrap_or("Pinterest API error").to_string();
+            let msg = json["message"]
+                .as_str()
+                .unwrap_or("Pinterest API error")
+                .to_string();
             Err(ProviderError::Api(msg))
         }
     }
@@ -117,7 +129,10 @@ impl PinterestProvider {
         } else if status == 401 {
             Err(ProviderError::TokenExpired)
         } else {
-            let msg = json["message"].as_str().unwrap_or("Pinterest API error").to_string();
+            let msg = json["message"]
+                .as_str()
+                .unwrap_or("Pinterest API error")
+                .to_string();
             Err(ProviderError::Api(msg))
         }
     }
@@ -145,7 +160,10 @@ impl PinterestProvider {
         } else if status == 401 {
             Err(ProviderError::TokenExpired)
         } else {
-            let msg = json["message"].as_str().unwrap_or("Pinterest API error").to_string();
+            let msg = json["message"]
+                .as_str()
+                .unwrap_or("Pinterest API error")
+                .to_string();
             Err(ProviderError::Api(msg))
         }
     }
@@ -173,7 +191,10 @@ impl PinterestProvider {
         } else if status == 401 {
             Err(ProviderError::TokenExpired)
         } else {
-            let msg = json["message"].as_str().unwrap_or("Pinterest API error").to_string();
+            let msg = json["message"]
+                .as_str()
+                .unwrap_or("Pinterest API error")
+                .to_string();
             Err(ProviderError::Api(msg))
         }
     }
@@ -188,27 +209,53 @@ impl PinterestProvider {
         if !internal_id.is_empty() {
             return Ok(Some(internal_id.to_string()));
         }
-        Ok(self.pages(access_token).await?.first().map(|b| b.id.clone()))
+        Ok(self
+            .pages(access_token)
+            .await?
+            .first()
+            .map(|b| b.id.clone()))
     }
 
     /// Search pins by keyword using Pinterest API v5
-    pub async fn search_pins(&self, access_token: &str, query: &str, limit: Option<u32>) -> Result<Value, ProviderError> {
+    pub async fn search_pins(
+        &self,
+        access_token: &str,
+        query: &str,
+        limit: Option<u32>,
+    ) -> Result<Value, ProviderError> {
         let max = limit.unwrap_or(25).min(100);
-        let encoded_query: String = url::form_urlencoded::byte_serialize(query.as_bytes()).collect();
+        let encoded_query: String =
+            url::form_urlencoded::byte_serialize(query.as_bytes()).collect();
         let url = format!(
             "https://api.pinterest.com/v5/pins/search?query={}&page_size={}",
             encoded_query, max
         );
-        let response = self.http.get(&url)
+        let response = self
+            .http
+            .get(&url)
             .header("Authorization", format!("Bearer {}", access_token))
-            .send().await.map_err(|e| ProviderError::Api(e.to_string()))?;
+            .send()
+            .await
+            .map_err(|e| ProviderError::Api(e.to_string()))?;
         let status = response.status();
-        let text = response.text().await.map_err(|e| ProviderError::Api(e.to_string()))?;
+        let text = response
+            .text()
+            .await
+            .map_err(|e| ProviderError::Api(e.to_string()))?;
         let v: Value = serde_json::from_str(&text).unwrap_or(json!({"raw": text}));
-        if status.is_success() { Ok(v) }
-        else if status == StatusCode::UNAUTHORIZED { Err(ProviderError::TokenExpired) }
-        else if status == StatusCode::FORBIDDEN { Err(ProviderError::Auth(v["message"].as_str().unwrap_or("forbidden").into())) }
-        else { Err(ProviderError::Api(v["message"].as_str().unwrap_or(&text).into())) }
+        if status.is_success() {
+            Ok(v)
+        } else if status == StatusCode::UNAUTHORIZED {
+            Err(ProviderError::TokenExpired)
+        } else if status == StatusCode::FORBIDDEN {
+            Err(ProviderError::Auth(
+                v["message"].as_str().unwrap_or("forbidden").into(),
+            ))
+        } else {
+            Err(ProviderError::Api(
+                v["message"].as_str().unwrap_or(&text).into(),
+            ))
+        }
     }
 }
 
@@ -241,9 +288,7 @@ const PIN_METRICS: [(&str, &str); 4] = [
 /// function of the payload and can be fixture-tested.
 fn pin_analytics_series(raw: &serde_json::Value, today: &str) -> Vec<AnalyticsData> {
     let all = raw.get("all").unwrap_or(raw);
-    let daily = all
-        .get("daily_metrics")
-        .and_then(|d| d.as_object());
+    let daily = all.get("daily_metrics").and_then(|d| d.as_object());
     let summary = all.get("summary_metrics").unwrap_or(all);
 
     PIN_METRICS
@@ -323,13 +368,12 @@ impl SocialProvider for PinterestProvider {
             ("state", state),
         ];
 
-        let url = url::Url::parse_with_params(
-            "https://www.pinterest.com/oauth/",
-            &params,
-        )
-        .map_err(|e| ProviderError::Auth(format!("URL parse: {e}")))?;
+        let url = url::Url::parse_with_params("https://www.pinterest.com/oauth/", &params)
+            .map_err(|e| ProviderError::Auth(format!("URL parse: {e}")))?;
 
-        Ok(AuthUrlResponse { url: url.to_string() })
+        Ok(AuthUrlResponse {
+            url: url.to_string(),
+        })
     }
 
     async fn exchange_code(
@@ -524,13 +568,20 @@ impl SocialProvider for PinterestProvider {
         Ok(vec![])
     }
 
-    async fn get_recent_posts(&self, access_token: &str, _internal_id: &str, limit: u32) -> Result<Vec<ExternalPostData>, ProviderError> {
+    async fn get_recent_posts(
+        &self,
+        access_token: &str,
+        _internal_id: &str,
+        limit: u32,
+    ) -> Result<Vec<ExternalPostData>, ProviderError> {
         let boards = self.pages(access_token).await?;
         let mut posts = Vec::new();
-        let max_pins = (limit / 5).max(1).min(10);
+        let max_pins = (limit / 5).clamp(1, 10);
 
         for board in boards.iter().take(max_pins as usize) {
-            let pins = self.get_board_pins(access_token, &board.id, limit.min(50)).await?;
+            let pins = self
+                .get_board_pins(access_token, &board.id, limit.min(50))
+                .await?;
             if let Some(items) = pins["items"].as_array() {
                 for item in items {
                     let pin_id = item["id"].as_str().unwrap_or("").to_string();
@@ -545,7 +596,10 @@ impl SocialProvider for PinterestProvider {
                     let posted_at = crate::social::common::parse_timestamp(created_at);
 
                     let post_url = link.or_else(|| {
-                        Some(format!("https://www.pinterest.com/pin/{}", item["id"].as_str().unwrap_or("")))
+                        Some(format!(
+                            "https://www.pinterest.com/pin/{}",
+                            item["id"].as_str().unwrap_or("")
+                        ))
                     });
 
                     posts.push(ExternalPostData {
@@ -554,12 +608,15 @@ impl SocialProvider for PinterestProvider {
                         author_name: None,
                         author_handle: None,
                         author_avatar: None,
-                        media: media_url.into_iter().map(|u| MediaAttachment {
-                            url: u,
-                            mime_type: String::new(),
-                            alt: None,
-                            poster_url: None,
-                        }).collect(),
+                        media: media_url
+                            .into_iter()
+                            .map(|u| MediaAttachment {
+                                url: u,
+                                mime_type: String::new(),
+                                alt: None,
+                                poster_url: None,
+                            })
+                            .collect(),
                         created_at: posted_at,
                         url: post_url,
                         metadata: title.map(|t| serde_json::json!({"title": t})),
@@ -569,7 +626,7 @@ impl SocialProvider for PinterestProvider {
         }
 
         // Sort by posted_at descending, take top 20
-        posts.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        posts.sort_by_key(|a| std::cmp::Reverse(a.created_at));
         posts.truncate(20);
 
         Ok(posts)
@@ -691,7 +748,8 @@ impl SocialProvider for PinterestProvider {
                 .as_str()
                 .unwrap_or("Pinterest publish failed");
             let code = json["code"].as_u64().unwrap_or(0);
-            let raw = format!("Pinterest publish failed (HTTP {publish_status}, code {code}): {err}");
+            let raw =
+                format!("Pinterest publish failed (HTTP {publish_status}, code {code}): {err}");
             ProviderError::Api(friendly_error(
                 self.map_error(err, publish_status.as_u16()),
                 &raw,
@@ -804,7 +862,10 @@ mod tests {
         assert_eq!(impressions.data.len(), 2);
         assert_eq!(impressions.data[0].date, "2026-09-28");
         assert_eq!(impressions.data[1].total, "20");
-        let saves = series.iter().find(|s| s.label == "Saves").expect("Saves series");
+        let saves = series
+            .iter()
+            .find(|s| s.label == "Saves")
+            .expect("Saves series");
         assert_eq!(saves.data[1].total, "2");
     }
 
@@ -826,10 +887,20 @@ mod tests {
     #[test]
     fn analytics_window_should_clamp_to_pinterest_ninety_day_max() {
         let (start, end) = analytics_window(3650);
-        assert_eq!(end, chrono::Utc::now().date_naive().format("%Y-%m-%d").to_string());
+        assert_eq!(
+            end,
+            chrono::Utc::now()
+                .date_naive()
+                .format("%Y-%m-%d")
+                .to_string()
+        );
         let span = end.parse::<chrono::NaiveDate>().expect("end date")
             - start.parse::<chrono::NaiveDate>().expect("start date");
-        assert_eq!(span.num_days(), 89, "v5 caps analytics at 90 days inclusive");
+        assert_eq!(
+            span.num_days(),
+            89,
+            "v5 caps analytics at 90 days inclusive"
+        );
     }
 
     // ── B4: map_error fixtures ──────────────────────────────
@@ -854,7 +925,9 @@ mod tests {
 
     #[test]
     fn map_error_explains_rejected_media() {
-        let msg = provider().map_error("The image upload was rejected", 422).unwrap();
+        let msg = provider()
+            .map_error("The image upload was rejected", 422)
+            .unwrap();
         assert!(msg.contains("20 MB"), "got: {msg}");
     }
 

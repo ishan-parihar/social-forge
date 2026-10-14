@@ -60,7 +60,10 @@ pub async fn create_user_with_id(
     .await
 }
 
-pub async fn get_user_by_email(pool: &SqlitePool, email: &str) -> Result<Option<User>, sqlx::Error> {
+pub async fn get_user_by_email(
+    pool: &SqlitePool,
+    email: &str,
+) -> Result<Option<User>, sqlx::Error> {
     sqlx::query_as!(
         User,
         r#"SELECT id as "id!: Uuid", email, password, name,
@@ -92,6 +95,10 @@ pub async fn get_user_by_id(pool: &SqlitePool, id: Uuid) -> Result<Option<User>,
 // INTEGRATIONS
 // ══════════════════════════════════════════════════════════════
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "OAuth provider fields: all persisted and required for upsert identity"
+)]
 pub async fn create_integration(
     pool: &SqlitePool,
     user_id: Uuid,
@@ -111,7 +118,7 @@ pub async fn create_integration(
     let id = Uuid::new_v4();
     sqlx::query_as!(
         Integration,
-r#"INSERT INTO integrations
+        r#"INSERT INTO integrations
            (id, user_id, provider_identifier, provider_name, internal_id,
              access_token, refresh_token, token_expires_at,
              profile_name, profile_picture, profile_url,
@@ -321,6 +328,10 @@ pub async fn delete_integration(
 // ══════════════════════════════════════════════════════════════
 
 /// Batch-create posts for multiple integrations in a single transaction.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Post composer fields: all bound to DB columns, no nesting grouping available"
+)]
 pub async fn create_posts_for_integrations(
     pool: &SqlitePool,
     user_id: Uuid,
@@ -372,6 +383,10 @@ pub async fn create_posts_for_integrations(
     Ok(posts)
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Post composer fields: all bound to DB columns, no nesting grouping available"
+)]
 pub async fn create_post(
     pool: &SqlitePool,
     user_id: Uuid,
@@ -417,6 +432,10 @@ pub async fn create_post(
 }
 
 /// Create thread posts (multiple content parts sharing a group_id)
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Thread post fields: all bound to DB columns, no nesting grouping available"
+)]
 pub async fn create_thread_posts(
     pool: &SqlitePool,
     user_id: Uuid,
@@ -430,9 +449,8 @@ pub async fn create_thread_posts(
     let st = state.unwrap_or(PostState::Draft);
     let mut tx = pool.begin().await?;
     let mut posts = Vec::new();
-    let mut seq = 1i32;
 
-    for part in content_parts {
+    for (seq, part) in (1i32..).zip(content_parts.iter()) {
         // Apply per-part delay: each part's scheduled_at is offset by
         // (seq - 1) * delay_minutes. Part 1 publishes at scheduled_at,
         // part 2 at scheduled_at + delay, part 3 at scheduled_at + 2*delay, etc.
@@ -469,10 +487,9 @@ pub async fn create_thread_posts(
             .bind(&serde_json::Value::Null)
             // v24-5: store delay_minutes in settings so the scheduler can
             // read it and sleep between thread parts.
-            .bind(if delay_minutes.is_some() {
-                serde_json::json!({"delay_minutes": delay_minutes.unwrap()})
-            } else {
-                serde_json::json!({})
+            .bind(match delay_minutes {
+                Some(d) => serde_json::json!({"delay_minutes": d}),
+                None => serde_json::json!({}),
             })
             .bind(part_scheduled_at.map(EpochUtc::from))
             .bind(&st)
@@ -484,7 +501,6 @@ pub async fn create_thread_posts(
             .await?;
             posts.push(post);
         }
-        seq += 1;
     }
 
     tx.commit().await?;
@@ -508,8 +524,8 @@ pub async fn get_posts_by_group_id(
          FROM posts WHERE user_id = ? AND group_id = ?
          ORDER BY sequence ASC, created_at ASC"#,
     )
-        .bind(user_id)
-        .bind(group_id)
+    .bind(user_id)
+    .bind(group_id)
     .fetch_all(pool)
     .await
 }
@@ -545,7 +561,7 @@ pub async fn list_posts(
                kanban_sort_order, kanban_substate, due_date, priority
              FROM posts WHERE user_id = ? AND state = ? AND deleted_at IS NULL
              ORDER BY scheduled_at DESC NULLS LAST, created_at DESC
-             LIMIT ? OFFSET ?"#
+             LIMIT ? OFFSET ?"#,
         )
         .bind(user_id)
         .bind(ps)
@@ -554,9 +570,9 @@ pub async fn list_posts(
         .fetch_all(pool)
         .await
     } else {
-         list_posts_all(pool, user_id, limit, offset).await
-     }
- }
+        list_posts_all(pool, user_id, limit, offset).await
+    }
+}
 
 /// Count posts for a user, optionally filtered by state
 pub async fn count_posts_by_user(
@@ -573,7 +589,7 @@ pub async fn count_posts_by_user(
             "error" => PostState::Error,
             _ => {
                 let row: (Option<i64>,) = sqlx::query_as(
-                    "SELECT COUNT(*) FROM posts WHERE user_id = ? AND deleted_at IS NULL"
+                    "SELECT COUNT(*) FROM posts WHERE user_id = ? AND deleted_at IS NULL",
                 )
                 .bind(user_id)
                 .fetch_one(pool)
@@ -582,7 +598,7 @@ pub async fn count_posts_by_user(
             }
         };
         let row: (Option<i64>,) = sqlx::query_as(
-            "SELECT COUNT(*) FROM posts WHERE user_id = ? AND state = ? AND deleted_at IS NULL"
+            "SELECT COUNT(*) FROM posts WHERE user_id = ? AND state = ? AND deleted_at IS NULL",
         )
         .bind(user_id)
         .bind(ps)
@@ -590,12 +606,11 @@ pub async fn count_posts_by_user(
         .await?;
         Ok(row.0.unwrap_or(0))
     } else {
-        let row: (Option<i64>,) = sqlx::query_as(
-            "SELECT COUNT(*) FROM posts WHERE user_id = ? AND deleted_at IS NULL"
-        )
-        .bind(user_id)
-        .fetch_one(pool)
-        .await?;
+        let row: (Option<i64>,) =
+            sqlx::query_as("SELECT COUNT(*) FROM posts WHERE user_id = ? AND deleted_at IS NULL")
+                .bind(user_id)
+                .fetch_one(pool)
+                .await?;
         Ok(row.0.unwrap_or(0))
     }
 }
@@ -608,7 +623,7 @@ async fn list_posts_all(
 ) -> Result<Vec<Post>, sqlx::Error> {
     // Runtime query (see note in list_posts above).
     sqlx::query_as::<_, Post>(
-         r#"SELECT id, user_id, integration_id, state,
+        r#"SELECT id, user_id, integration_id, state,
             content, title, media, settings, scheduled_at, published_at,
             platform_post_id, platform_post_url, error_message,
             created_at, updated_at,
@@ -618,14 +633,14 @@ async fn list_posts_all(
             kanban_sort_order, kanban_substate, due_date, priority
            FROM posts WHERE user_id = ? AND deleted_at IS NULL
            ORDER BY scheduled_at DESC NULLS LAST, created_at DESC
-           LIMIT ? OFFSET ?"#
-     )
-     .bind(user_id)
-     .bind(limit)
-     .bind(offset)
-     .fetch_all(pool)
-     .await
- }
+           LIMIT ? OFFSET ?"#,
+    )
+    .bind(user_id)
+    .bind(limit)
+    .bind(offset)
+    .fetch_all(pool)
+    .await
+}
 
 // ── Phase 5: search + filter + sort variants ───────────────────
 // Runtime queries (not sqlx::query! macros) per AGENTS.md §0 rule 4.
@@ -658,7 +673,7 @@ fn sort_to_order_by(sort: &str) -> &'static str {
             // engagement sort: left-join post_engagement and order by
             // (likes + comments + shares) DESC. Done in the query itself.
             "engagement DESC NULLS LAST"
-        },
+        }
         _ => "scheduled_at DESC NULLS LAST, created_at DESC",
     }
 }
@@ -666,6 +681,10 @@ fn sort_to_order_by(sort: &str) -> &'static str {
 /// Search + filter + sort posts for a user. Used by the Phase 5 posts
 /// list endpoint. All params are optional; passing None for a filter
 /// means "no filter on this field".
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Search/filter parameters: each filter is a distinct DB column, no grouping available"
+)]
 pub async fn list_posts_search(
     pool: &SqlitePool,
     user_id: Uuid,
@@ -683,7 +702,10 @@ pub async fn list_posts_search(
     // (safe because sort_to_order_by returns a fixed set of literals) and
     // bind all user-provided values as parameters.
     let q_pattern = q.map(|s| {
-        let escaped = s.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
+        let escaped = s
+            .replace('\\', "\\\\")
+            .replace('%', "\\%")
+            .replace('_', "\\_");
         format!("%{escaped}%")
     });
 
@@ -715,7 +737,8 @@ pub async fn list_posts_search(
            ORDER BY (COALESCE(pe.likes, 0) + COALESCE(pe.comments, 0) + COALESCE(pe.shares, 0)) DESC NULLS LAST
            LIMIT ? OFFSET ?"#.to_string()
     } else {
-        format!(r#"SELECT id, user_id, integration_id, state,
+        format!(
+            r#"SELECT id, user_id, integration_id, state,
                   content, title, media, settings, scheduled_at, published_at,
                   platform_post_id, platform_post_url, error_message,
                   created_at, updated_at,
@@ -732,7 +755,9 @@ pub async fn list_posts_search(
              AND (? IS NULL OR id IN (
                SELECT post_id FROM post_tags WHERE tag_id IN (SELECT value FROM json_each(?))
              ))
-           ORDER BY {} LIMIT ? OFFSET ?"#, order_by)
+           ORDER BY {} LIMIT ? OFFSET ?"#,
+            order_by
+        )
     };
 
     let mut q_builder = sqlx::query_as::<_, Post>(&sql)
@@ -763,7 +788,10 @@ pub async fn count_posts_search(
     tag_ids: Option<&[Uuid]>,
 ) -> Result<i64, sqlx::Error> {
     let q_pattern = q.map(|s| {
-        let escaped = s.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
+        let escaped = s
+            .replace('\\', "\\\\")
+            .replace('%', "\\%")
+            .replace('_', "\\_");
         format!("%{escaped}%")
     });
 
@@ -792,14 +820,14 @@ pub async fn count_posts_search(
     Ok(row.0.unwrap_or(0))
 }
 
- pub async fn get_post(
+pub async fn get_post(
     pool: &SqlitePool,
     id: Uuid,
     user_id: Uuid,
 ) -> Result<Option<Post>, sqlx::Error> {
     // Runtime query (see note in list_posts above).
     sqlx::query_as::<_, Post>(
-         r#"SELECT id, user_id, integration_id, state,
+        r#"SELECT id, user_id, integration_id, state,
             content, title, media, settings, scheduled_at, published_at,
             platform_post_id, platform_post_url, error_message,
             created_at, updated_at,
@@ -808,14 +836,14 @@ pub async fn count_posts_search(
             campaign_id,
             kanban_sort_order, kanban_substate, due_date, priority
           FROM posts WHERE id = ? AND user_id = ? AND deleted_at IS NULL"#,
-     )
-     .bind(id)
-     .bind(user_id)
-     .fetch_optional(pool)
-     .await
- }
+    )
+    .bind(id)
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await
+}
 
- pub async fn update_post_content(
+pub async fn update_post_content(
     pool: &SqlitePool,
     id: Uuid,
     user_id: Uuid,
@@ -836,22 +864,26 @@ pub async fn count_posts_search(
                first_comment, sequence, idempotency_key,
                campaign_id, kanban_substate, due_date"#,
     )
-        .bind(content)
-        .bind(title)
-        .bind(media)
-        .bind(settings)
-        .bind(id)
-        .bind(user_id)
-      .fetch_optional(pool)
-      .await
-  }
+    .bind(content)
+    .bind(title)
+    .bind(media)
+    .bind(settings)
+    .bind(id)
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await
+}
 
- /// v23-5: update post content + first_comment in one UPDATE.
- /// The original update_post_content only updates content/title/media/
- /// settings — first_comment was silently dropped on edit. This variant
- /// adds first_comment to the UPDATE so the composer's edit-mode can
- /// persist first-comment changes.
- pub async fn update_post_full(
+/// v23-5: update post content + first_comment in one UPDATE.
+/// The original update_post_content only updates content/title/media/
+/// settings — first_comment was silently dropped on edit. This variant
+/// adds first_comment to the UPDATE so the composer's edit-mode can
+/// persist first-comment changes.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Post edit fields: all bound to DB columns, no nesting grouping available"
+)]
+pub async fn update_post_full(
     pool: &SqlitePool,
     id: Uuid,
     user_id: Uuid,
@@ -860,7 +892,7 @@ pub async fn count_posts_search(
     media: &serde_json::Value,
     settings: &serde_json::Value,
     first_comment: Option<&str>,
- ) -> Result<Option<Post>, sqlx::Error> {
+) -> Result<Option<Post>, sqlx::Error> {
     sqlx::query_as::<_, Post>(
         r#"UPDATE posts SET
              content = ?, title = ?, media = ?, settings = ?,
@@ -875,18 +907,18 @@ pub async fn count_posts_search(
                first_comment, sequence, idempotency_key,
                campaign_id, kanban_substate, due_date"#,
     )
-        .bind(content)
-        .bind(title)
-        .bind(media)
-        .bind(settings)
-        .bind(first_comment)
-        .bind(id)
-        .bind(user_id)
-      .fetch_optional(pool)
-      .await
-  }
+    .bind(content)
+    .bind(title)
+    .bind(media)
+    .bind(settings)
+    .bind(first_comment)
+    .bind(id)
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await
+}
 
-  pub async fn schedule_post(
+pub async fn schedule_post(
     pool: &SqlitePool,
     id: Uuid,
     user_id: Uuid,
@@ -904,19 +936,19 @@ pub async fn count_posts_search(
                first_comment, sequence, idempotency_key,
                campaign_id, kanban_substate, due_date"#,
     )
-.bind(EpochUtc::from(scheduled_at))
+    .bind(EpochUtc::from(scheduled_at))
     .bind(id)
     .bind(user_id)
-      .fetch_optional(pool)
-      .await
-  }
+    .fetch_optional(pool)
+    .await
+}
 
-  /// v24-1: Unschedule a post — transition it back to draft state.
-  /// Sets scheduled_at = NULL and state = 'draft'. Only works on posts
-  /// that are currently 'queued' or 'draft' (not published/error/publishing).
-  /// Closes the ComposerModal TODO at line 551 which used the "100 years
-  /// in the future" hack to effectively unschedule.
-  pub async fn unschedule_post(
+/// v24-1: Unschedule a post — transition it back to draft state.
+/// Sets scheduled_at = NULL and state = 'draft'. Only works on posts
+/// that are currently 'queued' or 'draft' (not published/error/publishing).
+/// Closes the ComposerModal TODO at line 551 which used the "100 years
+/// in the future" hack to effectively unschedule.
+pub async fn unschedule_post(
     pool: &SqlitePool,
     id: Uuid,
     user_id: Uuid,
@@ -935,33 +967,33 @@ pub async fn count_posts_search(
                first_comment, sequence, idempotency_key,
                campaign_id, kanban_substate, due_date"#,
     )
-        .bind(id)
-        .bind(user_id)
-      .fetch_optional(pool)
-      .await
-  }
+    .bind(id)
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await
+}
 
-  /// Phase v21: reset a published post for re-publishing.
-  ///
-  /// Sets `state = 'queued'`, updates `scheduled_at` to the new time,
-  /// and CLEARS `platform_post_id`, `platform_post_url`, `published_at`,
-  /// `error_message`, `retry_count`, `next_retry_at`. The scheduler will
-  /// then pick it up at the new time and publish a NEW post to the
-  /// platform (creating a fresh platform_post_id).
-  ///
-  /// This is the "Reschedule the post" path of the postiz-inspired
-  /// drag-published-post modal.
-  ///
-  /// Uses a runtime query (not query_as!) because we don't have a live
-  /// Postgres to regenerate the .sqlx offline cache with this new SQL.
-  pub async fn reset_post_for_republish(
-      pool: &SqlitePool,
-      id: Uuid,
-      user_id: Uuid,
-      scheduled_at: DateTime<Utc>,
-  ) -> Result<Option<Post>, sqlx::Error> {
-      sqlx::query_as::<_, Post>(
-          r#"UPDATE posts SET
+/// Phase v21: reset a published post for re-publishing.
+///
+/// Sets `state = 'queued'`, updates `scheduled_at` to the new time,
+/// and CLEARS `platform_post_id`, `platform_post_url`, `published_at`,
+/// `error_message`, `retry_count`, `next_retry_at`. The scheduler will
+/// then pick it up at the new time and publish a NEW post to the
+/// platform (creating a fresh platform_post_id).
+///
+/// This is the "Reschedule the post" path of the postiz-inspired
+/// drag-published-post modal.
+///
+/// Uses a runtime query (not query_as!) because we don't have a live
+/// Postgres to regenerate the .sqlx offline cache with this new SQL.
+pub async fn reset_post_for_republish(
+    pool: &SqlitePool,
+    id: Uuid,
+    user_id: Uuid,
+    scheduled_at: DateTime<Utc>,
+) -> Result<Option<Post>, sqlx::Error> {
+    sqlx::query_as::<_, Post>(
+        r#"UPDATE posts SET
               scheduled_at = ?,
               state = 'queued',
               platform_post_id = NULL,
@@ -986,31 +1018,31 @@ pub async fn count_posts_search(
                repeat_interval_days, repeat_end_date, group_id,
                first_comment, sequence, idempotency_key,
                campaign_id, kanban_substate, due_date"#,
-      )
-      .bind(EpochUtc::from(scheduled_at))
-      .bind(Uuid::new_v4())
-      .bind(id)
-      .bind(user_id)
-      .fetch_optional(pool)
-      .await
-  }
+    )
+    .bind(EpochUtc::from(scheduled_at))
+    .bind(Uuid::new_v4())
+    .bind(id)
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await
+}
 
-  /// Phase v21: change a post's scheduled_at WITHOUT touching its state
-  /// or release fields. Used for the "Just update the post details" path
-  /// of the postiz-inspired drag-published-post modal — the user wants
-  /// to re-date a published post for archival purposes without triggering
-  /// a re-publish.
-  ///
-  /// Leaves `state`, `platform_post_id`, `platform_post_url`,
-  /// `published_at` untouched. Only `scheduled_at` and `updated_at` change.
-  pub async fn update_post_date_only(
-      pool: &SqlitePool,
-      id: Uuid,
-      user_id: Uuid,
-      scheduled_at: DateTime<Utc>,
-  ) -> Result<Option<Post>, sqlx::Error> {
-      sqlx::query_as::<_, Post>(
-          r#"UPDATE posts SET scheduled_at = ?, updated_at = unixepoch()
+/// Phase v21: change a post's scheduled_at WITHOUT touching its state
+/// or release fields. Used for the "Just update the post details" path
+/// of the postiz-inspired drag-published-post modal — the user wants
+/// to re-date a published post for archival purposes without triggering
+/// a re-publish.
+///
+/// Leaves `state`, `platform_post_id`, `platform_post_url`,
+/// `published_at` untouched. Only `scheduled_at` and `updated_at` change.
+pub async fn update_post_date_only(
+    pool: &SqlitePool,
+    id: Uuid,
+    user_id: Uuid,
+    scheduled_at: DateTime<Utc>,
+) -> Result<Option<Post>, sqlx::Error> {
+    sqlx::query_as::<_, Post>(
+        r#"UPDATE posts SET scheduled_at = ?, updated_at = unixepoch()
              WHERE id = ? AND user_id = ?
              RETURNING id, user_id, integration_id, state,
                content, title, media, settings, scheduled_at, published_at,
@@ -1019,15 +1051,15 @@ pub async fn count_posts_search(
                repeat_interval_days, repeat_end_date, group_id,
                first_comment, sequence, idempotency_key,
                campaign_id, kanban_substate, due_date"#,
-      )
-      .bind(EpochUtc::from(scheduled_at))
-      .bind(id)
-      .bind(user_id)
-      .fetch_optional(pool)
-      .await
-  }
+    )
+    .bind(EpochUtc::from(scheduled_at))
+    .bind(id)
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await
+}
 
-  pub async fn update_post_state(
+pub async fn update_post_state(
     pool: &SqlitePool,
     id: Uuid,
     state: PostState,
@@ -1087,7 +1119,11 @@ pub async fn delete_post(pool: &SqlitePool, id: Uuid, user_id: Uuid) -> Result<b
 }
 
 /// Hard-undelete a post (and its group). Useful for a future "Trash" UI.
-pub async fn undelete_post(pool: &SqlitePool, id: Uuid, user_id: Uuid) -> Result<bool, sqlx::Error> {
+pub async fn undelete_post(
+    pool: &SqlitePool,
+    id: Uuid,
+    user_id: Uuid,
+) -> Result<bool, sqlx::Error> {
     // Runtime query (see note in list_posts above).
     let r = sqlx::query(
         r#"UPDATE posts SET deleted_at = NULL
@@ -1155,8 +1191,8 @@ pub async fn get_post_with_integration(
            JOIN integrations i ON p.integration_id = i.id
            WHERE p.id = ? AND p.user_id = ?"#,
     )
-        .bind(post_id)
-        .bind(user_id)
+    .bind(post_id)
+    .bind(user_id)
     .fetch_optional(pool)
     .await
 }
@@ -1231,10 +1267,7 @@ pub async fn get_due_posts(
            LIMIT ?"#
     );
 
-    let ids: Vec<(Uuid,)> = sqlx::query_as(&sql)
-        .bind(limit)
-        .fetch_all(&mut *tx)
-        .await?;
+    let ids: Vec<(Uuid,)> = sqlx::query_as(&sql).bind(limit).fetch_all(&mut *tx).await?;
 
     if ids.is_empty() {
         tx.commit().await?;
@@ -1449,13 +1482,11 @@ pub async fn set_post_tags(
 
     // Insert new post_tags (only if tag_ids is non-empty)
     for &tag_id in tag_ids {
-        sqlx::query(
-            "INSERT INTO post_tags (post_id, tag_id) VALUES (?, ?) ON CONFLICT DO NOTHING",
-        )
-        .bind(post_id)
-        .bind(tag_id)
-        .execute(&mut *tx)
-        .await?;
+        sqlx::query("INSERT INTO post_tags (post_id, tag_id) VALUES (?, ?) ON CONFLICT DO NOTHING")
+            .bind(post_id)
+            .bind(tag_id)
+            .execute(&mut *tx)
+            .await?;
     }
 
     tx.commit().await?;
@@ -1484,9 +1515,9 @@ pub async fn get_posts_by_date_range(
              AND scheduled_at <= ?
            ORDER BY scheduled_at ASC"#,
     )
-        .bind(user_id)
-        .bind(start)
-        .bind(end)
+    .bind(user_id)
+    .bind(start)
+    .bind(end)
     .fetch_all(pool)
     .await
 }
@@ -1518,10 +1549,9 @@ pub async fn get_calendar_posts_with_metrics(
     // SQLite has no array type: the integration_id list is bound as JSON
     // text and expanded by json_each (? IS NULL disables the filter).
     let mut has_ids = false;
-    if let Some(ref ids) = integration_ids {
+    if let Some(ids) = &integration_ids {
         if !ids.is_empty() {
-            where_clauses
-                .push("p.integration_id IN (SELECT value FROM json_each(?))".into());
+            where_clauses.push("p.integration_id IN (SELECT value FROM json_each(?))".into());
             has_ids = true;
         }
     }
@@ -1606,7 +1636,7 @@ pub async fn find_next_free_slot(
     if posting_times.is_empty() {
         let last: Option<DateTime<Utc>> = if let Some(iid) = integration_id {
             sqlx::query_scalar!(
-               r#"SELECT MAX(scheduled_at) as "max: Option<EpochUtc>" FROM posts
+                r#"SELECT MAX(scheduled_at) as "max: Option<EpochUtc>" FROM posts
                   WHERE user_id = ? AND integration_id = ? AND state != 'error'"#,
                 user_id,
                 iid
@@ -1617,7 +1647,7 @@ pub async fn find_next_free_slot(
             .map(|e| e.0)
         } else {
             sqlx::query_scalar!(
-               r#"SELECT MAX(scheduled_at) as "max: Option<EpochUtc>" FROM posts
+                r#"SELECT MAX(scheduled_at) as "max: Option<EpochUtc>" FROM posts
                   WHERE user_id = ? AND state != 'error'"#,
                 user_id,
             )
@@ -1699,7 +1729,9 @@ pub async fn find_next_free_slot(
                 continue;
             }
             // Skip slots that already have a post (within 1 minute tolerance)
-            let occupied = scheduled.iter().any(|s| (*s - slot).num_minutes().abs() < 1);
+            let occupied = scheduled
+                .iter()
+                .any(|s| (*s - slot).num_minutes().abs() < 1);
             if !occupied {
                 return Ok(Some(slot));
             }
@@ -1714,6 +1746,10 @@ pub async fn find_next_free_slot(
 // MEDIA
 // ══════════════════════════════════════════════════════════════
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Media metadata fields: all bound to DB columns, no nesting grouping available"
+)]
 pub async fn create_media(
     pool: &SqlitePool,
     user_id: Uuid,
@@ -1804,7 +1840,11 @@ pub async fn list_media(
     }
 }
 
-pub async fn delete_media(pool: &SqlitePool, id: Uuid, user_id: Uuid) -> Result<Option<MediaEntry>, sqlx::Error> {
+pub async fn delete_media(
+    pool: &SqlitePool,
+    id: Uuid,
+    user_id: Uuid,
+) -> Result<Option<MediaEntry>, sqlx::Error> {
     sqlx::query_as!(
         MediaEntry,
         r#"DELETE FROM media WHERE id = ? AND user_id = ?
@@ -1878,7 +1918,10 @@ pub async fn save_oauth_state(
     Ok(())
 }
 
-pub async fn get_oauth_state(pool: &SqlitePool, state: &str) -> Result<Option<OAuthState>, sqlx::Error> {
+pub async fn get_oauth_state(
+    pool: &SqlitePool,
+    state: &str,
+) -> Result<Option<OAuthState>, sqlx::Error> {
     sqlx::query_as!(
         OAuthState,
         r#"SELECT id as "id!: Uuid", state, provider, code_verifier, redirect_uri,
@@ -1953,7 +1996,10 @@ pub async fn list_notifications(
     .await
 }
 
-pub async fn count_unread_notifications(pool: &SqlitePool, user_id: Uuid) -> Result<i64, sqlx::Error> {
+pub async fn count_unread_notifications(
+    pool: &SqlitePool,
+    user_id: Uuid,
+) -> Result<i64, sqlx::Error> {
     let row: Option<i64> = sqlx::query_scalar(
         r#"SELECT COUNT(*) FROM notifications WHERE user_id = ? AND is_read = false"#,
     )
@@ -1979,7 +2025,10 @@ pub async fn mark_notification_read(
     .await
 }
 
-pub async fn mark_all_notifications_read(pool: &SqlitePool, user_id: Uuid) -> Result<u64, sqlx::Error> {
+pub async fn mark_all_notifications_read(
+    pool: &SqlitePool,
+    user_id: Uuid,
+) -> Result<u64, sqlx::Error> {
     let r = sqlx::query(
         r#"UPDATE notifications SET is_read = true WHERE user_id = ? AND is_read = false"#,
     )
@@ -2042,11 +2091,11 @@ pub async fn set_post_recurring(
               first_comment, sequence, idempotency_key,
               campaign_id, kanban_substate, due_date"#,
     )
-        .bind(interval_days)
-        .bind(end_date)
-        .bind(group_id)
-        .bind(id)
-        .bind(user_id)
+    .bind(interval_days)
+    .bind(end_date)
+    .bind(group_id)
+    .bind(id)
+    .bind(user_id)
     .fetch_optional(pool)
     .await
 }
@@ -2074,11 +2123,11 @@ pub async fn set_post_recurring_with_copies(
               first_comment, sequence, idempotency_key,
               campaign_id, kanban_substate, due_date"#,
     )
-        .bind(interval_days)
-        .bind(end_date)
-        .bind(group_id)
-        .bind(id)
-        .bind(user_id)
+    .bind(interval_days)
+    .bind(end_date)
+    .bind(group_id)
+    .bind(id)
+    .bind(user_id)
     .fetch_optional(&mut *tx)
     .await?;
 
@@ -2163,7 +2212,11 @@ pub async fn list_rss_feeds(pool: &SqlitePool, user_id: Uuid) -> Result<Vec<RssF
     .await
 }
 
-pub async fn get_rss_feed(pool: &SqlitePool, feed_id: Uuid, user_id: Uuid) -> Result<Option<RssFeed>, sqlx::Error> {
+pub async fn get_rss_feed(
+    pool: &SqlitePool,
+    feed_id: Uuid,
+    user_id: Uuid,
+) -> Result<Option<RssFeed>, sqlx::Error> {
     sqlx::query_as::<_, RssFeed>(
         r#"SELECT id, user_id, feed_url, integration_id, title,
            last_polled_at, poll_interval_min, enabled, use_ai_summary,
@@ -2176,18 +2229,24 @@ pub async fn get_rss_feed(pool: &SqlitePool, feed_id: Uuid, user_id: Uuid) -> Re
     .await
 }
 
-pub async fn delete_rss_feed(pool: &SqlitePool, feed_id: Uuid, user_id: Uuid) -> Result<u64, sqlx::Error> {
-    let r = sqlx::query(
-        "DELETE FROM rss_feeds WHERE id = ? AND user_id = ?",
-    )
-    .bind(feed_id)
-    .bind(user_id)
-    .execute(pool)
-    .await?;
+pub async fn delete_rss_feed(
+    pool: &SqlitePool,
+    feed_id: Uuid,
+    user_id: Uuid,
+) -> Result<u64, sqlx::Error> {
+    let r = sqlx::query("DELETE FROM rss_feeds WHERE id = ? AND user_id = ?")
+        .bind(feed_id)
+        .bind(user_id)
+        .execute(pool)
+        .await?;
     Ok(r.rows_affected())
 }
 
-pub async fn toggle_rss_feed(pool: &SqlitePool, feed_id: Uuid, user_id: Uuid) -> Result<Option<RssFeed>, sqlx::Error> {
+pub async fn toggle_rss_feed(
+    pool: &SqlitePool,
+    feed_id: Uuid,
+    user_id: Uuid,
+) -> Result<Option<RssFeed>, sqlx::Error> {
     sqlx::query_as::<_, RssFeed>(
         r#"UPDATE rss_feeds SET enabled = NOT enabled, updated_at = unixepoch()
            WHERE id = ? AND user_id = ?
@@ -2250,14 +2309,17 @@ pub async fn insert_rss_post(
     Ok(())
 }
 
-pub async fn check_rss_post_exists(pool: &SqlitePool, feed_id: Uuid, content_hash: &str) -> Result<bool, sqlx::Error> {
-    let count: Option<i64> = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM rss_posts WHERE feed_id = ? AND content_hash = ?",
-    )
-    .bind(feed_id)
-    .bind(content_hash)
-    .fetch_one(pool)
-    .await?;
+pub async fn check_rss_post_exists(
+    pool: &SqlitePool,
+    feed_id: Uuid,
+    content_hash: &str,
+) -> Result<bool, sqlx::Error> {
+    let count: Option<i64> =
+        sqlx::query_scalar("SELECT COUNT(*) FROM rss_posts WHERE feed_id = ? AND content_hash = ?")
+            .bind(feed_id)
+            .bind(content_hash)
+            .fetch_one(pool)
+            .await?;
     Ok(count.unwrap_or(0) > 0)
 }
 
@@ -2285,18 +2347,24 @@ pub async fn list_rss_feed_items(
     .await
 }
 
-pub async fn update_rss_post_post_id(pool: &SqlitePool, rss_post_id: Uuid, post_id: Uuid) -> Result<u64, sqlx::Error> {
-    let r = sqlx::query(
-        "UPDATE rss_posts SET post_id = ?, is_imported = true WHERE id = ?",
-    )
-    .bind(post_id)
-    .bind(rss_post_id)
-    .execute(pool)
-    .await?;
+pub async fn update_rss_post_post_id(
+    pool: &SqlitePool,
+    rss_post_id: Uuid,
+    post_id: Uuid,
+) -> Result<u64, sqlx::Error> {
+    let r = sqlx::query("UPDATE rss_posts SET post_id = ?, is_imported = true WHERE id = ?")
+        .bind(post_id)
+        .bind(rss_post_id)
+        .execute(pool)
+        .await?;
     Ok(r.rows_affected())
 }
 
-pub async fn get_rss_post_by_hash(pool: &SqlitePool, feed_id: Uuid, content_hash: &str) -> Result<Option<RssPost>, sqlx::Error> {
+pub async fn get_rss_post_by_hash(
+    pool: &SqlitePool,
+    feed_id: Uuid,
+    content_hash: &str,
+) -> Result<Option<RssPost>, sqlx::Error> {
     sqlx::query_as::<_, RssPost>(
         r#"SELECT id, feed_id, post_id, guid, title, url, published_at, content_hash, is_imported, created_at
            FROM rss_posts WHERE feed_id = ? AND content_hash = ?"#,
@@ -2312,13 +2380,11 @@ pub async fn delete_notification(
     id: Uuid,
     user_id: Uuid,
 ) -> Result<bool, sqlx::Error> {
-    let r = sqlx::query(
-        r#"DELETE FROM notifications WHERE id = ? AND user_id = ?"#,
-    )
-    .bind(id)
-    .bind(user_id)
-    .execute(pool)
-    .await?;
+    let r = sqlx::query(r#"DELETE FROM notifications WHERE id = ? AND user_id = ?"#)
+        .bind(id)
+        .bind(user_id)
+        .execute(pool)
+        .await?;
     Ok(r.rows_affected() > 0)
 }
 
@@ -2611,11 +2677,11 @@ pub async fn update_signature(
            RETURNING id, user_id, name, content, provider, is_default,
              created_at, updated_at"#,
     )
-        .bind(name)
-        .bind(content)
-        .bind(provider)
-        .bind(id)
-        .bind(user_id)
+    .bind(name)
+    .bind(content)
+    .bind(provider)
+    .bind(id)
+    .bind(user_id)
     .fetch_optional(pool)
     .await
 }
@@ -2637,13 +2703,12 @@ pub async fn set_default_signature(
     let mut tx = pool.begin().await?;
 
     // 1. Fetch the target signature to get its provider.
-    let target: Option<(Option<String>,)> = sqlx::query_as(
-        "SELECT provider FROM signatures WHERE id = ? AND user_id = ?",
-    )
-    .bind(id)
-    .bind(user_id)
-    .fetch_optional(&mut *tx)
-    .await?;
+    let target: Option<(Option<String>,)> =
+        sqlx::query_as("SELECT provider FROM signatures WHERE id = ? AND user_id = ?")
+            .bind(id)
+            .bind(user_id)
+            .fetch_optional(&mut *tx)
+            .await?;
 
     let target = match target {
         Some(t) => t.0,
@@ -2843,6 +2908,10 @@ pub async fn delete_expired_analytics_cache(pool: &SqlitePool) -> Result<u64, sq
 /// Insert a new external post. Returns the created record.
 /// Insert an external post, updating on conflict (provider + platform_post_id).
 /// Returns `Some(post)` always — either the newly inserted or the updated record.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "External post fields: all bound to DB columns, no nesting grouping available"
+)]
 pub async fn insert_external_post(
     pool: &SqlitePool,
     user_id: Uuid,
@@ -2896,7 +2965,10 @@ pub async fn insert_external_post(
     if let Some(ref post) = result {
         tracing::info!(
             "insert_external_post RETURNED: id={} name={:?} handle={:?} avatar_present={}",
-            post.id, post.author_name, post.author_handle, post.author_avatar.is_some(),
+            post.id,
+            post.author_name,
+            post.author_handle,
+            post.author_avatar.is_some(),
         );
     } else {
         tracing::info!("insert_external_post RETURNED: None");
@@ -3022,7 +3094,10 @@ pub async fn search_all_external_posts_with_engagement(
     cursor: Option<DateTime<Utc>>,
     limit: i64,
 ) -> Result<Vec<ExternalPostWithEngagement>, sqlx::Error> {
-    let escaped = q.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
+    let escaped = q
+        .replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_");
     let pattern = format!("%{escaped}%");
 
     if let Some(provider) = provider {
@@ -3134,13 +3209,11 @@ pub async fn unresolve_comment(
     user_id: Uuid,
     comment_id: &str,
 ) -> Result<(), sqlx::Error> {
-    sqlx::query(
-        "DELETE FROM resolved_comments WHERE user_id = ? AND comment_id = ?",
-    )
-    .bind(user_id)
-    .bind(comment_id)
-    .execute(pool)
-    .await?;
+    sqlx::query("DELETE FROM resolved_comments WHERE user_id = ? AND comment_id = ?")
+        .bind(user_id)
+        .bind(comment_id)
+        .execute(pool)
+        .await?;
     Ok(())
 }
 
@@ -3151,12 +3224,11 @@ pub async fn list_resolved_comment_ids(
     pool: &SqlitePool,
     user_id: Uuid,
 ) -> Result<std::collections::HashSet<String>, sqlx::Error> {
-    let rows: Vec<(String,)> = sqlx::query_as(
-        "SELECT comment_id FROM resolved_comments WHERE user_id = ?",
-    )
-    .bind(user_id)
-    .fetch_all(pool)
-    .await?;
+    let rows: Vec<(String,)> =
+        sqlx::query_as("SELECT comment_id FROM resolved_comments WHERE user_id = ?")
+            .bind(user_id)
+            .fetch_all(pool)
+            .await?;
     Ok(rows.into_iter().map(|r| r.0).collect())
 }
 
@@ -3194,12 +3266,23 @@ pub struct CachedComment {
 /// so we know the cache is fresh; new rows are inserted.
 ///
 /// `fetched_at` is set to NOW() for all rows in this batch.
+/// A cached comment row upsert: (comment_id, text, author_name, author_handle,
+/// author_avatar, created_at).
+type CachedCommentRow = (
+    String,
+    String,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    DateTime<Utc>,
+);
+
 pub async fn upsert_cached_comments(
     pool: &SqlitePool,
     user_id: Uuid,
     post_id: Uuid,
     provider: &str,
-    comments: &[(String, String, Option<String>, Option<String>, Option<String>, DateTime<Utc>)],
+    comments: &[CachedCommentRow],
 ) -> Result<(), sqlx::Error> {
     // (comment_id, text, author_name, author_handle, author_avatar, created_at)
     if comments.is_empty() {
@@ -3410,15 +3493,21 @@ mod g02_tests {
         )
         .bind(id)
         .bind(user_id)
-        .bind((Utc::now() - chrono::Duration::days(2))
-            .to_rfc3339_opts(chrono::SecondsFormat::Secs, true))
+        .bind(
+            (Utc::now() - chrono::Duration::days(2))
+                .to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+        )
         .bind(Uuid::new_v4())
         .execute(&pool)
         .await
         .unwrap();
 
         let due = get_due_posts(&pool, 10).await.unwrap();
-        assert_eq!(due.len(), 1, "the TEXT row is claimed, not silently starved");
+        assert_eq!(
+            due.len(),
+            1,
+            "the TEXT row is claimed, not silently starved"
+        );
         assert_eq!(due[0].id, id);
     }
 }

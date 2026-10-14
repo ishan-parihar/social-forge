@@ -32,7 +32,7 @@
 // open pool, and `WRITER_MODE` records which process owns the file.
 
 use std::fs::{self, File, OpenOptions};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::str::FromStr;
 use std::time::Duration;
 
@@ -111,7 +111,7 @@ pub fn claim_writer_role(database_url: &str) -> anyhow::Result<File> {
         return Ok(File::open("/dev/null")?);
     }
 
-    let path = PathBuf::from(filename).with_extension(WRITER_MODE);
+    let path = filename.to_path_buf().with_extension(WRITER_MODE);
     if let Some(parent) = path.parent() {
         if !parent.as_os_str().is_empty() && !parent.exists() {
             fs::create_dir_all(parent)?;
@@ -147,13 +147,19 @@ pub fn claim_writer_role(database_url: &str) -> anyhow::Result<File> {
                 path.display()
             );
             fs::remove_file(&path)?;
-            let mut f = OpenOptions::new().write(true).create_new(true).open(&path)?;
+            let mut f = OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&path)?;
             use std::io::Write as _;
             writeln!(f, "{}", std::process::id())?;
             tracing::info!("Single-writer lock acquired: {}", path.display());
             Ok(f)
         }
-        Err(e) => Err(anyhow::anyhow!("Cannot claim writer lock {}: {e}", path.display())),
+        Err(e) => Err(anyhow::anyhow!(
+            "Cannot claim writer lock {}: {e}",
+            path.display()
+        )),
     }
 }
 
@@ -165,11 +171,10 @@ pub fn claim_writer_role(database_url: &str) -> anyhow::Result<File> {
 /// the DB), so we store a random invalid hash to make that explicit.
 pub async fn ensure_local_user(pool: &SqlitePool) -> anyhow::Result<()> {
     let id = crate::auth::middleware::DEFAULT_USER_ID;
-    let exists =
-        sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM users WHERE id = ?)")
-            .bind(id)
-            .fetch_one(pool)
-            .await?;
+    let exists = sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM users WHERE id = ?)")
+        .bind(id)
+        .fetch_one(pool)
+        .await?;
 
     if !exists {
         // Random invalid hash — DB password is never checked. The

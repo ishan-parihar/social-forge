@@ -7,9 +7,9 @@ use tracing;
 
 use crate::config::Config;
 use crate::db::models::PostState;
-use sqlx::SqlitePool;
 use crate::poll::{spawn_poll, FirstTick};
 use crate::social::registry::ProviderRegistry;
+use sqlx::SqlitePool;
 
 pub fn start_rss_poller(
     db: SqlitePool,
@@ -151,17 +151,13 @@ async fn poll_all_feeds(
             {
                 Ok(post) => {
                     // Link the rss_post to the created post
-                    if let Ok(rss_post) =
+                    if let Ok(Some(rp)) =
                         crate::db::queries::get_rss_post_by_hash(db, feed.id, &content_hash).await
                     {
-                        if let Some(rp) = rss_post {
-                            if let Err(e) = crate::db::queries::update_rss_post_post_id(
-                                db, rp.id, post.id,
-                            )
-                            .await
-                            {
-                                tracing::warn!("Failed to update RSS post post_id: {e}");
-                            }
+                        if let Err(e) =
+                            crate::db::queries::update_rss_post_post_id(db, rp.id, post.id).await
+                        {
+                            tracing::warn!("Failed to update RSS post post_id: {e}");
                         }
                     }
                     tracing::info!(
@@ -211,16 +207,14 @@ async fn summarize_with_llm(
     // Strip HTML from content for the LLM prompt (simple tag stripper)
     let clean_content: String = content
         .chars()
-        .fold((false, String::new()), |(in_tag, mut acc), ch| {
-            match ch {
-                '<' => (true, acc),
-                '>' => (false, acc),
-                _ if !in_tag => {
-                    acc.push(ch);
-                    (false, acc)
-                }
-                _ => (in_tag, acc),
+        .fold((false, String::new()), |(in_tag, mut acc), ch| match ch {
+            '<' => (true, acc),
+            '>' => (false, acc),
+            _ if !in_tag => {
+                acc.push(ch);
+                (false, acc)
             }
+            _ => (in_tag, acc),
         })
         .1;
     let clean_content = clean_content.trim();

@@ -94,6 +94,7 @@ When implementing features inspired by postiz-app or other competitors, apply th
 | `AGENTS.md` (this file) | Build/test/git/security protocol | Always, first |
 | `README.md` | User-facing overview, platform tiers, CLI/MCP reference | For product context |
 | `docs/planning/PLAN_PARITY_DEPTH_SINGLEUSER_v25.md` | Live master plan: tier rationale (§1), parity phases | Before parity/feature work |
+| `docs/planning/AUDIT_2026-10-14.md` | End-to-end audit: P0 bugs, cookie/API matrix, fragmentation, phased plan | Before fixing publish/scheduler/provider bugs |
 | `docs/planning/VENDOR_PINS.md` | Pinned transitive deps enforced by `vendor-pull.sh --check` (CI gate) | Before touching `Cargo.toml` |
 | `SESSION_HOOKS.md` | Session-start ambient-context setup (AXI) | When wiring agent hooks |
 | `skills/social-forge-agent/SKILL.md` | Installed agent skill (via `make install-skill`) | When editing the skill |
@@ -113,8 +114,8 @@ Social Forge is a **single-user, self-hosted social media management platform** 
 **Key numbers (as of v11):**
 - 327 MCP tools across 41 files in `src/mcp/`
 - 26 providers registered by default in `src/social/registry.rs` — 12 Tier-1 (depth) + 14 Tier-2 (publish-maintained), plus 1 Tier-3 (Farcaster) registered only when `ENABLE_ARCHIVE_PROVIDERS` is set. Tier membership lives in `src/social/tier.rs` (plan §1); `kick`/`vk`/`whop`/`lemmy` were removed outright.
-- 18 SQL migrations in `migrations/`
-- ~58,000 LOC of Rust + ~13,000 LOC of Svelte/TS frontend
+- 2 SQL migrations in `migrations/`
+- ~76,500 LOC of Rust + ~13,000 LOC of Svelte/TS frontend
 
 ---
 
@@ -141,7 +142,7 @@ social-forge/
 │   │   ├── middleware.rs    # auth_middleware (validates sf_session cookie), AuthenticatedUser extractor, DEFAULT_USER_ID
 │   │   └── jwt.rs           # hash_password / verify_password (argon2), create_token / validate_token (jsonwebtoken)
 │   ├── cli/                 # CLI commands (mirrors MCP tools)
-│   │   ├── run.rs           # Main CLI dispatcher (~1975 LOC)
+│   │   ├── run.rs           # Main CLI dispatcher (~2889 LOC)
 │   │   └── platforms/       # 32 platform shims (thin wrappers around unified commands)
 │   ├── mcp/                 # MCP server (327 tools)
 │   │   ├── mod.rs           # SocialForgeMcpServer impl + #[tool] method registration (~2800 LOC)
@@ -153,13 +154,13 @@ social-forge/
 │   ├── social/              # Provider trait + 31 provider implementations
 │   │   ├── mod.rs           # SocialProvider trait, ProviderError enum, PostContent, MediaAttachment
 │   │   ├── registry.rs      # ProviderRegistry (provider lookup + per-provider Semaphore)
-│   │   ├── x.rs             # X/Twitter (wreq + GraphQL cookie auth, ~2200 LOC)
-│   │   ├── reddit.rs        # Reddit (OAuth + cookie auth, ~1500 LOC)
-│   │   └── ...              # linkedin, facebook, instagram, threads, youtube, tiktok, bluesky, mastodon, pinterest, discord, slack, telegram_bot, telegram_user, whatsapp, wordpress, medium, devto, hashnode, github, google, vk, kick, whop, skool, lemmy, farcaster, google_my_business
+│   │   ├── x.rs             # X/Twitter (wreq + GraphQL cookie auth, ~2873 LOC)
+│   │   ├── reddit.rs        # Reddit (OAuth + cookie auth, ~1980 LOC)
+│   │   └── ...              # linkedin, facebook, instagram, threads, youtube, tiktok, bluesky, mastodon, pinterest, discord, slack, telegram_bot, telegram_user, whatsapp, wordpress, medium, devto, hashnode, github, google, skool, google_my_business, farcaster (see tier.rs for membership)
 │   ├── db/
 │   │   ├── mod.rs           # create_pool() — SqlitePoolOptions with env-configurable limits
 │   │   ├── models.rs        # PostState enum (Draft/Queued/Publishing/Published/Error), Post, PostWithIntegration, Integration, etc.
-│   │   └── queries.rs       # All SQL queries (~2100 LOC)
+│   │   └── queries.rs       # All SQL queries (~3423 LOC)
 │   ├── scheduler/
 │   │   └── mod.rs           # In-process scheduler: process_due_posts (JoinSet + Semaphore), publish_post (retry + backoff), proactive_token_refresh, analytics cache refresh
 │   ├── services/
@@ -186,14 +187,15 @@ social-forge/
 │   ├── tailwind.config.js   # Semantic color tokens (surface, line, muted, content, brand)
 │   ├── svelte.config.js     # adapter-static (SPA fallback)
 │   └── tsconfig.json        # Extends .svelte-kit/tsconfig.json
-├── migrations/              # 18 SQL migrations (001-018, additive-only, no destructive ops)
+├── migrations/              # 2 SQL migrations (001-002, additive-only, no destructive ops)
 ├── scripts/
 │   ├── install.sh           # One-line installer (downloads pre-built binary, sets up systemd)
 │   ├── social-forge.service # systemd unit
 │   └── social-forge-start.sh
-├── Dockerfile               # Multi-stage: rust:1.94-slim-bookworm → debian:bookworm-slim (non-root)
+├── Dockerfile               # OPTIONAL container build (downloads a pre-built binary). SQLite-in-container is not a supported deploy path — §0.5.3 rules out Docker as a runtime dependency.
 ├── Makefile                 # build, deploy, redeploy, restart, logs, watch
 ├── Cargo.toml               # Rust dependencies
+├── rust-toolchain.toml      # Pinned toolchain + clippy/rustfmt (CI lint gate)
 ├── .env.example             # Template for .env (all env vars documented)
 └── AGENTS.md                # THIS FILE
 ```
@@ -409,29 +411,26 @@ If you add a new upload endpoint, follow the same pattern.
 
 ### 6.3 Token encryption at rest
 
-When `TOKEN_ENCRYPTION_KEY` is set (64 hex chars = 32 bytes), ALL paths that write OAuth access tokens to the DB MUST encrypt them first:
+When `TOKEN_ENCRYPTION_KEY` is set (64 hex chars = 32 bytes), ALL paths that write OAuth tokens to the DB MUST encrypt them first, and an encryption failure MUST abort the write — never fall back to plaintext:
 
 ```rust
-let enc_access_token = if let Some(ref k) = token_key {
-    crate::crypto::encrypt_string(&token.access_token, k)
-        .unwrap_or_else(|e| {
-            tracing::warn!("Failed to encrypt token: {e}");
-            token.access_token.clone()
-        })
-} else {
-    token.access_token.clone()
-};
-queries::update_integration_token(db, integration_id, &enc_access_token, ...).await?;
+// Encrypt inside the one shared writer (see §6.3.1). If you are touching a
+// refresh site directly and cannot route through it, fail loudly instead:
+let enc = crate::crypto::encrypt_string(&plaintext, key)
+    .map_err(|e| format!("token encryption failed for integration {id}: {e}"))?;
+queries::update_integration_token(db, id, &enc, refresh.as_deref(), expires).await?;
 ```
 
-**There are 4 call sites that refresh tokens** — all must encrypt:
-1. `src/scheduler/mod.rs::publish_post` (mid-publish refresh) ✅
-2. `src/scheduler/mod.rs::resolve_token` (pre-publish refresh) ✅
-3. `src/services/posts.rs::resolve_token` (manual publish path) ✅
-4. `src/api/integrations.rs::refresh` (manual refresh endpoint) ✅
-5. `src/mcp/tools_admin.rs::handle_integrations_refresh` (MCP refresh tool) ✅
+**There is 1 shared writer — all refresh paths MUST route through it:**
 
-If you add a 6th refresh path, encrypt there too.
+1. `src/db/queries.rs::update_integration_token` (encrypts access + refresh token when a key is configured; encrypt failure returns `Err`). Every site below passes **plaintext** and lets this function encrypt.
+2. `src/scheduler/mod.rs::publish_post` (mid-publish refresh)
+3. `src/scheduler/mod.rs::resolve_token` (pre-publish refresh)
+4. `src/services/posts.rs::resolve_token` (manual publish path)
+5. `src/api/integrations.rs::refresh` (manual refresh endpoint)
+6. `src/mcp/tools_admin.rs::handle_integrations_refresh` (MCP refresh tool)
+
+If you add a 7th refresh path, call `update_integration_token` with plaintext — do not add a second encrypt site.
 
 ### 6.4 Auth gate
 

@@ -11,11 +11,11 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::api::tags::TagResponse;
 use crate::auth::middleware::AuthenticatedUser;
 use crate::db::models::PostPublic;
 use crate::db::queries;
 use crate::services::posts::PostService;
-use crate::api::tags::TagResponse;
 
 use super::AppState;
 
@@ -179,7 +179,11 @@ pub struct FindSlotResponse {
 // ── Helpers ──────────────────────────────────────────────────
 
 /// Fetch and convert tags for a post. Logs DB errors instead of silently swallowing them.
-async fn enrich_post_tags(db: &crate::db::SqlitePool, post_id: Uuid, user_id: Uuid) -> Vec<TagResponse> {
+async fn enrich_post_tags(
+    db: &crate::db::SqlitePool,
+    post_id: Uuid,
+    user_id: Uuid,
+) -> Vec<TagResponse> {
     match queries::get_tags_for_post(db, post_id, user_id).await {
         Ok(rows) => rows
             .into_iter()
@@ -238,22 +242,33 @@ pub async fn list(
 
     // Phase 5: parse the new search/filter/sort params.
     let q = query.q.as_deref().map(str::trim).filter(|s| !s.is_empty());
-    let integration_ids: Option<Vec<Uuid>> = query.integration_ids.as_deref()
+    let integration_ids: Option<Vec<Uuid>> = query
+        .integration_ids
+        .as_deref()
         .filter(|s| !s.is_empty())
-        .map(|s| s.split(',')
-             .filter_map(|id| Uuid::parse_str(id.trim()).ok())
-             .collect::<Vec<_>>())
+        .map(|s| {
+            s.split(',')
+                .filter_map(|id| Uuid::parse_str(id.trim()).ok())
+                .collect::<Vec<_>>()
+        })
         .filter(|v| !v.is_empty());
-    let tag_ids: Option<Vec<Uuid>> = query.tag_ids.as_deref()
+    let tag_ids: Option<Vec<Uuid>> = query
+        .tag_ids
+        .as_deref()
         .filter(|s| !s.is_empty())
-        .map(|s| s.split(',')
-             .filter_map(|id| Uuid::parse_str(id.trim()).ok())
-             .collect::<Vec<_>>())
+        .map(|s| {
+            s.split(',')
+                .filter_map(|id| Uuid::parse_str(id.trim()).ok())
+                .collect::<Vec<_>>()
+        })
         .filter(|v| !v.is_empty());
 
     // Use the new search query if any of the new params are present;
     // otherwise fall back to the original list_posts for backward compat.
-    let use_search = q.is_some() || integration_ids.is_some() || tag_ids.is_some() || query.sort != "scheduled_date";
+    let use_search = q.is_some()
+        || integration_ids.is_some()
+        || tag_ids.is_some()
+        || query.sort != "scheduled_date";
 
     let (posts, total) = if use_search {
         let posts = queries::list_posts_search(
@@ -266,7 +281,8 @@ pub async fn list(
             &query.sort,
             limit,
             offset,
-        ).await?;
+        )
+        .await?;
         let total = queries::count_posts_search(
             &state.db,
             auth.user_id,
@@ -274,57 +290,58 @@ pub async fn list(
             q,
             integration_ids.as_deref(),
             tag_ids.as_deref(),
-        ).await?;
+        )
+        .await?;
         (posts, total)
     } else {
-        let total = queries::count_posts_by_user(
-            &state.db,
-            auth.user_id,
-            query.state.as_deref(),
-        ).await?;
+        let total =
+            queries::count_posts_by_user(&state.db, auth.user_id, query.state.as_deref()).await?;
         let posts = queries::list_posts(
             &state.db,
             auth.user_id,
             query.state.as_deref(),
             limit,
             offset,
-        ).await?;
+        )
+        .await?;
         (posts, total)
     };
 
     let mut enriched = Vec::with_capacity(posts.len());
     for p in posts {
-        let integration_name = if let Ok(Some(integ)) = queries::get_integration(&state.db, p.integration_id, auth.user_id).await {
+        let integration_name = if let Ok(Some(integ)) =
+            queries::get_integration(&state.db, p.integration_id, auth.user_id).await
+        {
             integ.provider_name
         } else {
             "Unknown".into()
         };
         let tags = enrich_post_tags(&state.db, p.id, auth.user_id).await;
         enriched.push(PostWithIntegrationName {
-             id: p.id,
-             integration_id: p.integration_id,
-             integration_name,
-             state: p.state.to_string(),
-             content: p.content,
-             title: p.title,
-             media: p.media,
-             scheduled_at: p.scheduled_at.map(|d| d.to_rfc3339()),
-             published_at: p.published_at.map(|d| d.to_rfc3339()),
-             platform_post_url: p.platform_post_url,
-             error_message: p.error_message,
-             created_at: p.created_at.to_rfc3339(),
-             tags,
-             repeat_interval_days: p.repeat_interval_days,
-             repeat_end_date: p.repeat_end_date.map(|d| d.to_rfc3339()),
-             group_id: p.group_id,
-             first_comment: p.first_comment.clone(),
-             sequence: p.sequence,
-             kanban_sort_order: p.kanban_sort_order,
-             kanban_substate: p.kanban_substate.clone(),
-             due_date: p.due_date.map(|d| d.to_rfc3339()),
-             priority: p.priority.clone(),
-             campaign_id: p.campaign_id,
-         });
+            id: p.id,
+            integration_id: p.integration_id,
+            integration_name,
+            state: p.state.to_string(),
+            content: p.content,
+            title: p.title,
+            media: p.media,
+            scheduled_at: p.scheduled_at.map(|d| d.to_rfc3339()),
+            published_at: p.published_at.map(|d| d.to_rfc3339()),
+            platform_post_url: p.platform_post_url,
+            error_message: p.error_message,
+            created_at: p.created_at.to_rfc3339(),
+            tags,
+            repeat_interval_days: p.repeat_interval_days,
+            repeat_end_date: p.repeat_end_date.map(|d| d.to_rfc3339()),
+            group_id: p.group_id,
+            first_comment: p.first_comment.clone(),
+            sequence: p.sequence,
+            kanban_sort_order: p.kanban_sort_order,
+            kanban_substate: p.kanban_substate.clone(),
+            due_date: p.due_date.map(|d| d.to_rfc3339()),
+            priority: p.priority.clone(),
+            campaign_id: p.campaign_id,
+        });
     }
 
     Ok(Json(PostsListResponse {
@@ -347,7 +364,9 @@ pub async fn create(
             .ok_or_else(|| crate::error::AppError::NotFound("Integration not found".into()))?;
 
         if integ.disabled {
-            return Err(crate::error::AppError::BadRequest("Integration is disabled".into()));
+            return Err(crate::error::AppError::BadRequest(
+                "Integration is disabled".into(),
+            ));
         }
         validated_integrations.push(integ);
     }
@@ -359,12 +378,8 @@ pub async fn create(
     let media_val: Vec<crate::social::MediaAttachment> =
         serde_json::from_value(body.media.clone().unwrap_or(serde_json::json!([])))
             .unwrap_or_default();
-    let validation_errors = validate_posts_for_integrations(
-        &state,
-        &body,
-        &validated_integrations,
-        &media_val,
-    );
+    let validation_errors =
+        validate_posts_for_integrations(&state, &body, &validated_integrations, &media_val);
     if !validation_errors.is_empty() {
         return Err(crate::error::AppError::BadRequest(
             serde_json::to_string(&serde_json::json!({
@@ -376,8 +391,9 @@ pub async fn create(
 
     let scheduled_at: Option<DateTime<Utc>> = match body.scheduled_at {
         Some(ref s) => {
-            let dt = DateTime::parse_from_rfc3339(s)
-                .map_err(|_| crate::error::AppError::BadRequest("Invalid date format, use ISO8601".into()))?;
+            let dt = DateTime::parse_from_rfc3339(s).map_err(|_| {
+                crate::error::AppError::BadRequest("Invalid date format, use ISO8601".into())
+            })?;
             Some(dt.with_timezone(&Utc))
         }
         None => None,
@@ -398,8 +414,7 @@ pub async fn create(
         }
     }
 
-    let posts = if body.overrides.is_some() {
-        let overrides = body.overrides.as_ref().unwrap();
+    let posts = if let Some(overrides) = body.overrides.as_ref() {
         let mut posts = Vec::with_capacity(body.integration_ids.len());
         for &id in &body.integration_ids {
             let post_content = overrides
@@ -469,7 +484,10 @@ pub async fn create(
         })
         .collect();
 
-    Ok(Json(CreatePostsResponse { posts: publics, group_id: None }))
+    Ok(Json(CreatePostsResponse {
+        posts: publics,
+        group_id: None,
+    }))
 }
 
 /// POST /api/posts/thread — create a thread of posts (X/Twitter threads)
@@ -479,13 +497,19 @@ pub async fn create_thread(
     Json(body): Json<CreateThreadRequest>,
 ) -> Result<Json<CreateThreadResponse>, crate::error::AppError> {
     if body.content_parts.is_empty() {
-        return Err(crate::error::AppError::BadRequest("content_parts must not be empty".into()));
+        return Err(crate::error::AppError::BadRequest(
+            "content_parts must not be empty".into(),
+        ));
     }
     if body.content_parts.len() > 25 {
-        return Err(crate::error::AppError::BadRequest("Maximum 25 tweets per thread".into()));
+        return Err(crate::error::AppError::BadRequest(
+            "Maximum 25 tweets per thread".into(),
+        ));
     }
     if body.integration_ids.is_empty() {
-        return Err(crate::error::AppError::BadRequest("At least one integration is required".into()));
+        return Err(crate::error::AppError::BadRequest(
+            "At least one integration is required".into(),
+        ));
     }
 
     // Validate ALL integration_ids belong to user
@@ -496,15 +520,18 @@ pub async fn create_thread(
             .ok_or_else(|| crate::error::AppError::NotFound("Integration not found".into()))?;
 
         if integ.disabled {
-            return Err(crate::error::AppError::BadRequest("Integration is disabled".into()));
+            return Err(crate::error::AppError::BadRequest(
+                "Integration is disabled".into(),
+            ));
         }
         validated_integrations.push(integ);
     }
 
     let scheduled_at: Option<DateTime<Utc>> = match body.scheduled_at {
         Some(ref s) => {
-            let dt = DateTime::parse_from_rfc3339(s)
-                .map_err(|_| crate::error::AppError::BadRequest("Invalid date format, use ISO8601".into()))?;
+            let dt = DateTime::parse_from_rfc3339(s).map_err(|_| {
+                crate::error::AppError::BadRequest("Invalid date format, use ISO8601".into())
+            })?;
             Some(dt.with_timezone(&Utc))
         }
         None => None,
@@ -546,7 +573,10 @@ pub async fn create_thread(
         })
         .collect();
 
-    Ok(Json(CreateThreadResponse { posts: publics, group_id }))
+    Ok(Json(CreateThreadResponse {
+        posts: publics,
+        group_id,
+    }))
 }
 
 /// GET /api/posts/group/:group_id — fetch all posts sharing a group_id.
@@ -576,7 +606,9 @@ pub async fn get(
         .await?
         .ok_or_else(|| crate::error::AppError::NotFound("Post not found".into()))?;
 
-    let integration_name = if let Ok(Some(integ)) = queries::get_integration(&state.db, post.integration_id, auth.user_id).await {
+    let integration_name = if let Ok(Some(integ)) =
+        queries::get_integration(&state.db, post.integration_id, auth.user_id).await
+    {
         integ.provider_name
     } else {
         "Unknown".into()
@@ -585,28 +617,28 @@ pub async fn get(
     let tags = enrich_post_tags(&state.db, post.id, auth.user_id).await;
 
     Ok(Json(PostDetailResponse {
-         id: post.id,
-         integration_id: post.integration_id,
-         integration_name,
-         state: post.state.to_string(),
-         content: post.content,
-         title: post.title,
-         media: post.media,
-         scheduled_at: post.scheduled_at.map(|d| d.to_rfc3339()),
-         published_at: post.published_at.map(|d| d.to_rfc3339()),
-         platform_post_url: post.platform_post_url,
-         error_message: post.error_message,
-         created_at: post.created_at.to_rfc3339(),
-         tags,
-         repeat_interval_days: post.repeat_interval_days,
-         repeat_end_date: post.repeat_end_date.map(|d| d.to_rfc3339()),
-         group_id: post.group_id,
-         first_comment: post.first_comment.clone(),
-         sequence: post.sequence,
-     }))
- }
- 
- /// PUT /api/posts/:id
+        id: post.id,
+        integration_id: post.integration_id,
+        integration_name,
+        state: post.state.to_string(),
+        content: post.content,
+        title: post.title,
+        media: post.media,
+        scheduled_at: post.scheduled_at.map(|d| d.to_rfc3339()),
+        published_at: post.published_at.map(|d| d.to_rfc3339()),
+        platform_post_url: post.platform_post_url,
+        error_message: post.error_message,
+        created_at: post.created_at.to_rfc3339(),
+        tags,
+        repeat_interval_days: post.repeat_interval_days,
+        repeat_end_date: post.repeat_end_date.map(|d| d.to_rfc3339()),
+        group_id: post.group_id,
+        first_comment: post.first_comment.clone(),
+        sequence: post.sequence,
+    }))
+}
+
+/// PUT /api/posts/:id
 pub async fn update(
     State(state): State<AppState>,
     auth: AuthenticatedUser,
@@ -722,9 +754,10 @@ pub struct RescheduleRequest {
     /// If true and the post is part of a thread, reschedule all posts
     /// in the same group by the same time delta. Default: false.
     pub move_group: Option<bool>,
-    /// Phase v21: disambiguate published-post reschedules.
+    /// Phase v21: disambiguate published-post reschedules:
     /// - `schedule` → reset state to queued + clear release fields (re-publish).
     /// - `update`   → change scheduled_at only (archive re-date).
+    ///
     /// Required for published posts; ignored for queued/draft posts.
     pub action: Option<String>,
 }
@@ -736,7 +769,9 @@ pub async fn reschedule(
     Json(body): Json<RescheduleRequest>,
 ) -> Result<Json<serde_json::Value>, crate::error::AppError> {
     let new_scheduled_at = DateTime::parse_from_rfc3339(&body.scheduled_at)
-        .map_err(|_| crate::error::AppError::BadRequest("Invalid date format, use RFC3339/ISO8601".into()))?
+        .map_err(|_| {
+            crate::error::AppError::BadRequest("Invalid date format, use RFC3339/ISO8601".into())
+        })?
         .with_timezone(&Utc);
 
     // Fetch the post to verify ownership and get current scheduled_at + group_id
@@ -750,76 +785,88 @@ pub async fn reschedule(
     // archival" (update). Without `action`, we preserve the pre-v21
     // behavior of rejecting published-post reschedules.
     let action = body.action.as_deref().unwrap_or("");
-    if post.state == crate::db::models::PostState::Published {
-        if action != "schedule" && action != "update" {
-            return Err(crate::error::AppError::BadRequest(
-                "Cannot reschedule a published post without specifying action. \
-                 Use action: 'schedule' to re-publish, or action: 'update' to \
-                 just re-date for archival.".into(),
-            ));
-        }
+    if post.state == crate::db::models::PostState::Published
+        && action != "schedule"
+        && action != "update"
+    {
+        return Err(crate::error::AppError::BadRequest(
+            "Cannot reschedule a published post without specifying action. \
+             Use action: 'schedule' to re-publish, or action: 'update' to \
+             just re-date for archival."
+                .into(),
+        ));
     }
 
     // If move_group is true and post has a group_id, reschedule all posts in the group
     let move_group = body.move_group.unwrap_or(false);
-    if move_group && post.group_id.is_some() {
-        let group_id = post.group_id.as_ref().unwrap();
-        let group_posts = queries::get_posts_by_group_id(&state.db, auth.user_id, *group_id)
-            .await
-            .map_err(|e| crate::error::AppError::Internal(format!("DB error: {e}")))?;
+    if move_group {
+        if let Some(group_id) = post.group_id.as_ref() {
+            let group_posts = queries::get_posts_by_group_id(&state.db, auth.user_id, *group_id)
+                .await
+                .map_err(|e| crate::error::AppError::Internal(format!("DB error: {e}")))?;
 
-        // Calculate the delta from the dragged post's current scheduled_at
-        let old_scheduled_at = post.scheduled_at.unwrap_or_else(Utc::now);
-        let delta = new_scheduled_at - old_scheduled_at;
+            // Calculate the delta from the dragged post's current scheduled_at
+            let old_scheduled_at = post.scheduled_at.unwrap_or_else(Utc::now);
+            let delta = new_scheduled_at - old_scheduled_at;
 
-        // Apply the same delta to all posts in the group.
-        // For published posts in the group, honor the same `action`.
-        let mut updated_count = 0usize;
-        for group_post in &group_posts {
-            if let Some(ref old_at) = group_post.scheduled_at {
-                let new_at = *old_at + delta;
-                if group_post.state == crate::db::models::PostState::Published
-                    && action == "schedule"
-                {
-                    // Re-publish: reset state + clear release fields.
-                    let _ = queries::reset_post_for_republish(
-                        &state.db, group_post.id, auth.user_id, new_at,
-                    ).await;
-                } else if group_post.state == crate::db::models::PostState::Published
-                    && action == "update"
-                {
-                    // Archive re-date: change scheduled_at only.
-                    let _ = queries::update_post_date_only(
-                        &state.db, group_post.id, auth.user_id, new_at,
-                    ).await;
-                } else {
-                    // Normal reschedule for queued/draft posts.
-                    let _ = queries::schedule_post(
-                        &state.db, group_post.id, auth.user_id, new_at,
-                    ).await;
+            // Apply the same delta to all posts in the group.
+            // For published posts in the group, honor the same `action`.
+            let mut updated_count = 0usize;
+            for group_post in &group_posts {
+                if let Some(ref old_at) = group_post.scheduled_at {
+                    let new_at = *old_at + delta;
+                    if group_post.state == crate::db::models::PostState::Published
+                        && action == "schedule"
+                    {
+                        // Re-publish: reset state + clear release fields.
+                        let _ = queries::reset_post_for_republish(
+                            &state.db,
+                            group_post.id,
+                            auth.user_id,
+                            new_at,
+                        )
+                        .await;
+                    } else if group_post.state == crate::db::models::PostState::Published
+                        && action == "update"
+                    {
+                        // Archive re-date: change scheduled_at only.
+                        let _ = queries::update_post_date_only(
+                            &state.db,
+                            group_post.id,
+                            auth.user_id,
+                            new_at,
+                        )
+                        .await;
+                    } else {
+                        // Normal reschedule for queued/draft posts.
+                        let _ =
+                            queries::schedule_post(&state.db, group_post.id, auth.user_id, new_at)
+                                .await;
+                    }
+                    updated_count += 1;
                 }
-                updated_count += 1;
             }
-        }
 
-        return Ok(Json(serde_json::json!({
-            "rescheduled": true,
-            "group_id": group_id,
-            "count": updated_count,
-            "action": action,
-            "new_scheduled_at": new_scheduled_at.to_rfc3339(),
-        })));
+            return Ok(Json(serde_json::json!({
+                "rescheduled": true,
+                "group_id": group_id,
+                "count": updated_count,
+                "action": action,
+                "new_scheduled_at": new_scheduled_at.to_rfc3339(),
+            })));
+        }
     }
 
     // Single post reschedule
     if post.state == crate::db::models::PostState::Published && action == "schedule" {
         // Re-publish: reset state to queued, clear release fields.
-        let updated = queries::reset_post_for_republish(
-            &state.db, id, auth.user_id, new_scheduled_at,
-        )
-        .await
-        .map_err(|e| crate::error::AppError::Internal(format!("DB error: {e}")))?
-        .ok_or_else(|| crate::error::AppError::NotFound("Post not found after reschedule".into()))?;
+        let updated =
+            queries::reset_post_for_republish(&state.db, id, auth.user_id, new_scheduled_at)
+                .await
+                .map_err(|e| crate::error::AppError::Internal(format!("DB error: {e}")))?
+                .ok_or_else(|| {
+                    crate::error::AppError::NotFound("Post not found after reschedule".into())
+                })?;
 
         let public = PostPublic::from(updated);
         state.broadcast.send("post_scheduled", &public);
@@ -831,12 +878,12 @@ pub async fn reschedule(
         })));
     } else if post.state == crate::db::models::PostState::Published && action == "update" {
         // Archive re-date: change scheduled_at only, leave state + release fields.
-        let updated = queries::update_post_date_only(
-            &state.db, id, auth.user_id, new_scheduled_at,
-        )
-        .await
-        .map_err(|e| crate::error::AppError::Internal(format!("DB error: {e}")))?
-        .ok_or_else(|| crate::error::AppError::NotFound("Post not found after reschedule".into()))?;
+        let updated = queries::update_post_date_only(&state.db, id, auth.user_id, new_scheduled_at)
+            .await
+            .map_err(|e| crate::error::AppError::Internal(format!("DB error: {e}")))?
+            .ok_or_else(|| {
+                crate::error::AppError::NotFound("Post not found after reschedule".into())
+            })?;
 
         let public = PostPublic::from(updated);
         state.broadcast.send("post_scheduled", &public);
@@ -852,7 +899,9 @@ pub async fn reschedule(
     let updated = queries::schedule_post(&state.db, id, auth.user_id, new_scheduled_at)
         .await
         .map_err(|e| crate::error::AppError::Internal(format!("DB error: {e}")))?
-        .ok_or_else(|| crate::error::AppError::NotFound("Post not found after reschedule".into()))?;
+        .ok_or_else(|| {
+            crate::error::AppError::NotFound("Post not found after reschedule".into())
+        })?;
 
     let public = PostPublic::from(updated);
     state.broadcast.send("post_scheduled", &public);
@@ -895,7 +944,9 @@ pub async fn set_post_tags(
 
     queries::set_post_tags(&state.db, id, &body.tag_ids).await?;
 
-    let integration_name = if let Ok(Some(integ)) = queries::get_integration(&state.db, post.integration_id, auth.user_id).await {
+    let integration_name = if let Ok(Some(integ)) =
+        queries::get_integration(&state.db, post.integration_id, auth.user_id).await
+    {
         integ.provider_name
     } else {
         "Unknown".into()
@@ -904,25 +955,25 @@ pub async fn set_post_tags(
     let tags = enrich_post_tags(&state.db, post.id, auth.user_id).await;
 
     Ok(Json(PostDetailResponse {
-         id: post.id,
-         integration_id: post.integration_id,
-         integration_name,
-         state: post.state.to_string(),
-         content: post.content,
-         title: post.title,
-         media: post.media,
-         scheduled_at: post.scheduled_at.map(|d| d.to_rfc3339()),
-         published_at: post.published_at.map(|d| d.to_rfc3339()),
-         platform_post_url: post.platform_post_url,
-         error_message: post.error_message,
-         created_at: post.created_at.to_rfc3339(),
-         tags,
-         repeat_interval_days: post.repeat_interval_days,
-         repeat_end_date: post.repeat_end_date.map(|d| d.to_rfc3339()),
-         group_id: post.group_id,
-         first_comment: post.first_comment.clone(),
-         sequence: post.sequence,
-     }))
+        id: post.id,
+        integration_id: post.integration_id,
+        integration_name,
+        state: post.state.to_string(),
+        content: post.content,
+        title: post.title,
+        media: post.media,
+        scheduled_at: post.scheduled_at.map(|d| d.to_rfc3339()),
+        published_at: post.published_at.map(|d| d.to_rfc3339()),
+        platform_post_url: post.platform_post_url,
+        error_message: post.error_message,
+        created_at: post.created_at.to_rfc3339(),
+        tags,
+        repeat_interval_days: post.repeat_interval_days,
+        repeat_end_date: post.repeat_end_date.map(|d| d.to_rfc3339()),
+        group_id: post.group_id,
+        first_comment: post.first_comment.clone(),
+        sequence: post.sequence,
+    }))
 }
 
 // v25-4: Kanban drag-to-reorder within a column.
@@ -979,7 +1030,10 @@ pub async fn kanban_reorder(
         }
     }
 
-    let mut tx = state.db.begin().await
+    let mut tx = state
+        .db
+        .begin()
+        .await
         .map_err(|e| crate::error::AppError::Internal(format!("Failed to begin tx: {e}")))?;
 
     // Update each post's kanban_sort_order to its index in one statement
@@ -1017,7 +1071,8 @@ pub async fn kanban_reorder(
 
     let updated = result.rows_affected() as i64;
 
-    tx.commit().await
+    tx.commit()
+        .await
         .map_err(|e| crate::error::AppError::Internal(format!("Failed to commit reorder: {e}")))?;
 
     // Broadcast so other tabs refetch the new order.
@@ -1097,20 +1152,27 @@ pub async fn repeat_post(
         }
     }
 
-    let original_scheduled = original.scheduled_at
-        .ok_or_else(|| crate::error::AppError::BadRequest("Post must have a scheduled_at time".into()))?;
+    let original_scheduled = original.scheduled_at.ok_or_else(|| {
+        crate::error::AppError::BadRequest("Post must have a scheduled_at time".into())
+    })?;
 
     // 2. Validate parameters
     if body.interval_days <= 0 {
-        return Err(crate::error::AppError::BadRequest("interval_days must be positive".into()));
+        return Err(crate::error::AppError::BadRequest(
+            "interval_days must be positive".into(),
+        ));
     }
 
     let end_date = DateTime::parse_from_rfc3339(&body.end_date)
-        .map_err(|_| crate::error::AppError::BadRequest("Invalid end_date format, use ISO8601".into()))?
+        .map_err(|_| {
+            crate::error::AppError::BadRequest("Invalid end_date format, use ISO8601".into())
+        })?
         .with_timezone(&Utc);
 
     if end_date <= original_scheduled {
-        return Err(crate::error::AppError::BadRequest("end_date must be after the original scheduled_at".into()));
+        return Err(crate::error::AppError::BadRequest(
+            "end_date must be after the original scheduled_at".into(),
+        ));
     }
 
     // 3. Upper bound check — guard against runaway copy loops
@@ -1172,14 +1234,13 @@ pub async fn publish_post(
         // beats a 400 the operator cannot act on. The provider/integration
         // lookup only runs on this error path.
         Err(e) if crate::error::looks_like_scope_loss(&e) => {
-            let (provider, integration_id) = queries::get_post_with_integration(
-                &state.db, id, auth.user_id,
-            )
-            .await
-            .ok()
-            .flatten()
-            .map(|p| (p.provider_identifier, p.integration_id.to_string()))
-            .unwrap_or_else(|| ("unknown".to_string(), id.to_string()));
+            let (provider, integration_id) =
+                queries::get_post_with_integration(&state.db, id, auth.user_id)
+                    .await
+                    .ok()
+                    .flatten()
+                    .map(|p| (p.provider_identifier, p.integration_id.to_string()))
+                    .unwrap_or_else(|| ("unknown".to_string(), id.to_string()));
             return Err(crate::error::AppError::ScopeLost {
                 provider,
                 integration_id,
@@ -1238,16 +1299,14 @@ fn validate_posts_for_integrations(
         // Strip HTML for length check (same as PostService::sanitize_content)
         let clean: String = content
             .chars()
-            .fold((false, String::new()), |(in_tag, mut acc), ch| {
-                match ch {
-                    '<' => (true, acc),
-                    '>' => (false, acc),
-                    _ if !in_tag => {
-                        acc.push(ch);
-                        (false, acc)
-                    }
-                    _ => (in_tag, acc),
+            .fold((false, String::new()), |(in_tag, mut acc), ch| match ch {
+                '<' => (true, acc),
+                '>' => (false, acc),
+                _ if !in_tag => {
+                    acc.push(ch);
+                    (false, acc)
                 }
+                _ => (in_tag, acc),
             })
             .1;
         let clean = clean.trim();
@@ -1293,7 +1352,9 @@ fn validate_posts_for_integrations(
             ..Default::default()
         };
 
-        if let Err(e) = crate::social::validate_media_limits(&integ.provider_identifier, &post_content) {
+        if let Err(e) =
+            crate::social::validate_media_limits(&integ.provider_identifier, &post_content)
+        {
             errors.push(ValidationError {
                 integration_id: integ.id.to_string(),
                 provider: integ.provider_identifier.clone(),

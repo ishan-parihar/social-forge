@@ -57,6 +57,13 @@ jobs:
         # Note: format diffs are informational only; pre-existing formatting is not
         # blocked here. The release build is the authoritative compile check.
 
+      # Lint gate (audit 2026-10-14 §9). Pinned by rust-toolchain.toml so the
+      # gate does not drift with @stable; `[lints.clippy] all = "deny"` in
+      # Cargo.toml already fails on clippy::all, and this step additionally
+      # denies rustc's own warnings so the gate is fully clean.
+      - name: Clippy (deny all warnings)
+        run: cargo clippy --all-targets --locked -- -D warnings
+
       - name: Library tests (no DB required)
         run: cargo test --lib
         # Library tests use the committed .sqlx/ cache (SQLX_OFFLINE=true above),

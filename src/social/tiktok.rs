@@ -28,8 +28,7 @@ pub struct TikTokProvider {
 
 impl TikTokProvider {
     pub fn new(config: &Config) -> Self {
-        let (client_id, client_secret) =
-            config.provider_credentials("tiktok").unwrap_or_default();
+        let (client_id, client_secret) = config.provider_credentials("tiktok").unwrap_or_default();
         Self {
             client_id,
             client_secret,
@@ -248,8 +247,9 @@ impl TikTokProvider {
                     .as_str()
                     .unwrap_or("Publish-status query failed");
                 let code = json["error"]["code"].as_u64().unwrap_or(0);
-                let raw =
-                    format!("TikTok publish-status query failed (HTTP {status}, code {code}): {msg}");
+                let raw = format!(
+                    "TikTok publish-status query failed (HTTP {status}, code {code}): {msg}"
+                );
                 return Err(ProviderError::Api(friendly_error(
                     self.map_error(msg, status.as_u16()),
                     &raw,
@@ -387,13 +387,12 @@ impl SocialProvider for TikTokProvider {
             ("response_type", "code"),
         ];
 
-        let url = url::Url::parse_with_params(
-            "https://www.tiktok.com/v2/auth/authorize/",
-            &params,
-        )
-        .map_err(|e| ProviderError::Auth(format!("URL parse: {e}")))?;
+        let url = url::Url::parse_with_params("https://www.tiktok.com/v2/auth/authorize/", &params)
+            .map_err(|e| ProviderError::Auth(format!("URL parse: {e}")))?;
 
-        Ok(AuthUrlResponse { url: url.to_string() })
+        Ok(AuthUrlResponse {
+            url: url.to_string(),
+        })
     }
 
     async fn exchange_code(
@@ -540,10 +539,10 @@ impl SocialProvider for TikTokProvider {
             .get(&media.url)
             .send()
             .await
-            .map_err(|e| ProviderError::Network(e))?
+            .map_err(ProviderError::Network)?
             .bytes()
             .await
-            .map_err(|e| ProviderError::Network(e))?;
+            .map_err(ProviderError::Network)?;
 
         // Step 2: Upload video data to TikTok
         let file_part = reqwest::multipart::Part::bytes(video_bytes.to_vec())
@@ -569,7 +568,8 @@ impl SocialProvider for TikTokProvider {
                 .as_str()
                 .unwrap_or("Video upload failed");
             let code = upload_json["error"]["code"].as_u64().unwrap_or(0);
-            let raw = format!("TikTok video upload failed (HTTP {upload_status}, code {code}): {msg}");
+            let raw =
+                format!("TikTok video upload failed (HTTP {upload_status}, code {code}): {msg}");
             return Err(ProviderError::Api(friendly_error(
                 self.map_error(msg, upload_status.as_u16()),
                 &raw,
@@ -615,7 +615,8 @@ impl SocialProvider for TikTokProvider {
                 .as_str()
                 .unwrap_or("Video publish failed");
             let code = publish_json["error"]["code"].as_u64().unwrap_or(0);
-            let raw = format!("TikTok video publish failed (HTTP {publish_status}, code {code}): {msg}");
+            let raw =
+                format!("TikTok video publish failed (HTTP {publish_status}, code {code}): {msg}");
             return Err(ProviderError::Api(friendly_error(
                 self.map_error(msg, publish_status.as_u16()),
                 &raw,
@@ -639,7 +640,12 @@ impl SocialProvider for TikTokProvider {
         })
     }
 
-    async fn get_recent_posts(&self, access_token: &str, _internal_id: &str, limit: u32) -> Result<Vec<ExternalPostData>, ProviderError> {
+    async fn get_recent_posts(
+        &self,
+        access_token: &str,
+        _internal_id: &str,
+        limit: u32,
+    ) -> Result<Vec<ExternalPostData>, ProviderError> {
         let max_count = limit.clamp(1, 100);
         let videos = self.list_videos(access_token, max_count).await?;
         let mut posts = Vec::new();
@@ -652,8 +658,8 @@ impl SocialProvider for TikTokProvider {
                 let share_url = item["share_url"].as_str().map(|s| s.to_string());
                 let create_time_ts = item["create_time"].as_i64().unwrap_or(0);
 
-                let posted_at = chrono::DateTime::from_timestamp(create_time_ts, 0)
-                    .unwrap_or_default();
+                let posted_at =
+                    chrono::DateTime::from_timestamp(create_time_ts, 0).unwrap_or_default();
 
                 // Single media item: embed URL for iframe playback
                 // Cover image URL is stored in metadata.poster_url so frontend can show it as placeholder
@@ -733,7 +739,10 @@ impl SocialProvider for TikTokProvider {
         access_token: &str,
         platform_post_id: &str,
     ) -> Result<Vec<AnalyticsData>, ProviderError> {
-        let Some(video) = self.get_post_engagement(access_token, platform_post_id).await? else {
+        let Some(video) = self
+            .get_post_engagement(access_token, platform_post_id)
+            .await?
+        else {
             return Ok(vec![]);
         };
         let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
@@ -801,7 +810,10 @@ impl SocialProvider for TikTokProvider {
             .query(&[
                 ("video_id", platform_post_id),
                 ("max_count", "50"),
-                ("fields", "id,text,create_time,like_count,reply_id,parent_comment_id"),
+                (
+                    "fields",
+                    "id,text,create_time,like_count,reply_id,parent_comment_id",
+                ),
             ])
             .send()
             .await?;
@@ -867,7 +879,10 @@ mod tests {
         });
         match TikTokProvider::parse_publish_status(&q) {
             PublishPoll::Failed(reason) => {
-                assert!(reason.contains("Audio track is not allowed"), "got: {reason}");
+                assert!(
+                    reason.contains("Audio track is not allowed"),
+                    "got: {reason}"
+                );
             }
             other => panic!("FAILED must not be treated as pending, got {other:?}"),
         }
@@ -952,7 +967,11 @@ mod tests {
         let series = metrics_series(
             &video,
             "2026-09-30",
-            &[("Views", "view_count"), ("Likes", "like_count"), ("Shares", "share_count")],
+            &[
+                ("Views", "view_count"),
+                ("Likes", "like_count"),
+                ("Shares", "share_count"),
+            ],
         );
         assert_eq!(series.len(), 1);
         assert_eq!(series[0].label, "Likes");
@@ -979,7 +998,10 @@ mod tests {
     #[test]
     fn map_error_explains_creator_ttl_rejection() {
         let msg = provider()
-            .map_error("The video has been posted before (unauthorized.creator_ttl)", 400)
+            .map_error(
+                "The video has been posted before (unauthorized.creator_ttl)",
+                400,
+            )
             .unwrap();
         assert!(msg.contains("fresh URL"), "got: {msg}");
     }
@@ -992,7 +1014,9 @@ mod tests {
 
     #[test]
     fn map_error_explains_rejected_media() {
-        let msg = provider().map_error("The video upload was rejected", 422).unwrap();
+        let msg = provider()
+            .map_error("The video upload was rejected", 422)
+            .unwrap();
         assert!(msg.contains("210 MB"), "got: {msg}");
     }
 
@@ -1056,6 +1080,8 @@ mod tests {
 
     #[test]
     fn parse_should_read_no_tiktok_comments_from_empty_response() {
-        assert!(TikTokProvider::parse_research_comments(&serde_json::json!({ "data": {} })).is_empty());
+        assert!(
+            TikTokProvider::parse_research_comments(&serde_json::json!({ "data": {} })).is_empty()
+        );
     }
 }

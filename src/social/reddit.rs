@@ -19,8 +19,7 @@ pub struct RedditProvider {
 
 impl RedditProvider {
     pub fn new(config: &Config) -> Self {
-        let (client_id, client_secret) =
-            config.provider_credentials("reddit").unwrap_or_default();
+        let (client_id, client_secret) = config.provider_credentials("reddit").unwrap_or_default();
         let username = config.reddit_username().unwrap_or_default();
         let password = config.reddit_password().unwrap_or_default();
         let access_token = config.reddit_access_token();
@@ -71,7 +70,9 @@ impl RedditProvider {
 
     /// Initialize from a token JSON blob (cookie or OAuth).
     pub fn prepare_from_token(&mut self, token: &str) {
-        if let Some((session, token_v2, cookie_str)) = crate::social::reddit_cookies::parse_cookie_token(token) {
+        if let Some((session, token_v2, cookie_str)) =
+            crate::social::reddit_cookies::parse_cookie_token(token)
+        {
             self.set_cookie_credentials(&session, token_v2.as_deref(), cookie_str.as_deref());
         }
     }
@@ -81,7 +82,12 @@ impl RedditProvider {
         crate::social::reddit_cookies::is_cookie_auth(token)
     }
 
-    fn set_cookie_credentials(&mut self, reddit_session: &str, token_v2: Option<&str>, extra_cookies: Option<&str>) {
+    fn set_cookie_credentials(
+        &mut self,
+        reddit_session: &str,
+        token_v2: Option<&str>,
+        extra_cookies: Option<&str>,
+    ) {
         self.cookie_string = Some(match extra_cookies {
             Some(extras) if !extras.is_empty() && extras.contains("reddit_session=") => {
                 extras.to_string()
@@ -102,14 +108,17 @@ impl RedditProvider {
         endpoint: &str,
         params: &[(&str, &str)],
     ) -> Result<serde_json::Value, ProviderError> {
-        let cookies = self.cookie_string.as_deref()
+        let cookies = self
+            .cookie_string
+            .as_deref()
             .ok_or_else(|| ProviderError::Auth("No Reddit cookies configured".into()))?;
 
         let mut all_params: Vec<(&str, &str)> = params.to_vec();
         all_params.push(("raw_json", "1"));
 
-        let resp = self.http
-            .get(&format!("https://www.reddit.com{endpoint}"))
+        let resp = self
+            .http
+            .get(format!("https://www.reddit.com{endpoint}"))
             .header("Cookie", cookies)
             .query(&all_params)
             .send()
@@ -121,7 +130,9 @@ impl RedditProvider {
         }
         if !status.is_success() {
             let body = resp.text().await.unwrap_or_default();
-            return Err(ProviderError::Api(format!("Reddit www API error ({status}): {body}")));
+            return Err(ProviderError::Api(format!(
+                "Reddit www API error ({status}): {body}"
+            )));
         }
         Ok(resp.json().await?)
     }
@@ -133,7 +144,9 @@ impl RedditProvider {
         form: &[(&str, &str)],
     ) -> Result<serde_json::Value, ProviderError> {
         let modhash = self.ensure_modhash().await?;
-        let cookies = self.cookie_string.as_deref()
+        let cookies = self
+            .cookie_string
+            .as_deref()
             .ok_or_else(|| ProviderError::Auth("No Reddit cookies configured".into()))?
             .to_string();
 
@@ -141,8 +154,9 @@ impl RedditProvider {
         all_form.push(("uh", &modhash));
         all_form.push(("api_type", "json"));
 
-        let resp = self.http
-            .post(&format!("https://www.reddit.com{endpoint}"))
+        let resp = self
+            .http
+            .post(format!("https://www.reddit.com{endpoint}"))
             .header("Cookie", &cookies)
             .form(&all_form)
             .send()
@@ -154,7 +168,9 @@ impl RedditProvider {
         }
         if !status.is_success() {
             let body = resp.text().await.unwrap_or_default();
-            return Err(ProviderError::Api(format!("Reddit www POST error ({status}): {body}")));
+            return Err(ProviderError::Api(format!(
+                "Reddit www POST error ({status}): {body}"
+            )));
         }
         Ok(resp.json().await?)
     }
@@ -167,7 +183,9 @@ impl RedditProvider {
         let me = self.get_www("/api/me.json", &[]).await?;
         let mh = me["data"]["modhash"].as_str().unwrap_or("").to_string();
         if mh.is_empty() {
-            return Err(ProviderError::Auth("Could not fetch modhash — cookies may be expired".into()));
+            return Err(ProviderError::Auth(
+                "Could not fetch modhash — cookies may be expired".into(),
+            ));
         }
         self.modhash = Some(mh.clone());
         Ok(mh)
@@ -176,10 +194,15 @@ impl RedditProvider {
     // ── Cookie-based write operations ───────────────────────────
 
     /// Vote on a post/comment (dir: 1=upvote, 0=unvote, -1=downvote)
-    pub async fn vote(&mut self, thing_id: &str, dir: i8) -> Result<serde_json::Value, ProviderError> {
+    pub async fn vote(
+        &mut self,
+        thing_id: &str,
+        dir: i8,
+    ) -> Result<serde_json::Value, ProviderError> {
         let dir_s = dir.to_string();
         let id = thing_id.to_string();
-        self.post_www("/api/vote", &[("id", &id), ("dir", &dir_s)]).await
+        self.post_www("/api/vote", &[("id", &id), ("dir", &dir_s)])
+            .await
     }
 
     /// Save a post/comment
@@ -207,17 +230,27 @@ impl RedditProvider {
     }
 
     /// Subscribe/unsubscribe to a subreddit (action: "sub" or "unsub")
-    pub async fn subscribe(&mut self, subreddit: &str, action: &str) -> Result<serde_json::Value, ProviderError> {
+    pub async fn subscribe(
+        &mut self,
+        subreddit: &str,
+        action: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
         let sr = subreddit.trim_start_matches("r/").to_string();
         let act = action.to_string();
-        self.post_www("/api/subscribe", &[("sr_name", &sr), ("action", &act)]).await
+        self.post_www("/api/subscribe", &[("sr_name", &sr), ("action", &act)])
+            .await
     }
 
     /// Edit a self-post or comment text
-    pub async fn edit_text(&mut self, thing_id: &str, text: &str) -> Result<serde_json::Value, ProviderError> {
+    pub async fn edit_text(
+        &mut self,
+        thing_id: &str,
+        text: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
         let id = thing_id.to_string();
         let txt = text.to_string();
-        self.post_www("/api/editusertext", &[("thing_id", &id), ("text", &txt)]).await
+        self.post_www("/api/editusertext", &[("thing_id", &id), ("text", &txt)])
+            .await
     }
 
     /// Delete a post or comment
@@ -227,30 +260,48 @@ impl RedditProvider {
     }
 
     /// Moderation: remove a post/comment (spam=true marks as spam)
-    pub async fn mod_remove(&mut self, thing_id: &str, spam: bool) -> Result<serde_json::Value, ProviderError> {
+    pub async fn mod_remove(
+        &mut self,
+        thing_id: &str,
+        spam: bool,
+    ) -> Result<serde_json::Value, ProviderError> {
         let id = thing_id.to_string();
         let spam_s = spam.to_string();
-        self.post_www("/api/remove", &[("id", &id), ("spam", &spam_s)]).await
+        self.post_www("/api/remove", &[("id", &id), ("spam", &spam_s)])
+            .await
     }
 
     /// Moderation: approve a post/comment
-    pub async fn mod_approve(&mut self, thing_id: &str) -> Result<serde_json::Value, ProviderError> {
+    pub async fn mod_approve(
+        &mut self,
+        thing_id: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
         let id = thing_id.to_string();
         self.post_www("/api/approve", &[("id", &id)]).await
     }
 
     /// Moderation: distinguish a comment (how: "yes", "no", "admin", "special")
-    pub async fn mod_distinguish(&mut self, thing_id: &str, how: &str) -> Result<serde_json::Value, ProviderError> {
+    pub async fn mod_distinguish(
+        &mut self,
+        thing_id: &str,
+        how: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
         let id = thing_id.to_string();
         let h = how.to_string();
-        self.post_www("/api/distinguish", &[("id", &id), ("how", &h)]).await
+        self.post_www("/api/distinguish", &[("id", &id), ("how", &h)])
+            .await
     }
 
     /// Moderation: sticky/unsticky a post
-    pub async fn mod_sticky(&mut self, thing_id: &str, state: bool) -> Result<serde_json::Value, ProviderError> {
+    pub async fn mod_sticky(
+        &mut self,
+        thing_id: &str,
+        state: bool,
+    ) -> Result<serde_json::Value, ProviderError> {
         let id = thing_id.to_string();
         let s = state.to_string();
-        self.post_www("/api/set_subreddit_sticky", &[("id", &id), ("state", &s)]).await
+        self.post_www("/api/set_subreddit_sticky", &[("id", &id), ("state", &s)])
+            .await
     }
 
     /// Moderation: lock a post/comment
@@ -280,29 +331,36 @@ impl RedditProvider {
         let txt = text.unwrap_or("").to_string();
         let u = url.unwrap_or("").to_string();
 
-        let mut form: Vec<(&str, &str)> = vec![
-            ("sr", &sr),
-            ("title", &t),
-            ("kind", &k),
-        ];
-        if kind == "self" { form.push(("text", &txt)); }
-        else { form.push(("url", &u)); }
+        let mut form: Vec<(&str, &str)> = vec![("sr", &sr), ("title", &t), ("kind", &k)];
+        if kind == "self" {
+            form.push(("text", &txt));
+        } else {
+            form.push(("url", &u));
+        }
 
         self.post_www("/api/submit", &form).await
     }
 
     /// Comment via cookie auth (www.reddit.com)
-    pub async fn comment_www(&mut self, thing_id: &str, text: &str) -> Result<serde_json::Value, ProviderError> {
+    pub async fn comment_www(
+        &mut self,
+        thing_id: &str,
+        text: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
         let id = thing_id.to_string();
         let txt = text.to_string();
-        self.post_www("/api/comment", &[("thing_id", &id), ("text", &txt)]).await
+        self.post_www("/api/comment", &[("thing_id", &id), ("text", &txt)])
+            .await
     }
 
     /// Map a `/comments/{id}` listing into comments. The response is a
     /// two-element array — [submission listing, comment listing] — so the
     /// comment half is what carries `data.children`.
     pub(crate) fn parse_comment_listing(json: &serde_json::Value) -> Vec<CommentData> {
-        let listing = json.as_array().and_then(|parts| parts.get(1)).unwrap_or(json);
+        let listing = json
+            .as_array()
+            .and_then(|parts| parts.get(1))
+            .unwrap_or(json);
         Self::parse_comment_children(listing)
     }
 
@@ -369,10 +427,11 @@ impl RedditProvider {
             )));
         }
 
-        let json: serde_json::Value = serde_json::from_str(&body)
-            .map_err(|e| ProviderError::Api(format!(
+        let json: serde_json::Value = serde_json::from_str(&body).map_err(|e| {
+            ProviderError::Api(format!(
                 "Failed to parse Reddit token response: {e}. Body: {body}"
-            )))?;
+            ))
+        })?;
 
         let access_token = json["access_token"]
             .as_str()
@@ -396,7 +455,7 @@ impl RedditProvider {
 
         let resp = self
             .http
-            .get(&format!("https://oauth.reddit.com{endpoint}"))
+            .get(format!("https://oauth.reddit.com{endpoint}"))
             .header("Authorization", format!("Bearer {token}"))
             .query(&all_params)
             .send()
@@ -474,11 +533,7 @@ impl RedditProvider {
         let pid = post_id.trim_start_matches("t3_");
         let info_id = format!("t3_{pid}");
         let info = self
-            .get_oauth(
-                token,
-                "/api/info",
-                &[("id", &info_id)],
-            )
+            .get_oauth(token, "/api/info", &[("id", &info_id)])
             .await?;
         let subreddit = info["data"]["children"][0]["data"]["subreddit"]
             .as_str()
@@ -488,10 +543,7 @@ impl RedditProvider {
         let endpoint = format!("/r/{subreddit}/comments/{pid}");
         let limit_s = limit.to_string();
         let depth_s = depth.to_string();
-        let params: Vec<(&str, &str)> = vec![
-            ("limit", &limit_s),
-            ("depth", &depth_s),
-        ];
+        let params: Vec<(&str, &str)> = vec![("limit", &limit_s), ("depth", &depth_s)];
         self.get_oauth(token, &endpoint, &params).await
     }
 
@@ -516,11 +568,8 @@ impl RedditProvider {
         let endpoint = format!("/r/{subreddit}/comments/{pid}");
         let limit_s = limit.to_string();
         let depth_s = depth.to_string();
-        let params: Vec<(&str, &str)> = vec![
-            ("limit", &limit_s),
-            ("depth", &depth_s),
-            ("sort", sort),
-        ];
+        let params: Vec<(&str, &str)> =
+            vec![("limit", &limit_s), ("depth", &depth_s), ("sort", sort)];
         self.get_oauth(token, &endpoint, &params).await
     }
 
@@ -543,14 +592,22 @@ impl RedditProvider {
 
         if include_posts {
             let posts = self
-                .get_oauth(token, &format!("/user/{clean}/submitted"), &[("limit", "25")])
+                .get_oauth(
+                    token,
+                    &format!("/user/{clean}/submitted"),
+                    &[("limit", "25")],
+                )
                 .await?;
             result["posts"] = posts;
         }
 
         if include_comments {
             let comments = self
-                .get_oauth(token, &format!("/user/{clean}/comments"), &[("limit", "25")])
+                .get_oauth(
+                    token,
+                    &format!("/user/{clean}/comments"),
+                    &[("limit", "25")],
+                )
                 .await?;
             result["comments"] = comments;
         }
@@ -651,9 +708,7 @@ impl RedditProvider {
             ("score", data["score"].as_i64().map(|v| v.to_string())),
             (
                 "upvote_ratio",
-                data["upvote_ratio"]
-                    .as_f64()
-                    .map(|v| format!("{v:.2}")),
+                data["upvote_ratio"].as_f64().map(|v| format!("{v:.2}")),
             ),
             (
                 "num_comments",
@@ -662,7 +717,9 @@ impl RedditProvider {
             ("gilded", data["gilded"].as_i64().map(|v| v.to_string())),
             (
                 "total_awards_received",
-                data["total_awards_received"].as_i64().map(|v| v.to_string()),
+                data["total_awards_received"]
+                    .as_i64()
+                    .map(|v| v.to_string()),
             ),
         ]
         .into_iter()
@@ -697,8 +754,11 @@ impl RedditProvider {
     }
 
     /// Parse a Reddit listing JSON response into ExternalPostData vec
-    fn parse_reddit_listing(response: serde_json::Value) -> Result<Vec<ExternalPostData>, ProviderError> {
-        let children = response["data"]["children"].as_array()
+    fn parse_reddit_listing(
+        response: serde_json::Value,
+    ) -> Result<Vec<ExternalPostData>, ProviderError> {
+        let children = response["data"]["children"]
+            .as_array()
             .map(|c| c.to_vec())
             .unwrap_or_default();
 
@@ -706,11 +766,17 @@ impl RedditProvider {
         for child in &children {
             let data = &child["data"];
             let id = data["id"].as_str().unwrap_or("").to_string();
-            if id.is_empty() { continue; }
+            if id.is_empty() {
+                continue;
+            }
 
             let title = data["title"].as_str().unwrap_or("").to_string();
             let selftext = data["selftext"].as_str().unwrap_or("").to_string();
-            let text = if selftext.is_empty() { title.clone() } else { format!("{title}\n\n{selftext}") };
+            let text = if selftext.is_empty() {
+                title.clone()
+            } else {
+                format!("{title}\n\n{selftext}")
+            };
 
             let created_utc = data["created_utc"].as_f64().unwrap_or(0.0);
             let created_at = chrono::DateTime::from_timestamp(created_utc as i64, 0)
@@ -725,7 +791,8 @@ impl RedditProvider {
 
             // Extract author info
             let author = data["author"].as_str().map(String::from);
-            let avatar = data["author_icon_img"].as_str()
+            let avatar = data["author_icon_img"]
+                .as_str()
                 .or_else(|| data["icon_img"].as_str())
                 .and_then(|s| s.split('?').next())
                 .map(String::from);
@@ -737,21 +804,25 @@ impl RedditProvider {
             if is_gallery {
                 if let Some(metadata) = data["media_metadata"].as_object() {
                     // Use gallery_data for ordering; fall back to iterating metadata keys
-                    let ordered_ids: Vec<&str> = if let Some(items) = data["gallery_data"]["items"].as_array() {
-                        items.iter()
-                            .filter_map(|item| item["media_id"].as_str())
-                            .collect()
-                    } else {
-                        metadata.keys().map(|k| k.as_str()).collect()
-                    };
+                    let ordered_ids: Vec<&str> =
+                        if let Some(items) = data["gallery_data"]["items"].as_array() {
+                            items
+                                .iter()
+                                .filter_map(|item| item["media_id"].as_str())
+                                .collect()
+                        } else {
+                            metadata.keys().map(|k| k.as_str()).collect()
+                        };
                     for media_id in ordered_ids {
                         if let Some(meta) = metadata.get(media_id) {
                             // Use full-resolution image from `s.u`
-                            let url = meta["s"]["u"].as_str()
+                            let url = meta["s"]["u"]
+                                .as_str()
                                 .or_else(|| meta["s"]["gif"].as_str())
                                 .or_else(|| {
                                     // Fallback: use the largest preview image
-                                    meta["p"].as_array()
+                                    meta["p"]
+                                        .as_array()
                                         .and_then(|p| p.last())
                                         .and_then(|last| last["u"].as_str())
                                 });
@@ -789,7 +860,7 @@ impl RedditProvider {
                         if !url_str.is_empty() && !selftext.contains(url_str) {
                             let is_video = url_str.contains("v.redd.it")
                                 && (url_str.ends_with(".mp4") || url_str.contains("DASH_"));
-                            let is_image = url_str.ends_with(".jpg")
+                            let _is_image = url_str.ends_with(".jpg")
                                 || url_str.ends_with(".jpeg")
                                 || url_str.ends_with(".png")
                                 || url_str.ends_with(".gif")
@@ -798,8 +869,6 @@ impl RedditProvider {
                                 "video/mp4".to_string()
                             } else if url_str.contains(".gif") {
                                 "image/gif".to_string()
-                            } else if is_image {
-                                "image/jpeg".to_string()
                             } else {
                                 "image/jpeg".to_string()
                             };
@@ -855,8 +924,9 @@ impl RedditProvider {
         access_token: &str,
         limit: u32,
     ) -> Result<Vec<ExternalPostData>, ProviderError> {
-        let (_session, _token_v2, extra_cookies) = crate::social::reddit_cookies::parse_cookie_token(access_token)
-            .ok_or_else(|| ProviderError::Auth("Invalid Reddit cookie token".into()))?;
+        let (_session, _token_v2, extra_cookies) =
+            crate::social::reddit_cookies::parse_cookie_token(access_token)
+                .ok_or_else(|| ProviderError::Auth("Invalid Reddit cookie token".into()))?;
 
         let cookie_str = extra_cookies.as_deref()
             .filter(|s| !s.is_empty())
@@ -884,7 +954,9 @@ impl RedditProvider {
             }
             if !status.is_success() {
                 let body = resp.text().await.unwrap_or_default();
-                return Err(ProviderError::Api(format!("Reddit www API error ({status}): {body}")));
+                return Err(ProviderError::Api(format!(
+                    "Reddit www API error ({status}): {body}"
+                )));
             }
             resp.json().await.map_err(ProviderError::Network)
         }
@@ -895,10 +967,12 @@ impl RedditProvider {
             cookie_str,
             "https://www.reddit.com/api/me.json",
             &[("raw_json", "1")],
-        ).await?;
+        )
+        .await?;
 
-        let username = me["data"]["name"].as_str()
-            .ok_or_else(|| ProviderError::Api("Could not determine Reddit username from cookies".into()))?;
+        let username = me["data"]["name"].as_str().ok_or_else(|| {
+            ProviderError::Api("Could not determine Reddit username from cookies".into())
+        })?;
 
         let limit_str = limit.to_string();
         let response = cookie_get(
@@ -906,7 +980,8 @@ impl RedditProvider {
             cookie_str,
             &format!("https://www.reddit.com/user/{username}/submitted.json"),
             &[("limit", &limit_str), ("raw_json", "1")],
-        ).await?;
+        )
+        .await?;
 
         Self::parse_reddit_listing(response)
     }
@@ -1037,8 +1112,9 @@ impl SocialProvider for RedditProvider {
                 .await?;
 
             let body = resp.text().await.unwrap_or_default();
-            let json: serde_json::Value = serde_json::from_str(&body)
-                .map_err(|e| ProviderError::Api(format!("Reddit token exchange parse error: {e}")))?;
+            let json: serde_json::Value = serde_json::from_str(&body).map_err(|e| {
+                ProviderError::Api(format!("Reddit token exchange parse error: {e}"))
+            })?;
 
             if let Some(access_token) = json["access_token"].as_str() {
                 let refresh_token = json["refresh_token"].as_str().map(String::from);
@@ -1066,7 +1142,9 @@ impl SocialProvider for RedditProvider {
                 });
             } else {
                 let error = json["error"].as_str().unwrap_or("unknown");
-                return Err(ProviderError::Api(format!("Reddit code exchange failed: {error}")));
+                return Err(ProviderError::Api(format!(
+                    "Reddit code exchange failed: {error}"
+                )));
             }
         }
 
@@ -1082,7 +1160,7 @@ impl SocialProvider for RedditProvider {
 
             if resp.status().is_success() {
                 let user: serde_json::Value = resp.json().await.unwrap_or_default();
-                if user["name"].as_str().map_or(true, |s| s.is_empty()) {
+                if user["name"].as_str().is_none_or(|s| s.is_empty()) {
                     // valid JSON response but no user info — token expired/revoked
                 } else {
                     return Ok(AuthToken {
@@ -1131,7 +1209,9 @@ impl SocialProvider for RedditProvider {
                     tracing::debug!("Reddit refreshed access token OK, calling /api/v1/me");
                     return self.fetch_me(new_token).await;
                 } else {
-                    tracing::warn!("Reddit refresh token response missing access_token (status 200)");
+                    tracing::warn!(
+                        "Reddit refresh token response missing access_token (status 200)"
+                    );
                 }
             } else {
                 let status = resp.status();
@@ -1276,10 +1356,11 @@ impl SocialProvider for RedditProvider {
             )));
         }
 
-        let json: serde_json::Value = serde_json::from_str(&body)
-            .map_err(|e| ProviderError::Api(format!(
+        let json: serde_json::Value = serde_json::from_str(&body).map_err(|e| {
+            ProviderError::Api(format!(
                 "Failed to parse Reddit response: {e}. Body: {body}"
-            )))?;
+            ))
+        })?;
 
         let data = &json["json"]["data"];
         let post_id = data["id"].as_str().unwrap_or("").to_string();
@@ -1311,11 +1392,12 @@ impl SocialProvider for RedditProvider {
     /// Submit, and report pending when Reddit accepted the submission but has
     /// not materialised a permalink for it yet.
     ///
-    /// Reddit's async submit answers with a real `t3_` id and an empty `url`.
-    /// Reading that as a successful publish loses the post silently: the id is
-    /// stored, no post is ever findable, and nothing notices. The empty-permalink
-    /// case is downgraded to pending so it goes through the poll lifecycle; the
-    /// synchronous text/image path returns a permalink and is unaffected.
+    /// Reddit's async submit (media submissions) answers with a real `t3_` id
+    /// and an empty `url`. Today that reads as a successful publish of a post
+    /// nothing can link to — the id is stored, the post is never findable, and
+    /// the failure is silent. Downgrading the empty-permalink case to pending
+    /// sends it through the poll lifecycle instead; the synchronous text/image
+    /// path returns a permalink and is unaffected.
     async fn post_pending(
         &self,
         access_token: &str,
@@ -1323,16 +1405,19 @@ impl SocialProvider for RedditProvider {
     ) -> Result<PublishResult, ProviderError> {
         let result = self.publish(access_token, post).await?;
         if result.platform_post_url.as_deref().unwrap_or("").is_empty() {
-            Ok(PublishResult { status: "pending".into(), ..result })
+            Ok(PublishResult {
+                status: "pending".into(),
+                ..result
+            })
         } else {
             Ok(result)
         }
     }
 
     /// Look the submission up by id and report it only once Reddit serves a
-    /// permalink. A missing entry is reported as pending rather than failed: a
-    /// just-accepted submission takes a moment to become readable, and the
-    /// poll budget — not a false failure — is what bounds the wait.
+    /// permalink. A missing entry is reported as pending rather than failed:
+    /// a just-accepted submission takes a moment to become readable, and the
+    /// poll budget (not a false failure) is what bounds the wait.
     async fn check_post_status(
         &self,
         access_token: &str,
@@ -1364,7 +1449,9 @@ impl SocialProvider for RedditProvider {
         }
 
         let json: serde_json::Value = serde_json::from_str(&body).map_err(|e| {
-            ProviderError::Api(format!("Failed to parse Reddit lookup response: {e}. Body: {body}"))
+            ProviderError::Api(format!(
+                "Failed to parse Reddit lookup response: {e}. Body: {body}"
+            ))
         })?;
 
         let permalink = json[&full_id]["permalink"].as_str().unwrap_or("").trim();
@@ -1376,7 +1463,12 @@ impl SocialProvider for RedditProvider {
             } else {
                 Some(format!("https://www.reddit.com{permalink}"))
             },
-            status: if permalink.is_empty() { "pending" } else { "published" }.into(),
+            status: if permalink.is_empty() {
+                "pending"
+            } else {
+                "published"
+            }
+            .into(),
         })
     }
 
@@ -1453,8 +1545,9 @@ impl SocialProvider for RedditProvider {
             )));
         }
 
-        let json: serde_json::Value = serde_json::from_str(&body)
-            .map_err(|e| ProviderError::Api(format!("Failed to parse Reddit comment response: {e}")))?;
+        let json: serde_json::Value = serde_json::from_str(&body).map_err(|e| {
+            ProviderError::Api(format!("Failed to parse Reddit comment response: {e}"))
+        })?;
         let comment_id = json["json"]["data"]["things"][0]["data"]["id"]
             .as_str()
             .unwrap_or("")
@@ -1513,10 +1606,11 @@ impl SocialProvider for RedditProvider {
             )));
         }
 
-        let json: serde_json::Value = serde_json::from_str(&body)
-            .map_err(|e| ProviderError::Api(format!(
+        let json: serde_json::Value = serde_json::from_str(&body).map_err(|e| {
+            ProviderError::Api(format!(
                 "Failed to parse Reddit comment response: {e}. Body: {body}"
-            )))?;
+            ))
+        })?;
 
         let comment_id = json["json"]["data"]["things"][0]["data"]["id"]
             .as_str()
@@ -1670,10 +1764,7 @@ impl SocialProvider for RedditProvider {
 
                 result.push(MentionResult {
                     id: msg["id"].as_str().unwrap_or("").to_string(),
-                    label: format!(
-                        "u/{author}: {}",
-                        msg["subject"].as_str().unwrap_or("")
-                    ),
+                    label: format!("u/{author}: {}", msg["subject"].as_str().unwrap_or("")),
                     image: None,
                     do_not_cache: None,
                 });
@@ -1694,7 +1785,14 @@ impl SocialProvider for RedditProvider {
     }
 
     async fn targets(&self, access_token: &str) -> Result<Vec<TargetInfo>, ProviderError> {
-        let response = match self.get_oauth(access_token, "/subreddits/mine/subscriber", &[("limit", "100")]).await {
+        let response = match self
+            .get_oauth(
+                access_token,
+                "/subreddits/mine/subscriber",
+                &[("limit", "100")],
+            )
+            .await
+        {
             Ok(r) => r,
             Err(_) => return Ok(vec![]),
         };
@@ -1744,19 +1842,29 @@ impl SocialProvider for RedditProvider {
 
         // OAuth path: use Bearer token with oauth.reddit.com
         let me = self.get_oauth(access_token, "/api/v1/me", &[]).await?;
-        let username = me["name"].as_str()
+        let username = me["name"]
+            .as_str()
             .ok_or_else(|| ProviderError::Api("Could not determine Reddit username".into()))?;
 
-        tracing::info!("Reddit get_recent_posts: username='{}' limit={}", username, limit);
+        tracing::info!(
+            "Reddit get_recent_posts: username='{}' limit={}",
+            username,
+            limit
+        );
 
         let limit_str = limit.to_string();
-        let response = self.get_oauth(
-            access_token,
-            &format!("/user/{username}/submitted"),
-            &[("limit", &limit_str)],
-        ).await?;
+        let response = self
+            .get_oauth(
+                access_token,
+                &format!("/user/{username}/submitted"),
+                &[("limit", &limit_str)],
+            )
+            .await?;
 
-        let children_count = response["data"]["children"].as_array().map(|a| a.len()).unwrap_or(0);
+        let children_count = response["data"]["children"]
+            .as_array()
+            .map(|a| a.len())
+            .unwrap_or(0);
         tracing::info!(
             "Reddit get_recent_posts: {} children returned",
             children_count,
@@ -1765,8 +1873,6 @@ impl SocialProvider for RedditProvider {
         Self::parse_reddit_listing(response)
     }
 
-
-
     async fn get_post_engagement(
         &self,
         access_token: &str,
@@ -1774,8 +1880,12 @@ impl SocialProvider for RedditProvider {
     ) -> Result<Option<serde_json::Value>, ProviderError> {
         let pid = platform_post_id.trim_start_matches("t3_");
         let info_id = format!("t3_{pid}");
-        let info = self.get_oauth(access_token, "/api/info", &[("id", &info_id)]).await?;
-        Ok(Self::info_child_engagement(&info["data"]["children"][0]["data"]))
+        let info = self
+            .get_oauth(access_token, "/api/info", &[("id", &info_id)])
+            .await?;
+        Ok(Self::info_child_engagement(
+            &info["data"]["children"][0]["data"],
+        ))
     }
 
     fn resolve_media_url(&self, attachment: &MediaAttachment, app_url: &str) -> MediaAttachment {
@@ -1838,8 +1948,10 @@ mod tests {
             }}]}
         });
         let rows = RedditProvider::submission_analytics(&fixture);
-        let by_label: std::collections::HashMap<_, _> =
-            rows.iter().map(|r| (r.label.as_str(), r.data[0].total.as_str())).collect();
+        let by_label: std::collections::HashMap<_, _> = rows
+            .iter()
+            .map(|r| (r.label.as_str(), r.data[0].total.as_str()))
+            .collect();
         assert_eq!(by_label["score"], "420");
         assert_eq!(by_label["upvote_ratio"], "0.95");
         assert_eq!(by_label["num_comments"], "17");

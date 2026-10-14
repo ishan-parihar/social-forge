@@ -39,13 +39,9 @@ pub async fn get(
 
     // Check cache first
     let now = chrono::Utc::now();
-    let cached = crate::db::queries::get_cached_analytics(
-        &state.db,
-        auth.user_id,
-        &query.provider,
-        now,
-    )
-    .await?;
+    let cached =
+        crate::db::queries::get_cached_analytics(&state.db, auth.user_id, &query.provider, now)
+            .await?;
 
     // If we have cached data, return it directly
     if let Some(entry) = cached.into_iter().next() {
@@ -62,7 +58,9 @@ pub async fn get(
     let integration = integrations
         .iter()
         .find(|i| i.provider_identifier == query.provider)
-        .ok_or_else(|| AppError::NotFound(format!("Provider '{}' not connected", query.provider)))?;
+        .ok_or_else(|| {
+            AppError::NotFound(format!("Provider '{}' not connected", query.provider))
+        })?;
 
     let provider = state
         .providers
@@ -70,7 +68,8 @@ pub async fn get(
         .ok_or_else(|| AppError::NotFound(format!("Provider '{}' not found", query.provider)))?;
 
     // Decrypt token if encryption is enabled.
-    let tok = crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
+    let tok =
+        crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
 
     let analytics = provider
         .analytics(&tok, &integration.internal_id, days)
@@ -114,13 +113,10 @@ pub async fn get_post(
         .platform_post_id
         .ok_or_else(|| AppError::BadRequest("Post has not been published yet".into()))?;
 
-    let integration = crate::db::queries::get_integration(
-        &state.db,
-        post.integration_id,
-        auth.user_id,
-    )
-    .await?
-    .ok_or_else(|| AppError::NotFound("Integration not found".into()))?;
+    let integration =
+        crate::db::queries::get_integration(&state.db, post.integration_id, auth.user_id)
+            .await?
+            .ok_or_else(|| AppError::NotFound("Integration not found".into()))?;
 
     // Check cache for this specific post
     let cached = crate::db::queries::get_single_cached_analytics(
@@ -151,7 +147,8 @@ pub async fn get_post(
         })?;
 
     // Decrypt token if encryption is enabled.
-    let tok = crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
+    let tok =
+        crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
 
     let analytics = provider
         .post_analytics(&tok, &platform_post_id)
@@ -629,7 +626,7 @@ async fn calculate_streak(db: &sqlx::SqlitePool, user_id: Uuid) -> i64 {
         if let Some(d) = parse_date(date_str) {
             if d == expected {
                 streak += 1;
-                expected = expected - chrono::Duration::days(1);
+                expected -= chrono::Duration::days(1);
             } else if d < expected {
                 // Gap found — streak over.
                 break;

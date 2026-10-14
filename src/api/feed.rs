@@ -104,23 +104,29 @@ pub async fn get(
     let provider = query.provider.as_deref();
     let author_handle = query.author_handle.as_deref();
     // Trim the search query; an empty/whitespace query means "no search".
-    let q: Option<&str> = query
-        .q
-        .as_deref()
-        .map(str::trim)
-        .filter(|s| !s.is_empty());
+    let q: Option<&str> = query.q.as_deref().map(str::trim).filter(|s| !s.is_empty());
 
     // If a search query is present, use the case-insensitive LIKE search path;
     // otherwise use the regular list path. The search path ignores author_handle
     // (searching text/author_name/author_handle is more useful).
     let posts = if let Some(q) = q {
         queries::search_all_external_posts_with_engagement(
-            &state.db, auth.user_id, q, provider, cursor, limit + 1,
+            &state.db,
+            auth.user_id,
+            q,
+            provider,
+            cursor,
+            limit + 1,
         )
         .await?
     } else {
         queries::list_all_external_posts_with_engagement(
-            &state.db, auth.user_id, provider, author_handle, cursor, limit + 1,
+            &state.db,
+            auth.user_id,
+            provider,
+            author_handle,
+            cursor,
+            limit + 1,
         )
         .await?
     };
@@ -266,10 +272,12 @@ pub async fn analytics(
     Query(query): Query<AnalyticsQuery>,
 ) -> Result<Json<AnalyticsResponse>, AppError> {
     // Phase 2: compute the cutoff date if days is provided.
-    let cutoff: Option<chrono::DateTime<chrono::Utc>> = query.days.map(|d| {
-        chrono::Utc::now() - chrono::Duration::days(d as i64)
-    });
-    let summary = queries::get_engagement_summary(&state.db, auth.user_id, query.provider.as_deref(), cutoff).await?;
+    let cutoff: Option<chrono::DateTime<chrono::Utc>> = query
+        .days
+        .map(|d| chrono::Utc::now() - chrono::Duration::days(d as i64));
+    let summary =
+        queries::get_engagement_summary(&state.db, auth.user_id, query.provider.as_deref(), cutoff)
+            .await?;
     Ok(Json(AnalyticsResponse {
         total_likes: summary.total_likes.unwrap_or(0),
         total_comments: summary.total_comments.unwrap_or(0),
@@ -299,22 +307,23 @@ pub async fn get_comments(
     Path(post_id): Path<Uuid>,
 ) -> Result<Json<Vec<serde_json::Value>>, AppError> {
     // 1. Try the cache first.
-    let cached = queries::list_cached_comments_for_post(&state.db, auth.user_id, post_id)
-        .await?;
+    let cached = queries::list_cached_comments_for_post(&state.db, auth.user_id, post_id).await?;
 
     if !cached.is_empty() {
         // Cache hit — return immediately.
         let json_comments: Vec<serde_json::Value> = cached
             .into_iter()
-            .map(|c| serde_json::json!({
-                "comment_id": c.comment_id,
-                "text": c.text,
-                "author_name": c.author_name,
-                "author_handle": c.author_handle,
-                "author_avatar": c.author_avatar,
-                "created_at": c.created_at.to_rfc3339(),
-                "fetched_at": c.fetched_at.to_rfc3339(),
-            }))
+            .map(|c| {
+                serde_json::json!({
+                    "comment_id": c.comment_id,
+                    "text": c.text,
+                    "author_name": c.author_name,
+                    "author_handle": c.author_handle,
+                    "author_avatar": c.author_avatar,
+                    "created_at": c.created_at.to_rfc3339(),
+                    "fetched_at": c.fetched_at.to_rfc3339(),
+                })
+            })
             .collect();
         return Ok(Json(json_comments));
     }
@@ -326,7 +335,9 @@ pub async fn get_comments(
         .ok_or_else(|| AppError::NotFound("Post not found".into()))?;
 
     // Find the provider in the registry
-    let provider = state.providers.get(&post.provider)
+    let provider = state
+        .providers
+        .get(&post.provider)
         .ok_or_else(|| AppError::BadRequest(format!("Unknown provider: {}", post.provider)))?;
 
     // Get the integration for this provider to get the access token
@@ -337,7 +348,8 @@ pub async fn get_comments(
         .find(|i| i.provider_identifier == post.provider)
         .ok_or_else(|| AppError::NotFound("Integration not found for provider".into()))?;
 
-    let access_token = crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
+    let access_token =
+        crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
 
     // Fetch comments from the provider
     let comments = provider
@@ -351,17 +363,27 @@ pub async fn get_comments(
     //
     // Note: CommentData doesn't have an `author_handle` field (some
     // providers don't expose it), so we pass None for that column.
+    type CacheRow = (
+        String,
+        String,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        chrono::DateTime<chrono::Utc>,
+    );
     if !comments.is_empty() {
-        let cache_rows: Vec<(String, String, Option<String>, Option<String>, Option<String>, chrono::DateTime<chrono::Utc>)> = comments
+        let cache_rows: Vec<CacheRow> = comments
             .iter()
-            .map(|c| (
-                c.id.clone(),
-                c.text.clone(),
-                c.author_name.clone(),
-                None, // author_handle — not in CommentData
-                c.author_avatar.clone(),
-                c.created_at,
-            ))
+            .map(|c| {
+                (
+                    c.id.clone(),
+                    c.text.clone(),
+                    c.author_name.clone(),
+                    None, // author_handle — not in CommentData
+                    c.author_avatar.clone(),
+                    c.created_at,
+                )
+            })
             .collect();
         if let Err(e) = queries::upsert_cached_comments(
             &state.db,
@@ -369,8 +391,14 @@ pub async fn get_comments(
             post_id,
             &post.provider,
             &cache_rows,
-        ).await {
-            tracing::warn!("Failed to cache live-fetched comments for post {}: {}", post_id, e);
+        )
+        .await
+        {
+            tracing::warn!(
+                "Failed to cache live-fetched comments for post {}: {}",
+                post_id,
+                e
+            );
         }
     }
 
@@ -560,18 +588,22 @@ pub async fn repurpose_post(
     let content = body.content.unwrap_or_else(|| source.text.clone());
     let content = crate::services::PostService::sanitize_content(&content, 2000);
     if content.trim().is_empty() {
-        return Err(AppError::BadRequest("Cannot repurpose an empty post".into()));
+        return Err(AppError::BadRequest(
+            "Cannot repurpose an empty post".into(),
+        ));
     }
 
-    let (scheduled_at, state_enum): (Option<chrono::DateTime<chrono::Utc>>, crate::db::models::PostState) =
-        if let Some(s) = body.scheduled_at.as_deref() {
-            let dt = chrono::DateTime::parse_from_rfc3339(s)
-                .map_err(|_| AppError::BadRequest("Invalid scheduled_at format, use ISO8601".into()))?
-                .with_timezone(&chrono::Utc);
-            (Some(dt), crate::db::models::PostState::Queued)
-        } else {
-            (None, crate::db::models::PostState::Draft)
-        };
+    let (scheduled_at, state_enum): (
+        Option<chrono::DateTime<chrono::Utc>>,
+        crate::db::models::PostState,
+    ) = if let Some(s) = body.scheduled_at.as_deref() {
+        let dt = chrono::DateTime::parse_from_rfc3339(s)
+            .map_err(|_| AppError::BadRequest("Invalid scheduled_at format, use ISO8601".into()))?
+            .with_timezone(&chrono::Utc);
+        (Some(dt), crate::db::models::PostState::Queued)
+    } else {
+        (None, crate::db::models::PostState::Draft)
+    };
 
     // 4. Insert the new post with source_external_post_id set
     let post: crate::db::models::Post = sqlx::query_as::<_, crate::db::models::Post>(

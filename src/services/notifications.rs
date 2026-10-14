@@ -1,11 +1,11 @@
 use uuid::Uuid;
 
 use crate::api::AppState;
-use crate::db::queries;
 use crate::db::models::NotificationPublic;
-use sqlx::SqlitePool;
+use crate::db::queries;
 use crate::error::AppError;
 use crate::realtime::Broadcaster;
+use sqlx::SqlitePool;
 
 pub struct NotificationService;
 
@@ -37,6 +37,10 @@ impl NotificationService {
     /// broadcaster directly instead of a full [`AppState`] — background
     /// tasks in `src/scheduler/` have no HTTP state. Keeps a single
     /// implementation of the notify-then-broadcast path.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "notification fields: pool+broadcaster+user+title+body+type+two optional references"
+    )]
     pub async fn create_via(
         pool: &SqlitePool,
         broadcast: &Broadcaster,

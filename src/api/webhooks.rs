@@ -129,7 +129,10 @@ pub struct WebhookTestResult {
 // ── Helpers ─────────────────────────────────────────────────
 
 fn webhook_to_response(w: WebhookWithEvents) -> WebhookResponse {
-    let WebhookWithEvents { base: w, event_types } = w;
+    let WebhookWithEvents {
+        base: w,
+        event_types,
+    } = w;
     WebhookResponse {
         id: w.id,
         user_id: w.user_id,
@@ -145,7 +148,10 @@ fn webhook_to_response(w: WebhookWithEvents) -> WebhookResponse {
 }
 
 fn webhook_to_response_public(w: WebhookWithEvents) -> WebhookResponsePublic {
-    let WebhookWithEvents { base: w, event_types } = w;
+    let WebhookWithEvents {
+        base: w,
+        event_types,
+    } = w;
     WebhookResponsePublic {
         id: w.id,
         name: w.name,
@@ -215,8 +221,11 @@ async fn fetch_webhook(
         "SELECT {} FROM webhooks WHERE id = ? AND user_id = ?",
         WebhookBaseRow::SELECT_COLS
     );
-    let base: Option<WebhookBaseRow> =
-        sqlx::query_as(&sql).bind(id).bind(user_id).fetch_optional(db).await?;
+    let base: Option<WebhookBaseRow> = sqlx::query_as(&sql)
+        .bind(id)
+        .bind(user_id)
+        .fetch_optional(db)
+        .await?;
     match base {
         Some(base) => {
             let event_types = load_event_types(db, id).await?;
@@ -298,7 +307,10 @@ pub async fn create(
         .map_err(|e| crate::error::AppError::Internal(format!("Failed to commit webhook: {e}")))?;
 
     let event_types = load_event_types(&state.db, base.id).await?;
-    Ok(Json(webhook_to_response(WebhookWithEvents { base, event_types })))
+    Ok(Json(webhook_to_response(WebhookWithEvents {
+        base,
+        event_types,
+    })))
 }
 
 /// GET /api/webhooks
@@ -307,7 +319,9 @@ pub async fn list(
     auth: AuthenticatedUser,
 ) -> Result<Json<Vec<WebhookResponsePublic>>, crate::error::AppError> {
     let rows = list_webhooks(&state.db, auth.user_id).await?;
-    Ok(Json(rows.into_iter().map(webhook_to_response_public).collect()))
+    Ok(Json(
+        rows.into_iter().map(webhook_to_response_public).collect(),
+    ))
 }
 
 /// GET /api/webhooks/:id
@@ -334,7 +348,10 @@ pub async fn update(
     let current = fetch_webhook(&state.db, id, auth.user_id)
         .await?
         .ok_or_else(|| crate::error::AppError::NotFound("Webhook not found".into()))?;
-    let WebhookWithEvents { base: current, event_types: current_event_types } = current;
+    let WebhookWithEvents {
+        base: current,
+        event_types: current_event_types,
+    } = current;
 
     let new_name = body.name.unwrap_or(current.name);
     let new_url = body.url.unwrap_or(current.url);
@@ -460,7 +477,11 @@ pub async fn test(
     let (status_code, response_body) = result;
 
     // Record delivery — only set delivered_at on success
-    let delivered_dt = if status_code >= 200 && status_code < 300 { Some(Utc::now()) } else { None };
+    let delivered_dt = if (200..300).contains(&status_code) {
+        Some(Utc::now())
+    } else {
+        None
+    };
     let delivery_row: WebhookDeliveryRow = sqlx::query_as(
         r#"
         INSERT INTO webhook_deliveries (id, webhook_id, event_type, payload, status, status_code, response_body, delivered_at)

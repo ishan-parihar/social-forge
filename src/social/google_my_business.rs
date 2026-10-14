@@ -17,8 +17,7 @@ pub struct GoogleMyBusinessProvider {
 impl GoogleMyBusinessProvider {
     pub fn new(config: &Config) -> Self {
         // GMB reuses the same Google OAuth credentials as the "google" provider
-        let (client_id, client_secret) =
-            config.provider_credentials("google").unwrap_or_default();
+        let (client_id, client_secret) = config.provider_credentials("google").unwrap_or_default();
         Self {
             client_id,
             client_secret,
@@ -70,13 +69,13 @@ impl SocialProvider for GoogleMyBusinessProvider {
             ("prompt", "consent"),
         ];
 
-        let url = url::Url::parse_with_params(
-            "https://accounts.google.com/o/oauth2/v2/auth",
-            &params,
-        )
-        .map_err(|e| ProviderError::Auth(format!("URL parse: {e}")))?;
+        let url =
+            url::Url::parse_with_params("https://accounts.google.com/o/oauth2/v2/auth", &params)
+                .map_err(|e| ProviderError::Auth(format!("URL parse: {e}")))?;
 
-        Ok(AuthUrlResponse { url: url.to_string() })
+        Ok(AuthUrlResponse {
+            url: url.to_string(),
+        })
     }
 
     async fn exchange_code(
@@ -215,10 +214,7 @@ impl SocialProvider for GoogleMyBusinessProvider {
             ));
         }
 
-        let account_name = accounts[0]["name"]
-            .as_str()
-            .unwrap_or("")
-            .to_string();
+        let account_name = accounts[0]["name"].as_str().unwrap_or("").to_string();
 
         if account_name.is_empty() {
             return Err(ProviderError::Api(
@@ -252,10 +248,7 @@ impl SocialProvider for GoogleMyBusinessProvider {
             ));
         }
 
-        let location_name = locations[0]["name"]
-            .as_str()
-            .unwrap_or("")
-            .to_string();
+        let location_name = locations[0]["name"].as_str().unwrap_or("").to_string();
 
         // Step 3: Create a local post
         let post_body = serde_json::json!({
@@ -289,10 +282,7 @@ impl SocialProvider for GoogleMyBusinessProvider {
         }
 
         let result: serde_json::Value = post_resp.json().await?;
-        let post_id = result["name"]
-            .as_str()
-            .unwrap_or("")
-            .to_string();
+        let post_id = result["name"].as_str().unwrap_or("").to_string();
 
         Ok(PublishResult {
             platform_post_id: post_id,
@@ -330,7 +320,7 @@ impl SocialProvider for GoogleMyBusinessProvider {
             .iter()
             .map(|acc| {
                 let acc_name = acc["name"].as_str().unwrap_or("").to_string();
-                let account_id = acc_name.split('/').last().unwrap_or("").to_string();
+                let account_id = acc_name.split('/').next_back().unwrap_or("").to_string();
                 PageInfo {
                     id: account_id,
                     name: acc["accountName"]
@@ -377,7 +367,7 @@ impl SocialProvider for GoogleMyBusinessProvider {
         Ok(PageInfo {
             id: json["name"]
                 .as_str()
-                .and_then(|n| n.split('/').last())
+                .and_then(|n| n.split('/').next_back())
                 .unwrap_or("")
                 .to_string(),
             name: json["accountName"]

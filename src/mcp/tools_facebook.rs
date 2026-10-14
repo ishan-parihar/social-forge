@@ -2,7 +2,7 @@
 // Facebook Page management tools via Meta Graph API.
 // Uses page-scoped tokens resolved from connected Facebook integrations.
 
-use rmcp::{Json, schemars::JsonSchema};
+use rmcp::{schemars::JsonSchema, Json};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -209,7 +209,12 @@ pub async fn handle_fb_create_post(
     let token = find_page_token(state, user_id, &input.page_id).await?;
     let provider = create_provider(state);
     let result = provider
-        .create_post(&token, &input.page_id, &input.message, input.link.as_deref())
+        .create_post(
+            &token,
+            &input.page_id,
+            &input.message,
+            input.link.as_deref(),
+        )
         .await
         .map_err(|e| format!("Facebook create post failed: {e}"))?;
     Ok(Json(serde_json::json!({ "data": result })))
@@ -224,7 +229,12 @@ pub async fn handle_fb_create_photo(
     let provider = create_provider(state);
 
     let result = provider
-        .create_photo_post(&token, &input.page_id, &input.url, &input.caption.as_deref().unwrap_or(""))
+        .create_photo_post(
+            &token,
+            &input.page_id,
+            &input.url,
+            input.caption.as_deref().unwrap_or(""),
+        )
         .await
         .map_err(|e| format!("Facebook photo publish failed: {e}"))?;
 
@@ -305,18 +315,20 @@ pub async fn handle_fb_page_insights(
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_page_token(state, user_id, &input.page_id).await?;
     let provider = create_provider(state);
-    
+
     let metrics_str = if input.metric.is_empty() {
         "page_post_engagements"
     } else {
         &input.metric
     };
-    
+
     let metrics: Vec<&str> = metrics_str.split(',').map(|s| s.trim()).collect();
     let mut all_results = serde_json::Map::new();
-    
+
     for metric in metrics {
-        if metric.is_empty() { continue; }
+        if metric.is_empty() {
+            continue;
+        }
         let result = provider
             .get_page_insights(
                 &token,
@@ -328,10 +340,10 @@ pub async fn handle_fb_page_insights(
             )
             .await
             .map_err(|e| format!("Facebook page insights failed for metric {metric}: {e}"))?;
-        
+
         all_results.insert(metric.to_string(), result);
     }
-    
+
     Ok(Json(serde_json::json!({ "data": all_results })))
 }
 

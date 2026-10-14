@@ -30,8 +30,8 @@ pub struct Campaign {
     pub end_date: Option<chrono::NaiveDate>,
     pub goal: Option<String>,
     // v22 Phase 6: expanded campaign fields.
-    pub status: String,                    // active | paused | archived | completed
-    pub progress_metric: Option<String>,   // posts | engagement | reach | followers | custom
+    pub status: String,                  // active | paused | archived | completed
+    pub progress_metric: Option<String>, // posts | engagement | reach | followers | custom
     pub progress_target: Option<i32>,
     pub audience_persona: Option<serde_json::Value>,
     pub content_pillars: Option<serde_json::Value>,
@@ -132,8 +132,14 @@ pub async fn create(
     Json(body): Json<CreateCampaignRequest>,
 ) -> Result<Json<Campaign>, AppError> {
     let color = body.color.unwrap_or_else(|| "#6366f1".into());
-    let start_date = body.start_date.as_deref().and_then(|s| chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").ok());
-    let end_date = body.end_date.as_deref().and_then(|s| chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").ok());
+    let start_date = body
+        .start_date
+        .as_deref()
+        .and_then(|s| chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").ok());
+    let end_date = body
+        .end_date
+        .as_deref()
+        .and_then(|s| chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").ok());
     let status = body.status.unwrap_or_else(|| "active".into());
 
     // Validate status.
@@ -190,8 +196,14 @@ pub async fn update(
     Path(id): Path<Uuid>,
     Json(body): Json<UpdateCampaignRequest>,
 ) -> Result<Json<Campaign>, AppError> {
-    let start_date = body.start_date.as_deref().and_then(|s| chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").ok());
-    let end_date = body.end_date.as_deref().and_then(|s| chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").ok());
+    let start_date = body
+        .start_date
+        .as_deref()
+        .and_then(|s| chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").ok());
+    let end_date = body
+        .end_date
+        .as_deref()
+        .and_then(|s| chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").ok());
 
     // Validate status if provided.
     if let Some(ref status) = body.status {
@@ -299,7 +311,10 @@ pub async fn update_stage(
     // Validate the state value.
     let valid_states = ["idea", "draft", "queued", "published", "error"];
     if !valid_states.contains(&body.state.as_str()) {
-        return Err(AppError::BadRequest(format!("Invalid state: {}", body.state)));
+        return Err(AppError::BadRequest(format!(
+            "Invalid state: {}",
+            body.state
+        )));
     }
 
     // v25-3: validate kanban metadata fields if provided. The DB has CHECK
@@ -322,24 +337,24 @@ pub async fn update_stage(
     // Parse due_date if provided (RFC3339 → epoch i64; the column is an
     // INTEGER epoch). An empty string is treated as "clear" (set to NULL).
     let due_date_dt: Option<Option<i64>> = match &body.due_date {
-        None => None, // don't touch the field
+        None => None,                                 // don't touch the field
         Some(s) if s.trim().is_empty() => Some(None), // explicit clear
         Some(s) => {
-            let dt = chrono::DateTime::parse_from_rfc3339(s)
-                .map_err(|_| AppError::BadRequest("Invalid due_date format, use ISO8601/RFC3339".into()))?;
+            let dt = chrono::DateTime::parse_from_rfc3339(s).map_err(|_| {
+                AppError::BadRequest("Invalid due_date format, use ISO8601/RFC3339".into())
+            })?;
             Some(Some(dt.timestamp()))
         }
     };
 
     // Fetch the current state to validate the transition.
-    let current_state: Option<String> = sqlx::query_scalar(
-        r#"SELECT state FROM posts WHERE id = ? AND user_id = ?"#,
-    )
-    .bind(id)
-    .bind(auth.user_id)
-    .fetch_optional(&state.db)
-    .await
-    .map_err(|e| AppError::Internal(format!("Failed to fetch current state: {e}")))?;
+    let current_state: Option<String> =
+        sqlx::query_scalar(r#"SELECT state FROM posts WHERE id = ? AND user_id = ?"#)
+            .bind(id)
+            .bind(auth.user_id)
+            .fetch_optional(&state.db)
+            .await
+            .map_err(|e| AppError::Internal(format!("Failed to fetch current state: {e}")))?;
 
     let current_state = current_state.ok_or_else(|| AppError::NotFound("Post not found".into()))?;
 
@@ -351,23 +366,23 @@ pub async fn update_stage(
         // is None (caller didn't pass it). For due_date, we use a separate
         // branch because "clear" (Some(None)) vs "unchanged" (None) vs
         // "set" (Some(Some(dt))) are three distinct states.
-        if due_date_dt.is_some() {
+        if let Some(due_date_dt) = due_date_dt {
             // Explicit set or clear.
             sqlx::query(
                 r#"UPDATE posts SET
-                     campaign_id = ?,
-                     kanban_substate = COALESCE(?, kanban_substate),
-                     priority = COALESCE(?, priority),
-                     due_date = ?,
-                     updated_at = unixepoch()
-                   WHERE id = ? AND user_id = ?"#,
+                      campaign_id = ?,
+                      kanban_substate = COALESCE(?, kanban_substate),
+                      priority = COALESCE(?, priority),
+                      due_date = ?,
+                      updated_at = unixepoch()
+                    WHERE id = ? AND user_id = ?"#,
             )
             .bind(id)
             .bind(auth.user_id)
             .bind(body.campaign_id)
             .bind(&body.kanban_substate)
             .bind(&body.priority)
-            .bind(due_date_dt.unwrap())
+            .bind(due_date_dt)
             .execute(&state.db)
             .await
             .map_err(|e| AppError::Internal(format!("Failed to update post: {e}")))?;
@@ -442,16 +457,16 @@ pub async fn update_stage(
     // v25-3: same kanban-metadata persistence as the no-op branch above,
     // but the UPDATE also transitions state. Two branches for the same
     // due_date three-state reason (set / clear / unchanged).
-    if due_date_dt.is_some() {
+    if let Some(due_date_dt) = due_date_dt {
         sqlx::query(
             r#"UPDATE posts SET
-                 state = ?,
-                 campaign_id = ?,
-                 kanban_substate = COALESCE(?, kanban_substate),
-                 priority = COALESCE(?, priority),
-                 due_date = ?,
-                 updated_at = unixepoch()
-               WHERE id = ? AND user_id = ?"#,
+                  state = ?,
+                  campaign_id = ?,
+                  kanban_substate = COALESCE(?, kanban_substate),
+                  priority = COALESCE(?, priority),
+                  due_date = ?,
+                  updated_at = unixepoch()
+                WHERE id = ? AND user_id = ?"#,
         )
         .bind(id)
         .bind(auth.user_id)
@@ -459,7 +474,7 @@ pub async fn update_stage(
         .bind(body.campaign_id)
         .bind(&body.kanban_substate)
         .bind(&body.priority)
-        .bind(due_date_dt.unwrap())
+        .bind(due_date_dt)
         .execute(&state.db)
         .await
         .map_err(|e| AppError::Internal(format!("Failed to update post stage: {e}")))?;

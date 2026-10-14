@@ -1,7 +1,7 @@
 pub mod auth;
-pub mod messages;
 pub mod chats;
 pub mod groups;
+pub mod messages;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -52,7 +52,7 @@ impl WhaClient {
     /// `wa-rs` manages:
     /// - `wa-store.db` — Signal protocol identity, prekeys, sessions
     /// - `wa-meta.db` — application-level chat summaries / contacts (managed
-    ///    by [`crate::wa::chats`])
+    ///   by [`crate::wa::chats`])
     ///
     /// # Errors
     ///

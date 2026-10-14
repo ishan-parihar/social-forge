@@ -5,7 +5,9 @@
 
 use std::path::{Path, PathBuf};
 
-use super::browser_cookies::{home_dir as shared_home_dir, chrome_default_profile as shared_chrome_default_profile};
+use super::browser_cookies::{
+    chrome_default_profile as shared_chrome_default_profile, home_dir as shared_home_dir,
+};
 
 /// Result of browser cookie extraction
 #[derive(Debug)]
@@ -16,10 +18,13 @@ pub struct ExtractedCookies {
     pub source: String,
 }
 
+/// Function type for browser cookie extractors
+type BrowserExtractor = fn() -> Option<(String, String, String)>;
+
 /// Try to extract X cookies from all known browsers in order
 pub fn extract_x_cookies() -> Option<ExtractedCookies> {
     // Priority order: Brave, Chrome, Zen, Firefox
-    let browsers: Vec<(&str, fn() -> Option<(String, String, String)>)> = vec![
+    let browsers: Vec<(&str, BrowserExtractor)> = vec![
         ("brave", extract_brave),
         ("chrome", extract_chrome),
         ("zen", extract_zen),
@@ -50,7 +55,9 @@ fn chrome_cookie_path(profile_dir: &Path) -> PathBuf {
 }
 
 fn chrome_local_state_path(profile_dir: &Path) -> PathBuf {
-    profile_dir.parent().map(|p| p.join("Local State"))
+    profile_dir
+        .parent()
+        .map(|p| p.join("Local State"))
         .unwrap_or_else(|| profile_dir.join("Local State"))
 }
 
@@ -86,11 +93,8 @@ fn get_chrome_encryption_key(local_state_path: &Path) -> Option<Vec<u8>> {
         .pointer("/os_crypt/encrypted_key")
         .and_then(|v| v.as_str())?;
 
-    let enc_key = base64::Engine::decode(
-        &base64::engine::general_purpose::STANDARD,
-        enc_key_b64,
-    )
-    .ok()?;
+    let enc_key =
+        base64::Engine::decode(&base64::engine::general_purpose::STANDARD, enc_key_b64).ok()?;
 
     // Chrome format: "DPAPI" prefix (5 bytes), then actual encrypted data
     // On Linux, the key is encrypted with the OS keyring
@@ -109,13 +113,14 @@ fn get_chrome_encryption_key(local_state_path: &Path) -> Option<Vec<u8>> {
 
 fn decrypt_chrome_key_linux(encrypted: &[u8]) -> Result<Vec<u8>, aes_gcm::Error> {
     if encrypted.len() >= 15 {
-        let nonce_len = u32::from_ne_bytes([encrypted[0], encrypted[1], encrypted[2], encrypted[3]]) as usize;
+        let nonce_len =
+            u32::from_ne_bytes([encrypted[0], encrypted[1], encrypted[2], encrypted[3]]) as usize;
         if nonce_len > 0 && nonce_len + 4 + 16 <= encrypted.len() && nonce_len <= 32 {
             let nonce = &encrypted[4..4 + nonce_len];
             let ciphertext_and_tag = &encrypted[4 + nonce_len..];
 
-            use aes_gcm::{Aes256Gcm, Key, KeyInit, Nonce};
             use aes_gcm::aead::Aead;
+            use aes_gcm::{Aes256Gcm, Key, KeyInit, Nonce};
             let fallback_key = Key::<Aes256Gcm>::from_slice(&[0u8; 32]);
             let cipher = Aes256Gcm::new(fallback_key);
             let nonce_obj = Nonce::from_slice(nonce);
@@ -144,14 +149,16 @@ fn read_chrome_cookies(db_path: &Path, _enc_key: &[u8]) -> Option<(String, Strin
     let mut ct0 = String::new();
     let mut all_cookies: Vec<(String, String)> = Vec::new();
 
-    let rows = stmt.query_map([], |row| {
-        let name: String = row.get(0)?;
-        let value: String = row.get(1)?;
-        let encrypted_value: Vec<u8> = row.get(2)?;
-        let host_key: String = row.get(3)?;
-        let path: String = row.get(4)?;
-        Ok((name, value, encrypted_value, host_key, path))
-    }).ok()?;
+    let rows = stmt
+        .query_map([], |row| {
+            let name: String = row.get(0)?;
+            let value: String = row.get(1)?;
+            let encrypted_value: Vec<u8> = row.get(2)?;
+            let host_key: String = row.get(3)?;
+            let path: String = row.get(4)?;
+            Ok((name, value, encrypted_value, host_key, path))
+        })
+        .ok()?;
 
     for row in rows.flatten() {
         let (name, value, encrypted_value, _host, _path) = row;
@@ -208,10 +215,8 @@ fn firefox_profile_dir(home: &Path, config_dir: &str) -> Vec<PathBuf> {
     if let Ok(entries) = std::fs::read_dir(&mozilla_dir) {
         for entry in entries.flatten() {
             let path = entry.path();
-            if path.is_dir() && path.join("cookies.sqlite").exists() {
-                if !profiles.contains(&path) {
-                    profiles.push(path);
-                }
+            if path.is_dir() && path.join("cookies.sqlite").exists() && !profiles.contains(&path) {
+                profiles.push(path);
             }
         }
     }
@@ -250,12 +255,14 @@ fn extract_firefox_impl(profile_dir: &Path, _browser: &str) -> Option<(String, S
     let mut x_domain: Vec<(String, String)> = Vec::new();
     let mut tw_domain: Vec<(String, String)> = Vec::new();
 
-    let rows = stmt.query_map([], |row| {
-        let name: String = row.get(0)?;
-        let value: String = row.get(1)?;
-        let host: String = row.get(2)?;
-        Ok((name, value, host))
-    }).ok()?;
+    let rows = stmt
+        .query_map([], |row| {
+            let name: String = row.get(0)?;
+            let value: String = row.get(1)?;
+            let host: String = row.get(2)?;
+            Ok((name, value, host))
+        })
+        .ok()?;
 
     for row in rows.flatten() {
         let (name, value, host) = row;
@@ -267,7 +274,11 @@ fn extract_firefox_impl(profile_dir: &Path, _browser: &str) -> Option<(String, S
     }
 
     // Prefer x.com cookies; fall back to twitter.com
-    let chosen = if !x_domain.is_empty() { &x_domain } else { &tw_domain };
+    let chosen = if !x_domain.is_empty() {
+        &x_domain
+    } else {
+        &tw_domain
+    };
     for (name, value) in chosen {
         match name.as_str() {
             "auth_token" => auth_token = value.clone(),
@@ -405,7 +416,10 @@ pub fn parse_cookie_string(cookie_str: &str) -> Option<(String, String, String)>
 /// Build the JSON token blob for storage in DB or env
 pub fn build_cookie_token(auth_token: &str, ct0: &str, cookie_string: Option<&str>) -> String {
     let mut m = serde_json::Map::new();
-    m.insert("auth_token".into(), serde_json::Value::String(auth_token.into()));
+    m.insert(
+        "auth_token".into(),
+        serde_json::Value::String(auth_token.into()),
+    );
     m.insert("ct0".into(), serde_json::Value::String(ct0.into()));
     if let Some(cs) = cookie_string {
         if !cs.is_empty() {

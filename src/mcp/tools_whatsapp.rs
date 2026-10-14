@@ -1,10 +1,10 @@
-use rmcp::{Json, schemars::JsonSchema};
+use rmcp::{schemars::JsonSchema, Json};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use crate::api::AppState;
-use crate::wa::{WhaClient, chats, messages};
+use crate::wa::{chats, messages, WhaClient};
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct WaAuthStatusOutput {
@@ -45,26 +45,18 @@ pub struct WaContactsOutput {
 }
 
 /// Get the native WhaClient guard, or error.
-fn get_wa_client<'a>(
-    state: &'a AppState,
-) -> Result<&'a Arc<Mutex<WhaClient>>, String> {
+fn get_wa_client(state: &AppState) -> Result<&Arc<Mutex<WhaClient>>, String> {
     state
         .wa_client
         .as_ref()
         .ok_or_else(|| "WhatsApp client not configured (set WHATSAPP_STORE_DIR)".to_string())
 }
 
-pub async fn handle_wa_auth_status(
-    state: &AppState,
-) -> Result<Json<WaAuthStatusOutput>, String> {
+pub async fn handle_wa_auth_status(state: &AppState) -> Result<Json<WaAuthStatusOutput>, String> {
     let client = get_wa_client(state)?;
     let locked = client.lock().await;
     let authenticated = locked.is_authenticated();
-    let jid = locked
-        .inner()
-        .get_pn()
-        .await
-        .map(|j| j.to_string());
+    let jid = locked.inner().get_pn().await.map(|j| j.to_string());
     Ok(Json(WaAuthStatusOutput { authenticated, jid }))
 }
 
@@ -179,9 +171,7 @@ pub async fn handle_wa_revoke_message(
     Ok(Json(WaRevokeMessageOutput { success: true }))
 }
 
-pub async fn handle_wa_list_groups(
-    state: &AppState,
-) -> Result<Json<WaListGroupsOutput>, String> {
+pub async fn handle_wa_list_groups(state: &AppState) -> Result<Json<WaListGroupsOutput>, String> {
     let client = get_wa_client(state)?;
     let result = groups::list_groups(client)
         .await
@@ -197,7 +187,9 @@ pub async fn handle_wa_create_group(
     let result = groups::create_group(client, &input.subject, &input.participants)
         .await
         .map_err(|e| format!("WhatsApp create group failed: {e}"))?;
-    Ok(Json(WaCreateGroupOutput { group_jid: result.gid.to_string() }))
+    Ok(Json(WaCreateGroupOutput {
+        group_jid: result.gid.to_string(),
+    }))
 }
 
 pub async fn handle_wa_group_invite_link(
@@ -205,7 +197,9 @@ pub async fn handle_wa_group_invite_link(
     input: &WaGroupInviteLinkInput,
 ) -> Result<Json<WaGroupInviteLinkOutput>, String> {
     let client = get_wa_client(state)?;
-    let jid: wa_rs::Jid = input.group_jid.parse()
+    let jid: wa_rs::Jid = input
+        .group_jid
+        .parse()
         .map_err(|e| format!("Invalid group JID: {e}"))?;
     let link = groups::get_group_invite_link(client, &jid)
         .await

@@ -47,8 +47,6 @@ pub struct IntegrationListResponse {
     pub integrations: Vec<IntegrationPublic>,
 }
 
-
-
 // ── Handlers ─────────────────────────────────────────────────
 
 /// GET /api/integrations — list all connected channels
@@ -58,7 +56,9 @@ pub async fn list(
 ) -> Result<Json<IntegrationListResponse>, AppError> {
     let integrations = queries::list_integrations(&state.db, auth.user_id).await?;
     let public: Vec<IntegrationPublic> = integrations.into_iter().map(Into::into).collect();
-    Ok(Json(IntegrationListResponse { integrations: public }))
+    Ok(Json(IntegrationListResponse {
+        integrations: public,
+    }))
 }
 
 /// GET /api/integrations/connect/:provider — initiate OAuth flow
@@ -140,14 +140,14 @@ pub async fn connect(
             &token.provider_user_id,
             &token.access_token,
             token.refresh_token.as_deref(),
-            token.expires_in.map(|exp| {
-                chrono::Utc::now() + chrono::Duration::seconds(exp as i64)
-            }),
+            token
+                .expires_in
+                .map(|exp| chrono::Utc::now() + chrono::Duration::seconds(exp as i64)),
             Some(&token.name),
             token.picture.as_deref(),
             None,
             None,
-        None, // auth_method
+            None, // auth_method
         )
         .await?;
 
@@ -160,7 +160,10 @@ pub async fn connect(
         );
 
         return Ok(Json(ConnectResponse {
-            url: format!("Connected to {} as {}. No browser OAuth needed.", provider, token.name),
+            url: format!(
+                "Connected to {} as {}. No browser OAuth needed.",
+                provider, token.name
+            ),
             state: "auto".into(),
         }));
     }
@@ -216,7 +219,10 @@ pub async fn oauth_callback(
 
     // Handle error redirects from provider (e.g. LinkedIn denied access)
     if let Some(ref error) = query.error {
-        let desc = query.error_description.as_deref().unwrap_or("no description");
+        let desc = query
+            .error_description
+            .as_deref()
+            .unwrap_or("no description");
         tracing::warn!("OAuth provider returned error: {error} — {desc}");
         return Ok(Redirect::to(&format!(
             "{}/auth/callback?error={}",
@@ -256,10 +262,7 @@ pub async fn oauth_callback(
                         .map_err(|e| AppError::Internal(format!("JWT creation: {e}")))?;
                     return Ok(Redirect::to(&format!(
                         "{}/auth/callback?pending={}&integration_id={}&token={}",
-                        app_url,
-                        integration.provider_identifier,
-                        integration.id,
-                        token,
+                        app_url, integration.provider_identifier, integration.id, token,
                     )));
                 }
             }
@@ -294,10 +297,9 @@ pub async fn delete(
         return Err(AppError::NotFound("Integration not found".into()));
     }
 
-    state.broadcast.send(
-        "integration_disconnected",
-        &serde_json::json!({"id": id}),
-    );
+    state
+        .broadcast
+        .send("integration_disconnected", &serde_json::json!({"id": id}));
 
     Ok(Json(serde_json::json!({"deleted": true})))
 }
@@ -377,9 +379,7 @@ pub async fn update_timeslots(
 
     // Validate: max 3 slots
     if body.timeslots.len() > 3 {
-        return Err(AppError::BadRequest(
-            "Maximum 3 time slots allowed".into(),
-        ));
+        return Err(AppError::BadRequest("Maximum 3 time slots allowed".into()));
     }
 
     // Validate no duplicate times
@@ -387,9 +387,10 @@ pub async fn update_timeslots(
     let mut seen = HashSet::new();
     for slot in &body.timeslots {
         if !seen.insert(&slot.time) {
-            return Err(AppError::BadRequest(
-                format!("Duplicate time slot: {} minutes is already set", slot.time)
-            ));
+            return Err(AppError::BadRequest(format!(
+                "Duplicate time slot: {} minutes is already set",
+                slot.time
+            )));
         }
     }
 
@@ -436,14 +437,18 @@ pub async fn toggle_disable(
         .await?
         .ok_or_else(|| AppError::NotFound("Integration not found".into()))?;
 
-    sqlx::query("UPDATE integrations SET disabled = $1, updated_at = NOW() WHERE id = $2 AND user_id = $3")
-        .bind(body.disabled)
-        .bind(id)
-        .bind(auth.user_id)
-        .execute(&state.db)
-        .await?;
+    sqlx::query(
+        "UPDATE integrations SET disabled = $1, updated_at = NOW() WHERE id = $2 AND user_id = $3",
+    )
+    .bind(body.disabled)
+    .bind(id)
+    .bind(auth.user_id)
+    .execute(&state.db)
+    .await?;
 
-    Ok(Json(serde_json::json!({"success": true, "disabled": body.disabled})))
+    Ok(Json(
+        serde_json::json!({"success": true, "disabled": body.disabled}),
+    ))
 }
 
 /// POST /api/integrations/{id}/refresh — refresh OAuth token and profile info
@@ -463,22 +468,29 @@ pub async fn refresh(
 
     let mut new_access_token = None;
     if let Some(ref refresh_token_encrypted) = integration.refresh_token {
-        let refresh_token = crypto::maybe_decrypt_token(refresh_token_encrypted, state.token_key.as_ref());
+        let refresh_token =
+            crypto::maybe_decrypt_token(refresh_token_encrypted, state.token_key.as_ref());
         match provider_obj.refresh_token(&refresh_token).await {
             Ok(new_token) => {
                 let (access_token, refresh_token_to_store) = if let Some(key) = state.token_key {
                     let enc_access = crypto::encrypt_string(&new_token.access_token, &key)
                         .map_err(|e| AppError::Internal(format!("Encryption failed: {e}")))?;
-                    let enc_refresh = new_token.refresh_token.as_ref()
+                    let enc_refresh = new_token
+                        .refresh_token
+                        .as_ref()
                         .map(|rt| crypto::encrypt_string(rt, &key))
                         .transpose()
                         .map_err(|e| AppError::Internal(format!("Encryption failed: {e}")))?;
                     (enc_access, enc_refresh)
                 } else {
-                    (new_token.access_token.clone(), new_token.refresh_token.clone())
+                    (
+                        new_token.access_token.clone(),
+                        new_token.refresh_token.clone(),
+                    )
                 };
 
-                let expires_at = new_token.expires_in
+                let expires_at = new_token
+                    .expires_in
                     .map(|e| chrono::Utc::now() + chrono::Duration::seconds(e as i64));
 
                 queries::update_integration_token(
@@ -510,12 +522,16 @@ pub async fn refresh(
         }
     }
 
-    let fallback_token = crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
-    let token_to_use = new_access_token.as_deref()
-        .unwrap_or(&fallback_token);
+    let fallback_token =
+        crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
+    let token_to_use = new_access_token.as_deref().unwrap_or(&fallback_token);
 
     let info = provider_obj
-        .reconnect(token_to_use, &integration.internal_id, &integration.internal_id)
+        .reconnect(
+            token_to_use,
+            &integration.internal_id,
+            &integration.internal_id,
+        )
         .await
         .map_err(|e| {
             crate::error::map_scope_loss(
@@ -571,24 +587,34 @@ pub async fn verify_one_time_token(
         .await
         .map_err(|e| AppError::Provider(format!("Verification failed: {e}")))?;
 
+    let profile_url = if token.username.is_empty() {
+        None
+    } else {
+        Some(format!("@{}", token.username))
+    };
     queries::create_integration(
         &state.db,
         auth.user_id,
         &provider,
-        &provider_obj.name(),
+        provider_obj.name(),
         &token.provider_user_id,
         &token.access_token,
         token.refresh_token.as_deref(),
-        token.expires_in.map(|exp| chrono::Utc::now() + chrono::Duration::seconds(exp as i64)),
+        token
+            .expires_in
+            .map(|exp| chrono::Utc::now() + chrono::Duration::seconds(exp as i64)),
         Some(&token.name),
         token.picture.as_deref(),
-        token.username.is_empty().then_some(None).unwrap_or(Some(&format!("@{}", token.username))),
+        profile_url.as_deref(),
         None,
         None,
     )
     .await?;
 
-    state.broadcast.send("integration_connected", &serde_json::json!({ "provider": provider, "name": token.name }));
+    state.broadcast.send(
+        "integration_connected",
+        &serde_json::json!({ "provider": provider, "name": token.name }),
+    );
 
     Ok(Json(ConnectResponse {
         url: format!("Connected to {} as {}", provider_obj.name(), token.name),
@@ -609,11 +635,15 @@ pub async fn connect_telegram_bot_token(
 
     // Validate token via getMe
     let http = reqwest::Client::new();
-    let resp = http.get(format!("https://api.telegram.org/bot{token}/getMe"))
-        .send().await
+    let resp = http
+        .get(format!("https://api.telegram.org/bot{token}/getMe"))
+        .send()
+        .await
         .map_err(|e| AppError::Provider(format!("Failed to reach Telegram: {e}")))?;
 
-    let json: serde_json::Value = resp.json().await
+    let json: serde_json::Value = resp
+        .json()
+        .await
         .map_err(|e| AppError::Provider(format!("Invalid response: {e}")))?;
 
     if !json["ok"].as_bool().unwrap_or(false) {
@@ -623,22 +653,36 @@ pub async fn connect_telegram_bot_token(
     let bot = &json["result"];
     let bot_id = bot["id"].as_i64().unwrap_or(0).to_string();
     let bot_username = bot["username"].as_str().unwrap_or("");
-    let display_name = if bot_username.is_empty() { "Telegram Bot".to_string() } else { format!("@{bot_username}") };
-    let profile_url = if bot_username.is_empty() { None } else { Some(format!("@{bot_username}")) };
+    let display_name = if bot_username.is_empty() {
+        "Telegram Bot".to_string()
+    } else {
+        format!("@{bot_username}")
+    };
+    let profile_url = if bot_username.is_empty() {
+        None
+    } else {
+        Some(format!("@{bot_username}"))
+    };
 
     // Store as JSON with bot_token (no chat_id yet — user connects a chat via /connect flow)
     let access_token = serde_json::json!({ "bot_token": token }).to_string();
 
     let integration = queries::create_integration(
-        &state.db, auth.user_id,
-        "telegram-bot", "Telegram Bot",
-        &bot_id, &access_token,
-        None, None,
+        &state.db,
+        auth.user_id,
+        "telegram-bot",
+        "Telegram Bot",
+        &bot_id,
+        &access_token,
+        None,
+        None,
         Some(&display_name),
         None,
         profile_url.as_deref(),
-        None, None,
-    ).await?;
+        None,
+        None,
+    )
+    .await?;
 
     let public: IntegrationPublic = integration.into();
     Ok(Json(serde_json::json!({ "integration": public })))
@@ -650,26 +694,44 @@ pub async fn whatsapp_pair(
     _auth: AuthenticatedUser,
     Json(body): Json<serde_json::Value>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    let phone = body["phone_number"].as_str().unwrap_or("").trim().to_string();
+    let phone = body["phone_number"]
+        .as_str()
+        .unwrap_or("")
+        .trim()
+        .to_string();
     if phone.is_empty() || !phone.starts_with('+') {
-        return Err(AppError::BadRequest("phone_number required in international format (e.g. +1234567890)".into()));
+        return Err(AppError::BadRequest(
+            "phone_number required in international format (e.g. +1234567890)".into(),
+        ));
     }
 
-    let wa = state.wa_client.as_ref()
+    let wa = state
+        .wa_client
+        .as_ref()
         .ok_or_else(|| AppError::Provider("WhatsApp client not configured".into()))?;
 
     // Force fresh connection for reliable pair code generation
     {
         let mut locked = wa.lock().await;
-        locked.reconnect().await.map_err(|e| AppError::Provider(format!("WhatsApp connect failed: {e}")))?;
+        locked
+            .reconnect()
+            .await
+            .map_err(|e| AppError::Provider(format!("WhatsApp connect failed: {e}")))?;
     }
 
-    let code = crate::wa::auth::pair_with_code(wa, crate::wa::auth::PairOptions {
-        phone_number: phone,
-        show_push_notification: true,
-    }).await.map_err(|e| AppError::Provider(format!("Pair code request failed: {e}")))?;
+    let code = crate::wa::auth::pair_with_code(
+        wa,
+        crate::wa::auth::PairOptions {
+            phone_number: phone,
+            show_push_notification: true,
+        },
+    )
+    .await
+    .map_err(|e| AppError::Provider(format!("Pair code request failed: {e}")))?;
 
-    Ok(Json(serde_json::json!({ "pair_code": code, "expires_in": 180 })))
+    Ok(Json(
+        serde_json::json!({ "pair_code": code, "expires_in": 180 }),
+    ))
 }
 
 /// GET /api/integrations/connect/whatsapp/status — poll auth status
@@ -677,7 +739,9 @@ pub async fn whatsapp_status(
     State(state): State<AppState>,
     _auth: AuthenticatedUser,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    let wa = state.wa_client.as_ref()
+    let wa = state
+        .wa_client
+        .as_ref()
         .ok_or_else(|| AppError::Provider("WhatsApp client not configured".into()))?;
 
     let locked = wa.lock().await;
@@ -687,7 +751,9 @@ pub async fn whatsapp_status(
     } else {
         None
     };
-    Ok(Json(serde_json::json!({ "authenticated": authenticated, "jid": jid })))
+    Ok(Json(
+        serde_json::json!({ "authenticated": authenticated, "jid": jid }),
+    ))
 }
 
 /// POST /api/integrations/connect/telegram-user/request-code
@@ -701,10 +767,15 @@ pub async fn telegram_user_request_code(
         return Err(AppError::BadRequest("phone number required".into()));
     }
 
-    let mgr = state.telegram_client_manager.as_ref()
-        .ok_or_else(|| AppError::Provider("Telegram user client not configured. Set TELEGRAM_API_ID and TELEGRAM_API_HASH.".into()))?;
+    let mgr = state.telegram_client_manager.as_ref().ok_or_else(|| {
+        AppError::Provider(
+            "Telegram user client not configured. Set TELEGRAM_API_ID and TELEGRAM_API_HASH."
+                .into(),
+        )
+    })?;
 
-    mgr.request_login_code(&phone).await
+    mgr.request_login_code(&phone)
+        .await
         .map_err(|e| AppError::Provider(format!("Failed to send code: {e}")))?;
 
     Ok(Json(serde_json::json!({ "status": "code_sent" })))
@@ -721,31 +792,46 @@ pub async fn telegram_user_sign_in(
         return Err(AppError::BadRequest("verification code required".into()));
     }
 
-    let mgr = state.telegram_client_manager.as_ref()
+    let mgr = state
+        .telegram_client_manager
+        .as_ref()
         .ok_or_else(|| AppError::Provider("Telegram user client not configured".into()))?;
 
-    mgr.sign_in("", &code).await
+    mgr.sign_in("", &code)
+        .await
         .map_err(|e| AppError::Provider(format!("Sign in failed: {e}")))?;
 
     // Fetch user info and create integration
-    let info = mgr.user_info().await
+    let info = mgr
+        .user_info()
+        .await
         .map_err(|e| AppError::Provider(format!("Failed to get user info: {e}")))?;
 
     let user_id = info["id"].as_i64().unwrap_or(0).to_string();
     let name = info["name"].as_str().unwrap_or("Telegram User").to_string();
     let username = info["username"].as_str().unwrap_or("").to_string();
-    let profile_url = if username.is_empty() { None } else { Some(format!("@{username}")) };
+    let profile_url = if username.is_empty() {
+        None
+    } else {
+        Some(format!("@{username}"))
+    };
 
     let integration = queries::create_integration(
-        &state.db, auth.user_id,
-        "telegram-user", "Telegram User",
-        &user_id, &user_id,
-        None, None,
+        &state.db,
+        auth.user_id,
+        "telegram-user",
+        "Telegram User",
+        &user_id,
+        &user_id,
+        None,
+        None,
         Some(&name),
         None,
         profile_url.as_deref(),
-        None, None,
-    ).await?;
+        None,
+        None,
+    )
+    .await?;
 
     let public: IntegrationPublic = integration.into();
     Ok(Json(serde_json::json!({ "integration": public })))
@@ -758,10 +844,16 @@ pub async fn connect_x_cookie(
     Json(body): Json<ConnectXCookieRequest>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     if body.auth_token.trim().is_empty() || body.ct0.trim().is_empty() {
-        return Err(AppError::BadRequest("auth_token and ct0 are required".into()));
+        return Err(AppError::BadRequest(
+            "auth_token and ct0 are required".into(),
+        ));
     }
 
-    let cookie_str = format!("auth_token={}; ct0={};", body.auth_token.trim(), body.ct0.trim());
+    let cookie_str = format!(
+        "auth_token={}; ct0={};",
+        body.auth_token.trim(),
+        body.ct0.trim()
+    );
     let ct0 = body.ct0.trim();
     let bearer = "Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA";
 
@@ -777,19 +869,25 @@ pub async fn connect_x_cookie(
         .await
         .map_err(|e| AppError::Provider(format!("X cookie auth failed: {e}")))?;
 
-    let list: serde_json::Value = resp.json().await
+    let list: serde_json::Value = resp
+        .json()
+        .await
         .map_err(|e| AppError::Provider(format!("X response parse error: {e}")))?;
 
-    let users = list["users"].as_array()
+    let users = list["users"]
+        .as_array()
         .ok_or_else(|| AppError::Provider("X cookie auth: no users in response".into()))?;
-    let user = users.first()
+    let user = users
+        .first()
         .ok_or_else(|| AppError::Provider("X cookie auth: empty users list".into()))?;
 
     let screen_name = user["screen_name"].as_str().unwrap_or("");
     let user_id_str = user["user_id"].as_str().unwrap_or("");
 
     if screen_name.is_empty() || user_id_str.is_empty() {
-        return Err(AppError::Provider("X cookie auth: could not determine user".into()));
+        return Err(AppError::Provider(
+            "X cookie auth: could not determine user".into(),
+        ));
     }
 
     // Step 2: Get full profile via GraphQL UserByScreenName
@@ -813,8 +911,11 @@ pub async fn connect_x_cookie(
 
     let profile: serde_json::Value = resp.json().await.unwrap_or_default();
     let legacy = profile.pointer("/data/user/result/legacy");
-    let name = legacy.and_then(|l| l["name"].as_str()).unwrap_or(screen_name);
-    let picture = legacy.and_then(|l| l["profile_image_url_https"].as_str())
+    let name = legacy
+        .and_then(|l| l["name"].as_str())
+        .unwrap_or(screen_name);
+    let picture = legacy
+        .and_then(|l| l["profile_image_url_https"].as_str())
         .map(|u| u.replace("_normal", "_400x400"));
 
     // Store as JSON blob
@@ -864,7 +965,11 @@ pub async fn connect_reddit_cookie(
     }
 
     let parsed = crate::social::reddit_cookies::parse_cookie_string(&body.cookie_string)
-        .ok_or_else(|| AppError::BadRequest("Could not parse cookie string. Ensure it contains reddit_session.".into()))?;
+        .ok_or_else(|| {
+            AppError::BadRequest(
+                "Could not parse cookie string. Ensure it contains reddit_session.".into(),
+            )
+        })?;
 
     let token_str = crate::social::reddit_cookies::build_cookie_token(
         &parsed.reddit_session,
@@ -877,18 +982,26 @@ pub async fn connect_reddit_cookie(
     let me_resp = http
         .get("https://www.reddit.com/api/me.json")
         .header("Cookie", &parsed.cookie_string)
-        .header("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) social-forge/0.1")
+        .header(
+            "User-Agent",
+            "Mozilla/5.0 (X11; Linux x86_64) social-forge/0.1",
+        )
         .send()
         .await
         .map_err(|e| AppError::Provider(format!("Reddit cookie validation failed: {e}")))?;
-    let me: serde_json::Value = me_resp.json().await
+    let me: serde_json::Value = me_resp
+        .json()
+        .await
         .map_err(|e| AppError::Provider(format!("Reddit response parse error: {e}")))?;
 
     let username = me["data"]["name"].as_str().unwrap_or("unknown");
     if username == "unknown" || username.is_empty() {
-        return Err(AppError::BadRequest("Invalid cookies — could not authenticate with Reddit".into()));
+        return Err(AppError::BadRequest(
+            "Invalid cookies — could not authenticate with Reddit".into(),
+        ));
     }
-    let icon = me["data"]["icon_img"].as_str()
+    let icon = me["data"]["icon_img"]
+        .as_str()
         .and_then(|s| s.split('?').next())
         .unwrap_or("");
 
@@ -899,15 +1012,20 @@ pub async fn connect_reddit_cookie(
         "Reddit",
         username,
         &token_str,
-        None, None,
+        None,
+        None,
         Some(username),
         if icon.is_empty() { None } else { Some(icon) },
         Some(&format!("https://reddit.com/user/{username}")),
         None,
         Some("cookie"),
-    ).await.map_err(|e| AppError::Internal(format!("DB error: {e}")))?;
+    )
+    .await
+    .map_err(|e| AppError::Internal(format!("DB error: {e}")))?;
 
-    Ok(Json(serde_json::json!({ "integration": { "id": integration.id, "provider_name": "Reddit", "profile_name": username } })))
+    Ok(Json(
+        serde_json::json!({ "integration": { "id": integration.id, "provider_name": "Reddit", "profile_name": username } }),
+    ))
 }
 
 // ── GitHub PAT Connect ──────────────────────────────────────
@@ -939,19 +1057,28 @@ pub async fn connect_github_pat(
         .map_err(|e| AppError::Provider(format!("GitHub API error: {e}")))?;
 
     if !resp.status().is_success() {
-        return Err(AppError::BadRequest("Invalid GitHub PAT or insufficient permissions".into()));
+        return Err(AppError::BadRequest(
+            "Invalid GitHub PAT or insufficient permissions".into(),
+        ));
     }
 
-    let json: serde_json::Value = resp.json().await
+    let json: serde_json::Value = resp
+        .json()
+        .await
         .map_err(|e| AppError::Provider(format!("GitHub response parse error: {e}")))?;
 
-    let gh_id = json["id"].as_u64().map(|n| n.to_string()).unwrap_or_default();
+    let gh_id = json["id"]
+        .as_u64()
+        .map(|n| n.to_string())
+        .unwrap_or_default();
     let login = json["login"].as_str().unwrap_or("");
     let name = json["name"].as_str().or(Some(login)).unwrap_or("");
     let avatar = json["avatar_url"].as_str();
 
     if gh_id.is_empty() {
-        return Err(AppError::Provider("Failed to fetch GitHub user info".into()));
+        return Err(AppError::Provider(
+            "Failed to fetch GitHub user info".into(),
+        ));
     }
 
     let label = body.label.as_deref().unwrap_or(name);
@@ -1009,9 +1136,10 @@ pub async fn connect_api_key(
         .ok_or_else(|| AppError::BadRequest(format!("Unknown provider: {}", body.provider)))?;
 
     if provider_obj.uses_oauth() {
-        return Err(AppError::BadRequest(
-            format!("Provider '{}' uses OAuth, not API key auth. Use the standard connect flow.", body.provider)
-        ));
+        return Err(AppError::BadRequest(format!(
+            "Provider '{}' uses OAuth, not API key auth. Use the standard connect flow.",
+            body.provider
+        )));
     }
 
     if body.api_key.trim().is_empty() {
@@ -1020,7 +1148,9 @@ pub async fn connect_api_key(
 
     // Build the credential JSON (WordPress-style per-user credential storage)
     let instance_url = body.instance_url.unwrap_or_default();
-    let label = body.label.unwrap_or_else(|| provider_obj.name().to_string());
+    let label = body
+        .label
+        .unwrap_or_else(|| provider_obj.name().to_string());
 
     let creds_json = serde_json::json!({
         "api_key": body.api_key,
@@ -1111,9 +1241,10 @@ pub async fn connect_web3(
         .ok_or_else(|| AppError::BadRequest(format!("Unknown provider: {}", body.provider)))?;
 
     if provider_obj.uses_oauth() {
-        return Err(AppError::BadRequest(
-            format!("Provider '{}' uses OAuth, not Web3 auth. Use the standard connect flow.", body.provider)
-        ));
+        return Err(AppError::BadRequest(format!(
+            "Provider '{}' uses OAuth, not Web3 auth. Use the standard connect flow.",
+            body.provider
+        )));
     }
 
     // Verify provider is Web3-capable (farcaster only — nostr was deleted)
@@ -1125,16 +1256,19 @@ pub async fn connect_web3(
 
     // Check credentials first
     if state.config.provider_credentials(&body.provider).is_none() {
-        return Err(AppError::BadRequest(
-            format!("Provider '{}' is not configured. Set the corresponding environment variables first.", body.provider)
-        ));
+        return Err(AppError::BadRequest(format!(
+            "Provider '{}' is not configured. Set the corresponding environment variables first.",
+            body.provider
+        )));
     }
 
     if body.address.trim().is_empty() {
         return Err(AppError::BadRequest("address must not be empty".into()));
     }
 
-    let label = body.label.unwrap_or_else(|| provider_obj.name().to_string());
+    let label = body
+        .label
+        .unwrap_or_else(|| provider_obj.name().to_string());
 
     // Build credential JSON and pass through exchange_code for validation
     let creds_json = serde_json::json!({
@@ -1267,17 +1401,16 @@ pub async fn connect_page(
         .ok_or_else(|| AppError::BadRequest("Provider not found in registry".into()))?;
 
     // Same token discovery logic as available_pages
-    let raw_token = if parent.provider_identifier == "facebook"
-        || parent.provider_identifier == "instagram"
-    {
-        parent
-            .refresh_token
-            .as_deref()
-            .filter(|t| !t.is_empty())
-            .unwrap_or(&parent.access_token)
-    } else {
-        &parent.access_token
-    };
+    let raw_token =
+        if parent.provider_identifier == "facebook" || parent.provider_identifier == "instagram" {
+            parent
+                .refresh_token
+                .as_deref()
+                .filter(|t| !t.is_empty())
+                .unwrap_or(&parent.access_token)
+        } else {
+            &parent.access_token
+        };
     let token = crypto::maybe_decrypt_token(raw_token, state.token_key.as_ref());
 
     // Fetch all pages and find the matching one
@@ -1286,10 +1419,9 @@ pub async fn connect_page(
         .await
         .map_err(|e| AppError::Provider(format!("Failed to list pages: {e}")))?;
 
-    let page = pages
-        .into_iter()
-        .find(|p| p.id == page_id)
-        .ok_or_else(|| AppError::BadRequest("Page not found or not accessible with this token".into()))?;
+    let page = pages.into_iter().find(|p| p.id == page_id).ok_or_else(|| {
+        AppError::BadRequest("Page not found or not accessible with this token".into())
+    })?;
 
     let page_token = page.access_token.unwrap_or_default();
 
@@ -1303,9 +1435,10 @@ pub async fn connect_page(
     .await?;
 
     if existing > 0 {
-        return Err(AppError::BadRequest(
-            format!("Page '{}' is already connected", page.name)
-        ));
+        return Err(AppError::BadRequest(format!(
+            "Page '{}' is already connected",
+            page.name
+        )));
     }
 
     let integration = queries::create_integration(
@@ -1363,15 +1496,25 @@ pub async fn list_targets(
     Path(id): Path<Uuid>,
     user: AuthenticatedUser,
 ) -> Result<Json<TargetsResponse>, AppError> {
-    let integration = queries::get_integration(&state.db, id, user.user_id).await?
+    let integration = queries::get_integration(&state.db, id, user.user_id)
+        .await?
         .ok_or_else(|| AppError::NotFound("Integration not found".into()))?;
 
-    let provider = state.providers.get(&integration.provider_identifier)
-        .ok_or_else(|| AppError::NotFound(format!("Provider '{}' not in registry", integration.provider_identifier)))?;
+    let provider = state
+        .providers
+        .get(&integration.provider_identifier)
+        .ok_or_else(|| {
+            AppError::NotFound(format!(
+                "Provider '{}' not in registry",
+                integration.provider_identifier
+            ))
+        })?;
 
     let token = crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
 
-    let targets = provider.targets(&token).await
+    let targets = provider
+        .targets(&token)
+        .await
         .map_err(|e| AppError::Internal(format!("Failed to fetch targets: {}", e)))?;
 
     Ok(Json(TargetsResponse {
@@ -1410,24 +1553,37 @@ pub async fn search_mentions(
     Query(query): Query<MentionQuery>,
     user: AuthenticatedUser,
 ) -> Result<Json<MentionResponse>, AppError> {
-    let integration = queries::get_integration(&state.db, id, user.user_id).await?
+    let integration = queries::get_integration(&state.db, id, user.user_id)
+        .await?
         .ok_or_else(|| AppError::NotFound("Integration not found".into()))?;
 
-    let provider = state.providers.get(&integration.provider_identifier)
-        .ok_or_else(|| AppError::NotFound(format!("Provider '{}' not in registry", integration.provider_identifier)))?;
+    let provider = state
+        .providers
+        .get(&integration.provider_identifier)
+        .ok_or_else(|| {
+            AppError::NotFound(format!(
+                "Provider '{}' not in registry",
+                integration.provider_identifier
+            ))
+        })?;
 
     let token = crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
 
-    let mentions = provider.search_mention(&token, &query.q).await
+    let mentions = provider
+        .search_mention(&token, &query.q)
+        .await
         .map_err(|e| AppError::Internal(format!("Mention search failed: {}", e)))?;
 
-    let results = mentions.into_iter().map(|m| MentionItem {
-        formatted: provider.format_mention(&m.id, &m.label),
-        id: m.id,
-        label: m.label,
-        image: m.image,
-        provider: integration.provider_identifier.clone(),
-    }).collect();
+    let results = mentions
+        .into_iter()
+        .map(|m| MentionItem {
+            formatted: provider.format_mention(&m.id, &m.label),
+            id: m.id,
+            label: m.label,
+            image: m.image,
+            provider: integration.provider_identifier.clone(),
+        })
+        .collect();
 
     Ok(Json(MentionResponse { results }))
 }

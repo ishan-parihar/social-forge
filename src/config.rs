@@ -188,7 +188,8 @@ impl Config {
                         .ok()
                         .and_then(|s| {
                             s.lines().find_map(|l| {
-                                l.strip_prefix("APP_PASSWORD=").map(|v| v.trim().to_string())
+                                l.strip_prefix("APP_PASSWORD=")
+                                    .map(|v| v.trim().to_string())
                             })
                         })
                         .filter(|s| !s.is_empty())
@@ -207,19 +208,16 @@ impl Config {
                     // container logs, journald, shell history, etc. Point
                     // the user at the persisted file instead.
                     let env_path = config_dir().join(".env");
-                    tracing::warn!(
-                        "┌──────────────────────────────────────────────────────────┐"
-                    );
+                    tracing::warn!("┌──────────────────────────────────────────────────────────┐");
                     tracing::warn!("│ No APP_PASSWORD set. Generated a random one and persisted │");
-                    tracing::warn!("│ it to {}|",
+                    tracing::warn!(
+                        "│ it to {}|",
                         format!("{:<48}", env_path.display().to_string()).trim_end()
                     );
                     tracing::warn!("│                                                          │");
                     tracing::warn!("│ To view it:  cat ~/.social-forge/.env                    │");
                     tracing::warn!("│ To change it: edit that file or set APP_PASSWORD in env  │");
-                    tracing::warn!(
-                        "└──────────────────────────────────────────────────────────┘"
-                    );
+                    tracing::warn!("└──────────────────────────────────────────────────────────┘");
                     generated
                 }
             }
@@ -233,8 +231,7 @@ impl Config {
             _ => format!("sf-session-{}", app_password),
         };
 
-        let database_url =
-            opt("DATABASE_URL").unwrap_or_else(|| DEFAULT_DATABASE_URL.to_string());
+        let database_url = opt("DATABASE_URL").unwrap_or_else(|| DEFAULT_DATABASE_URL.to_string());
         ensure_sqlite_url(&database_url)?;
 
         Ok(Self {
@@ -356,20 +353,35 @@ impl Config {
             )),
             "telegram-bot" => Some(("bot".into(), self.telegram_bot_tokens.clone()?)),
             "telegram-user" => Some(("user".into(), "daemon".into())),
-            "whatsapp" => self.whatsapp_store_dir.as_ref().map(|d| ("whatsapp".into(), d.clone())),
+            "whatsapp" => self
+                .whatsapp_store_dir
+                .as_ref()
+                .map(|d| ("whatsapp".into(), d.clone())),
             "pinterest" => Some((
                 self.pinterest_client_id.clone()?,
                 self.pinterest_client_secret.clone()?,
             )),
             "skool" => Some(("skool".into(), "chrome_extension".into())),
-            "slack" => Some((self.slack_client_id.clone()?, self.slack_client_secret.clone()?)),
-            "mastodon" => Some((self.mastodon_client_id.clone()?, self.mastodon_client_secret.clone()?)),
-            "tiktok" => Some((self.tiktok_client_id.clone()?, self.tiktok_client_secret.clone()?)),
+            "slack" => Some((
+                self.slack_client_id.clone()?,
+                self.slack_client_secret.clone()?,
+            )),
+            "mastodon" => Some((
+                self.mastodon_client_id.clone()?,
+                self.mastodon_client_secret.clone()?,
+            )),
+            "tiktok" => Some((
+                self.tiktok_client_id.clone()?,
+                self.tiktok_client_secret.clone()?,
+            )),
             "medium" => Some(("api-key".into(), self.medium_access_token.clone()?)),
             "devto" => Some(("api-key".into(), self.devto_api_key.clone()?)),
             "hashnode" => Some(("api-key".into(), self.hashnode_api_key.clone()?)),
             "github" => Some((self.github_token.clone()?, self.github_token.clone()?)),
-            "google" | "google_my_business" | "gmail" | "calendar" | "drive" => Some((self.youtube_client_id.clone()?, self.youtube_client_secret.clone()?)),
+            "google" | "google_my_business" | "gmail" | "calendar" | "drive" => Some((
+                self.youtube_client_id.clone()?,
+                self.youtube_client_secret.clone()?,
+            )),
             "farcaster" => Some(("neynar".into(), self.neynar_api_key.clone()?)),
             _ => None,
         }
@@ -394,10 +406,6 @@ impl Config {
     pub fn reddit_refresh_token(&self) -> Option<String> {
         self.reddit_refresh_token.clone()
     }
-}
-
-fn env(key: &str) -> anyhow::Result<String> {
-    std::env::var(key).map_err(|_| anyhow::anyhow!("Missing required env var: {key}"))
 }
 
 fn opt(key: &str) -> Option<String> {

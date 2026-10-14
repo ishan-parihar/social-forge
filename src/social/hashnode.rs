@@ -129,8 +129,7 @@ impl SocialProvider for HashnodeProvider {
 
     async fn refresh_token(&self, _refresh_token: &str) -> Result<AuthToken, ProviderError> {
         Err(ProviderError::Auth(
-            "Hashnode API keys do not expire. Set HASHNODE_API_KEY in your .env file."
-                .into(),
+            "Hashnode API keys do not expire. Set HASHNODE_API_KEY in your .env file.".into(),
         ))
     }
 
@@ -165,7 +164,7 @@ impl SocialProvider for HashnodeProvider {
             .settings
             .get("tags")
             .and_then(|v| v.as_array())
-            .map(|arr| arr.clone())
+            .cloned()
             .unwrap_or_default();
 
         let body = serde_json::json!({
@@ -196,7 +195,10 @@ impl SocialProvider for HashnodeProvider {
                 .or_else(|| post_data["id"].as_str())
                 .unwrap_or("")
                 .to_string();
-            let post_url = post_data["url"].as_str().or_else(|| post_data["slug"].as_str()).map(String::from);
+            let post_url = post_data["url"]
+                .as_str()
+                .or_else(|| post_data["slug"].as_str())
+                .map(String::from);
 
             Ok(PublishResult {
                 platform_post_id: post_id,
@@ -281,16 +283,25 @@ impl SocialProvider for HashnodeProvider {
         }
     }
 
-    async fn get_recent_posts(&self, access_token: &str, _internal_id: &str, limit: u32) -> Result<Vec<ExternalPostData>, ProviderError> {
+    async fn get_recent_posts(
+        &self,
+        access_token: &str,
+        _internal_id: &str,
+        limit: u32,
+    ) -> Result<Vec<ExternalPostData>, ProviderError> {
         let pages = self.pages(access_token).await?;
         let mut posts = Vec::new();
-        let pages_to_check = (limit / 5).max(1).min(5);
+        let pages_to_check = (limit / 5).clamp(1, 5);
 
         for page in pages.iter().take(pages_to_check as usize) {
             let data = self.list_posts(access_token, &page.id, 1).await?;
             if let Some(stories) = data["stories"].as_array() {
                 for item in stories {
-                    let post_id = item["_id"].as_str().or_else(|| item["id"].as_str()).unwrap_or("").to_string();
+                    let post_id = item["_id"]
+                        .as_str()
+                        .or_else(|| item["id"].as_str())
+                        .unwrap_or("")
+                        .to_string();
                     let title = item["title"].as_str().unwrap_or("").to_string();
                     let brief = item["brief"].as_str().unwrap_or("");
                     let slug = item["slug"].as_str().unwrap_or("");
@@ -305,12 +316,15 @@ impl SocialProvider for HashnodeProvider {
                         author_name: None,
                         author_handle: None,
                         author_avatar: None,
-                        media: cover.into_iter().map(|u| MediaAttachment {
-                            url: u,
-                            mime_type: String::new(),
-                            alt: None,
-                            poster_url: None,
-                        }).collect(),
+                        media: cover
+                            .into_iter()
+                            .map(|u| MediaAttachment {
+                                url: u,
+                                mime_type: String::new(),
+                                alt: None,
+                                poster_url: None,
+                            })
+                            .collect(),
                         created_at: posted_at,
                         url: Some(format!("https://hashnode.com/post/{slug}")),
                         metadata: Some(serde_json::json!({"title": title})),
@@ -320,7 +334,7 @@ impl SocialProvider for HashnodeProvider {
         }
 
         // Sort by posted_at descending, take top 20
-        posts.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        posts.sort_by_key(|a| std::cmp::Reverse(a.created_at));
         posts.truncate(20);
 
         Ok(posts)

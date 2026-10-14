@@ -2,7 +2,7 @@
 // Instagram-specific read/write tools via Instagram Graph API.
 // Follows the same pattern as tools_reddit.rs and tools_x.rs.
 
-use rmcp::{Json, schemars::JsonSchema};
+use rmcp::{schemars::JsonSchema, Json};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -97,7 +97,6 @@ pub struct IgBusinessDiscoveryInput {
     pub target_username: String,
 }
 
-
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct IgGetInsightsAudienceInput {
     pub ig_id: String,
@@ -116,7 +115,11 @@ pub struct IgPollContainerInput {
 
 // ── Helpers ──────────────────────────────────────────────────
 
-async fn find_instagram_token(state: &AppState, user_id: Uuid, ig_id: &str) -> Result<String, String> {
+async fn find_instagram_token(
+    state: &AppState,
+    user_id: Uuid,
+    ig_id: &str,
+) -> Result<String, String> {
     let integrations = crate::db::queries::list_integrations(&state.db, user_id)
         .await
         .map_err(|e| format!("DB error: {e}"))?;
@@ -234,23 +237,52 @@ pub async fn handle_ig_get_insights(
     let resolved_metric = match input.metric.trim() {
         "all" | "overview" => "reach,follower_count",
         "engagement" => "accounts_engaged,total_interactions",
-        s if s.is_empty() => "reach,follower_count",
+        "" => "reach,follower_count",
         s => s,
     };
     let valid_metrics: std::collections::HashSet<&str> = [
-        "reach", "follower_count", "website_clicks", "profile_views",
-        "online_followers", "accounts_engaged", "total_interactions",
-        "likes", "comments", "shares", "saves", "replies",
-        "engaged_audience_demographics", "reached_audience_demographics",
-        "follower_demographics", "follows_and_unfollows",
-        "profile_links_taps", "views", "threads_likes", "threads_replies",
-        "reposts", "quotes", "threads_followers", "threads_follower_demographics",
-        "content_views", "threads_views", "threads_clicks", "threads_reposts",
-    ].into_iter().collect();
+        "reach",
+        "follower_count",
+        "website_clicks",
+        "profile_views",
+        "online_followers",
+        "accounts_engaged",
+        "total_interactions",
+        "likes",
+        "comments",
+        "shares",
+        "saves",
+        "replies",
+        "engaged_audience_demographics",
+        "reached_audience_demographics",
+        "follower_demographics",
+        "follows_and_unfollows",
+        "profile_links_taps",
+        "views",
+        "threads_likes",
+        "threads_replies",
+        "reposts",
+        "quotes",
+        "threads_followers",
+        "threads_follower_demographics",
+        "content_views",
+        "threads_views",
+        "threads_clicks",
+        "threads_reposts",
+    ]
+    .into_iter()
+    .collect();
     let requested: Vec<&str> = resolved_metric.split(',').map(|s| s.trim()).collect();
-    let invalid: Vec<_> = requested.iter().filter(|m| !valid_metrics.contains(*m)).collect();
+    let invalid: Vec<_> = requested
+        .iter()
+        .filter(|m| !valid_metrics.contains(*m))
+        .collect();
     if !invalid.is_empty() {
-        let invalid_str: String = invalid.iter().map(|s| s.to_string()).collect::<Vec<_>>().join(", ");
+        let invalid_str: String = invalid
+            .iter()
+            .map(|s| s.to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
         return Err(format!(
             "Invalid metric(s): {}. Valid: reach, follower_count, website_clicks, \
              profile_views, online_followers, accounts_engaged, total_interactions, \
@@ -262,13 +294,21 @@ pub async fn handle_ig_get_insights(
             invalid_str
         ));
     }
-    
+
     let basic_metrics = ["reach", "follower_count"];
-    let basic: Vec<&str> = requested.iter().filter(|m| basic_metrics.contains(m)).copied().collect();
-    let other: Vec<&str> = requested.iter().filter(|m| !basic_metrics.contains(m)).copied().collect();
-    
+    let basic: Vec<&str> = requested
+        .iter()
+        .filter(|m| basic_metrics.contains(m))
+        .copied()
+        .collect();
+    let other: Vec<&str> = requested
+        .iter()
+        .filter(|m| !basic_metrics.contains(m))
+        .copied()
+        .collect();
+
     let mut all_results = serde_json::Map::new();
-    
+
     // All Instagram insight metrics use period=day (engagement metrics like total_interactions,
     // comments, likes, etc. also require period=day on the current API)
     if !basic.is_empty() {
@@ -279,7 +319,7 @@ pub async fn handle_ig_get_insights(
             .map_err(|e| format!("Instagram get insights failed for basic metrics: {e}"))?;
         all_results.insert("basic".to_string(), result);
     }
-    
+
     if !other.is_empty() {
         let metrics_str = other.join(",");
         let result = provider
@@ -288,7 +328,7 @@ pub async fn handle_ig_get_insights(
             .map_err(|e| format!("Instagram get insights failed for engagement metrics: {e}"))?;
         all_results.insert("engagement".to_string(), result);
     }
-    
+
     Ok(Json(serde_json::json!({ "data": all_results })))
 }
 
@@ -320,7 +360,13 @@ pub async fn handle_ig_create_container(
     let token = find_instagram_token(state, user_id, &input.ig_id).await?;
     let provider = create_provider(state);
     let result = provider
-        .create_ig_container(&token, &input.ig_id, &input.media_type, &input.media_url, &input.caption)
+        .create_ig_container(
+            &token,
+            &input.ig_id,
+            &input.media_type,
+            &input.media_url,
+            &input.caption,
+        )
         .await
         .map_err(|e| format!("Instagram create container failed: {e}"))?;
 
@@ -417,7 +463,6 @@ pub async fn handle_ig_business_discovery(
     Ok(Json(serde_json::json!({ "data": result })))
 }
 
-
 pub async fn handle_ig_get_insights_audience(
     state: &AppState,
     input: &IgGetInsightsAudienceInput,
@@ -486,7 +531,9 @@ pub async fn handle_ig_send_dm(
         settings: serde_json::json!({}),
         ..Default::default()
     };
-    let result = provider.send_dm(&token, &input.recipient_id, &post).await
+    let result = provider
+        .send_dm(&token, &input.recipient_id, &post)
+        .await
         .map_err(|e| format!("Instagram send DM failed: {e}"))?;
     Ok(Json(serde_json::json!({
         "data": {
@@ -510,16 +557,21 @@ pub async fn handle_ig_list_conversations(
     let token = find_instagram_token(state, user_id, &input.ig_id).await?;
     let provider = create_provider(state);
     let limit = input.limit.unwrap_or(20);
-    let conversations = provider.get_dm_conversations(&token, limit).await
+    let conversations = provider
+        .get_dm_conversations(&token, limit)
+        .await
         .map_err(|e| format!("Instagram list conversations failed: {e}"))?;
-    let conv_values: Vec<serde_json::Value> = conversations.into_iter().map(|c| {
-        serde_json::json!({
-            "id": c.id,
-            "last_message": c.last_message,
-            "last_message_at": c.last_message_at.map(|dt| dt.to_rfc3339()),
-            "unread_count": c.unread_count,
+    let conv_values: Vec<serde_json::Value> = conversations
+        .into_iter()
+        .map(|c| {
+            serde_json::json!({
+                "id": c.id,
+                "last_message": c.last_message,
+                "last_message_at": c.last_message_at.map(|dt| dt.to_rfc3339()),
+                "unread_count": c.unread_count,
+            })
         })
-    }).collect();
+        .collect();
     Ok(Json(serde_json::json!({ "data": conv_values })))
 }
 
@@ -538,16 +590,21 @@ pub async fn handle_ig_get_messages(
     let token = find_instagram_token(state, user_id, &input.ig_id).await?;
     let provider = create_provider(state);
     let limit = input.limit.unwrap_or(20);
-    let messages = provider.get_dm_messages(&token, &input.conversation_id, limit).await
+    let messages = provider
+        .get_dm_messages(&token, &input.conversation_id, limit)
+        .await
         .map_err(|e| format!("Instagram get messages failed: {e}"))?;
-    let msg_values: Vec<serde_json::Value> = messages.into_iter().map(|m| {
-        serde_json::json!({
-            "id": m.id,
-            "sender": m.sender,
-            "content": m.content,
-            "created_at": m.created_at.to_rfc3339(),
+    let msg_values: Vec<serde_json::Value> = messages
+        .into_iter()
+        .map(|m| {
+            serde_json::json!({
+                "id": m.id,
+                "sender": m.sender,
+                "content": m.content,
+                "created_at": m.created_at.to_rfc3339(),
+            })
         })
-    }).collect();
+        .collect();
     Ok(Json(serde_json::json!({ "data": msg_values })))
 }
 // ── Unified Instagram Post (create + poll + publish in one call) ──
@@ -566,7 +623,9 @@ pub struct IgPostInput {
     pub media_type: String,
 }
 
-fn default_media_type() -> String { "IMAGE".into() }
+fn default_media_type() -> String {
+    "IMAGE".into()
+}
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct IgPostOutput {
@@ -589,7 +648,13 @@ pub async fn handle_ig_post(
 
     // Step 1: Create container
     let container = provider
-        .create_ig_container(&token, &input.ig_id, &input.media_type, &input.media_url, &input.caption)
+        .create_ig_container(
+            &token,
+            &input.ig_id,
+            &input.media_type,
+            &input.media_url,
+            &input.caption,
+        )
         .await
         .map_err(|e| format!("Instagram create container failed: {e}"))?;
 
@@ -626,9 +691,7 @@ pub async fn handle_ig_post(
         .or_else(|| result["id"].as_str())
         .unwrap_or("")
         .to_string();
-    let permalink = result["permalink"]
-        .as_str()
-        .map(|s| s.to_string());
+    let permalink = result["permalink"].as_str().map(|s| s.to_string());
 
     Ok(Json(IgPostOutput {
         media_id,

@@ -1,7 +1,7 @@
 // ─── MCP Automation Tools ───────────────────────────────────────
 // Tools for managing automation rules and viewing execution logs.
 
-use rmcp::{Json, schemars::JsonSchema};
+use rmcp::{schemars::JsonSchema, Json};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -108,8 +108,8 @@ pub async fn create_rule(
     input: &CreateRuleInput,
 ) -> Result<Json<CreateRuleOutput>, String> {
     let user_id = resolve_first_user(state).await?;
-    let integration_id = Uuid::parse_str(&input.integration_id)
-        .map_err(|_| "Invalid integration_id format")?;
+    let integration_id =
+        Uuid::parse_str(&input.integration_id).map_err(|_| "Invalid integration_id format")?;
 
     let cooldown = input.cooldown_minutes.unwrap_or(0);
     let max_per_hour = input.max_responses_per_hour.unwrap_or(10);
@@ -140,7 +140,7 @@ pub async fn create_rule(
     Ok(Json(CreateRuleOutput {
         id: rule.id,
         name: rule.name,
-        is_active: rule.is_active.map_or(true, |v| v != 0),
+        is_active: rule.is_active != Some(0),
     }))
 }
 
@@ -151,8 +151,8 @@ pub async fn list_rules(
     let user_id = resolve_first_user(state).await?;
 
     let rules: Vec<RuleRow> = if let Some(ref integration_id_str) = input.integration_id {
-        let integration_id = Uuid::parse_str(integration_id_str)
-            .map_err(|_| "Invalid integration_id format")?;
+        let integration_id =
+            Uuid::parse_str(integration_id_str).map_err(|_| "Invalid integration_id format")?;
         sqlx::query_as!(
             RuleRow,
             r#"SELECT id as "id!: String", name, trigger_type, response_type,
@@ -183,26 +183,31 @@ pub async fn list_rules(
         .map_err(|e| format!("Failed to list rules: {e}"))?
     };
 
-    let rule_infos: Vec<RuleInfo> = rules.into_iter().map(|r| RuleInfo {
-        id: r.id,
-        name: r.name,
-        trigger_type: r.trigger_type,
-        response_type: r.response_type,
-        is_active: r.is_active.map_or(true, |v| v != 0),
-        created_at: r.created_at.unwrap_or_else(EpochUtc::now).0.to_rfc3339(),
-    }).collect();
+    let rule_infos: Vec<RuleInfo> = rules
+        .into_iter()
+        .map(|r| RuleInfo {
+            id: r.id,
+            name: r.name,
+            trigger_type: r.trigger_type,
+            response_type: r.response_type,
+            is_active: r.is_active != Some(0),
+            created_at: r.created_at.unwrap_or_else(EpochUtc::now).0.to_rfc3339(),
+        })
+        .collect();
 
     let total = rule_infos.len();
 
-    Ok(Json(ListRulesOutput { rules: rule_infos, total }))
+    Ok(Json(ListRulesOutput {
+        rules: rule_infos,
+        total,
+    }))
 }
 
 pub async fn update_rule(
     state: &AppState,
     input: &UpdateRuleInput,
 ) -> Result<Json<crate::mcp::McpJsonValue>, String> {
-    let rule_id = Uuid::parse_str(&input.rule_id)
-        .map_err(|_| "Invalid rule_id format")?;
+    let rule_id = Uuid::parse_str(&input.rule_id).map_err(|_| "Invalid rule_id format")?;
 
     let input_active_i64 = input.is_active.map(i64::from);
     sqlx::query!(
@@ -231,33 +236,32 @@ pub async fn update_rule(
     .await
     .map_err(|e| format!("Failed to update rule: {e}"))?;
 
-    Ok(Json(crate::mcp::McpJsonValue(serde_json::json!({"success": true, "message": "Rule updated",}))))
+    Ok(Json(crate::mcp::McpJsonValue(
+        serde_json::json!({"success": true, "message": "Rule updated",}),
+    )))
 }
 
 pub async fn delete_rule(
     state: &AppState,
     input: &DeleteRuleInput,
 ) -> Result<Json<crate::mcp::McpJsonValue>, String> {
-    let rule_id = Uuid::parse_str(&input.rule_id)
-        .map_err(|_| "Invalid rule_id format")?;
+    let rule_id = Uuid::parse_str(&input.rule_id).map_err(|_| "Invalid rule_id format")?;
 
-    sqlx::query!(
-        r#"DELETE FROM automation_rules WHERE id = ?"#,
-        rule_id,
-    )
-    .execute(&state.db)
-    .await
-    .map_err(|e| format!("Failed to delete rule: {e}"))?;
+    sqlx::query!(r#"DELETE FROM automation_rules WHERE id = ?"#, rule_id,)
+        .execute(&state.db)
+        .await
+        .map_err(|e| format!("Failed to delete rule: {e}"))?;
 
-    Ok(Json(crate::mcp::McpJsonValue(serde_json::json!({"success": true, "message": "Rule deleted",}))))
+    Ok(Json(crate::mcp::McpJsonValue(
+        serde_json::json!({"success": true, "message": "Rule deleted",}),
+    )))
 }
 
 pub async fn get_logs(
     state: &AppState,
     input: &GetLogsInput,
 ) -> Result<Json<GetLogsOutput>, String> {
-    let rule_id = Uuid::parse_str(&input.rule_id)
-        .map_err(|_| "Invalid rule_id format")?;
+    let rule_id = Uuid::parse_str(&input.rule_id).map_err(|_| "Invalid rule_id format")?;
     let limit = input.limit.unwrap_or(50);
 
     let logs = sqlx::query!(
@@ -274,19 +278,25 @@ pub async fn get_logs(
     .await
     .map_err(|e| format!("Failed to get logs: {e}"))?;
 
-    let log_entries: Vec<LogEntry> = logs.into_iter().map(|l| LogEntry {
-        id: l.id,
-        trigger_id: l.trigger_id,
-        trigger_type: l.trigger_type,
-        response: l.response,
-        status: l.status,
-        error_message: l.error_message,
-        created_at: l.created_at.unwrap_or_else(EpochUtc::now).0.to_rfc3339(),
-    }).collect();
+    let log_entries: Vec<LogEntry> = logs
+        .into_iter()
+        .map(|l| LogEntry {
+            id: l.id,
+            trigger_id: l.trigger_id,
+            trigger_type: l.trigger_type,
+            response: l.response,
+            status: l.status,
+            error_message: l.error_message,
+            created_at: l.created_at.unwrap_or_else(EpochUtc::now).0.to_rfc3339(),
+        })
+        .collect();
 
     let total = log_entries.len();
 
-    Ok(Json(GetLogsOutput { logs: log_entries, total }))
+    Ok(Json(GetLogsOutput {
+        logs: log_entries,
+        total,
+    }))
 }
 
 use super::auth::resolve_first_user;

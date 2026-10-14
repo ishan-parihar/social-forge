@@ -106,7 +106,8 @@ pub async fn onboard_page(
     // returns the canonical DEFAULT_USER_ID which is what we bind
     // integrations to in single-user mode. The call here is purely
     // an auth check.
-    let _authed_user_id = resolve_authed_user(&headers, query.token.as_deref(), &state.config.jwt_secret)?;
+    let _authed_user_id =
+        resolve_authed_user(&headers, query.token.as_deref(), &state.config.jwt_secret)?;
     let user = get_or_create_dev_user(&state).await?;
     // Re-issue a fresh token ONLY for already-authenticated users —
     // needed because the page embeds `?token=<jwt>` in provider-card
@@ -116,13 +117,18 @@ pub async fn onboard_page(
     let token = jwt::create_token(user.id, &state.config.jwt_secret)?;
 
     // ── Fetch existing integrations ───────────────────────────
-    let integrations = queries::list_integrations(&state.db, user.id).await.unwrap_or_default();
+    let integrations = queries::list_integrations(&state.db, user.id)
+        .await
+        .unwrap_or_default();
 
     let mut connected_cards = String::new();
     for integration in &integrations {
         let pid = &integration.provider_identifier;
         let (_, icon, _) = provider_meta(pid);
-        let name = integration.profile_name.as_deref().unwrap_or(&integration.provider_name);
+        let name = integration
+            .profile_name
+            .as_deref()
+            .unwrap_or(&integration.provider_name);
         // Profile pic URL comes from upstream provider response — escape
         // it for both HTML-attribute context (quote-breakout) and JS
         // context (the `dc('{iid}')` onclick). A malicious upstream
@@ -130,9 +136,14 @@ pub async fn onboard_page(
         // an `onerror=` handler.
         let pic_html = if let Some(ref pic) = integration.profile_picture {
             let pic_escaped = html_escape(pic);
-            format!(r#"<img class="profile-pic" src="{pic_escaped}" alt="" onerror="this.style.display='none'" />"#)
+            format!(
+                r#"<img class="profile-pic" src="{pic_escaped}" alt="" onerror="this.style.display='none'" />"#
+            )
         } else {
-            format!(r#"<div class="profile-pic profile-pic-placeholder">{}</div>"#, &icon)
+            format!(
+                r#"<div class="profile-pic profile-pic-placeholder">{}</div>"#,
+                icon
+            )
         };
         let connected_at = integration.created_at.format("%b %e, %Y").to_string();
         let integration_id = integration.id.to_string();
@@ -172,9 +183,12 @@ pub async fn onboard_page(
     let mut cards = String::new();
 
     // Count integrations per provider for multi-account display
-    let mut connected_counts: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    let mut connected_counts: std::collections::HashMap<String, usize> =
+        std::collections::HashMap::new();
     for integration in &integrations {
-        *connected_counts.entry(integration.provider_identifier.clone()).or_insert(0) += 1;
+        *connected_counts
+            .entry(integration.provider_identifier.clone())
+            .or_insert(0) += 1;
     }
 
     for provider in &sorted {
@@ -196,7 +210,10 @@ pub async fn onboard_page(
             badge_class = "badge-connected";
             badge_text = format!("Connected ({})", connected_count);
             if id == "x" {
-                hint_text = format!("{} account(s) connected — Add Another (OAuth) or Enter Cookies", connected_count);
+                hint_text = format!(
+                    "{} account(s) connected — Add Another (OAuth) or Enter Cookies",
+                    connected_count
+                );
                 action_html = format!(
                     r#"<div style="display:flex;gap:6px;flex-direction:column;">
                         <a href="/api/public/connect/{}?token={}" class="btn btn-primary" style="font-size:12px;">+ Add Another (OAuth)</a>
@@ -205,7 +222,10 @@ pub async fn onboard_page(
                     id, token, token
                 );
             } else if id == "reddit" {
-                hint_text = format!("{} account(s) connected — Add Another (OAuth) or Enter Cookies", connected_count);
+                hint_text = format!(
+                    "{} account(s) connected — Add Another (OAuth) or Enter Cookies",
+                    connected_count
+                );
                 action_html = format!(
                     r#"<div style="display:flex;gap:6px;flex-direction:column;">
                         <a href="/api/public/connect/{}?token={}" class="btn btn-primary" style="font-size:12px;">+ Add Another (OAuth)</a>
@@ -214,7 +234,10 @@ pub async fn onboard_page(
                     id, token, token
                 );
             } else {
-                hint_text = format!("{} account(s) connected — click Add Another to connect more", connected_count);
+                hint_text = format!(
+                    "{} account(s) connected — click Add Another to connect more",
+                    connected_count
+                );
                 action_html = format!(
                     r#"<a href="/api/public/connect/{}?token={}" class="btn btn-primary">+ Add Another</a>"#,
                     id, token
@@ -242,7 +265,10 @@ pub async fn onboard_page(
                     token
                 );
             } else {
-                action_html = format!(r#"<a href="/api/public/connect/{}" class="btn btn-disabled">Not Available</a>"#, id);
+                action_html = format!(
+                    r#"<a href="/api/public/connect/{}" class="btn btn-disabled">Not Available</a>"#,
+                    id
+                );
             }
         } else if is_onetime {
             badge_class = "badge-info";
@@ -250,7 +276,9 @@ pub async fn onboard_page(
             hint_text = match id {
                 "telegram-bot" => "Send /connect {code} to the Telegram bot".into(),
                 "telegram-user" => "Login via telegram-cli when prompted".into(),
-                "skool" => "Install Chrome extension, login to Skool, extract auth_token cookie".into(),
+                "skool" => {
+                    "Install Chrome extension, login to Skool, extract auth_token cookie".into()
+                }
                 _ => "One-time token provider — follow provider instructions".into(),
             };
             action_html = format!(
@@ -624,9 +652,7 @@ pub async fn public_connect(
             .into_response());
         }
 
-        let token = provider_obj
-            .exchange_code("", "", &redirect_uri)
-            .await?;
+        let token = provider_obj.exchange_code("", "", &redirect_uri).await?;
 
         queries::create_integration(
             &state.db,
@@ -636,14 +662,14 @@ pub async fn public_connect(
             &token.provider_user_id,
             &token.access_token,
             token.refresh_token.as_deref(),
-            token.expires_in.map(|exp| {
-                chrono::Utc::now() + chrono::Duration::seconds(exp as i64)
-            }),
+            token
+                .expires_in
+                .map(|exp| chrono::Utc::now() + chrono::Duration::seconds(exp as i64)),
             Some(&token.name),
             token.picture.as_deref(),
             None,
             None,
-        None, // auth_method
+            None, // auth_method
         )
         .await?;
 
@@ -680,9 +706,7 @@ pub async fn public_connect(
     )
     .await?;
 
-    tracing::info!(
-        "Public connect: {provider} for user {user_id} — redirecting to OAuth"
-    );
+    tracing::info!("Public connect: {provider} for user {user_id} — redirecting to OAuth");
 
     Ok(Redirect::to(&auth_url.url).into_response())
 }
@@ -698,7 +722,11 @@ pub async fn public_connect(
 /// `textContent`/`setAttribute` instead of string concatenation for any
 /// server-supplied page data — preventing DOM-based XSS if a page name
 /// contains quotes or angle brackets.
-fn build_page_picker_html(pending: Option<&str>, integration_id: Option<&str>, pending_token: Option<&str>) -> String {
+fn build_page_picker_html(
+    pending: Option<&str>,
+    integration_id: Option<&str>,
+    pending_token: Option<&str>,
+) -> String {
     let (prov, iid, tok) = match (pending, integration_id, pending_token) {
         (Some(p), Some(i), Some(t)) => (p, i, t),
         _ => return String::new(),
@@ -798,7 +826,8 @@ pub async fn x_cookies_form(
     let token = query.token.clone().unwrap_or_default();
     let error = query.redirect_uri.as_deref().unwrap_or("");
 
-    let html = format!(r#"<!DOCTYPE html>
+    let html = format!(
+        r#"<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -890,8 +919,13 @@ pub async fn x_cookies_form(
 </div>
 </body>
 </html>"#,
-        error_html = if error.is_empty() { String::new() } else {
-            format!(r#"<div class="error">❌ {error}</div>"#, error = html_escape(error))
+        error_html = if error.is_empty() {
+            String::new()
+        } else {
+            format!(
+                r#"<div class="error">❌ {error}</div>"#,
+                error = html_escape(error)
+            )
         },
         token = html_escape(&token),
     );
@@ -935,7 +969,9 @@ pub async fn x_cookies_submit(
     };
 
     let token_str = crate::social::x_cookies::build_cookie_token(
-        &final_at, &final_ct0, Some(&final_cookie_string)
+        &final_at,
+        &final_ct0,
+        Some(&final_cookie_string),
     );
 
     let (internal_id, profile_name, profile_picture) = {
@@ -944,15 +980,31 @@ pub async fn x_cookies_submit(
         match provider.get_me(&token_str).await {
             Ok(json) => {
                 let data = json.get("data");
-                let name = data.and_then(|d| d.get("name")).and_then(|s| s.as_str()).unwrap_or("X User").to_string();
-                let username = data.and_then(|d| d.get("username")).and_then(|s| s.as_str()).unwrap_or("");
-                let avatar = data.and_then(|d| d.get("profile_image_url")).and_then(|s| s.as_str()).map(String::from);
-                let id = data.and_then(|d| d.get("id")).and_then(|s| s.as_str()).unwrap_or("").to_string();
+                let name = data
+                    .and_then(|d| d.get("name"))
+                    .and_then(|s| s.as_str())
+                    .unwrap_or("X User")
+                    .to_string();
+                let username = data
+                    .and_then(|d| d.get("username"))
+                    .and_then(|s| s.as_str())
+                    .unwrap_or("");
+                let avatar = data
+                    .and_then(|d| d.get("profile_image_url"))
+                    .and_then(|s| s.as_str())
+                    .map(String::from);
+                let id = data
+                    .and_then(|d| d.get("id"))
+                    .and_then(|s| s.as_str())
+                    .unwrap_or("")
+                    .to_string();
                 tracing::info!("X cookie auth identified user: @{username} ({name}) id={id}");
                 (id, name, avatar)
             }
             Err(e) => {
-                tracing::warn!("X cookie auth succeeded but get_me failed: {e}. Using fallback profile.");
+                tracing::warn!(
+                    "X cookie auth succeeded but get_me failed: {e}. Using fallback profile."
+                );
                 (
                     format!("cookie-{}", &final_at[..8.min(final_at.len())]),
                     "X (Cookie Auth)".to_string(),
@@ -976,7 +1028,8 @@ pub async fn x_cookies_submit(
         profile_picture.as_deref(),
         None,
         None, // auth_method
-    ).await?;
+    )
+    .await?;
 
     let display = urlencoding::encode(&profile_name);
     state.broadcast.send(
@@ -1005,7 +1058,9 @@ pub async fn x_cookies_import(
         ))?;
 
     let token_str = crate::social::x_cookies::build_cookie_token(
-        &cookies.auth_token, &cookies.ct0, Some(&cookies.cookie_string)
+        &cookies.auth_token,
+        &cookies.ct0,
+        Some(&cookies.cookie_string),
     );
 
     let (internal_id, profile_name, profile_picture) = {
@@ -1014,17 +1069,37 @@ pub async fn x_cookies_import(
         match provider.get_me(&token_str).await {
             Ok(json) => {
                 let data = json.get("data");
-                let name = data.and_then(|d| d.get("name")).and_then(|s| s.as_str()).unwrap_or("X User").to_string();
-                let username = data.and_then(|d| d.get("username")).and_then(|s| s.as_str()).unwrap_or("");
-                let avatar = data.and_then(|d| d.get("profile_image_url")).and_then(|s| s.as_str()).map(String::from);
-                let id = data.and_then(|d| d.get("id")).and_then(|s| s.as_str()).unwrap_or("").to_string();
-                tracing::info!("X browser import identified user: @{username} ({name}) id={id} from {}", cookies.source);
+                let name = data
+                    .and_then(|d| d.get("name"))
+                    .and_then(|s| s.as_str())
+                    .unwrap_or("X User")
+                    .to_string();
+                let username = data
+                    .and_then(|d| d.get("username"))
+                    .and_then(|s| s.as_str())
+                    .unwrap_or("");
+                let avatar = data
+                    .and_then(|d| d.get("profile_image_url"))
+                    .and_then(|s| s.as_str())
+                    .map(String::from);
+                let id = data
+                    .and_then(|d| d.get("id"))
+                    .and_then(|s| s.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                tracing::info!(
+                    "X browser import identified user: @{username} ({name}) id={id} from {}",
+                    cookies.source
+                );
                 (id, name, avatar)
             }
             Err(e) => {
                 tracing::warn!("X browser import get_me failed: {e}. Using fallback profile.");
                 (
-                    format!("cookie-{}", &cookies.auth_token[..8.min(cookies.auth_token.len())]),
+                    format!(
+                        "cookie-{}",
+                        &cookies.auth_token[..8.min(cookies.auth_token.len())]
+                    ),
                     format!("X (Cookie Auth) — {}", cookies.source),
                     None,
                 )
@@ -1046,7 +1121,8 @@ pub async fn x_cookies_import(
         profile_picture.as_deref(),
         None,
         None, // auth_method
-    ).await?;
+    )
+    .await?;
 
     let display = urlencoding::encode(&profile_name);
     state.broadcast.send(
@@ -1054,7 +1130,10 @@ pub async fn x_cookies_import(
         &serde_json::json!({ "provider": "x", "method": "browser-import", "source": cookies.source, "profile": profile_name }),
     );
 
-    tracing::info!("X cookie auth connected for user {user_id} via browser import ({}) as {profile_name}", cookies.source);
+    tracing::info!(
+        "X cookie auth connected for user {user_id} via browser import ({}) as {profile_name}",
+        cookies.source
+    );
 
     Ok(Redirect::to(&format!("/?connected=x&name={display}")).into_response())
 }
@@ -1082,7 +1161,8 @@ pub async fn reddit_cookies_form(
     let token = query.token.clone().unwrap_or_default();
     let error = query.redirect_uri.as_deref().unwrap_or("");
 
-    let html = format!(r#"<!DOCTYPE html>
+    let html = format!(
+        r#"<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Connect Reddit — Cookie Auth</title>
 <style>
@@ -1155,7 +1235,14 @@ pub async fn reddit_cookies_form(
   </form>
   <a href="/" class="back">← Back to onboarding</a>
 </div></body></html>"#,
-        error_html = if error.is_empty() { String::new() } else { format!(r#"<div class="error">❌ {error}</div>"#, error = html_escape(error)) },
+        error_html = if error.is_empty() {
+            String::new()
+        } else {
+            format!(
+                r#"<div class="error">❌ {error}</div>"#,
+                error = html_escape(error)
+            )
+        },
         token = html_escape(&token),
     );
     Ok(Html(html))
@@ -1179,7 +1266,11 @@ pub async fn reddit_cookies_submit(
 
     let (final_session, final_token_v2, final_cookie_string) = if !cookie_string.is_empty() {
         if let Some(parsed) = crate::social::reddit_cookies::parse_cookie_string(cookie_string) {
-            (parsed.reddit_session, parsed.token_v2, Some(parsed.cookie_string))
+            (
+                parsed.reddit_session,
+                parsed.token_v2,
+                Some(parsed.cookie_string),
+            )
         } else {
             return Ok(Redirect::to(&format!(
                 "/api/public/connect/reddit-cookies?token={}&redirect_uri=Could+not+parse+cookie+string.+Ensure+it+contains+reddit_session.",
@@ -1187,7 +1278,15 @@ pub async fn reddit_cookies_submit(
             )).into_response());
         }
     } else if !reddit_session.is_empty() {
-        (reddit_session.to_string(), if token_v2.is_empty() { None } else { Some(token_v2.to_string()) }, None)
+        (
+            reddit_session.to_string(),
+            if token_v2.is_empty() {
+                None
+            } else {
+                Some(token_v2.to_string())
+            },
+            None,
+        )
     } else {
         return Ok(Redirect::to(&format!(
             "/api/public/connect/reddit-cookies?token={}&redirect_uri=Please+provide+reddit_session+or+a+full+Cookie+string.",
@@ -1196,7 +1295,9 @@ pub async fn reddit_cookies_submit(
     };
 
     let token_str = crate::social::reddit_cookies::build_cookie_token(
-        &final_session, final_token_v2.as_deref(), final_cookie_string.as_deref()
+        &final_session,
+        final_token_v2.as_deref(),
+        final_cookie_string.as_deref(),
     );
 
     // Validate by fetching /api/me.json
@@ -1205,8 +1306,12 @@ pub async fn reddit_cookies_submit(
         provider.prepare_from_token(&token_str);
         match provider.get_www("/api/me.json", &[]).await {
             Ok(json) => {
-                let name = json["data"]["name"].as_str().unwrap_or("Reddit User").to_string();
-                let icon = json["data"]["icon_img"].as_str()
+                let name = json["data"]["name"]
+                    .as_str()
+                    .unwrap_or("Reddit User")
+                    .to_string();
+                let icon = json["data"]["icon_img"]
+                    .as_str()
                     .and_then(|s| s.split('?').next())
                     .map(String::from);
                 let id = json["data"]["id"].as_str().unwrap_or("").to_string();
@@ -1224,16 +1329,32 @@ pub async fn reddit_cookies_submit(
     };
 
     queries::create_integration(
-        &state.db, user_id, "reddit", "Reddit", &internal_id, &token_str,
-        None, None, Some(&profile_name), None, profile_picture.as_deref(), None, None,
-    ).await?;
+        &state.db,
+        user_id,
+        "reddit",
+        "Reddit",
+        &internal_id,
+        &token_str,
+        None,
+        None,
+        Some(&profile_name),
+        None,
+        profile_picture.as_deref(),
+        None,
+        None,
+    )
+    .await?;
 
     state.broadcast.send(
         "integration_connected",
         &serde_json::json!({ "provider": "reddit", "method": "cookie", "profile": profile_name }),
     );
 
-    Ok(Redirect::to(&format!("/?connected=reddit&name={}", urlencoding::encode(&profile_name))).into_response())
+    Ok(Redirect::to(&format!(
+        "/?connected=reddit&name={}",
+        urlencoding::encode(&profile_name)
+    ))
+    .into_response())
 }
 
 /// POST /api/public/connect/reddit-cookies/import — extract from browser
@@ -1254,7 +1375,9 @@ pub async fn reddit_cookies_import(
         ))?;
 
     let token_str = crate::social::reddit_cookies::build_cookie_token(
-        &cookies.reddit_session, cookies.token_v2.as_deref(), Some(&cookies.cookie_string)
+        &cookies.reddit_session,
+        cookies.token_v2.as_deref(),
+        Some(&cookies.cookie_string),
     );
 
     let (internal_id, profile_name, profile_picture) = {
@@ -1262,18 +1385,28 @@ pub async fn reddit_cookies_import(
         provider.prepare_from_token(&token_str);
         match provider.get_www("/api/me.json", &[]).await {
             Ok(json) => {
-                let name = json["data"]["name"].as_str().unwrap_or("Reddit User").to_string();
-                let icon = json["data"]["icon_img"].as_str()
+                let name = json["data"]["name"]
+                    .as_str()
+                    .unwrap_or("Reddit User")
+                    .to_string();
+                let icon = json["data"]["icon_img"]
+                    .as_str()
                     .and_then(|s| s.split('?').next())
                     .map(String::from);
                 let id = json["data"]["id"].as_str().unwrap_or("").to_string();
-                tracing::info!("Reddit browser import identified user: u/{name} from {}", cookies.source);
+                tracing::info!(
+                    "Reddit browser import identified user: u/{name} from {}",
+                    cookies.source
+                );
                 (id, name, icon)
             }
             Err(e) => {
                 tracing::warn!("Reddit browser import validation failed: {e}");
                 (
-                    format!("cookie-{}", &cookies.reddit_session[..8.min(cookies.reddit_session.len())]),
+                    format!(
+                        "cookie-{}",
+                        &cookies.reddit_session[..8.min(cookies.reddit_session.len())]
+                    ),
                     format!("Reddit (Cookie) — {}", cookies.source),
                     None,
                 )
@@ -1282,16 +1415,32 @@ pub async fn reddit_cookies_import(
     };
 
     queries::create_integration(
-        &state.db, user_id, "reddit", "Reddit", &internal_id, &token_str,
-        None, None, Some(&profile_name), None, profile_picture.as_deref(), None, None,
-    ).await?;
+        &state.db,
+        user_id,
+        "reddit",
+        "Reddit",
+        &internal_id,
+        &token_str,
+        None,
+        None,
+        Some(&profile_name),
+        None,
+        profile_picture.as_deref(),
+        None,
+        None,
+    )
+    .await?;
 
     state.broadcast.send(
         "integration_connected",
         &serde_json::json!({ "provider": "reddit", "method": "browser-import", "source": cookies.source, "profile": profile_name }),
     );
 
-    Ok(Redirect::to(&format!("/?connected=reddit&name={}", urlencoding::encode(&profile_name))).into_response())
+    Ok(Redirect::to(&format!(
+        "/?connected=reddit&name={}",
+        urlencoding::encode(&profile_name)
+    ))
+    .into_response())
 }
 
 // ── Local user helper ─────────────────────────────────────────
@@ -1336,7 +1485,8 @@ pub async fn telegram_bot_token_form(
     // the user reached this form via an OAuth-redirect link with
     // ?token= and hasn't logged into the WebUI to set the cookie).
     let token_hidden = query.token.as_deref().map(html_escape).unwrap_or_default();
-    Ok(axum::response::Html(format!(r#"<!DOCTYPE html>
+    Ok(axum::response::Html(format!(
+        r#"<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Social Forge — Telegram Bot Token</title>
 <style>body{{font-family:system-ui;background:#0b0e14;color:#d1d5db;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0}}
@@ -1352,7 +1502,8 @@ h2{{color:#fff;margin-top:0}}input{{width:100%;padding:.75rem;border:1px solid #
 <button type="submit" class="btn">Connect Bot</button>
 </form>
 <p class="hint">The token looks like: 123456789:ABCdefGHIjklMNOpqrsTUVwxyz</p>
-</div></body></html>"#)))
+</div></body></html>"#
+    )))
 }
 
 /// POST /api/public/connect/telegram-bot-token — submit bot token
@@ -1372,22 +1523,43 @@ pub async fn telegram_bot_token_submit(
 
     let bot_token = match form.get("bot_token") {
         Some(t) if !t.is_empty() => t.clone(),
-        _ => return Ok(axum::response::Html("<p>Error: bot_token is required</p>".to_string()).into_response()),
+        _ => {
+            return Ok(
+                axum::response::Html("<p>Error: bot_token is required</p>".to_string())
+                    .into_response(),
+            )
+        }
     };
 
     // Validate token via getMe
     let url = format!("https://api.telegram.org/bot{}/getMe", bot_token);
     let resp = match reqwest::get(&url).await {
         Ok(r) => r,
-        Err(e) => return Ok(axum::response::Html(format!("<p>Error: Failed to reach Telegram API: {e}</p>", e = html_escape(&e.to_string()))).into_response()),
+        Err(e) => {
+            return Ok(axum::response::Html(format!(
+                "<p>Error: Failed to reach Telegram API: {e}</p>",
+                e = html_escape(&e.to_string())
+            ))
+            .into_response())
+        }
     };
     let json: serde_json::Value = match resp.json().await {
         Ok(j) => j,
-        Err(e) => return Ok(axum::response::Html(format!("<p>Error: Invalid response: {e}</p>", e = html_escape(&e.to_string()))).into_response()),
+        Err(e) => {
+            return Ok(axum::response::Html(format!(
+                "<p>Error: Invalid response: {e}</p>",
+                e = html_escape(&e.to_string())
+            ))
+            .into_response())
+        }
     };
     if !json["ok"].as_bool().unwrap_or(false) {
         let desc = json["description"].as_str().unwrap_or("unknown error");
-        return Ok(axum::response::Html(format!("<p>Error: Invalid bot token. Telegram says: {desc}</p>", desc = html_escape(desc))).into_response());
+        return Ok(axum::response::Html(format!(
+            "<p>Error: Invalid bot token. Telegram says: {desc}</p>",
+            desc = html_escape(desc)
+        ))
+        .into_response());
     }
 
     let bot = &json["result"];
@@ -1397,7 +1569,13 @@ pub async fn telegram_bot_token_submit(
 
     let user = match get_or_create_dev_user(&state).await {
         Ok(u) => u,
-        Err(e) => return Ok(axum::response::Html(format!("<p>Error creating user: {e}</p>", e = html_escape(&e.to_string()))).into_response()),
+        Err(e) => {
+            return Ok(axum::response::Html(format!(
+                "<p>Error creating user: {e}</p>",
+                e = html_escape(&e.to_string())
+            ))
+            .into_response())
+        }
     };
     let token_json = serde_json::json!({"bot_token": bot_token}).to_string();
     if let Err(e) = crate::db::queries::create_integration(
@@ -1414,12 +1592,16 @@ pub async fn telegram_bot_token_submit(
         Some(&format!("https://t.me/{bot_username}")),
         None,
         Some("api_key"),
-    ).await {
+    )
+    .await
+    {
         tracing::error!("Failed to create Telegram Bot integration: {e}");
-        let msg = html_escape(&format!("Failed to save Telegram Bot connection: {e}. Please try again."));
-        return Ok(axum::response::Html(
-            format!("<p style=\"color:red\">{msg}</p>")
-        ).into_response());
+        let msg = html_escape(&format!(
+            "Failed to save Telegram Bot connection: {e}. Please try again."
+        ));
+        return Ok(
+            axum::response::Html(format!("<p style=\"color:red\">{msg}</p>")).into_response(),
+        );
     }
 
     Ok(axum::response::Redirect::to("/setup?connected=telegram-bot").into_response())
@@ -1545,10 +1727,7 @@ mod tests {
         // The `'` becomes `\'`, neutralising the breakout. The rest of
         // the payload is left alone because none of its chars are in
         // the escape set.
-        assert_eq!(
-            js_escape("';alert(1);//"),
-            "\\';alert(1);//"
-        );
+        assert_eq!(js_escape("';alert(1);//"), "\\';alert(1);//");
     }
 
     #[test]

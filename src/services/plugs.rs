@@ -9,8 +9,8 @@
 // post_plugs table. A single background task (plug_runner) wakes every
 // minute, queries due plugs, executes them.
 
-use std::sync::Arc;
 use chrono::Utc;
+use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::db::SqlitePool;
@@ -82,7 +82,11 @@ async fn process_due_plugs(
 
         tracing::info!(
             "Processing plug {} (type={}, post={}, run {}/{})",
-            plug_id, plug_type, post_id, runs_so_far + 1, max_runs
+            plug_id,
+            plug_type,
+            post_id,
+            runs_so_far + 1,
+            max_runs
         );
 
         let result = execute_plug(
@@ -146,6 +150,10 @@ async fn process_due_plugs(
 
 /// Execute a single plug. Returns Ok(true) if the plug fired (action taken),
 /// Ok(false) if conditions not met yet, Err on failure.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "plug execution context: db, registry, key, type, config, and three ids"
+)]
 async fn execute_plug(
     db: &SqlitePool,
     providers: &ProviderRegistry,
@@ -160,7 +168,7 @@ async fn execute_plug(
 
     match plug_type {
         "auto_repost_after_likes" => {
-            let threshold = config["threshold"].as_i64().unwrap_or(10) as i64;
+            let threshold = config["threshold"].as_i64().unwrap_or(10);
 
             // Fetch the post to get platform_post_id + provider
             let post_row = sqlx::query(
@@ -187,7 +195,8 @@ async fn execute_plug(
             };
 
             // Decrypt token
-            let access_token = crate::crypto::maybe_decrypt_token(&access_token_raw, token_key.as_ref());
+            let access_token =
+                crate::crypto::maybe_decrypt_token(&access_token_raw, token_key.as_ref());
 
             // Get current engagement
             let engagement = provider
@@ -203,34 +212,47 @@ async fn execute_plug(
             if likes >= threshold {
                 tracing::info!(
                     "Plug auto_repost: post {} has {} likes (threshold {}), firing!",
-                    post_id, likes, threshold
+                    post_id,
+                    likes,
+                    threshold
                 );
 
                 // For X: retweet using the XProvider's retweet method
                 if provider_id == "x" {
-                    let x_provider = crate::social::x::XProvider::new(&crate::config::Config::from_env().map_err(|e| format!("Config error: {e}"))?);
+                    let x_provider = crate::social::x::XProvider::new(
+                        &crate::config::Config::from_env()
+                            .map_err(|e| format!("Config error: {e}"))?,
+                    );
                     let _user_id_str = crate::auth::middleware::DEFAULT_USER_ID.to_string();
                     // XProvider::retweet needs the X user ID, not our internal UUID.
                     // We'll use the integration's internal_id which is the X user ID.
-                    let internal_id_row = sqlx::query("SELECT internal_id FROM integrations WHERE id = ?")
-                        .bind(integration_id)
-                        .fetch_one(db)
-                        .await?;
+                    let internal_id_row =
+                        sqlx::query("SELECT internal_id FROM integrations WHERE id = ?")
+                            .bind(integration_id)
+                            .fetch_one(db)
+                            .await?;
                     let x_user_id: String = internal_id_row.try_get::<String, _>("internal_id")?;
-                    x_provider.retweet(&access_token, &x_user_id, &platform_post_id).await
+                    x_provider
+                        .retweet(&access_token, &x_user_id, &platform_post_id)
+                        .await
                         .map_err(|e| format!("Retweet failed: {e}"))?;
                     return Ok(true);
                 }
 
                 // For other providers: repost by creating a new post with the same content
                 // (simplified — a full implementation would call provider.share() if it exists)
-                tracing::info!("Plug auto_repost: provider {} doesn't support native retweet, skipping", provider_id);
+                tracing::info!(
+                    "Plug auto_repost: provider {} doesn't support native retweet, skipping",
+                    provider_id
+                );
                 return Ok(true);
             }
 
             tracing::debug!(
                 "Plug auto_repost: post {} has {} likes (threshold {} not met)",
-                post_id, likes, threshold
+                post_id,
+                likes,
+                threshold
             );
             Ok(false)
         }
@@ -297,7 +319,8 @@ async fn execute_plug(
 
             tracing::info!(
                 "Plug cross_post: created secondary post on integration {} (delay {}m)",
-                secondary_integration_id, delay_minutes
+                secondary_integration_id,
+                delay_minutes
             );
             Ok(true)
         }

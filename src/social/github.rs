@@ -68,10 +68,7 @@ impl GithubProvider {
                 .to_string();
             Err(ProviderError::Auth(msg))
         } else if status == StatusCode::FORBIDDEN {
-            let msg = json["message"]
-                .as_str()
-                .unwrap_or("Forbidden")
-                .to_string();
+            let msg = json["message"].as_str().unwrap_or("Forbidden").to_string();
             if msg.to_lowercase().contains("rate limit") {
                 Err(ProviderError::RateLimited(msg))
             } else {
@@ -123,7 +120,10 @@ impl GithubProvider {
             Ok(json)
         } else if status == StatusCode::UNAUTHORIZED {
             Err(ProviderError::Auth(
-                json["message"].as_str().unwrap_or("Authentication failed").to_string(),
+                json["message"]
+                    .as_str()
+                    .unwrap_or("Authentication failed")
+                    .to_string(),
             ))
         } else if status == StatusCode::FORBIDDEN {
             let msg = json["message"].as_str().unwrap_or("Forbidden").to_string();
@@ -133,11 +133,26 @@ impl GithubProvider {
                 Err(ProviderError::Api(msg))
             }
         } else if status == StatusCode::NOT_FOUND {
-            Err(ProviderError::Api(json["message"].as_str().unwrap_or("Resource not found").to_string()))
+            Err(ProviderError::Api(
+                json["message"]
+                    .as_str()
+                    .unwrap_or("Resource not found")
+                    .to_string(),
+            ))
         } else if status == StatusCode::UNPROCESSABLE_ENTITY {
-            Err(ProviderError::InvalidRequest(json["message"].as_str().unwrap_or("Validation error").to_string()))
+            Err(ProviderError::InvalidRequest(
+                json["message"]
+                    .as_str()
+                    .unwrap_or("Validation error")
+                    .to_string(),
+            ))
         } else {
-            Err(ProviderError::Api(json["message"].as_str().unwrap_or("GitHub API error").to_string()))
+            Err(ProviderError::Api(
+                json["message"]
+                    .as_str()
+                    .unwrap_or("GitHub API error")
+                    .to_string(),
+            ))
         }
     }
 
@@ -170,10 +185,7 @@ impl GithubProvider {
                     .to_string(),
             ))
         } else if status == StatusCode::FORBIDDEN {
-            let msg = json["message"]
-                .as_str()
-                .unwrap_or("Forbidden")
-                .to_string();
+            let msg = json["message"].as_str().unwrap_or("Forbidden").to_string();
             if msg.to_lowercase().contains("rate limit") {
                 Err(ProviderError::RateLimited(msg))
             } else {
@@ -643,10 +655,7 @@ impl SocialProvider for GithubProvider {
                             .as_u64()
                             .map(|id| id.to_string())
                             .unwrap_or_default(),
-                        name: r["full_name"]
-                            .as_str()
-                            .unwrap_or("")
-                            .to_string(),
+                        name: r["full_name"].as_str().unwrap_or("").to_string(),
                         access_token: Some(access_token.to_string()),
                         picture: r["owner"]["avatar_url"].as_str().map(String::from),
                         username: r["owner"]["login"].as_str().map(String::from),
@@ -677,10 +686,7 @@ impl SocialProvider for GithubProvider {
                 .as_u64()
                 .map(|id| id.to_string())
                 .unwrap_or_default(),
-            name: json["full_name"]
-                .as_str()
-                .unwrap_or("")
-                .to_string(),
+            name: json["full_name"].as_str().unwrap_or("").to_string(),
             access_token: Some(access_token.to_string()),
             picture: json["owner"]["avatar_url"].as_str().map(String::from),
             username: json["owner"]["login"].as_str().map(String::from),
@@ -693,22 +699,32 @@ impl SocialProvider for GithubProvider {
         _internal_id: &str,
         _limit: u32,
     ) -> Result<Vec<ExternalPostData>, ProviderError> {
-        let repos = self.github_get(access_token, "/user/repos", Some(&[
-            ("per_page", "5"),
-            ("sort", "updated"),
-            ("direction", "desc"),
-        ])).await?;
+        let repos = self
+            .github_get(
+                access_token,
+                "/user/repos",
+                Some(&[
+                    ("per_page", "5"),
+                    ("sort", "updated"),
+                    ("direction", "desc"),
+                ]),
+            )
+            .await?;
 
-        let gists = self.github_get(access_token, "/gists", Some(&[
-            ("per_page", "5"),
-            ("direction", "desc"),
-        ])).await?;
+        let gists = self
+            .github_get(
+                access_token,
+                "/gists",
+                Some(&[("per_page", "5"), ("direction", "desc")]),
+            )
+            .await?;
 
         let mut posts: Vec<ExternalPostData> = Vec::new();
 
         if let Some(repos_arr) = repos.as_array() {
             for repo in repos_arr {
-                let created_at = repo["created_at"].as_str()
+                let created_at = repo["created_at"]
+                    .as_str()
                     .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
                     .map(|dt| dt.with_timezone(&chrono::Utc))
                     .unwrap_or_else(chrono::Utc::now);
@@ -723,7 +739,10 @@ impl SocialProvider for GithubProvider {
                     });
                 }
                 posts.push(ExternalPostData {
-                    platform_post_id: repo["id"].as_u64().map(|id| id.to_string()).unwrap_or_default(),
+                    platform_post_id: repo["id"]
+                        .as_u64()
+                        .map(|id| id.to_string())
+                        .unwrap_or_default(),
                     text: repo["description"].as_str().unwrap_or("").to_string(),
                     author_name: None,
                     author_handle: Some(repo["owner"]["login"].as_str().unwrap_or("").to_string()),
@@ -744,11 +763,13 @@ impl SocialProvider for GithubProvider {
 
         if let Some(gists_arr) = gists.as_array() {
             for gist in gists_arr {
-                let created_at = gist["created_at"].as_str()
+                let created_at = gist["created_at"]
+                    .as_str()
                     .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
                     .map(|dt| dt.with_timezone(&chrono::Utc))
                     .unwrap_or_else(chrono::Utc::now);
-                let files: Vec<String> = gist["files"].as_object()
+                let files: Vec<String> = gist["files"]
+                    .as_object()
                     .map(|obj| obj.keys().cloned().collect())
                     .unwrap_or_default();
                 let gist_avatar = gist["owner"]["avatar_url"].as_str().map(String::from);
@@ -779,7 +800,7 @@ impl SocialProvider for GithubProvider {
             }
         }
 
-        posts.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        posts.sort_by_key(|a| std::cmp::Reverse(a.created_at));
         posts.truncate(_limit as usize);
         Ok(posts)
     }

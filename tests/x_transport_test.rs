@@ -17,9 +17,11 @@ async fn test_headers(headers: &[(&str, &str)], label: &str) {
     let client = reqwest::Client::builder()
         .user_agent(UA)
         .timeout(Duration::from_secs(15))
-        .build().unwrap_or_else(|e| panic!("client: {e}"));
+        .build()
+        .unwrap_or_else(|e| panic!("client: {e}"));
 
-    let mut req = client.get(URL)
+    let mut req = client
+        .get(URL)
         .header("Cookie", &cookies)
         .header("x-csrf-token", &ct0)
         .header("Authorization", format!("Bearer {BEARER}"));
@@ -44,32 +46,47 @@ async fn test_x_headers_bisect() {
 
     test_headers(&[], "base (cookies+csrf+bearer+UA)").await;
 
-    test_headers(&[
-        ("x-twitter-active-user", "yes"),
-        ("x-twitter-auth-type", "OAuth2Session"),
-        ("x-twitter-client-language", "en"),
-    ], "+ x-twitter-*").await;
+    test_headers(
+        &[
+            ("x-twitter-active-user", "yes"),
+            ("x-twitter-auth-type", "OAuth2Session"),
+            ("x-twitter-client-language", "en"),
+        ],
+        "+ x-twitter-*",
+    )
+    .await;
 
-    test_headers(&[
-        ("origin", "https://x.com"),
-        ("referer", "https://x.com/"),
-    ], "+ origin+referer").await;
+    test_headers(
+        &[("origin", "https://x.com"), ("referer", "https://x.com/")],
+        "+ origin+referer",
+    )
+    .await;
 
-    test_headers(&[
-        ("accept", "*/*"),
-    ], "+ accept: */*").await;
+    test_headers(&[("accept", "*/*")], "+ accept: */*").await;
 
-    test_headers(&[
-        ("accept-language", "en-US,en;q=0.9"),
-    ], "+ accept-language").await;
+    test_headers(
+        &[("accept-language", "en-US,en;q=0.9")],
+        "+ accept-language",
+    )
+    .await;
 
-    test_headers(&[
-        ("sec-ch-ua", r#""Chromium";v="131", "Not(A:Brand";v="24", "Google Chrome";v="131""#),
-    ], "+ sec-ch-ua").await;
+    test_headers(
+        &[(
+            "sec-ch-ua",
+            r#""Chromium";v="131", "Not(A:Brand";v="24", "Google Chrome";v="131""#,
+        )],
+        "+ sec-ch-ua",
+    )
+    .await;
 
-    test_headers(&[
-        ("sec-ch-ua-full-version-list", r#""Chromium";v="131", "Not(A:Brand";v="24.0.0.0", "Google Chrome";v="131.0.6778.265""#),
-    ], "+ sec-ch-ua-full-version-list").await;
+    test_headers(
+        &[(
+            "sec-ch-ua-full-version-list",
+            r#""Chromium";v="131", "Not(A:Brand";v="24.0.0.0", "Google Chrome";v="131.0.6778.265""#,
+        )],
+        "+ sec-ch-ua-full-version-list",
+    )
+    .await;
 
     test_headers(&[
         ("accept", "*/*"),
@@ -93,9 +110,14 @@ async fn test_x_headers_bisect() {
         ("Sec-Fetch-Site", "same-origin"),
     ], "+sec-ch-ua+sec-fetch family").await;
 
-    test_headers(&[
-        ("x-client-transaction-id", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
-    ], "+ x-client-transaction-id").await;
+    test_headers(
+        &[(
+            "x-client-transaction-id",
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        )],
+        "+ x-client-transaction-id",
+    )
+    .await;
 
     test_headers(&[
         ("accept", "*/*"),
@@ -131,16 +153,26 @@ async fn test_wreq_no_emulation() {
     let (at, ct0) = get_cookies();
     let cookies = format!("auth_token={at}; ct0={ct0}");
     let bearer = format!("Bearer {BEARER}");
-    let resp = client.get(URL)
+    let resp = client
+        .get(URL)
         .header("Cookie", &cookies)
         .header("x-csrf-token", &ct0)
         .header("Authorization", &bearer)
-        .send().await.unwrap();
+        .send()
+        .await
+        .unwrap();
 
     let status = resp.status();
     let body = resp.text().await.unwrap_or_default();
-    eprintln!("wreq no emulation | HTTP {status} | body_len={} | body_start={}", body.len(), &body.chars().take(100).collect::<String>());
-    assert!(status.is_success(), "wreq no emulation failed: HTTP {status}: {body}");
+    eprintln!(
+        "wreq no emulation | HTTP {status} | body_len={} | body_start={}",
+        body.len(),
+        body.chars().take(100).collect::<String>()
+    );
+    assert!(
+        status.is_success(),
+        "wreq no emulation failed: HTTP {status}: {body}"
+    );
 }
 
 #[tokio::test]
@@ -151,18 +183,29 @@ async fn test_wreq_chrome131() {
     let client = wreq::Client::builder()
         .emulation(wreq_util::Emulation::Chrome131)
         .timeout(Duration::from_secs(15))
-        .build().unwrap();
+        .build()
+        .unwrap();
 
-    let resp = client.get(URL)
+    let resp = client
+        .get(URL)
         .header("Cookie", &cookies)
         .header("x-csrf-token", &ct0)
         .header("Authorization", &bearer)
-        .send().await.unwrap();
+        .send()
+        .await
+        .unwrap();
 
     let status = resp.status();
     let body = resp.text().await.unwrap_or_default();
-    eprintln!("wreq Chrome131 | HTTP {status} | body_len={} | body_start={}", body.len(), &body.chars().take(100).collect::<String>());
-    assert!(status.is_success(), "wreq Chrome131 failed: HTTP {status}: {body}");
+    eprintln!(
+        "wreq Chrome131 | HTTP {status} | body_len={} | body_start={}",
+        body.len(),
+        body.chars().take(100).collect::<String>()
+    );
+    assert!(
+        status.is_success(),
+        "wreq Chrome131 failed: HTTP {status}: {body}"
+    );
 }
 
 #[tokio::test]
@@ -174,28 +217,98 @@ async fn test_xprovider_emulation_headers() {
     let bearer = format!("Bearer {BEARER}");
 
     let mut headers = wreq::header::HeaderMap::new();
-    headers.insert(wreq::header::ACCEPT, wreq::header::HeaderValue::from_static("*/*"));
-    headers.insert("origin", wreq::header::HeaderValue::from_static("https://x.com"));
-    headers.insert("referer", wreq::header::HeaderValue::from_static("https://x.com/"));
-    headers.insert("x-twitter-active-user", wreq::header::HeaderValue::from_static("yes"));
-    headers.insert("x-twitter-auth-type", wreq::header::HeaderValue::from_static("OAuth2Session"));
-    headers.insert("x-twitter-client-language", wreq::header::HeaderValue::from_static("en"));
-    headers.insert(wreq::header::AUTHORIZATION, wreq::header::HeaderValue::from_str(&bearer).unwrap());
-    headers.insert("accept-language", wreq::header::HeaderValue::from_static("en-US,en;q=0.9"));
+    headers.insert(
+        wreq::header::ACCEPT,
+        wreq::header::HeaderValue::from_static("*/*"),
+    );
+    headers.insert(
+        "origin",
+        wreq::header::HeaderValue::from_static("https://x.com"),
+    );
+    headers.insert(
+        "referer",
+        wreq::header::HeaderValue::from_static("https://x.com/"),
+    );
+    headers.insert(
+        "x-twitter-active-user",
+        wreq::header::HeaderValue::from_static("yes"),
+    );
+    headers.insert(
+        "x-twitter-auth-type",
+        wreq::header::HeaderValue::from_static("OAuth2Session"),
+    );
+    headers.insert(
+        "x-twitter-client-language",
+        wreq::header::HeaderValue::from_static("en"),
+    );
+    headers.insert(
+        wreq::header::AUTHORIZATION,
+        wreq::header::HeaderValue::from_str(&bearer).unwrap(),
+    );
+    headers.insert(
+        "accept-language",
+        wreq::header::HeaderValue::from_static("en-US,en;q=0.9"),
+    );
     // sec-ch-ua family
-    headers.insert("sec-ch-ua", wreq::header::HeaderValue::from_static(r#""Chromium";v="131", "Not(A:Brand";v="24", "Google Chrome";v="131""#));
-    headers.insert("sec-ch-ua-mobile", wreq::header::HeaderValue::from_static("?0"));
-    headers.insert("sec-ch-ua-platform", wreq::header::HeaderValue::from_static("Linux"));
-    headers.insert("sec-ch-ua-arch", wreq::header::HeaderValue::from_static("x86"));
-    headers.insert("sec-ch-ua-bitness", wreq::header::HeaderValue::from_static("64"));
-    headers.insert("sec-ch-ua-full-version", wreq::header::HeaderValue::from_static("131.0.6778.265"));
-    headers.insert("sec-ch-ua-full-version-list", wreq::header::HeaderValue::from_static(r#""Chromium";v="131", "Not(A:Brand";v="24.0.0.0", "Google Chrome";v="131.0.6778.265""#));
-    headers.insert("sec-ch-ua-model", wreq::header::HeaderValue::from_static("\"\""));
-    headers.insert("sec-ch-ua-platform-version", wreq::header::HeaderValue::from_static(if std::env::var("OS_VERSION").unwrap_or_default().is_empty() { "\"\"" } else { "dummy" }));
+    headers.insert(
+        "sec-ch-ua",
+        wreq::header::HeaderValue::from_static(
+            r#""Chromium";v="131", "Not(A:Brand";v="24", "Google Chrome";v="131""#,
+        ),
+    );
+    headers.insert(
+        "sec-ch-ua-mobile",
+        wreq::header::HeaderValue::from_static("?0"),
+    );
+    headers.insert(
+        "sec-ch-ua-platform",
+        wreq::header::HeaderValue::from_static("Linux"),
+    );
+    headers.insert(
+        "sec-ch-ua-arch",
+        wreq::header::HeaderValue::from_static("x86"),
+    );
+    headers.insert(
+        "sec-ch-ua-bitness",
+        wreq::header::HeaderValue::from_static("64"),
+    );
+    headers.insert(
+        "sec-ch-ua-full-version",
+        wreq::header::HeaderValue::from_static("131.0.6778.265"),
+    );
+    headers.insert(
+        "sec-ch-ua-full-version-list",
+        wreq::header::HeaderValue::from_static(
+            r#""Chromium";v="131", "Not(A:Brand";v="24.0.0.0", "Google Chrome";v="131.0.6778.265""#,
+        ),
+    );
+    headers.insert(
+        "sec-ch-ua-model",
+        wreq::header::HeaderValue::from_static("\"\""),
+    );
+    headers.insert(
+        "sec-ch-ua-platform-version",
+        wreq::header::HeaderValue::from_static(
+            if std::env::var("OS_VERSION").unwrap_or_default().is_empty() {
+                "\"\""
+            } else {
+                "dummy"
+            },
+        ),
+    );
     // sec-fetch family
-    headers.insert("Sec-Fetch-Dest", wreq::header::HeaderValue::from_static("empty"));
-    headers.insert("Sec-Fetch-Mode", wreq::header::HeaderValue::from_static("cors"));
-    headers.insert("Sec-Fetch-Site", wreq::header::HeaderValue::from_static("same-origin"));
+    headers.insert(
+        "Sec-Fetch-Dest",
+        wreq::header::HeaderValue::from_static("empty"),
+    );
+    headers.insert(
+        "Sec-Fetch-Mode",
+        wreq::header::HeaderValue::from_static("cors"),
+    );
+    headers.insert(
+        "Sec-Fetch-Site",
+        wreq::header::HeaderValue::from_static("same-origin"),
+    );
 
     let client = wreq::Client::builder()
         .default_headers(headers)
@@ -204,17 +317,28 @@ async fn test_xprovider_emulation_headers() {
         .brotli(true)
         .timeout(Duration::from_secs(30))
         .pool_idle_timeout(Duration::from_secs(90))
-        .build().unwrap();
+        .build()
+        .unwrap();
 
     // Test GET with Cookie + x-csrf-token (like graphql_get does)
-    let resp = client.get(URL)
+    let resp = client
+        .get(URL)
         .header("Cookie", &cookies)
         .header("x-csrf-token", &ct0)
-        .send().await.unwrap();
+        .send()
+        .await
+        .unwrap();
 
     let status = resp.status();
     let body = resp.text().await.unwrap_or_default();
     let preview: String = body.chars().take(100).collect();
-    eprintln!("XProvider-like wreq | HTTP {status} | body_len={} | body_start={}", body.len(), &preview);
-    assert!(status.is_success(), "XProvider-like wreq: HTTP {status}: {body}");
+    eprintln!(
+        "XProvider-like wreq | HTTP {status} | body_len={} | body_start={}",
+        body.len(),
+        preview
+    );
+    assert!(
+        status.is_success(),
+        "XProvider-like wreq: HTTP {status}: {body}"
+    );
 }

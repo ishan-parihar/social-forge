@@ -43,9 +43,8 @@ use std::future::Future;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
 use schemars::JsonSchema;
-
+use serde::{Deserialize, Serialize};
 
 // ── Common Types ────────────────────────────────────────────
 
@@ -125,7 +124,13 @@ impl PublishResult {
     pub fn is_pending(&self) -> bool {
         matches!(
             self.status.to_ascii_lowercase().as_str(),
-            "pending" | "processing" | "in_progress" | "accepted" | "queued" | "uploaded" | "submitted"
+            "pending"
+                | "processing"
+                | "in_progress"
+                | "accepted"
+                | "queued"
+                | "uploaded"
+                | "submitted"
         )
     }
 
@@ -371,31 +376,49 @@ pub trait SocialProvider: Send + Sync {
     fn max_content_length(&self) -> usize;
 
     /// Tooltip shown in UI
-    fn tooltip(&self) -> Option<&'static str> { None }
+    fn tooltip(&self) -> Option<&'static str> {
+        None
+    }
 
     /// Editor type for content creation
-    fn editor_type(&self) -> EditorType { EditorType::Normal }
+    fn editor_type(&self) -> EditorType {
+        EditorType::Normal
+    }
 
     /// Does this provider have multi-step auth (page selection after OAuth)?
-    fn is_between_steps(&self) -> bool { false }
+    fn is_between_steps(&self) -> bool {
+        false
+    }
 
     /// Does this provider use a Chrome extension for auth?
-    fn is_chrome_extension(&self) -> bool { false }
+    fn is_chrome_extension(&self) -> bool {
+        false
+    }
 
     /// Does this provider need proactive cron-based token refresh?
-    fn needs_cron_refresh(&self) -> bool { false }
+    fn needs_cron_refresh(&self) -> bool {
+        false
+    }
 
     /// Should we wait for refresh to complete before publishing?
-    fn refresh_wait(&self) -> bool { false }
+    fn refresh_wait(&self) -> bool {
+        false
+    }
 
     /// Is this a one-time token provider?
-    fn one_time_token(&self) -> bool { false }
+    fn one_time_token(&self) -> bool {
+        false
+    }
 
     /// Custom fields for OAuth config
-    async fn custom_fields(&self) -> Vec<CustomField> { vec![] }
+    async fn custom_fields(&self) -> Vec<CustomField> {
+        vec![]
+    }
 
     /// Extension cookies needed (for Chrome extension providers like Skool)
-    fn extension_cookies(&self) -> Vec<(&'static str, &'static str)> { vec![] }
+    fn extension_cookies(&self) -> Vec<(&'static str, &'static str)> {
+        vec![]
+    }
 
     /// Generate the OAuth authorization URL
     /// `code_verifier` is the PKCE code verifier (S256 challenge will be derived from it).
@@ -407,7 +430,9 @@ pub trait SocialProvider: Send + Sync {
     ) -> Result<AuthUrlResponse, ProviderError>;
 
     /// Check if this provider uses OAuth (vs direct API key / app password).
-    fn uses_oauth(&self) -> bool { true }
+    fn uses_oauth(&self) -> bool {
+        true
+    }
 
     /// Exchange authorization code for access token
     async fn exchange_code(
@@ -418,10 +443,7 @@ pub trait SocialProvider: Send + Sync {
     ) -> Result<AuthToken, ProviderError>;
 
     /// Refresh an expired access token
-    async fn refresh_token(
-        &self,
-        refresh_token: &str,
-    ) -> Result<AuthToken, ProviderError>;
+    async fn refresh_token(&self, refresh_token: &str) -> Result<AuthToken, ProviderError>;
 
     /// Publish content to the social platform
     async fn publish(
@@ -486,7 +508,9 @@ pub trait SocialProvider: Send + Sync {
         _last_comment_id: Option<&str>,
         _post: &PostContent,
     ) -> Result<PublishResult, ProviderError> {
-        Err(ProviderError::Api("Comments not supported by this provider".into()))
+        Err(ProviderError::Api(
+            "Comments not supported by this provider".into(),
+        ))
     }
 
     /// Get analytics for a time range (dashboard)
@@ -509,19 +533,13 @@ pub trait SocialProvider: Send + Sync {
     }
 
     /// List manageable pages/channels (for isBetweenSteps providers)
-    async fn pages(
-        &self,
-        _access_token: &str,
-    ) -> Result<Vec<PageInfo>, ProviderError> {
+    async fn pages(&self, _access_token: &str) -> Result<Vec<PageInfo>, ProviderError> {
         Ok(vec![])
     }
 
     /// Discover available posting targets (channels, groups, subreddits, peers, etc.)
     /// Returns empty vec for providers where target = integration (e.g., X, LinkedIn personal)
-    async fn targets(
-        &self,
-        _access_token: &str,
-    ) -> Result<Vec<TargetInfo>, ProviderError> {
+    async fn targets(&self, _access_token: &str) -> Result<Vec<TargetInfo>, ProviderError> {
         Ok(vec![])
     }
 
@@ -564,7 +582,9 @@ pub trait SocialProvider: Send + Sync {
     }
 
     /// Map provider API error body/status to user-friendly message
-    fn map_error(&self, _body: &str, _status: u16) -> Option<String> { None }
+    fn map_error(&self, _body: &str, _status: u16) -> Option<String> {
+        None
+    }
 
     /// Import recent posts from this platform (for the External Post Import CLI).
     async fn get_recent_posts(
@@ -605,7 +625,9 @@ pub trait SocialProvider: Send + Sync {
         access_token: &str,
         platform_post_id: &str,
     ) -> Result<Option<EngagementData>, ProviderError> {
-        let raw = self.get_post_engagement(access_token, platform_post_id).await?;
+        let raw = self
+            .get_post_engagement(access_token, platform_post_id)
+            .await?;
         match raw {
             Some(value) => Ok(Some(parse_engagement_data(self.identifier(), value))),
             None => Ok(None),
@@ -657,7 +679,9 @@ pub trait SocialProvider: Send + Sync {
         _recipient: &str,
         _content: &PostContent,
     ) -> Result<PublishResult, ProviderError> {
-        Err(ProviderError::Api("DMs not supported by this provider".into()))
+        Err(ProviderError::Api(
+            "DMs not supported by this provider".into(),
+        ))
     }
 
     /// Get list of DM conversations
@@ -688,7 +712,9 @@ pub trait SocialProvider: Send + Sync {
         _comment_id: &str,
         _content: &PostContent,
     ) -> Result<PublishResult, ProviderError> {
-        Err(ProviderError::Api("Comment replies not supported by this provider".into()))
+        Err(ProviderError::Api(
+            "Comment replies not supported by this provider".into(),
+        ))
     }
 
     /// Get a specific comment by ID
@@ -706,38 +732,66 @@ pub trait SocialProvider: Send + Sync {
         _access_token: &str,
         _comment_id: &str,
     ) -> Result<(), ProviderError> {
-        Err(ProviderError::Api("Comment deletion not supported by this provider".into()))
+        Err(ProviderError::Api(
+            "Comment deletion not supported by this provider".into(),
+        ))
     }
 }
 
 /// Platform-specific media validation limits.
 pub fn validate_media_limits(identifier: &str, post: &PostContent) -> Result<(), String> {
-    let images: Vec<_> = post.media.iter().filter(|m| m.mime_type.starts_with("image/")).collect();
-    let videos: Vec<_> = post.media.iter().filter(|m| m.mime_type.starts_with("video/")).collect();
+    let images: Vec<_> = post
+        .media
+        .iter()
+        .filter(|m| m.mime_type.starts_with("image/"))
+        .collect();
+    let videos: Vec<_> = post
+        .media
+        .iter()
+        .filter(|m| m.mime_type.starts_with("video/"))
+        .collect();
 
     match identifier {
         "instagram" | "instagram_standalone" | "instagram-standalone" => {
             if images.len() > 10 {
-                return Err(format!("Instagram allows max 10 images, got {}", images.len()));
+                return Err(format!(
+                    "Instagram allows max 10 images, got {}",
+                    images.len()
+                ));
             }
             if post.media.len() > 10 {
-                return Err(format!("Instagram allows max 10 media items, got {}", post.media.len()));
+                return Err(format!(
+                    "Instagram allows max 10 media items, got {}",
+                    post.media.len()
+                ));
             }
         }
         "x" => {
             if images.len() > 4 {
-                return Err(format!("X/Twitter allows max 4 images, got {}", images.len()));
+                return Err(format!(
+                    "X/Twitter allows max 4 images, got {}",
+                    images.len()
+                ));
             }
             if post.media.len() > 4 {
-                return Err(format!("X/Twitter allows max 4 media items, got {}", post.media.len()));
+                return Err(format!(
+                    "X/Twitter allows max 4 media items, got {}",
+                    post.media.len()
+                ));
             }
         }
         "linkedin" | "linkedin_page" | "linkedin-page" => {
             if images.len() > 20 {
-                return Err(format!("LinkedIn allows max 20 images, got {}", images.len()));
+                return Err(format!(
+                    "LinkedIn allows max 20 images, got {}",
+                    images.len()
+                ));
             }
             if post.media.len() > 20 {
-                return Err(format!("LinkedIn allows max 20 media items, got {}", post.media.len()));
+                return Err(format!(
+                    "LinkedIn allows max 20 media items, got {}",
+                    post.media.len()
+                ));
             }
         }
         "reddit" => {
@@ -750,10 +804,16 @@ pub fn validate_media_limits(identifier: &str, post: &PostContent) -> Result<(),
         }
         "facebook" => {
             if images.len() > 10 {
-                return Err(format!("Facebook allows max 10 images, got {}", images.len()));
+                return Err(format!(
+                    "Facebook allows max 10 images, got {}",
+                    images.len()
+                ));
             }
             if post.media.len() > 10 {
-                return Err(format!("Facebook allows max 10 media items, got {}", post.media.len()));
+                return Err(format!(
+                    "Facebook allows max 10 media items, got {}",
+                    post.media.len()
+                ));
             }
         }
         "youtube" => {
@@ -766,10 +826,16 @@ pub fn validate_media_limits(identifier: &str, post: &PostContent) -> Result<(),
         }
         "threads" => {
             if images.len() > 10 {
-                return Err(format!("Threads allows max 10 images, got {}", images.len()));
+                return Err(format!(
+                    "Threads allows max 10 images, got {}",
+                    images.len()
+                ));
             }
             if post.media.len() > 10 {
-                return Err(format!("Threads allows max 10 media items, got {}", post.media.len()));
+                return Err(format!(
+                    "Threads allows max 10 media items, got {}",
+                    post.media.len()
+                ));
             }
         }
         "bluesky" => {
@@ -777,13 +843,17 @@ pub fn validate_media_limits(identifier: &str, post: &PostContent) -> Result<(),
                 return Err(format!("Bluesky allows max 4 images, got {}", images.len()));
             }
             if post.media.len() > 4 {
-                return Err(format!("Bluesky allows max 4 media items, got {}", post.media.len()));
+                return Err(format!(
+                    "Bluesky allows max 4 media items, got {}",
+                    post.media.len()
+                ));
             }
         }
-        "mastodon" => {
-            if post.media.len() > 4 {
-                return Err(format!("Mastodon allows max 4 media items, got {}", post.media.len()));
-            }
+        "mastodon" if post.media.len() > 4 => {
+            return Err(format!(
+                "Mastodon allows max 4 media items, got {}",
+                post.media.len()
+            ));
         }
         _ => {}
     }
@@ -807,7 +877,9 @@ pub fn fetches_media_server_side(identifier: &str) -> bool {
 /// (`localhost`, loopback, RFC1918, `.local`), so a remote platform server
 /// cannot fetch a URL built on it.
 pub fn is_host_local(host: &str) -> bool {
-    let h = host.trim_matches(|c| c == '[' || c == ']').to_ascii_lowercase();
+    let h = host
+        .trim_matches(|c| c == '[' || c == ']')
+        .to_ascii_lowercase();
     if h == "localhost"
         || h == "::1"
         || h == "0.0.0.0"
@@ -1227,10 +1299,7 @@ fn graph_comment(item: &serde_json::Value) -> Option<CommentData> {
 /// (`/{ig-id}/mentions`, `/{user-id}/mentions`). An empty `query` returns the
 /// whole page; otherwise only usernames containing it (case-insensitive) are
 /// kept, so the caller can pass the API's `search` param or filter locally.
-pub(crate) fn parse_graph_mentions(
-    raw: &serde_json::Value,
-    query: &str,
-) -> Vec<MentionResult> {
+pub(crate) fn parse_graph_mentions(raw: &serde_json::Value, query: &str) -> Vec<MentionResult> {
     let needle = query.trim().to_lowercase();
     raw.get("data")
         .and_then(|d| d.as_array())
@@ -1343,24 +1412,41 @@ pub(crate) fn parse_linkedin_connections(
 /// This function handles all known provider-specific formats.
 pub fn parse_engagement_data(provider: &str, raw: serde_json::Value) -> EngagementData {
     let mut e = EngagementData {
-        likes: 0, comments: 0, shares: 0, views: 0,
-        saves: 0, quotes: 0, reposts: 0, replies: 0,
+        likes: 0,
+        comments: 0,
+        shares: 0,
+        views: 0,
+        saves: 0,
+        quotes: 0,
+        reposts: 0,
+        replies: 0,
         reactions: None,
-        upvotes: 0, downvotes: 0, upvote_ratio: None, awards: 0,
+        upvotes: 0,
+        downvotes: 0,
+        upvote_ratio: None,
+        awards: 0,
         raw: Some(raw.clone()),
     };
 
     match provider {
         // X/Twitter: { "public_metrics": { "like_count": 42, "retweet_count": 8, "reply_count": 3, "quote_count": 1, "impression_count": 1200, "bookmark_count": 5 } }
         "x" => {
-            let pm = raw.get("public_metrics").or_else(|| raw.as_object().map(|_| &raw));
+            let pm = raw
+                .get("public_metrics")
+                .or_else(|| raw.as_object().map(|_| &raw));
             if let Some(m) = pm {
                 e.likes = m.get("like_count").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
                 e.replies = m.get("reply_count").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
                 e.reposts = m.get("retweet_count").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
                 e.quotes = m.get("quote_count").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-                e.views = m.get("impression_count").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-                e.saves = m.get("bookmark_count").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+                e.views = m
+                    .get("impression_count")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0) as i32;
+                e.saves = m
+                    .get("bookmark_count")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0) as i32;
             }
         }
 
@@ -1368,9 +1454,18 @@ pub fn parse_engagement_data(provider: &str, raw: serde_json::Value) -> Engageme
         "reddit" => {
             e.upvotes = raw.get("ups").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
             e.downvotes = raw.get("downs").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-            e.upvote_ratio = raw.get("upvote_ratio").and_then(|v| v.as_f64()).map(|v| v as f32);
-            e.comments = raw.get("num_comments").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-            e.awards = raw.get("total_awards_received").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            e.upvote_ratio = raw
+                .get("upvote_ratio")
+                .and_then(|v| v.as_f64())
+                .map(|v| v as f32);
+            e.comments = raw
+                .get("num_comments")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0) as i32;
+            e.awards = raw
+                .get("total_awards_received")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0) as i32;
             // Score as likes (positive engagement indicator)
             e.likes = raw.get("score").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
         }
@@ -1401,20 +1496,54 @@ pub fn parse_engagement_data(provider: &str, raw: serde_json::Value) -> Engageme
 
         // LinkedIn: { "likeCount": 42, "commentCount": 12, "shareCount": 5 }
         "linkedin" | "linkedin_page" | "linkedin-page" => {
-            e.likes = raw.get("likeCount").or_else(|| raw.get("likes")).and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-            e.comments = raw.get("commentCount").or_else(|| raw.get("comments")).and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-            e.shares = raw.get("shareCount").or_else(|| raw.get("shares")).and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-            e.views = raw.get("impressionCount").or_else(|| raw.get("impressions")).and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            e.likes = raw
+                .get("likeCount")
+                .or_else(|| raw.get("likes"))
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0) as i32;
+            e.comments = raw
+                .get("commentCount")
+                .or_else(|| raw.get("comments"))
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0) as i32;
+            e.shares = raw
+                .get("shareCount")
+                .or_else(|| raw.get("shares"))
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0) as i32;
+            e.views = raw
+                .get("impressionCount")
+                .or_else(|| raw.get("impressions"))
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0) as i32;
         }
 
         // Facebook: Graph API returns reactions.summary.total_count (not "likes")
         // { "reactions": { "summary": { "total_count": 42 } }, "comments": { "summary": { "total_count": 12 } }, "shares": { "count": 5 } }
         "facebook" => {
-            e.likes = raw.get("reactions").and_then(|l| l.get("summary")).and_then(|s| s.get("total_count")).and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-            e.comments = raw.get("comments").and_then(|c| c.get("summary")).and_then(|s| s.get("total_count")).and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-            e.shares = raw.get("shares").and_then(|s| s.get("count")).and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            e.likes = raw
+                .get("reactions")
+                .and_then(|l| l.get("summary"))
+                .and_then(|s| s.get("total_count"))
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0) as i32;
+            e.comments = raw
+                .get("comments")
+                .and_then(|c| c.get("summary"))
+                .and_then(|s| s.get("total_count"))
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0) as i32;
+            e.shares = raw
+                .get("shares")
+                .and_then(|s| s.get("count"))
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0) as i32;
             // Reactions breakdown from data array (not the summary object)
-            if let Some(data) = raw.get("reactions").and_then(|r| r.get("data")).and_then(|d| d.as_array()) {
+            if let Some(data) = raw
+                .get("reactions")
+                .and_then(|r| r.get("data"))
+                .and_then(|d| d.as_array())
+            {
                 let mut rmap = serde_json::Map::new();
                 for reaction in data {
                     if let Some(rtype) = reaction["type"].as_str() {
@@ -1441,9 +1570,18 @@ pub fn parse_engagement_data(provider: &str, raw: serde_json::Value) -> Engageme
 
         // Mastodon: { "favourites_count": 42, "reblogs_count": 8, "replies_count": 3 }
         "mastodon" => {
-            e.likes = raw.get("favourites_count").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-            e.reposts = raw.get("reblogs_count").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-            e.replies = raw.get("replies_count").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            e.likes = raw
+                .get("favourites_count")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0) as i32;
+            e.reposts = raw
+                .get("reblogs_count")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0) as i32;
+            e.replies = raw
+                .get("replies_count")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0) as i32;
         }
 
         // TikTok: { "like_count": 42, "comment_count": 12, "share_count": 5, "view_count": 1200 }
@@ -1519,8 +1657,7 @@ pub(crate) fn test_config() -> crate::config::Config {
             std::env::temp_dir()
                 .join(format!("social-forge-test-{}.db", uuid::Uuid::new_v4()))
                 .display()
-        )
-        .into(),
+        ),
         jwt_secret: "test".into(),
         app_password: "test".into(),
         app_url: "http://localhost:3000".into(),
@@ -1750,12 +1887,16 @@ impl From<EngagementData> for EngagementRow {
             quotes: e.quotes,
             reposts: e.reposts,
             replies: e.replies,
-            reactions: e.reactions.unwrap_or(serde_json::Value::Object(serde_json::Map::new())),
+            reactions: e
+                .reactions
+                .unwrap_or(serde_json::Value::Object(serde_json::Map::new())),
             upvotes: e.upvotes,
             downvotes: e.downvotes,
             upvote_ratio: e.upvote_ratio,
             awards: e.awards,
-            raw: e.raw.unwrap_or(serde_json::Value::Object(serde_json::Map::new())),
+            raw: e
+                .raw
+                .unwrap_or(serde_json::Value::Object(serde_json::Map::new())),
         }
     }
 }
@@ -1840,7 +1981,10 @@ mod insights_tests {
         assert_eq!(e.comments, 12);
         assert_eq!(e.shares, 5);
         // Repeated reaction types are aggregated into the breakdown map.
-        assert_eq!(e.reactions, Some(serde_json::json!({ "like": 2, "love": 1 })));
+        assert_eq!(
+            e.reactions,
+            Some(serde_json::json!({ "like": 2, "love": 1 }))
+        );
     }
 
     #[test]
@@ -1922,7 +2066,10 @@ mod insights_tests {
         assert_eq!(comments[0].id, "c1");
         assert_eq!(comments[0].text, "Nice post");
         assert_eq!(comments[0].author_name.as_deref(), Some("Ada"));
-        assert_eq!(comments[0].author_avatar.as_deref(), Some("https://img/a.jpg"));
+        assert_eq!(
+            comments[0].author_avatar.as_deref(),
+            Some("https://img/a.jpg")
+        );
         assert_eq!(comments[0].replies.len(), 1);
         assert_eq!(comments[0].replies[0].author_name.as_deref(), Some("Bob"));
     }
@@ -2010,7 +2157,8 @@ mod insights_tests {
 
     #[test]
     fn parse_should_default_missing_linkedin_comment_fields() {
-        let comments = parse_linkedin_comments(&serde_json::json!({ "elements": [{ "id": "c1" }] }));
+        let comments =
+            parse_linkedin_comments(&serde_json::json!({ "elements": [{ "id": "c1" }] }));
         assert_eq!(comments[0].text, "");
         assert_eq!(comments[0].author_name, None);
         assert_eq!(comments[0].like_count, 0);
@@ -2041,7 +2189,10 @@ mod insights_tests {
 
     #[test]
     fn parse_should_read_no_linkedin_connections_from_error_body() {
-        assert!(parse_linkedin_connections(&serde_json::json!({ "message": "Not Found" }), "").is_empty());
+        assert!(
+            parse_linkedin_connections(&serde_json::json!({ "message": "Not Found" }), "")
+                .is_empty()
+        );
     }
 
     // ── pages_to_targets ─────────────────────────────────────
@@ -2107,7 +2258,13 @@ mod insights_tests {
 
     #[test]
     fn pending_statuses_are_distinguished_from_terminal_ones() {
-        for s in ["pending", "processing", "IN_PROGRESS", "accepted", "uploaded"] {
+        for s in [
+            "pending",
+            "processing",
+            "IN_PROGRESS",
+            "accepted",
+            "uploaded",
+        ] {
             assert!(result(s).is_pending(), "{s} should be pending");
             assert!(!result(s).is_terminal(), "{s} should not be terminal");
             assert!(!result(s).is_published(), "{s} should not be published");
@@ -2134,10 +2291,18 @@ mod insights_tests {
 
     #[async_trait]
     impl SocialProvider for FakeAsyncProvider {
-        fn identifier(&self) -> &'static str { "fake" }
-        fn name(&self) -> &'static str { "Fake" }
-        fn scopes(&self) -> Vec<String> { vec![] }
-        fn max_content_length(&self) -> usize { 280 }
+        fn identifier(&self) -> &'static str {
+            "fake"
+        }
+        fn name(&self) -> &'static str {
+            "Fake"
+        }
+        fn scopes(&self) -> Vec<String> {
+            vec![]
+        }
+        fn max_content_length(&self) -> usize {
+            280
+        }
 
         async fn generate_auth_url(
             &self,
@@ -2155,17 +2320,10 @@ mod insights_tests {
         ) -> Result<AuthToken, ProviderError> {
             unimplemented!()
         }
-        async fn refresh_token(
-            &self,
-            _r: &str,
-        ) -> Result<AuthToken, ProviderError> {
+        async fn refresh_token(&self, _r: &str) -> Result<AuthToken, ProviderError> {
             unimplemented!()
         }
-        async fn fetch_page_info(
-            &self,
-            _t: &str,
-            _p: &str,
-        ) -> Result<PageInfo, ProviderError> {
+        async fn fetch_page_info(&self, _t: &str, _p: &str) -> Result<PageInfo, ProviderError> {
             unimplemented!()
         }
         async fn publish(
@@ -2215,11 +2373,9 @@ mod insights_tests {
     async fn poll_until_terminal_keeps_polling_until_the_post_goes_live() {
         let p = fake(3, "published");
         let polls = Arc::clone(&p.polls);
-        let out = poll_until_terminal(Duration::ZERO, || {
-            p.check_post_status("", "post-1")
-        })
-        .await
-        .expect("should reach a terminal state");
+        let out = poll_until_terminal(Duration::ZERO, || p.check_post_status("", "post-1"))
+            .await
+            .expect("should reach a terminal state");
 
         assert!(out.is_published());
         assert_eq!(polls.load(Ordering::SeqCst), 4, "3 pending + 1 published");
@@ -2228,11 +2384,9 @@ mod insights_tests {
     #[tokio::test]
     async fn poll_until_terminal_surfaces_a_platform_failure_as_terminal() {
         let p = fake(2, "error");
-        let out = poll_until_terminal(Duration::ZERO, || {
-            p.check_post_status("", "post-1")
-        })
-        .await
-        .expect("failure is a terminal result, not a poll error");
+        let out = poll_until_terminal(Duration::ZERO, || p.check_post_status("", "post-1"))
+            .await
+            .expect("failure is a terminal result, not a poll error");
 
         assert!(!out.is_published(), "a failed post must not look live");
     }
@@ -2241,11 +2395,9 @@ mod insights_tests {
     async fn poll_until_terminal_gives_up_rather_than_reporting_a_pending_post_as_published() {
         let p = fake(u32::MAX, "published");
         let polls = Arc::clone(&p.polls);
-        let err = poll_until_terminal(Duration::ZERO, || {
-            p.check_post_status("", "post-1")
-        })
-        .await
-        .expect_err("an endlessly pending platform must not resolve");
+        let err = poll_until_terminal(Duration::ZERO, || p.check_post_status("", "post-1"))
+            .await
+            .expect_err("an endlessly pending platform must not resolve");
 
         assert!(matches!(err, ProviderError::Api(_)));
         assert_eq!(polls.load(Ordering::SeqCst), MAX_POLL_ATTEMPTS as usize);
@@ -2283,10 +2435,18 @@ mod insights_tests {
 
     #[async_trait]
     impl SocialProvider for SyncProvider {
-        fn identifier(&self) -> &'static str { "sync" }
-        fn name(&self) -> &'static str { "Sync" }
-        fn scopes(&self) -> Vec<String> { vec![] }
-        fn max_content_length(&self) -> usize { 280 }
+        fn identifier(&self) -> &'static str {
+            "sync"
+        }
+        fn name(&self) -> &'static str {
+            "Sync"
+        }
+        fn scopes(&self) -> Vec<String> {
+            vec![]
+        }
+        fn max_content_length(&self) -> usize {
+            280
+        }
 
         async fn generate_auth_url(
             &self,
@@ -2304,17 +2464,10 @@ mod insights_tests {
         ) -> Result<AuthToken, ProviderError> {
             unimplemented!()
         }
-        async fn refresh_token(
-            &self,
-            _r: &str,
-        ) -> Result<AuthToken, ProviderError> {
+        async fn refresh_token(&self, _r: &str) -> Result<AuthToken, ProviderError> {
             unimplemented!()
         }
-        async fn fetch_page_info(
-            &self,
-            _t: &str,
-            _p: &str,
-        ) -> Result<PageInfo, ProviderError> {
+        async fn fetch_page_info(&self, _t: &str, _p: &str) -> Result<PageInfo, ProviderError> {
             unimplemented!()
         }
         async fn publish(

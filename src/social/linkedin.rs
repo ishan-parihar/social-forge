@@ -15,9 +15,8 @@ pub struct LinkedInProvider {
 
 impl LinkedInProvider {
     pub fn new(config: &Config) -> Self {
-        let (client_id, client_secret) = config
-            .provider_credentials("linkedin")
-            .unwrap_or_default();
+        let (client_id, client_secret) =
+            config.provider_credentials("linkedin").unwrap_or_default();
         Self {
             client_id,
             client_secret,
@@ -35,7 +34,10 @@ impl LinkedInProvider {
 
     // ─── API Methods ──────────────────────────────────────────
 
-    pub async fn get_profile(&self, access_token: &str) -> Result<serde_json::Value, ProviderError> {
+    pub async fn get_profile(
+        &self,
+        access_token: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
         let url = "https://api.linkedin.com/v2/userinfo";
         let resp = self
             .http
@@ -99,9 +101,8 @@ impl LinkedInProvider {
         let limit = limit.clamp(1, 100);
         // URL-encode the author URN (contains colons like "urn:li:person:abc123")
         let encoded_author = urlencoding::encode(author_urn);
-        let url = format!(
-            "https://api.linkedin.com/v2/rest/posts?author={encoded_author}&count={limit}"
-        );
+        let url =
+            format!("https://api.linkedin.com/v2/rest/posts?author={encoded_author}&count={limit}");
         tracing::debug!("LinkedIn get_posts: calling {}", url);
         let resp = self
             .http
@@ -116,7 +117,8 @@ impl LinkedInProvider {
         if status.is_success() {
             tracing::debug!(
                 "LinkedIn get_posts SUCCESS — response keys: {:?}, elements count: {}",
-                json.as_object().map(|o| o.keys().cloned().collect::<Vec<_>>()),
+                json.as_object()
+                    .map(|o| o.keys().cloned().collect::<Vec<_>>()),
                 json["elements"].as_array().map(|a| a.len()).unwrap_or(0),
             );
             Ok(json)
@@ -133,7 +135,9 @@ impl LinkedInProvider {
                 .to_string();
             tracing::warn!(
                 "LinkedIn get_posts failed with status {}: {}. Full response: {:#}",
-                status, msg, json
+                status,
+                msg,
+                json
             );
             Err(ProviderError::Api(msg))
         }
@@ -206,9 +210,7 @@ impl LinkedInProvider {
         access_token: &str,
         post_urn: &str,
     ) -> Result<serde_json::Value, ProviderError> {
-        let url = format!(
-            "https://api.linkedin.com/v2/rest/socialActions/{post_urn}/comments"
-        );
+        let url = format!("https://api.linkedin.com/v2/rest/socialActions/{post_urn}/comments");
         let resp = self
             .http
             .get(&url)
@@ -256,7 +258,10 @@ impl LinkedInProvider {
             Err(ProviderError::TokenExpired)
         } else {
             let body = resp.text().await.unwrap_or_default();
-            Err(ProviderError::Api(format!("Delete failed ({}): {}", status, body)))
+            Err(ProviderError::Api(format!(
+                "Delete failed ({}): {}",
+                status, body
+            )))
         }
     }
 
@@ -265,9 +270,7 @@ impl LinkedInProvider {
         access_token: &str,
         post_urn: &str,
     ) -> Result<serde_json::Value, ProviderError> {
-        let url = format!(
-            "https://api.linkedin.com/v2/rest/socialActions/{post_urn}/likes"
-        );
+        let url = format!("https://api.linkedin.com/v2/rest/socialActions/{post_urn}/likes");
         let resp = self
             .http
             .get(&url)
@@ -283,7 +286,10 @@ impl LinkedInProvider {
         } else if status == 401 {
             Err(ProviderError::TokenExpired)
         } else {
-            let msg = json["message"].as_str().unwrap_or("LinkedIn API error").to_string();
+            let msg = json["message"]
+                .as_str()
+                .unwrap_or("LinkedIn API error")
+                .to_string();
             Err(ProviderError::Api(msg))
         }
     }
@@ -293,9 +299,7 @@ impl LinkedInProvider {
         access_token: &str,
         post_urn: &str,
     ) -> Result<serde_json::Value, ProviderError> {
-        let url = format!(
-            "https://api.linkedin.com/v2/rest/socialActions/{post_urn}/shares"
-        );
+        let url = format!("https://api.linkedin.com/v2/rest/socialActions/{post_urn}/shares");
         let resp = self
             .http
             .get(&url)
@@ -311,7 +315,10 @@ impl LinkedInProvider {
         } else if status == 401 {
             Err(ProviderError::TokenExpired)
         } else {
-            let msg = json["message"].as_str().unwrap_or("LinkedIn API error").to_string();
+            let msg = json["message"]
+                .as_str()
+                .unwrap_or("LinkedIn API error")
+                .to_string();
             Err(ProviderError::Api(msg))
         }
     }
@@ -323,9 +330,7 @@ impl LinkedInProvider {
         actor_urn: &str,
         message: &str,
     ) -> Result<serde_json::Value, ProviderError> {
-        let url = format!(
-            "https://api.linkedin.com/v2/rest/socialActions/{post_urn}/comments"
-        );
+        let url = format!("https://api.linkedin.com/v2/rest/socialActions/{post_urn}/comments");
         let body = serde_json::json!({
             "actor": actor_urn,
             "message": {
@@ -374,7 +379,9 @@ impl LinkedInProvider {
             "image" => "https://api.linkedin.com/rest/images",
             "video" => "https://api.linkedin.com/rest/videos",
             _ => {
-                tracing::debug!("LinkedIn: unsupported media type '{asset_type}' in URN {media_urn}");
+                tracing::debug!(
+                    "LinkedIn: unsupported media type '{asset_type}' in URN {media_urn}"
+                );
                 return None;
             }
         };
@@ -389,7 +396,8 @@ impl LinkedInProvider {
                 .header("X-Restli-Protocol-Version", "2.0.0")
                 .header("LinkedIn-Version", "202401")
                 .send(),
-        ).await;
+        )
+        .await;
 
         match resp {
             Ok(Ok(r)) if r.status().is_success() => {
@@ -399,9 +407,14 @@ impl LinkedInProvider {
                         return Some(dl.to_string());
                     }
                     // Or {"value": {"playbackStreams": [...]}}
-                    if let Some(streams) = json.pointer("/value/playbackStreams").and_then(|v| v.as_array()) {
+                    if let Some(streams) = json
+                        .pointer("/value/playbackStreams")
+                        .and_then(|v| v.as_array())
+                    {
                         if let Some(stream) = streams.first() {
-                            if let Some(s) = stream.get("streamLocations").and_then(|v| v.as_array()) {
+                            if let Some(s) =
+                                stream.get("streamLocations").and_then(|v| v.as_array())
+                            {
                                 if let Some(loc) = s.first() {
                                     if let Some(u) = loc.get("url").and_then(|v| v.as_str()) {
                                         return Some(u.to_string());
@@ -417,7 +430,10 @@ impl LinkedInProvider {
                 }
             }
             Ok(Ok(r)) => {
-                tracing::debug!("LinkedIn: resolve_media_url HTTP {} for {media_urn}", r.status());
+                tracing::debug!(
+                    "LinkedIn: resolve_media_url HTTP {} for {media_urn}",
+                    r.status()
+                );
             }
             Ok(Err(e)) => {
                 tracing::debug!("LinkedIn: resolve_media_url network error for {media_urn}: {e}");
@@ -491,7 +507,9 @@ impl SocialProvider for LinkedInProvider {
         let url = url::Url::parse_with_params(self.authorize_url(), &params)
             .map_err(|e| ProviderError::Auth(format!("URL parse: {e}")))?;
 
-        Ok(AuthUrlResponse { url: url.to_string() })
+        Ok(AuthUrlResponse {
+            url: url.to_string(),
+        })
     }
 
     async fn exchange_code(
@@ -509,7 +527,12 @@ impl SocialProvider for LinkedInProvider {
             ("client_secret", &self.client_secret),
         ];
 
-        let resp = self.http.post(self.token_url()).form(&params).send().await?;
+        let resp = self
+            .http
+            .post(self.token_url())
+            .form(&params)
+            .send()
+            .await?;
         let json: serde_json::Value = resp.json().await?;
 
         let access_token = json["access_token"]
@@ -532,7 +555,10 @@ impl SocialProvider for LinkedInProvider {
 
         let sub = profile["sub"].as_str().unwrap_or("").to_string();
         let name = profile["name"].as_str().unwrap_or("").to_string();
-        let username = profile["preferred_username"].as_str().unwrap_or("").to_string();
+        let username = profile["preferred_username"]
+            .as_str()
+            .unwrap_or("")
+            .to_string();
         let picture = profile["picture"].as_str().map(String::from);
 
         Ok(AuthToken {
@@ -546,10 +572,7 @@ impl SocialProvider for LinkedInProvider {
         })
     }
 
-    async fn refresh_token(
-        &self,
-        refresh_token: &str,
-    ) -> Result<AuthToken, ProviderError> {
+    async fn refresh_token(&self, refresh_token: &str) -> Result<AuthToken, ProviderError> {
         let params = [
             ("grant_type", "refresh_token"),
             ("refresh_token", refresh_token),
@@ -557,7 +580,12 @@ impl SocialProvider for LinkedInProvider {
             ("client_secret", &self.client_secret),
         ];
 
-        let resp = self.http.post(self.token_url()).form(&params).send().await?;
+        let resp = self
+            .http
+            .post(self.token_url())
+            .form(&params)
+            .send()
+            .await?;
         let json: serde_json::Value = resp.json().await?;
 
         let access_token = json["access_token"]
@@ -581,7 +609,10 @@ impl SocialProvider for LinkedInProvider {
             expires_in: json["expires_in"].as_u64().map(|v| v as u32),
             provider_user_id: profile["sub"].as_str().unwrap_or("").to_string(),
             name: profile["name"].as_str().unwrap_or("").to_string(),
-            username: profile["preferred_username"].as_str().unwrap_or("").to_string(),
+            username: profile["preferred_username"]
+                .as_str()
+                .unwrap_or("")
+                .to_string(),
             picture: profile["picture"].as_str().map(String::from),
         })
     }
@@ -615,10 +646,9 @@ impl SocialProvider for LinkedInProvider {
                  resource does not belong to this member."
                     .into(),
             ),
-            Some(ErrorKind::NotFound) => Some(
-                "LinkedIn post or member not found. Check the URN (urn:li:activity:…)."
-                    .into(),
-            ),
+            Some(ErrorKind::NotFound) => {
+                Some("LinkedIn post or member not found. Check the URN (urn:li:activity:…).".into())
+            }
             Some(ErrorKind::InvalidRequest) => Some(
                 "LinkedIn rejected the request as invalid. Check the post text length \
                  (3 000 chars) and that the author URN is a person URN."
@@ -786,9 +816,7 @@ impl SocialProvider for LinkedInProvider {
         platform_post_id: &str,
     ) -> Result<Vec<AnalyticsData>, ProviderError> {
         // Get social actions (likes, comments, shares counts) for a post
-        let url = format!(
-            "https://api.linkedin.com/v2/rest/socialActions/{platform_post_id}"
-        );
+        let url = format!("https://api.linkedin.com/v2/rest/socialActions/{platform_post_id}");
         let resp = self
             .http
             .get(&url)
@@ -805,7 +833,10 @@ impl SocialProvider for LinkedInProvider {
 
         let json: serde_json::Value = resp.json().await.unwrap_or_default();
         if !status.is_success() {
-            let msg = json["message"].as_str().unwrap_or("LinkedIn post analytics error").to_string();
+            let msg = json["message"]
+                .as_str()
+                .unwrap_or("LinkedIn post analytics error")
+                .to_string();
             let raw = format!("LinkedIn post analytics error (HTTP {status}): {msg}");
             return Err(ProviderError::Api(friendly_error(
                 self.map_error(&msg, status.as_u16()),
@@ -825,7 +856,10 @@ impl SocialProvider for LinkedInProvider {
             if let Some(n) = counts.get(key).and_then(|v| v.as_i64()) {
                 results.push(AnalyticsData {
                     label: label.into(),
-                    data: vec![AnalyticsDataPoint { total: n.to_string(), date: today.clone() }],
+                    data: vec![AnalyticsDataPoint {
+                        total: n.to_string(),
+                        date: today.clone(),
+                    }],
                     percentage_change: 0.0,
                 });
             }
@@ -846,9 +880,15 @@ impl SocialProvider for LinkedInProvider {
 
         // Fetch profile info for author details (name, handle, avatar)
         let profile = self.get_profile(access_token).await.ok();
-        let author_name = profile.as_ref().and_then(|p| p["name"].as_str().map(String::from));
-        let author_handle = profile.as_ref().and_then(|p| p["preferred_username"].as_str().map(String::from));
-        let author_avatar = profile.as_ref().and_then(|p| p["picture"].as_str().map(String::from));
+        let author_name = profile
+            .as_ref()
+            .and_then(|p| p["name"].as_str().map(String::from));
+        let author_handle = profile
+            .as_ref()
+            .and_then(|p| p["preferred_username"].as_str().map(String::from));
+        let author_avatar = profile
+            .as_ref()
+            .and_then(|p| p["picture"].as_str().map(String::from));
 
         tracing::info!(
             "LinkedIn get_recent_posts: {} elements in response, user_id={}",
@@ -861,7 +901,10 @@ impl SocialProvider for LinkedInProvider {
             for element in elements {
                 let post_urn = element["id"].as_str().unwrap_or("").to_string();
                 if post_urn.is_empty() {
-                    tracing::warn!("LinkedIn get_recent_posts: element has no id: {:#}", element);
+                    tracing::warn!(
+                        "LinkedIn get_recent_posts: element has no id: {:#}",
+                        element
+                    );
                     continue;
                 }
 
@@ -879,8 +922,9 @@ impl SocialProvider for LinkedInProvider {
                     .unwrap_or("")
                     .to_string();
 
-                let created_at = element["createdAt"].as_i64()
-                    .and_then(|ms| chrono::DateTime::from_timestamp_millis(ms))
+                let created_at = element["createdAt"]
+                    .as_i64()
+                    .and_then(chrono::DateTime::from_timestamp_millis)
                     .unwrap_or_else(chrono::Utc::now);
 
                 tracing::debug!(
@@ -900,12 +944,21 @@ impl SocialProvider for LinkedInProvider {
                         // Single media: content.media { id: "urn:li:image:xxx" }
                         if let Some(m) = content.get("media") {
                             if let Some(media_urn) = m.get("id").and_then(|v| v.as_str()) {
-                                if let Some(url) = self.resolve_media_url(access_token, media_urn).await {
+                                if let Some(url) =
+                                    self.resolve_media_url(access_token, media_urn).await
+                                {
                                     let is_video = media_urn.contains(":video:");
                                     media.push(MediaAttachment {
                                         url,
-                                        mime_type: if is_video { "video/mp4".to_string() } else { "image/jpeg".to_string() },
-                                        alt: m.get("title").and_then(|v| v.as_str()).map(String::from),
+                                        mime_type: if is_video {
+                                            "video/mp4".to_string()
+                                        } else {
+                                            "image/jpeg".to_string()
+                                        },
+                                        alt: m
+                                            .get("title")
+                                            .and_then(|v| v.as_str())
+                                            .map(String::from),
                                         poster_url: None,
                                     });
                                 }
@@ -914,10 +967,15 @@ impl SocialProvider for LinkedInProvider {
 
                         // Multi-image / carousel: content.multiImage array
                         if media.is_empty() {
-                            if let Some(multi) = content.get("multiImage").and_then(|v| v.as_array()) {
+                            if let Some(multi) =
+                                content.get("multiImage").and_then(|v| v.as_array())
+                            {
                                 for img in multi.iter().take(MAX_MEDIA_PER_POST) {
-                                    if let Some(media_urn) = img.get("id").and_then(|v| v.as_str()) {
-                                        if let Some(url) = self.resolve_media_url(access_token, media_urn).await {
+                                    if let Some(media_urn) = img.get("id").and_then(|v| v.as_str())
+                                    {
+                                        if let Some(url) =
+                                            self.resolve_media_url(access_token, media_urn).await
+                                        {
                                             media.push(MediaAttachment {
                                                 url,
                                                 mime_type: "image/jpeg".to_string(),
@@ -933,12 +991,17 @@ impl SocialProvider for LinkedInProvider {
                         // Article with thumbnail
                         if media.is_empty() {
                             if let Some(article) = content.get("article") {
-                                if let Some(thumb) = article.get("thumbnail").and_then(|v| v.as_str()) {
+                                if let Some(thumb) =
+                                    article.get("thumbnail").and_then(|v| v.as_str())
+                                {
                                     if !thumb.is_empty() {
                                         media.push(MediaAttachment {
                                             url: thumb.to_string(),
                                             mime_type: "image/jpeg".to_string(),
-                                            alt: article.get("title").and_then(|v| v.as_str()).map(String::from),
+                                            alt: article
+                                                .get("title")
+                                                .and_then(|v| v.as_str())
+                                                .map(String::from),
                                             poster_url: None,
                                         });
                                     }
@@ -950,11 +1013,16 @@ impl SocialProvider for LinkedInProvider {
                         if media.is_empty() {
                             if let Some(file) = content.get("singlefile") {
                                 if let Some(media_urn) = file.get("id").and_then(|v| v.as_str()) {
-                                    if let Some(url) = self.resolve_media_url(access_token, media_urn).await {
+                                    if let Some(url) =
+                                        self.resolve_media_url(access_token, media_urn).await
+                                    {
                                         media.push(MediaAttachment {
                                             url,
                                             mime_type: "application/pdf".to_string(),
-                                            alt: file.get("title").and_then(|v| v.as_str()).map(String::from),
+                                            alt: file
+                                                .get("title")
+                                                .and_then(|v| v.as_str())
+                                                .map(String::from),
                                             poster_url: None,
                                         });
                                     }
@@ -982,7 +1050,8 @@ impl SocialProvider for LinkedInProvider {
         } else if json["elements"].is_null() {
             tracing::warn!(
                 "LinkedIn get_recent_posts: 'elements' is null/absent. Response keys: {:?}",
-                json.as_object().map(|o| o.keys().cloned().collect::<Vec<_>>()),
+                json.as_object()
+                    .map(|o| o.keys().cloned().collect::<Vec<_>>()),
             );
         }
         Ok(posts)
@@ -994,9 +1063,7 @@ impl SocialProvider for LinkedInProvider {
         platform_post_id: &str,
     ) -> Result<Option<serde_json::Value>, ProviderError> {
         // Use the social actions API to get likes/comments/shares counts
-        let url = format!(
-            "https://api.linkedin.com/v2/rest/socialActions/{platform_post_id}"
-        );
+        let url = format!("https://api.linkedin.com/v2/rest/socialActions/{platform_post_id}");
         let resp = self
             .http
             .get(&url)
@@ -1064,7 +1131,9 @@ impl SocialProvider for LinkedInProvider {
         _access_token: &str,
         _page_id: &str,
     ) -> Result<PageInfo, ProviderError> {
-        Err(ProviderError::Api("LinkedIn personal profile does not support page selection".into()))
+        Err(ProviderError::Api(
+            "LinkedIn personal profile does not support page selection".into(),
+        ))
     }
 
     async fn reply_to_comment(
@@ -1230,8 +1299,7 @@ impl SocialProvider for LinkedInProvider {
                 let last_message = elem["body"].as_str().map(|s| s.to_string());
                 let last_message_at = elem["createdAt"]
                     .as_i64()
-                    .map(|ts| chrono::DateTime::from_timestamp(ts / 1000, 0))
-                    .flatten();
+                    .and_then(|ts| chrono::DateTime::from_timestamp(ts / 1000, 0));
 
                 conversations.push(super::DmConversation {
                     id,
@@ -1283,8 +1351,7 @@ impl SocialProvider for LinkedInProvider {
                 let content = elem["body"].as_str().unwrap_or("").to_string();
                 let created_at = elem["createdAt"]
                     .as_i64()
-                    .map(|ts| chrono::DateTime::from_timestamp(ts / 1000, 0))
-                    .flatten()
+                    .and_then(|ts| chrono::DateTime::from_timestamp(ts / 1000, 0))
                     .unwrap_or_else(chrono::Utc::now);
 
                 messages.push(super::DmMessage {
@@ -1365,11 +1432,23 @@ mod tests {
     #[tokio::test]
     async fn test_generate_auth_url_contains_params() {
         let provider = LinkedInProvider::new(&test_config());
-        let result = provider.generate_auth_url("test_state", "test_verifier", "http://localhost:3000/callback").await;
+        let result = provider
+            .generate_auth_url(
+                "test_state",
+                "test_verifier",
+                "http://localhost:3000/callback",
+            )
+            .await;
         let url = result.unwrap().url;
 
-        assert!(url.contains("response_type=code"), "should contain response_type=code");
-        assert!(url.contains("client_id=test_linkedin_id"), "should contain client_id");
+        assert!(
+            url.contains("response_type=code"),
+            "should contain response_type=code"
+        );
+        assert!(
+            url.contains("client_id=test_linkedin_id"),
+            "should contain client_id"
+        );
         assert!(url.contains("redirect_uri="), "should contain redirect_uri");
         assert!(url.contains("state=test_state"), "should contain state");
         assert!(url.contains("scope="), "should contain scope");

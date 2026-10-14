@@ -10,6 +10,19 @@ homepage = "https://github.com/ishan-parihar/social-forge"
 keywords = ["mcp", "social-media", "scheduler", "axum", "social-forge"]
 categories = ["command-line-utilities", "web-programming::http-server"]
 
+# Lint gate (audit 2026-10-14 §9). `clippy::all = deny` makes
+# `cargo clippy` itself fail on any default-clippy finding, so the CI
+# gate does not depend on remembering `-- -D warnings`. rustc's own
+# default warnings stay warnings for `cargo check`; CI denies those
+# separately (`-- -D warnings`).
+#
+# The audit also suggested redundant_clone/needless_collect at warn, but
+# those are nursery lints (off by default): they fire 59 more findings
+# beyond the audited 133 and escalate to errors under CI's `-D warnings`.
+# Revisit only with a dedicated cleanup pass.
+[lints.clippy]
+all = "deny"
+
 [[bin]]
 name = "social-forge"
 path = "src/main.rs"

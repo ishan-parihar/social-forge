@@ -17,8 +17,10 @@ fn text_message(text: &str) -> Option<wa_rs_proto::whatsapp::Message> {
         warn!("attempted to send empty WhatsApp message — skipped");
         return None;
     }
-    let mut msg = wa_rs_proto::whatsapp::Message::default();
-    msg.conversation = Some(text.to_owned());
+    let msg = wa_rs_proto::whatsapp::Message {
+        conversation: Some(text.to_owned()),
+        ..Default::default()
+    };
     Some(msg)
 }
 

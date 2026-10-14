@@ -186,17 +186,17 @@ pub fn start_scheduler(
                 // `make_interval(days => ?::int)` was a Postgres-only function
                 // whose bigint->int cast was itself load-bearing.)
                 let cutoff = Utc::now().timestamp() - retention_days * 86_400;
-                match sqlx::query(
-                    "DELETE FROM events_log WHERE created_at < ?",
-                )
-                .bind(cutoff)
-                .execute(&db)
-                .await
+                match sqlx::query("DELETE FROM events_log WHERE created_at < ?")
+                    .bind(cutoff)
+                    .execute(&db)
+                    .await
                 {
                     Ok(res) => {
                         let n = res.rows_affected();
                         if n > 0 {
-                            tracing::debug!("Cleaned up {n} events_log rows older than {retention_days} days");
+                            tracing::debug!(
+                                "Cleaned up {n} events_log rows older than {retention_days} days"
+                            );
                         }
                     }
                     Err(e) => {
@@ -215,37 +215,38 @@ async fn proactive_token_refresh(
     token_key: Option<[u8; 32]>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     const PROACTIVE_REFRESH_WINDOW_HOURS: i64 = 24;
-    
+
     // Get all providers that need cron refresh
     let providers_needing_refresh: Vec<_> = providers
         .list()
         .into_iter()
         .filter(|id| {
-            providers.get(id)
+            providers
+                .get(id)
                 .map(|p| p.needs_cron_refresh())
                 .unwrap_or(false)
         })
         .collect();
-    
+
     if providers_needing_refresh.is_empty() {
         return Ok(());
     }
-    
+
     tracing::info!(
         "Running proactive token refresh for {} provider(s): {:?}",
         providers_needing_refresh.len(),
         providers_needing_refresh
     );
-    
+
     let mut refreshed_count = 0;
     let mut failed_count = 0;
-    
+
     for provider_id in &providers_needing_refresh {
         let provider = match providers.get(provider_id) {
             Some(p) => p,
             None => continue,
         };
-        
+
         // Get integrations with tokens expiring within 24h
         let integrations = queries::get_integrations_needing_refresh(
             db,
@@ -253,23 +254,23 @@ async fn proactive_token_refresh(
             PROACTIVE_REFRESH_WINDOW_HOURS,
         )
         .await?;
-        
+
         if integrations.is_empty() {
             continue;
         }
-        
+
         tracing::info!(
             "Proactive refresh: {} {} integration(s) need refresh",
             integrations.len(),
             provider_id
         );
-        
+
         for integration in &integrations {
             // Skip if integration already has refresh_needed flag
             if integration.refresh_needed {
                 continue;
             }
-            
+
             let refresh_token = match &integration.refresh_token {
                 Some(rt) => rt,
                 None => {
@@ -277,14 +278,16 @@ async fn proactive_token_refresh(
                         "Integration {} has no refresh token, marking as refresh_needed",
                         integration.id
                     );
-                    if let Err(e) = queries::mark_integration_refresh_needed(db, integration.id).await {
+                    if let Err(e) =
+                        queries::mark_integration_refresh_needed(db, integration.id).await
+                    {
                         tracing::warn!("DB operation failed: {e}");
                     }
                     failed_count += 1;
                     continue;
                 }
             };
-            
+
             // Decrypt refresh token if encrypted
             let decrypted_refresh_token = if let Some(key) = token_key {
                 crate::crypto::decrypt_string(refresh_token, &key)
@@ -292,25 +295,32 @@ async fn proactive_token_refresh(
             } else {
                 refresh_token.clone()
             };
-            
+
             // Attempt token refresh
             match provider.refresh_token(&decrypted_refresh_token).await {
                 Ok(new_token) => {
                     // Encrypt new tokens if encryption is enabled
                     let (access_token, refresh_token_to_store) = if let Some(key) = token_key {
-                        let enc_access = crate::crypto::encrypt_string(&new_token.access_token, &key)?;
-                        let enc_refresh = new_token.refresh_token.as_ref()
+                        let enc_access =
+                            crate::crypto::encrypt_string(&new_token.access_token, &key)?;
+                        let enc_refresh = new_token
+                            .refresh_token
+                            .as_ref()
                             .map(|rt| crate::crypto::encrypt_string(rt, &key))
                             .transpose()?;
                         (enc_access, enc_refresh)
                     } else {
-                        (new_token.access_token.clone(), new_token.refresh_token.clone())
+                        (
+                            new_token.access_token.clone(),
+                            new_token.refresh_token.clone(),
+                        )
                     };
-                    
+
                     // Atomic persistence of the rotating refresh token
-                    let expires_at = new_token.expires_in
+                    let expires_at = new_token
+                        .expires_in
                         .map(|e| Utc::now() + chrono::Duration::seconds(e as i64));
-                    
+
                     queries::update_integration_token(
                         db,
                         integration.id,
@@ -319,18 +329,18 @@ async fn proactive_token_refresh(
                         expires_at,
                     )
                     .await?;
-                    
+
                     tracing::debug!(
                         "Proactively refreshed token for {} integration {}",
                         provider_id,
                         integration.id
                     );
-                    
+
                     // LinkedIn needs 10s propagation delay after refresh
                     if provider.refresh_wait() {
                         tokio::time::sleep(Duration::from_secs(10)).await;
                     }
-                    
+
                     refreshed_count += 1;
                 }
                 Err(e) => {
@@ -340,7 +350,9 @@ async fn proactive_token_refresh(
                         integration.id
                     );
                     // Mark as needing reconnection
-                    if let Err(e) = queries::mark_integration_refresh_needed(db, integration.id).await {
+                    if let Err(e) =
+                        queries::mark_integration_refresh_needed(db, integration.id).await
+                    {
                         tracing::warn!("DB operation failed: {e}");
                     }
                     failed_count += 1;
@@ -348,7 +360,7 @@ async fn proactive_token_refresh(
             }
         }
     }
-    
+
     if refreshed_count > 0 || failed_count > 0 {
         tracing::info!(
             "Proactive token refresh complete: {} refreshed, {} failed",
@@ -356,7 +368,7 @@ async fn proactive_token_refresh(
             failed_count
         );
     }
-    
+
     Ok(())
 }
 
@@ -482,13 +494,10 @@ async fn process_due_posts(
             // spawned task so the scheduler doesn't block on a slow
             // provider. The permit is released automatically when the
             // task exits (success or failure).
+            // Semaphore closed — shouldn't happen, but proceed
+            // without throttling rather than skipping the post.
             let _permit = match semaphore.as_ref() {
-                Some(sem) => match sem.clone().acquire_owned().await {
-                    Ok(p) => Some(p),
-                    // Semaphore closed — shouldn't happen, but proceed
-                    // without throttling rather than skipping the post.
-                    Err(_) => None,
-                },
+                Some(sem) => sem.clone().acquire_owned().await.ok(),
                 None => None,
             };
 
@@ -509,7 +518,9 @@ async fn process_due_posts(
                     });
                     bcast.send("post_failed", &fail_payload);
                     // v23: persist to events_log for the dashboard.
-                    let _ = bcast.send_and_log(&db_clone, post_clone.user_id, "post_failed", &fail_payload).await;
+                    let _ = bcast
+                        .send_and_log(&db_clone, post_clone.user_id, "post_failed", &fail_payload)
+                        .await;
                     // Publish failed — record failure in circuit breaker.
                     // After N consecutive failures, the circuit opens and
                     // subsequent posts for this provider are skipped.
@@ -526,7 +537,7 @@ async fn process_due_posts(
     // the current one. If a publish takes longer than one tick
     // interval, the next tick simply starts later — no unbounded
     // task growth.
-    while join_set.len() > 0 {
+    while !join_set.is_empty() {
         // Use a timeout so we don't block forever if a single publish
         // hangs (e.g. a provider API that never responds). 5 minutes
         // is generous; most publishes complete in <10s.
@@ -649,7 +660,8 @@ async fn drain_publish_outbox(db: &SqlitePool) -> Result<(), sqlx::Error> {
                     .await;
                     tracing::info!(
                         "Outbox drain: applied publish result for post {} (platform_post_id={})",
-                        row.post_id, platform_post_id
+                        row.post_id,
+                        platform_post_id
                     );
                 }
                 Err(e) => {
@@ -786,13 +798,17 @@ async fn publish_post(
     let mut access_token = resolve_token(db, provider, post, token_key).await?;
 
     // Build post content - resolve media URLs to absolute paths
-    let media: Vec<crate::social::MediaAttachment> = serde_json::from_value(post.media.clone()).unwrap_or_default();
+    let media: Vec<crate::social::MediaAttachment> =
+        serde_json::from_value(post.media.clone()).unwrap_or_default();
     let app_url = std::env::var("APP_URL").unwrap_or_else(|_| "https://localhost:6543".into());
-    let resolved_media: Vec<crate::social::MediaAttachment> = media.into_iter().map(|m| {
-        // Resolve relative media URLs to absolute URLs for providers that need them
-        // (Instagram, Facebook, Threads, Reddit require absolute URLs)
-        provider.resolve_media_url(&m, &app_url)
-    }).collect();
+    let resolved_media: Vec<crate::social::MediaAttachment> = media
+        .into_iter()
+        .map(|m| {
+            // Resolve relative media URLs to absolute URLs for providers that need them
+            // (Instagram, Facebook, Threads, Reddit require absolute URLs)
+            provider.resolve_media_url(&m, &app_url)
+        })
+        .collect();
 
     // ── Thread linking ──────────────────────────────────────
     // If this post is part of a thread (has a group_id and sequence > 1),
@@ -822,7 +838,9 @@ async fn publish_post(
                 Ok(Some(Some(pid))) => {
                     tracing::info!(
                         "Thread link: post {} (seq {}) replying to platform_post_id {}",
-                        post.id, seq, pid
+                        post.id,
+                        seq,
+                        pid
                     );
                     Some(pid)
                 }
@@ -867,8 +885,11 @@ async fn publish_post(
         // Shorten URLs if Dub.co is configured
         if let Ok(api_key) = std::env::var("DUB_CO_API_KEY") {
             if !api_key.is_empty() && crate::services::short_link::has_urls(&c) {
-                let workspace = std::env::var("DUB_CO_WORKSPACE").ok().filter(|s| !s.is_empty());
-                c = crate::services::short_link::shorten_urls(&c, &api_key, workspace.as_deref()).await;
+                let workspace = std::env::var("DUB_CO_WORKSPACE")
+                    .ok()
+                    .filter(|s| !s.is_empty());
+                c = crate::services::short_link::shorten_urls(&c, &api_key, workspace.as_deref())
+                    .await;
             }
         }
 
@@ -892,7 +913,9 @@ async fn publish_post(
         // publishing. This allows spaced-out thread publishing (e.g.
         // "part 1, wait 30min, part 2"). The delay is stored in the
         // post's settings JSONB under 'delay_minutes'.
-        delay_minutes: post.settings.get("delay_minutes")
+        delay_minutes: post
+            .settings
+            .get("delay_minutes")
             .and_then(|v| v.as_u64())
             .map(|v| v as u32),
     };
@@ -904,7 +927,9 @@ async fn publish_post(
             if delay > 0 {
                 tracing::info!(
                     "Thread delay: sleeping {} minutes before publishing post {} (seq {})",
-                    delay, post.id, post.sequence
+                    delay,
+                    post.id,
+                    post.sequence
                 );
                 tokio::time::sleep(Duration::from_secs(delay as u64 * 60)).await;
             }
@@ -912,10 +937,12 @@ async fn publish_post(
     }
 
     // Validate content against provider limits before publishing
-    provider.validate_post(&content)
+    provider
+        .validate_post(&content)
         .map_err(|e| format!("Content validation failed: {e}"))?;
 
-    provider.validate_media(&content)
+    provider
+        .validate_media(&content)
         .map_err(|e| format!("Media validation failed: {e}"))?;
 
     // Publish with retry
@@ -940,17 +967,23 @@ async fn publish_post(
                 let result = if result.is_pending() {
                     tracing::info!(
                         "Post {} accepted-but-pending on {}; polling until terminal",
-                        post.id, post.provider_identifier
+                        post.id,
+                        post.provider_identifier
                     );
                     match provider
-                        .finalize_post(&access_token, &result.platform_post_id, PENDING_POLL_INTERVAL)
+                        .finalize_post(
+                            &access_token,
+                            &result.platform_post_id,
+                            PENDING_POLL_INTERVAL,
+                        )
                         .await
                     {
                         Ok(settled) => settled,
                         Err(e) => {
                             tracing::error!(
                                 "Post {} never finished publishing on {}: {e}",
-                                post.id, post.provider_identifier
+                                post.id,
+                                post.provider_identifier
                             );
                             last_error = Some(crate::error::annotate_scope_loss(
                                 &post.provider_identifier,
@@ -969,7 +1002,9 @@ async fn publish_post(
                     // published.
                     tracing::error!(
                         "Post {} on {} ended in terminal state '{}', not published",
-                        post.id, post.provider_identifier, result.status
+                        post.id,
+                        post.provider_identifier,
+                        result.status
                     );
                     last_error = Some(format!(
                         "{} rejected the post after accepting it (status: {})",
@@ -1005,8 +1040,13 @@ async fn publish_post(
                         Some(&result.platform_post_id),
                         result.platform_post_url.as_deref(),
                         None,
-                    ).await {
-                        Ok(_) => { db_updated = true; break; }
+                    )
+                    .await
+                    {
+                        Ok(_) => {
+                            db_updated = true;
+                            break;
+                        }
                         Err(e) => {
                             tracing::warn!(
                                 "Post {} published on {} but DB update failed (attempt {}/3): {}. Retrying in 1s...",
@@ -1051,7 +1091,8 @@ async fn publish_post(
                     Some(&result.platform_post_id),
                     result.platform_post_url.as_deref(),
                     None,
-                ).await;
+                )
+                .await;
 
                 // Record successful attempt in audit trail.
                 let _ = queries::record_publish_attempt(
@@ -1061,7 +1102,8 @@ async fn publish_post(
                     "success",
                     None,
                     attempt_start,
-                ).await;
+                )
+                .await;
 
                 tracing::info!(
                     "Post {} published on {}: {}",
@@ -1080,7 +1122,9 @@ async fn publish_post(
                 // v23: persist to events_log so the dashboard's "Recent
                 // Activity" widget shows publishes even if no SSE client
                 // was connected at the time.
-                let _ = broadcaster.send_and_log(db, post.user_id, "post_published", &event_payload).await;
+                let _ = broadcaster
+                    .send_and_log(db, post.user_id, "post_published", &event_payload)
+                    .await;
 
                 // Fire webhooks for post.published event (best-effort,
                 // non-blocking — runs in a detached task so it doesn't
@@ -1102,12 +1146,15 @@ async fn publish_post(
                             settings: serde_json::json!({}),
                             ..Default::default()
                         };
-                        if let Err(e) = provider.comment(
-                            &access_token,
-                            &result.platform_post_id,
-                            None,
-                            &comment_content,
-                        ).await {
+                        if let Err(e) = provider
+                            .comment(
+                                &access_token,
+                                &result.platform_post_id,
+                                None,
+                                &comment_content,
+                            )
+                            .await
+                        {
                             tracing::warn!("Failed to post first_comment for {}: {e}", post.id);
                         }
                     }
@@ -1116,22 +1163,26 @@ async fn publish_post(
                 return Ok(());
             }
             Err(ProviderError::TokenExpired) if !did_refresh => {
-                tracing::warn!("Token expired for post {} (attempt {}). Refreshing...", post.id, attempt);
+                tracing::warn!(
+                    "Token expired for post {} (attempt {}). Refreshing...",
+                    post.id,
+                    attempt
+                );
                 did_refresh = true;
-                let new_token = match provider.refresh_token(
-                    post.refresh_token.as_deref().unwrap_or(""),
-                ).await {
+                let new_token = match provider
+                    .refresh_token(post.refresh_token.as_deref().unwrap_or(""))
+                    .await
+                {
                     Ok(t) => {
-                                        // Encrypt token before storing if encryption key is configured
+                        // Encrypt token before storing if encryption key is configured
                         let enc_access_token = if let Some(ref k) = token_key {
-                            crate::crypto::encrypt_string(&t.access_token, k)
-                                .unwrap_or_else(|e| {
-                                    tracing::warn!(
-                                        "Failed to encrypt refreshed token for integration {}: {e}",
-                                        post.integration_id
-                                    );
-                                    t.access_token.clone()
-                                })
+                            crate::crypto::encrypt_string(&t.access_token, k).unwrap_or_else(|e| {
+                                tracing::warn!(
+                                    "Failed to encrypt refreshed token for integration {}: {e}",
+                                    post.integration_id
+                                );
+                                t.access_token.clone()
+                            })
                         } else {
                             t.access_token.clone()
                         };
@@ -1140,15 +1191,18 @@ async fn publish_post(
                             post.integration_id,
                             &enc_access_token,
                             t.refresh_token.as_deref(),
-                            t.expires_in.map(|e| Utc::now() + chrono::Duration::seconds(e as i64)),
-                        ).await?;
+                            t.expires_in
+                                .map(|e| Utc::now() + chrono::Duration::seconds(e as i64)),
+                        )
+                        .await?;
                         t.access_token
                     }
                     Err(e) => {
                         tracing::error!("Token refresh failed for post {}: {e}", post.id);
                         // Mark the integration as needing re-auth so the
                         // user gets a UI prompt to reconnect.
-                        let _ = queries::mark_integration_refresh_needed(db, post.integration_id).await;
+                        let _ =
+                            queries::mark_integration_refresh_needed(db, post.integration_id).await;
                         // A lost grant gets an actionable message; every other
                         // refresh failure keeps its original text.
                         return Err(crate::error::annotate_scope_loss(
@@ -1178,7 +1232,10 @@ async fn publish_post(
                 let wait = base + jitter;
                 tracing::warn!(
                     "Rate limited for post {} (attempt {}): {}. Backing off {}s",
-                    post.id, attempt, msg, wait
+                    post.id,
+                    attempt,
+                    msg,
+                    wait
                 );
                 last_error = Some(msg.clone());
                 tokio::time::sleep(Duration::from_secs(wait)).await;
@@ -1194,7 +1251,10 @@ async fn publish_post(
                 let err_str = e.to_string();
                 tracing::warn!(
                     "Network error for post {} (attempt {}): {}. Retrying in {}s",
-                    post.id, attempt, err_str, wait
+                    post.id,
+                    attempt,
+                    err_str,
+                    wait
                 );
                 last_error = Some(err_str);
                 tokio::time::sleep(Duration::from_secs(wait)).await;
@@ -1221,7 +1281,8 @@ async fn publish_post(
         "failed",
         last_error.as_deref(),
         Utc::now(),
-    ).await;
+    )
+    .await;
 
     // Fire webhook for post.failed before returning the error.
     let fail_payload = serde_json::json!({
@@ -1231,7 +1292,9 @@ async fn publish_post(
     });
     dispatch_webhook_background(db, post.user_id, "post.failed", &fail_payload);
 
-    Err(last_error.unwrap_or_else(|| "Max retries exceeded".to_string()).into())
+    Err(last_error
+        .unwrap_or_else(|| "Max retries exceeded".to_string())
+        .into())
 }
 
 /// Fire a webhook event in the background without blocking the caller.
@@ -1241,9 +1304,13 @@ async fn publish_post(
 /// have — it only has `&SqlitePool`). Instead we inline a minimal version
 /// that does the same DB query + HTTP send, spawned as a detached
 /// task so the scheduler tick isn't delayed by webhook delivery.
-fn dispatch_webhook_background(db: &SqlitePool, user_id: uuid::Uuid, event_type: &str, payload: &serde_json::Value) {
+fn dispatch_webhook_background(
+    db: &SqlitePool,
+    user_id: uuid::Uuid,
+    event_type: &str,
+    payload: &serde_json::Value,
+) {
     let db = db.clone();
-    let user_id = user_id;
     let event_type = event_type.to_string();
     let payload = payload.clone();
     tokio::spawn(async move {
@@ -1274,7 +1341,8 @@ fn dispatch_webhook_background(db: &SqlitePool, user_id: uuid::Uuid, event_type:
                 secret.as_deref(),
                 &event_type,
                 &payload,
-            ).await;
+            )
+            .await;
 
             let (status, status_code, response_body) = match &result {
                 Ok((code, body)) => {
@@ -1337,15 +1405,14 @@ async fn resolve_token(
 
         // Encrypt before storing if encryption key is configured.
         let enc_access_token = if let Some(ref k) = token_key {
-            crate::crypto::encrypt_string(&token.access_token, k)
-                .unwrap_or_else(|e| {
-                    tracing::warn!(
-                        "Failed to encrypt refreshed access token for integration {}: {e}. \
+            crate::crypto::encrypt_string(&token.access_token, k).unwrap_or_else(|e| {
+                tracing::warn!(
+                    "Failed to encrypt refreshed access token for integration {}: {e}. \
                          Storing unencrypted (downgrade).",
-                        post.integration_id
-                    );
-                    token.access_token.clone()
-                })
+                    post.integration_id
+                );
+                token.access_token.clone()
+            })
         } else {
             token.access_token.clone()
         };
@@ -1369,7 +1436,9 @@ async fn resolve_token(
 
 /// Mark a post as error
 async fn mark_post_error(db: &SqlitePool, post_id: uuid::Uuid, error: &str) {
-    if let Err(e) = queries::update_post_state(db, post_id, PostState::Error, None, None, Some(error)).await {
+    if let Err(e) =
+        queries::update_post_state(db, post_id, PostState::Error, None, None, Some(error)).await
+    {
         tracing::error!("Failed to mark post {post_id} as error: {e}");
     }
 }
@@ -1427,11 +1496,19 @@ async fn check_posting_gaps(
         };
         let overdue_label = format_overdue(overdue);
         let preview = post.content_preview.trim();
-        let preview = if preview.is_empty() { "(no text)" } else { preview };
+        let preview = if preview.is_empty() {
+            "(no text)"
+        } else {
+            preview
+        };
 
         tracing::warn!(
             "Posting gap: post {} for user {} is still '{}' {} past its scheduled_at — \"{}\"",
-            post.id, post.user_id, post.state, overdue_label, preview
+            post.id,
+            post.user_id,
+            post.state,
+            overdue_label,
+            preview
         );
 
         let title = format!("Post not published ({overdue_label} late)");
@@ -1456,7 +1533,10 @@ async fn check_posting_gaps(
         {
             // A failed alert must not stall the rest of the batch — the
             // next tick retries it.
-            tracing::warn!("Failed to raise posting-gap notification for post {}: {e}", post.id);
+            tracing::warn!(
+                "Failed to raise posting-gap notification for post {}: {e}",
+                post.id
+            );
         }
     }
 
@@ -1482,27 +1562,31 @@ async fn update_streak_on_publish(db: &SqlitePool, user_id: uuid::Uuid) {
     match row {
         Ok(Some(r)) => {
             use sqlx::Row;
-            let streak_since: Option<chrono::DateTime<chrono::Utc>> = r.try_get("streak_since").ok();
+            let streak_since: Option<chrono::DateTime<chrono::Utc>> =
+                r.try_get("streak_since").ok();
             let streak_days: i32 = r.try_get("streak_days").unwrap_or(0);
 
             if streak_since.is_none() {
                 // First ever post
-                let _ = sqlx::query("UPDATE users SET streak_since = ?, streak_days = 1 WHERE id = ?")
-                    .bind(now)
-                    .bind(user_id)
-                    .execute(db)
-                    .await;
+                let _ =
+                    sqlx::query("UPDATE users SET streak_since = ?, streak_days = 1 WHERE id = ?")
+                        .bind(now)
+                        .bind(user_id)
+                        .execute(db)
+                        .await;
                 tracing::info!("Streak: first post for user {user_id}, streak = 1");
             } else if let Some(since) = streak_since {
                 let elapsed = now - since;
                 if elapsed.num_hours() >= 24 {
                     let new_streak = streak_days + 1;
-                    let _ = sqlx::query("UPDATE users SET streak_since = ?, streak_days = ? WHERE id = ?")
-                        .bind(now)
-                        .bind(new_streak)
-                        .bind(user_id)
-                        .execute(db)
-                        .await;
+                    let _ = sqlx::query(
+                        "UPDATE users SET streak_since = ?, streak_days = ? WHERE id = ?",
+                    )
+                    .bind(now)
+                    .bind(new_streak)
+                    .bind(user_id)
+                    .execute(db)
+                    .await;
                     tracing::info!("Streak: user {user_id} now at {new_streak} days");
                 }
             }
@@ -1535,7 +1619,9 @@ pub fn start_streak_reset(db: SqlitePool, shutdown: tokio::sync::watch::Receiver
     );
 }
 
-async fn reset_expired_streaks(db: &SqlitePool) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn reset_expired_streaks(
+    db: &SqlitePool,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Reset streaks where no post has been published in the last 48 hours.
     // (48h gives a grace period so a streak isn't lost if you post at 11pm
     // one day and 1am the next — those are ~2h apart but count as 2 days.)
@@ -1549,7 +1635,10 @@ async fn reset_expired_streaks(db: &SqlitePool) -> Result<(), Box<dyn std::error
     .await?;
 
     if result.rows_affected() > 0 {
-        tracing::info!("Streak: reset {} user(s) with expired streaks", result.rows_affected());
+        tracing::info!(
+            "Streak: reset {} user(s) with expired streaks",
+            result.rows_affected()
+        );
     }
     Ok(())
 }
@@ -1589,7 +1678,11 @@ pub async fn run_analytics_cache_refresh(
     }
 }
 
-async fn refresh_cache_cycle(db: &SqlitePool, providers: &ProviderRegistry, token_key: Option<[u8; 32]>) {
+async fn refresh_cache_cycle(
+    db: &SqlitePool,
+    providers: &ProviderRegistry,
+    token_key: Option<[u8; 32]>,
+) {
     // Clean up expired entries first
     if let Ok(count) = queries::delete_expired_analytics_cache(db).await {
         if count > 0 {
@@ -1618,7 +1711,8 @@ async fn refresh_cache_cycle(db: &SqlitePool, providers: &ProviderRegistry, toke
             if integration.refresh_needed {
                 tracing::debug!(
                     "Skipping analytics refresh for user {} provider {}: refresh_needed flag set",
-                    user.id, integration.provider_identifier
+                    user.id,
+                    integration.provider_identifier
                 );
                 continue;
             }
@@ -1630,12 +1724,10 @@ async fn refresh_cache_cycle(db: &SqlitePool, providers: &ProviderRegistry, toke
 
             // Decrypt token if encryption is enabled — without this,
             // every analytics call 401s when TOKEN_ENCRYPTION_KEY is set.
-            let tok = crate::crypto::maybe_decrypt_token(&integration.access_token, token_key.as_ref());
+            let tok =
+                crate::crypto::maybe_decrypt_token(&integration.access_token, token_key.as_ref());
 
-            match provider
-                .analytics(&tok, &integration.internal_id, 7)
-                .await
-            {
+            match provider.analytics(&tok, &integration.internal_id, 7).await {
                 Ok(analytics) => {
                     let data = serde_json::to_value(&analytics).unwrap_or(serde_json::Value::Null);
                     if let Err(e) = queries::upsert_analytics_cache(

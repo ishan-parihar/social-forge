@@ -6,10 +6,10 @@ use std::time::Duration;
 use uuid::Uuid;
 
 use crate::crypto;
-use sqlx::SqlitePool;
 use crate::realtime::Broadcaster;
 use crate::social::registry::ProviderRegistry;
-use crate::social::{SocialProvider, ProviderError};
+use crate::social::{ProviderError, SocialProvider};
+use sqlx::SqlitePool;
 
 /// Default interval between full refresh cycles (seconds)
 const DEFAULT_REFRESH_INTERVAL_SECS: u64 = 300; // 5 minutes
@@ -48,9 +48,8 @@ pub fn start_feed_refresher(
         let mut interval = tokio::time::interval(Duration::from_secs(interval_secs));
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
-        let mut engagement_interval = tokio::time::interval(Duration::from_secs(
-            DEFAULT_ENGAGEMENT_INTERVAL_SECS,
-        ));
+        let mut engagement_interval =
+            tokio::time::interval(Duration::from_secs(DEFAULT_ENGAGEMENT_INTERVAL_SECS));
         engagement_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
         loop {
@@ -93,32 +92,57 @@ async fn try_refresh_and_fetch(
 ) -> Option<Vec<crate::social::ExternalPostData>> {
     tracing::info!(
         "Token expired for integration {} ({}), attempting auto-refresh...",
-        integration.id, integration.provider_identifier
+        integration.id,
+        integration.provider_identifier
     );
     let refresh_token = integration.refresh_token.as_ref()?;
     let rt = crypto::maybe_decrypt_token(refresh_token, token_key.as_ref());
     let new_token = match provider.refresh_token(&rt).await {
         Ok(t) => t,
         Err(e) => {
-            tracing::warn!("Token refresh failed for {} ({}): {e}", integration.id, integration.provider_identifier);
+            tracing::warn!(
+                "Token refresh failed for {} ({}): {e}",
+                integration.id,
+                integration.provider_identifier
+            );
             return None;
         }
     };
     let new_access = new_token.access_token.clone();
-    let expires_at = new_token.expires_in.map(|e| {
-        chrono::Utc::now() + chrono::Duration::seconds(e as i64)
-    });
+    let expires_at = new_token
+        .expires_in
+        .map(|e| chrono::Utc::now() + chrono::Duration::seconds(e as i64));
     if let Err(e) = crate::db::queries::update_integration_token(
-        db, integration.id, &new_access, new_token.refresh_token.as_deref(), expires_at,
-    ).await {
-        tracing::warn!("Failed to update refreshed token for {}: {e}", integration.id);
+        db,
+        integration.id,
+        &new_access,
+        new_token.refresh_token.as_deref(),
+        expires_at,
+    )
+    .await
+    {
+        tracing::warn!(
+            "Failed to update refreshed token for {}: {e}",
+            integration.id
+        );
         return None;
     }
-    tracing::info!("Token refreshed successfully for {} ({})", integration.id, integration.provider_identifier);
-    match provider.get_recent_posts(&new_access, &integration.internal_id, RECENT_POSTS_LIMIT).await {
+    tracing::info!(
+        "Token refreshed successfully for {} ({})",
+        integration.id,
+        integration.provider_identifier
+    );
+    match provider
+        .get_recent_posts(&new_access, &integration.internal_id, RECENT_POSTS_LIMIT)
+        .await
+    {
         Ok(p) => Some(p),
         Err(e) => {
-            tracing::warn!("Failed to fetch posts after refresh for {} ({}): {e}", integration.id, integration.provider_identifier);
+            tracing::warn!(
+                "Failed to fetch posts after refresh for {} ({}): {e}",
+                integration.id,
+                integration.provider_identifier
+            );
             None
         }
     }
@@ -171,9 +195,13 @@ pub async fn refresh_user_posts(
                 if msg.contains("No virtual resource") || msg.contains("RESOURCE_NOT_FOUND") {
                     tracing::warn!(
                         "Integration {} ({}) lacks API scope — marking refresh_needed",
-                        integration.id, integration.provider_identifier
+                        integration.id,
+                        integration.provider_identifier
                     );
-                    if let Err(e2) = crate::db::queries::mark_integration_refresh_needed(db, integration.id).await {
+                    if let Err(e2) =
+                        crate::db::queries::mark_integration_refresh_needed(db, integration.id)
+                            .await
+                    {
                         tracing::warn!("Failed to mark refresh_needed: {e2}");
                     }
                 } else {
@@ -210,10 +238,7 @@ pub async fn refresh_user_posts(
                 Ok(Some(_)) => new_count += 1,
                 Ok(None) => {}
                 Err(e) => {
-                    tracing::warn!(
-                        "Failed to import post {}: {e}",
-                        post.platform_post_id
-                    );
+                    tracing::warn!("Failed to import post {}: {e}", post.platform_post_id);
                 }
             }
         }
@@ -283,9 +308,13 @@ async fn refresh_all_posts(
                 if msg.contains("No virtual resource") || msg.contains("RESOURCE_NOT_FOUND") {
                     tracing::warn!(
                         "Integration {} ({}) lacks API scope — marking refresh_needed",
-                        integration.id, integration.provider_identifier
+                        integration.id,
+                        integration.provider_identifier
                     );
-                    if let Err(e2) = crate::db::queries::mark_integration_refresh_needed(db, integration.id).await {
+                    if let Err(e2) =
+                        crate::db::queries::mark_integration_refresh_needed(db, integration.id)
+                            .await
+                    {
                         tracing::warn!("Failed to mark refresh_needed: {e2}");
                     }
                 } else {
@@ -332,10 +361,7 @@ async fn refresh_all_posts(
                 Ok(Some(_)) => new_count += 1,
                 Ok(None) => {} // already exists
                 Err(e) => {
-                    tracing::warn!(
-                        "Failed to import post {}: {e}",
-                        post.platform_post_id
-                    );
+                    tracing::warn!("Failed to import post {}: {e}", post.platform_post_id);
                 }
             }
         }
@@ -384,9 +410,13 @@ async fn refresh_all_engagement(
         let token = crypto::maybe_decrypt_token(&integration.access_token, token_key.as_ref());
 
         // Fetch recent posts from DB to get their platform_post_ids
-        let recent_posts =
-            crate::db::queries::list_external_posts(db, integration.user_id, &integration.provider_identifier, 50)
-                .await?;
+        let recent_posts = crate::db::queries::list_external_posts(
+            db,
+            integration.user_id,
+            &integration.provider_identifier,
+            50,
+        )
+        .await?;
 
         for post in &recent_posts {
             // Fetch normalized engagement data from provider
@@ -471,7 +501,10 @@ async fn refresh_all_comments(
 
         for post in &recent_posts {
             // Fetch comments from the provider.
-            let comments = match provider.get_post_comments(&token, &post.platform_post_id).await {
+            let comments = match provider
+                .get_post_comments(&token, &post.platform_post_id)
+                .await
+            {
                 Ok(c) => c,
                 Err(e) => {
                     // Don't log at warn for every post — many providers
@@ -493,7 +526,15 @@ async fn refresh_all_comments(
             // Convert provider comments to the tuple shape upsert_cached_comments expects:
             // (comment_id, text, author_name, author_handle, author_avatar, created_at)
             // Note: CommentData doesn't have author_handle, so we pass None for that.
-            let batch: Vec<(String, String, Option<String>, Option<String>, Option<String>, chrono::DateTime<chrono::Utc>)> = comments
+            type CacheRow = (
+                String,
+                String,
+                Option<String>,
+                Option<String>,
+                Option<String>,
+                chrono::DateTime<chrono::Utc>,
+            );
+            let batch: Vec<CacheRow> = comments
                 .into_iter()
                 .map(|c| {
                     (
@@ -518,10 +559,7 @@ async fn refresh_all_comments(
             {
                 Ok(_) => total_cached += batch.len() as u32,
                 Err(e) => {
-                    tracing::warn!(
-                        "Failed to upsert cached comments for post {}: {e}",
-                        post.id
-                    );
+                    tracing::warn!("Failed to upsert cached comments for post {}: {e}", post.id);
                 }
             }
         }

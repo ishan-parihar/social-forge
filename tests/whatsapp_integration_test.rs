@@ -1,13 +1,13 @@
-use std::path::PathBuf;
 use std::fs;
+use std::path::{Path, PathBuf};
 
+use rmcp::Json;
 use social_forge::config::Config;
+use social_forge::mcp::tools_whatsapp;
 use social_forge::social::registry::ProviderRegistry;
 use social_forge::social::whatsapp::WhatsAppProvider;
 use social_forge::social::SocialProvider;
-use social_forge::mcp::tools_whatsapp;
 use social_forge::wa::chats;
-use rmcp::Json;
 
 fn get_config() -> Config {
     dotenvy::dotenv().ok();
@@ -16,14 +16,17 @@ fn get_config() -> Config {
 
 fn create_test_store_dir() -> PathBuf {
     use std::time::{SystemTime, UNIX_EPOCH};
-    let ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+    let ts = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
     let dir = std::env::temp_dir().join(format!("wa-test-{}", ts));
     fs::create_dir_all(&dir).expect("create temp dir");
     dir
 }
 
 /// Helper: seed a chat_summaries row into the meta DB at `store_dir`.
-fn insert_chat(store_dir: &PathBuf, jid: &str, name: &str, unread: u32, last_msg: Option<&str>) {
+fn insert_chat(store_dir: &Path, jid: &str, name: &str, unread: u32, last_msg: Option<&str>) {
     let db = chats::ensure_meta_db(store_dir).expect("ensure_meta_db");
     db.execute(
         "INSERT OR REPLACE INTO chat_summaries (jid, name, unread_count, last_message_text) VALUES (?1, ?2, ?3, ?4)",
@@ -32,12 +35,13 @@ fn insert_chat(store_dir: &PathBuf, jid: &str, name: &str, unread: u32, last_msg
 }
 
 /// Helper: seed a contact_entries row into the meta DB at `store_dir`.
-fn insert_contact(store_dir: &PathBuf, jid: &str, name: &str, push_name: &str) {
+fn insert_contact(store_dir: &Path, jid: &str, name: &str, push_name: &str) {
     let db = chats::ensure_meta_db(store_dir).expect("ensure_meta_db");
     db.execute(
         "INSERT OR REPLACE INTO contact_entries (jid, name, push_name) VALUES (?1, ?2, ?3)",
         rusqlite::params![jid, name, push_name],
-    ).expect("insert contact");
+    )
+    .expect("insert contact");
 }
 
 #[test]
@@ -45,7 +49,9 @@ fn test_whatsapp_provider_metadata() {
     std::env::set_var("WHATSAPP_STORE_DIR", "/tmp/nonexistent-wa-store-test");
     let config = get_config();
     let registry = ProviderRegistry::new(&config, None, None);
-    let wa = registry.get("whatsapp").expect("WhatsApp provider should exist");
+    let wa = registry
+        .get("whatsapp")
+        .expect("WhatsApp provider should exist");
 
     assert_eq!(wa.identifier(), "whatsapp");
     assert_eq!(wa.name(), "WhatsApp");
@@ -60,15 +66,27 @@ fn test_whatsapp_provider_metadata() {
     assert_eq!(wa.editor_type(), EditorType::Normal);
 
     let rt = tokio::runtime::Runtime::new().unwrap();
-    let auth_url = rt.block_on(wa.generate_auth_url("state", "verifier", "http://localhost/callback"));
+    let auth_url =
+        rt.block_on(wa.generate_auth_url("state", "verifier", "http://localhost/callback"));
     assert!(auth_url.is_ok());
-    assert_eq!(auth_url.unwrap().url, "", "Non-OAuth provider should return empty auth URL");
+    assert_eq!(
+        auth_url.unwrap().url,
+        "",
+        "Non-OAuth provider should return empty auth URL"
+    );
 
-    let exchange = rt.block_on(wa.exchange_code("test-code", "verifier", "http://localhost/callback"));
-    assert!(exchange.is_err(), "exchange_code without daemon should fail");
+    let exchange =
+        rt.block_on(wa.exchange_code("test-code", "verifier", "http://localhost/callback"));
+    assert!(
+        exchange.is_err(),
+        "exchange_code without daemon should fail"
+    );
 
     let refresh = rt.block_on(wa.refresh_token("test-refresh"));
-    assert!(refresh.is_err(), "refresh_token should error for non-OAuth provider");
+    assert!(
+        refresh.is_err(),
+        "refresh_token should error for non-OAuth provider"
+    );
 
     use social_forge::social::PostContent;
     let post = PostContent {
@@ -136,7 +154,10 @@ fn test_wa_meta_db_contact_crud() {
     let store_dir = create_test_store_dir();
 
     let contacts_empty = chats::list_contacts_store(&store_dir, None).expect("list_contacts_store");
-    assert!(contacts_empty.is_empty(), "Fresh meta DB should have no contacts");
+    assert!(
+        contacts_empty.is_empty(),
+        "Fresh meta DB should have no contacts"
+    );
 
     insert_contact(&store_dir, "333@s.whatsapp.net", "Charlie", "Charlie P.");
     insert_contact(&store_dir, "444@s.whatsapp.net", "Diana", "Diana Q.");
@@ -158,7 +179,10 @@ fn test_wa_meta_db_empty_on_fresh_store() {
     assert!(chats.is_empty(), "Fresh meta DB should return empty chats");
 
     let contacts = chats::list_contacts_store(&store_dir, Some(50)).expect("list_contacts_store");
-    assert!(contacts.is_empty(), "Fresh meta DB should return empty contacts");
+    assert!(
+        contacts.is_empty(),
+        "Fresh meta DB should return empty contacts"
+    );
 
     println!("PASS: wa-rs meta DB empty results on fresh store");
 }
@@ -179,10 +203,19 @@ fn test_wa_meta_db_limit_respected() {
     let all = chats::list_chats_store(&store_dir, None).expect("list_chats_store");
     assert_eq!(all.len(), 10, "default limit should return all 10");
 
-    let contacts_limited = chats::list_contacts_store(&store_dir, Some(5)).expect("list_contacts_store");
-    assert_eq!(contacts_limited.len(), 5, "limit=5 should return 5 contacts");
+    let contacts_limited =
+        chats::list_contacts_store(&store_dir, Some(5)).expect("list_contacts_store");
+    assert_eq!(
+        contacts_limited.len(),
+        5,
+        "limit=5 should return 5 contacts"
+    );
 
-    println!("PASS: wa-rs meta DB LIMIT respected (chats={}, contacts={})", limited.len(), contacts_limited.len());
+    println!(
+        "PASS: wa-rs meta DB LIMIT respected (chats={}, contacts={})",
+        limited.len(),
+        contacts_limited.len()
+    );
 }
 
 #[test]
@@ -213,12 +246,24 @@ fn test_wa_meta_db_upsert() {
     let store_dir = create_test_store_dir();
 
     // Insert then update
-    insert_chat(&store_dir, "666@s.whatsapp.net", "First", 1, Some("initial"));
+    insert_chat(
+        &store_dir,
+        "666@s.whatsapp.net",
+        "First",
+        1,
+        Some("initial"),
+    );
     let c1 = chats::list_chats_store(&store_dir, None).expect("list_chats_store");
     assert_eq!(c1.len(), 1);
     assert_eq!(c1[0].name, "First");
 
-    insert_chat(&store_dir, "666@s.whatsapp.net", "Updated", 5, Some("modified"));
+    insert_chat(
+        &store_dir,
+        "666@s.whatsapp.net",
+        "Updated",
+        5,
+        Some("modified"),
+    );
     let c2 = chats::list_chats_store(&store_dir, None).expect("list_chats_store");
     assert_eq!(c2.len(), 1, "upsert should keep 1 row");
     assert_eq!(c2[0].name, "Updated");
@@ -311,10 +356,16 @@ async fn test_whatsapp_mcp_tool_compilation() {
     };
 
     let server = SocialForgeMcpServer::new(state.clone());
-    assert!(server.state.config.whatsapp_store_dir.is_some() || server.state.config.whatsapp_store_dir.is_none());
+    assert!(
+        server.state.config.whatsapp_store_dir.is_some()
+            || server.state.config.whatsapp_store_dir.is_none()
+    );
 
     let wa_provider = server.state.providers.get("whatsapp");
-    assert!(wa_provider.is_some(), "WhatsApp provider should be in server state");
+    assert!(
+        wa_provider.is_some(),
+        "WhatsApp provider should be in server state"
+    );
     let wa = wa_provider.unwrap();
     assert_eq!(wa.identifier(), "whatsapp");
     assert_eq!(wa.name(), "WhatsApp");
@@ -366,19 +417,31 @@ async fn test_whatsapp_mcp_handler_functions() {
 
     let auth_result: Result<Json<tools_whatsapp::WaAuthStatusOutput>, String> =
         tools_whatsapp::handle_wa_auth_status(&state).await;
-    assert!(auth_result.is_err(), "wa_auth_status without daemon should error");
+    assert!(
+        auth_result.is_err(),
+        "wa_auth_status without daemon should error"
+    );
 
     let send_result: Result<Json<tools_whatsapp::WaSendTextOutput>, String> =
         tools_whatsapp::handle_wa_send_text(&state, &send_input).await;
-    assert!(send_result.is_err(), "wa_send_text without daemon should error");
+    assert!(
+        send_result.is_err(),
+        "wa_send_text without daemon should error"
+    );
 
     let chats_result: Result<Json<tools_whatsapp::WaChatsOutput>, String> =
         tools_whatsapp::handle_wa_chats(&state, &chats_input).await;
-    assert!(chats_result.is_err(), "wa_chats without daemon should error");
+    assert!(
+        chats_result.is_err(),
+        "wa_chats without daemon should error"
+    );
 
     let contacts_result: Result<Json<tools_whatsapp::WaContactsOutput>, String> =
         tools_whatsapp::handle_wa_contacts(&state, &contacts_input).await;
-    assert!(contacts_result.is_err(), "wa_contacts without daemon should error");
+    assert!(
+        contacts_result.is_err(),
+        "wa_contacts without daemon should error"
+    );
 
     println!("PASS: All 4 MCP handler functions compile and error gracefully without daemon");
 }

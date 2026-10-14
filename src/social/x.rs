@@ -3,7 +3,8 @@
 // GraphQL path uses wreq for Chrome TLS fingerprint emulation.
 // OAuth path is the fallback used by the web onboarding flow.
 
-use std::collections::HashMap; use std::sync::LazyLock;
+use std::collections::HashMap;
+use std::sync::LazyLock;
 const RATE_LIMIT_RETRIES: u32 = 2;
 async fn rate_limit_sleep(attempt: u32) {
     tokio::time::sleep(std::time::Duration::from_secs(1u64 << attempt)).await;
@@ -93,9 +94,7 @@ pub struct XProvider {
 
 impl XProvider {
     pub fn new(config: &Config) -> Self {
-        let (client_id, client_secret) = config
-            .provider_credentials("x")
-            .unwrap_or_default();
+        let (client_id, client_secret) = config.provider_credentials("x").unwrap_or_default();
 
         let auth_token = config.x_auth_token.as_deref();
         let ct0 = config.x_ct0.as_deref();
@@ -106,10 +105,16 @@ impl XProvider {
         headers.insert("origin", HeaderValue::from_static("https://x.com"));
         headers.insert("referer", HeaderValue::from_static("https://x.com/"));
         headers.insert("x-twitter-active-user", HeaderValue::from_static("yes"));
-        headers.insert("x-twitter-auth-type", HeaderValue::from_static("OAuth2Session"));
+        headers.insert(
+            "x-twitter-auth-type",
+            HeaderValue::from_static("OAuth2Session"),
+        );
         headers.insert("x-twitter-client-language", HeaderValue::from_static("en"));
         // Authorization header MUST include "Bearer " prefix
-        headers.insert(header::AUTHORIZATION, HeaderValue::from_str(&format!("Bearer {}", TWITTER_BEARER_TOKEN)).unwrap());
+        headers.insert(
+            header::AUTHORIZATION,
+            HeaderValue::from_str(&format!("Bearer {}", TWITTER_BEARER_TOKEN)).unwrap(),
+        );
 
         let http = wreq::Client::builder()
             .default_headers(headers)
@@ -118,7 +123,8 @@ impl XProvider {
             .brotli(true)
             .timeout(Duration::from_secs(30))
             .pool_idle_timeout(Duration::from_secs(90))
-            .build().expect("Failed to build wreq client");
+            .build()
+            .expect("Failed to build wreq client");
 
         let mut provider = Self {
             client_id,
@@ -136,7 +142,11 @@ impl XProvider {
             }
         } else if let Some(cookies) = crate::social::x_cookies::extract_x_cookies() {
             tracing::info!("X cookies extracted from browser: {}", cookies.source);
-            provider.set_credentials(&cookies.auth_token, &cookies.ct0, Some(&cookies.cookie_string));
+            provider.set_credentials(
+                &cookies.auth_token,
+                &cookies.ct0,
+                Some(&cookies.cookie_string),
+            );
         }
 
         provider
@@ -209,7 +219,12 @@ impl XProvider {
 
     // ── Core GraphQL Request ─────────────────────────────────
 
-    fn graphql_url(&self, query_id: &str, operation: &str, variables: &serde_json::Value) -> Result<String, ProviderError> {
+    fn graphql_url(
+        &self,
+        query_id: &str,
+        operation: &str,
+        variables: &serde_json::Value,
+    ) -> Result<String, ProviderError> {
         use url::form_urlencoded;
         let vars_json = variables.to_string();
         let features_json = GRAPHQL_FEATURES.to_string();
@@ -217,7 +232,9 @@ impl XProvider {
             .append_pair("variables", &vars_json)
             .append_pair("features", &features_json)
             .finish();
-        Ok(format!("https://x.com/i/api/graphql/{query_id}/{operation}?{query}"))
+        Ok(format!(
+            "https://x.com/i/api/graphql/{query_id}/{operation}?{query}"
+        ))
     }
 
     /// Ensure the ct0 value in a cookie string matches the given ct0.
@@ -261,13 +278,18 @@ impl XProvider {
     ) -> Result<serde_json::Value, ProviderError> {
         let url = self.graphql_url(query_id, operation, variables)?;
         let (ct0, cs) = self.effective_cookie_str(access_token);
-        let resp = self.http.get(&url)
+        let resp = self
+            .http
+            .get(&url)
             .header("x-csrf-token", &ct0)
             .header("Cookie", &cs)
-            .send().await
+            .send()
+            .await
             .map_err(|e| ProviderError::Api(format!("X GraphQL GET error: {e}")))?;
         let status = resp.status();
-        let body = resp.text().await
+        let body = resp
+            .text()
+            .await
             .map_err(|e| ProviderError::Api(format!("X body error: {e}")))?;
         if !status.is_success() {
             let raw = format!("X GraphQL {operation}: HTTP {status}: {body}");
@@ -295,13 +317,16 @@ impl XProvider {
             "features": *GRAPHQL_FEATURES,
         });
         let (ct0, cs) = self.effective_cookie_str(access_token);
-        let resp = self.http.post(&url)
+        let resp = self
+            .http
+            .post(&url)
             .header("x-csrf-token", &ct0)
             .header("Cookie", &cs)
             .header("Priority", "u=1, i")
             .header("Referer", "https://x.com/compose/post")
             .json(&body)
-            .send().await
+            .send()
+            .await
             .map_err(|e| ProviderError::Api(format!("X GraphQL POST error: {e}")))?;
         let status = resp.status();
         let json: serde_json::Value = resp
@@ -313,7 +338,11 @@ impl XProvider {
 
     // ── V2 REST API (OAuth Bearer fallback) ──────────────────
 
-    async fn v1_get_with_cookies(&self, url: &str, cookie_str: &str) -> Result<serde_json::Value, ProviderError> {
+    async fn v1_get_with_cookies(
+        &self,
+        url: &str,
+        cookie_str: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
         let ct0 = Self::parse_cookie_token(cookie_str)
             .map(|(_, ct)| ct)
             .unwrap_or_default();
@@ -326,11 +355,18 @@ impl XProvider {
             .await
             .map_err(|e| ProviderError::Api(format!("X cookie GET error: {e}")))?;
         let status = resp.status();
-        let json: serde_json::Value = resp.json().await.map_err(|e| ProviderError::Api(e.to_string()))?;
+        let json: serde_json::Value = resp
+            .json()
+            .await
+            .map_err(|e| ProviderError::Api(e.to_string()))?;
         self.check_v2_response(status, &json)
     }
 
-    async fn v2_get(&self, url: &str, access_token: &str) -> Result<serde_json::Value, ProviderError> {
+    async fn v2_get(
+        &self,
+        url: &str,
+        access_token: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
         let resp = self
             .http
             .get(url)
@@ -339,11 +375,19 @@ impl XProvider {
             .await
             .map_err(|e| ProviderError::Api(format!("X v2 GET error: {e}")))?;
         let status = resp.status();
-        let json: serde_json::Value = resp.json().await.map_err(|e| ProviderError::Api(e.to_string()))?;
+        let json: serde_json::Value = resp
+            .json()
+            .await
+            .map_err(|e| ProviderError::Api(e.to_string()))?;
         self.check_v2_response(status, &json)
     }
 
-    async fn v2_post(&self, url: &str, access_token: &str, body: &serde_json::Value) -> Result<serde_json::Value, ProviderError> {
+    async fn v2_post(
+        &self,
+        url: &str,
+        access_token: &str,
+        body: &serde_json::Value,
+    ) -> Result<serde_json::Value, ProviderError> {
         let resp = self
             .http
             .post(url)
@@ -353,11 +397,18 @@ impl XProvider {
             .await
             .map_err(|e| ProviderError::Api(format!("X v2 POST error: {e}")))?;
         let status = resp.status();
-        let json: serde_json::Value = resp.json().await.map_err(|e| ProviderError::Api(e.to_string()))?;
+        let json: serde_json::Value = resp
+            .json()
+            .await
+            .map_err(|e| ProviderError::Api(e.to_string()))?;
         self.check_v2_response(status, &json)
     }
 
-    async fn v2_delete(&self, url: &str, access_token: &str) -> Result<serde_json::Value, ProviderError> {
+    async fn v2_delete(
+        &self,
+        url: &str,
+        access_token: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
         let resp = self
             .http
             .delete(url)
@@ -366,13 +417,20 @@ impl XProvider {
             .await
             .map_err(|e| ProviderError::Api(format!("X v2 DELETE error: {e}")))?;
         let status = resp.status();
-        let json: serde_json::Value = resp.json().await.map_err(|e| ProviderError::Api(e.to_string()))?;
+        let json: serde_json::Value = resp
+            .json()
+            .await
+            .map_err(|e| ProviderError::Api(e.to_string()))?;
         self.check_v2_response(status, &json)
     }
 
     // ── Response Checkers ────────────────────────────────────
 
-    fn check_graphql_response(&self, status: wreq::StatusCode, json: &serde_json::Value) -> Result<serde_json::Value, ProviderError> {
+    fn check_graphql_response(
+        &self,
+        status: wreq::StatusCode,
+        json: &serde_json::Value,
+    ) -> Result<serde_json::Value, ProviderError> {
         if status.is_success() {
             // Check for GraphQL errors in response body
             if let Some(errors) = json.get("errors").and_then(|e| e.as_array()) {
@@ -402,7 +460,11 @@ impl XProvider {
         )))
     }
 
-    fn check_v2_response(&self, status: wreq::StatusCode, json: &serde_json::Value) -> Result<serde_json::Value, ProviderError> {
+    fn check_v2_response(
+        &self,
+        status: wreq::StatusCode,
+        json: &serde_json::Value,
+    ) -> Result<serde_json::Value, ProviderError> {
         if status.is_success() {
             return Ok(json.clone());
         }
@@ -430,7 +492,9 @@ impl XProvider {
             .pointer("/data/home/home_timeline_urt/instructions")
             .or_else(|| json.pointer("/data/user/result/timeline/timeline/instructions"))
             .or_else(|| json.pointer("/data/user/result/timeline_v2/timeline/instructions"))
-            .or_else(|| json.pointer("/data/search_by_raw_query/search_timeline/timeline/instructions"))
+            .or_else(|| {
+                json.pointer("/data/search_by_raw_query/search_timeline/timeline/instructions")
+            })
             .or_else(|| json.pointer("/data/bookmark_timeline_v2/timeline/instructions"))
             .or_else(|| json.pointer("/data/list/tweets_timeline/timeline/instructions"))
             .and_then(|i| i.as_array())?;
@@ -468,7 +532,10 @@ impl XProvider {
             let total = metrics.get(key).and_then(|v| v.as_i64())?.to_string();
             Some(AnalyticsData {
                 label: label.into(),
-                data: vec![AnalyticsDataPoint { total, date: today.clone() }],
+                data: vec![AnalyticsDataPoint {
+                    total,
+                    date: today.clone(),
+                }],
                 percentage_change: 0.0,
             })
         })
@@ -491,7 +558,10 @@ impl XProvider {
             let total = metrics.get(key).and_then(|v| v.as_i64())?.to_string();
             Some(AnalyticsData {
                 label: label.into(),
-                data: vec![AnalyticsDataPoint { total, date: today.clone() }],
+                data: vec![AnalyticsDataPoint {
+                    total,
+                    date: today.clone(),
+                }],
                 percentage_change: 0.0,
             })
         })
@@ -514,9 +584,13 @@ impl XProvider {
         // X sometimes serializes GraphQL counters as strings; normalise to
         // numbers so `as_i64()` in the parser arm does not read them as 0.
         let count = |v: &serde_json::Value| -> Option<serde_json::Value> {
-            v.as_i64()
-                .map(serde_json::Value::from)
-                .or_else(|| v.as_str()?.trim().parse::<i64>().ok().map(serde_json::Value::from))
+            v.as_i64().map(serde_json::Value::from).or_else(|| {
+                v.as_str()?
+                    .trim()
+                    .parse::<i64>()
+                    .ok()
+                    .map(serde_json::Value::from)
+            })
         };
         let mut out = serde_json::Map::new();
         for (gql_key, v2_key) in [
@@ -621,9 +695,7 @@ impl XProvider {
                         let author = users.get(tweet["author_id"].as_str()?);
                         Some(CommentData {
                             id: id.to_string(),
-                            author_name: author
-                                .and_then(|a| a["name"].as_str())
-                                .map(String::from),
+                            author_name: author.and_then(|a| a["name"].as_str()).map(String::from),
                             author_avatar: author
                                 .and_then(|a| a["profile_image_url"].as_str())
                                 .map(String::from),
@@ -678,7 +750,9 @@ impl XProvider {
                 .map_err(|e| ProviderError::Api(format!("Failed to fetch media: {e}")))?;
             let status = resp.status();
             if !status.is_success() {
-                return Err(ProviderError::Api(format!("Failed to fetch media: HTTP {status}")));
+                return Err(ProviderError::Api(format!(
+                    "Failed to fetch media: HTTP {status}"
+                )));
             }
             resp.bytes()
                 .await
@@ -739,10 +813,7 @@ impl XProvider {
             .to_string();
 
         // APPEND (base64-encoded per twitter-cli pattern)
-        let b64_data = base64::Engine::encode(
-            &base64::engine::general_purpose::STANDARD,
-            &bytes,
-        );
+        let b64_data = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &bytes);
         let append_body = format!(
             "command=APPEND&media_id={media_id}&segment_index=0&media_data={}",
             urlencoding::encode(&b64_data),
@@ -852,7 +923,9 @@ impl XProvider {
             let query_id = FALLBACK_QUERY_IDS
                 .get("CreateTweet")
                 .ok_or_else(|| ProviderError::Api("Missing CreateTweet queryId".into()))?;
-            let json = self.graphql_post(query_id, "CreateTweet", &variables, access_token).await?;
+            let json = self
+                .graphql_post(query_id, "CreateTweet", &variables, access_token)
+                .await?;
 
             let tweet_id = json["data"]["create_tweet"]["tweet_results"]["result"]["rest_id"]
                 .as_str()
@@ -900,7 +973,10 @@ impl XProvider {
             .await
             .map_err(|e| ProviderError::Api(format!("X v2 POST error: {e}")))?;
         let status = resp.status();
-        let json: serde_json::Value = resp.json().await.map_err(|e| ProviderError::Api(e.to_string()))?;
+        let json: serde_json::Value = resp
+            .json()
+            .await
+            .map_err(|e| ProviderError::Api(e.to_string()))?;
         self.check_v2_response(status, &json)?;
         let post_id = json["data"]["id"].as_str().unwrap_or("").to_string();
         Ok((
@@ -972,192 +1048,118 @@ impl XProvider {
 
     /// Parse one page of user tweets (GraphQL or v2) into ExternalPostData + cursor.
     fn parse_user_tweets_page(&self, response: &serde_json::Value) -> UserTweetsPage {
-    let mut posts = Vec::new();
-    let mut next_cursor = None;
+        let mut posts = Vec::new();
+        let mut next_cursor = None;
 
-    // ── OAuth v2 path: response["data"] is an array of tweet objects ──
-    if let Some(data) = response["data"].as_array() {
-        let media_map: std::collections::HashMap<String, MediaAttachment> = response["includes"]["media"]
-            .as_array()
-            .map(|arr| {
-                arr.iter().filter_map(|m| {
-                    let key = m["media_key"].as_str()?;
-                    let media_type = m["type"].as_str().unwrap_or("photo");
-                    if media_type == "video" {
-                        let video_url = m["variants"]
-                            .as_array()
-                            .and_then(|variants| {
-                                let mut best: Option<(&str, u64)> = None;
-                                for v in variants {
-                                    if v["content_type"].as_str() == Some("video/mp4") {
-                                        if let (Some(url), Some(bitrate)) = (v["url"].as_str(), v["bitrate"].as_u64()) {
-                                            if best.map_or(true, |(_, b)| bitrate > b) {
-                                                best = Some((url, bitrate));
-                                            }
-                                        }
-                                    }
-                                }
-                                best.map(|(url, _)| url.to_string())
-                            })
-                            .or_else(|| m["url"].as_str().map(String::from));
-                        video_url.map(|url| (key.to_string(), MediaAttachment {
-                            url,
-                            mime_type: "video/mp4".to_string(),
-                            alt: m["alt_text"].as_str().map(String::from),
-                            poster_url: m["preview_image_url"].as_str().map(String::from),
-                        }))
-                    } else {
-                        let url = m["url"].as_str()
-                            .or_else(|| m["preview_image_url"].as_str())?;
-                        Some((key.to_string(), MediaAttachment {
-                            url: url.to_string(),
-                            mime_type: if media_type == "animated_gif" { "image/gif".to_string() } else { "image/jpeg".to_string() },
-                            alt: m["alt_text"].as_str().map(String::from),
-                            poster_url: None,
-                        }))
-                    }
-                }).collect()
-            })
-            .unwrap_or_default();
-
-        let author_map: std::collections::HashMap<String, serde_json::Value> = response["includes"]["users"]
-            .as_array()
-            .map(|arr| {
-                arr.iter().filter_map(|u| {
-                    let uid = u["id"].as_str()?;
-                    Some((uid.to_string(), u.clone()))
-                }).collect()
-            })
-            .unwrap_or_default();
-
-        for item in data {
-            let id = item["id"].as_str().unwrap_or("").to_string();
-            if id.is_empty() { continue; }
-            let text = item["text"].as_str().unwrap_or("").to_string();
-            let created_at = item["created_at"].as_str()
-                .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
-                .map(|dt| dt.with_timezone(&chrono::Utc))
-                .unwrap_or_else(chrono::Utc::now);
-
-            let author_id = item["author_id"].as_str();
-            let author_name = author_id
-                .and_then(|aid| author_map.get(aid))
-                .and_then(|u| u["name"].as_str().map(String::from));
-            let author_handle = author_id
-                .and_then(|aid| author_map.get(aid))
-                .and_then(|u| u["username"].as_str().map(String::from));
-            let author_avatar = author_id
-                .and_then(|aid| author_map.get(aid))
-                .and_then(|u| u["profile_image_url"].as_str().map(String::from));
-
-            let mut media = Vec::new();
-            if let Some(keys) = item["attachments"]["media_keys"].as_array() {
-                for key in keys.iter().filter_map(|k| k.as_str()) {
-                    if let Some(att) = media_map.get(key) {
-                        media.push(att.clone());
-                    }
-                }
-            }
-
-            posts.push(ExternalPostData {
-                platform_post_id: id,
-                text,
-                author_name,
-                author_handle,
-                author_avatar,
-                created_at,
-                url: None,
-                media,
-                metadata: Some(item.clone()),
-            });
-        }
-        next_cursor = response["meta"]["next_token"].as_str().map(String::from);
-    } else if let Some(timeline) = response["data"].as_object() {
-        // ── Cookie auth (GraphQL) path: navigate instructions → entries ──
-        if let Some(instructions) = timeline.get("instructions").and_then(|i| i.as_array()) {
-            for entry in instructions.iter()
-                .filter_map(|inst| inst["entries"].as_array())
-                .flatten()
-            {
-                let raw_result = match entry["content"]["itemContent"]["tweet_results"]["result"].as_object() {
-                    Some(r) => r,
-                    None => continue,
-                };
-                let result = if raw_result.get("__typename").and_then(|t| t.as_str()) == Some("TweetWithState") {
-                    match raw_result.get("tweet").and_then(|t| t.as_object()) {
-                        Some(inner) => inner,
-                        None => raw_result,
-                    }
-                } else {
-                    raw_result
-                };
-                let legacy = match result.get("legacy") {
-                    Some(l) => l,
-                    None => continue,
-                };
-                let id = result["rest_id"].as_str().unwrap_or("").to_string();
-                if id.is_empty() { continue; }
-                let text = legacy["full_text"].as_str()
-                    .or_else(|| legacy["text"].as_str())
-                    .unwrap_or("").to_string();
-                let created_at_str = legacy["created_at"].as_str().unwrap_or("");
-                let created_at = chrono::DateTime::parse_from_str(created_at_str, "%a %b %d %H:%M:%S %z %Y")
-                    .map(|dt| dt.with_timezone(&chrono::Utc))
-                    .unwrap_or_else(|_| chrono::Utc::now());
-                let user = &result["core"]["user_results"]["result"]["legacy"];
-                let author_name = user["name"].as_str().map(String::from);
-                let author_handle = user["screen_name"].as_str().map(String::from);
-
-                let mut media = Vec::new();
-                Self::extract_media_from_legacy(legacy, &mut media);
-                if media.is_empty() {
-                    if let Some(media_details) = result.get("mediaDetails").and_then(|m| m.as_array()) {
-                        for m in media_details {
+        // ── OAuth v2 path: response["data"] is an array of tweet objects ──
+        if let Some(data) = response["data"].as_array() {
+            let media_map: std::collections::HashMap<String, MediaAttachment> = response
+                ["includes"]["media"]
+                .as_array()
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|m| {
+                            let key = m["media_key"].as_str()?;
                             let media_type = m["type"].as_str().unwrap_or("photo");
-                            if media_type == "video" || media_type == "animated_gif" {
-                                let video_url = m["video_info"]["variants"]
+                            if media_type == "video" {
+                                let video_url = m["variants"]
                                     .as_array()
                                     .and_then(|variants| {
                                         let mut best: Option<(&str, u64)> = None;
                                         for v in variants {
                                             if v["content_type"].as_str() == Some("video/mp4") {
-                                                if let (Some(url), Some(bitrate)) = (v["url"].as_str(), v["bitrate"].as_u64()) {
-                                                    if best.map_or(true, |(_, b)| bitrate > b) {
+                                                if let (Some(url), Some(bitrate)) =
+                                                    (v["url"].as_str(), v["bitrate"].as_u64())
+                                                {
+                                                    if best.is_none_or(|(_, b)| bitrate > b) {
                                                         best = Some((url, bitrate));
                                                     }
                                                 }
                                             }
                                         }
                                         best.map(|(url, _)| url.to_string())
-                                    });
-                                if let Some(url) = video_url {
-                                    media.push(MediaAttachment { url, mime_type: "video/mp4".to_string(), alt: None, poster_url: m["media_url_https"].as_str().map(String::from) });
-                                }
+                                    })
+                                    .or_else(|| m["url"].as_str().map(String::from));
+                                video_url.map(|url| {
+                                    (
+                                        key.to_string(),
+                                        MediaAttachment {
+                                            url,
+                                            mime_type: "video/mp4".to_string(),
+                                            alt: m["alt_text"].as_str().map(String::from),
+                                            poster_url: m["preview_image_url"]
+                                                .as_str()
+                                                .map(String::from),
+                                        },
+                                    )
+                                })
                             } else {
-                                let url = m["media_url_https"].as_str().or_else(|| m["media_url"].as_str()).unwrap_or("").to_string();
-                                if !url.is_empty() {
-                                    media.push(MediaAttachment { url, mime_type: "image/jpeg".to_string(), alt: None, poster_url: None });
-                                }
+                                let url = m["url"]
+                                    .as_str()
+                                    .or_else(|| m["preview_image_url"].as_str())?;
+                                Some((
+                                    key.to_string(),
+                                    MediaAttachment {
+                                        url: url.to_string(),
+                                        mime_type: if media_type == "animated_gif" {
+                                            "image/gif".to_string()
+                                        } else {
+                                            "image/jpeg".to_string()
+                                        },
+                                        alt: m["alt_text"].as_str().map(String::from),
+                                        poster_url: None,
+                                    },
+                                ))
                             }
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+
+            let author_map: std::collections::HashMap<String, serde_json::Value> = response
+                ["includes"]["users"]
+                .as_array()
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|u| {
+                            let uid = u["id"].as_str()?;
+                            Some((uid.to_string(), u.clone()))
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+
+            for item in data {
+                let id = item["id"].as_str().unwrap_or("").to_string();
+                if id.is_empty() {
+                    continue;
+                }
+                let text = item["text"].as_str().unwrap_or("").to_string();
+                let created_at = item["created_at"]
+                    .as_str()
+                    .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                    .map(|dt| dt.with_timezone(&chrono::Utc))
+                    .unwrap_or_else(chrono::Utc::now);
+
+                let author_id = item["author_id"].as_str();
+                let author_name = author_id
+                    .and_then(|aid| author_map.get(aid))
+                    .and_then(|u| u["name"].as_str().map(String::from));
+                let author_handle = author_id
+                    .and_then(|aid| author_map.get(aid))
+                    .and_then(|u| u["username"].as_str().map(String::from));
+                let author_avatar = author_id
+                    .and_then(|aid| author_map.get(aid))
+                    .and_then(|u| u["profile_image_url"].as_str().map(String::from));
+
+                let mut media = Vec::new();
+                if let Some(keys) = item["attachments"]["media_keys"].as_array() {
+                    for key in keys.iter().filter_map(|k| k.as_str()) {
+                        if let Some(att) = media_map.get(key) {
+                            media.push(att.clone());
                         }
                     }
                 }
-                if media.is_empty() {
-                    let rt_legacy = legacy.pointer("/retweeted_status_result/result/result/legacy")
-                        .or_else(|| legacy.pointer("/retweeted_status_result/result/legacy"));
-                    if let Some(rt) = rt_legacy {
-                        Self::extract_media_from_legacy(rt, &mut media);
-                    }
-                }
-                if media.is_empty() {
-                    let qt_legacy = legacy.pointer("/quoted_status_result/result/result/legacy")
-                        .or_else(|| legacy.pointer("/quoted_status_result/result/legacy"));
-                    if let Some(qt) = qt_legacy {
-                        Self::extract_media_from_legacy(qt, &mut media);
-                    }
-                }
-
-                let author_avatar = user["profile_image_url_https"].as_str().map(String::from);
 
                 posts.push(ExternalPostData {
                     platform_post_id: id,
@@ -1168,47 +1170,182 @@ impl XProvider {
                     created_at,
                     url: None,
                     media,
-                    metadata: Some(serde_json::Value::Object(result.clone())),
+                    metadata: Some(item.clone()),
                 });
             }
+            next_cursor = response["meta"]["next_token"].as_str().map(String::from);
+        } else if let Some(timeline) = response["data"].as_object() {
+            // ── Cookie auth (GraphQL) path: navigate instructions → entries ──
+            if let Some(instructions) = timeline.get("instructions").and_then(|i| i.as_array()) {
+                for entry in instructions
+                    .iter()
+                    .filter_map(|inst| inst["entries"].as_array())
+                    .flatten()
+                {
+                    let raw_result = match entry["content"]["itemContent"]["tweet_results"]
+                        ["result"]
+                        .as_object()
+                    {
+                        Some(r) => r,
+                        None => continue,
+                    };
+                    let result = if raw_result.get("__typename").and_then(|t| t.as_str())
+                        == Some("TweetWithState")
+                    {
+                        match raw_result.get("tweet").and_then(|t| t.as_object()) {
+                            Some(inner) => inner,
+                            None => raw_result,
+                        }
+                    } else {
+                        raw_result
+                    };
+                    let legacy = match result.get("legacy") {
+                        Some(l) => l,
+                        None => continue,
+                    };
+                    let id = result["rest_id"].as_str().unwrap_or("").to_string();
+                    if id.is_empty() {
+                        continue;
+                    }
+                    let text = legacy["full_text"]
+                        .as_str()
+                        .or_else(|| legacy["text"].as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let created_at_str = legacy["created_at"].as_str().unwrap_or("");
+                    let created_at =
+                        chrono::DateTime::parse_from_str(created_at_str, "%a %b %d %H:%M:%S %z %Y")
+                            .map(|dt| dt.with_timezone(&chrono::Utc))
+                            .unwrap_or_else(|_| chrono::Utc::now());
+                    let user = &result["core"]["user_results"]["result"]["legacy"];
+                    let author_name = user["name"].as_str().map(String::from);
+                    let author_handle = user["screen_name"].as_str().map(String::from);
+
+                    let mut media = Vec::new();
+                    Self::extract_media_from_legacy(legacy, &mut media);
+                    if media.is_empty() {
+                        if let Some(media_details) =
+                            result.get("mediaDetails").and_then(|m| m.as_array())
+                        {
+                            for m in media_details {
+                                let media_type = m["type"].as_str().unwrap_or("photo");
+                                if media_type == "video" || media_type == "animated_gif" {
+                                    let video_url = m["video_info"]["variants"]
+                                        .as_array()
+                                        .and_then(|variants| {
+                                            let mut best: Option<(&str, u64)> = None;
+                                            for v in variants {
+                                                if v["content_type"].as_str() == Some("video/mp4") {
+                                                    if let (Some(url), Some(bitrate)) =
+                                                        (v["url"].as_str(), v["bitrate"].as_u64())
+                                                    {
+                                                        if best.is_none_or(|(_, b)| bitrate > b) {
+                                                            best = Some((url, bitrate));
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            best.map(|(url, _)| url.to_string())
+                                        });
+                                    if let Some(url) = video_url {
+                                        media.push(MediaAttachment {
+                                            url,
+                                            mime_type: "video/mp4".to_string(),
+                                            alt: None,
+                                            poster_url: m["media_url_https"]
+                                                .as_str()
+                                                .map(String::from),
+                                        });
+                                    }
+                                } else {
+                                    let url = m["media_url_https"]
+                                        .as_str()
+                                        .or_else(|| m["media_url"].as_str())
+                                        .unwrap_or("")
+                                        .to_string();
+                                    if !url.is_empty() {
+                                        media.push(MediaAttachment {
+                                            url,
+                                            mime_type: "image/jpeg".to_string(),
+                                            alt: None,
+                                            poster_url: None,
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if media.is_empty() {
+                        let rt_legacy = legacy
+                            .pointer("/retweeted_status_result/result/result/legacy")
+                            .or_else(|| legacy.pointer("/retweeted_status_result/result/legacy"));
+                        if let Some(rt) = rt_legacy {
+                            Self::extract_media_from_legacy(rt, &mut media);
+                        }
+                    }
+                    if media.is_empty() {
+                        let qt_legacy = legacy
+                            .pointer("/quoted_status_result/result/result/legacy")
+                            .or_else(|| legacy.pointer("/quoted_status_result/result/legacy"));
+                        if let Some(qt) = qt_legacy {
+                            Self::extract_media_from_legacy(qt, &mut media);
+                        }
+                    }
+
+                    let author_avatar = user["profile_image_url_https"].as_str().map(String::from);
+
+                    posts.push(ExternalPostData {
+                        platform_post_id: id,
+                        text,
+                        author_name,
+                        author_handle,
+                        author_avatar,
+                        created_at,
+                        url: None,
+                        media,
+                        metadata: Some(serde_json::Value::Object(result.clone())),
+                    });
+                }
+            }
+            next_cursor = Self::extract_next_cursor(response);
         }
-        next_cursor = Self::extract_next_cursor(response);
+
+        UserTweetsPage { posts, next_cursor }
     }
 
-    UserTweetsPage { posts, next_cursor }
-}
-
-// ── Media Extraction Helper ──────────────────────────────
+    // ── Media Extraction Helper ──────────────────────────────
 
     /// Extract media attachments from a legacy tweet object's extended_entities or entities.
     /// Works for original tweets, retweets, and quote tweets.
     fn extract_media_from_legacy(legacy: &serde_json::Value, media: &mut Vec<MediaAttachment>) {
-        let arr = legacy["extended_entities"]["media"].as_array()
+        let arr = legacy["extended_entities"]["media"]
+            .as_array()
             .or_else(|| legacy["entities"]["media"].as_array());
         if let Some(arr) = arr {
             for m in arr {
                 let media_type = m["type"].as_str().unwrap_or("photo");
                 // Thumbnail/poster URL available for all media types
-                let poster = m["media_url_https"].as_str()
+                let poster = m["media_url_https"]
+                    .as_str()
                     .or_else(|| m["media_url"].as_str())
                     .map(|s| s.to_string());
                 if media_type == "video" || media_type == "animated_gif" {
                     // Extract video URL from video_info.variants — prefer highest-bitrate mp4
-                    let video_url = m["video_info"]["variants"]
-                        .as_array()
-                        .and_then(|variants| {
-                            let mut best: Option<(&str, u64)> = None;
-                            for v in variants {
-                                if v["content_type"].as_str() == Some("video/mp4") {
-                                    if let (Some(url), Some(bitrate)) = (v["url"].as_str(), v["bitrate"].as_u64()) {
-                                        if best.map_or(true, |(_, b)| bitrate > b) {
-                                            best = Some((url, bitrate));
-                                        }
+                    let video_url = m["video_info"]["variants"].as_array().and_then(|variants| {
+                        let mut best: Option<(&str, u64)> = None;
+                        for v in variants {
+                            if v["content_type"].as_str() == Some("video/mp4") {
+                                if let (Some(url), Some(bitrate)) =
+                                    (v["url"].as_str(), v["bitrate"].as_u64())
+                                {
+                                    if best.is_none_or(|(_, b)| bitrate > b) {
+                                        best = Some((url, bitrate));
                                     }
                                 }
                             }
-                            best.map(|(url, _)| url.to_string())
-                        });
+                        }
+                        best.map(|(url, _)| url.to_string())
+                    });
                     if let Some(video_url) = video_url {
                         media.push(MediaAttachment {
                             url: video_url,
@@ -1373,8 +1510,13 @@ impl SocialProvider for XProvider {
             expires_in,
             provider_user_id: user_info["data"]["id"].as_str().unwrap_or("").to_string(),
             name: user_info["data"]["name"].as_str().unwrap_or("").to_string(),
-            username: user_info["data"]["username"].as_str().unwrap_or("").to_string(),
-            picture: user_info["data"]["profile_image_url"].as_str().map(String::from),
+            username: user_info["data"]["username"]
+                .as_str()
+                .unwrap_or("")
+                .to_string(),
+            picture: user_info["data"]["profile_image_url"]
+                .as_str()
+                .map(String::from),
         })
     }
 
@@ -1441,7 +1583,10 @@ impl SocialProvider for XProvider {
         if media_ready {
             Ok(result)
         } else {
-            Ok(PublishResult { status: "pending".into(), ..result })
+            Ok(PublishResult {
+                status: "pending".into(),
+                ..result
+            })
         }
     }
 
@@ -1482,7 +1627,9 @@ impl SocialProvider for XProvider {
         _access_token: &str,
         _page_id: &str,
     ) -> Result<PageInfo, ProviderError> {
-        Err(ProviderError::Api("X does not support page management".into()))
+        Err(ProviderError::Api(
+            "X does not support page management".into(),
+        ))
     }
 
     async fn reconnect(
@@ -1495,9 +1642,17 @@ impl SocialProvider for XProvider {
         let json = if let Some((at, ct)) = Self::parse_cookie_token(access_token) {
             let cookie_str = Self::extract_cookie_string(access_token)
                 .unwrap_or_else(|| format!("auth_token={at}; ct0={ct};"));
-            self.v1_get_with_cookies("https://api.twitter.com/2/users/me?user.fields=name,username,profile_image_url", &cookie_str).await?
+            self.v1_get_with_cookies(
+                "https://api.twitter.com/2/users/me?user.fields=name,username,profile_image_url",
+                &cookie_str,
+            )
+            .await?
         } else {
-            self.v2_get("https://api.twitter.com/2/users/me?user.fields=name,username,profile_image_url", access_token).await?
+            self.v2_get(
+                "https://api.twitter.com/2/users/me?user.fields=name,username,profile_image_url",
+                access_token,
+            )
+            .await?
         };
         let data = &json["data"];
         Ok(super::ReconnectResult {
@@ -1558,7 +1713,10 @@ impl SocialProvider for XProvider {
         _days: u32,
     ) -> Result<Vec<AnalyticsData>, ProviderError> {
         let json = self
-            .v2_get("https://api.twitter.com/2/users/me?user.fields=public_metrics", access_token)
+            .v2_get(
+                "https://api.twitter.com/2/users/me?user.fields=public_metrics",
+                access_token,
+            )
             .await?;
         Ok(Self::parse_account_metrics(&json))
     }
@@ -1583,7 +1741,8 @@ impl SocialProvider for XProvider {
     ) -> Result<Vec<ExternalPostData>, ProviderError> {
         tracing::info!(
             "X get_recent_posts: internal_id='{}' limit={}",
-            internal_id, limit,
+            internal_id,
+            limit,
         );
         let page_size = limit.min(100);
         let mut all_posts = Vec::new();
@@ -1592,12 +1751,16 @@ impl SocialProvider for XProvider {
         const MAX_PAGES: u32 = 10;
 
         loop {
-            let response = self.user_tweets(access_token, internal_id, page_size, cursor.as_deref()).await?;
+            let response = self
+                .user_tweets(access_token, internal_id, page_size, cursor.as_deref())
+                .await?;
             pages_fetched += 1;
             let data_count = response["data"].as_array().map(|a| a.len()).unwrap_or(0);
             tracing::info!(
                 "X get_recent_posts page {}: data_count={}, total_so_far={}",
-                pages_fetched, data_count, all_posts.len(),
+                pages_fetched,
+                data_count,
+                all_posts.len(),
             );
 
             let page = self.parse_user_tweets_page(&response);
@@ -1609,7 +1772,8 @@ impl SocialProvider for XProvider {
             if all_posts.len() as u32 >= limit {
                 tracing::info!(
                     "X get_recent_posts: reached limit={} (got {}), stopping",
-                    limit, all_posts.len(),
+                    limit,
+                    all_posts.len(),
                 );
                 break;
             }
@@ -1623,7 +1787,8 @@ impl SocialProvider for XProvider {
             if pages_fetched >= MAX_PAGES {
                 tracing::info!(
                     "X get_recent_posts: hit MAX_PAGES={} after {} posts",
-                    MAX_PAGES, all_posts.len(),
+                    MAX_PAGES,
+                    all_posts.len(),
                 );
                 break;
             }
@@ -1641,7 +1806,8 @@ impl SocialProvider for XProvider {
 
         tracing::info!(
             "X get_recent_posts: returning {} posts (pages={})",
-            all_posts.len(), pages_fetched,
+            all_posts.len(),
+            pages_fetched,
         );
         Ok(all_posts)
     }
@@ -1676,7 +1842,9 @@ impl SocialProvider for XProvider {
             let qid = FALLBACK_QUERY_IDS
                 .get("TweetDetail")
                 .ok_or_else(|| ProviderError::Api("Missing TweetDetail queryId".into()))?;
-            let json = self.graphql_get(qid, "TweetDetail", &vars, access_token).await?;
+            let json = self
+                .graphql_get(qid, "TweetDetail", &vars, access_token)
+                .await?;
             return Ok(Self::parse_graphql_comments(&json, platform_post_id));
         }
 
@@ -1740,7 +1908,9 @@ impl SocialProvider for XProvider {
             let query_id = FALLBACK_QUERY_IDS
                 .get("CreateTweet")
                 .ok_or_else(|| ProviderError::Api("Missing CreateTweet queryId".into()))?;
-            let json = self.graphql_post(query_id, "CreateTweet", &variables, access_token).await?;
+            let json = self
+                .graphql_post(query_id, "CreateTweet", &variables, access_token)
+                .await?;
 
             let tweet_id = json["data"]["create_tweet"]["tweet_results"]["result"]["rest_id"]
                 .as_str()
@@ -1767,7 +1937,9 @@ impl SocialProvider for XProvider {
                 body["media"] = serde_json::json!({ "media_ids": media_ids });
             }
         }
-        let json = self.v2_post("https://api.twitter.com/2/tweets", access_token, &body).await?;
+        let json = self
+            .v2_post("https://api.twitter.com/2/tweets", access_token, &body)
+            .await?;
         let post_id = json["data"]["id"].as_str().unwrap_or("").to_string();
         Ok(PublishResult {
             platform_post_url: Some(format!("https://twitter.com/user/status/{post_id}")),
@@ -1795,8 +1967,17 @@ impl SocialProvider for XProvider {
                 }
             }
         });
-        let json = self.v2_post("https://api.twitter.com/2/dm_conversations/with/{recipient_id}/messages", access_token, &body).await?;
-        let message_id = json["data"]["dm_event_id"].as_str().unwrap_or("").to_string();
+        let json = self
+            .v2_post(
+                "https://api.twitter.com/2/dm_conversations/with/{recipient_id}/messages",
+                access_token,
+                &body,
+            )
+            .await?;
+        let message_id = json["data"]["dm_event_id"]
+            .as_str()
+            .unwrap_or("")
+            .to_string();
         Ok(PublishResult {
             platform_post_id: message_id,
             platform_post_url: None,
@@ -1817,7 +1998,10 @@ impl SocialProvider for XProvider {
         let mut conversations = Vec::new();
         if let Some(data) = json["data"].as_array() {
             for conv in data {
-                let id = conv["dm_conversation_id"].as_str().unwrap_or("").to_string();
+                let id = conv["dm_conversation_id"]
+                    .as_str()
+                    .unwrap_or("")
+                    .to_string();
                 let participant = conv["participants"]
                     .as_array()
                     .and_then(|p| p.first())
@@ -1867,7 +2051,8 @@ impl SocialProvider for XProvider {
                 let id = msg["dm_event_id"].as_str().unwrap_or("").to_string();
                 let sender = msg["sender_id"].as_str().unwrap_or("").to_string();
                 let content = msg["text"].as_str().unwrap_or("").to_string();
-                let created_at = msg["created_at"].as_str()
+                let created_at = msg["created_at"]
+                    .as_str()
                     .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
                     .map(|dt| dt.with_timezone(&chrono::Utc))
                     .unwrap_or_else(chrono::Utc::now);
@@ -1894,28 +2079,36 @@ impl SocialProvider for XProvider {
 impl XProvider {
     // ── User / Profile ───────────────────────────────────────
 
-    pub async fn get_me(
-        &self,
-        access_token: &str,
-    ) -> Result<serde_json::Value, ProviderError> {
+    pub async fn get_me(&self, access_token: &str) -> Result<serde_json::Value, ProviderError> {
         if let Some((_auth_token, _ct0)) = Self::parse_cookie_token(access_token) {
             let url = "https://x.com/i/api/1.1/account/multi/list.json";
             let (ct0, cs) = self.effective_cookie_str(access_token);
             let mut last_err = None;
             for attempt in 0..=RATE_LIMIT_RETRIES {
-                if attempt > 0 { rate_limit_sleep(attempt - 1).await; }
-                let resp = self.http.get(url)
+                if attempt > 0 {
+                    rate_limit_sleep(attempt - 1).await;
+                }
+                let resp = self
+                    .http
+                    .get(url)
                     .header("x-csrf-token", &ct0)
                     .header("Cookie", &cs)
-                    .send().await
+                    .send()
+                    .await
                     .map_err(|e| ProviderError::Api(format!("X whoami error: {e}")))?;
                 let status = resp.status();
                 let body_text = resp.text().await.unwrap_or_default();
                 if status.is_success() {
                     // ... parse and return below
-                    let json: serde_json::Value = serde_json::from_str(&body_text)
-                        .map_err(|e| ProviderError::Api(format!("JSON parse: {e}: {}", &body_text.chars().take(100).collect::<String>())))?;
-                    let user = json["users"].as_array()
+                    let json: serde_json::Value =
+                        serde_json::from_str(&body_text).map_err(|e| {
+                            ProviderError::Api(format!(
+                                "JSON parse: {e}: {}",
+                                body_text.chars().take(100).collect::<String>()
+                            ))
+                        })?;
+                    let user = json["users"]
+                        .as_array()
                         .and_then(|arr| arr.first())
                         .ok_or_else(|| ProviderError::Api("No user found".into()))?;
                     let screen_name = user["screen_name"].as_str().unwrap_or("");
@@ -1924,27 +2117,62 @@ impl XProvider {
                         return Ok(json);
                     }
                     let vars = serde_json::json!({"screen_name": screen_name, "withSafetyModeUserFields": true});
-                    let qid = FALLBACK_QUERY_IDS.get("UserByScreenName")
-                        .ok_or_else(|| ProviderError::Api("Missing UserByScreenName queryId".into()))?;
-                    let profile = self.graphql_get(qid, "UserByScreenName", &vars, access_token).await?;
-                    let data = profile.pointer("/data/user/result").and_then(|r| r.get("legacy")).or_else(|| profile.get("data"));
-                    let name = data.and_then(|d| d.get("name")).and_then(|n| n.as_str()).unwrap_or("");
-                    let username = data.and_then(|d| d.get("screen_name")).and_then(|n| n.as_str()).unwrap_or("");
-                    let avatar = profile.pointer("/data/user/result/legacy/profile_image_url_https")
-                        .or_else(|| profile.pointer("/data/user/result/avatar/image_url")).and_then(|u| u.as_str()).unwrap_or("");
-                    let description = data.and_then(|d| d.get("description")).and_then(|d| d.as_str()).unwrap_or("");
-                    let followers = data.and_then(|d| d.get("followers_count")).and_then(|c| c.as_u64()).unwrap_or(0);
-                    let following = data.and_then(|d| d.get("friends_count")).and_then(|c| c.as_u64()).unwrap_or(0);
-                    return Ok(serde_json::json!({"data": {"id": user_id, "name": name, "username": username, "profile_image_url": avatar, "description": description, "public_metrics": {"followers_count": followers, "following_count": following}}}));
+                    let qid = FALLBACK_QUERY_IDS.get("UserByScreenName").ok_or_else(|| {
+                        ProviderError::Api("Missing UserByScreenName queryId".into())
+                    })?;
+                    let profile = self
+                        .graphql_get(qid, "UserByScreenName", &vars, access_token)
+                        .await?;
+                    let data = profile
+                        .pointer("/data/user/result")
+                        .and_then(|r| r.get("legacy"))
+                        .or_else(|| profile.get("data"));
+                    let name = data
+                        .and_then(|d| d.get("name"))
+                        .and_then(|n| n.as_str())
+                        .unwrap_or("");
+                    let username = data
+                        .and_then(|d| d.get("screen_name"))
+                        .and_then(|n| n.as_str())
+                        .unwrap_or("");
+                    let avatar = profile
+                        .pointer("/data/user/result/legacy/profile_image_url_https")
+                        .or_else(|| profile.pointer("/data/user/result/avatar/image_url"))
+                        .and_then(|u| u.as_str())
+                        .unwrap_or("");
+                    let description = data
+                        .and_then(|d| d.get("description"))
+                        .and_then(|d| d.as_str())
+                        .unwrap_or("");
+                    let followers = data
+                        .and_then(|d| d.get("followers_count"))
+                        .and_then(|c| c.as_u64())
+                        .unwrap_or(0);
+                    let following = data
+                        .and_then(|d| d.get("friends_count"))
+                        .and_then(|c| c.as_u64())
+                        .unwrap_or(0);
+                    return Ok(
+                        serde_json::json!({"data": {"id": user_id, "name": name, "username": username, "profile_image_url": avatar, "description": description, "public_metrics": {"followers_count": followers, "following_count": following}}}),
+                    );
                 }
-                if status.as_u16() == 429 && is_rate_limited(&body_text) && attempt < RATE_LIMIT_RETRIES {
+                if status.as_u16() == 429
+                    && is_rate_limited(&body_text)
+                    && attempt < RATE_LIMIT_RETRIES
+                {
                     last_err = Some(format!("rate limited (attempt {})", attempt + 1));
                     continue;
                 }
                 let snippet = body_text.chars().take(200).collect::<String>();
-                return Err(ProviderError::Api(format!("X whoami HTTP {status}: {snippet}")));
+                return Err(ProviderError::Api(format!(
+                    "X whoami HTTP {status}: {snippet}"
+                )));
             }
-            return Err(ProviderError::Api(format!("X whoami failed after {} retries: {}", RATE_LIMIT_RETRIES, last_err.unwrap_or_default())));
+            return Err(ProviderError::Api(format!(
+                "X whoami failed after {} retries: {}",
+                RATE_LIMIT_RETRIES,
+                last_err.unwrap_or_default()
+            )));
         }
         // Fallback: v2 REST API (OAuth Bearer) — for non-cookie auth
         let v2_url = "https://api.twitter.com/2/users/me?user.fields=profile_image_url,description,public_metrics".to_string();
@@ -1964,11 +2192,16 @@ impl XProvider {
             let (ct0, cs) = self.effective_cookie_str(access_token);
             let mut last_err = None;
             for attempt in 0..=RATE_LIMIT_RETRIES {
-                if attempt > 0 { rate_limit_sleep(attempt - 1).await; }
-                let resp = self.http.get(&url)
+                if attempt > 0 {
+                    rate_limit_sleep(attempt - 1).await;
+                }
+                let resp = self
+                    .http
+                    .get(&url)
                     .header("x-csrf-token", &ct0)
                     .header("Cookie", &cs)
-                    .send().await
+                    .send()
+                    .await
                     .map_err(|e| ProviderError::Api(format!("X user lookup error: {e}")))?;
                 let status = resp.status();
                 let body_text = resp.text().await.unwrap_or_default();
@@ -1977,14 +2210,23 @@ impl XProvider {
                         .map_err(|e| ProviderError::Api(format!("X JSON parse error: {e}")))?;
                     return Ok(json);
                 }
-                if status.as_u16() == 429 && is_rate_limited(&body_text) && attempt < RATE_LIMIT_RETRIES {
+                if status.as_u16() == 429
+                    && is_rate_limited(&body_text)
+                    && attempt < RATE_LIMIT_RETRIES
+                {
                     last_err = Some(format!("rate limited (attempt {})", attempt + 1));
                     continue;
                 }
                 let snippet = body_text.chars().take(200).collect::<String>();
-                return Err(ProviderError::Api(format!("X user lookup failed: HTTP {status}: {snippet}")));
+                return Err(ProviderError::Api(format!(
+                    "X user lookup failed: HTTP {status}: {snippet}"
+                )));
             }
-            return Err(ProviderError::Api(format!("X user lookup failed after {} retries: {}", RATE_LIMIT_RETRIES, last_err.unwrap_or_default())));
+            return Err(ProviderError::Api(format!(
+                "X user lookup failed after {} retries: {}",
+                RATE_LIMIT_RETRIES,
+                last_err.unwrap_or_default()
+            )));
         }
         // Fallback: v2 REST API (works with Bearer token in default_headers)
         let url = format!(
@@ -1999,10 +2241,14 @@ impl XProvider {
         username: &str,
     ) -> Result<serde_json::Value, ProviderError> {
         if let Some((_at, _ct0)) = Self::parse_cookie_token(access_token) {
-            let vars = serde_json::json!({"screen_name": username, "withSafetyModeUserFields": true});
-            let qid = FALLBACK_QUERY_IDS.get("UserByScreenName")
+            let vars =
+                serde_json::json!({"screen_name": username, "withSafetyModeUserFields": true});
+            let qid = FALLBACK_QUERY_IDS
+                .get("UserByScreenName")
                 .ok_or_else(|| ProviderError::Api("Missing UserByScreenName queryId".into()))?;
-            let json = self.graphql_get(qid, "UserByScreenName", &vars, access_token).await?;
+            let json = self
+                .graphql_get(qid, "UserByScreenName", &vars, access_token)
+                .await?;
             let result = json.pointer("/data/user/result").cloned().unwrap_or(json);
             Ok(serde_json::json!({"data": {
                 "id": result["rest_id"].as_str().unwrap_or(""),
@@ -2031,7 +2277,7 @@ impl XProvider {
     ) -> Result<serde_json::Value, ProviderError> {
         if let Some((_at, _ct0)) = Self::parse_cookie_token(access_token) {
             let mut vars = serde_json::json!({
-                "count": max_results.min(100).max(1) as u32,
+                "count": max_results.clamp(1, 100),
                 "includePromotedContent": false,
                 "latestControlAvailable": true,
                 "requestContext": "launch",
@@ -2042,7 +2288,9 @@ impl XProvider {
             let qid = FALLBACK_QUERY_IDS
                 .get("HomeLatestTimeline")
                 .ok_or_else(|| ProviderError::Api("Missing HomeLatestTimeline queryId".into()))?;
-            let json = self.graphql_get(qid, "HomeLatestTimeline", &vars, access_token).await?;
+            let json = self
+                .graphql_get(qid, "HomeLatestTimeline", &vars, access_token)
+                .await?;
             let cursor = Self::extract_next_cursor(&json);
             let timeline = json
                 .pointer("/data/home/home_timeline_urt")
@@ -2074,7 +2322,7 @@ impl XProvider {
         if let Some((_at, _ct0)) = Self::parse_cookie_token(access_token) {
             let mut vars = serde_json::json!({
                 "userId": user_id,
-                "count": max_results.min(100).max(1) as u32,
+                "count": max_results.clamp(1, 100),
                 "includePromotedContent": false,
                 "withQuickPromoteEligibilityTweetFields": true,
                 "withVoice": true,
@@ -2086,7 +2334,9 @@ impl XProvider {
             let qid = FALLBACK_QUERY_IDS
                 .get("UserTweets")
                 .ok_or_else(|| ProviderError::Api("Missing UserTweets queryId".into()))?;
-            let json = self.graphql_get(qid, "UserTweets", &vars, access_token).await?;
+            let json = self
+                .graphql_get(qid, "UserTweets", &vars, access_token)
+                .await?;
             let cursor = Self::extract_next_cursor(&json);
             let timeline = json
                 .pointer("/data/user/result/timeline_v2/timeline")
@@ -2130,7 +2380,9 @@ impl XProvider {
             let qid = FALLBACK_QUERY_IDS
                 .get("TweetDetail")
                 .ok_or_else(|| ProviderError::Api("Missing TweetDetail queryId".into()))?;
-            let json = self.graphql_get(qid, "TweetDetail", &vars, access_token).await?;
+            let json = self
+                .graphql_get(qid, "TweetDetail", &vars, access_token)
+                .await?;
             // Extract the focal tweet from the response
             let tweet = json
                 .pointer("/data/threaded_conversation_with_injections_v2/instructions")
@@ -2161,7 +2413,7 @@ impl XProvider {
         if let Some((_at, _ct0)) = Self::parse_cookie_token(access_token) {
             let mut vars = serde_json::json!({
                 "rawQuery": query,
-                "count": max_results.min(100).max(1) as u32,
+                "count": max_results.clamp(1, 100),
                 "querySource": "typed_query",
                 "product": "Top",
             });
@@ -2171,7 +2423,9 @@ impl XProvider {
             let qid = FALLBACK_QUERY_IDS
                 .get("SearchTimeline")
                 .ok_or_else(|| ProviderError::Api("Missing SearchTimeline queryId".into()))?;
-            let json = self.graphql_post(qid, "SearchTimeline", &vars, access_token).await?;
+            let json = self
+                .graphql_post(qid, "SearchTimeline", &vars, access_token)
+                .await?;
             let cursor = Self::extract_next_cursor(&json);
             let mut result = serde_json::json!({ "data": json });
             if let Some(c) = cursor {
@@ -2205,7 +2459,9 @@ impl XProvider {
             let qid = FALLBACK_QUERY_IDS
                 .get("DeleteTweet")
                 .ok_or_else(|| ProviderError::Api("Missing DeleteTweet queryId".into()))?;
-            let json = self.graphql_post(qid, "DeleteTweet", &vars, access_token).await?;
+            let json = self
+                .graphql_post(qid, "DeleteTweet", &vars, access_token)
+                .await?;
             Self::write_delay();
             return Ok(serde_json::json!({ "data": json.get("data") }));
         }
@@ -2224,7 +2480,9 @@ impl XProvider {
             let qid = FALLBACK_QUERY_IDS
                 .get("FavoriteTweet")
                 .ok_or_else(|| ProviderError::Api("Missing FavoriteTweet queryId".into()))?;
-            let json = self.graphql_post(qid, "FavoriteTweet", &vars, access_token).await?;
+            let json = self
+                .graphql_post(qid, "FavoriteTweet", &vars, access_token)
+                .await?;
             Self::write_delay();
             return Ok(serde_json::json!({ "data": json.get("data") }));
         }
@@ -2247,7 +2505,9 @@ impl XProvider {
             let qid = FALLBACK_QUERY_IDS
                 .get("UnfavoriteTweet")
                 .ok_or_else(|| ProviderError::Api("Missing UnfavoriteTweet queryId".into()))?;
-            let json = self.graphql_post(qid, "UnfavoriteTweet", &vars, access_token).await?;
+            let json = self
+                .graphql_post(qid, "UnfavoriteTweet", &vars, access_token)
+                .await?;
             Self::write_delay();
             return Ok(serde_json::json!({ "data": json.get("data") }));
         }
@@ -2269,7 +2529,9 @@ impl XProvider {
             let qid = FALLBACK_QUERY_IDS
                 .get("CreateRetweet")
                 .ok_or_else(|| ProviderError::Api("Missing CreateRetweet queryId".into()))?;
-            let json = self.graphql_post(qid, "CreateRetweet", &vars, access_token).await?;
+            let json = self
+                .graphql_post(qid, "CreateRetweet", &vars, access_token)
+                .await?;
             Self::write_delay();
             return Ok(serde_json::json!({ "data": json.get("data") }));
         }
@@ -2292,7 +2554,9 @@ impl XProvider {
             let qid = FALLBACK_QUERY_IDS
                 .get("DeleteRetweet")
                 .ok_or_else(|| ProviderError::Api("Missing DeleteRetweet queryId".into()))?;
-            let json = self.graphql_post(qid, "DeleteRetweet", &vars, access_token).await?;
+            let json = self
+                .graphql_post(qid, "DeleteRetweet", &vars, access_token)
+                .await?;
             Self::write_delay();
             return Ok(serde_json::json!({ "data": json.get("data") }));
         }
@@ -2311,7 +2575,7 @@ impl XProvider {
     ) -> Result<serde_json::Value, ProviderError> {
         if let Some((_at, _ct0)) = Self::parse_cookie_token(access_token) {
             let mut vars = serde_json::json!({
-                "count": max_results.min(100).max(1) as u32,
+                "count": max_results.clamp(1, 100),
             });
             if let Some(cursor) = pagination_token {
                 vars["cursor"] = serde_json::json!(cursor);
@@ -2319,7 +2583,9 @@ impl XProvider {
             let qid = FALLBACK_QUERY_IDS
                 .get("Bookmarks")
                 .ok_or_else(|| ProviderError::Api("Missing Bookmarks queryId".into()))?;
-            let json = self.graphql_get(qid, "Bookmarks", &vars, access_token).await?;
+            let json = self
+                .graphql_get(qid, "Bookmarks", &vars, access_token)
+                .await?;
             let cursor = Self::extract_next_cursor(&json);
             let timeline = json
                 .pointer("/data/bookmark_timeline_v2/timeline")
@@ -2353,7 +2619,9 @@ impl XProvider {
             let qid = FALLBACK_QUERY_IDS
                 .get("CreateBookmark")
                 .ok_or_else(|| ProviderError::Api("Missing CreateBookmark queryId".into()))?;
-            let json = self.graphql_post(qid, "CreateBookmark", &vars, access_token).await?;
+            let json = self
+                .graphql_post(qid, "CreateBookmark", &vars, access_token)
+                .await?;
             return Ok(serde_json::json!({ "data": json.get("data") }));
         }
         let url = format!("https://api.twitter.com/2/users/{user_id}/bookmarks");
@@ -2372,7 +2640,9 @@ impl XProvider {
             let qid = FALLBACK_QUERY_IDS
                 .get("DeleteBookmark")
                 .ok_or_else(|| ProviderError::Api("Missing DeleteBookmark queryId".into()))?;
-            let json = self.graphql_post(qid, "DeleteBookmark", &vars, access_token).await?;
+            let json = self
+                .graphql_post(qid, "DeleteBookmark", &vars, access_token)
+                .await?;
             return Ok(serde_json::json!({ "data": json.get("data") }));
         }
         let url = format!("https://api.twitter.com/2/users/{user_id}/bookmarks/{tweet_id}");
@@ -2391,7 +2661,7 @@ impl XProvider {
         if let Some((_at, _ct0)) = Self::parse_cookie_token(access_token) {
             let mut vars = serde_json::json!({
                 "userId": user_id,
-                "count": max_results.min(100).max(1) as u32,
+                "count": max_results.clamp(1, 100),
                 "includePromotedContent": false,
             });
             if let Some(cursor) = pagination_token {
@@ -2401,7 +2671,9 @@ impl XProvider {
                 .get("UserByScreenName")
                 .ok_or_else(|| ProviderError::Api("Missing UserByScreenName queryId".into()))?;
             // Followers is a POST GraphQL query
-            let json = self.graphql_post(qid, "Followers", &vars, access_token).await?;
+            let json = self
+                .graphql_post(qid, "Followers", &vars, access_token)
+                .await?;
             let cursor = Self::extract_next_cursor(&json);
             let mut result = serde_json::json!({ "data": json });
             if let Some(c) = cursor {
@@ -2429,7 +2701,7 @@ impl XProvider {
         if let Some((_at, _ct0)) = Self::parse_cookie_token(access_token) {
             let mut vars = serde_json::json!({
                 "userId": user_id,
-                "count": max_results.min(100).max(1) as u32,
+                "count": max_results.clamp(1, 100),
                 "includePromotedContent": false,
             });
             if let Some(cursor) = pagination_token {
@@ -2438,7 +2710,9 @@ impl XProvider {
             let qid = FALLBACK_QUERY_IDS
                 .get("UserByScreenName")
                 .ok_or_else(|| ProviderError::Api("Missing UserByScreenName queryId".into()))?;
-            let json = self.graphql_post(qid, "Following", &vars, access_token).await?;
+            let json = self
+                .graphql_post(qid, "Following", &vars, access_token)
+                .await?;
             let cursor = Self::extract_next_cursor(&json);
             let mut result = serde_json::json!({ "data": json });
             if let Some(c) = cursor {
@@ -2467,15 +2741,20 @@ impl XProvider {
             let body = format!("user_id={target_user_id}");
             let url = "https://x.com/i/api/1.1/friendships/create.json";
             let (ct0, cs) = self.effective_cookie_str(access_token);
-            let resp = self.http.post(url)
+            let resp = self
+                .http
+                .post(url)
                 .header("x-csrf-token", &ct0)
                 .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
                 .header("Cookie", &cs)
                 .body(body)
-                .send().await
+                .send()
+                .await
                 .map_err(|e| ProviderError::Api(format!("Follow error: {e}")))?;
             let status = resp.status();
-            let json: serde_json::Value = resp.json().await
+            let json: serde_json::Value = resp
+                .json()
+                .await
                 .map_err(|e| ProviderError::Api(e.to_string()))?;
             Self::write_delay();
             return if status.is_success() {
@@ -2499,21 +2778,28 @@ impl XProvider {
             let body = format!("user_id={target_user_id}");
             let url = "https://x.com/i/api/1.1/friendships/destroy.json";
             let (ct0, cs) = self.effective_cookie_str(access_token);
-            let resp = self.http.post(url)
+            let resp = self
+                .http
+                .post(url)
                 .header("x-csrf-token", &ct0)
                 .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
                 .header("Cookie", &cs)
                 .body(body)
-                .send().await
+                .send()
+                .await
                 .map_err(|e| ProviderError::Api(format!("Unfollow error: {e}")))?;
             let status = resp.status();
-            let json: serde_json::Value = resp.json().await
+            let json: serde_json::Value = resp
+                .json()
+                .await
                 .map_err(|e| ProviderError::Api(e.to_string()))?;
             Self::write_delay();
             return if status.is_success() {
                 Ok(serde_json::json!({ "data": json }))
             } else {
-                Err(ProviderError::Api(format!("Unfollow failed: HTTP {status}")))
+                Err(ProviderError::Api(format!(
+                    "Unfollow failed: HTTP {status}"
+                )))
             };
         }
         let url = format!("https://api.twitter.com/2/users/{user_id}/following/{target_user_id}");
@@ -2532,15 +2818,19 @@ impl XProvider {
         if let Some((_at, _ct0)) = Self::parse_cookie_token(access_token) {
             let mut vars = serde_json::json!({
                 "listId": list_id,
-                "count": max_results.min(100).max(1) as u32,
+                "count": max_results.clamp(1, 100),
             });
             if let Some(cursor) = pagination_token {
                 vars["cursor"] = serde_json::json!(cursor);
             }
             let qid = FALLBACK_QUERY_IDS
                 .get("ListLatestTweetsTimeline")
-                .ok_or_else(|| ProviderError::Api("Missing ListLatestTweetsTimeline queryId".into()))?;
-            let json = self.graphql_get(qid, "ListLatestTweetsTimeline", &vars, access_token).await?;
+                .ok_or_else(|| {
+                    ProviderError::Api("Missing ListLatestTweetsTimeline queryId".into())
+                })?;
+            let json = self
+                .graphql_get(qid, "ListLatestTweetsTimeline", &vars, access_token)
+                .await?;
             let cursor = Self::extract_next_cursor(&json);
             let timeline = json
                 .pointer("/data/list/tweets_timeline/timeline")
@@ -2620,7 +2910,10 @@ mod tests {
         });
         let rows = XProvider::parse_tweet_metrics(&fixture);
         let labels: Vec<&str> = rows.iter().map(|r| r.label.as_str()).collect();
-        assert_eq!(labels, ["Likes", "Retweets", "Replies", "Quotes", "Impressions"]);
+        assert_eq!(
+            labels,
+            ["Likes", "Retweets", "Replies", "Quotes", "Impressions"]
+        );
         assert_eq!(rows[4].data[0].total, "1200");
     }
 
@@ -2659,9 +2952,14 @@ mod tests {
         assert_eq!(metrics["impression_count"], 1200);
         assert_eq!(metrics["bookmark_count"], 5);
 
-        let e = crate::social::parse_engagement_data("x", serde_json::json!({ "public_metrics": metrics }));
-        assert_eq!((e.likes, e.reposts, e.replies, e.quotes, e.views, e.saves),
-                   (42, 8, 3, 1, 1200, 5));
+        let e = crate::social::parse_engagement_data(
+            "x",
+            serde_json::json!({ "public_metrics": metrics }),
+        );
+        assert_eq!(
+            (e.likes, e.reposts, e.replies, e.quotes, e.views, e.saves),
+            (42, 8, 3, 1, 1200, 5)
+        );
     }
 
     #[test]
@@ -2679,7 +2977,10 @@ mod tests {
             "data": { "result": { "legacy": { "favorite_count": "42" } } }
         });
         let metrics = XProvider::extract_public_metrics(&fixture).unwrap();
-        assert_eq!(metrics["like_count"], 42, "string counts must be coerced to numbers");
+        assert_eq!(
+            metrics["like_count"], 42,
+            "string counts must be coerced to numbers"
+        );
     }
 
     #[test]
@@ -2700,15 +3001,15 @@ mod tests {
 
     #[test]
     fn map_error_explains_rate_limit_from_graphql_code_88() {
-        let msg = provider().map_error(r#"{"errors":[{"code":88}]}"#, 400).unwrap();
+        let msg = provider()
+            .map_error(r#"{"errors":[{"code":88}]}"#, 400)
+            .unwrap();
         assert!(msg.contains("rate limit"), "got: {msg}");
     }
 
     #[test]
     fn map_error_explains_duplicate_tweet() {
-        let msg = provider()
-            .map_error("Status is a duplicate.", 403)
-            .unwrap();
+        let msg = provider().map_error("Status is a duplicate.", 403).unwrap();
         assert!(msg.contains("duplicate"), "got: {msg}");
     }
 
@@ -2837,7 +3138,10 @@ mod tests {
         assert_eq!(comments.len(), 1);
         assert_eq!(comments[0].text, "nice");
         assert_eq!(comments[0].author_name.as_deref(), Some("Bob"));
-        assert_eq!(comments[0].author_avatar.as_deref(), Some("https://img/b.jpg"));
+        assert_eq!(
+            comments[0].author_avatar.as_deref(),
+            Some("https://img/b.jpg")
+        );
         assert_eq!(comments[0].like_count, 3);
     }
 

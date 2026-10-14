@@ -5,12 +5,7 @@
 // in the v5 audit — single-user mode doesn't need Stripe subscription
 // tiers. If billing is re-added, restore from git history.
 
-use axum::{
-    body::Bytes,
-    extract::State,
-    http::HeaderMap,
-    Json,
-};
+use axum::{body::Bytes, extract::State, http::HeaderMap, Json};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -77,18 +72,28 @@ fn verify_webhook_signature(
         }
     }
     if timestamp.is_empty() || signature.is_empty() {
-        return Err(AppError::BadRequest("Invalid Stripe signature format".into()));
+        return Err(AppError::BadRequest(
+            "Invalid Stripe signature format".into(),
+        ));
     }
     // Verify timestamp is within tolerance (5 minutes)
-    let ts_secs: i64 = timestamp.parse().map_err(|_| AppError::BadRequest("Invalid webhook timestamp".into()))?;
+    let ts_secs: i64 = timestamp
+        .parse()
+        .map_err(|_| AppError::BadRequest("Invalid webhook timestamp".into()))?;
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs() as i64;
     if (now - ts_secs).abs() > 300 {
-        return Err(AppError::BadRequest("Webhook timestamp outside tolerance window".into()));
+        return Err(AppError::BadRequest(
+            "Webhook timestamp outside tolerance window".into(),
+        ));
     }
-    let signed_payload = format!("{}.{}", timestamp, std::str::from_utf8(payload).unwrap_or(""));
+    let signed_payload = format!(
+        "{}.{}",
+        timestamp,
+        std::str::from_utf8(payload).unwrap_or("")
+    );
     let expected = hex::encode(hmac_sha256(secret.as_bytes(), signed_payload.as_bytes()));
     if expected != signature {
         return Err(AppError::BadRequest("Invalid webhook signature".into()));
@@ -99,6 +104,10 @@ fn verify_webhook_signature(
 
 // ── Query helpers ─────────────────────────────────────────────
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "upsert_subscription requires 8 params per DB schema"
+)]
 async fn upsert_subscription(
     pool: &sqlx::SqlitePool,
     user_id: Uuid,
@@ -133,7 +142,7 @@ async fn upsert_subscription(
     .bind(period_end)
     .fetch_one(pool)
     .await
-    .map_err(|e| AppError::Database(e))
+    .map_err(AppError::Database)
 }
 
 async fn update_subscription_status(
@@ -154,10 +163,14 @@ async fn update_subscription_status(
     .bind(stripe_subscription_id)
     .execute(pool)
     .await
-    .map_err(|e| AppError::Database(e))?;
+    .map_err(AppError::Database)?;
     Ok(())
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "insert_invoice requires 7 params per DB schema"
+)]
 async fn insert_invoice(
     pool: &sqlx::SqlitePool,
     user_id: Uuid,
@@ -183,7 +196,7 @@ async fn insert_invoice(
     .bind(paid_at)
     .execute(pool)
     .await
-    .map_err(|e| AppError::Database(e))?;
+    .map_err(AppError::Database)?;
     Ok(())
 }
 
@@ -197,7 +210,7 @@ async fn set_subscription_plan_free(
     .bind(stripe_subscription_id)
     .execute(pool)
     .await
-    .map_err(|e| AppError::Database(e))?;
+    .map_err(AppError::Database)?;
     Ok(())
 }
 
@@ -222,10 +235,7 @@ pub async fn stripe_webhook(
 
     let event = verify_webhook_signature(&body, sig_header, secret)?;
 
-    let event_type = event
-        .get("type")
-        .and_then(|t| t.as_str())
-        .unwrap_or("");
+    let event_type = event.get("type").and_then(|t| t.as_str()).unwrap_or("");
 
     tracing::info!("Stripe webhook received: {}", event_type);
 
@@ -240,12 +250,16 @@ pub async fn stripe_webhook(
                 .get("customer")
                 .and_then(|c| c.as_str())
                 .filter(|s| !s.is_empty())
-                .ok_or_else(|| AppError::BadRequest("Missing customer in checkout session".into()))?;
+                .ok_or_else(|| {
+                    AppError::BadRequest("Missing customer in checkout session".into())
+                })?;
             let subscription_id = session
                 .get("subscription")
                 .and_then(|s| s.as_str())
                 .filter(|s| !s.is_empty())
-                .ok_or_else(|| AppError::BadRequest("Missing subscription in checkout session".into()))?;
+                .ok_or_else(|| {
+                    AppError::BadRequest("Missing subscription in checkout session".into())
+                })?;
             let user_id_str = session
                 .get("metadata")
                 .and_then(|m| m.get("user_id"))
@@ -280,13 +294,8 @@ pub async fn stripe_webhook(
                 .and_then(|d| d.get("object"))
                 .ok_or_else(|| AppError::BadRequest("Missing object in event".into()))?;
 
-            let invoice_id = invoice
-                .get("id")
-                .and_then(|i| i.as_str())
-                .unwrap_or("");
-            let subscription_id = invoice
-                .get("subscription")
-                .and_then(|s| s.as_str());
+            let invoice_id = invoice.get("id").and_then(|i| i.as_str()).unwrap_or("");
+            let subscription_id = invoice.get("subscription").and_then(|s| s.as_str());
             let customer_id = invoice
                 .get("customer")
                 .and_then(|c| c.as_str())
@@ -299,16 +308,12 @@ pub async fn stripe_webhook(
                 .get("currency")
                 .and_then(|c| c.as_str())
                 .unwrap_or("usd");
-            let invoice_url = invoice
-                .get("hosted_invoice_url")
-                .and_then(|u| u.as_str());
+            let invoice_url = invoice.get("hosted_invoice_url").and_then(|u| u.as_str());
             let status = invoice
                 .get("status")
                 .and_then(|s| s.as_str())
                 .unwrap_or("paid");
-            let paid_at = invoice
-                .get("paid_at")
-                .and_then(|p| p.as_i64());
+            let paid_at = invoice.get("paid_at").and_then(|p| p.as_i64());
 
             let period_start = invoice
                 .get("lines")
@@ -335,7 +340,7 @@ pub async fn stripe_webhook(
                 .bind(sid)
                 .fetch_optional(&state.db)
                 .await
-                .map_err(|e| AppError::Database(e))?;
+                .map_err(AppError::Database)?;
                 sub.map(|s| (s.id, s.user_id))
             } else {
                 let sub: Option<Subscription> = sqlx::query_as::<_, Subscription>(
@@ -344,7 +349,7 @@ pub async fn stripe_webhook(
                 .bind(customer_id)
                 .fetch_optional(&state.db)
                 .await
-                .map_err(|e| AppError::Database(e))?;
+                .map_err(AppError::Database)?;
                 sub.map(|s| (s.id, s.user_id))
             };
 
@@ -381,10 +386,7 @@ pub async fn stripe_webhook(
                 .and_then(|d| d.get("object"))
                 .ok_or_else(|| AppError::BadRequest("Missing object in event".into()))?;
 
-            let sub_id = sub_obj
-                .get("id")
-                .and_then(|s| s.as_str())
-                .unwrap_or("");
+            let sub_id = sub_obj.get("id").and_then(|s| s.as_str()).unwrap_or("");
             let sub_status = sub_obj
                 .get("status")
                 .and_then(|s| s.as_str())
@@ -394,13 +396,9 @@ pub async fn stripe_webhook(
                 .and_then(|c| c.as_bool())
                 .unwrap_or(false);
 
-            let period_start = sub_obj
-                .get("current_period_start")
-                .and_then(|p| p.as_i64());
+            let period_start = sub_obj.get("current_period_start").and_then(|p| p.as_i64());
 
-            let period_end = sub_obj
-                .get("current_period_end")
-                .and_then(|p| p.as_i64());
+            let period_end = sub_obj.get("current_period_end").and_then(|p| p.as_i64());
 
             update_subscription_status(
                 &state.db,
@@ -418,10 +416,7 @@ pub async fn stripe_webhook(
                 .and_then(|d| d.get("object"))
                 .ok_or_else(|| AppError::BadRequest("Missing object in event".into()))?;
 
-            let sub_id = sub_obj
-                .get("id")
-                .and_then(|s| s.as_str())
-                .unwrap_or("");
+            let sub_id = sub_obj.get("id").and_then(|s| s.as_str()).unwrap_or("");
 
             set_subscription_plan_free(&state.db, sub_id).await?;
         }

@@ -11,9 +11,11 @@ use crate::db;
 use crate::realtime::Broadcaster;
 use crate::social::registry::ProviderRegistry;
 
-use super::{Cli, Command, ConfigAction, CommentAction, DmAction, AutomationAction, MediaAction, PostsAction};
-use crate::social::TargetInfo;
+use super::{
+    AutomationAction, Cli, Command, CommentAction, ConfigAction, DmAction, MediaAction, PostsAction,
+};
 use crate::db::models::Integration;
+use crate::social::TargetInfo;
 
 // ── TOON Output (AXI §1/§3) ───────────────────────────────────
 // Formerly the `toon-helper` crate: three functions, one call site each.
@@ -38,7 +40,10 @@ pub(crate) fn format_text<T: serde::Serialize>(value: &T, format: &str) -> Strin
 
 /// AXI §3: Recursively truncate long string fields to `max_chars`, appending
 /// a total-length indicator so the agent knows the field was clipped.
-pub(crate) fn truncate_json_strings(value: &serde_json::Value, max_chars: usize) -> serde_json::Value {
+pub(crate) fn truncate_json_strings(
+    value: &serde_json::Value,
+    max_chars: usize,
+) -> serde_json::Value {
     match value {
         serde_json::Value::Object(map) => serde_json::Value::Object(
             map.iter()
@@ -46,7 +51,9 @@ pub(crate) fn truncate_json_strings(value: &serde_json::Value, max_chars: usize)
                 .collect(),
         ),
         serde_json::Value::Array(arr) => serde_json::Value::Array(
-            arr.iter().map(|v| truncate_json_strings(v, max_chars)).collect(),
+            arr.iter()
+                .map(|v| truncate_json_strings(v, max_chars))
+                .collect(),
         ),
         serde_json::Value::String(s) if s.len() > max_chars => {
             let total = s.len();
@@ -80,28 +87,47 @@ pub(crate) fn output_error_with_hint(msg: &str, hint: &str) -> ! {
 
 // ── Target Discovery Helpers ─────────────────────────────────
 
-pub(crate) async fn fetch_targets(state: &AppState, integration: &Integration) -> anyhow::Result<Vec<TargetInfo>> {
-    let provider_obj = state.providers.get(&integration.provider_identifier)
+pub(crate) async fn fetch_targets(
+    state: &AppState,
+    integration: &Integration,
+) -> anyhow::Result<Vec<TargetInfo>> {
+    let provider_obj = state
+        .providers
+        .get(&integration.provider_identifier)
         .ok_or_else(|| anyhow::anyhow!("Provider not found in registry"))?;
 
-    let token = crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
+    let token =
+        crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
 
-    let targets = provider_obj.targets(&token).await
+    let targets = provider_obj
+        .targets(&token)
+        .await
         .map_err(|e| anyhow::anyhow!("Failed to fetch targets: {}", e))?;
 
     Ok(targets)
 }
 
-pub(crate) async fn find_integration(state: &AppState, user_id: Uuid, provider: &str) -> anyhow::Result<Integration> {
+pub(crate) async fn find_integration(
+    state: &AppState,
+    user_id: Uuid,
+    provider: &str,
+) -> anyhow::Result<Integration> {
     let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
-    integrations.into_iter()
+    integrations
+        .into_iter()
         .find(|i| i.provider_identifier == provider)
         .ok_or_else(|| anyhow::anyhow!("No {} integration found", provider))
 }
 
-pub(crate) fn pick_target_interactive(targets: &[TargetInfo], provider: &str) -> anyhow::Result<String> {
+pub(crate) fn pick_target_interactive(
+    targets: &[TargetInfo],
+    provider: &str,
+) -> anyhow::Result<String> {
     if targets.is_empty() {
-        return Err(anyhow::anyhow!("No posting targets found for this {} account", provider));
+        return Err(anyhow::anyhow!(
+            "No posting targets found for this {} account",
+            provider
+        ));
     }
 
     eprintln!("\nAvailable {} targets:", provider);
@@ -116,14 +142,20 @@ pub(crate) fn pick_target_interactive(targets: &[TargetInfo], provider: &str) ->
     eprint!("\nSelect target (1-{}): ", targets.len());
 
     let mut input = String::new();
-    std::io::stdin().read_line(&mut input)
+    std::io::stdin()
+        .read_line(&mut input)
         .map_err(|e| anyhow::anyhow!("Failed to read input: {}", e))?;
 
-    let choice: usize = input.trim().parse()
+    let choice: usize = input
+        .trim()
+        .parse()
         .map_err(|_| anyhow::anyhow!("Invalid selection: {}", input.trim()))?;
 
     if choice < 1 || choice > targets.len() {
-        return Err(anyhow::anyhow!("Selection out of range (1-{})", targets.len()));
+        return Err(anyhow::anyhow!(
+            "Selection out of range (1-{})",
+            targets.len()
+        ));
     }
 
     Ok(targets[choice - 1].id.clone())
@@ -147,10 +179,7 @@ pub const PLATFORM_COLLISIONS: &[(&str, &str)] = &[
 /// `telegram-bot` / `telegram-user`) applies ONLY to names that have no exact
 /// match, so a real provider is never shadowed by its own `-suffix` variant.
 /// See [`PLATFORM_COLLISIONS`].
-pub(crate) fn resolve_platform_integrations<'a, I>(
-    integrations: I,
-    platforms: &str,
-) -> Vec<Uuid>
+pub(crate) fn resolve_platform_integrations<'a, I>(integrations: I, platforms: &str) -> Vec<Uuid>
 where
     I: Iterator<Item = &'a crate::db::models::Integration>,
 {
@@ -188,7 +217,9 @@ async fn init_state() -> anyhow::Result<AppState> {
     let config = Config::from_env()?;
     let db = db::create_pool(&config.database_url).await?;
     let broadcaster = Broadcaster::new();
-    let token_key = config.token_encryption_key.as_ref()
+    let token_key = config
+        .token_encryption_key
+        .as_ref()
         .and_then(|k| crypto::decode_hex_key(k).ok());
     let providers = ProviderRegistry::new(&config, None, None);
     Ok(AppState {
@@ -225,13 +256,20 @@ pub(crate) async fn resolve_user(state: &AppState) -> anyhow::Result<Uuid> {
 
 // ── Token Resolution ─────────────────────────────────────────
 
-pub(crate) async fn find_x_token(state: &AppState, user_id: Uuid) -> anyhow::Result<(String, String)> {
+pub(crate) async fn find_x_token(
+    state: &AppState,
+    user_id: Uuid,
+) -> anyhow::Result<(String, String)> {
     let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
-    let x_integrations: Vec<_> = integrations.into_iter()
+    let x_integrations: Vec<_> = integrations
+        .into_iter()
         .filter(|i| i.provider_identifier == "x")
         .collect();
 
-    if let Some(preferred) = x_integrations.iter().find(|i| i.access_token.starts_with('{')) {
+    if let Some(preferred) = x_integrations
+        .iter()
+        .find(|i| i.access_token.starts_with('{'))
+    {
         let token = preferred.access_token.clone();
         let token = crate::crypto::maybe_decrypt_token(&token, state.token_key.as_ref());
         return Ok((token, preferred.internal_id.clone()));
@@ -244,7 +282,9 @@ pub(crate) async fn find_x_token(state: &AppState, user_id: Uuid) -> anyhow::Res
 
     if let Some(cookies) = crate::social::x_cookies::extract_x_cookies() {
         let token = crate::social::x_cookies::build_cookie_token(
-            &cookies.auth_token, &cookies.ct0, Some(&cookies.cookie_string)
+            &cookies.auth_token,
+            &cookies.ct0,
+            Some(&cookies.cookie_string),
         );
         return Ok((token, String::new()));
     }
@@ -260,11 +300,15 @@ pub(crate) async fn find_x_token(state: &AppState, user_id: Uuid) -> anyhow::Res
 
 pub(crate) async fn find_reddit_token(state: &AppState, user_id: Uuid) -> anyhow::Result<String> {
     let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
-    let reddit_integrations: Vec<_> = integrations.into_iter()
+    let reddit_integrations: Vec<_> = integrations
+        .into_iter()
         .filter(|i| i.provider_identifier == "reddit")
         .collect();
 
-    if let Some(preferred) = reddit_integrations.iter().find(|i| i.access_token.starts_with('{')) {
+    if let Some(preferred) = reddit_integrations
+        .iter()
+        .find(|i| i.access_token.starts_with('{'))
+    {
         let token = preferred.access_token.clone();
         let token = crate::crypto::maybe_decrypt_token(&token, state.token_key.as_ref());
         return Ok(token);
@@ -272,7 +316,9 @@ pub(crate) async fn find_reddit_token(state: &AppState, user_id: Uuid) -> anyhow
 
     if let Some(cookies) = crate::social::reddit_cookies::extract_reddit_cookies() {
         return Ok(crate::social::reddit_cookies::build_cookie_token(
-            &cookies.reddit_session, cookies.token_v2.as_deref(), Some(&cookies.cookie_string)
+            &cookies.reddit_session,
+            cookies.token_v2.as_deref(),
+            Some(&cookies.cookie_string),
         ));
     }
 
@@ -285,9 +331,13 @@ pub(crate) async fn find_reddit_token(state: &AppState, user_id: Uuid) -> anyhow
     anyhow::bail!("No Reddit integration found")
 }
 
-pub(crate) async fn find_linkedin_token(state: &AppState, user_id: Uuid) -> anyhow::Result<(String, String)> {
+pub(crate) async fn find_linkedin_token(
+    state: &AppState,
+    user_id: Uuid,
+) -> anyhow::Result<(String, String)> {
     let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
-    let li = integrations.iter()
+    let li = integrations
+        .iter()
         .find(|i| i.provider_identifier == "linkedin")
         .ok_or_else(|| anyhow::anyhow!("No LinkedIn account connected"))?;
     let token = li.access_token.clone();
@@ -295,7 +345,11 @@ pub(crate) async fn find_linkedin_token(state: &AppState, user_id: Uuid) -> anyh
     Ok((token, li.internal_id.clone()))
 }
 
-pub(crate) async fn find_linkedin_page_token(state: &AppState, user_id: Uuid, page_id: &str) -> anyhow::Result<(String, String)> {
+pub(crate) async fn find_linkedin_page_token(
+    state: &AppState,
+    user_id: Uuid,
+    page_id: &str,
+) -> anyhow::Result<(String, String)> {
     let lip = state
         .integration_by_internal_id(user_id, "linkedin-page", page_id)
         .await?
@@ -304,7 +358,11 @@ pub(crate) async fn find_linkedin_page_token(state: &AppState, user_id: Uuid, pa
     Ok((token, lip.internal_id.clone()))
 }
 
-pub(crate) async fn find_facebook_page_token(state: &AppState, user_id: Uuid, page_id: &str) -> anyhow::Result<String> {
+pub(crate) async fn find_facebook_page_token(
+    state: &AppState,
+    user_id: Uuid,
+    page_id: &str,
+) -> anyhow::Result<String> {
     let page = state
         .integration_by_internal_id(user_id, "facebook", page_id)
         .await?
@@ -408,10 +466,7 @@ async fn handle_audit_with_state(state: &AppState) -> anyhow::Result<()> {
     .into_iter()
     .collect();
 
-    let warn_count = findings
-        .iter()
-        .filter(|f| f["status"] != "ok")
-        .count();
+    let warn_count = findings.iter().filter(|f| f["status"] != "ok").count();
 
     output_json(&serde_json::json!({
         "status": if warn_count == 0 { "clean" } else { "warn" },
@@ -454,10 +509,7 @@ fn checked_at() -> String {
 /// authenticated round-trip, so there is no code path where a provider looks
 /// verified because a flag was on disk. Returns `(draft_ok, publish_capable,
 /// reason_when_not_publish_capable)`.
-fn readiness_flags(
-    registry: &ProviderRegistry,
-    provider_id: &str,
-) -> (bool, bool, Option<String>) {
+fn readiness_flags(registry: &ProviderRegistry, provider_id: &str) -> (bool, bool, Option<String>) {
     let Some(provider) = registry.get(provider_id) else {
         return (
             false,
@@ -501,10 +553,20 @@ fn credential_env_names(provider_id: &str) -> &'static [&'static str] {
             "REDDIT_ACCESS_TOKEN",
             "REDDIT_REFRESH_TOKEN",
         ],
-        "youtube" | "google" | "google_my_business" => &["YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET"],
-        "discord" => &["DISCORD_CLIENT_ID", "DISCORD_CLIENT_SECRET", "DISCORD_BOT_TOKEN"],
+        "youtube" | "google" | "google_my_business" => {
+            &["YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET"]
+        }
+        "discord" => &[
+            "DISCORD_CLIENT_ID",
+            "DISCORD_CLIENT_SECRET",
+            "DISCORD_BOT_TOKEN",
+        ],
         "telegram-bot" => &["TELEGRAM_BOT_TOKENS"],
-        "telegram-user" => &["TELEGRAM_API_ID", "TELEGRAM_API_HASH", "TELEGRAM_SESSION_DIR"],
+        "telegram-user" => &[
+            "TELEGRAM_API_ID",
+            "TELEGRAM_API_HASH",
+            "TELEGRAM_SESSION_DIR",
+        ],
         "pinterest" => &["PINTEREST_CLIENT_ID", "PINTEREST_CLIENT_SECRET"],
         "tiktok" => &["TIKTOK_CLIENT_ID", "TIKTOK_CLIENT_SECRET"],
         "mastodon" => &[
@@ -606,7 +668,8 @@ async fn media_preflight(
     })
 }
 
-async fn handle_providers_with_state(state: &AppState) -> anyhow::Result<()> {let user_id = resolve_user(&state).await?;
+async fn handle_providers_with_state(state: &AppState) -> anyhow::Result<()> {
+    let user_id = resolve_user(state).await?;
     let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
     let db_counts: std::collections::HashMap<&str, usize> = integrations.iter().fold(
         std::collections::HashMap::new(),
@@ -625,7 +688,8 @@ async fn handle_providers_with_state(state: &AppState) -> anyhow::Result<()> {le
     let started_at = checked_at();
     let mut list: Vec<serde_json::Value> = Vec::new();
     for i in &integrations {
-        let (draft_ok, publish_capable, reason) = readiness_flags(&state.providers, &i.provider_identifier);
+        let (draft_ok, publish_capable, reason) =
+            readiness_flags(&state.providers, &i.provider_identifier);
         let mut row = serde_json::json!({
             "provider": i.provider_identifier,
             "name": i.profile_name,
@@ -873,15 +937,22 @@ fn is_credential_row(i: &crate::db::models::Integration) -> bool {
     !i.disabled && !i.access_token.is_empty()
 }
 
-async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::Result<()> {let user_id = resolve_user(&state).await?;
+async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::Result<()> {
+    let user_id = resolve_user(state).await?;
 
     match provider {
         // ── X/Twitter: auto-import from browser ────────────────
         "x" => {
             // Check if already connected
             let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
-            if integrations.iter().any(|i| i.provider_identifier == "x" && is_credential_row(i)) {
-                let existing: Vec<_> = integrations.iter().filter(|i| i.provider_identifier == "x" && is_credential_row(i)).collect();
+            if integrations
+                .iter()
+                .any(|i| i.provider_identifier == "x" && is_credential_row(i))
+            {
+                let existing: Vec<_> = integrations
+                    .iter()
+                    .filter(|i| i.provider_identifier == "x" && is_credential_row(i))
+                    .collect();
                 output_json(&serde_json::json!({
                     "status": "already_connected",
                     "provider": "x",
@@ -902,7 +973,9 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
             let imported = crate::social::x_cookies::extract_x_cookies().map(|cookies| {
                 (
                     crate::social::x_cookies::build_cookie_token(
-                        &cookies.auth_token, &cookies.ct0, Some(&cookies.cookie_string)
+                        &cookies.auth_token,
+                        &cookies.ct0,
+                        Some(&cookies.cookie_string),
                     ),
                     "browser-import".to_string(),
                     cookies.source,
@@ -944,15 +1017,39 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
                 match provider_obj.get_me(&token_str).await {
                     Ok(json) => {
                         let data = json.get("data");
-                        let name = data.and_then(|d| d.get("name")).and_then(|s| s.as_str()).unwrap_or("X User");
-                        let username = data.and_then(|d| d.get("username")).and_then(|s| s.as_str()).unwrap_or("");
-                        let avatar = data.and_then(|d| d.get("profile_image_url")).and_then(|s| s.as_str());
-                        let id = data.and_then(|d| d.get("id")).and_then(|s| s.as_str()).unwrap_or("").to_string();
+                        let name = data
+                            .and_then(|d| d.get("name"))
+                            .and_then(|s| s.as_str())
+                            .unwrap_or("X User");
+                        let username = data
+                            .and_then(|d| d.get("username"))
+                            .and_then(|s| s.as_str())
+                            .unwrap_or("");
+                        let avatar = data
+                            .and_then(|d| d.get("profile_image_url"))
+                            .and_then(|s| s.as_str());
+                        let id = data
+                            .and_then(|d| d.get("id"))
+                            .and_then(|s| s.as_str())
+                            .unwrap_or("")
+                            .to_string();
 
                         crate::db::queries::create_integration(
-                            &state.db, user_id, "x", "X (Twitter)", &id, &token_str,
-                            None, None, Some(name), None, avatar, None, None,
-                        ).await?;
+                            &state.db,
+                            user_id,
+                            "x",
+                            "X (Twitter)",
+                            &id,
+                            &token_str,
+                            None,
+                            None,
+                            Some(name),
+                            None,
+                            avatar,
+                            None,
+                            None,
+                        )
+                        .await?;
 
                         output_json(&serde_json::json!({
                             "status": "connected",
@@ -979,8 +1076,14 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
         // ── Reddit: auto-import from browser ──────────────────
         "reddit" => {
             let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
-            if integrations.iter().any(|i| i.provider_identifier == "reddit" && is_credential_row(i)) {
-                let existing: Vec<_> = integrations.iter().filter(|i| i.provider_identifier == "reddit" && is_credential_row(i)).collect();
+            if integrations
+                .iter()
+                .any(|i| i.provider_identifier == "reddit" && is_credential_row(i))
+            {
+                let existing: Vec<_> = integrations
+                    .iter()
+                    .filter(|i| i.provider_identifier == "reddit" && is_credential_row(i))
+                    .collect();
                 output_json(&serde_json::json!({
                     "status": "already_connected",
                     "provider": "reddit",
@@ -997,23 +1100,42 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
             match crate::social::reddit_cookies::extract_reddit_cookies() {
                 Some(cookies) => {
                     let token_str = crate::social::reddit_cookies::build_cookie_token(
-                        &cookies.reddit_session, cookies.token_v2.as_deref(), Some(&cookies.cookie_string)
+                        &cookies.reddit_session,
+                        cookies.token_v2.as_deref(),
+                        Some(&cookies.cookie_string),
                     );
 
-                    let mut provider_obj = crate::social::reddit::RedditProvider::new(&state.config);
+                    let mut provider_obj =
+                        crate::social::reddit::RedditProvider::new(&state.config);
                     provider_obj.prepare_from_token(&token_str);
                     match provider_obj.get_www("/api/me.json", &[]).await {
                         Ok(json) => {
-                            let name = json["data"]["name"].as_str().unwrap_or("Reddit User").to_string();
+                            let name = json["data"]["name"]
+                                .as_str()
+                                .unwrap_or("Reddit User")
+                                .to_string();
                             let id = json["data"]["id"].as_str().unwrap_or("").to_string();
-                            let icon = json["data"]["icon_img"].as_str()
+                            let icon = json["data"]["icon_img"]
+                                .as_str()
                                 .and_then(|s| s.split('?').next())
                                 .map(String::from);
 
                             crate::db::queries::create_integration(
-                                &state.db, user_id, "reddit", "Reddit", &id, &token_str,
-                                None, None, Some(&name), None, icon.as_deref(), None, None,
-                            ).await?;
+                                &state.db,
+                                user_id,
+                                "reddit",
+                                "Reddit",
+                                &id,
+                                &token_str,
+                                None,
+                                None,
+                                Some(&name),
+                                None,
+                                icon.as_deref(),
+                                None,
+                                None,
+                            )
+                            .await?;
 
                             output_json(&serde_json::json!({
                                 "status": "connected",
@@ -1052,8 +1174,13 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
         // ── OAuth providers: check status and provide URL ──────
         "linkedin" | "linkedin-page" => {
             let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
-            let connected: Vec<_> = integrations.iter()
-                .filter(|i| (i.provider_identifier == "linkedin" || i.provider_identifier == "linkedin-page") && is_credential_row(i))
+            let connected: Vec<_> = integrations
+                .iter()
+                .filter(|i| {
+                    (i.provider_identifier == "linkedin"
+                        || i.provider_identifier == "linkedin-page")
+                        && is_credential_row(i)
+                })
                 .collect();
             let app_url = &state.config.app_url;
             output_json(&serde_json::json!({
@@ -1072,7 +1199,8 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
         }
         "facebook" | "instagram" | "instagram-standalone" => {
             let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
-            let connected: Vec<_> = integrations.iter()
+            let connected: Vec<_> = integrations
+                .iter()
                 .filter(|i| i.provider_identifier == provider && is_credential_row(i))
                 .collect();
             let app_url = &state.config.app_url;
@@ -1094,134 +1222,257 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
         // ── Env-var credential providers ─────────────────────
         "bluesky" => {
             let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
-            if integrations.iter().any(|i| i.provider_identifier == "bluesky" && is_credential_row(i)) {
-                let existing: Vec<_> = integrations.iter().filter(|i| i.provider_identifier == "bluesky" && is_credential_row(i)).collect();
-                output_json(&serde_json::json!({"status": "already_connected", "provider": "bluesky", "count": existing.len()}));
-            } else if state.config.bluesky_handle.is_some() && state.config.bluesky_app_password.is_some() {
-                output_json(&serde_json::json!({"status": "configured", "provider": "bluesky", "method": "env_vars", "hint": "BLUESKY_HANDLE + BLUESKY_APP_PASSWORD are set. The provider will connect automatically on first use."}));
+            if integrations
+                .iter()
+                .any(|i| i.provider_identifier == "bluesky" && is_credential_row(i))
+            {
+                let existing: Vec<_> = integrations
+                    .iter()
+                    .filter(|i| i.provider_identifier == "bluesky" && is_credential_row(i))
+                    .collect();
+                output_json(
+                    &serde_json::json!({"status": "already_connected", "provider": "bluesky", "count": existing.len()}),
+                );
+            } else if state.config.bluesky_handle.is_some()
+                && state.config.bluesky_app_password.is_some()
+            {
+                output_json(
+                    &serde_json::json!({"status": "configured", "provider": "bluesky", "method": "env_vars", "hint": "BLUESKY_HANDLE + BLUESKY_APP_PASSWORD are set. The provider will connect automatically on first use."}),
+                );
             } else {
-                output_json(&serde_json::json!({"status": "not_configured", "provider": "bluesky", "requires": ["BLUESKY_HANDLE", "BLUESKY_APP_PASSWORD"], "hint": "Set these in ~/.social-forge/.env. Get an app password at Bluesky Settings > Advanced > App Passwords."}));
+                output_json(
+                    &serde_json::json!({"status": "not_configured", "provider": "bluesky", "requires": ["BLUESKY_HANDLE", "BLUESKY_APP_PASSWORD"], "hint": "Set these in ~/.social-forge/.env. Get an app password at Bluesky Settings > Advanced > App Passwords."}),
+                );
             }
         }
         "github" => {
             let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
-            if integrations.iter().any(|i| i.provider_identifier == "github" && is_credential_row(i)) {
-                output_json(&serde_json::json!({"status": "already_connected", "provider": "github"}));
+            if integrations
+                .iter()
+                .any(|i| i.provider_identifier == "github" && is_credential_row(i))
+            {
+                output_json(
+                    &serde_json::json!({"status": "already_connected", "provider": "github"}),
+                );
             } else if state.config.github_token.is_some() {
-                output_json(&serde_json::json!({"status": "configured", "provider": "github", "method": "env_vars", "hint": "GITHUB_TOKEN is set. The provider will connect automatically on first use."}));
+                output_json(
+                    &serde_json::json!({"status": "configured", "provider": "github", "method": "env_vars", "hint": "GITHUB_TOKEN is set. The provider will connect automatically on first use."}),
+                );
             } else {
-                output_json(&serde_json::json!({"status": "not_configured", "provider": "github", "requires": ["GITHUB_TOKEN"], "hint": "Create a PAT at https://github.com/settings/tokens and set GITHUB_TOKEN in ~/.social-forge/.env"}));
+                output_json(
+                    &serde_json::json!({"status": "not_configured", "provider": "github", "requires": ["GITHUB_TOKEN"], "hint": "Create a PAT at https://github.com/settings/tokens and set GITHUB_TOKEN in ~/.social-forge/.env"}),
+                );
             }
         }
         "telegram-bot" | "telegram" => {
             let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
-            if integrations.iter().any(|i| i.provider_identifier == "telegram-bot" && is_credential_row(i)) {
-                output_json(&serde_json::json!({"status": "already_connected", "provider": "telegram-bot"}));
+            if integrations
+                .iter()
+                .any(|i| i.provider_identifier == "telegram-bot" && is_credential_row(i))
+            {
+                output_json(
+                    &serde_json::json!({"status": "already_connected", "provider": "telegram-bot"}),
+                );
             } else if state.config.telegram_bot_tokens.is_some() {
-                output_json(&serde_json::json!({"status": "configured", "provider": "telegram-bot", "method": "env_vars", "hint": "TELEGRAM_BOT_TOKENS is set. The provider will connect automatically on first use."}));
+                output_json(
+                    &serde_json::json!({"status": "configured", "provider": "telegram-bot", "method": "env_vars", "hint": "TELEGRAM_BOT_TOKENS is set. The provider will connect automatically on first use."}),
+                );
             } else {
-                output_json(&serde_json::json!({"status": "not_configured", "provider": "telegram-bot", "requires": ["TELEGRAM_BOT_TOKENS"], "hint": "Message @BotFather on Telegram to create a bot, get the token, and set TELEGRAM_BOT_TOKENS in ~/.social-forge/.env"}));
+                output_json(
+                    &serde_json::json!({"status": "not_configured", "provider": "telegram-bot", "requires": ["TELEGRAM_BOT_TOKENS"], "hint": "Message @BotFather on Telegram to create a bot, get the token, and set TELEGRAM_BOT_TOKENS in ~/.social-forge/.env"}),
+                );
             }
         }
         "discord" => {
             let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
-            if integrations.iter().any(|i| i.provider_identifier == "discord" && is_credential_row(i)) {
-                output_json(&serde_json::json!({"status": "already_connected", "provider": "discord"}));
-            } else if state.config.discord_client_id.is_some() && state.config.discord_client_secret.is_some() {
-                output_json(&serde_json::json!({"status": "configured", "provider": "discord", "method": "oauth", "hint": "DISCORD_CLIENT_ID + DISCORD_CLIENT_SECRET are set. Authorize via the web UI."}));
+            if integrations
+                .iter()
+                .any(|i| i.provider_identifier == "discord" && is_credential_row(i))
+            {
+                output_json(
+                    &serde_json::json!({"status": "already_connected", "provider": "discord"}),
+                );
+            } else if state.config.discord_client_id.is_some()
+                && state.config.discord_client_secret.is_some()
+            {
+                output_json(
+                    &serde_json::json!({"status": "configured", "provider": "discord", "method": "oauth", "hint": "DISCORD_CLIENT_ID + DISCORD_CLIENT_SECRET are set. Authorize via the web UI."}),
+                );
             } else {
-                output_json(&serde_json::json!({"status": "not_configured", "provider": "discord", "requires": ["DISCORD_CLIENT_ID", "DISCORD_CLIENT_SECRET"], "hint": "Create an app at https://discord.com/developers/applications and set credentials in ~/.social-forge/.env"}));
+                output_json(
+                    &serde_json::json!({"status": "not_configured", "provider": "discord", "requires": ["DISCORD_CLIENT_ID", "DISCORD_CLIENT_SECRET"], "hint": "Create an app at https://discord.com/developers/applications and set credentials in ~/.social-forge/.env"}),
+                );
             }
         }
         "slack" => {
             let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
-            if integrations.iter().any(|i| i.provider_identifier == "slack" && is_credential_row(i)) {
-                output_json(&serde_json::json!({"status": "already_connected", "provider": "slack"}));
-            } else if state.config.slack_client_id.is_some() && state.config.slack_client_secret.is_some() {
-                output_json(&serde_json::json!({"status": "configured", "provider": "slack", "method": "oauth", "hint": "SLACK_CLIENT_ID + SLACK_CLIENT_SECRET are set. Authorize via the web UI."}));
+            if integrations
+                .iter()
+                .any(|i| i.provider_identifier == "slack" && is_credential_row(i))
+            {
+                output_json(
+                    &serde_json::json!({"status": "already_connected", "provider": "slack"}),
+                );
+            } else if state.config.slack_client_id.is_some()
+                && state.config.slack_client_secret.is_some()
+            {
+                output_json(
+                    &serde_json::json!({"status": "configured", "provider": "slack", "method": "oauth", "hint": "SLACK_CLIENT_ID + SLACK_CLIENT_SECRET are set. Authorize via the web UI."}),
+                );
             } else {
-                output_json(&serde_json::json!({"status": "not_configured", "provider": "slack", "requires": ["SLACK_CLIENT_ID", "SLACK_CLIENT_SECRET"], "hint": "Create an app at https://api.slack.com/apps and set credentials in ~/.social-forge/.env"}));
+                output_json(
+                    &serde_json::json!({"status": "not_configured", "provider": "slack", "requires": ["SLACK_CLIENT_ID", "SLACK_CLIENT_SECRET"], "hint": "Create an app at https://api.slack.com/apps and set credentials in ~/.social-forge/.env"}),
+                );
             }
         }
         "pinterest" => {
             let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
-            if integrations.iter().any(|i| i.provider_identifier == "pinterest" && is_credential_row(i)) {
-                output_json(&serde_json::json!({"status": "already_connected", "provider": "pinterest"}));
-            } else if state.config.pinterest_client_id.is_some() && state.config.pinterest_client_secret.is_some() {
-                output_json(&serde_json::json!({"status": "configured", "provider": "pinterest", "method": "oauth"}));
+            if integrations
+                .iter()
+                .any(|i| i.provider_identifier == "pinterest" && is_credential_row(i))
+            {
+                output_json(
+                    &serde_json::json!({"status": "already_connected", "provider": "pinterest"}),
+                );
+            } else if state.config.pinterest_client_id.is_some()
+                && state.config.pinterest_client_secret.is_some()
+            {
+                output_json(
+                    &serde_json::json!({"status": "configured", "provider": "pinterest", "method": "oauth"}),
+                );
             } else {
-                output_json(&serde_json::json!({"status": "not_configured", "provider": "pinterest", "requires": ["PINTEREST_CLIENT_ID", "PINTEREST_CLIENT_SECRET"], "hint": "Create an app at https://developers.pinterest.com/apps/ and set credentials in ~/.social-forge/.env"}));
+                output_json(
+                    &serde_json::json!({"status": "not_configured", "provider": "pinterest", "requires": ["PINTEREST_CLIENT_ID", "PINTEREST_CLIENT_SECRET"], "hint": "Create an app at https://developers.pinterest.com/apps/ and set credentials in ~/.social-forge/.env"}),
+                );
             }
         }
         "tiktok" => {
             let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
-            if integrations.iter().any(|i| i.provider_identifier == "tiktok" && is_credential_row(i)) {
-                output_json(&serde_json::json!({"status": "already_connected", "provider": "tiktok"}));
-            } else if state.config.tiktok_client_id.is_some() && state.config.tiktok_client_secret.is_some() {
-                output_json(&serde_json::json!({"status": "configured", "provider": "tiktok", "method": "oauth"}));
+            if integrations
+                .iter()
+                .any(|i| i.provider_identifier == "tiktok" && is_credential_row(i))
+            {
+                output_json(
+                    &serde_json::json!({"status": "already_connected", "provider": "tiktok"}),
+                );
+            } else if state.config.tiktok_client_id.is_some()
+                && state.config.tiktok_client_secret.is_some()
+            {
+                output_json(
+                    &serde_json::json!({"status": "configured", "provider": "tiktok", "method": "oauth"}),
+                );
             } else {
-                output_json(&serde_json::json!({"status": "not_configured", "provider": "tiktok", "requires": ["TIKTOK_CLIENT_ID", "TIKTOK_CLIENT_SECRET"], "hint": "Create an app at https://developers.tiktok.com/ and set credentials in ~/.social-forge/.env"}));
+                output_json(
+                    &serde_json::json!({"status": "not_configured", "provider": "tiktok", "requires": ["TIKTOK_CLIENT_ID", "TIKTOK_CLIENT_SECRET"], "hint": "Create an app at https://developers.tiktok.com/ and set credentials in ~/.social-forge/.env"}),
+                );
             }
         }
         "mastodon" => {
             let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
-            if integrations.iter().any(|i| i.provider_identifier == "mastodon" && is_credential_row(i)) {
-                output_json(&serde_json::json!({"status": "already_connected", "provider": "mastodon"}));
-            } else if state.config.mastodon_client_id.is_some() && state.config.mastodon_client_secret.is_some() && state.config.mastodon_instance_url.is_some() {
-                output_json(&serde_json::json!({"status": "configured", "provider": "mastodon", "method": "oauth"}));
+            if integrations
+                .iter()
+                .any(|i| i.provider_identifier == "mastodon" && is_credential_row(i))
+            {
+                output_json(
+                    &serde_json::json!({"status": "already_connected", "provider": "mastodon"}),
+                );
+            } else if state.config.mastodon_client_id.is_some()
+                && state.config.mastodon_client_secret.is_some()
+                && state.config.mastodon_instance_url.is_some()
+            {
+                output_json(
+                    &serde_json::json!({"status": "configured", "provider": "mastodon", "method": "oauth"}),
+                );
             } else {
-                output_json(&serde_json::json!({"status": "not_configured", "provider": "mastodon", "requires": ["MASTODON_CLIENT_ID", "MASTODON_CLIENT_SECRET", "MASTODON_INSTANCE_URL"], "hint": "Register an app on your Mastodon instance and set credentials in ~/.social-forge/.env"}));
+                output_json(
+                    &serde_json::json!({"status": "not_configured", "provider": "mastodon", "requires": ["MASTODON_CLIENT_ID", "MASTODON_CLIENT_SECRET", "MASTODON_INSTANCE_URL"], "hint": "Register an app on your Mastodon instance and set credentials in ~/.social-forge/.env"}),
+                );
             }
         }
         "youtube" | "google" => {
             let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
-            let connected = integrations.iter().any(|i| (i.provider_identifier == "youtube" || i.provider_identifier == "google") && is_credential_row(i));
+            let connected = integrations.iter().any(|i| {
+                (i.provider_identifier == "youtube" || i.provider_identifier == "google")
+                    && is_credential_row(i)
+            });
             if connected {
-                output_json(&serde_json::json!({"status": "already_connected", "provider": "youtube"}));
-            } else if state.config.youtube_client_id.is_some() && state.config.youtube_client_secret.is_some() {
-                output_json(&serde_json::json!({"status": "configured", "provider": "youtube", "method": "oauth", "hint": "YOUTUBE_CLIENT_ID + YOUTUBE_CLIENT_SECRET are set. Authorize via the web UI."}));
+                output_json(
+                    &serde_json::json!({"status": "already_connected", "provider": "youtube"}),
+                );
+            } else if state.config.youtube_client_id.is_some()
+                && state.config.youtube_client_secret.is_some()
+            {
+                output_json(
+                    &serde_json::json!({"status": "configured", "provider": "youtube", "method": "oauth", "hint": "YOUTUBE_CLIENT_ID + YOUTUBE_CLIENT_SECRET are set. Authorize via the web UI."}),
+                );
             } else {
-                output_json(&serde_json::json!({"status": "not_configured", "provider": "youtube", "requires": ["YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET"], "hint": "Create a Google Cloud project, enable YouTube Data API v3, create OAuth credentials, and set in ~/.social-forge/.env"}));
+                output_json(
+                    &serde_json::json!({"status": "not_configured", "provider": "youtube", "requires": ["YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET"], "hint": "Create a Google Cloud project, enable YouTube Data API v3, create OAuth credentials, and set in ~/.social-forge/.env"}),
+                );
             }
         }
         "medium" => {
             if state.config.medium_access_token.is_some() {
-                output_json(&serde_json::json!({"status": "configured", "provider": "medium", "method": "env_vars"}));
+                output_json(
+                    &serde_json::json!({"status": "configured", "provider": "medium", "method": "env_vars"}),
+                );
             } else {
-                output_json(&serde_json::json!({"status": "not_configured", "provider": "medium", "requires": ["MEDIUM_ACCESS_TOKEN"], "hint": "Get an integration token at https://medium.com/me/settings/security"}));
+                output_json(
+                    &serde_json::json!({"status": "not_configured", "provider": "medium", "requires": ["MEDIUM_ACCESS_TOKEN"], "hint": "Get an integration token at https://medium.com/me/settings/security"}),
+                );
             }
         }
         "devto" => {
             if state.config.devto_api_key.is_some() {
-                output_json(&serde_json::json!({"status": "configured", "provider": "devto", "method": "env_vars"}));
+                output_json(
+                    &serde_json::json!({"status": "configured", "provider": "devto", "method": "env_vars"}),
+                );
             } else {
-                output_json(&serde_json::json!({"status": "not_configured", "provider": "devto", "requires": ["DEVTO_API_KEY"], "hint": "Generate an API key at https://dev.to/settings/extensions"}));
+                output_json(
+                    &serde_json::json!({"status": "not_configured", "provider": "devto", "requires": ["DEVTO_API_KEY"], "hint": "Generate an API key at https://dev.to/settings/extensions"}),
+                );
             }
         }
         "hashnode" => {
             if state.config.hashnode_api_key.is_some() {
-                output_json(&serde_json::json!({"status": "configured", "provider": "hashnode", "method": "env_vars"}));
+                output_json(
+                    &serde_json::json!({"status": "configured", "provider": "hashnode", "method": "env_vars"}),
+                );
             } else {
-                output_json(&serde_json::json!({"status": "not_configured", "provider": "hashnode", "requires": ["HASHNODE_API_KEY"], "hint": "Generate a PAT at https://hashnode.com/settings/integrations"}));
+                output_json(
+                    &serde_json::json!({"status": "not_configured", "provider": "hashnode", "requires": ["HASHNODE_API_KEY"], "hint": "Generate a PAT at https://hashnode.com/settings/integrations"}),
+                );
             }
         }
         "wordpress" => {
-            output_json(&serde_json::json!({"status": "per_site", "provider": "wordpress", "hint": "WordPress uses per-site Application Passwords. Connect via the web UI with site URL, username, and app password."}));
+            output_json(
+                &serde_json::json!({"status": "per_site", "provider": "wordpress", "hint": "WordPress uses per-site Application Passwords. Connect via the web UI with site URL, username, and app password."}),
+            );
         }
         "skool" => {
-            output_json(&serde_json::json!({"status": "chrome_extension", "provider": "skool", "hint": "Skool uses Chrome extension cookie extraction. Install the Skool Chrome extension, log into skool.com, and cookies are auto-extracted."}));
+            output_json(
+                &serde_json::json!({"status": "chrome_extension", "provider": "skool", "hint": "Skool uses Chrome extension cookie extraction. Install the Skool Chrome extension, log into skool.com, and cookies are auto-extracted."}),
+            );
         }
         "farcaster" => {
-            output_json(&serde_json::json!({"status": "per_user", "provider": provider, "hint": "Farcaster is a Tier-3 archive provider (v25 §1) — set ENABLE_ARCHIVE_PROVIDERS=1 to register it. Uses per-user credentials stored in the integration record; connect via the web UI."}));
+            output_json(
+                &serde_json::json!({"status": "per_user", "provider": provider, "hint": "Farcaster is a Tier-3 archive provider (v25 §1) — set ENABLE_ARCHIVE_PROVIDERS=1 to register it. Uses per-user credentials stored in the integration record; connect via the web UI."}),
+            );
         }
         "whatsapp" => {
-            output_json(&serde_json::json!({"status": "native_client", "provider": "whatsapp", "hint": "WhatsApp uses a native client. Connect via the web UI to scan the QR code."}));
+            output_json(
+                &serde_json::json!({"status": "native_client", "provider": "whatsapp", "hint": "WhatsApp uses a native client. Connect via the web UI to scan the QR code."}),
+            );
         }
         "threads" => {
             if state.config.threads_app_id.is_some() && state.config.threads_app_secret.is_some() {
-                output_json(&serde_json::json!({"status": "configured", "provider": "threads", "method": "oauth"}));
+                output_json(
+                    &serde_json::json!({"status": "configured", "provider": "threads", "method": "oauth"}),
+                );
             } else {
-                output_json(&serde_json::json!({"status": "not_configured", "provider": "threads", "requires": ["THREADS_APP_ID", "THREADS_APP_SECRET"], "hint": "Threads uses Meta credentials. Set THREADS_APP_ID and THREADS_APP_SECRET in ~/.social-forge/.env"}));
+                output_json(
+                    &serde_json::json!({"status": "not_configured", "provider": "threads", "requires": ["THREADS_APP_ID", "THREADS_APP_SECRET"], "hint": "Threads uses Meta credentials. Set THREADS_APP_ID and THREADS_APP_SECRET in ~/.social-forge/.env"}),
+                );
             }
         }
 
@@ -1240,7 +1491,8 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
 
 // ── Doctor: health check for all providers ───────────────────
 
-async fn handle_doctor_with_state(state: &AppState) -> anyhow::Result<()> {let user_id = resolve_user(&state).await?;
+async fn handle_doctor_with_state(state: &AppState) -> anyhow::Result<()> {
+    let user_id = resolve_user(state).await?;
     let integrations = crate::db::queries::list_integrations(&state.db, user_id)
         .await
         .map_err(|e| anyhow::anyhow!("Failed to list integrations: {e}"))?;
@@ -1252,7 +1504,8 @@ async fn handle_doctor_with_state(state: &AppState) -> anyhow::Result<()> {let u
     for integration in &integrations {
         let provider_id = &integration.provider_identifier;
         let name = integration.profile_name.as_deref().unwrap_or("Unknown");
-        let token = crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
+        let token =
+            crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
 
         let (status, detail) = match provider_id.as_str() {
             "x" => {
@@ -1399,7 +1652,10 @@ async fn handle_doctor_with_state(state: &AppState) -> anyhow::Result<()> {let u
     let live_verified = checks.iter().filter(|c| c["live_verified"] == true).count();
     let unverified = checks.iter().filter(|c| c["live_verified"] != true).count();
     let draft_ok = checks.iter().filter(|c| c["draft_ok"] == true).count();
-    let publish_capable = checks.iter().filter(|c| c["publish_capable"] == true).count();
+    let publish_capable = checks
+        .iter()
+        .filter(|c| c["publish_capable"] == true)
+        .count();
 
     // ── Credential audit (names only) ───────────────────────────
     // `configured` could never be traced: it said a credential existed but
@@ -1409,10 +1665,12 @@ async fn handle_doctor_with_state(state: &AppState) -> anyhow::Result<()> {let u
     // is read into the output — `provider_credentials().is_some()` answers
     // presence without unwrapping anything.
     let db_counts: std::collections::HashMap<&str, usize> =
-        integrations.iter().fold(std::collections::HashMap::new(), |mut acc, i| {
-            *acc.entry(i.provider_identifier.as_str()).or_default() += 1;
-            acc
-        });
+        integrations
+            .iter()
+            .fold(std::collections::HashMap::new(), |mut acc, i| {
+                *acc.entry(i.provider_identifier.as_str()).or_default() += 1;
+                acc
+            });
     let credentials: Vec<serde_json::Value> = integrations
         .iter()
         .map(|i| {
@@ -1565,8 +1823,16 @@ async fn handle_setup() -> anyhow::Result<()> {
     // Step 4: Cookie-based providers (X, Reddit)
     let x_cookies = crate::social::x_cookies::extract_x_cookies();
     let reddit_cookies = crate::social::reddit_cookies::extract_reddit_cookies();
-    let x_cookie_status = if x_cookies.is_some() { "found" } else { "not_found" };
-    let reddit_cookie_status = if reddit_cookies.is_some() { "found" } else { "not_found" };
+    let x_cookie_status = if x_cookies.is_some() {
+        "found"
+    } else {
+        "not_found"
+    };
+    let reddit_cookie_status = if reddit_cookies.is_some() {
+        "found"
+    } else {
+        "not_found"
+    };
     steps.push(serde_json::json!({
         "step": 4,
         "name": "browser_cookies",
@@ -1577,13 +1843,18 @@ async fn handle_setup() -> anyhow::Result<()> {
 
     // Step 5: Existing integrations
     if let Ok(uid) = user_result {
-        let integrations = crate::db::queries::list_integrations(&state.db, uid).await.unwrap_or_default();
-        let provider_summary: Vec<serde_json::Value> = integrations.iter().map(|i| {
-            serde_json::json!({
-                "provider": i.provider_identifier,
-                "name": i.profile_name,
+        let integrations = crate::db::queries::list_integrations(&state.db, uid)
+            .await
+            .unwrap_or_default();
+        let provider_summary: Vec<serde_json::Value> = integrations
+            .iter()
+            .map(|i| {
+                serde_json::json!({
+                    "provider": i.provider_identifier,
+                    "name": i.profile_name,
+                })
             })
-        }).collect();
+            .collect();
         steps.push(serde_json::json!({
             "step": 5,
             "name": "integrations",
@@ -1603,7 +1874,10 @@ async fn handle_setup() -> anyhow::Result<()> {
         serde_json::json!({"name": "Medium", "key": "MEDIUM_ACCESS_TOKEN", "configured": state.config.medium_access_token.is_some()}),
         serde_json::json!({"name": "Hashnode", "key": "HASHNODE_API_KEY", "configured": state.config.hashnode_api_key.is_some()}),
     ];
-    let configured_count = env_providers.iter().filter(|p| p["configured"] == true).count();
+    let configured_count = env_providers
+        .iter()
+        .filter(|p| p["configured"] == true)
+        .count();
     steps.push(serde_json::json!({
         "step": 6,
         "name": "env_providers",
@@ -1615,7 +1889,9 @@ async fn handle_setup() -> anyhow::Result<()> {
     }));
 
     // Summary
-    let action_needed = steps.iter().any(|s| s["status"] == "action_needed" || s["status"] == "error");
+    let action_needed = steps
+        .iter()
+        .any(|s| s["status"] == "action_needed" || s["status"] == "error");
     output_json(&serde_json::json!({
         "status": if action_needed { "setup_incomplete" } else { "ready" },
         "steps": steps,
@@ -1630,7 +1906,8 @@ async fn handle_setup() -> anyhow::Result<()> {
 
 // ── Connect All: Bulk Cookie Import ──────────────────────────
 
-async fn handle_connect_all_with_state(state: &AppState) -> anyhow::Result<()> {let user_id = resolve_user(&state).await?;
+async fn handle_connect_all_with_state(state: &AppState) -> anyhow::Result<()> {
+    let user_id = resolve_user(state).await?;
     let mut results: Vec<serde_json::Value> = Vec::new();
 
     // ── X/Twitter ─────────────────────────────────────────────
@@ -1642,28 +1919,60 @@ async fn handle_connect_all_with_state(state: &AppState) -> anyhow::Result<()> {
             match crate::social::x_cookies::extract_x_cookies() {
                 Some(cookies) => {
                     let token_str = crate::social::x_cookies::build_cookie_token(
-                        &cookies.auth_token, &cookies.ct0, Some(&cookies.cookie_string)
+                        &cookies.auth_token,
+                        &cookies.ct0,
+                        Some(&cookies.cookie_string),
                     );
                     let mut provider_obj = crate::social::x::XProvider::new(&state.config);
                     provider_obj.prepare_from_token(&token_str);
                     match provider_obj.get_me(&token_str).await {
                         Ok(json) => {
                             let data = json.get("data");
-                            let name = data.and_then(|d| d.get("name")).and_then(|s| s.as_str()).unwrap_or("X User");
-                            let id = data.and_then(|d| d.get("id")).and_then(|s| s.as_str()).unwrap_or("").to_string();
-                            let avatar = data.and_then(|d| d.get("profile_image_url")).and_then(|s| s.as_str());
+                            let name = data
+                                .and_then(|d| d.get("name"))
+                                .and_then(|s| s.as_str())
+                                .unwrap_or("X User");
+                            let id = data
+                                .and_then(|d| d.get("id"))
+                                .and_then(|s| s.as_str())
+                                .unwrap_or("")
+                                .to_string();
+                            let avatar = data
+                                .and_then(|d| d.get("profile_image_url"))
+                                .and_then(|s| s.as_str());
                             match crate::db::queries::create_integration(
-                                &state.db, user_id, "x", "X (Twitter)", &id, &token_str,
-                                None, None, Some(name), None, avatar, None, None,
-                            ).await {
-                                Ok(_) => serde_json::json!({"provider": "x", "status": "connected", "name": name, "source": cookies.source}),
-                                Err(e) => serde_json::json!({"provider": "x", "status": "error", "error": format!("DB write failed: {e}")}),
+                                &state.db,
+                                user_id,
+                                "x",
+                                "X (Twitter)",
+                                &id,
+                                &token_str,
+                                None,
+                                None,
+                                Some(name),
+                                None,
+                                avatar,
+                                None,
+                                None,
+                            )
+                            .await
+                            {
+                                Ok(_) => {
+                                    serde_json::json!({"provider": "x", "status": "connected", "name": name, "source": cookies.source})
+                                }
+                                Err(e) => {
+                                    serde_json::json!({"provider": "x", "status": "error", "error": format!("DB write failed: {e}")})
+                                }
                             }
                         }
-                        Err(e) => serde_json::json!({"provider": "x", "status": "error", "error": format!("{e}")}),
+                        Err(e) => {
+                            serde_json::json!({"provider": "x", "status": "error", "error": format!("{e}")})
+                        }
                     }
                 }
-                None => serde_json::json!({"provider": "x", "status": "no_cookies", "hint": "Log into x.com in your browser first."}),
+                None => {
+                    serde_json::json!({"provider": "x", "status": "no_cookies", "hint": "Log into x.com in your browser first."})
+                }
             }
         }
     };
@@ -1672,42 +1981,84 @@ async fn handle_connect_all_with_state(state: &AppState) -> anyhow::Result<()> {
     // ── Reddit ────────────────────────────────────────────────
     let reddit_result = {
         let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
-        if integrations.iter().any(|i| i.provider_identifier == "reddit") {
+        if integrations
+            .iter()
+            .any(|i| i.provider_identifier == "reddit")
+        {
             serde_json::json!({"provider": "reddit", "status": "already_connected"})
         } else {
             match crate::social::reddit_cookies::extract_reddit_cookies() {
                 Some(cookies) => {
                     let token_str = crate::social::reddit_cookies::build_cookie_token(
-                        &cookies.reddit_session, cookies.token_v2.as_deref(), Some(&cookies.cookie_string)
+                        &cookies.reddit_session,
+                        cookies.token_v2.as_deref(),
+                        Some(&cookies.cookie_string),
                     );
-                    let mut provider_obj = crate::social::reddit::RedditProvider::new(&state.config);
+                    let mut provider_obj =
+                        crate::social::reddit::RedditProvider::new(&state.config);
                     provider_obj.prepare_from_token(&token_str);
                     match provider_obj.get_www("/api/me.json", &[]).await {
                         Ok(json) => {
-                            let name = json["data"]["name"].as_str().unwrap_or("Reddit User").to_string();
+                            let name = json["data"]["name"]
+                                .as_str()
+                                .unwrap_or("Reddit User")
+                                .to_string();
                             let id = json["data"]["id"].as_str().unwrap_or("").to_string();
-                            let icon = json["data"]["icon_img"].as_str().and_then(|s| s.split('?').next()).map(String::from);
+                            let icon = json["data"]["icon_img"]
+                                .as_str()
+                                .and_then(|s| s.split('?').next())
+                                .map(String::from);
                             match crate::db::queries::create_integration(
-                                &state.db, user_id, "reddit", "Reddit", &id, &token_str,
-                                None, None, Some(&name), None, icon.as_deref(), None, None,
-                            ).await {
-                                Ok(_) => serde_json::json!({"provider": "reddit", "status": "connected", "name": name, "source": cookies.source}),
-                                Err(e) => serde_json::json!({"provider": "reddit", "status": "error", "error": format!("DB write failed: {e}")}),
+                                &state.db,
+                                user_id,
+                                "reddit",
+                                "Reddit",
+                                &id,
+                                &token_str,
+                                None,
+                                None,
+                                Some(&name),
+                                None,
+                                icon.as_deref(),
+                                None,
+                                None,
+                            )
+                            .await
+                            {
+                                Ok(_) => {
+                                    serde_json::json!({"provider": "reddit", "status": "connected", "name": name, "source": cookies.source})
+                                }
+                                Err(e) => {
+                                    serde_json::json!({"provider": "reddit", "status": "error", "error": format!("DB write failed: {e}")})
+                                }
                             }
                         }
-                        Err(e) => serde_json::json!({"provider": "reddit", "status": "error", "error": format!("{e}")}),
+                        Err(e) => {
+                            serde_json::json!({"provider": "reddit", "status": "error", "error": format!("{e}")})
+                        }
                     }
                 }
-                None => serde_json::json!({"provider": "reddit", "status": "no_cookies", "hint": "Log into reddit.com in your browser first."}),
+                None => {
+                    serde_json::json!({"provider": "reddit", "status": "no_cookies", "hint": "Log into reddit.com in your browser first."})
+                }
             }
         }
     };
     results.push(reddit_result);
 
-    let connected = results.iter().filter(|r| r["status"] == "connected").count();
-    let already = results.iter().filter(|r| r["status"] == "already_connected").count();
+    let connected = results
+        .iter()
+        .filter(|r| r["status"] == "connected")
+        .count();
+    let already = results
+        .iter()
+        .filter(|r| r["status"] == "already_connected")
+        .count();
     let failed = results.iter().filter(|r| r["status"] == "error").count();
-    let no_cookies = results.iter().filter(|r| r["status"] == "no_cookies").count();
+    let no_cookies = results
+        .iter()
+        .filter(|r| r["status"] == "no_cookies")
+        .count();
 
     output_json(&serde_json::json!({
         "connected": connected,
@@ -1792,11 +2143,14 @@ fn handle_config(action: ConfigAction) -> anyhow::Result<()> {
             match std::env::var(&key_upper) {
                 Ok(val) => {
                     // Redact secrets
-                    let display = if key_upper.contains("SECRET") || key_upper.contains("PASSWORD") ||
-                                   key_upper.contains("TOKEN") || key_upper.contains("KEY") ||
-                                   key_upper.contains("PRIVATE") {
+                    let display = if key_upper.contains("SECRET")
+                        || key_upper.contains("PASSWORD")
+                        || key_upper.contains("TOKEN")
+                        || key_upper.contains("KEY")
+                        || key_upper.contains("PRIVATE")
+                    {
                         if val.len() > 8 {
-                            format!("{}...{}", &val[..4], &val[val.len()-4..])
+                            format!("{}...{}", &val[..4], &val[val.len() - 4..])
                         } else {
                             "****".into()
                         }
@@ -1821,7 +2175,7 @@ fn handle_config(action: ConfigAction) -> anyhow::Result<()> {
             }
         }
         ConfigAction::ResetPassword { password } => {
-            let generated = password.as_deref().map_or(true, |p| p.is_empty());
+            let generated = password.as_deref().is_none_or(|p| p.is_empty());
             let new_pw = match password.filter(|p| !p.is_empty()) {
                 Some(p) => p,
                 None => crate::config::generate_random_password(32),
@@ -1855,12 +2209,14 @@ fn handle_config(action: ConfigAction) -> anyhow::Result<()> {
                     }
                     if let Some((k, v)) = trimmed.split_once('=') {
                         let k = k.trim().to_uppercase();
-                        let is_secret = k.contains("SECRET") || k.contains("PASSWORD") ||
-                                        k.contains("TOKEN") || k.contains("KEY") ||
-                                        k.contains("PRIVATE");
+                        let is_secret = k.contains("SECRET")
+                            || k.contains("PASSWORD")
+                            || k.contains("TOKEN")
+                            || k.contains("KEY")
+                            || k.contains("PRIVATE");
                         let display = if is_secret {
                             if v.len() > 8 {
-                                format!("{}...{}", &v[..4], &v[v.len()-4..])
+                                format!("{}...{}", &v[..4], &v[v.len() - 4..])
                             } else if !v.is_empty() {
                                 "****".into()
                             } else {
@@ -1890,21 +2246,26 @@ fn handle_config(action: ConfigAction) -> anyhow::Result<()> {
 
 // ── X (Twitter) Handler ──────────────────────────────────────
 
-
-
-
-
-
 // ── Import Handler ───────────────────────────────────────────
 
-async fn handle_import_with_state(state: &AppState, provider_name: &str, count: u32) -> anyhow::Result<()> {let user_id = resolve_user(&state).await?;
-    let integration = find_integration(&state, user_id, provider_name).await?;
-    let token = crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
+async fn handle_import_with_state(
+    state: &AppState,
+    provider_name: &str,
+    count: u32,
+) -> anyhow::Result<()> {
+    let user_id = resolve_user(state).await?;
+    let integration = find_integration(state, user_id, provider_name).await?;
+    let token =
+        crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
 
-    let provider = state.providers.get(provider_name)
+    let provider = state
+        .providers
+        .get(provider_name)
         .ok_or_else(|| anyhow::anyhow!("Provider '{}' not found in registry", provider_name))?;
 
-    let posts = provider.get_recent_posts(&token, &integration.internal_id, count).await
+    let posts = provider
+        .get_recent_posts(&token, &integration.internal_id, count)
+        .await
         .map_err(|e| anyhow::anyhow!("Failed to get posts from {provider_name}: {e}"))?;
 
     let mut imported = 0u32;
@@ -1935,10 +2296,13 @@ async fn handle_import_with_state(state: &AppState, provider_name: &str, count: 
         }
     }
 
-    let truncated: Vec<serde_json::Value> = posts.into_iter().map(|p| {
-        let val = serde_json::to_value(&p).unwrap_or_default();
-        truncate_json_strings(&val, 500)
-    }).collect();
+    let truncated: Vec<serde_json::Value> = posts
+        .into_iter()
+        .map(|p| {
+            let val = serde_json::to_value(&p).unwrap_or_default();
+            truncate_json_strings(&val, 500)
+        })
+        .collect();
     output_json(&serde_json::json!({
         "provider": provider_name,
         "imported": imported,
@@ -1950,17 +2314,17 @@ async fn handle_import_with_state(state: &AppState, provider_name: &str, count: 
 
 // ── Feed Handler ────────────────────────────────────────────
 
-async fn handle_feed_with_state(state: &AppState, provider: Option<&str>, limit: u32) -> anyhow::Result<()> {let user_id = resolve_user(&state).await?;
+async fn handle_feed_with_state(
+    state: &AppState,
+    provider: Option<&str>,
+    limit: u32,
+) -> anyhow::Result<()> {
+    let user_id = resolve_user(state).await?;
     let limit = limit.min(100) as i64;
 
-    let posts = crate::db::queries::list_all_external_posts(
-        &state.db,
-        user_id,
-        provider,
-        None,
-        limit,
-    )
-    .await?;
+    let posts =
+        crate::db::queries::list_all_external_posts(&state.db, user_id, provider, None, limit)
+            .await?;
 
     // AXI §5: Definitive empty state + §3: truncate long post text
     if posts.is_empty() {
@@ -1972,10 +2336,13 @@ async fn handle_feed_with_state(state: &AppState, provider: Option<&str>, limit:
             "message": format!("No feed posts found for {filter}. Run 'social-forge import <provider> --count 10' to pull recent posts."),
         }));
     } else {
-        let truncated: Vec<serde_json::Value> = posts.into_iter().map(|p| {
-            let val = serde_json::to_value(&p).unwrap_or_default();
-            truncate_json_strings(&val, 500)
-        }).collect();
+        let truncated: Vec<serde_json::Value> = posts
+            .into_iter()
+            .map(|p| {
+                let val = serde_json::to_value(&p).unwrap_or_default();
+                truncate_json_strings(&val, 500)
+            })
+            .collect();
         output_json(&serde_json::json!({
             "provider": provider,
             "count": truncated.len(),
@@ -1987,37 +2354,46 @@ async fn handle_feed_with_state(state: &AppState, provider: Option<&str>, limit:
 
 // ── Instagram Handler ────────────────────────────────────────
 
-
 // ── Comment Handler ──────────────────────────────────────────
 
-async fn handle_comment_with_state(state: &AppState, action: CommentAction) -> anyhow::Result<()> {match action {
-        CommentAction::Get { integration_id, post_id, limit } => {
+async fn handle_comment_with_state(state: &AppState, action: CommentAction) -> anyhow::Result<()> {
+    match action {
+        CommentAction::Get {
+            integration_id,
+            post_id,
+            limit,
+        } => {
             let input = crate::mcp::tools_comments::GetCommentsInput {
                 integration_id,
                 post_id,
                 limit: Some(limit),
             };
-            let result = match crate::mcp::tools_comments::get_comments(&state, &input).await {
+            let result = match crate::mcp::tools_comments::get_comments(state, &input).await {
                 Ok(r) => r,
                 Err(e) => output_error_with_hint(
                     &format!("Failed to get comments: {}", e),
-                    "Run `social-forge doctor` to check provider health."
+                    "Run `social-forge doctor` to check provider health.",
                 ),
             };
-            let val = truncate_json_strings(&serde_json::to_value(result.0).unwrap_or_default(), 500);
+            let val =
+                truncate_json_strings(&serde_json::to_value(result.0).unwrap_or_default(), 500);
             output_json(&val);
         }
-        CommentAction::Reply { integration_id, comment_id, content } => {
+        CommentAction::Reply {
+            integration_id,
+            comment_id,
+            content,
+        } => {
             let input = crate::mcp::tools_comments::ReplyToCommentInput {
                 integration_id,
                 comment_id,
                 content,
             };
-            let result = match crate::mcp::tools_comments::reply_to_comment(&state, &input).await {
+            let result = match crate::mcp::tools_comments::reply_to_comment(state, &input).await {
                 Ok(r) => r,
                 Err(e) => output_error_with_hint(
                     &format!("Failed to reply to comment: {}", e),
-                    "Ensure the integration is connected. Run `social-forge doctor` to check."
+                    "Ensure the integration is connected. Run `social-forge doctor` to check.",
                 ),
             };
             output_json(&serde_json::to_value(result.0).unwrap_or_default());
@@ -2028,51 +2404,65 @@ async fn handle_comment_with_state(state: &AppState, action: CommentAction) -> a
 
 // ── DM Handler ───────────────────────────────────────────────
 
-async fn handle_dm_with_state(state: &AppState, action: DmAction) -> anyhow::Result<()> {match action {
-        DmAction::Send { integration_id, recipient, content } => {
+async fn handle_dm_with_state(state: &AppState, action: DmAction) -> anyhow::Result<()> {
+    match action {
+        DmAction::Send {
+            integration_id,
+            recipient,
+            content,
+        } => {
             let input = crate::mcp::tools_dm::SendDmInput {
                 integration_id,
                 recipient,
                 content,
             };
-            let result = match crate::mcp::tools_dm::send_dm(&state, &input).await {
+            let result = match crate::mcp::tools_dm::send_dm(state, &input).await {
                 Ok(r) => r,
                 Err(e) => output_error_with_hint(
                     &format!("Failed to send DM: {}", e),
-                    "Ensure the DM integration is connected. Run `social-forge doctor` to check."
+                    "Ensure the DM integration is connected. Run `social-forge doctor` to check.",
                 ),
             };
             output_json(&serde_json::to_value(result.0).unwrap_or_default());
         }
-        DmAction::List { integration_id, limit } => {
+        DmAction::List {
+            integration_id,
+            limit,
+        } => {
             let input = crate::mcp::tools_dm::ListDmInput {
                 integration_id,
                 limit: Some(limit),
             };
-            let result = match crate::mcp::tools_dm::list_dm_conversations(&state, &input).await {
+            let result = match crate::mcp::tools_dm::list_dm_conversations(state, &input).await {
                 Ok(r) => r,
                 Err(e) => output_error_with_hint(
                     &format!("Failed to list DM conversations: {}", e),
-                    "Run `social-forge doctor` to check provider health."
+                    "Run `social-forge doctor` to check provider health.",
                 ),
             };
-            let val = truncate_json_strings(&serde_json::to_value(result.0).unwrap_or_default(), 500);
+            let val =
+                truncate_json_strings(&serde_json::to_value(result.0).unwrap_or_default(), 500);
             output_json(&val);
         }
-        DmAction::Messages { integration_id, conversation_id, limit } => {
+        DmAction::Messages {
+            integration_id,
+            conversation_id,
+            limit,
+        } => {
             let input = crate::mcp::tools_dm::GetDmInput {
                 integration_id,
                 conversation_id,
                 limit: Some(limit),
             };
-            let result = match crate::mcp::tools_dm::get_dm_messages(&state, &input).await {
+            let result = match crate::mcp::tools_dm::get_dm_messages(state, &input).await {
                 Ok(r) => r,
                 Err(e) => output_error_with_hint(
                     &format!("Failed to get DM messages: {}", e),
-                    "Ensure the conversation ID is valid."
+                    "Ensure the conversation ID is valid.",
                 ),
             };
-            let val = truncate_json_strings(&serde_json::to_value(result.0).unwrap_or_default(), 500);
+            let val =
+                truncate_json_strings(&serde_json::to_value(result.0).unwrap_or_default(), 500);
             output_json(&val);
         }
     }
@@ -2081,8 +2471,18 @@ async fn handle_dm_with_state(state: &AppState, action: DmAction) -> anyhow::Res
 
 // ── Automation Handler ───────────────────────────────────────
 
-async fn handle_automation_with_state(state: &AppState, action: AutomationAction) -> anyhow::Result<()> {match action {
-        AutomationAction::Create { integration_id, name, trigger_type, response_template, response_type } => {
+async fn handle_automation_with_state(
+    state: &AppState,
+    action: AutomationAction,
+) -> anyhow::Result<()> {
+    match action {
+        AutomationAction::Create {
+            integration_id,
+            name,
+            trigger_type,
+            response_template,
+            response_type,
+        } => {
             let input = crate::mcp::tools_automation::CreateRuleInput {
                 integration_id,
                 name,
@@ -2094,20 +2494,26 @@ async fn handle_automation_with_state(state: &AppState, action: AutomationAction
                 cooldown_minutes: None,
                 max_responses_per_hour: None,
             };
-            let result = crate::mcp::tools_automation::create_rule(&state, &input).await
+            let result = crate::mcp::tools_automation::create_rule(state, &input)
+                .await
                 .map_err(|e| anyhow::anyhow!("{}", e))?;
             output_json(&serde_json::to_value(result.0).unwrap_or_default());
         }
         AutomationAction::List { integration_id } => {
-            let input = crate::mcp::tools_automation::ListRulesInput {
-                integration_id,
-            };
-            let result = crate::mcp::tools_automation::list_rules(&state, &input).await
+            let input = crate::mcp::tools_automation::ListRulesInput { integration_id };
+            let result = crate::mcp::tools_automation::list_rules(state, &input)
+                .await
                 .map_err(|e| anyhow::anyhow!("{}", e))?;
-            let val = truncate_json_strings(&serde_json::to_value(result.0).unwrap_or_default(), 500);
+            let val =
+                truncate_json_strings(&serde_json::to_value(result.0).unwrap_or_default(), 500);
             output_json(&val);
         }
-        AutomationAction::Update { rule_id, name, response_template, is_active } => {
+        AutomationAction::Update {
+            rule_id,
+            name,
+            response_template,
+            is_active,
+        } => {
             let input = crate::mcp::tools_automation::UpdateRuleInput {
                 rule_id,
                 name,
@@ -2119,15 +2525,15 @@ async fn handle_automation_with_state(state: &AppState, action: AutomationAction
                 cooldown_minutes: None,
                 max_responses_per_hour: None,
             };
-            let result = crate::mcp::tools_automation::update_rule(&state, &input).await
+            let result = crate::mcp::tools_automation::update_rule(state, &input)
+                .await
                 .map_err(|e| anyhow::anyhow!("{}", e))?;
             output_json(&serde_json::to_value(result.0).unwrap_or_default());
         }
         AutomationAction::Delete { rule_id } => {
-            let input = crate::mcp::tools_automation::DeleteRuleInput {
-                rule_id,
-            };
-            let result = crate::mcp::tools_automation::delete_rule(&state, &input).await
+            let input = crate::mcp::tools_automation::DeleteRuleInput { rule_id };
+            let result = crate::mcp::tools_automation::delete_rule(state, &input)
+                .await
                 .map_err(|e| anyhow::anyhow!("{}", e))?;
             output_json(&serde_json::to_value(result.0).unwrap_or_default());
         }
@@ -2136,23 +2542,27 @@ async fn handle_automation_with_state(state: &AppState, action: AutomationAction
                 rule_id,
                 limit: Some(limit as i64),
             };
-            let result = crate::mcp::tools_automation::get_logs(&state, &input).await
+            let result = crate::mcp::tools_automation::get_logs(state, &input)
+                .await
                 .map_err(|e| anyhow::anyhow!("{}", e))?;
-            let val = truncate_json_strings(&serde_json::to_value(result.0).unwrap_or_default(), 500);
+            let val =
+                truncate_json_strings(&serde_json::to_value(result.0).unwrap_or_default(), 500);
             output_json(&val);
         }
     }
     Ok(())
 }
 
-
-
 // Unified Post Handler
-async fn handle_post_with_state(state: &AppState, text: &str,
+async fn handle_post_with_state(
+    state: &AppState,
+    text: &str,
     platforms: Option<&str>,
     media: Option<&str>,
     schedule: Option<&str>,
-    first_comment: Option<&str>,) -> anyhow::Result<()> {let user_id = resolve_user(&state).await?;
+    first_comment: Option<&str>,
+) -> anyhow::Result<()> {
+    let user_id = resolve_user(state).await?;
     let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
 
     let integration_ids: Vec<String> = if let Some(platforms_str) = platforms {
@@ -2173,8 +2583,12 @@ async fn handle_post_with_state(state: &AppState, text: &str,
     let input = crate::mcp::tools_posts::StagePostInput {
         content: text.to_string(),
         media: media.map(|m| {
-            serde_json::json!(m.split(',').map(|s| s.trim()).filter(|s| !s.is_empty())
-                .map(|u| serde_json::json!({"url": u})).collect::<Vec<_>>())
+            serde_json::json!(m
+                .split(',')
+                .map(|s| s.trim())
+                .filter(|s| !s.is_empty())
+                .map(|u| serde_json::json!({"url": u}))
+                .collect::<Vec<_>>())
         }),
         integration_ids,
         settings: Some(serde_json::json!({})),
@@ -2182,25 +2596,35 @@ async fn handle_post_with_state(state: &AppState, text: &str,
         first_comment: first_comment.map(String::from),
     };
 
-    let result = crate::mcp::tools_posts::stage_post(&state, &input).await
+    let result = crate::mcp::tools_posts::stage_post(state, &input)
+        .await
         .map_err(|e| anyhow::anyhow!("{}", e))?;
 
     output_json(&serde_json::to_value(result.0).unwrap_or_default());
     Ok(())
 }
 
-
 // Stage Handler
-async fn handle_stage_with_state(state: &AppState, text: &str,
+#[expect(
+    clippy::too_many_arguments,
+    reason = "7 arguments required to handle stage command with all optional input fields"
+)]
+async fn handle_stage_with_state(
+    state: &AppState,
+    text: &str,
     integrations_str: Option<&str>,
     platforms_str: Option<&str>,
     media: Option<&str>,
     schedule: Option<&str>,
     preview_only: bool,
-    first_comment: Option<&str>,) -> anyhow::Result<()> {let user_id = resolve_user(&state).await?;
+    first_comment: Option<&str>,
+) -> anyhow::Result<()> {
+    let user_id = resolve_user(state).await?;
     let all_integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
     let integration_ids: Vec<Uuid> = if let Some(iids) = integrations_str {
-        iids.split(',').map(|s| s.trim()).filter(|s| !s.is_empty())
+        iids.split(',')
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
             .map(|s| Uuid::parse_str(s).map_err(|_| anyhow::anyhow!("Invalid integration_id: {s}")))
             .collect::<Result<_, _>>()?
     } else if let Some(plats) = platforms_str {
@@ -2209,19 +2633,30 @@ async fn handle_stage_with_state(state: &AppState, text: &str,
         all_integrations.iter().map(|i| i.id).collect()
     };
     if integration_ids.is_empty() {
-        return Err(anyhow::anyhow!("No integration IDs specified and no connected accounts found."));
+        return Err(anyhow::anyhow!(
+            "No integration IDs specified and no connected accounts found."
+        ));
     }
     let media_json = match media {
         Some(m) => {
-            let urls: Vec<String> = m.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
-            serde_json::json!(urls.iter().map(|u| serde_json::json!({"url": u})).collect::<Vec<_>>())
+            let urls: Vec<String> = m
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
+            serde_json::json!(urls
+                .iter()
+                .map(|u| serde_json::json!({"url": u}))
+                .collect::<Vec<_>>())
         }
         None => serde_json::json!([]),
     };
     let scheduled_at = match schedule {
-        Some(s) => Some(chrono::DateTime::parse_from_rfc3339(s)
-            .map_err(|_| anyhow::anyhow!("Invalid date format, use ISO8601"))?
-            .with_timezone(&chrono::Utc)),
+        Some(s) => Some(
+            chrono::DateTime::parse_from_rfc3339(s)
+                .map_err(|_| anyhow::anyhow!("Invalid date format, use ISO8601"))?
+                .with_timezone(&chrono::Utc),
+        ),
         None => None,
     };
     if preview_only {
@@ -2235,7 +2670,9 @@ async fn handle_stage_with_state(state: &AppState, text: &str,
                 "posts": segments.iter().map(|s| serde_json::json!({"sequence": s.sequence, "total": s.total, "content": s.content, "char_count": s.content.len()})).collect::<Vec<_>>(),
             }))
         }).collect();
-        output_json(&serde_json::json!({"preview": true, "total_integrations": previews.len(), "integrations": previews}));
+        output_json(
+            &serde_json::json!({"preview": true, "total_integrations": previews.len(), "integrations": previews}),
+        );
         return Ok(());
     }
     let request = crate::services::staging::StagingRequest {
@@ -2246,21 +2683,32 @@ async fn handle_stage_with_state(state: &AppState, text: &str,
         scheduled_at,
         first_comment: first_comment.map(String::from),
     };
-    crate::services::staging::validate_staging_request(&request).map_err(|e| anyhow::anyhow!("Validation failed: {e}"))?;
-    let result = crate::services::staging::stage_post(&state.db, &state.providers, user_id, request).await.map_err(|e| anyhow::anyhow!("Staging failed: {e}"))?;
+    crate::services::staging::validate_staging_request(&request)
+        .map_err(|e| anyhow::anyhow!("Validation failed: {e}"))?;
+    let result =
+        crate::services::staging::stage_post(&state.db, &state.providers, user_id, request)
+            .await
+            .map_err(|e| anyhow::anyhow!("Staging failed: {e}"))?;
     let staged: Vec<serde_json::Value> = result.staged.into_iter().map(|s| {
         serde_json::json!({"post_id": s.post_id.to_string(), "provider": s.provider, "sequence": s.sequence, "total_segments": s.total_segments, "state": s.state})
     }).collect();
-    output_json(&serde_json::json!({"status": "staged", "total_posts": result.total_posts, "warnings": result.warnings, "staged": staged}));
+    output_json(
+        &serde_json::json!({"status": "staged", "total_posts": result.total_posts, "warnings": result.warnings, "staged": staged}),
+    );
     Ok(())
 }
 
 // Carousel Handler
-async fn handle_carousel_with_state(state: &AppState, text: &str,
+async fn handle_carousel_with_state(
+    state: &AppState,
+    text: &str,
     integration_id_str: &str,
     media_str: &str,
     title: Option<&str>,
-    schedule: Option<&str>,) -> anyhow::Result<()> {let media_urls: Vec<String> = media_str.split(',')
+    schedule: Option<&str>,
+) -> anyhow::Result<()> {
+    let media_urls: Vec<String> = media_str
+        .split(',')
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
         .collect();
@@ -2269,14 +2717,16 @@ async fn handle_carousel_with_state(state: &AppState, text: &str,
     }
 
     let scheduled_at = match schedule {
-        Some(s) => Some(chrono::DateTime::parse_from_rfc3339(s)
-            .map_err(|_| anyhow::anyhow!("Invalid date format, use ISO8601"))?
-            .with_timezone(&chrono::Utc)),
+        Some(s) => Some(
+            chrono::DateTime::parse_from_rfc3339(s)
+                .map_err(|_| anyhow::anyhow!("Invalid date format, use ISO8601"))?
+                .with_timezone(&chrono::Utc),
+        ),
         None => None,
     };
 
     let media_json = serde_json::json!(media_urls);
-    let user_id = resolve_user(&state).await?;
+    let user_id = resolve_user(state).await?;
     let integration_id = Uuid::parse_str(integration_id_str)
         .map_err(|_| anyhow::anyhow!("Invalid integration_id format"))?;
 
@@ -2294,7 +2744,9 @@ async fn handle_carousel_with_state(state: &AppState, text: &str,
             first_comment: None,
             state: None,
         },
-    ).await.map_err(|e| anyhow::anyhow!("Failed to create carousel: {e}"))?;
+    )
+    .await
+    .map_err(|e| anyhow::anyhow!("Failed to create carousel: {e}"))?;
 
     output_json(&serde_json::json!({
         "id": post.id.to_string(),
@@ -2306,9 +2758,11 @@ async fn handle_carousel_with_state(state: &AppState, text: &str,
 }
 
 // Media Handler
-async fn handle_media_with_state(state: &AppState, action: MediaAction) -> anyhow::Result<()> {match action {
+async fn handle_media_with_state(state: &AppState, action: MediaAction) -> anyhow::Result<()> {
+    match action {
         MediaAction::Upload { path, alt: _ } => {
-            let result = crate::mcp::tools_media::upload_from_path(&state, &path).await
+            let result = crate::mcp::tools_media::upload_from_path(state, &path)
+                .await
                 .map_err(|e| anyhow::anyhow!("{}", e))?;
             output_json(&serde_json::to_value(result.0).unwrap_or_default());
         }
@@ -2317,22 +2771,30 @@ async fn handle_media_with_state(state: &AppState, action: MediaAction) -> anyho
                 limit: Some(limit.min(200) as i64),
                 search,
             };
-            let result = crate::mcp::tools_media::list_media(&state, &input).await
+            let result = crate::mcp::tools_media::list_media(state, &input)
+                .await
                 .map_err(|e| anyhow::anyhow!("{}", e))?;
             output_json(&serde_json::to_value(result.0).unwrap_or_default());
         }
         MediaAction::Download { url, output } => {
-            let resp = reqwest::Client::new().get(&url).send().await
+            let resp = reqwest::Client::new()
+                .get(&url)
+                .send()
+                .await
                 .map_err(|e| anyhow::anyhow!("Failed to download: {e}"))?;
             let status = resp.status();
             if !status.is_success() {
                 return Err(anyhow::anyhow!("Download failed with HTTP {}", status));
             }
-            let content_type = resp.headers().get("content-type")
+            let content_type = resp
+                .headers()
+                .get("content-type")
                 .and_then(|v| v.to_str().ok())
                 .unwrap_or("application/octet-stream")
                 .to_string();
-            let bytes = resp.bytes().await
+            let bytes = resp
+                .bytes()
+                .await
                 .map_err(|e| anyhow::anyhow!("Failed to read response: {e}"))?;
             let out_path = if std::path::Path::new(&output).is_dir() {
                 let filename = url.rsplit('/').next().unwrap_or("download");
@@ -2359,11 +2821,9 @@ async fn handle_media_with_state(state: &AppState, action: MediaAction) -> anyho
             if paths.is_empty() {
                 return Err(anyhow::anyhow!("At least one file path is required"));
             }
-            let input = crate::mcp::tools_media::MediaUploadBatchInput {
-                paths,
-                alt: None,
-            };
-            let result = crate::mcp::tools_media::upload_batch(&state, &input).await
+            let input = crate::mcp::tools_media::MediaUploadBatchInput { paths, alt: None };
+            let result = crate::mcp::tools_media::upload_batch(state, &input)
+                .await
                 .map_err(|e| anyhow::anyhow!("{}", e))?;
             output_json(&serde_json::to_value(result.0).unwrap_or_default());
         }
@@ -2393,14 +2853,16 @@ async fn handle_posts_create_helper(
         .filter_map(|s| s.parse::<uuid::Uuid>().ok())
         .collect();
     if integration_ids.is_empty() {
-        return Err(anyhow::anyhow!("At least one valid integration UUID required"));
+        return Err(anyhow::anyhow!(
+            "At least one valid integration UUID required"
+        ));
     }
 
     let scheduled_at = match schedule {
         Some(s) => Some(
             chrono::DateTime::parse_from_rfc3339(s)
                 .map_err(|_| anyhow::anyhow!("Invalid schedule date, use ISO 8601 / RFC 3339"))?
-                .with_timezone(&chrono::Utc)
+                .with_timezone(&chrono::Utc),
         ),
         None => None,
     };
@@ -2410,10 +2872,14 @@ async fn handle_posts_create_helper(
             if m.trim_start().starts_with('[') {
                 serde_json::from_str(m).unwrap_or_else(|_| serde_json::json!([]))
             } else {
-                let urls: Vec<String> = m.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+                let urls: Vec<String> = m
+                    .split(',')
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+                    .collect();
                 serde_json::json!(urls)
             }
-        },
+        }
         None => serde_json::json!([]),
     };
 
@@ -2428,12 +2894,22 @@ async fn handle_posts_create_helper(
         Some("queued") => Some(crate::db::models::PostState::Queued),
         Some("published") => Some(crate::db::models::PostState::Published),
         Some("error") => Some(crate::db::models::PostState::Error),
-        Some(other) => return Err(anyhow::anyhow!("Invalid --state '{other}'. Use draft|queued|published|error.")),
+        Some(other) => {
+            return Err(anyhow::anyhow!(
+                "Invalid --state '{other}'. Use draft|queued|published|error."
+            ))
+        }
         None if scheduled_at.is_some() => Some(crate::db::models::PostState::Queued),
         None => None,
     };
 
-    let first_comment_owned = first_comment.and_then(|s| if s.is_empty() { None } else { Some(s.to_string()) });
+    let first_comment_owned = first_comment.and_then(|s| {
+        if s.is_empty() {
+            None
+        } else {
+            Some(s.to_string())
+        }
+    });
     let title_owned = title.map(String::from);
 
     fn build(
@@ -2464,7 +2940,9 @@ async fn handle_posts_create_helper(
     let count = integration_ids.len();
     for &iid in &integration_ids {
         let input = build(
-            iid, user_id, content,
+            iid,
+            user_id,
+            content,
             title_owned.clone(),
             media_json.clone(),
             scheduled_at,
@@ -2472,9 +2950,8 @@ async fn handle_posts_create_helper(
             first_comment_owned.clone(),
             target_state.clone(),
         );
-        match crate::services::posts::PostService::create(
-            &state.db, &state.broadcast, input
-        ).await {
+        match crate::services::posts::PostService::create(&state.db, &state.broadcast, input).await
+        {
             Ok(post) => created.push(serde_json::json!({
                 "id": post.id.to_string(),
                 "integration_id": iid.to_string(),
@@ -2501,86 +2978,112 @@ async fn handle_posts_create_helper(
     }))
 }
 
-async fn handle_posts_with_state(state: &AppState, action: PostsAction) -> anyhow::Result<()> {let user_id = resolve_user(&state).await?;
+async fn handle_posts_with_state(state: &AppState, action: PostsAction) -> anyhow::Result<()> {
+    let user_id = resolve_user(state).await?;
 
     let result: anyhow::Result<serde_json::Value> = match action {
-        PostsAction::List { state: post_state, limit, offset } => {
+        PostsAction::List {
+            state: post_state,
+            limit,
+            offset,
+        } => {
             let limit = limit.min(200) as i64;
             let offset = offset as i64;
             match crate::services::posts::PostService::list(
-                &state.db, user_id, post_state.as_deref(),
-                limit, offset, true
-            ).await {
+                &state.db,
+                user_id,
+                post_state.as_deref(),
+                limit,
+                offset,
+                true,
+            )
+            .await
+            {
                 Ok((posts, total)) => {
-                    let summaries: Vec<_> = posts.iter().map(|p| {
-                        let mut val = serde_json::json!({
-                            "id": p.id,
-                            "content": p.content,
-                            "state": p.state,
-                            "title": p.title,
-                            "integration_id": p.integration_id,
-                            "scheduled_at": p.scheduled_at.map(|dt| dt.to_rfc3339()),
-                            "published_at": p.published_at.map(|dt| dt.to_rfc3339()),
-                            "platform_post_id": p.platform_post_id,
-                            "platform_post_url": p.platform_post_url,
-                            "error_message": p.error_message,
-                            "first_comment": p.first_comment,
-                            "media": p.media,
-                            "settings": p.settings,
-                            "created_at": p.created_at.to_rfc3339(),
-                            "updated_at": p.updated_at.to_rfc3339(),
-                        });
-                        // AXI §3: truncate long strings in list view
-                        val = truncate_json_strings(&val, 500);
-                        val
-                    }).collect();
+                    let summaries: Vec<_> = posts
+                        .iter()
+                        .map(|p| {
+                            let mut val = serde_json::json!({
+                                "id": p.id,
+                                "content": p.content,
+                                "state": p.state,
+                                "title": p.title,
+                                "integration_id": p.integration_id,
+                                "scheduled_at": p.scheduled_at.map(|dt| dt.to_rfc3339()),
+                                "published_at": p.published_at.map(|dt| dt.to_rfc3339()),
+                                "platform_post_id": p.platform_post_id,
+                                "platform_post_url": p.platform_post_url,
+                                "error_message": p.error_message,
+                                "first_comment": p.first_comment,
+                                "media": p.media,
+                                "settings": p.settings,
+                                "created_at": p.created_at.to_rfc3339(),
+                                "updated_at": p.updated_at.to_rfc3339(),
+                            });
+                            // AXI §3: truncate long strings in list view
+                            val = truncate_json_strings(&val, 500);
+                            val
+                        })
+                        .collect();
                     Ok(serde_json::json!({
                         "total": total.unwrap_or(0),
                         "limit": limit,
                         "offset": offset,
                         "count": summaries.len(),
-                        "hint": if total.unwrap_or(0) as i64 > limit { Some(format!("Showing {} of {} posts. Use --offset {} for next page.", summaries.len(), total.unwrap_or(0), offset + limit)) } else { None },
+                        "hint": if total.unwrap_or(0) > limit { Some(format!("Showing {} of {} posts. Use --offset {} for next page.", summaries.len(), total.unwrap_or(0), offset + limit)) } else { None },
                         "posts": summaries,
                     }))
-                },
+                }
                 Err(e) => Err(anyhow::anyhow!("DB error: {e}")),
             }
         }
-        PostsAction::Get { id } => {
-            match id.parse::<uuid::Uuid>() {
-                Ok(post_id) => match crate::db::queries::get_post(&state.db, post_id, user_id).await {
-                    Ok(Some(p)) => Ok(serde_json::json!({
-                        "id": p.id,
-                        "content": p.content,
-                        "state": p.state,
-                        "title": p.title,
-                        "integration_id": p.integration_id,
-                        "scheduled_at": p.scheduled_at.map(|dt| dt.to_rfc3339()),
-                        "published_at": p.published_at.map(|dt| dt.to_rfc3339()),
-                        "platform_post_id": p.platform_post_id,
-                        "platform_post_url": p.platform_post_url,
-                        "error_message": p.error_message,
-                        "first_comment": p.first_comment,
-                        "media": p.media,
-                        "settings": p.settings,
-                        "created_at": p.created_at.to_rfc3339(),
-                        "updated_at": p.updated_at.to_rfc3339(),
-                    })),
-                    Ok(None) => Err(anyhow::anyhow!("Post {id} not found")),
-                    Err(e) => Err(anyhow::anyhow!("DB error: {e}")),
-                },
-                Err(_) => Err(anyhow::anyhow!("Invalid post ID: {id}")),
-            }
-        }
+        PostsAction::Get { id } => match id.parse::<uuid::Uuid>() {
+            Ok(post_id) => match crate::db::queries::get_post(&state.db, post_id, user_id).await {
+                Ok(Some(p)) => Ok(serde_json::json!({
+                    "id": p.id,
+                    "content": p.content,
+                    "state": p.state,
+                    "title": p.title,
+                    "integration_id": p.integration_id,
+                    "scheduled_at": p.scheduled_at.map(|dt| dt.to_rfc3339()),
+                    "published_at": p.published_at.map(|dt| dt.to_rfc3339()),
+                    "platform_post_id": p.platform_post_id,
+                    "platform_post_url": p.platform_post_url,
+                    "error_message": p.error_message,
+                    "first_comment": p.first_comment,
+                    "media": p.media,
+                    "settings": p.settings,
+                    "created_at": p.created_at.to_rfc3339(),
+                    "updated_at": p.updated_at.to_rfc3339(),
+                })),
+                Ok(None) => Err(anyhow::anyhow!("Post {id} not found")),
+                Err(e) => Err(anyhow::anyhow!("DB error: {e}")),
+            },
+            Err(_) => Err(anyhow::anyhow!("Invalid post ID: {id}")),
+        },
         PostsAction::Create {
-            content, integrations, schedule, title, media, first_comment, settings, state: state_override
+            content,
+            integrations,
+            schedule,
+            title,
+            media,
+            first_comment,
+            settings,
+            state: state_override,
         } => {
             handle_posts_create_helper(
-                &state, user_id, &content, &integrations,
-                schedule.as_deref(), title.as_deref(),
-                media.as_deref(), first_comment.as_deref(),
-                settings.as_deref(), state_override.as_deref(),
-            ).await
+                state,
+                user_id,
+                &content,
+                &integrations,
+                schedule.as_deref(),
+                title.as_deref(),
+                media.as_deref(),
+                first_comment.as_deref(),
+                settings.as_deref(),
+                state_override.as_deref(),
+            )
+            .await
         }
         PostsAction::Schedule { id, scheduled_at } => {
             let post_id = match id.parse::<uuid::Uuid>() {
@@ -2591,15 +3094,22 @@ async fn handle_posts_with_state(state: &AppState, action: PostsAction) -> anyho
                 .map_err(|e: chrono::ParseError| anyhow::anyhow!("Invalid scheduled_at: {}", e))?
                 .with_timezone(&chrono::Utc);
             crate::services::posts::PostService::schedule(
-                &state.db, &state.broadcast, user_id, post_id, dt
-            ).await
-                .map(|post| serde_json::json!({
+                &state.db,
+                &state.broadcast,
+                user_id,
+                post_id,
+                dt,
+            )
+            .await
+            .map(|post| {
+                serde_json::json!({
                     "ok": true,
                     "id": post.id.to_string(),
                     "state": post.state.to_string(),
                     "scheduled_at": post.scheduled_at.map(|d| d.to_rfc3339()),
-                }))
-                .map_err(|e| anyhow::anyhow!("Schedule failed: {e}"))
+                })
+            })
+            .map_err(|e| anyhow::anyhow!("Schedule failed: {e}"))
         }
         PostsAction::Publish { id } => {
             let post_id = match id.parse::<uuid::Uuid>() {
@@ -2607,15 +3117,23 @@ async fn handle_posts_with_state(state: &AppState, action: PostsAction) -> anyho
                 Err(_) => return output_error("Invalid post ID"),
             };
             crate::services::posts::PostService::publish(
-                &state.db, &state.providers, &state.broadcast, user_id, post_id, state.token_key
-            ).await
-                .map(|platform_url| serde_json::json!({
+                &state.db,
+                &state.providers,
+                &state.broadcast,
+                user_id,
+                post_id,
+                state.token_key,
+            )
+            .await
+            .map(|platform_url| {
+                serde_json::json!({
                     "ok": true,
                     "id": id,
                     "state": "published",
                     "platform_post_url": platform_url,
-                }))
-                .map_err(|e| anyhow::anyhow!("Publish failed: {e}"))
+                })
+            })
+            .map_err(|e| anyhow::anyhow!("Publish failed: {e}"))
         }
         PostsAction::Delete { id } => {
             let post_id = match id.parse::<uuid::Uuid>() {
@@ -2623,21 +3141,28 @@ async fn handle_posts_with_state(state: &AppState, action: PostsAction) -> anyho
                 Err(_) => return output_error("Invalid post ID"),
             };
             crate::services::posts::PostService::delete(
-                &state.db, &state.broadcast, user_id, post_id
-            ).await
-                .map(|deleted| serde_json::json!({"ok": deleted, "id": id}))
-                .map_err(|e| anyhow::anyhow!("Delete failed: {e}"))
+                &state.db,
+                &state.broadcast,
+                user_id,
+                post_id,
+            )
+            .await
+            .map(|deleted| serde_json::json!({"ok": deleted, "id": id}))
+            .map_err(|e| anyhow::anyhow!("Delete failed: {e}"))
         }
         PostsAction::FindSlot { integration } => {
-            let integration_id = integration.as_deref().and_then(|s| uuid::Uuid::parse_str(s).ok());
-            crate::services::posts::PostService::find_slot(
-                &state.db, user_id, integration_id
-            ).await
-                .map(|slot| serde_json::json!({
-                    "ok": true,
-                    "scheduled_at": slot.to_rfc3339(),
-                    "integration_id": integration,
-                }))
+            let integration_id = integration
+                .as_deref()
+                .and_then(|s| uuid::Uuid::parse_str(s).ok());
+            crate::services::posts::PostService::find_slot(&state.db, user_id, integration_id)
+                .await
+                .map(|slot| {
+                    serde_json::json!({
+                        "ok": true,
+                        "scheduled_at": slot.to_rfc3339(),
+                        "integration_id": integration,
+                    })
+                })
                 .map_err(|e| anyhow::anyhow!("Find-slot failed: {e}"))
         }
     };
@@ -2652,8 +3177,21 @@ async fn handle_posts_with_state(state: &AppState, action: PostsAction) -> anyho
 // Split Preview Handler
 fn handle_split_preview(text: &str, platforms: Option<&str>) -> anyhow::Result<()> {
     let provider_list: Vec<&str> = match platforms {
-        Some(p) => p.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()).collect(),
-        None => vec!["x", "bluesky", "linkedin", "reddit", "mastodon", "facebook", "instagram", "youtube"],
+        Some(p) => p
+            .split(',')
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .collect(),
+        None => vec![
+            "x",
+            "bluesky",
+            "linkedin",
+            "reddit",
+            "mastodon",
+            "facebook",
+            "instagram",
+            "youtube",
+        ],
     };
     let preview: Vec<serde_json::Value> = provider_list.iter().map(|&provider| {
         let segments = crate::services::content_splitter::split_content(text, provider, 4);
@@ -2690,7 +3228,11 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
     let state = init_state().await?;
 
     match cli.command {
-        Command::Init | Command::Config { .. } | Command::SplitPreview { .. } | Command::Serve { .. } | Command::Mcp => {
+        Command::Init
+        | Command::Config { .. }
+        | Command::SplitPreview { .. }
+        | Command::Serve { .. }
+        | Command::Mcp => {
             unreachable!("handled above")
         }
 
@@ -2704,29 +3246,89 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
         // ── Core Platform Handlers ──────────────────────────
         Command::X { action } => crate::cli::platforms::x::handle(action, &state).await,
         Command::Reddit { action } => crate::cli::platforms::reddit::handle(action, &state).await,
-        Command::Linkedin { action } => crate::cli::platforms::linkedin::handle(action, &state).await,
-        Command::LinkedinPage { action } => crate::cli::platforms::linkedin_page::handle(action, &state).await,
-        Command::Facebook { action } => crate::cli::platforms::facebook::handle(action, &state).await,
-        Command::Instagram { action } => crate::cli::platforms::instagram::handle(action, &state).await,
+        Command::Linkedin { action } => {
+            crate::cli::platforms::linkedin::handle(action, &state).await
+        }
+        Command::LinkedinPage { action } => {
+            crate::cli::platforms::linkedin_page::handle(action, &state).await
+        }
+        Command::Facebook { action } => {
+            crate::cli::platforms::facebook::handle(action, &state).await
+        }
+        Command::Instagram { action } => {
+            crate::cli::platforms::instagram::handle(action, &state).await
+        }
         Command::Youtube { action } => crate::cli::platforms::youtube::handle(action, &state).await,
         Command::Bluesky { action } => crate::cli::platforms::bluesky::handle(action, &state).await,
-        Command::Mastodon { action } => crate::cli::platforms::mastodon::handle(action, &state).await,
+        Command::Mastodon { action } => {
+            crate::cli::platforms::mastodon::handle(action, &state).await
+        }
 
         // ── Unified Commands ────────────────────────────────
-        Command::Import { provider, count } => handle_import_with_state(&state, &provider, count).await,
-        Command::Feed { provider, limit } => handle_feed_with_state(&state, provider.as_deref(), limit).await,
+        Command::Import { provider, count } => {
+            handle_import_with_state(&state, &provider, count).await
+        }
+        Command::Feed { provider, limit } => {
+            handle_feed_with_state(&state, provider.as_deref(), limit).await
+        }
         Command::Comment { action } => handle_comment_with_state(&state, action).await,
         Command::Dm { action } => handle_dm_with_state(&state, action).await,
         Command::Automation { action } => handle_automation_with_state(&state, action).await,
         Command::Posts { action } => handle_posts_with_state(&state, action).await,
-        Command::Post { text, platforms, media, schedule, first_comment } => {
-            handle_post_with_state(&state, &text, platforms.as_deref(), media.as_deref(), schedule.as_deref(), first_comment.as_deref()).await
+        Command::Post {
+            text,
+            platforms,
+            media,
+            schedule,
+            first_comment,
+        } => {
+            handle_post_with_state(
+                &state,
+                &text,
+                platforms.as_deref(),
+                media.as_deref(),
+                schedule.as_deref(),
+                first_comment.as_deref(),
+            )
+            .await
         }
-        Command::Stage { text, integrations, platforms, media, schedule, preview, first_comment } => {
-            handle_stage_with_state(&state, &text, integrations.as_deref(), platforms.as_deref(), media.as_deref(), schedule.as_deref(), preview, first_comment.as_deref()).await
+        Command::Stage {
+            text,
+            integrations,
+            platforms,
+            media,
+            schedule,
+            preview,
+            first_comment,
+        } => {
+            handle_stage_with_state(
+                &state,
+                &text,
+                integrations.as_deref(),
+                platforms.as_deref(),
+                media.as_deref(),
+                schedule.as_deref(),
+                preview,
+                first_comment.as_deref(),
+            )
+            .await
         }
-        Command::Carousel { text, integration, media, title, schedule } => {
-            handle_carousel_with_state(&state, &text, &integration, &media, title.as_deref(), schedule.as_deref()).await
+        Command::Carousel {
+            text,
+            integration,
+            media,
+            title,
+            schedule,
+        } => {
+            handle_carousel_with_state(
+                &state,
+                &text,
+                &integration,
+                &media,
+                title.as_deref(),
+                schedule.as_deref(),
+            )
+            .await
         }
         Command::Media { action } => handle_media_with_state(&state, action).await,
 
@@ -2735,24 +3337,44 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
         Command::Threads { action } => crate::cli::platforms::threads::handle(action, &state).await,
         Command::Discord { action } => crate::cli::platforms::discord::handle(action, &state).await,
         Command::Slack { action } => crate::cli::platforms::slack::handle(action, &state).await,
-        Command::TelegramBot { action } => crate::cli::platforms::telegram_bot::handle(action, &state).await,
-        Command::TelegramUser { action } => crate::cli::platforms::telegram_user::handle(action, &state).await,
-        Command::Whatsapp { action } => crate::cli::platforms::whatsapp::handle(action, &state).await,
-        Command::Pinterest { action } => crate::cli::platforms::pinterest::handle(action, &state).await,
+        Command::TelegramBot { action } => {
+            crate::cli::platforms::telegram_bot::handle(action, &state).await
+        }
+        Command::TelegramUser { action } => {
+            crate::cli::platforms::telegram_user::handle(action, &state).await
+        }
+        Command::Whatsapp { action } => {
+            crate::cli::platforms::whatsapp::handle(action, &state).await
+        }
+        Command::Pinterest { action } => {
+            crate::cli::platforms::pinterest::handle(action, &state).await
+        }
         Command::Github { action } => crate::cli::platforms::github::handle(action, &state).await,
-        Command::Wordpress { action } => crate::cli::platforms::wordpress::handle(action, &state).await,
-        Command::Hashnode { action } => crate::cli::platforms::hashnode::handle(action, &state).await,
-        Command::MediumBlog { action } => crate::cli::platforms::medium_blog::handle(action, &state).await,
+        Command::Wordpress { action } => {
+            crate::cli::platforms::wordpress::handle(action, &state).await
+        }
+        Command::Hashnode { action } => {
+            crate::cli::platforms::hashnode::handle(action, &state).await
+        }
+        Command::MediumBlog { action } => {
+            crate::cli::platforms::medium_blog::handle(action, &state).await
+        }
         Command::Devto { action } => crate::cli::platforms::devto::handle(action, &state).await,
         Command::Skool { action } => crate::cli::platforms::skool::handle(action, &state).await,
         Command::Google { action } => crate::cli::platforms::google::handle(action, &state).await,
         Command::Gdrive { action } => crate::cli::platforms::drive::handle(action, &state).await,
         Command::Gcal { action } => crate::cli::platforms::gcal::handle(action, &state).await,
         Command::GmailOps { action } => crate::cli::platforms::gmail::handle(action, &state).await,
-        Command::Webhooks { action } => crate::cli::platforms::webhooks::handle(action, &state).await,
-        Command::Notifications { action } => crate::cli::platforms::notifications::handle(action, &state).await,
+        Command::Webhooks { action } => {
+            crate::cli::platforms::webhooks::handle(action, &state).await
+        }
+        Command::Notifications { action } => {
+            crate::cli::platforms::notifications::handle(action, &state).await
+        }
         Command::Tags { action } => crate::cli::platforms::tags::handle(action, &state).await,
-        Command::Analytics { action } => crate::cli::platforms::analytics::handle(action, &state).await,
+        Command::Analytics { action } => {
+            crate::cli::platforms::analytics::handle(action, &state).await
+        }
     }
 }
 
@@ -2770,9 +3392,15 @@ mod tests {
             "nested": {"inner": "b".repeat(700)},
         });
         let out = truncate_json_strings(&val, 500);
-        assert_eq!(out["body"].as_str().unwrap(), format!("{}... (truncated, 600 chars total)", "a".repeat(500)));
+        assert_eq!(
+            out["body"].as_str().unwrap(),
+            format!("{}... (truncated, 600 chars total)", "a".repeat(500))
+        );
         assert_eq!(out["title"], "short");
-        assert!(out["nested"]["inner"].as_str().unwrap().ends_with("(truncated, 700 chars total)"));
+        assert!(out["nested"]["inner"]
+            .as_str()
+            .unwrap()
+            .ends_with("(truncated, 700 chars total)"));
     }
 
     #[test]
@@ -2808,17 +3436,16 @@ mod tests {
     }
 
     fn providers(integrations: &[crate::db::models::Integration], platforms: &str) -> Vec<String> {
-        let mut out: Vec<String> =
-            resolve_platform_integrations(integrations.iter(), platforms)
-                .into_iter()
-                .map(|id| {
-                    integrations
-                        .iter()
-                        .find(|i| i.id == id)
-                        .map(|i| i.provider_identifier.clone())
-                        .unwrap_or_default()
-                })
-                .collect();
+        let mut out: Vec<String> = resolve_platform_integrations(integrations.iter(), platforms)
+            .into_iter()
+            .map(|id| {
+                integrations
+                    .iter()
+                    .find(|i| i.id == id)
+                    .map(|i| i.provider_identifier.clone())
+                    .unwrap_or_default()
+            })
+            .collect();
         out.sort();
         out
     }
@@ -2834,7 +3461,10 @@ mod tests {
         ];
         assert_eq!(providers(&igs, "instagram"), vec!["instagram".to_string()]);
 
-        let lis = [fake_integration("linkedin"), fake_integration("linkedin-page")];
+        let lis = [
+            fake_integration("linkedin"),
+            fake_integration("linkedin-page"),
+        ];
         assert_eq!(providers(&lis, "linkedin"), vec!["linkedin".to_string()]);
 
         // Every documented collision pair behaves the same way.
@@ -2876,7 +3506,10 @@ mod tests {
         ];
         assert_eq!(providers(&all, "x"), vec!["x".to_string()]);
         assert_eq!(providers(&all, "x,bluesky").len(), 2);
-        assert!(providers(&all, "tiktok").is_empty(), "no match → no targets");
+        assert!(
+            providers(&all, "tiktok").is_empty(),
+            "no match → no targets"
+        );
     }
 
     /// Whitespace and empty entries in the list must not create blank targets.

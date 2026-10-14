@@ -2,7 +2,7 @@
 // Tool handlers for media upload via MCP protocol.
 // Allows AI agents to upload images/videos for post attachments.
 
-use rmcp::{Json, schemars::JsonSchema};
+use rmcp::{schemars::JsonSchema, Json};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -53,11 +53,8 @@ pub async fn upload_media(
 ) -> Result<Json<MediaUploadOutput>, String> {
     let user_id = resolve_first_user(state).await?;
 
-    let data = base64::Engine::decode(
-        &base64::engine::general_purpose::STANDARD,
-        &input.data,
-    )
-    .map_err(|e| format!("Invalid base64 data: {e}"))?;
+    let data = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &input.data)
+        .map_err(|e| format!("Invalid base64 data: {e}"))?;
 
     if data.len() > 50 * 1024 * 1024 {
         return Err("File too large (max 50 MB)".into());
@@ -123,7 +120,8 @@ pub async fn upload_from_path_with_alt(
         return Err(format!("File not found: {file_path}"));
     }
 
-    let metadata = tokio::fs::metadata(path).await
+    let metadata = tokio::fs::metadata(path)
+        .await
         .map_err(|e| format!("Failed to read file metadata: {e}"))?;
     let file_size = metadata.len();
 
@@ -131,7 +129,8 @@ pub async fn upload_from_path_with_alt(
         return Err("File too large (max 50 MB)".into());
     }
 
-    let original_name = path.file_name()
+    let original_name = path
+        .file_name()
         .and_then(|f| f.to_str())
         .unwrap_or("upload.bin")
         .to_string();
@@ -165,7 +164,9 @@ pub async fn upload_from_path_with_alt(
     // isn't silently swallowed — callers can check logs to understand
     // why alt text isn't being stored.
     if let Some(alt) = alt {
-        tracing::debug!("Media alt text provided but not stored (DB column not yet migrated): {alt}");
+        tracing::debug!(
+            "Media alt text provided but not stored (DB column not yet migrated): {alt}"
+        );
     }
 
     let entry = crate::db::queries::create_media(
@@ -197,25 +198,23 @@ pub async fn list_media(
     let user_id = resolve_first_user(state).await?;
     let limit = input.limit.unwrap_or(50).min(200);
 
-    let entries = crate::db::queries::list_media(
-        &state.db,
-        user_id,
-        limit,
-        0,
-        input.search.as_deref(),
-    )
-    .await
-    .map_err(|e| format!("DB error: {e}"))?;
+    let entries =
+        crate::db::queries::list_media(&state.db, user_id, limit, 0, input.search.as_deref())
+            .await
+            .map_err(|e| format!("DB error: {e}"))?;
 
     let total = entries.len() as i64;
-    let media = entries.into_iter().map(|e| MediaItem {
-        id: e.id.to_string(),
-        url: format!("/api/media/{}", e.id),
-        filename: e.original_name,
-        mime_type: e.mime_type,
-        size: e.file_size,
-        created_at: e.created_at.to_rfc3339(),
-    }).collect();
+    let media = entries
+        .into_iter()
+        .map(|e| MediaItem {
+            id: e.id.to_string(),
+            url: format!("/api/media/{}", e.id),
+            filename: e.original_name,
+            mime_type: e.mime_type,
+            size: e.file_size,
+            created_at: e.created_at.to_rfc3339(),
+        })
+        .collect();
 
     Ok(Json(MediaListOutput { media, total }))
 }
@@ -312,11 +311,14 @@ pub async fn upload_from_url(
     let user_id = resolve_first_user(state).await?;
 
     // SSRF protection: validate URL scheme and block non-public IPs
-    let parsed = url::Url::parse(&input.url)
-        .map_err(|e| format!("Invalid URL: {e}"))?;
+    let parsed = url::Url::parse(&input.url).map_err(|e| format!("Invalid URL: {e}"))?;
     match parsed.scheme() {
         "http" | "https" => {}
-        other => return Err(format!("URL scheme '{other}' not allowed (use http or https)")),
+        other => {
+            return Err(format!(
+                "URL scheme '{other}' not allowed (use http or https)"
+            ))
+        }
     }
     if let Some(host) = parsed.host_str() {
         // Reject localhost aliases
@@ -327,8 +329,11 @@ pub async fn upload_from_url(
         if let Ok(ip) = host.parse::<std::net::IpAddr>() {
             match ip {
                 std::net::IpAddr::V4(v4) => {
-                    if v4.is_private() || v4.is_loopback() || v4.is_link_local()
-                        || v4.is_broadcast() || v4.is_unspecified()
+                    if v4.is_private()
+                        || v4.is_loopback()
+                        || v4.is_link_local()
+                        || v4.is_broadcast()
+                        || v4.is_unspecified()
                     {
                         return Err(format!(
                             "URLs pointing to private/reserved IPs ({ip}) are not allowed"
@@ -388,19 +393,21 @@ pub async fn upload_from_url(
         .redirect(reqwest::redirect::Policy::none())
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
-    let resp = client.get(&input.url)
+    let resp = client
+        .get(&input.url)
         .send()
         .await
         .map_err(|e| format!("Failed to fetch URL: {e}"))?;
     // If the server returned a redirect, follow it manually with SSRF re-validation
     let resp = if resp.status().is_redirection() {
-        let location = resp.headers()
+        let location = resp
+            .headers()
             .get("location")
             .and_then(|v| v.to_str().ok())
             .ok_or_else(|| "Redirect missing Location header".to_string())?;
         // Re-validate the redirect target against SSRF rules
-        let redirect_url = url::Url::parse(location)
-            .map_err(|e| format!("Invalid redirect URL: {e}"))?;
+        let redirect_url =
+            url::Url::parse(location).map_err(|e| format!("Invalid redirect URL: {e}"))?;
         match redirect_url.scheme() {
             "http" | "https" => {}
             other => return Err(format!("Redirect to scheme '{other}' not allowed")),
@@ -412,8 +419,11 @@ pub async fn upload_from_url(
             if let Ok(ip) = host.parse::<std::net::IpAddr>() {
                 match ip {
                     std::net::IpAddr::V4(v4) => {
-                        if v4.is_private() || v4.is_loopback() || v4.is_link_local()
-                            || v4.is_broadcast() || v4.is_unspecified()
+                        if v4.is_private()
+                            || v4.is_loopback()
+                            || v4.is_link_local()
+                            || v4.is_broadcast()
+                            || v4.is_unspecified()
                         {
                             return Err(format!("Redirect to private IP ({ip}) not allowed"));
                         }
@@ -426,7 +436,10 @@ pub async fn upload_from_url(
                 }
             }
         }
-        client.get(location).send().await
+        client
+            .get(location)
+            .send()
+            .await
             .map_err(|e| format!("Failed to follow redirect: {e}"))?
     } else {
         resp
@@ -463,8 +476,9 @@ pub async fn upload_from_url(
 
     // Determine filename from URL path (reuse already-parsed URL)
     let filename = input.filename.clone().unwrap_or_else(|| {
-        parsed.path_segments()
-            .and_then(|s| s.last())
+        parsed
+            .path_segments()
+            .and_then(|mut s| s.next_back())
             .filter(|s| !s.is_empty())
             .map(String::from)
             .unwrap_or_else(|| {

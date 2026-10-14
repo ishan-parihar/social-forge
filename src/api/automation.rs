@@ -162,7 +162,7 @@ pub async fn list_rules(
             name: r.name,
             trigger_type: r.trigger_type,
             response_type: r.response_type,
-            is_active: r.is_active.map_or(true, |v| v != 0),
+            is_active: r.is_active.map(|v| v != 0).unwrap_or(true),
             created_at: r.created_at.unwrap_or_else(EpochUtc::now).0.to_rfc3339(),
         })
         .collect();
@@ -210,7 +210,7 @@ pub async fn create_rule(
     Ok(Json(CreateRuleResponse {
         id: rule.id,
         name: rule.name,
-        is_active: rule.is_active.map_or(true, |v| v != 0),
+        is_active: rule.is_active.map(|v| v != 0).unwrap_or(true),
     }))
 }
 

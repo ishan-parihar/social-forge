@@ -192,10 +192,16 @@ impl S3Config {
     /// config falls back to local disk — with a warning, because that
     /// fallback is exactly what makes media die with the container.
     fn from_env() -> Option<Self> {
-        let endpoint = std::env::var("MEDIA_S3_ENDPOINT").ok().filter(|v| !v.is_empty());
-        let bucket = std::env::var("MEDIA_S3_BUCKET").ok().filter(|v| !v.is_empty());
+        let endpoint = std::env::var("MEDIA_S3_ENDPOINT")
+            .ok()
+            .filter(|v| !v.is_empty());
+        let bucket = std::env::var("MEDIA_S3_BUCKET")
+            .ok()
+            .filter(|v| !v.is_empty());
         let access_key = std::env::var("MEDIA_S3_KEY").ok().filter(|v| !v.is_empty());
-        let secret_key = std::env::var("MEDIA_S3_SECRET").ok().filter(|v| !v.is_empty());
+        let secret_key = std::env::var("MEDIA_S3_SECRET")
+            .ok()
+            .filter(|v| !v.is_empty());
 
         let cfg = Self::from_vars(
             endpoint.as_deref(),
@@ -203,7 +209,11 @@ impl S3Config {
             access_key.as_deref(),
             secret_key.as_deref(),
         );
-        if cfg.is_none() && [endpoint, bucket, access_key, secret_key].iter().any(|v| v.is_some()) {
+        if cfg.is_none()
+            && [endpoint, bucket, access_key, secret_key]
+                .iter()
+                .any(|v| v.is_some())
+        {
             warn_once(
                 "MEDIA_S3_* is partially set (all four of ENDPOINT, BUCKET, KEY, SECRET are required) \
                  — media falls back to local disk and will not survive a container restart",
@@ -318,7 +328,10 @@ impl S3 {
             sha256_hex(canonical_request.as_bytes())
         );
 
-        let k_date = hmac_sha256(format!("AWS4{}", self.secret_key).as_bytes(), day.as_bytes())?;
+        let k_date = hmac_sha256(
+            format!("AWS4{}", self.secret_key).as_bytes(),
+            day.as_bytes(),
+        )?;
         let k_region = hmac_sha256(&k_date, S3_REGION.as_bytes())?;
         let k_service = hmac_sha256(&k_region, b"s3")?;
         let k_signing = hmac_sha256(&k_service, b"aws4_request")?;
@@ -475,7 +488,11 @@ fn select_backend(
 /// config without a rebuild, and so the local path stays byte-identical to
 /// the previous hardcoded `config.media_dir` behaviour when S3 is unset.
 pub fn storage(state: &AppState) -> Arc<dyn MediaStorage> {
-    select_backend(S3Config::from_env(), &state.config.media_dir, &state.media_http_client)
+    select_backend(
+        S3Config::from_env(),
+        &state.config.media_dir,
+        &state.media_http_client,
+    )
 }
 
 /// `storage()` is per-request but the answer only changes when the operator
@@ -539,9 +556,9 @@ pub async fn upload(
         .unwrap_or("bin");
     let filename = format!("{file_id}.{ext}");
     let upload_dir = FsPath::new(&state.config.media_dir);
-    tokio::fs::create_dir_all(upload_dir).await.map_err(|e| {
-        AppError::Internal(format!("Failed to create upload dir: {e}"))
-    })?;
+    tokio::fs::create_dir_all(upload_dir)
+        .await
+        .map_err(|e| AppError::Internal(format!("Failed to create upload dir: {e}")))?;
 
     let filepath = upload_dir.join(&filename);
     let (size, head) = stream_to_disk(&mut field, &filepath, MAX_FILE_SIZE).await?;
@@ -583,7 +600,9 @@ pub async fn upload(
         })?;
         if let Err(e) = backend.store(&filename, &bytes, &mime_type).await {
             let _ = tokio::fs::remove_file(&filepath).await;
-            return Err(AppError::Internal(format!("Remote backend store failed: {e}")));
+            return Err(AppError::Internal(format!(
+                "Remote backend store failed: {e}"
+            )));
         }
         let _ = tokio::fs::remove_file(&filepath).await;
     }
@@ -615,9 +634,9 @@ async fn stream_to_disk(
     dest: &FsPath,
     max_bytes: u64,
 ) -> Result<(u64, Vec<u8>), AppError> {
-    let mut file = tokio::fs::File::create(dest).await.map_err(|e| {
-        AppError::Internal(format!("Failed to write file: {e}"))
-    })?;
+    let mut file = tokio::fs::File::create(dest)
+        .await
+        .map_err(|e| AppError::Internal(format!("Failed to write file: {e}")))?;
 
     let mut size: u64 = 0;
     let mut head: Vec<u8> = Vec::with_capacity(SNIFF_HEAD_BYTES);
@@ -656,7 +675,10 @@ async fn stream_to_disk(
 async fn abort_partial(dest: &FsPath, file: tokio::fs::File) -> AppError {
     drop(file);
     let _ = tokio::fs::remove_file(dest).await;
-    AppError::BadRequest(format!("File too large (max {} MB)", MAX_FILE_SIZE / (1024 * 1024)))
+    AppError::BadRequest(format!(
+        "File too large (max {} MB)",
+        MAX_FILE_SIZE / (1024 * 1024)
+    ))
 }
 
 /// Resolve the stored MIME type from the client's declared type and the real
@@ -672,9 +694,7 @@ fn resolve_mime(declared: &str, head: &[u8]) -> Result<String, AppError> {
         // Sniffer recognised the bytes — trust it (it can't be lied to).
         (declared, Some(sniffed)) if ALLOWED_MIMES.contains(&sniffed.as_str()) => {
             // If the client declared something else, reject as suspicious.
-            if !declared.is_empty()
-                && declared != "application/octet-stream"
-                && declared != sniffed
+            if !declared.is_empty() && declared != "application/octet-stream" && declared != sniffed
             {
                 return Err(AppError::BadRequest(format!(
                     "MIME mismatch: declared `{declared}` but bytes look like `{sniffed}`"
@@ -757,20 +777,30 @@ pub async fn serve_media(
     // `Body::from` moves `data` and we need a `&[u8]` reference to it.
     let (final_content_type, disposition) = match sniff_mime(&data) {
         Some(ref sniffed) if sniffed.as_str() == mime_str => (mime_str.to_string(), "inline"),
-        Some(ref sniffed) if ALLOWED_MIMES.contains(&sniffed.as_str()) && mime_str == "application/octet-stream" => {
-            (sniffed.clone(), if sniffed.starts_with("image/") { "inline" } else { "attachment" })
+        Some(ref sniffed)
+            if ALLOWED_MIMES.contains(&sniffed.as_str())
+                && mime_str == "application/octet-stream" =>
+        {
+            (
+                sniffed.clone(),
+                if sniffed.starts_with("image/") {
+                    "inline"
+                } else {
+                    "attachment"
+                },
+            )
         }
-        _ => (
-            "application/octet-stream".to_string(),
-            "attachment",
-        ),
+        _ => ("application/octet-stream".to_string(), "attachment"),
     };
 
     let body = Body::from(data);
 
     Ok(Response::builder()
         .header(header::CONTENT_TYPE, &final_content_type)
-        .header(header::CONTENT_LENGTH, body.size_hint().exact().unwrap_or(0))
+        .header(
+            header::CONTENT_LENGTH,
+            body.size_hint().exact().unwrap_or(0),
+        )
         .header("X-Content-Type-Options", "nosniff")
         .header("Content-Disposition", disposition)
         .body(body)
@@ -792,19 +822,20 @@ pub async fn proxy_media(
     let url = &params.url;
     let parsed = url::Url::parse(url).map_err(|_| AppError::BadRequest("Invalid URL".into()))?;
     let host = parsed.host_str().unwrap_or("");
-    let allowed = (parsed.scheme() == "https") && (
-        host == "video.twimg.com"
-        || host == "pbs.twimg.com"
-        || host == "media.tenor.com"
-        || host == "www.instagram.com"
-        || host == "i.ytimg.com"
-        || host == "files.catbox.moe"
-        || host == "i.imgur.com"
-        || (host.starts_with("scontent-") && host.contains(".fbcdn."))
-    );
+    let allowed = (parsed.scheme() == "https")
+        && (host == "video.twimg.com"
+            || host == "pbs.twimg.com"
+            || host == "media.tenor.com"
+            || host == "www.instagram.com"
+            || host == "i.ytimg.com"
+            || host == "files.catbox.moe"
+            || host == "i.imgur.com"
+            || (host.starts_with("scontent-") && host.contains(".fbcdn.")));
 
     if !allowed {
-        return Err(AppError::BadRequest("Domain not allowed for proxying".into()));
+        return Err(AppError::BadRequest(
+            "Domain not allowed for proxying".into(),
+        ));
     }
 
     // X/Twitter CDN domains use wreq for Chrome TLS fingerprinting.
@@ -812,7 +843,10 @@ pub async fn proxy_media(
     // We must fetch inside each branch because wreq::Response and reqwest::Response
     // are different types — Rust's if/else requires both branches to match.
     let is_x_cdn = host == "video.twimg.com" || host == "pbs.twimg.com";
-    let range_header = req_headers.get(header::RANGE).and_then(|v| v.to_str().ok()).map(String::from);
+    let range_header = req_headers
+        .get(header::RANGE)
+        .and_then(|v| v.to_str().ok())
+        .map(String::from);
 
     // Shared headers for all upstream requests
     const UPSTREAM_REFERER: &str = "https://x.com/";
@@ -829,21 +863,29 @@ pub async fn proxy_media(
         if let Some(ref range) = range_header {
             req = req.header(header::RANGE, range.as_str());
         }
-        let resp = req.send().await
+        let resp = req
+            .send()
+            .await
             .map_err(|e| AppError::Internal(format!("Failed to fetch media (wreq): {e}")))?;
         let status = resp.status();
         if !status.is_success() && status.as_u16() != 206 {
             return Err(AppError::Internal(format!("Upstream returned {status}")));
         }
-        let ct = resp.headers().get(header::CONTENT_TYPE)
+        let ct = resp
+            .headers()
+            .get(header::CONTENT_TYPE)
             .and_then(|v| v.to_str().ok())
             .unwrap_or("application/octet-stream")
             .to_string();
         let cl = resp.content_length();
-        let cr = resp.headers().get("content-range")
+        let cr = resp
+            .headers()
+            .get("content-range")
             .and_then(|v| v.to_str().ok())
             .map(String::from);
-        let bytes = resp.bytes().await
+        let bytes = resp
+            .bytes()
+            .await
             .map_err(|e| AppError::Internal(format!("Failed to read upstream body (wreq): {e}")))?;
         (status, ct, cl, cr, bytes)
     } else {
@@ -855,22 +897,29 @@ pub async fn proxy_media(
         if let Some(ref range) = range_header {
             req = req.header(header::RANGE, range.as_str());
         }
-        let resp = req.send().await
+        let resp = req
+            .send()
+            .await
             .map_err(|e| AppError::Internal(format!("Failed to fetch media (reqwest): {e}")))?;
         let status = resp.status();
         if !status.is_success() && status.as_u16() != 206 {
             return Err(AppError::Internal(format!("Upstream returned {status}")));
         }
-        let ct = resp.headers().get(header::CONTENT_TYPE)
+        let ct = resp
+            .headers()
+            .get(header::CONTENT_TYPE)
             .and_then(|v| v.to_str().ok())
             .unwrap_or("application/octet-stream")
             .to_string();
         let cl = resp.content_length();
-        let cr = resp.headers().get("content-range")
+        let cr = resp
+            .headers()
+            .get("content-range")
             .and_then(|v| v.to_str().ok())
             .map(String::from);
-        let bytes = resp.bytes().await
-            .map_err(|e| AppError::Internal(format!("Failed to read upstream body (reqwest): {e}")))?;
+        let bytes = resp.bytes().await.map_err(|e| {
+            AppError::Internal(format!("Failed to read upstream body (reqwest): {e}"))
+        })?;
         (status, ct, cl, cr, bytes)
     };
 
@@ -893,7 +942,9 @@ pub async fn proxy_media(
 
     let body = Body::from(bytes);
 
-    builder.body(body).map_err(|e| AppError::Internal(e.to_string()))
+    builder
+        .body(body)
+        .map_err(|e| AppError::Internal(e.to_string()))
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -918,7 +969,9 @@ fn detect_image_dimensions(data: &[u8]) -> (Option<i32>, Option<i32>) {
                 return (Some(w as i32), Some(h as i32));
             }
             pos += 2 + u16::from_be_bytes([data[pos + 2], data[pos + 3]]) as usize;
-            if pos == 2 { break; } // safety: avoid getting stuck
+            if pos == 2 {
+                break;
+            } // safety: avoid getting stuck
         }
     }
     (None, None)
@@ -960,7 +1013,7 @@ fn sniff_mime(data: &[u8]) -> Option<String> {
         let brand = &data[8..12];
         // Common MP4 brands: isom, iso2, mp41, mp42, avc1, M4V , M4A , etc.
         // QuickTime: qt  (with trailing spaces), which we map to video/quicktime.
-        if brand == b"qt  " || brand == b"qt  " {
+        if brand == b"qt  " {
             return Some("video/quicktime".into());
         }
         return Some("video/mp4".into());
@@ -1043,13 +1096,23 @@ mod tests {
 
     #[test]
     fn s3_config_requires_all_four_vars() {
-        let partial = S3Config::from_vars(Some("https://acct.r2.cloudflarestorage.com"), Some("media"), Some("AKIA"), None);
+        let partial = S3Config::from_vars(
+            Some("https://acct.r2.cloudflarestorage.com"),
+            Some("media"),
+            Some("AKIA"),
+            None,
+        );
         assert!(partial.is_none());
     }
 
     #[test]
     fn s3_config_rejects_blank_vars() {
-        let blank = S3Config::from_vars(Some("https://acct.r2.cloudflarestorage.com"), Some("  "), Some("AKIA"), Some("secret"));
+        let blank = S3Config::from_vars(
+            Some("https://acct.r2.cloudflarestorage.com"),
+            Some("  "),
+            Some("AKIA"),
+            Some("secret"),
+        );
         assert!(blank.is_none());
     }
 
@@ -1074,11 +1137,17 @@ mod tests {
         let rt = async_runtime();
 
         rt.block_on(async {
-            local.store("a.png", b"\x89PNG-body", "image/png").await.unwrap();
+            local
+                .store("a.png", b"\x89PNG-body", "image/png")
+                .await
+                .unwrap();
             assert_eq!(local.get("a.png").await.unwrap(), b"\x89PNG-body");
 
             local.delete("a.png").await.unwrap();
-            assert!(matches!(local.get("a.png").await, Err(StorageError::Io { .. })));
+            assert!(matches!(
+                local.get("a.png").await,
+                Err(StorageError::Io { .. })
+            ));
             // Second delete must be a no-op, not an error.
             local.delete("a.png").await.unwrap();
         });
@@ -1116,7 +1185,8 @@ mod tests {
 
         let mut payload = vec![0u8; CHUNK];
         // `ftyp` box at offset 4 — what sniff_mime keys on.
-        payload[..12].copy_from_slice(&[0, 0, 0, 32, b'f', b't', b'y', b'p', b'i', b's', b'o', b'm']);
+        payload[..12]
+            .copy_from_slice(&[0, 0, 0, 32, b'f', b't', b'y', b'p', b'i', b's', b'o', b'm']);
         let payload = Bytes::from(payload);
 
         let preamble = Bytes::from(format!(
@@ -1144,7 +1214,10 @@ mod tests {
         );
 
         Request::builder()
-            .header(CONTENT_TYPE, format!("multipart/form-data; boundary={BOUNDARY}"))
+            .header(
+                CONTENT_TYPE,
+                format!("multipart/form-data; boundary={BOUNDARY}"),
+            )
             .body(Body::from_stream(body))
             .unwrap()
     }
@@ -1171,8 +1244,7 @@ mod tests {
     async fn cap_rejects_oversized_upload_mid_stream_and_leaves_no_file() {
         let dest = scratch_dir("oversize").join("out.mp4");
 
-        let (_multipart, mut field) =
-            open_mp4_field(MAX_FILE_SIZE as usize + CHUNK).await;
+        let (_multipart, mut field) = open_mp4_field(MAX_FILE_SIZE as usize + CHUNK).await;
         let err = stream_to_disk(&mut field, &dest, MAX_FILE_SIZE)
             .await
             .unwrap_err();
@@ -1193,7 +1265,9 @@ mod tests {
         let dest = scratch_dir("large").join("out.mp4");
 
         let (_multipart, mut field) = open_mp4_field(total).await;
-        let (size, head) = stream_to_disk(&mut field, &dest, MAX_FILE_SIZE).await.unwrap();
+        let (size, head) = stream_to_disk(&mut field, &dest, MAX_FILE_SIZE)
+            .await
+            .unwrap();
         let mime = resolve_mime("video/mp4", &head).unwrap();
 
         assert_eq!(size, total as u64, "byte count written");
@@ -1220,7 +1294,9 @@ mod tests {
         let dest = scratch_dir("small").join("out.mp4");
 
         let (_multipart, mut field) = open_mp4_field(total).await;
-        let (size, head) = stream_to_disk(&mut field, &dest, MAX_FILE_SIZE).await.unwrap();
+        let (size, head) = stream_to_disk(&mut field, &dest, MAX_FILE_SIZE)
+            .await
+            .unwrap();
         let mime = resolve_mime("video/mp4", &head).unwrap();
 
         assert_eq!(size, total as u64);
@@ -1254,6 +1330,9 @@ mod tests {
         // serve time.
         assert_eq!(resolve_mime("image/png", &[]).unwrap(), "image/png");
         // Sniffed type with no usable declaration: the sniff decides.
-        assert_eq!(resolve_mime("application/octet-stream", &png).unwrap(), "image/png");
+        assert_eq!(
+            resolve_mime("application/octet-stream", &png).unwrap(),
+            "image/png"
+        );
     }
 }

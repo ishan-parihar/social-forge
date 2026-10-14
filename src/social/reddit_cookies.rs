@@ -4,7 +4,9 @@
 
 use std::path::{Path, PathBuf};
 
-use super::browser_cookies::{home_dir as shared_home_dir, chrome_default_profile as shared_chrome_default_profile};
+use super::browser_cookies::{
+    chrome_default_profile as shared_chrome_default_profile, home_dir as shared_home_dir,
+};
 
 /// Result of browser cookie extraction
 #[derive(Debug)]
@@ -15,9 +17,12 @@ pub struct ExtractedRedditCookies {
     pub source: String,
 }
 
+/// Function type for browser cookie extractors
+type BrowserExtractor = fn() -> Option<ExtractedRedditCookies>;
+
 /// Try to extract Reddit cookies from all known browsers in order
 pub fn extract_reddit_cookies() -> Option<ExtractedRedditCookies> {
-    let browsers: Vec<(&str, fn() -> Option<ExtractedRedditCookies>)> = vec![
+    let browsers: Vec<(&str, BrowserExtractor)> = vec![
         ("brave", extract_brave),
         ("chrome", extract_chrome),
         ("zen", extract_zen),
@@ -34,9 +39,16 @@ pub fn extract_reddit_cookies() -> Option<ExtractedRedditCookies> {
 }
 
 /// Build the JSON token blob for storage in DB
-pub fn build_cookie_token(reddit_session: &str, token_v2: Option<&str>, cookie_string: Option<&str>) -> String {
+pub fn build_cookie_token(
+    reddit_session: &str,
+    token_v2: Option<&str>,
+    cookie_string: Option<&str>,
+) -> String {
     let mut m = serde_json::Map::new();
-    m.insert("reddit_session".into(), serde_json::Value::String(reddit_session.into()));
+    m.insert(
+        "reddit_session".into(),
+        serde_json::Value::String(reddit_session.into()),
+    );
     if let Some(t) = token_v2 {
         m.insert("token_v2".into(), serde_json::Value::String(t.into()));
     }
@@ -56,7 +68,10 @@ pub fn parse_cookie_token(token: &str) -> Option<(String, Option<String>, Option
         return None;
     }
     let token_v2 = v.get("token_v2").and_then(|s| s.as_str()).map(String::from);
-    let cookie_string = v.get("cookie_string").and_then(|s| s.as_str()).map(String::from);
+    let cookie_string = v
+        .get("cookie_string")
+        .and_then(|s| s.as_str())
+        .map(String::from);
     Some((session, token_v2, cookie_string))
 }
 
@@ -134,12 +149,14 @@ fn read_chrome_cookies(db_path: &Path) -> Option<ExtractedRedditCookies> {
     let mut token_v2 = String::new();
     let mut all_cookies: Vec<(String, String)> = Vec::new();
 
-    let rows = stmt.query_map([], |row| {
-        let name: String = row.get(0)?;
-        let value: String = row.get(1)?;
-        let _encrypted_value: Vec<u8> = row.get(2)?;
-        Ok((name, value))
-    }).ok()?;
+    let rows = stmt
+        .query_map([], |row| {
+            let name: String = row.get(0)?;
+            let value: String = row.get(1)?;
+            let _encrypted_value: Vec<u8> = row.get(2)?;
+            Ok((name, value))
+        })
+        .ok()?;
 
     for row in rows.flatten() {
         let (name, value) = row;
@@ -167,7 +184,11 @@ fn read_chrome_cookies(db_path: &Path) -> Option<ExtractedRedditCookies> {
 
     Some(ExtractedRedditCookies {
         reddit_session,
-        token_v2: if token_v2.is_empty() { None } else { Some(token_v2) },
+        token_v2: if token_v2.is_empty() {
+            None
+        } else {
+            Some(token_v2)
+        },
         cookie_string,
         source: String::new(),
     })
@@ -201,11 +222,13 @@ fn extract_firefox_impl(profile_dir: &Path) -> Option<ExtractedRedditCookies> {
     let mut token_v2 = String::new();
     let mut all_cookies: Vec<(String, String)> = Vec::new();
 
-    let rows = stmt.query_map([], |row| {
-        let name: String = row.get(0)?;
-        let value: String = row.get(1)?;
-        Ok((name, value))
-    }).ok()?;
+    let rows = stmt
+        .query_map([], |row| {
+            let name: String = row.get(0)?;
+            let value: String = row.get(1)?;
+            Ok((name, value))
+        })
+        .ok()?;
 
     for row in rows.flatten() {
         let (name, value) = row;
@@ -234,7 +257,11 @@ fn extract_firefox_impl(profile_dir: &Path) -> Option<ExtractedRedditCookies> {
 
     Some(ExtractedRedditCookies {
         reddit_session,
-        token_v2: if token_v2.is_empty() { None } else { Some(token_v2) },
+        token_v2: if token_v2.is_empty() {
+            None
+        } else {
+            Some(token_v2)
+        },
         cookie_string,
         source: String::new(),
     })

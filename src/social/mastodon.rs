@@ -223,10 +223,10 @@ impl MastodonProvider {
             .get(media_url)
             .send()
             .await
-            .map_err(|e| ProviderError::Network(e))?
+            .map_err(ProviderError::Network)?
             .bytes()
             .await
-            .map_err(|e| ProviderError::Network(e))?;
+            .map_err(ProviderError::Network)?;
 
         // Determine file extension from mime type
         let ext = match mime_type {
@@ -346,7 +346,9 @@ impl SocialProvider for MastodonProvider {
             .to_string();
         let client_secret = json["client_secret"]
             .as_str()
-            .ok_or_else(|| ProviderError::Auth("Missing client_secret from app registration".into()))?
+            .ok_or_else(|| {
+                ProviderError::Auth("Missing client_secret from app registration".into())
+            })?
             .to_string();
 
         // Store for exchange_code step
@@ -366,7 +368,9 @@ impl SocialProvider for MastodonProvider {
         let url = url::Url::parse_with_params(&auth_url, &params)
             .map_err(|e| ProviderError::Auth(format!("URL parse: {e}")))?;
 
-        Ok(AuthUrlResponse { url: url.to_string() })
+        Ok(AuthUrlResponse {
+            url: url.to_string(),
+        })
     }
 
     async fn exchange_code(
@@ -376,17 +380,17 @@ impl SocialProvider for MastodonProvider {
         redirect_uri: &str,
     ) -> Result<AuthToken, ProviderError> {
         // Read client_id and client_secret from the stored app credentials
-        let (client_id, client_secret) = self
-            .app_credentials
-            .lock()
-            .unwrap()
-            .clone()
-            .ok_or_else(|| {
-                ProviderError::Auth(
-                    "No app credentials. Call generate_auth_url first to register the app."
-                        .into(),
-                )
-            })?;
+        let (client_id, client_secret) =
+            self.app_credentials
+                .lock()
+                .unwrap()
+                .clone()
+                .ok_or_else(|| {
+                    ProviderError::Auth(
+                        "No app credentials. Call generate_auth_url first to register the app."
+                            .into(),
+                    )
+                })?;
 
         let body = serde_json::json!({
             "client_id": client_id,
@@ -430,21 +434,10 @@ impl SocialProvider for MastodonProvider {
             access_token,
             refresh_token,
             expires_in,
-            provider_user_id: user_info["id"]
-                .as_str()
-                .unwrap_or("")
-                .to_string(),
-            name: user_info["display_name"]
-                .as_str()
-                .unwrap_or("")
-                .to_string(),
-            username: user_info["username"]
-                .as_str()
-                .unwrap_or("")
-                .to_string(),
-            picture: user_info["avatar"]
-                .as_str()
-                .map(String::from),
+            provider_user_id: user_info["id"].as_str().unwrap_or("").to_string(),
+            name: user_info["display_name"].as_str().unwrap_or("").to_string(),
+            username: user_info["username"].as_str().unwrap_or("").to_string(),
+            picture: user_info["avatar"].as_str().map(String::from),
         })
     }
 
@@ -612,13 +605,8 @@ impl SocialProvider for MastodonProvider {
             return Err(ProviderError::Api(msg));
         }
 
-        let post_id = json["id"]
-            .as_str()
-            .unwrap_or("")
-            .to_string();
-        let post_url = json["url"]
-            .as_str()
-            .map(|u| u.to_string());
+        let post_id = json["id"].as_str().unwrap_or("").to_string();
+        let post_url = json["url"].as_str().map(|u| u.to_string());
 
         Ok(PublishResult {
             platform_post_id: post_id,
@@ -662,7 +650,10 @@ impl SocialProvider for MastodonProvider {
     ) -> Result<Vec<ExternalPostData>, ProviderError> {
         let resp = self
             .http
-            .get(self.api_url(&format!("/api/v1/accounts/{}/statuses?limit={}", _internal_id, _limit)))
+            .get(self.api_url(&format!(
+                "/api/v1/accounts/{}/statuses?limit={}",
+                _internal_id, _limit
+            )))
             .header("Authorization", format!("Bearer {access_token}"))
             .send()
             .await?;
@@ -675,44 +666,60 @@ impl SocialProvider for MastodonProvider {
         }
 
         if !status.is_success() {
-            let msg = json["error"].as_str().unwrap_or("Failed to fetch statuses").to_string();
+            let msg = json["error"]
+                .as_str()
+                .unwrap_or("Failed to fetch statuses")
+                .to_string();
             return Err(ProviderError::Api(msg));
         }
 
-        let posts: Vec<ExternalPostData> = json.as_array()
+        let posts: Vec<ExternalPostData> = json
+            .as_array()
             .map(|arr| {
-                arr.iter().map(|s| {
-                    let created_at = s["created_at"].as_str()
-                        .and_then(|t| chrono::DateTime::parse_from_rfc3339(t).ok())
-                        .map(|dt| dt.with_timezone(&chrono::Utc))
-                        .unwrap_or_else(chrono::Utc::now);
-                    let media_urls: Vec<String> = s["media_attachments"].as_array()
-                        .map(|ma| {
-                            ma.iter().filter_map(|m| m["url"].as_str().map(String::from)).collect()
-                        })
-                        .unwrap_or_default();
-                    let media: Vec<MediaAttachment> = media_urls.into_iter().map(|url| {
-                        MediaAttachment { url, mime_type: "image/jpeg".into(), alt: None, poster_url: None }
-                    }).collect();
-                    ExternalPostData {
-                        platform_post_id: s["id"].as_str().unwrap_or("").to_string(),
-                        text: s["content"].as_str().unwrap_or("").to_string(),
-                        author_name: s["account"]["display_name"].as_str().map(String::from),
-                        author_handle: s["account"]["acct"].as_str().map(String::from),
-                        author_avatar: s["account"]["avatar"].as_str().map(String::from),
-                        created_at,
-                        url: s["url"].as_str().map(String::from),
-                        media,
-                        metadata: Some(serde_json::json!({
-                            "visibility": s["visibility"],
-                            "favourites_count": s["favourites_count"],
-                            "reblogs_count": s["reblogs_count"],
-                            "replies_count": s["replies_count"],
-                            "sensitive": s["sensitive"],
-                            "spoiler_text": s["spoiler_text"],
-                        })),
-                    }
-                }).collect()
+                arr.iter()
+                    .map(|s| {
+                        let created_at = s["created_at"]
+                            .as_str()
+                            .and_then(|t| chrono::DateTime::parse_from_rfc3339(t).ok())
+                            .map(|dt| dt.with_timezone(&chrono::Utc))
+                            .unwrap_or_else(chrono::Utc::now);
+                        let media_urls: Vec<String> = s["media_attachments"]
+                            .as_array()
+                            .map(|ma| {
+                                ma.iter()
+                                    .filter_map(|m| m["url"].as_str().map(String::from))
+                                    .collect()
+                            })
+                            .unwrap_or_default();
+                        let media: Vec<MediaAttachment> = media_urls
+                            .into_iter()
+                            .map(|url| MediaAttachment {
+                                url,
+                                mime_type: "image/jpeg".into(),
+                                alt: None,
+                                poster_url: None,
+                            })
+                            .collect();
+                        ExternalPostData {
+                            platform_post_id: s["id"].as_str().unwrap_or("").to_string(),
+                            text: s["content"].as_str().unwrap_or("").to_string(),
+                            author_name: s["account"]["display_name"].as_str().map(String::from),
+                            author_handle: s["account"]["acct"].as_str().map(String::from),
+                            author_avatar: s["account"]["avatar"].as_str().map(String::from),
+                            created_at,
+                            url: s["url"].as_str().map(String::from),
+                            media,
+                            metadata: Some(serde_json::json!({
+                                "visibility": s["visibility"],
+                                "favourites_count": s["favourites_count"],
+                                "reblogs_count": s["reblogs_count"],
+                                "replies_count": s["replies_count"],
+                                "sensitive": s["sensitive"],
+                                "spoiler_text": s["spoiler_text"],
+                            })),
+                        }
+                    })
+                    .collect()
             })
             .unwrap_or_default();
 

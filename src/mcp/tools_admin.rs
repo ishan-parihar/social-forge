@@ -11,7 +11,7 @@
 // at build time. Trade-off: no compile-time column type checking,
 // but the queries are simple and the structs derive FromRow.
 
-use rmcp::{Json, schemars::JsonSchema};
+use rmcp::{schemars::JsonSchema, Json};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -45,14 +45,14 @@ pub async fn handle_posts_repeat(
     input: &PostsRepeatInput,
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
-    let post_id = Uuid::parse_str(&input.post_id)
-        .map_err(|_| "Invalid post_id UUID".to_string())?;
+    let post_id =
+        Uuid::parse_str(&input.post_id).map_err(|_| "Invalid post_id UUID".to_string())?;
 
     let end_date = match input.end_date.as_deref() {
         Some(d) if !d.is_empty() => Some(
             chrono::DateTime::parse_from_rfc3339(d)
                 .map_err(|e| format!("Invalid end_date (use RFC3339): {e}"))?
-                .timestamp(),
+                .with_timezone(&chrono::Utc),
         ),
         _ => None,
     };
@@ -69,10 +69,10 @@ pub async fn handle_posts_repeat(
 
     let updated: RepeatUpdate = sqlx::query_as(
         "UPDATE posts
-         SET repeat_interval_days = ?,
-             repeat_end_date = ?,
-             updated_at = unixepoch()
-         WHERE id = ? AND user_id = ?
+         SET repeat_interval_days = $1,
+             repeat_end_date = $2,
+             updated_at = NOW()
+         WHERE id = $3 AND user_id = $4
          RETURNING id, repeat_interval_days, repeat_end_date",
     )
     .bind(input.interval_days)
@@ -107,8 +107,8 @@ pub async fn handle_posts_set_tags(
     input: &PostsSetTagsInput,
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
-    let post_id = Uuid::parse_str(&input.post_id)
-        .map_err(|_| "Invalid post_id UUID".to_string())?;
+    let post_id =
+        Uuid::parse_str(&input.post_id).map_err(|_| "Invalid post_id UUID".to_string())?;
 
     // Verify ownership
     let _post = queries::get_post(&state.db, post_id, user_id)
@@ -117,24 +117,28 @@ pub async fn handle_posts_set_tags(
         .ok_or_else(|| "Post not found".to_string())?;
 
     // Parse tag IDs
-    let tag_uuids: Vec<Uuid> = input.tag_ids.iter()
+    let tag_uuids: Vec<Uuid> = input
+        .tag_ids
+        .iter()
         .map(|s| Uuid::parse_str(s).map_err(|e| format!("Invalid tag UUID '{s}': {e}")))
         .collect::<Result<_, _>>()?;
 
     // Remove existing tags, then insert new ones
-    sqlx::query("DELETE FROM post_tags WHERE post_id = ?")
+    sqlx::query("DELETE FROM post_tags WHERE post_id = $1")
         .bind(post_id)
         .execute(&state.db)
         .await
         .map_err(|e| format!("Failed to clear existing tags: {e}"))?;
 
     for tag_id in &tag_uuids {
-        sqlx::query("INSERT INTO post_tags (post_id, tag_id) VALUES (?, ?) ON CONFLICT DO NOTHING")
-            .bind(post_id)
-            .bind(tag_id)
-            .execute(&state.db)
-            .await
-            .map_err(|e| format!("Failed to attach tag: {e}"))?;
+        sqlx::query(
+            "INSERT INTO post_tags (post_id, tag_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+        )
+        .bind(post_id)
+        .bind(tag_id)
+        .execute(&state.db)
+        .await
+        .map_err(|e| format!("Failed to attach tag: {e}"))?;
     }
 
     Ok(Json(serde_json::json!({
@@ -158,8 +162,8 @@ pub async fn handle_media_delete(
     input: &MediaDeleteInput,
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
-    let media_id = Uuid::parse_str(&input.media_id)
-        .map_err(|_| "Invalid media_id UUID".to_string())?;
+    let media_id =
+        Uuid::parse_str(&input.media_id).map_err(|_| "Invalid media_id UUID".to_string())?;
 
     let entry = queries::delete_media(&state.db, media_id, user_id)
         .await
@@ -205,8 +209,15 @@ pub async fn handle_integrations_refresh(
         .map_err(|e| format!("DB error: {e}"))?
         .ok_or_else(|| "Integration not found".to_string())?;
 
-    let provider = state.providers.get(&integration.provider_identifier)
-        .ok_or_else(|| format!("Provider '{}' not registered", integration.provider_identifier))?;
+    let provider = state
+        .providers
+        .get(&integration.provider_identifier)
+        .ok_or_else(|| {
+            format!(
+                "Provider '{}' not registered",
+                integration.provider_identifier
+            )
+        })?;
 
     // Decrypt the refresh token if encryption is configured
     let refresh_token = crate::crypto::maybe_decrypt_token(
@@ -214,16 +225,17 @@ pub async fn handle_integrations_refresh(
         state.token_key.as_ref(),
     );
 
-    let token = provider.refresh_token(&refresh_token).await
+    let token = provider
+        .refresh_token(&refresh_token)
+        .await
         .map_err(|e| format!("Token refresh failed: {e}"))?;
 
     // Encrypt the new access token before storing
     let enc_access_token = if let Some(ref k) = state.token_key {
-        crate::crypto::encrypt_string(&token.access_token, k)
-            .unwrap_or_else(|e| {
-                tracing::warn!("Failed to encrypt refreshed token: {e}");
-                token.access_token.clone()
-            })
+        crate::crypto::encrypt_string(&token.access_token, k).unwrap_or_else(|e| {
+            tracing::warn!("Failed to encrypt refreshed token: {e}");
+            token.access_token.clone()
+        })
     } else {
         token.access_token.clone()
     };
@@ -233,13 +245,15 @@ pub async fn handle_integrations_refresh(
         integration_id,
         &enc_access_token,
         token.refresh_token.as_deref(),
-        token.expires_in.map(|e| chrono::Utc::now() + chrono::Duration::seconds(e as i64)),
+        token
+            .expires_in
+            .map(|e| chrono::Utc::now() + chrono::Duration::seconds(e as i64)),
     )
     .await
     .map_err(|e| format!("Failed to save refreshed token: {e}"))?;
 
     // Clear the refresh_needed flag
-    let _ = sqlx::query("UPDATE integrations SET refresh_needed = false WHERE id = ?")
+    let _ = sqlx::query("UPDATE integrations SET refresh_needed = false WHERE id = $1")
         .bind(integration_id)
         .execute(&state.db)
         .await;
@@ -296,21 +310,26 @@ pub async fn handle_signatures_list(
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let sigs: Vec<SignatureRow> = sqlx::query_as(
         "SELECT id, name, content, provider, created_at, updated_at
-         FROM signatures WHERE user_id = ? ORDER BY created_at DESC",
+         FROM signatures WHERE user_id = $1 ORDER BY created_at DESC",
     )
     .bind(user_id)
     .fetch_all(&state.db)
     .await
     .map_err(|e| format!("DB error: {e}"))?;
 
-    let data: Vec<_> = sigs.iter().map(|s| serde_json::json!({
-        "id": s.id.to_string(),
-        "name": s.name,
-        "content": s.content,
-        "provider": s.provider,
-        "created_at": s.created_at.to_rfc3339(),
-        "updated_at": s.updated_at.to_rfc3339(),
-    })).collect();
+    let data: Vec<_> = sigs
+        .iter()
+        .map(|s| {
+            serde_json::json!({
+                "id": s.id.to_string(),
+                "name": s.name,
+                "content": s.content,
+                "provider": s.provider,
+                "created_at": s.created_at.to_rfc3339(),
+                "updated_at": s.updated_at.to_rfc3339(),
+            })
+        })
+        .collect();
 
     Ok(Json(serde_json::json!({ "signatures": data })))
 }
@@ -321,11 +340,10 @@ pub async fn handle_signatures_create(
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let sig: SignatureRow = sqlx::query_as(
-        "INSERT INTO signatures (id, user_id, name, content, provider)
-         VALUES (?, ?, ?, ?, ?)
+        "INSERT INTO signatures (user_id, name, content, provider)
+         VALUES ($1, $2, $3, $4)
          RETURNING id, name, content, provider, created_at, updated_at",
     )
-    .bind(Uuid::new_v4())
     .bind(user_id)
     .bind(&input.name)
     .bind(&input.content)
@@ -353,11 +371,11 @@ pub async fn handle_signatures_update(
 
     let sig: SignatureRow = sqlx::query_as(
         "UPDATE signatures
-         SET name = COALESCE(?, name),
-             content = COALESCE(?, content),
-             provider = COALESCE(?, provider),
-             updated_at = unixepoch()
-         WHERE id = ? AND user_id = ?
+         SET name = COALESCE($2, name),
+             content = COALESCE($3, content),
+             provider = COALESCE($4, provider),
+             updated_at = NOW()
+         WHERE id = $1 AND user_id = $5
          RETURNING id, name, content, provider, created_at, updated_at",
     )
     .bind(sig_id)
@@ -385,14 +403,16 @@ pub async fn handle_signatures_delete(
     let sig_id = Uuid::parse_str(&input.signature_id)
         .map_err(|_| "Invalid signature_id UUID".to_string())?;
 
-    sqlx::query("DELETE FROM signatures WHERE id = ? AND user_id = ?")
+    sqlx::query("DELETE FROM signatures WHERE id = $1 AND user_id = $2")
         .bind(sig_id)
         .bind(user_id)
         .execute(&state.db)
         .await
         .map_err(|e| format!("DB error: {e}"))?;
 
-    Ok(Json(serde_json::json!({ "deleted": true, "id": input.signature_id })))
+    Ok(Json(
+        serde_json::json!({ "deleted": true, "id": input.signature_id }),
+    ))
 }
 
 // ── Analytics Summary ─────────────────────────────────────────
@@ -419,10 +439,7 @@ pub async fn handle_analytics_summary(
     input: &AnalyticsSummaryInput,
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
-    let days = input.days.unwrap_or(30).max(1).min(365) as i64;
-    // SQLite has no make_interval(); timestamps are INTEGER epoch, so the
-    // cutoff is computed in Rust.
-    let cutoff = (chrono::Utc::now() - chrono::Duration::days(days)).timestamp();
+    let days = input.days.unwrap_or(30).clamp(1, 365) as i64;
 
     let counts: SummaryCounts = sqlx::query_as(
         "SELECT
@@ -432,11 +449,11 @@ pub async fn handle_analytics_summary(
             COUNT(*) FILTER (WHERE state = 'draft') as draft,
             COUNT(*) FILTER (WHERE state = 'queued') as queued
            FROM posts
-           WHERE user_id = ?
-             AND created_at > ?",
+           WHERE user_id = $1
+             AND created_at > NOW() - make_interval(secs => $2::double precision * 86400.0)",
     )
     .bind(user_id)
-    .bind(cutoff)
+    .bind(days as f64)
     .fetch_one(&state.db)
     .await
     .map_err(|e| format!("DB error: {e}"))?;
@@ -475,8 +492,7 @@ pub async fn handle_feed_analytics(
     input: &FeedAnalyticsInput,
 ) -> Result<Json<serde_json::Value>, String> {
     let _user_id = super::tools_posts::resolve_first_user(state).await?;
-    let days = input.days.unwrap_or(30).max(1).min(365) as i64;
-    let cutoff = (chrono::Utc::now() - chrono::Duration::days(days)).timestamp();
+    let days = input.days.unwrap_or(30).clamp(1, 365) as i64;
 
     let totals: FeedTotals = sqlx::query_as(
         "SELECT
@@ -486,9 +502,9 @@ pub async fn handle_feed_analytics(
             COALESCE(SUM(shares), 0) as total_shares,
             COALESCE(SUM(impressions), 0) as total_impressions
            FROM post_engagement
-           WHERE updated_at > ?",
+           WHERE updated_at > NOW() - make_interval(secs => $1::double precision * 86400.0)",
     )
-    .bind(cutoff)
+    .bind(days as f64)
     .fetch_one(&state.db)
     .await
     .map_err(|e| format!("DB error: {e}"))?;

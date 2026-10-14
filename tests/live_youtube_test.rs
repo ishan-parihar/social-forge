@@ -18,7 +18,10 @@ fn resolve_token(token: &str, key: Option<&[u8; 32]>) -> String {
         }
     }
     // Check if it looks like a raw OAuth token (ya29. or similar)
-    if token.starts_with("ya29.") || token.starts_with("AIza") || !token.chars().all(|c| c.is_ascii_hexdigit()) {
+    if token.starts_with("ya29.")
+        || token.starts_with("AIza")
+        || !token.chars().all(|c| c.is_ascii_hexdigit())
+    {
         return token.to_string(); // Plaintext token
     }
     // Might be encrypted, try fallback decryption
@@ -49,21 +52,34 @@ async fn test_live_youtube_all_tools() {
          FROM integrations i
          JOIN users u ON i.user_id = u.id
          WHERE u.email = 'dev@social-forge.dev' AND i.provider_identifier = 'youtube'
-         ORDER BY i.created_at"
+         ORDER BY i.created_at",
     )
     .fetch_all(&pool)
     .await
     .expect("Query");
 
-    assert!(!rows.is_empty(), "No YouTube integrations found for dev@social-forge.dev");
+    assert!(
+        !rows.is_empty(),
+        "No YouTube integrations found for dev@social-forge.dev"
+    );
     println!("Found {} YouTube channel(s)\n", rows.len());
 
     let provider = YoutubeProvider::new(&config);
 
-    for (i, (id, raw_token, raw_refresh, channel_id, name)) in rows.iter().enumerate() {
+    for (i, (id, raw_token, _raw_refresh, channel_id, name)) in rows.iter().enumerate() {
         let access_token = resolve_token(raw_token, token_key.as_ref());
-        println!("=== Channel {}: {} (id={}, channel={}) ===", i + 1, name, id, channel_id);
-        println!("  Token valid: {} (first 20 chars: {}...)", !access_token.is_empty(), &access_token.chars().take(20).collect::<String>());
+        println!(
+            "=== Channel {}: {} (id={}, channel={}) ===",
+            i + 1,
+            name,
+            id,
+            channel_id
+        );
+        println!(
+            "  Token valid: {} (first 20 chars: {}...)",
+            !access_token.is_empty(),
+            access_token.chars().take(20).collect::<String>()
+        );
 
         // Skip if token is clearly garbage (encrypted but no key)
         if access_token.len() < 20 && raw_token.len() > 20 {
@@ -92,7 +108,10 @@ async fn test_live_youtube_all_tools() {
                 let subs = stats["subscriberCount"].as_str().unwrap_or("?");
                 let views = stats["viewCount"].as_str().unwrap_or("?");
                 let videos = stats["videoCount"].as_str().unwrap_or("?");
-                println!("  ✅ get_channel_stats(): {} subs, {} videos, {} views", subs, videos, views);
+                println!(
+                    "  ✅ get_channel_stats(): {} subs, {} videos, {} views",
+                    subs, videos, views
+                );
             }
             Err(e) => println!("  ❌ get_channel_stats(): {e}"),
         }
@@ -127,8 +146,14 @@ async fn test_live_youtube_all_tools() {
                             // 7. get_playlist_items()
                             match provider.get_playlist_items(tok, pid, 5).await {
                                 Ok(items_resp) => {
-                                    let ic = items_resp["items"].as_array().map(|a| a.len()).unwrap_or(0);
-                                    println!("  ✅ get_playlist_items(): {} items in first playlist", ic);
+                                    let ic = items_resp["items"]
+                                        .as_array()
+                                        .map(|a| a.len())
+                                        .unwrap_or(0);
+                                    println!(
+                                        "  ✅ get_playlist_items(): {} items in first playlist",
+                                        ic
+                                    );
                                 }
                                 Err(e) => println!("  ❌ get_playlist_items(): {e}"),
                             }
@@ -143,7 +168,9 @@ async fn test_live_youtube_all_tools() {
         let video_id = {
             let search = provider.search_videos(tok, "channel", 1).await.ok();
             search.and_then(|s| {
-                s["items"].as_array()?.first()?["id"]["videoId"].as_str().map(String::from)
+                s["items"].as_array()?.first()?["id"]["videoId"]
+                    .as_str()
+                    .map(String::from)
             })
         };
 
@@ -151,7 +178,9 @@ async fn test_live_youtube_all_tools() {
             // 9. get_video()
             match provider.get_video(tok, vid).await {
                 Ok(video) => {
-                    let title = video["items"][0]["snippet"]["title"].as_str().unwrap_or("?");
+                    let title = video["items"][0]["snippet"]["title"]
+                        .as_str()
+                        .unwrap_or("?");
                     println!("  ✅ get_video(): \"{}\"", title);
                 }
                 Err(e) => println!("  ❌ get_video(): {e}"),
@@ -176,7 +205,16 @@ async fn test_live_youtube_all_tools() {
             .unwrap()
             .format("%Y-%m-%d")
             .to_string();
-        match provider.get_analytics(tok, channel_id, "views,estimatedMinutesWatched", &thirty_days_ago, &today).await {
+        match provider
+            .get_analytics(
+                tok,
+                channel_id,
+                "views,estimatedMinutesWatched",
+                &thirty_days_ago,
+                &today,
+            )
+            .await
+        {
             Ok(analytics) => {
                 let rows = analytics["rows"].as_array().map(|a| a.len()).unwrap_or(0);
                 println!("  ✅ get_analytics(): {} data rows", rows);
@@ -188,7 +226,10 @@ async fn test_live_youtube_all_tools() {
         }
 
         // 12. find_creators()
-        match provider.find_creators(tok, "architecture", Some(1000), Some(5)).await {
+        match provider
+            .find_creators(tok, "architecture", Some(1000), Some(5))
+            .await
+        {
             Ok(creators) => {
                 let count = creators["items"].as_array().map(|a| a.len()).unwrap_or(0);
                 println!("  ✅ find_creators(): {} creators found", count);
