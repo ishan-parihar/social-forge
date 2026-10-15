@@ -77,10 +77,7 @@ pub async fn delete(
 }
 
 /// GET /api/notifications/prefs
-pub async fn get_prefs(
-    State(_state): State<AppState>,
-    _auth: AuthenticatedUser,
-) -> Json<Value> {
+pub async fn get_prefs(State(_state): State<AppState>, _auth: AuthenticatedUser) -> Json<Value> {
     // Return defaults — prefs are stored client-side for now
     Json(json!({
         "post_published": "push",

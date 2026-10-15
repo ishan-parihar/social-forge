@@ -54,7 +54,12 @@ pub async fn list(
     auth: AuthenticatedUser,
 ) -> Result<Json<Vec<SignatureResponse>>, AppError> {
     let signatures = queries::list_signatures(&state.db, auth.user_id).await?;
-    Ok(Json(signatures.into_iter().map(SignatureResponse::from).collect()))
+    Ok(Json(
+        signatures
+            .into_iter()
+            .map(SignatureResponse::from)
+            .collect(),
+    ))
 }
 
 /// POST /api/signatures
@@ -65,11 +70,15 @@ pub async fn create(
 ) -> Result<Json<SignatureResponse>, AppError> {
     let name = input.name.trim().to_string();
     if name.is_empty() {
-        return Err(AppError::BadRequest("Signature name cannot be empty".into()));
+        return Err(AppError::BadRequest(
+            "Signature name cannot be empty".into(),
+        ));
     }
     let content = input.content.trim().to_string();
     if content.is_empty() {
-        return Err(AppError::BadRequest("Signature content cannot be empty".into()));
+        return Err(AppError::BadRequest(
+            "Signature content cannot be empty".into(),
+        ));
     }
 
     let sig = queries::create_signature(
@@ -93,12 +102,16 @@ pub async fn update(
 ) -> Result<Json<SignatureResponse>, AppError> {
     if let Some(ref name) = input.name {
         if name.trim().is_empty() {
-            return Err(AppError::BadRequest("Signature name cannot be empty".into()));
+            return Err(AppError::BadRequest(
+                "Signature name cannot be empty".into(),
+            ));
         }
     }
     if let Some(ref content) = input.content {
         if content.trim().is_empty() {
-            return Err(AppError::BadRequest("Signature content cannot be empty".into()));
+            return Err(AppError::BadRequest(
+                "Signature content cannot be empty".into(),
+            ));
         }
     }
     let provider = input.provider.filter(|p| !p.trim().is_empty());

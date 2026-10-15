@@ -65,12 +65,17 @@ impl TelegramClientManager {
                     guard.client = None;
                     guard.pending_token = None;
                     let _ = std::fs::remove_file(&self.session_path);
-                    Self::ensure_client(&mut guard, self.api_id, &self.api_hash, &self.session_path).await?;
+                    Self::ensure_client(
+                        &mut guard,
+                        self.api_id,
+                        &self.api_hash,
+                        &self.session_path,
+                    )
+                    .await?;
                     let client = guard.client.as_ref().unwrap();
-                    let token = client
-                        .request_login_code(phone)
-                        .await
-                        .map_err(|e| format!("Request login code failed after session reset: {e}"))?;
+                    let token = client.request_login_code(phone).await.map_err(|e| {
+                        format!("Request login code failed after session reset: {e}")
+                    })?;
                     guard.pending_token = Some(token);
                     Ok(serde_json::json!({ "status": "code_sent", "note": "session was reset" }))
                 } else {
@@ -84,9 +89,10 @@ impl TelegramClientManager {
         let mut guard = self.inner.lock().await;
         Self::ensure_client(&mut guard, self.api_id, &self.api_hash, &self.session_path).await?;
 
-        let token = guard.pending_token.take().ok_or_else(|| {
-            "No pending login token. Call request_login_code first.".to_string()
-        })?;
+        let token = guard
+            .pending_token
+            .take()
+            .ok_or_else(|| "No pending login token. Call request_login_code first.".to_string())?;
         let client = guard.client.as_ref().unwrap();
 
         match client.sign_in(&token, code).await {
@@ -108,12 +114,14 @@ impl TelegramClientManager {
 
     pub async fn check_password(&self, password: &str) -> Result<Value, String> {
         let mut guard = self.inner.lock().await;
-        let pw_token = guard.pending_password_token.take().ok_or_else(|| {
-            "No pending 2FA.".to_string()
-        })?;
-        let client = guard.client.as_ref().ok_or_else(|| {
-            "Client not connected.".to_string()
-        })?;
+        let pw_token = guard
+            .pending_password_token
+            .take()
+            .ok_or_else(|| "No pending 2FA.".to_string())?;
+        let client = guard
+            .client
+            .as_ref()
+            .ok_or_else(|| "Client not connected.".to_string())?;
 
         let user = client
             .check_password(pw_token, password)
@@ -130,9 +138,10 @@ impl TelegramClientManager {
 
     pub async fn send_message(&self, peer: &str, text: &str) -> Result<Value, String> {
         let guard = self.inner.lock().await;
-        let client = guard.client.as_ref().ok_or_else(|| {
-            "Telegram client not connected.".to_string()
-        })?;
+        let client = guard
+            .client
+            .as_ref()
+            .ok_or_else(|| "Telegram client not connected.".to_string())?;
 
         let chat = client
             .resolve_username(peer)
@@ -153,9 +162,10 @@ impl TelegramClientManager {
 
     pub async fn list_dialogs(&self) -> Result<Value, String> {
         let guard = self.inner.lock().await;
-        let client = guard.client.as_ref().ok_or_else(|| {
-            "Telegram client not connected.".to_string()
-        })?;
+        let client = guard
+            .client
+            .as_ref()
+            .ok_or_else(|| "Telegram client not connected.".to_string())?;
 
         let mut dialogs: Vec<Value> = Vec::new();
         let mut iter = client.iter_dialogs();
@@ -176,9 +186,10 @@ impl TelegramClientManager {
 
     pub async fn list_dialogs_detailed(&self) -> Result<Value, String> {
         let guard = self.inner.lock().await;
-        let client = guard.client.as_ref().ok_or_else(|| {
-            "Telegram client not connected.".to_string()
-        })?;
+        let client = guard
+            .client
+            .as_ref()
+            .ok_or_else(|| "Telegram client not connected.".to_string())?;
 
         let mut dialogs: Vec<Value> = Vec::new();
         let mut iter = client.iter_dialogs();
@@ -211,9 +222,10 @@ impl TelegramClientManager {
 
     pub async fn list_contacts(&self) -> Result<Value, String> {
         let guard = self.inner.lock().await;
-        let client = guard.client.as_ref().ok_or_else(|| {
-            "Telegram client not connected.".to_string()
-        })?;
+        let client = guard
+            .client
+            .as_ref()
+            .ok_or_else(|| "Telegram client not connected.".to_string())?;
 
         let mut contacts: Vec<Value> = Vec::new();
         let mut iter = client.iter_dialogs();
@@ -234,9 +246,10 @@ impl TelegramClientManager {
 
     pub async fn search(&self, query: &str) -> Result<Value, String> {
         let guard = self.inner.lock().await;
-        let client = guard.client.as_ref().ok_or_else(|| {
-            "Telegram client not connected.".to_string()
-        })?;
+        let client = guard
+            .client
+            .as_ref()
+            .ok_or_else(|| "Telegram client not connected.".to_string())?;
 
         let mut results: Vec<Value> = Vec::new();
         let q = query.to_lowercase();
@@ -261,9 +274,10 @@ impl TelegramClientManager {
 
     pub async fn user_info(&self) -> Result<Value, String> {
         let guard = self.inner.lock().await;
-        let client = guard.client.as_ref().ok_or_else(|| {
-            "Telegram client not connected.".to_string()
-        })?;
+        let client = guard
+            .client
+            .as_ref()
+            .ok_or_else(|| "Telegram client not connected.".to_string())?;
 
         let me = client
             .get_me()
@@ -288,7 +302,9 @@ impl TelegramClientManager {
         }
 
         tokio::fs::create_dir_all(
-            session_path.parent().expect("session_path must have parent"),
+            session_path
+                .parent()
+                .expect("session_path must have parent"),
         )
         .await
         .map_err(|e| format!("Failed to create session dir: {e}"))?;
@@ -313,5 +329,3 @@ impl TelegramClientManager {
 }
 
 pub type OptionalTelegramClient = Option<Arc<TelegramClientManager>>;
-
-

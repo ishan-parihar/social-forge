@@ -1,7 +1,7 @@
 // ─── MCP Dev.to Tools ────────────────────────────────────────────
 // Dev.to API v0 tools via the DevtoProvider (API key-based).
 
-use rmcp::{Json, schemars::JsonSchema};
+use rmcp::{schemars::JsonSchema, Json};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use uuid::Uuid;
@@ -22,11 +22,14 @@ pub struct DvCreatePostInput {
     pub tags: Option<Vec<String>>,
     /// Publish immediately (default: false, saves as draft)
     pub published: Option<bool>,
+    /// §5.4: which connected Dev.to account to use — integration UUID,
+    /// "devto:Name", or empty for the first connected account.
+    #[serde(default)]
+    pub integration: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
-pub struct DvListPostsInput {
-}
+pub struct DvListPostsInput {}
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct DvGetPostInput {
@@ -63,7 +66,13 @@ pub async fn handle_dv_create_post(
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     // §4.2: through the publish pipeline — posts row + idempotency + retries.
-    let integration = super::tools_posts::integration_for_provider(state, user_id, "devto").await?;
+    let integration = super::tools_posts::select_integration(
+        state,
+        user_id,
+        "devto",
+        input.integration.as_deref(),
+    )
+    .await?;
 
     let mut settings = json!({});
     if let Some(title) = &input.title {

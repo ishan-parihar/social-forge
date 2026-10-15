@@ -1,8 +1,8 @@
 // Social Forge library root
 // Re-exports modules for use from tests and integration.
 pub mod api;
-pub mod cli;
 pub mod auth;
+pub mod cli;
 pub mod config;
 pub mod crypto;
 pub mod db;

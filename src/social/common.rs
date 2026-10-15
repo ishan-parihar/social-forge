@@ -4,7 +4,8 @@
 use rand::{Rng, RngCore};
 use sha2::{Digest, Sha256};
 
-const CODE_VERIFIER_CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
+const CODE_VERIFIER_CHARSET: &[u8] =
+    b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
 
 /// Generate a PKCE code verifier (128 chars)
 pub fn generate_code_verifier() -> String {
@@ -43,7 +44,13 @@ pub fn parse_timestamp(s: &str) -> chrono::DateTime<chrono::Utc> {
         let (prefix, offset) = s.split_at(s.len() - 5);
         let offset_chars: Vec<char> = offset.chars().collect();
         if offset_chars.len() == 5 && (offset_chars[0] == '+' || offset_chars[0] == '-') {
-            format!("{}{}{}:{}", prefix, offset_chars[0], &offset[1..3], &offset[3..5])
+            format!(
+                "{}{}{}:{}",
+                prefix,
+                offset_chars[0],
+                &offset[1..3],
+                &offset[3..5]
+            )
         } else {
             s.to_string()
         }
@@ -118,10 +125,7 @@ mod tests {
         let verifier = "test-verifier-string-1234567890abcdefghijklmnopqrstuvwxyz";
         let c1 = generate_code_challenge(verifier);
         let c2 = generate_code_challenge(verifier);
-        assert_eq!(
-            c1, c2,
-            "same verifier should produce same challenge"
-        );
+        assert_eq!(c1, c2, "same verifier should produce same challenge");
     }
 
     #[test]
@@ -129,7 +133,11 @@ mod tests {
         let verifier = "short";
         let challenge = generate_code_challenge(verifier);
         // SHA256 base64url = 43 chars (no padding)
-        assert_eq!(challenge.len(), 43, "SHA256 base64url challenge should be 43 chars");
+        assert_eq!(
+            challenge.len(),
+            43,
+            "SHA256 base64url challenge should be 43 chars"
+        );
     }
 
     #[test]

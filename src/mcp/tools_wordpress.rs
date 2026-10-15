@@ -1,7 +1,7 @@
 // ─── MCP WordPress Tools ─────────────────────────────────────────
 // WordPress REST API tools via the WordPressProvider (Application Password).
 
-use rmcp::{Json, schemars::JsonSchema};
+use rmcp::{schemars::JsonSchema, Json};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use uuid::Uuid;
@@ -23,6 +23,10 @@ pub struct WpCreatePostInput {
     pub categories: Option<Vec<i32>>,
     /// Tag IDs to assign
     pub tags: Option<Vec<i32>>,
+    /// §5.4: which connected WordPress site to use — integration UUID,
+    /// "wordpress:Name", or empty for the first connected site.
+    #[serde(default)]
+    pub integration: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
@@ -40,8 +44,7 @@ pub struct WpGetPostInput {
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
-pub struct WpListCategoriesInput {
-}
+pub struct WpListCategoriesInput {}
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -72,7 +75,13 @@ pub async fn handle_wp_create_post(
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     // §4.2: through the publish pipeline — posts row + idempotency + retries.
-    let integration = super::tools_posts::integration_for_provider(state, user_id, "wordpress").await?;
+    let integration = super::tools_posts::select_integration(
+        state,
+        user_id,
+        "wordpress",
+        input.integration.as_deref(),
+    )
+    .await?;
 
     let mut settings = json!({
         "title": input.title,

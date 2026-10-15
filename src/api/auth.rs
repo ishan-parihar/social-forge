@@ -46,10 +46,15 @@ pub async fn login(
     Json(body): Json<LoginRequest>,
 ) -> Result<(HeaderMap, Json<LoginResponse>), crate::error::AppError> {
     // Constant-time password compare to avoid timing side-channels.
-    let ok = constant_time_eq(state.config.app_password.as_bytes(), body.password.as_bytes());
+    let ok = constant_time_eq(
+        state.config.app_password.as_bytes(),
+        body.password.as_bytes(),
+    );
 
     if !ok {
-        return Err(crate::error::AppError::Unauthorized("Invalid password".into()));
+        return Err(crate::error::AppError::Unauthorized(
+            "Invalid password".into(),
+        ));
     }
 
     let token = jwt::create_token(
@@ -61,13 +66,17 @@ pub async fn login(
     let mut headers = HeaderMap::new();
     headers.insert(
         header::SET_COOKIE,
-        HeaderValue::from_str(&cookie).map_err(|e| {
-            crate::error::AppError::Internal(format!("invalid cookie: {e}"))
-        })?,
+        HeaderValue::from_str(&cookie)
+            .map_err(|e| crate::error::AppError::Internal(format!("invalid cookie: {e}")))?,
     );
 
     tracing::info!("WebUI login successful");
-    Ok((headers, Json(LoginResponse { authenticated: true })))
+    Ok((
+        headers,
+        Json(LoginResponse {
+            authenticated: true,
+        }),
+    ))
 }
 
 /// POST /api/auth/logout — clears the session cookie.
@@ -78,22 +87,16 @@ pub async fn logout(
     let mut headers = HeaderMap::new();
     headers.insert(
         header::SET_COOKIE,
-        HeaderValue::from_str(&cookie).map_err(|e| {
-            crate::error::AppError::Internal(format!("invalid cookie: {e}"))
-        })?,
+        HeaderValue::from_str(&cookie)
+            .map_err(|e| crate::error::AppError::Internal(format!("invalid cookie: {e}")))?,
     );
-    Ok((
-        headers,
-        Json(serde_json::json!({"logged_out": true})),
-    ))
+    Ok((headers, Json(serde_json::json!({"logged_out": true}))))
 }
 
 /// GET /api/auth/me — returns 200 if the session cookie validated
 /// (the middleware already proved it). Used by the frontend to
 /// check session state on app load.
-pub async fn me(
-    auth: AuthenticatedUser,
-) -> Json<MeResponse> {
+pub async fn me(auth: AuthenticatedUser) -> Json<MeResponse> {
     Json(MeResponse {
         authenticated: true,
         user_id: auth.user_id.to_string(),

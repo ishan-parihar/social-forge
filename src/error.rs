@@ -178,34 +178,61 @@ impl IntoResponse for AppError {
                     sqlx::Error::Configuration(_) => "db_configuration",
                     _ => "db_unknown",
                 };
-                (StatusCode::INTERNAL_SERVER_ERROR, "Database error".into(), code)
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Database error".into(),
+                    code,
+                )
             }
             AppError::Auth(e) => {
                 tracing::error!("Auth error: {:?}", e);
                 (StatusCode::UNAUTHORIZED, "Invalid token".into(), "auth")
             }
-            AppError::Hash(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Hashing error".into(), "hash"),
+            AppError::Hash(_) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Hashing error".into(),
+                "hash",
+            ),
             AppError::Provider(msg) => (StatusCode::BAD_GATEWAY, msg.clone(), "provider"),
             // `self.to_string()` keeps the Display impl the single source of
             // truth for the human message (provider + integration id + hint).
             AppError::ScopeLost { .. } => (StatusCode::CONFLICT, self.to_string(), "scope_lost"),
-            AppError::TokenExpired => (StatusCode::UNAUTHORIZED, "Token expired".into(), "token_expired"),
+            AppError::TokenExpired => (
+                StatusCode::UNAUTHORIZED,
+                "Token expired".into(),
+                "token_expired",
+            ),
             // B8: a failed token store (encrypt or DB write) is an internal
             // error — the client must retry after the operator fixes the
             // key/DB; the message is logged server-side.
             AppError::TokenUpdate(e) => {
                 tracing::error!("Token store failed: {e}");
-                (StatusCode::INTERNAL_SERVER_ERROR, "Token store failed".into(), "token_update")
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Token store failed".into(),
+                    "token_update",
+                )
             }
-            AppError::RateLimited(msg) => (StatusCode::TOO_MANY_REQUESTS, msg.clone(), "rate_limited"),
+            AppError::RateLimited(msg) => {
+                (StatusCode::TOO_MANY_REQUESTS, msg.clone(), "rate_limited")
+            }
             AppError::Internal(msg) => {
                 tracing::error!("Internal error: {}", msg);
-                (StatusCode::INTERNAL_SERVER_ERROR, "Internal error".into(), "internal")
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Internal error".into(),
+                    "internal",
+                )
             }
         };
 
         let mut body = json!({ "error": message, "code": code });
-        if let AppError::ScopeLost { provider, integration_id, .. } = &self {
+        if let AppError::ScopeLost {
+            provider,
+            integration_id,
+            ..
+        } = &self
+        {
             body["provider"] = json!(provider);
             body["integration_id"] = json!(integration_id);
             body["reconnect"] = json!(format!("/api/integrations/connect/{provider}"));
@@ -252,6 +279,9 @@ mod tests {
 
     #[test]
     fn annotate_scope_loss_appends_the_hint_only_for_scope_failures() {
-        assert_eq!(annotate_scope_loss("x", "API error: rate limited"), "API error: rate limited");
+        assert_eq!(
+            annotate_scope_loss("x", "API error: rate limited"),
+            "API error: rate limited"
+        );
     }
 }

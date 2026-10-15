@@ -2,11 +2,11 @@
 // Orchestrates multi-platform post staging with content splitting.
 // Takes a single post intent and creates appropriate posts per platform.
 
-use uuid::Uuid;
-use sqlx::SqlitePool;
 use crate::db::queries;
 use crate::services::content_splitter;
-use crate::social::{self, MediaAttachment, PostContent, registry::ProviderRegistry};
+use crate::social::{self, registry::ProviderRegistry, MediaAttachment, PostContent};
+use sqlx::SqlitePool;
+use uuid::Uuid;
 
 #[derive(Debug)]
 pub struct StagingRequest {

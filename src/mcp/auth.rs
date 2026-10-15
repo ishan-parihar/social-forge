@@ -4,9 +4,9 @@
 // (shell access already implies trust). The WebUI is the only place
 // that needs the password gate, and that's enforced by axum middleware.
 
-use uuid::Uuid;
 use crate::api::AppState;
 use crate::auth::middleware::DEFAULT_USER_ID;
+use uuid::Uuid;
 
 /// Resolve the local user. In single-user mode this is always
 /// `DEFAULT_USER_ID` — no DB lookup needed. The function signature

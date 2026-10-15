@@ -67,7 +67,10 @@ impl Broadcaster {
         let data_value = serde_json::to_value(data).unwrap_or_default();
         // Broadcast first (don't block the SSE push on the DB write).
         if self.tx.receiver_count() > 0 {
-            let _ = self.tx.send(ServerEvent { event, data: data_value.clone() });
+            let _ = self.tx.send(ServerEvent {
+                event,
+                data: data_value.clone(),
+            });
         }
         // Persist to events_log (best-effort).
         let _ = sqlx::query(

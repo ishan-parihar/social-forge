@@ -107,11 +107,15 @@ mod tests {
     fn test_create_and_validate_token() {
         let user_id = Uuid::new_v4();
         let secret = "test-secret-key-that-is-long-enough-for-hmac";
-        
+
         let token = create_token(user_id, secret).expect("create token");
         let claims = validate_token(&token, secret).expect("validate token");
-        
-        assert_eq!(claims.sub, user_id.to_string(), "subject should match user_id");
+
+        assert_eq!(
+            claims.sub,
+            user_id.to_string(),
+            "subject should match user_id"
+        );
         assert!(claims.exp > 0, "expiry should be set");
         assert!(claims.iat > 0, "issued-at should be set");
     }
@@ -128,7 +132,7 @@ mod tests {
     fn test_tampered_token_rejected() {
         let secret = "test-secret-for-hmac";
         let token = create_token(Uuid::new_v4(), secret).expect("create token");
-        
+
         // Tamper with the payload portion
         let mut parts: Vec<&str> = token.split('.').collect();
         if parts.len() == 3 {
@@ -143,10 +147,10 @@ mod tests {
     fn test_token_contains_correct_user_id() {
         let user_id = Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap();
         let secret = "another-test-key-for-validating-subject";
-        
+
         let token = create_token(user_id, secret).expect("create token");
         let claims = validate_token(&token, secret).expect("validate token");
-        
+
         assert_eq!(claims.sub, "550e8400-e29b-41d4-a716-446655440000");
     }
 
@@ -154,18 +158,19 @@ mod tests {
     fn test_token_expiry_is_about_30_days() {
         let user_id = Uuid::new_v4();
         let secret = "test-key-for-expiry-check";
-        
+
         let token = create_token(user_id, secret).expect("create token");
         let claims = validate_token(&token, secret).expect("validate token");
-        
+
         let now = Utc::now().timestamp() as usize;
         let thirty_days_secs = 30 * 24 * 60 * 60;
-        
+
         // Allow 5 second tolerance for test execution time
         assert!(
             claims.exp >= now + thirty_days_secs - 5,
             "expiry should be ~30 days from now (exp={}, now={})",
-            claims.exp, now
+            claims.exp,
+            now
         );
         assert!(
             claims.exp <= now + thirty_days_secs + 5,
@@ -177,10 +182,10 @@ mod tests {
     fn test_iat_is_recent() {
         let user_id = Uuid::new_v4();
         let secret = "test-key-for-iat-check";
-        
+
         let token = create_token(user_id, secret).expect("create token");
         let claims = validate_token(&token, secret).expect("validate token");
-        
+
         let now = Utc::now().timestamp() as usize;
         assert!(
             claims.iat <= now && claims.iat >= now - 5,

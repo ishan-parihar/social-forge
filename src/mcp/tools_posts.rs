@@ -3,7 +3,7 @@
 // Thin wrappers over the shared PostService.
 
 use chrono::{DateTime, Utc};
-use rmcp::{Json, schemars::JsonSchema};
+use rmcp::{schemars::JsonSchema, Json};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -31,6 +31,53 @@ pub(crate) fn mime_from_url(url: &str) -> String {
     .to_string()
 }
 
+/// Resolve ONE integration row (audit §5.4). `selector` accepts:
+/// - `None` → the first connected integration for the provider (the
+///   historical single-account behavior);
+/// - a UUID → that exact integration id;
+/// - `"provider:Name"` → the provider's integration whose
+///   `internal_id` or name matches `Name` (e.g. "linkedin-page:acme",
+///   "x:alt-account").
+pub(crate) async fn select_integration(
+    state: &AppState,
+    user_id: Uuid,
+    provider: &str,
+    selector: Option<&str>,
+) -> Result<crate::db::models::Integration, String> {
+    let integrations: Vec<crate::db::models::Integration> =
+        crate::db::queries::list_integrations(&state.db, user_id)
+            .await
+            .map_err(|e| format!("DB error: {e}"))?
+            .into_iter()
+            .filter(|i| i.provider_identifier == provider)
+            .collect();
+
+    let found = match selector.map(str::trim).filter(|s| !s.is_empty()) {
+        None => integrations.into_iter().next(),
+        Some(sel) => {
+            let by_uuid = Uuid::parse_str(sel)
+                .ok()
+                .and_then(|id| integrations.iter().find(|i| i.id == id).cloned());
+            by_uuid.or_else(|| {
+                let name = sel.strip_prefix(&format!("{provider}:")).unwrap_or(sel);
+                integrations.into_iter().find(|i| {
+                    i.internal_id.eq_ignore_ascii_case(name)
+                        || i.provider_name.eq_ignore_ascii_case(name)
+                })
+            })
+        }
+    };
+
+    found.ok_or_else(|| match selector {
+        Some(sel) => format!(
+            "No {provider} integration matches '{sel}'. Connected: none — connect it first."
+        ),
+        None => {
+            format!("{provider} account not connected. Connect it via the onboarding page first.")
+        }
+    })
+}
+
 /// First integration row for a provider (audit §4.2 — the create-tools
 /// need the ROW, not just a token, so the post can be attached to it).
 pub(crate) async fn integration_for_provider(
@@ -38,14 +85,7 @@ pub(crate) async fn integration_for_provider(
     user_id: Uuid,
     provider: &str,
 ) -> Result<crate::db::models::Integration, String> {
-    crate::db::queries::list_integrations(&state.db, user_id)
-        .await
-        .map_err(|e| format!("DB error: {e}"))?
-        .into_iter()
-        .find(|i| i.provider_identifier == provider)
-        .ok_or_else(|| {
-            format!("{provider} account not connected. Connect it via the onboarding page first.")
-        })
+    select_integration(state, user_id, provider, None).await
 }
 
 /// Publish NOW through the ONE pipeline (audit §4.2): creates a `posts`
@@ -237,7 +277,8 @@ pub async fn create_post(
             first_comment: None,
             state: None,
         },
-    ).await?;
+    )
+    .await?;
 
     Ok(Json(CreatePostOutput {
         id: post.id.to_string(),
@@ -262,20 +303,18 @@ pub async fn list_posts(
         limit,
         offset,
         true,
-    ).await?;
+    )
+    .await?;
 
     let mut summaries = Vec::with_capacity(posts.0.len());
     for p in &posts.0 {
-        let integration_name = crate::db::queries::get_integration(
-            &state.db,
-            p.integration_id,
-            user_id,
-        )
-        .await
-        .ok()
-        .flatten()
-        .map(|i| i.provider_name)
-        .unwrap_or_else(|| "Unknown".into());
+        let integration_name =
+            crate::db::queries::get_integration(&state.db, p.integration_id, user_id)
+                .await
+                .ok()
+                .flatten()
+                .map(|i| i.provider_name)
+                .unwrap_or_else(|| "Unknown".into());
 
         summaries.push(PostSummary {
             id: p.id.to_string(),
@@ -305,16 +344,13 @@ pub async fn get_post(
 
     let post = PostService::get(&state.db, user_id, post_id).await?;
 
-    let integration_name = crate::db::queries::get_integration(
-        &state.db,
-        post.integration_id,
-        user_id,
-    )
-    .await
-    .ok()
-    .flatten()
-    .map(|i| i.provider_name)
-    .unwrap_or_else(|| "Unknown".into());
+    let integration_name =
+        crate::db::queries::get_integration(&state.db, post.integration_id, user_id)
+            .await
+            .ok()
+            .flatten()
+            .map(|i| i.provider_name)
+            .unwrap_or_else(|| "Unknown".into());
 
     Ok(Json(GetPostOutput {
         post: PostSummary {
@@ -342,13 +378,8 @@ pub async fn schedule_post(
         .map_err(|_| "Invalid date format, use ISO8601".to_string())?
         .with_timezone(&Utc);
 
-    let post = PostService::schedule(
-        &state.db,
-        &state.broadcast,
-        user_id,
-        post_id,
-        scheduled_at,
-    ).await?;
+    let post =
+        PostService::schedule(&state.db, &state.broadcast, user_id, post_id, scheduled_at).await?;
 
     Ok(Json(SchedulePostOutput {
         id: post.id.to_string(),
@@ -364,14 +395,11 @@ pub async fn delete_post(
     let user_id = resolve_first_user(state).await?;
     let post_id = Uuid::parse_str(&input.id).map_err(|_| "Invalid post ID".to_string())?;
 
-    PostService::delete(
-        &state.db,
-        &state.broadcast,
-        user_id,
-        post_id,
-    ).await?;
+    PostService::delete(&state.db, &state.broadcast, user_id, post_id).await?;
 
-    Ok(Json(crate::mcp::McpJsonValue(serde_json::json!({"success": true, "message": "Post deleted",}))))
+    Ok(Json(crate::mcp::McpJsonValue(
+        serde_json::json!({"success": true, "message": "Post deleted",}),
+    )))
 }
 
 pub async fn find_slot(
@@ -379,7 +407,9 @@ pub async fn find_slot(
     input: &FindSlotInput,
 ) -> Result<Json<FindSlotOutput>, String> {
     let user_id = resolve_first_user(state).await?;
-    let integration_id = input.integration_id.as_ref()
+    let integration_id = input
+        .integration_id
+        .as_ref()
         .and_then(|s| Uuid::parse_str(s).ok());
     let slot = PostService::find_slot(&state.db, user_id, integration_id).await?;
 
@@ -406,7 +436,8 @@ pub async fn update_post(
             media: input.media.clone(),
             settings: input.settings.clone(),
         },
-    ).await?;
+    )
+    .await?;
 
     Ok(Json(UpdatePostOutput {
         id: post.id.to_string(),
@@ -432,7 +463,8 @@ pub async fn publish_post(
         user_id,
         post_id,
         state.token_key,
-    ).await?;
+    )
+    .await?;
 
     Ok(Json(SchedulePostOutput {
         id: post_id.to_string(),
@@ -495,7 +527,9 @@ pub async fn stage_post(
 ) -> Result<Json<StagePostOutput>, String> {
     let user_id = resolve_first_user(state).await?;
 
-    let integration_ids: Vec<Uuid> = input.integration_ids.iter()
+    let integration_ids: Vec<Uuid> = input
+        .integration_ids
+        .iter()
         .map(|s| Uuid::parse_str(s).map_err(|_| format!("Invalid integration_id: {s}")))
         .collect::<Result<_, _>>()?;
 
@@ -519,15 +553,20 @@ pub async fn stage_post(
 
     crate::services::staging::validate_staging_request(&request)?;
 
-    let result = crate::services::staging::stage_post(&state.db, &state.providers, user_id, request).await?;
+    let result =
+        crate::services::staging::stage_post(&state.db, &state.providers, user_id, request).await?;
 
-    let staged = result.staged.into_iter().map(|s| StagedPostInfo {
-        post_id: s.post_id.to_string(),
-        provider: s.provider,
-        sequence: s.sequence,
-        total_segments: s.total_segments,
-        state: s.state,
-    }).collect();
+    let staged = result
+        .staged
+        .into_iter()
+        .map(|s| StagedPostInfo {
+            post_id: s.post_id.to_string(),
+            provider: s.provider,
+            sequence: s.sequence,
+            total_segments: s.total_segments,
+            state: s.state,
+        })
+        .collect();
 
     Ok(Json(StagePostOutput {
         staged,
@@ -571,7 +610,8 @@ pub async fn create_carousel(
             first_comment: None,
             state: None,
         },
-    ).await?;
+    )
+    .await?;
 
     Ok(Json(CreateCarouselOutput {
         id: post.id.to_string(),

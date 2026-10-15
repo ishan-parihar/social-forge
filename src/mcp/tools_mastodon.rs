@@ -2,7 +2,7 @@
 // Content posting, timeline reading, and search API tools
 // via the MastodonProvider.
 
-use rmcp::{Json, schemars::JsonSchema};
+use rmcp::{schemars::JsonSchema, Json};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -57,10 +57,7 @@ pub struct MsSearchInput {
 // ── Helpers ──────────────────────────────────────────────────
 
 /// Find a Mastodon integration for the given user and return access_token.
-async fn find_mastodon_integration(
-    state: &AppState,
-    user_id: Uuid,
-) -> Result<String, String> {
+async fn find_mastodon_integration(state: &AppState, user_id: Uuid) -> Result<String, String> {
     let integrations = crate::db::queries::list_integrations(&state.db, user_id)
         .await
         .map_err(|e| format!("DB error: {e}"))?;
@@ -72,7 +69,8 @@ async fn find_mastodon_integration(
             "Mastodon not connected. Connect it via the integrations page first.".to_string()
         })?;
 
-    let tok = crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
+    let tok =
+        crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
     Ok(tok)
 }
 
@@ -150,10 +148,7 @@ pub async fn handle_ms_get_timeline(
     let stored_token = find_mastodon_integration(state, user_id).await?;
     let token = stored_token;
 
-    let tl_type = input
-        .timeline_type
-        .as_deref()
-        .unwrap_or("home");
+    let tl_type = input.timeline_type.as_deref().unwrap_or("home");
     let limit = input.limit.unwrap_or(20);
 
     let provider = create_mastodon_provider(state);
@@ -245,7 +240,9 @@ pub struct MsGetAnalyticsInput {
     pub days: u32,
 }
 
-fn default_days() -> u32 { 30 }
+fn default_days() -> u32 {
+    30
+}
 
 /// Get account-level analytics for the authenticated Mastodon user
 /// (followers, following, statuses count, and recent engagement).
@@ -270,13 +267,16 @@ pub async fn handle_ms_get_analytics(
         .map_err(|e| format!("Mastodon timeline for analytics failed: {e}"))?;
 
     let posts = timeline.as_array().cloned().unwrap_or_default();
-    let total_replies: i64 = posts.iter()
+    let total_replies: i64 = posts
+        .iter()
         .filter_map(|p| p["replies_count"].as_i64())
         .sum();
-    let total_reblogs: i64 = posts.iter()
+    let total_reblogs: i64 = posts
+        .iter()
         .filter_map(|p| p["reblogs_count"].as_i64())
         .sum();
-    let total_favourites: i64 = posts.iter()
+    let total_favourites: i64 = posts
+        .iter()
         .filter_map(|p| p["favourites_count"].as_i64())
         .sum();
 

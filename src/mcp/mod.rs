@@ -6,41 +6,41 @@
 // Same business logic as the REST API — shared via AppState.
 
 use rmcp::{
-    ServiceExt,
-    handler::server::wrapper::Parameters,
-    schemars::JsonSchema,
-    tool, tool_router,
-    transport::stdio,
-    Json,
+    handler::server::wrapper::Parameters, schemars::JsonSchema, tool, tool_router,
+    transport::stdio, Json, ServiceExt,
 };
 use serde::{Deserialize, Serialize};
 
 use crate::api::AppState;
 
-
 pub(crate) mod auth;
-pub mod tools_setup;
+pub mod tools_admin;
 pub mod tools_analytics;
+pub mod tools_automation;
 pub mod tools_bluesky;
 mod tools_calendar;
+pub mod tools_comments;
 pub mod tools_devto;
+pub mod tools_discord;
+pub mod tools_dm;
 pub mod tools_facebook;
+pub mod tools_feed;
+pub mod tools_github;
+pub mod tools_google;
+pub mod tools_hashnode;
 pub mod tools_instagram;
 pub mod tools_instagram_standalone;
 pub mod tools_integrations;
 pub mod tools_linkedin;
 pub mod tools_linkedin_page;
 pub mod tools_mastodon;
+pub mod tools_media;
 pub mod tools_medium;
-pub mod tools_hashnode;
+pub mod tools_notifications;
 pub mod tools_pinterest;
 pub mod tools_posts;
-pub mod tools_media;
-pub mod tools_comments;
-pub mod tools_dm;
-pub mod tools_automation;
-pub mod tools_discord;
 pub mod tools_reddit;
+pub mod tools_setup;
 pub mod tools_skool;
 pub mod tools_slack;
 pub mod tools_tags;
@@ -48,16 +48,11 @@ pub mod tools_telegram_bot;
 pub mod tools_telegram_user;
 pub mod tools_threads;
 pub mod tools_tiktok;
-pub mod tools_whatsapp;
-pub mod tools_notifications;
 pub mod tools_webhooks;
-pub mod tools_feed;
+pub mod tools_whatsapp;
 pub mod tools_wordpress;
-pub mod tools_admin;
-pub mod tools_youtube;
 pub mod tools_x;
-pub mod tools_github;
-pub mod tools_google;
+pub mod tools_youtube;
 
 // ══════════════════════════════════════════════════════════════
 // SHARED TYPES
@@ -91,15 +86,12 @@ impl JsonSchema for McpJsonValue {
 // TOOL ROUTER
 // ══════════════════════════════════════════════════════════════
 
-
-
 #[derive(Clone)]
 pub struct SocialForgeMcpServer {
     pub state: AppState,
 }
 
 // Helper: get DB pool from state
-
 
 #[tool_router(server_handler)]
 impl SocialForgeMcpServer {
@@ -116,7 +108,9 @@ impl SocialForgeMcpServer {
     // This single tool lets an AI agent confirm the server is up
     // and identify the local user.
 
-    #[tool(description = "Return the local user id. Single-user mode — no login required over MCP.")]
+    #[tool(
+        description = "Return the local user id. Single-user mode — no login required over MCP."
+    )]
     async fn auth_status(&self) -> Result<Json<McpJsonValue>, String> {
         Ok(Json(McpJsonValue(serde_json::json!({
             "user_id": crate::auth::middleware::DEFAULT_USER_ID.to_string(),
@@ -127,7 +121,9 @@ impl SocialForgeMcpServer {
 
     // ── Calendar Tools ──────────────────────────────────────
 
-    #[tool(description = "Get posts for a date range (for calendar view). Pass start and end dates as RFC3339.")]
+    #[tool(
+        description = "Get posts for a date range (for calendar view). Pass start and end dates as RFC3339."
+    )]
     async fn calendar_get(
         &self,
         params: Parameters<tools_calendar::CalendarInput>,
@@ -145,7 +141,9 @@ impl SocialForgeMcpServer {
         tools_integrations::list_providers(&self.state, &params.0).await
     }
 
-    #[tool(description = "List all connected social media integrations for the authenticated user.")]
+    #[tool(
+        description = "List all connected social media integrations for the authenticated user."
+    )]
     async fn integrations_list(
         &self,
         params: Parameters<tools_integrations::ListIntegrationsInput>,
@@ -187,7 +185,9 @@ impl SocialForgeMcpServer {
 
     // ── Setup/Onboarding Tools ─────────────────────────────────
 
-    #[tool(description = "Check overall setup status: database, user, connected providers, and next actions for AI agent guided setup")]
+    #[tool(
+        description = "Check overall setup status: database, user, connected providers, and next actions for AI agent guided setup"
+    )]
     async fn setup_status(
         &self,
         _params: Parameters<tools_setup::SetupStatusInput>,
@@ -195,7 +195,9 @@ impl SocialForgeMcpServer {
         tools_setup::setup_status(&self.state, &tools_setup::SetupStatusInput {}).await
     }
 
-    #[tool(description = "Import browser cookies for X/Twitter and/or Reddit. Auto-detects Chrome, Brave, Firefox, Zen. Use provider='all' to import both.")]
+    #[tool(
+        description = "Import browser cookies for X/Twitter and/or Reddit. Auto-detects Chrome, Brave, Firefox, Zen. Use provider='all' to import both."
+    )]
     async fn setup_import_cookies(
         &self,
         params: Parameters<tools_setup::ImportCookiesInput>,
@@ -203,7 +205,9 @@ impl SocialForgeMcpServer {
         tools_setup::import_cookies(&self.state, &params.0).await
     }
 
-    #[tool(description = "Get setup guidance for connecting social media providers. Returns what credentials are needed, where to get them, and how to configure them. Call without provider to see all providers.")]
+    #[tool(
+        description = "Get setup guidance for connecting social media providers. Returns what credentials are needed, where to get them, and how to configure them. Call without provider to see all providers."
+    )]
     async fn setup_guide(
         &self,
         params: Parameters<tools_setup::SetupGuideInput>,
@@ -211,7 +215,9 @@ impl SocialForgeMcpServer {
         tools_setup::setup_guide(&self.state, &params.0)
     }
 
-    #[tool(description = "Set a configuration value in ~/.social-forge/.env. Creates file if needed. Restart social-forge after setting.")]
+    #[tool(
+        description = "Set a configuration value in ~/.social-forge/.env. Creates file if needed. Restart social-forge after setting."
+    )]
     async fn setup_config_set(
         &self,
         params: Parameters<tools_setup::ConfigSetInput>,
@@ -301,7 +307,9 @@ impl SocialForgeMcpServer {
         tools_posts::update_post(&self.state, &params.0).await
     }
 
-    #[tool(description = "Upload media (image/video) for post attachments. Pass base64-encoded file data.")]
+    #[tool(
+        description = "Upload media (image/video) for post attachments. Pass base64-encoded file data."
+    )]
     async fn posts_media_upload(
         &self,
         params: Parameters<tools_media::MediaUploadInput>,
@@ -317,7 +325,9 @@ impl SocialForgeMcpServer {
         tools_media::list_media(&self.state, &params.0).await
     }
 
-    #[tool(description = "Upload media from a local file path. More efficient than base64 for large files. Returns the media URL for use in posts.")]
+    #[tool(
+        description = "Upload media from a local file path. More efficient than base64 for large files. Returns the media URL for use in posts."
+    )]
     async fn posts_media_upload_from_path(
         &self,
         params: Parameters<tools_media::MediaUploadFromPathInput>,
@@ -325,7 +335,9 @@ impl SocialForgeMcpServer {
         tools_media::upload_from_path_mcp(&self.state, &params.0).await
     }
 
-    #[tool(description = "Batch upload multiple media files from local file paths in a single call. Optimized for carousel workflows. Returns all uploaded media URLs.")]
+    #[tool(
+        description = "Batch upload multiple media files from local file paths in a single call. Optimized for carousel workflows. Returns all uploaded media URLs."
+    )]
     async fn posts_media_upload_batch(
         &self,
         params: Parameters<tools_media::MediaUploadBatchInput>,
@@ -333,7 +345,9 @@ impl SocialForgeMcpServer {
         tools_media::upload_batch(&self.state, &params.0).await
     }
 
-    #[tool(description = "Download media from an external URL and store it locally. Useful when you have image URLs but need them in the local media library for posting.")]
+    #[tool(
+        description = "Download media from an external URL and store it locally. Useful when you have image URLs but need them in the local media library for posting."
+    )]
     async fn posts_media_upload_from_url(
         &self,
         params: Parameters<tools_media::MediaUploadFromUrlInput>,
@@ -341,7 +355,9 @@ impl SocialForgeMcpServer {
         tools_media::upload_from_url(&self.state, &params.0).await
     }
 
-    #[tool(description = "Stage a post across multiple platforms. Auto-splits content per platform character limits. Creates draft posts for each integration.")]
+    #[tool(
+        description = "Stage a post across multiple platforms. Auto-splits content per platform character limits. Creates draft posts for each integration."
+    )]
     async fn posts_stage(
         &self,
         params: Parameters<tools_posts::StagePostInput>,
@@ -349,7 +365,9 @@ impl SocialForgeMcpServer {
         tools_posts::stage_post(&self.state, &params.0).await
     }
 
-    #[tool(description = "Create a carousel post with multiple images. Requires at least 2 media URLs. Supported by Instagram, LinkedIn, and Facebook.")]
+    #[tool(
+        description = "Create a carousel post with multiple images. Requires at least 2 media URLs. Supported by Instagram, LinkedIn, and Facebook."
+    )]
     async fn posts_create_carousel(
         &self,
         params: Parameters<tools_posts::CreateCarouselInput>,
@@ -792,7 +810,9 @@ impl SocialForgeMcpServer {
         tools_x::x_list_timeline(&self.state, &params.0).await
     }
 
-    #[tool(description = "Create and immediately publish a new tweet on X/Twitter. For media tweets, first upload via media_upload_from_path, then pass returned URLs in media_urls.")]
+    #[tool(
+        description = "Create and immediately publish a new tweet on X/Twitter. For media tweets, first upload via media_upload_from_path, then pass returned URLs in media_urls."
+    )]
     async fn x_create_tweet(
         &self,
         params: Parameters<tools_x::XCreateTweetInput>,
@@ -800,7 +820,9 @@ impl SocialForgeMcpServer {
         tools_x::x_create_tweet(&self.state, &params.0).await
     }
 
-    #[tool(description = "Get account-level analytics for the authenticated X/Twitter user (followers, following, tweet count)")]
+    #[tool(
+        description = "Get account-level analytics for the authenticated X/Twitter user (followers, following, tweet count)"
+    )]
     async fn x_get_analytics(
         &self,
         params: Parameters<tools_x::XGetAnalyticsInput>,
@@ -808,7 +830,9 @@ impl SocialForgeMcpServer {
         tools_x::x_get_analytics(&self.state, &params.0).await
     }
 
-    #[tool(description = "Get engagement metrics (likes, retweets, replies, impressions) for a specific tweet")]
+    #[tool(
+        description = "Get engagement metrics (likes, retweets, replies, impressions) for a specific tweet"
+    )]
     async fn x_get_post_analytics(
         &self,
         params: Parameters<tools_x::XGetPostAnalyticsInput>,
@@ -855,7 +879,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_facebook::FbGetFeedInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_facebook::handle_fb_get_feed(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_facebook::handle_fb_get_feed(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get a single Facebook post by ID")]
@@ -863,7 +889,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_facebook::FbGetPostInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_facebook::handle_fb_get_post(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_facebook::handle_fb_get_post(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get comments on a Facebook post")]
@@ -871,7 +899,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_facebook::FbGetCommentsInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_facebook::handle_fb_get_comments(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_facebook::handle_fb_get_comments(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Create a text/link post on a Facebook")]
@@ -879,7 +909,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_facebook::FbCreatePostInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_facebook::handle_fb_create_post(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_facebook::handle_fb_create_post(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Create a photo post on a Facebook page")]
@@ -887,7 +919,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_facebook::FbCreatePhotoInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_facebook::handle_fb_create_photo(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_facebook::handle_fb_create_photo(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Create a video post on a Facebook page")]
@@ -895,7 +929,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_facebook::FbCreateVideoInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_facebook::handle_fb_create_video(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_facebook::handle_fb_create_video(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Delete a Facebook post by ID")]
@@ -903,7 +939,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_facebook::FbDeletePostInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_facebook::handle_fb_delete_post(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_facebook::handle_fb_delete_post(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Comment on a Facebook post")]
@@ -911,7 +949,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_facebook::FbCommentInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_facebook::handle_fb_comment(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_facebook::handle_fb_comment(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "React to a Facebook post")]
@@ -919,7 +959,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_facebook::FbReactInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_facebook::handle_fb_react(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_facebook::handle_fb_react(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get insights/analytics for a Facebook")]
@@ -927,7 +969,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_facebook::FbPageInsightsInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_facebook::handle_fb_page_insights(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_facebook::handle_fb_page_insights(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get conversations (inbox) for a connected X/Twitter account.")]
@@ -935,7 +979,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_facebook::FbConversationsInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_facebook::handle_fb_conversations(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_facebook::handle_fb_conversations(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get messages in a Facebook")]
@@ -943,7 +989,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_facebook::FbConversationMsgsInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_facebook::handle_fb_conversation_msgs(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_facebook::handle_fb_conversation_msgs(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Send a message to a Facebook")]
@@ -951,7 +999,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_facebook::FbSendMessageInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_facebook::handle_fb_send_message(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_facebook::handle_fb_send_message(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Search for public Facebook pages by name.")]
@@ -959,7 +1009,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_facebook::FbSearchPagesInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_facebook::handle_fb_search_pages(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_facebook::handle_fb_search_pages(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get albums from a Facebook page")]
@@ -967,7 +1019,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_facebook::FbAlbumsInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_facebook::handle_fb_albums(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_facebook::handle_fb_albums(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     // ── Instagram Tools ─────────────────────────────────────────────
@@ -977,7 +1031,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_instagram::IgGetMediaInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_instagram::handle_ig_get_media(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_instagram::handle_ig_get_media(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get details of a specific Instagram")]
@@ -985,7 +1041,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_instagram::IgGetMediaDetailInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_instagram::handle_ig_get_media_detail(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_instagram::handle_ig_get_media_detail(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get comments on an Instagram media post by media ID.")]
@@ -993,7 +1051,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_instagram::IgGetCommentsInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_instagram::handle_ig_get_comments(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_instagram::handle_ig_get_comments(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Search for Instagram hashtags by name")]
@@ -1001,7 +1061,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_instagram::IgSearchHashtagInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_instagram::handle_ig_search_hashtag(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_instagram::handle_ig_search_hashtag(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get recent media for an Instagram")]
@@ -1009,7 +1071,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_instagram::IgGetHashtagMediaInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_instagram::handle_ig_get_hashtag_media(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_instagram::handle_ig_get_hashtag_media(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get insights for an Instagram")]
@@ -1017,7 +1081,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_instagram::IgGetInsightsInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_instagram::handle_ig_get_insights(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_instagram::handle_ig_get_insights(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get media where the Instagram account")]
@@ -1025,7 +1091,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_instagram::IgGetTaggedInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_instagram::handle_ig_get_tagged(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_instagram::handle_ig_get_tagged(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Create an Instagram media container")]
@@ -1033,7 +1101,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_instagram::IgCreateContainerInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_instagram::handle_ig_create_container(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_instagram::handle_ig_create_container(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Publish an Instagram media container")]
@@ -1041,7 +1111,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_instagram::IgPublishContainerInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_instagram::handle_ig_publish_container(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_instagram::handle_ig_publish_container(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Reply to an Instagram comment")]
@@ -1049,7 +1121,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_instagram::IgReplyToCommentInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_instagram::handle_ig_reply_to_comment(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_instagram::handle_ig_reply_to_comment(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get Instagram reels for a business")]
@@ -1057,7 +1131,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_instagram::IgGetReelsInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_instagram::handle_ig_get_reels(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_instagram::handle_ig_get_reels(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get Instagram stories for a business")]
@@ -1065,7 +1141,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_instagram::IgGetStoriesInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_instagram::handle_ig_get_stories(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_instagram::handle_ig_get_stories(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get followers of an Instagram")]
@@ -1073,7 +1151,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_instagram::IgGetFollowersInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_instagram::handle_ig_get_followers(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_instagram::handle_ig_get_followers(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Discover an Instagram business")]
@@ -1081,16 +1161,19 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_instagram::IgBusinessDiscoveryInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_instagram::handle_ig_business_discovery(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_instagram::handle_ig_business_discovery(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
-
 
     #[tool(description = "Get recent mentions of an Instagram")]
     pub async fn ig_get_mentions(
         &self,
         params: Parameters<tools_instagram::IgGetMentionsInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_instagram::handle_ig_get_mentions(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_instagram::handle_ig_get_mentions(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Poll the status of an Instagram")]
@@ -1098,7 +1181,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_instagram::IgPollContainerInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_instagram::handle_ig_poll_container(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_instagram::handle_ig_poll_container(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get audience insights for an Instagram business account.")]
@@ -1106,7 +1191,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_instagram::IgGetInsightsAudienceInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_instagram::handle_ig_get_insights_audience(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_instagram::handle_ig_get_insights_audience(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Send a direct message on Instagram")]
@@ -1114,7 +1201,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_instagram::IgSendDmInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_instagram::handle_ig_send_dm(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_instagram::handle_ig_send_dm(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "List Instagram message conversations")]
@@ -1122,7 +1211,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_instagram::IgListConversationsInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_instagram::handle_ig_list_conversations(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_instagram::handle_ig_list_conversations(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get messages in an Instagram conversation by conversation ID.")]
@@ -1130,10 +1221,14 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_instagram::IgGetMessagesInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_instagram::handle_ig_get_messages(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_instagram::handle_ig_get_messages(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Create and publish an Instagram media post in a single call. Handles the full container flow internally (create + poll + publish). Pass ig_id, caption, media_url, and media_type (IMAGE/VIDEO/REELS).")]
+    #[tool(
+        description = "Create and publish an Instagram media post in a single call. Handles the full container flow internally (create + poll + publish). Pass ig_id, caption, media_url, and media_type (IMAGE/VIDEO/REELS)."
+    )]
     pub async fn ig_post(
         &self,
         params: Parameters<tools_instagram::IgPostInput>,
@@ -1148,7 +1243,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_instagram_standalone::IasGetMediaInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_instagram_standalone::handle_ias_get_media(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_instagram_standalone::handle_ias_get_media(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get details of a specific Instagram")]
@@ -1156,7 +1253,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_instagram_standalone::IasGetMediaDetailInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_instagram_standalone::handle_ias_get_media_detail(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_instagram_standalone::handle_ias_get_media_detail(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get comments on an Instagram media post by media ID.")]
@@ -1164,7 +1263,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_instagram_standalone::IasGetCommentsInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_instagram_standalone::handle_ias_get_comments(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_instagram_standalone::handle_ias_get_comments(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Reply to an Instagram comment (Basic")]
@@ -1172,7 +1273,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_instagram_standalone::IasReplyToCommentInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_instagram_standalone::handle_ias_reply_to_comment(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_instagram_standalone::handle_ias_reply_to_comment(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Create an Instagram media container")]
@@ -1180,7 +1283,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_instagram_standalone::IasCreateContainerInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_instagram_standalone::handle_ias_create_container(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_instagram_standalone::handle_ias_create_container(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Publish an Instagram media container")]
@@ -1188,7 +1293,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_instagram_standalone::IasPublishContainerInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_instagram_standalone::handle_ias_publish_container(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_instagram_standalone::handle_ias_publish_container(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Poll Instagram container publish")]
@@ -1196,7 +1303,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_instagram_standalone::IasPollContainerInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_instagram_standalone::handle_ias_poll_container(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_instagram_standalone::handle_ias_poll_container(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     // ── Google Suite Tools ─────────────────────────────────────────
@@ -1207,7 +1316,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_google::YtSearchVideosInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_google::handle_goog_search_videos(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_google::handle_goog_search_videos(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get details of a specific YouTube")]
@@ -1215,7 +1326,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_google::YtGetVideoInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_google::handle_goog_get_video(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_google::handle_goog_get_video(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "List playlists for a YouTube channel")]
@@ -1223,7 +1336,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_google::YtListPlaylistsInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_google::handle_goog_get_playlists(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_google::handle_goog_get_playlists(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get items in a YouTube playlist")]
@@ -1231,7 +1346,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_google::YtGetPlaylistItemsInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_google::handle_goog_get_playlist_items(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_google::handle_goog_get_playlist_items(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get comments on a YouTube video")]
@@ -1239,7 +1356,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_google::YtGetCommentsInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_google::handle_goog_get_comments(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_google::handle_goog_get_comments(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get statistics for a YouTube channel")]
@@ -1247,7 +1366,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_google::YtGetChannelStatsInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_google::handle_goog_get_channel_stats(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_google::handle_goog_get_channel_stats(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get YouTube Analytics reports for a channel by date range.")]
@@ -1255,7 +1376,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_google::YtGetAnalyticsInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_google::handle_goog_get_analytics(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_google::handle_goog_get_analytics(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get subscriptions for a YouTube")]
@@ -1263,7 +1386,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_google::YtGetSubscriptionsInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_google::handle_goog_get_subscriptions(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_google::handle_goog_get_subscriptions(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Find YouTube creators by topic")]
@@ -1271,7 +1396,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_google::YtFindCreatorsInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_google::handle_goog_find_creators(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_google::handle_goog_find_creators(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Reply to a YouTube comment")]
@@ -1279,22 +1406,28 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_youtube::YtReplyCommentInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_youtube::handle_yt_reply_comment(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_youtube::handle_yt_reply_comment(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Upload and publish a video to YouTube immediately. Uses YouTube's resumable upload API. Pass video_url (from media_upload), title, description, and channel_id.")]
+    #[tool(
+        description = "Upload and publish a video to YouTube immediately. Uses YouTube's resumable upload API. Pass video_url (from media_upload), title, description, and channel_id."
+    )]
     pub async fn yt_upload_video(
         &self,
         params: Parameters<tools_youtube::YtUploadVideoInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_youtube::handle_yt_upload_video(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_youtube::handle_yt_upload_video(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get Gmail profile info")]
-    pub async fn goog_get_profile(
-        &self,
-    ) -> Result<Json<McpJsonValue>, String> {
-        tools_google::handle_goog_get_profile(&self.state, &()).await.map(|Json(v)| Json(McpJsonValue(v)))
+    pub async fn goog_get_profile(&self) -> Result<Json<McpJsonValue>, String> {
+        tools_google::handle_goog_get_profile(&self.state, &())
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "List Gmail messages with optional")]
@@ -1302,7 +1435,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_google::GmListMessagesInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_google::handle_goog_list_messages(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_google::handle_goog_list_messages(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get a single Gmail message by ID")]
@@ -1310,7 +1445,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_google::GmGetMessageInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_google::handle_goog_get_message(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_google::handle_goog_get_message(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Send an email via Gmail")]
@@ -1318,14 +1455,16 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_google::GmSendMessageInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_google::handle_goog_send_message(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_google::handle_goog_send_message(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "List Gmail labels")]
-    pub async fn goog_list_labels(
-        &self,
-    ) -> Result<Json<McpJsonValue>, String> {
-        tools_google::handle_goog_list_labels(&self.state, &()).await.map(|Json(v)| Json(McpJsonValue(v)))
+    pub async fn goog_list_labels(&self) -> Result<Json<McpJsonValue>, String> {
+        tools_google::handle_goog_list_labels(&self.state, &())
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get a Gmail thread by ID")]
@@ -1333,7 +1472,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_google::GmGetThreadInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_google::handle_goog_get_thread(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_google::handle_goog_get_thread(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Search Gmail messages with a query")]
@@ -1341,7 +1482,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_google::GmSearchMessagesInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_google::handle_goog_search_messages(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_google::handle_goog_search_messages(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "List Google calendars")]
@@ -1349,7 +1492,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_google::GcalListCalendarsInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_google::handle_goog_list_calendars(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_google::handle_goog_list_calendars(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "List calendar events")]
@@ -1357,7 +1502,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_google::GcalListEventsInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_google::handle_goog_list_events(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_google::handle_goog_list_events(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get a single calendar event")]
@@ -1365,7 +1512,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_google::GcalGetEventInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_google::handle_goog_get_event(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_google::handle_goog_get_event(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Create a new calendar event")]
@@ -1373,7 +1522,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_google::GcalCreateEventInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_google::handle_goog_create_event(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_google::handle_goog_create_event(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Update a calendar event")]
@@ -1381,7 +1532,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_google::GcalUpdateEventInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_google::handle_goog_update_event(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_google::handle_goog_update_event(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Delete a calendar event")]
@@ -1389,7 +1542,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_google::GcalDeleteEventInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_google::handle_goog_delete_event(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_google::handle_goog_delete_event(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "List files in Google Drive")]
@@ -1397,7 +1552,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_google::DrListFilesInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_google::handle_goog_list_files(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_google::handle_goog_list_files(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get a file from Google Drive by ID")]
@@ -1405,7 +1562,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_google::DrGetFileInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_google::handle_goog_get_file(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_google::handle_goog_get_file(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Search files in Google Drive")]
@@ -1413,7 +1572,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_google::DrSearchFilesInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_google::handle_goog_search_files(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_google::handle_goog_search_files(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "List folders in Google Drive")]
@@ -1421,7 +1582,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_google::DrListFoldersInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_google::handle_goog_list_folders(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_google::handle_goog_list_folders(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get file metadata from Google Drive")]
@@ -1429,7 +1592,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_google::DrGetFileMetadataInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_google::handle_goog_get_file_metadata(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_google::handle_goog_get_file_metadata(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Export a Google Drive file to a specific MIME type.")]
@@ -1437,7 +1602,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_google::DrExportFileInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_google::handle_goog_export_file(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_google::handle_goog_export_file(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     // ── Pinterest Tools ──────────────────────────────────────────
@@ -1447,7 +1614,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_pinterest::PiGetUserAccountInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_pinterest::handle_pi_get_user_account(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_pinterest::handle_pi_get_user_account(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get Pinterest board details")]
@@ -1455,7 +1624,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_pinterest::PiGetBoardInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_pinterest::handle_pi_get_board(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_pinterest::handle_pi_get_board(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get pins on a Pinterest board")]
@@ -1463,7 +1634,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_pinterest::PiGetBoardPinsInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_pinterest::handle_pi_get_board_pins(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_pinterest::handle_pi_get_board_pins(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get a single Pinterest pin by pin ID.")]
@@ -1471,7 +1644,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_pinterest::PiGetPinInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_pinterest::handle_pi_get_pin(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_pinterest::handle_pi_get_pin(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get analytics for a Pinterest board")]
@@ -1479,7 +1654,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_pinterest::PiGetBoardAnalyticsInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_pinterest::handle_pi_get_board_analytics(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_pinterest::handle_pi_get_board_analytics(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get analytics for a Pinterest pin by pin ID.")]
@@ -1487,7 +1664,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_pinterest::PiGetPinAnalyticsInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_pinterest::handle_pi_get_pin_analytics(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_pinterest::handle_pi_get_pin_analytics(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Search Pinterest pins by keyword")]
@@ -1495,15 +1674,21 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_pinterest::PiSearchPinsInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_pinterest::handle_pi_search_pins(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_pinterest::handle_pi_search_pins(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Create and publish a new Pinterest pin immediately. Supports image and video pins. Pass board_id, title, content, and media_urls.")]
+    #[tool(
+        description = "Create and publish a new Pinterest pin immediately. Supports image and video pins. Pass board_id, title, content, and media_urls."
+    )]
     pub async fn pi_create_pin(
         &self,
         params: Parameters<tools_pinterest::PiCreatePinInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_pinterest::handle_pi_create_pin(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_pinterest::handle_pi_create_pin(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     // ── Discord Tools ───────────────────────────────────────────
@@ -1513,7 +1698,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_discord::DiGetChannelInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_discord::handle_di_get_channel(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_discord::handle_di_get_channel(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get messages from a Discord channel")]
@@ -1521,7 +1708,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_discord::DiGetMessagesInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_discord::handle_di_get_messages(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_discord::handle_di_get_messages(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get Discord guild/server info")]
@@ -1529,7 +1718,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_discord::DiGetGuildInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_discord::handle_di_get_guild(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_discord::handle_di_get_guild(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get thread members in a Discord")]
@@ -1537,7 +1728,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_discord::DiGetThreadMembersInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_discord::handle_di_get_thread_members(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_discord::handle_di_get_thread_members(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Send a message to a Discord channel")]
@@ -1545,7 +1738,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_discord::DiSendMessageInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_discord::handle_di_send_message(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_discord::handle_di_send_message(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Delete a message from a Discord")]
@@ -1553,7 +1748,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_discord::DiDeleteMessageInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_discord::handle_di_delete_message(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_discord::handle_di_delete_message(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Add a reaction (emoji) to a Discord")]
@@ -1561,7 +1758,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_discord::DiAddReactionInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_discord::handle_di_add_reaction(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_discord::handle_di_add_reaction(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "List all channels in a Discord")]
@@ -1569,7 +1768,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_discord::DiGetGuildChannelsInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_discord::handle_di_get_guild_channels(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_discord::handle_di_get_guild_channels(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get detailed info about a Discord")]
@@ -1577,7 +1778,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_discord::DiGetServerInfoInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_discord::handle_di_get_server_info(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_discord::handle_di_get_server_info(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Create a forum post in a Discord")]
@@ -1585,7 +1788,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_discord::DiCreateForumPostInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_discord::handle_di_create_forum_post(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_discord::handle_di_create_forum_post(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     // ── WhatsApp Tools ───────────────────────────────────────────
@@ -1639,9 +1844,7 @@ impl SocialForgeMcpServer {
     }
 
     #[tool(description = "List all WhatsApp groups the user")]
-    pub async fn wa_list_groups(
-        &self,
-    ) -> Result<Json<tools_whatsapp::WaListGroupsOutput>, String> {
+    pub async fn wa_list_groups(&self) -> Result<Json<tools_whatsapp::WaListGroupsOutput>, String> {
         tools_whatsapp::handle_wa_list_groups(&self.state).await
     }
 
@@ -1668,7 +1871,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_wordpress::WpCreatePostInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_wordpress::handle_wp_create_post(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_wordpress::handle_wp_create_post(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "List WordPress posts with optional")]
@@ -1676,7 +1881,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_wordpress::WpListPostsInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_wordpress::handle_wp_list_posts(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_wordpress::handle_wp_list_posts(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get a single WordPress post by ID")]
@@ -1684,7 +1891,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_wordpress::WpGetPostInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_wordpress::handle_wp_get_post(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_wordpress::handle_wp_get_post(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "List categories for a WordPress site")]
@@ -1692,7 +1901,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_wordpress::WpListCategoriesInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_wordpress::handle_wp_list_categories(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_wordpress::handle_wp_list_categories(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     // ── Threads Tools ─────────────────────────────────────────────────
@@ -1702,7 +1913,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_threads::ThreadsGetProfileInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_threads::handle_th_get_profile(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_threads::handle_th_get_profile(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "List Threads threads (posts) for your")]
@@ -1710,7 +1923,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_threads::ThreadsGetThreadsInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_threads::handle_th_get_threads(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_threads::handle_th_get_threads(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get details of a specific Threads")]
@@ -1718,7 +1933,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_threads::ThreadsGetThreadDetailInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_threads::handle_th_get_thread_detail(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_threads::handle_th_get_thread_detail(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get replies on a Threads thread")]
@@ -1726,7 +1943,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_threads::ThreadsGetRepliesInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_threads::handle_th_get_replies(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_threads::handle_th_get_replies(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Reply to a Threads thread")]
@@ -1734,7 +1953,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_threads::ThreadsReplyToThreadInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_threads::handle_th_reply_to_thread(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_threads::handle_th_reply_to_thread(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Create and publish a new Threads post")]
@@ -1742,7 +1963,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_threads::ThreadsCreateThreadInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_threads::handle_th_create_thread(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_threads::handle_th_create_thread(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Delete a Threads thread (post)")]
@@ -1750,7 +1973,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_threads::ThreadsDeleteThreadInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_threads::handle_th_delete_thread(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_threads::handle_th_delete_thread(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get insights/analytics for your")]
@@ -1758,7 +1983,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_threads::ThreadsGetInsightsInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_threads::handle_th_get_insights(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_threads::handle_th_get_insights(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Poll publish status of a Threads")]
@@ -1766,7 +1993,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_threads::ThreadsPollStatusInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_threads::handle_th_poll_publish_status(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_threads::handle_th_poll_publish_status(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     // ── LinkedIn Personal Tools ─────────────────────────────────
@@ -1776,7 +2005,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_linkedin::LiGetProfileInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_linkedin::handle_li_get_profile(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_linkedin::handle_li_get_profile(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "List LinkedIn posts for an author URN")]
@@ -1784,7 +2015,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_linkedin::LiGetPostsInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_linkedin::handle_li_get_posts(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_linkedin::handle_li_get_posts(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get details of a specific LinkedIn")]
@@ -1792,7 +2025,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_linkedin::LiGetPostDetailInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_linkedin::handle_li_get_post_detail(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_linkedin::handle_li_get_post_detail(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get comments on a LinkedIn post by post URN.")]
@@ -1800,7 +2035,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_linkedin::LiGetCommentsInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_linkedin::handle_li_get_comments(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_linkedin::handle_li_get_comments(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Create a comment on a LinkedIn post.")]
@@ -1808,7 +2045,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_linkedin::LiCreateCommentInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_linkedin::handle_li_create_comment(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_linkedin::handle_li_create_comment(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Create a new LinkedIn post")]
@@ -1816,7 +2055,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_linkedin::LiCreatePostInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_linkedin::handle_li_create_post(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_linkedin::handle_li_create_post(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Delete a LinkedIn post by its URN")]
@@ -1824,7 +2065,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_linkedin::LiDeletePostInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_linkedin::handle_li_delete_post(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_linkedin::handle_li_delete_post(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get reactions (likes) on a LinkedIn")]
@@ -1832,7 +2075,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_linkedin::LiGetReactionsInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_linkedin::handle_li_get_reactions(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_linkedin::handle_li_get_reactions(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get shares (reposts) of a LinkedIn")]
@@ -1840,7 +2085,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_linkedin::LiGetSharesInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_linkedin::handle_li_get_shares(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_linkedin::handle_li_get_shares(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get analytics for your LinkedIn")]
@@ -1848,7 +2095,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_linkedin::LiGetAnalyticsInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_linkedin::handle_li_get_analytics(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_linkedin::handle_li_get_analytics(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get analytics for a specific LinkedIn")]
@@ -1856,7 +2105,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_linkedin::LiGetPostAnalyticsInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_linkedin::handle_li_get_post_analytics(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_linkedin::handle_li_get_post_analytics(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Reply to a LinkedIn comment")]
@@ -1864,7 +2115,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_linkedin::LiReplyCommentInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_linkedin::handle_li_reply_comment(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_linkedin::handle_li_reply_comment(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Send a direct message on LinkedIn")]
@@ -1872,7 +2125,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_linkedin::LiSendDmInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_linkedin::handle_li_send_dm(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_linkedin::handle_li_send_dm(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "List LinkedIn message conversations")]
@@ -1880,7 +2135,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_linkedin::LiListConversationsInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_linkedin::handle_li_list_conversations(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_linkedin::handle_li_list_conversations(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get messages in a LinkedIn conversation by conversation ID.")]
@@ -1888,7 +2145,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_linkedin::LiGetMessagesInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_linkedin::handle_li_get_messages(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_linkedin::handle_li_get_messages(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     // ── LinkedIn Page Tools ────────────────────────────────────
@@ -1898,7 +2157,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_linkedin_page::LipListPagesInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_linkedin_page::handle_lip_list_pages(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_linkedin_page::handle_lip_list_pages(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get details of a LinkedIn company")]
@@ -1906,7 +2167,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_linkedin_page::LipGetPageInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_linkedin_page::handle_lip_get_page(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_linkedin_page::handle_lip_get_page(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get posts from a LinkedIn company")]
@@ -1914,7 +2177,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_linkedin_page::LipGetPagePostsInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_linkedin_page::handle_lip_get_page_posts(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_linkedin_page::handle_lip_get_page_posts(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Create a comment on a LinkedIn post")]
@@ -1922,7 +2187,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_linkedin_page::LipCreateCommentInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_linkedin_page::handle_lip_create_comment(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_linkedin_page::handle_lip_create_comment(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Create a post as a LinkedIn Page")]
@@ -1962,7 +2229,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_linkedin_page::LipDeletePostInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_linkedin_page::handle_lip_delete_post(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_linkedin_page::handle_lip_delete_post(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get reactions (likes) on a LinkedIn")]
@@ -1970,7 +2239,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_linkedin_page::LipGetReactionsInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_linkedin_page::handle_lip_get_reactions(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_linkedin_page::handle_lip_get_reactions(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get shares (reposts) of a LinkedIn")]
@@ -1978,7 +2249,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_linkedin_page::LipGetSharesInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_linkedin_page::handle_lip_get_shares(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_linkedin_page::handle_lip_get_shares(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     // ── Telegram Bot Tools ───────────────────────────────────────
@@ -2127,7 +2400,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_skool::SkPublishInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_skool::handle_sk_publish(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_skool::handle_sk_publish(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get Skool community details")]
@@ -2135,7 +2410,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_skool::SkGetInfoInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_skool::handle_sk_get_info(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_skool::handle_sk_get_info(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "List posts in a Skool community with the given group ID.")]
@@ -2143,7 +2420,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_skool::SkListPostsInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_skool::handle_sk_list_posts(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_skool::handle_sk_list_posts(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get a single Skool post by community")]
@@ -2151,7 +2430,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_skool::SkGetPostInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_skool::handle_sk_get_post(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_skool::handle_sk_get_post(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Create a comment on a Skool post")]
@@ -2159,7 +2440,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_skool::SkCreateCommentInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_skool::handle_sk_create_comment(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_skool::handle_sk_create_comment(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     // ── Slack Tools ─────────────────────────────────────────────────
@@ -2169,7 +2452,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_slack::SlSendMessageInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_slack::handle_sl_send_message(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_slack::handle_sl_send_message(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "List all public and private channels")]
@@ -2177,7 +2462,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_slack::SlListChannelsInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_slack::handle_sl_list_channels(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_slack::handle_sl_list_channels(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get message history for a Slack")]
@@ -2185,7 +2472,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_slack::SlChannelHistoryInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_slack::handle_sl_channel_history(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_slack::handle_sl_channel_history(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "List all users in the Slack workspace")]
@@ -2193,7 +2482,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_slack::SlListUsersInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_slack::handle_sl_list_users(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_slack::handle_sl_list_users(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     // ── Bluesky Tools ─────────────────────────────────────────────────
@@ -2203,7 +2494,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_bluesky::BsProfileInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_bluesky::handle_bs_profile(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_bluesky::handle_bs_profile(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get the Bluesky home timeline")]
@@ -2211,7 +2504,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_bluesky::BsTimelineInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_bluesky::handle_bs_timeline(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_bluesky::handle_bs_timeline(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Create a new Bluesky post (text with optional media).")]
@@ -2219,7 +2514,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_bluesky::BsCreatePostInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_bluesky::handle_bs_create_post(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_bluesky::handle_bs_create_post(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Search Bluesky for posts and users")]
@@ -2227,7 +2524,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_bluesky::BsSearchInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_bluesky::handle_bs_search(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_bluesky::handle_bs_search(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get the Bluesky feed (popular/recent")]
@@ -2235,7 +2534,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_bluesky::BsFeedInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_bluesky::handle_bs_feed(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_bluesky::handle_bs_feed(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Reply to a Bluesky post")]
@@ -2243,15 +2544,21 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_bluesky::BsReplyInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_bluesky::handle_bs_reply(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_bluesky::handle_bs_reply(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Get account-level analytics for a Bluesky user (followers, following, posts, engagement)")]
+    #[tool(
+        description = "Get account-level analytics for a Bluesky user (followers, following, posts, engagement)"
+    )]
     pub async fn bs_get_analytics(
         &self,
         params: Parameters<tools_bluesky::BsGetAnalyticsInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_bluesky::handle_bs_get_analytics(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_bluesky::handle_bs_get_analytics(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     // ── TikTok Tools ─────────────────────────────────────────────────
@@ -2261,7 +2568,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_tiktok::TtProfileInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_tiktok::handle_tt_profile(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_tiktok::handle_tt_profile(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Create and publish a TikTok video")]
@@ -2269,7 +2578,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_tiktok::TtCreatePostInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_tiktok::handle_tt_create_post(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_tiktok::handle_tt_create_post(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "List TikTok videos for the connected account.")]
@@ -2277,15 +2588,21 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_tiktok::TtListVideosInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_tiktok::handle_tt_list_videos(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_tiktok::handle_tt_list_videos(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Get account-level analytics for TikTok (followers, likes, video engagement)")]
+    #[tool(
+        description = "Get account-level analytics for TikTok (followers, likes, video engagement)"
+    )]
     pub async fn tt_get_analytics(
         &self,
         params: Parameters<tools_tiktok::TtGetAnalyticsInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_tiktok::handle_tt_get_analytics(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_tiktok::handle_tt_get_analytics(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     // ── Mastodon Tools ───────────────────────────────────────────────
@@ -2295,7 +2612,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_mastodon::MsCreatePostInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_mastodon::handle_ms_create_post(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_mastodon::handle_ms_create_post(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get Mastodon timeline feed")]
@@ -2303,7 +2622,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_mastodon::MsGetTimelineInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_mastodon::handle_ms_get_timeline(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_mastodon::handle_ms_get_timeline(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get a single Mastodon post/status by status ID.")]
@@ -2311,7 +2632,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_mastodon::MsGetPostInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_mastodon::handle_ms_get_post(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_mastodon::handle_ms_get_post(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Search Mastodon for posts/users")]
@@ -2319,7 +2642,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_mastodon::MsSearchInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_mastodon::handle_ms_search(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_mastodon::handle_ms_search(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Reply to a Mastodon status")]
@@ -2327,15 +2652,21 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_mastodon::MsReplyInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_mastodon::handle_ms_reply(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_mastodon::handle_ms_reply(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Get account-level analytics for Mastodon (followers, following, statuses, engagement)")]
+    #[tool(
+        description = "Get account-level analytics for Mastodon (followers, following, statuses, engagement)"
+    )]
     pub async fn ms_get_analytics(
         &self,
         params: Parameters<tools_mastodon::MsGetAnalyticsInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_mastodon::handle_ms_get_analytics(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_mastodon::handle_ms_get_analytics(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     // ── Medium Tools ─────────────────────────────────────────────────
@@ -2345,7 +2676,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_medium::MdCreatePostInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_medium::handle_md_create_post(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_medium::handle_md_create_post(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "List Medium posts for the connected account.")]
@@ -2353,7 +2686,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_medium::MdListPostsInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_medium::handle_md_list_posts(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_medium::handle_md_list_posts(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get a single Medium post by post ID")]
@@ -2361,7 +2696,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_medium::MdGetPostInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_medium::handle_md_get_post(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_medium::handle_md_get_post(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     // ── Hashnode Tools ────────────────────────────────────────────────
@@ -2371,7 +2708,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_hashnode::HnCreatePostInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_hashnode::handle_hn_create_post(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_hashnode::handle_hn_create_post(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "List Hashnode posts for a publication by publication ID.")]
@@ -2379,7 +2718,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_hashnode::HnListPostsInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_hashnode::handle_hn_list_posts(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_hashnode::handle_hn_list_posts(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get a single Hashnode post by post ID")]
@@ -2387,7 +2728,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_hashnode::HnGetPostInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_hashnode::handle_hn_get_post(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_hashnode::handle_hn_get_post(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     // ── Dev.to Tools ─────────────────────────────────────────────────
@@ -2397,7 +2740,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_devto::DvCreatePostInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_devto::handle_dv_create_post(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_devto::handle_dv_create_post(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "List Dev.to articles for the connected account.")]
@@ -2405,7 +2750,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_devto::DvListPostsInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_devto::handle_dv_list_posts(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_devto::handle_dv_list_posts(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get a single Dev.to article by article ID.")]
@@ -2413,7 +2760,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_devto::DvGetPostInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_devto::handle_dv_get_post(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_devto::handle_dv_get_post(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     // ── Analytics Tools ──────────────────────────────────────────────
@@ -2423,7 +2772,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_analytics::AnalyticsGetInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_analytics::handle_analytics_get(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_analytics::handle_analytics_get(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get analytics data for a specific post")]
@@ -2431,7 +2782,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_analytics::AnalyticsPostInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_analytics::handle_analytics_get_post(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_analytics::handle_analytics_get_post(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     // ── Feed Tools ──────────────────────────────────────
@@ -2459,7 +2812,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_tags::TagCreateInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_tags::handle_tag_create(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_tags::handle_tag_create(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "List all tags for the authenticated")]
@@ -2467,7 +2822,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_tags::TagListInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_tags::handle_tag_list(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_tags::handle_tag_list(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get a single tag by ID")]
@@ -2475,7 +2832,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_tags::TagGetInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_tags::handle_tag_get(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_tags::handle_tag_get(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Update an existing tag")]
@@ -2483,7 +2842,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_tags::TagUpdateInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_tags::handle_tag_update(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_tags::handle_tag_update(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Delete a tag")]
@@ -2491,7 +2852,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_tags::TagDeleteInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_tags::handle_tag_delete(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_tags::handle_tag_delete(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     // ── Webhooks Tools ──────────────────────────────────────────────
@@ -2501,7 +2864,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_webhooks::WhCreateInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_webhooks::handle_wh_create(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_webhooks::handle_wh_create(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "List all outgoing webhooks")]
@@ -2509,7 +2874,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_webhooks::WhListInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_webhooks::handle_wh_list(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_webhooks::handle_wh_list(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get a single webhook by ID")]
@@ -2517,7 +2884,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_webhooks::WhGetInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_webhooks::handle_wh_get(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_webhooks::handle_wh_get(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Update an existing webhook")]
@@ -2525,7 +2894,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_webhooks::WhUpdateInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_webhooks::handle_wh_update(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_webhooks::handle_wh_update(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Delete a webhook")]
@@ -2533,7 +2904,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_webhooks::WhDeleteInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_webhooks::handle_wh_delete(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_webhooks::handle_wh_delete(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Test a webhook by sending a sample")]
@@ -2541,7 +2914,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_webhooks::WhTestInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_webhooks::handle_wh_test(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_webhooks::handle_wh_test(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     // ── Notification Tools ─────────────────────────────────────
@@ -2551,7 +2926,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_notifications::NotifListInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_notifications::handle_notif_list(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_notifications::handle_notif_list(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Mark a notification as read by its ID")]
@@ -2559,7 +2936,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_notifications::NotifMarkReadInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_notifications::handle_notif_mark_read(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_notifications::handle_notif_mark_read(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Mark all notifications as read")]
@@ -2567,7 +2946,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_notifications::NotifMarkAllReadInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_notifications::handle_notif_mark_all_read(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_notifications::handle_notif_mark_all_read(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Create a notification (for testing or manual alerts).")]
@@ -2575,16 +2956,18 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_notifications::NotifCreateInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_notifications::handle_notif_create(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_notifications::handle_notif_create(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     // ── GitHub Tools ─────────────────────────────────────────────
 
     #[tool(description = "Get the currently authenticated")]
-    pub async fn gh_get_authenticated_user(
-        &self,
-    ) -> Result<Json<McpJsonValue>, String> {
-        tools_github::handle_gh_get_authenticated_user(&self.state, &()).await.map(|Json(v)| Json(McpJsonValue(v)))
+    pub async fn gh_get_authenticated_user(&self) -> Result<Json<McpJsonValue>, String> {
+        tools_github::handle_gh_get_authenticated_user(&self.state, &())
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get a GitHub user by login username")]
@@ -2592,7 +2975,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_github::GhGetUserInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_github::handle_gh_get_user(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_github::handle_gh_get_user(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "List repositories for a GitHub user")]
@@ -2600,7 +2985,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_github::GhListReposInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_github::handle_gh_list_repos(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_github::handle_gh_list_repos(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get details of a specific GitHub")]
@@ -2608,7 +2995,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_github::GhGetRepoInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_github::handle_gh_get_repo(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_github::handle_gh_get_repo(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "List issues for a GitHub repository")]
@@ -2616,7 +3005,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_github::GhListIssuesInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_github::handle_gh_list_issues(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_github::handle_gh_list_issues(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get a specific GitHub issue")]
@@ -2624,7 +3015,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_github::GhGetIssueInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_github::handle_gh_get_issue(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_github::handle_gh_get_issue(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Create a new issue in a GitHub")]
@@ -2632,7 +3025,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_github::GhCreateIssueInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_github::handle_gh_create_issue(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_github::handle_gh_create_issue(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "List pull requests for a GitHub")]
@@ -2640,7 +3035,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_github::GhListPullRequestsInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_github::handle_gh_list_pull_requests(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_github::handle_gh_list_pull_requests(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get a specific GitHub pull request")]
@@ -2648,7 +3045,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_github::GhGetPullRequestInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_github::handle_gh_get_pull_request(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_github::handle_gh_get_pull_request(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "List commits for a GitHub repository")]
@@ -2656,7 +3055,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_github::GhListCommitsInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_github::handle_gh_list_commits(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_github::handle_gh_list_commits(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "List branches for a GitHub repository")]
@@ -2664,7 +3065,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_github::GhListBranchesInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_github::handle_gh_list_branches(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_github::handle_gh_list_branches(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "List releases for a GitHub repository")]
@@ -2672,7 +3075,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_github::GhListReleasesInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_github::handle_gh_list_releases(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_github::handle_gh_list_releases(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Search GitHub repositories by query")]
@@ -2680,7 +3085,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_github::GhSearchReposInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_github::handle_gh_search_repos(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_github::handle_gh_search_repos(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Search code on GitHub by query")]
@@ -2688,7 +3095,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_github::GhSearchCodeInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_github::handle_gh_search_code(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_github::handle_gh_search_code(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "List contributors for a GitHub")]
@@ -2696,7 +3105,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_github::GhListContributorsInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_github::handle_gh_list_contributors(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_github::handle_gh_list_contributors(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Get file or directory contents from a GitHub repository by path.")]
@@ -2704,7 +3115,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_github::GhGetRepoContentInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_github::handle_gh_get_repo_content(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_github::handle_gh_get_repo_content(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Close a GitHub issue")]
@@ -2712,7 +3125,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_github::GhCloseIssueInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_github::handle_gh_close_issue(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_github::handle_gh_close_issue(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "List repositories for the authenticated GitHub user.")]
@@ -2720,41 +3135,59 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_github::GhListMyReposInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_github::handle_gh_list_my_repos(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_github::handle_gh_list_my_repos(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     // ── Admin/Parity Tools (v9 MCP parity wrappers) ────────────────
 
-    #[tool(description = "Set up a recurring/evergreen post. The scheduler creates a new queued copy every interval_days days until end_date. Wraps POST /api/posts/{id}/repeat.")]
+    #[tool(
+        description = "Set up a recurring/evergreen post. The scheduler creates a new queued copy every interval_days days until end_date. Wraps POST /api/posts/{id}/repeat."
+    )]
     pub async fn posts_repeat(
         &self,
         params: Parameters<tools_admin::PostsRepeatInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_admin::handle_posts_repeat(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_admin::handle_posts_repeat(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Attach tags to a post. Replaces any existing tags. Wraps PUT /api/posts/{id}/tags.")]
+    #[tool(
+        description = "Attach tags to a post. Replaces any existing tags. Wraps PUT /api/posts/{id}/tags."
+    )]
     pub async fn posts_set_tags(
         &self,
         params: Parameters<tools_admin::PostsSetTagsInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_admin::handle_posts_set_tags(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_admin::handle_posts_set_tags(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Delete a media file (DB row + file on disk). Wraps DELETE /api/media/{id}.")]
+    #[tool(
+        description = "Delete a media file (DB row + file on disk). Wraps DELETE /api/media/{id}."
+    )]
     pub async fn media_delete(
         &self,
         params: Parameters<tools_admin::MediaDeleteInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_admin::handle_media_delete(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_admin::handle_media_delete(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Manually refresh the OAuth access token for an integration. Wraps POST /api/integrations/{id}/refresh.")]
+    #[tool(
+        description = "Manually refresh the OAuth access token for an integration. Wraps POST /api/integrations/{id}/refresh."
+    )]
     pub async fn integrations_refresh(
         &self,
         params: Parameters<tools_admin::IntegrationsRefreshInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_admin::handle_integrations_refresh(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_admin::handle_integrations_refresh(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "List all per-platform signatures. Wraps GET /api/signatures.")]
@@ -2762,7 +3195,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_admin::SignatureListInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_admin::handle_signatures_list(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_admin::handle_signatures_list(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Create a new per-platform signature. Wraps POST /api/signatures.")]
@@ -2770,7 +3205,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_admin::SignatureCreateInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_admin::handle_signatures_create(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_admin::handle_signatures_create(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Update an existing signature. Wraps PUT /api/signatures/{id}.")]
@@ -2778,7 +3215,9 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_admin::SignatureUpdateInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_admin::handle_signatures_update(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_admin::handle_signatures_update(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     #[tool(description = "Delete a signature. Wraps DELETE /api/signatures/{id}.")]
@@ -2786,31 +3225,47 @@ impl SocialForgeMcpServer {
         &self,
         params: Parameters<tools_admin::SignatureDeleteInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_admin::handle_signatures_delete(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_admin::handle_signatures_delete(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Get aggregate analytics summary: total posts, published/failed/draft/queued counts. Wraps GET /api/analytics/summary.")]
+    #[tool(
+        description = "Get aggregate analytics summary: total posts, published/failed/draft/queued counts. Wraps GET /api/analytics/summary."
+    )]
     pub async fn analytics_summary(
         &self,
         params: Parameters<tools_admin::AnalyticsSummaryInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_admin::handle_analytics_summary(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_admin::handle_analytics_summary(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Get feed-level engagement analytics: total likes/comments/shares/impressions across all imported feed posts. Wraps GET /api/feed/analytics.")]
+    #[tool(
+        description = "Get feed-level engagement analytics: total likes/comments/shares/impressions across all imported feed posts. Wraps GET /api/feed/analytics."
+    )]
     pub async fn feed_analytics(
         &self,
         params: Parameters<tools_admin::FeedAnalyticsInput>,
     ) -> Result<Json<McpJsonValue>, String> {
-        tools_admin::handle_feed_analytics(&self.state, &params.0).await.map(|Json(v)| Json(McpJsonValue(v)))
+        tools_admin::handle_feed_analytics(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
-
-
 }
 
 // ══════════════════════════════════════════════════════════════
 // RUNNER
 // ══════════════════════════════════════════════════════════════
+
+/// Crate-visible accessor for the (privately generated) tool router —
+/// `mcp-call` (§5.3) dispatches tools in-process through it.
+impl SocialForgeMcpServer {
+    pub(crate) fn router() -> rmcp::handler::server::router::tool::ToolRouter<Self> {
+        Self::tool_router()
+    }
+}
 
 /// Start the MCP server on stdio (for AI clients that spawn the binary)
 pub async fn run_mcp_stdio(state: AppState) -> anyhow::Result<()> {
@@ -2820,4 +3275,3 @@ pub async fn run_mcp_stdio(state: AppState) -> anyhow::Result<()> {
     service.waiting().await?;
     Ok(())
 }
-

@@ -571,15 +571,12 @@ impl SocialProvider for TikTokProvider {
 
         let publish_id = init_json["data"]["publish_id"]
             .as_str()
-            .ok_or_else(|| {
-                ProviderError::Api("TikTok init returned no publish_id".into())
-            })?
+            .ok_or_else(|| ProviderError::Api("TikTok init returned no publish_id".into()))?
             .to_string();
 
         // `publish` is the immediate path: poll the fetch endpoint until the
         // video is actually live (bounded) — see await_publish_status.
-        self.await_publish_status(access_token, &publish_id)
-            .await?;
+        self.await_publish_status(access_token, &publish_id).await?;
 
         Ok(PublishResult {
             platform_post_url: None, // resolved after transcoding; video list owns URLs
@@ -653,9 +650,7 @@ impl SocialProvider for TikTokProvider {
 
         let publish_id = init_json["data"]["publish_id"]
             .as_str()
-            .ok_or_else(|| {
-                ProviderError::Api("TikTok init returned no publish_id".into())
-            })?
+            .ok_or_else(|| ProviderError::Api("TikTok init returned no publish_id".into()))?
             .to_string();
 
         Ok(PublishResult {

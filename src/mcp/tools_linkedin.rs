@@ -1,7 +1,7 @@
 // ─── MCP LinkedIn Personal Tools ─────────────────────────────────
 // LinkedIn personal profile tools via LinkedIn API v2.
 
-use rmcp::{Json, schemars::JsonSchema};
+use rmcp::{schemars::JsonSchema, Json};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -212,9 +212,13 @@ pub async fn handle_li_delete_post(
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_linkedin_token(state, user_id, &input.li_id).await?;
     let provider = create_provider(state);
-    provider.delete_post(&token, &input.post_urn).await
+    provider
+        .delete_post(&token, &input.post_urn)
+        .await
         .map_err(|e| format!("LinkedIn delete failed: {e}"))?;
-    Ok(Json(serde_json::json!({"deleted": true, "post_urn": input.post_urn})))
+    Ok(Json(
+        serde_json::json!({"deleted": true, "post_urn": input.post_urn}),
+    ))
 }
 
 // ─── LinkedIn Personal Get Reactions ────────────────────────────
@@ -233,7 +237,9 @@ pub async fn handle_li_get_reactions(
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_linkedin_token(state, user_id, &input.li_id).await?;
     let provider = create_provider(state);
-    let result = provider.get_reactions(&token, &input.post_urn).await
+    let result = provider
+        .get_reactions(&token, &input.post_urn)
+        .await
         .map_err(|e| format!("LinkedIn get reactions failed: {e}"))?;
     Ok(Json(serde_json::json!({ "data": result })))
 }
@@ -254,7 +260,9 @@ pub async fn handle_li_get_shares(
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_linkedin_token(state, user_id, &input.li_id).await?;
     let provider = create_provider(state);
-    let result = provider.get_shares(&token, &input.post_urn).await
+    let result = provider
+        .get_shares(&token, &input.post_urn)
+        .await
         .map_err(|e| format!("LinkedIn get shares failed: {e}"))?;
     Ok(Json(serde_json::json!({ "data": result })))
 }
@@ -274,7 +282,9 @@ pub async fn handle_li_get_analytics(
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_linkedin_token(state, user_id, &input.li_id).await?;
     let provider = create_provider(state);
-    let data = provider.analytics(&token, &input.li_id, 30).await
+    let data = provider
+        .analytics(&token, &input.li_id, 30)
+        .await
         .map_err(|e| format!("LinkedIn analytics failed: {e}"))?;
     Ok(Json(serde_json::json!({ "data": data })))
 }
@@ -295,7 +305,9 @@ pub async fn handle_li_get_post_analytics(
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_linkedin_token(state, user_id, &input.li_id).await?;
     let provider = create_provider(state);
-    let data = provider.post_analytics(&token, &input.post_urn).await
+    let data = provider
+        .post_analytics(&token, &input.post_urn)
+        .await
         .map_err(|e| format!("LinkedIn post analytics failed: {e}"))?;
     Ok(Json(serde_json::json!({ "data": data })))
 }
@@ -321,7 +333,9 @@ pub async fn handle_li_reply_comment(
         settings: serde_json::json!({}),
         ..Default::default()
     };
-    let result = provider.reply_to_comment(&token, &input.comment_id, &post).await
+    let result = provider
+        .reply_to_comment(&token, &input.comment_id, &post)
+        .await
         .map_err(|e| format!("LinkedIn reply comment failed: {e}"))?;
     Ok(Json(serde_json::json!({
         "data": {
@@ -352,7 +366,9 @@ pub async fn handle_li_send_dm(
         settings: serde_json::json!({}),
         ..Default::default()
     };
-    let result = provider.send_dm(&token, &input.recipient_urn, &post).await
+    let result = provider
+        .send_dm(&token, &input.recipient_urn, &post)
+        .await
         .map_err(|e| format!("LinkedIn send DM failed: {e}"))?;
     Ok(Json(serde_json::json!({
         "data": {
@@ -377,16 +393,21 @@ pub async fn handle_li_list_conversations(
     let token = find_linkedin_token(state, user_id, &input.li_id).await?;
     let provider = create_provider(state);
     let limit = input.limit.unwrap_or(20);
-    let conversations = provider.get_dm_conversations(&token, limit).await
+    let conversations = provider
+        .get_dm_conversations(&token, limit)
+        .await
         .map_err(|e| format!("LinkedIn list conversations failed: {e}"))?;
-    let conv_values: Vec<serde_json::Value> = conversations.into_iter().map(|c| {
-        serde_json::json!({
-            "id": c.id,
-            "participant": c.participant,
-            "last_message": c.last_message,
-            "last_message_at": c.last_message_at.map(|dt| dt.to_rfc3339()),
+    let conv_values: Vec<serde_json::Value> = conversations
+        .into_iter()
+        .map(|c| {
+            serde_json::json!({
+                "id": c.id,
+                "participant": c.participant,
+                "last_message": c.last_message,
+                "last_message_at": c.last_message_at.map(|dt| dt.to_rfc3339()),
+            })
         })
-    }).collect();
+        .collect();
     Ok(Json(serde_json::json!({ "data": conv_values })))
 }
 
@@ -406,15 +427,20 @@ pub async fn handle_li_get_messages(
     let token = find_linkedin_token(state, user_id, &input.li_id).await?;
     let provider = create_provider(state);
     let limit = input.limit.unwrap_or(20);
-    let messages = provider.get_dm_messages(&token, &input.conversation_id, limit).await
+    let messages = provider
+        .get_dm_messages(&token, &input.conversation_id, limit)
+        .await
         .map_err(|e| format!("LinkedIn get messages failed: {e}"))?;
-    let msg_values: Vec<serde_json::Value> = messages.into_iter().map(|m| {
-        serde_json::json!({
-            "id": m.id,
-            "sender": m.sender,
-            "content": m.content,
-            "created_at": m.created_at.to_rfc3339(),
+    let msg_values: Vec<serde_json::Value> = messages
+        .into_iter()
+        .map(|m| {
+            serde_json::json!({
+                "id": m.id,
+                "sender": m.sender,
+                "content": m.content,
+                "created_at": m.created_at.to_rfc3339(),
+            })
         })
-    }).collect();
+        .collect();
     Ok(Json(serde_json::json!({ "data": msg_values })))
 }

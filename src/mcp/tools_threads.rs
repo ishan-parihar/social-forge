@@ -1,7 +1,7 @@
 // ─── MCP Threads Tools ─────────────────────────────────────────
 // Meta Threads API v1.0 via graph.threads.net.
 
-use rmcp::{Json, schemars::JsonSchema};
+use rmcp::{schemars::JsonSchema, Json};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -193,9 +193,7 @@ pub async fn handle_th_create_thread(
                 .as_ref()
                 .map(|t| match t.to_lowercase().as_str() {
                     "video" | "mp4" => "video/mp4".to_string(),
-                    "image" | "jpg" | "jpeg" | "png" | "gif" | "webp" => {
-                        "image/jpeg".to_string()
-                    }
+                    "image" | "jpg" | "jpeg" | "png" | "gif" | "webp" => "image/jpeg".to_string(),
                     _ => "application/octet-stream".to_string(),
                 })
                 .unwrap_or_else(|| "application/octet-stream".to_string()),

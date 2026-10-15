@@ -1,4 +1,4 @@
-use rmcp::{Json, schemars::JsonSchema};
+use rmcp::{schemars::JsonSchema, Json};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -23,8 +23,7 @@ pub struct NotifMarkReadInput {
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
-pub struct NotifMarkAllReadInput {
-}
+pub struct NotifMarkAllReadInput {}
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct NotifCreateInput {

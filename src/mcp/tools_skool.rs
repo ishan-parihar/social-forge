@@ -2,7 +2,7 @@
 // Skool publish wrapper (Cookie auth, no read methods).
 // Uses Chrome extension to capture the skool.com session auth_token.
 
-use rmcp::{Json, schemars::JsonSchema};
+use rmcp::{schemars::JsonSchema, Json};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use uuid::Uuid;
@@ -18,6 +18,10 @@ pub struct SkPublishInput {
     pub title: String,
     pub content: String,
     pub label: Option<String>,
+    /// §5.4: which connected Skool account to use — integration UUID,
+    /// "skool:Name", or empty for the first connected account.
+    #[serde(default)]
+    pub integration: Option<String>,
 }
 
 // ── Helpers ──────────────────────────────────────────────────
@@ -33,8 +37,7 @@ async fn find_sk_token(state: &AppState, user_id: Uuid) -> Result<String, String
         .find(|i| i.provider_identifier == "skool")
         .map(|i| i.access_token)
         .ok_or_else(|| {
-            "No Skool integration found. Connect Skool first via integrations_connect."
-                .to_string()
+            "No Skool integration found. Connect Skool first via integrations_connect.".to_string()
         })
 }
 
@@ -52,7 +55,13 @@ pub async fn handle_sk_publish(
 ) -> Result<Json<Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     // §4.2: through the publish pipeline — posts row + idempotency + retries.
-    let integration = super::tools_posts::integration_for_provider(state, user_id, "skool").await?;
+    let integration = super::tools_posts::select_integration(
+        state,
+        user_id,
+        "skool",
+        input.integration.as_deref(),
+    )
+    .await?;
 
     let (_post_id, platform_id, url) = super::tools_posts::publish_now_via_pipeline(
         state,

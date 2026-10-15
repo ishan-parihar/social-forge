@@ -131,14 +131,13 @@ pub async fn update(
     Json(input): Json<TagUpdateRequest>,
 ) -> Result<Json<TagResponse>, AppError> {
     // First check tag exists and belongs to user
-    let _existing = sqlx::query_scalar::<_, Uuid>(
-        "SELECT id FROM tags WHERE id = ? AND user_id = ?",
-    )
-    .bind(id)
-    .bind(auth.user_id)
-    .fetch_optional(&state.db)
-    .await?
-    .ok_or_else(|| AppError::NotFound("Tag not found".into()))?;
+    let _existing =
+        sqlx::query_scalar::<_, Uuid>("SELECT id FROM tags WHERE id = ? AND user_id = ?")
+            .bind(id)
+            .bind(auth.user_id)
+            .fetch_optional(&state.db)
+            .await?
+            .ok_or_else(|| AppError::NotFound("Tag not found".into()))?;
 
     // Build dynamic update
     let name = input.name.as_deref();
@@ -168,13 +167,11 @@ pub async fn delete(
     auth: AuthenticatedUser,
     Path(id): Path<Uuid>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    let result = sqlx::query(
-        "DELETE FROM tags WHERE id = ? AND user_id = ?",
-    )
-    .bind(id)
-    .bind(auth.user_id)
-    .execute(&state.db)
-    .await?;
+    let result = sqlx::query("DELETE FROM tags WHERE id = ? AND user_id = ?")
+        .bind(id)
+        .bind(auth.user_id)
+        .execute(&state.db)
+        .await?;
 
     if result.rows_affected() == 0 {
         return Err(AppError::NotFound("Tag not found".into()));

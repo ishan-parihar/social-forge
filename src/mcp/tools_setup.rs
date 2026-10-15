@@ -5,7 +5,7 @@
 // - Import browser cookies programmatically
 // - Set configuration values
 
-use rmcp::{Json, schemars::JsonSchema};
+use rmcp::{schemars::JsonSchema, Json};
 use serde::{Deserialize, Serialize};
 
 use crate::api::AppState;
@@ -494,7 +494,8 @@ pub fn setup_guide(
 
     // Filter by provider if specified
     let guides = if let Some(ref requested) = input.provider {
-        all_guides.into_iter()
+        all_guides
+            .into_iter()
             .filter(|g| g.identifier == *requested)
             .collect()
     } else {
@@ -517,23 +518,19 @@ pub async fn setup_status(
         .is_ok();
 
     // User check
-    let user_exists = sqlx::query_scalar::<_, uuid::Uuid>(
-        "SELECT id FROM users LIMIT 1",
-    )
-    .fetch_optional(&state.db)
-    .await
-    .ok()
-    .flatten()
-    .is_some();
+    let user_exists = sqlx::query_scalar::<_, uuid::Uuid>("SELECT id FROM users LIMIT 1")
+        .fetch_optional(&state.db)
+        .await
+        .ok()
+        .flatten()
+        .is_some();
 
     // Connected providers
-    let user_id_opt = sqlx::query_scalar::<_, uuid::Uuid>(
-        "SELECT id FROM users LIMIT 1",
-    )
-    .fetch_optional(&state.db)
-    .await
-    .ok()
-    .flatten();
+    let user_id_opt = sqlx::query_scalar::<_, uuid::Uuid>("SELECT id FROM users LIMIT 1")
+        .fetch_optional(&state.db)
+        .await
+        .ok()
+        .flatten();
 
     let connected_providers: Vec<String> = if let Some(uid) = user_id_opt {
         crate::db::queries::list_integrations(&state.db, uid)
@@ -570,7 +567,9 @@ pub async fn setup_status(
             name: "LinkedIn".into(),
             env_key: "LINKEDIN_CLIENT_ID".into(),
             configured: state.config.linkedin_client_id.is_some(),
-            connected: connected_providers.iter().any(|p| p.starts_with("linkedin")),
+            connected: connected_providers
+                .iter()
+                .any(|p| p.starts_with("linkedin")),
         },
         EnvProviderStatus {
             name: "Facebook".into(),
@@ -634,13 +633,21 @@ pub async fn setup_status(
         next_actions.push("Register a user via the web UI or API (POST /api/auth/register)".into());
     }
     if !cookie_providers.x_browser_cookies && !connected_providers.contains(&"x".to_string()) {
-        next_actions.push("Log into x.com in your browser, then use the import_cookies tool for provider='x'".into());
+        next_actions.push(
+            "Log into x.com in your browser, then use the import_cookies tool for provider='x'"
+                .into(),
+        );
     }
-    if !cookie_providers.reddit_browser_cookies && !connected_providers.contains(&"reddit".to_string()) {
+    if !cookie_providers.reddit_browser_cookies
+        && !connected_providers.contains(&"reddit".to_string())
+    {
         next_actions.push("Log into reddit.com in your browser, then use the import_cookies tool for provider='reddit'".into());
     }
-    let unconfigured_oauth: Vec<&str> = env_providers.iter()
-        .filter(|p| !p.connected && matches!(p.name.as_str(), "LinkedIn" | "Facebook" | "Instagram"))
+    let unconfigured_oauth: Vec<&str> = env_providers
+        .iter()
+        .filter(|p| {
+            !p.connected && matches!(p.name.as_str(), "LinkedIn" | "Facebook" | "Instagram")
+        })
         .filter(|p| !p.configured)
         .map(|p| p.name.as_str())
         .collect();
@@ -750,8 +757,12 @@ pub async fn import_cookies(
                                         status: "error".into(),
                                         name: None,
                                         source: Some(cookies.source),
-                                        error: Some(format!("Cookie import succeeded but DB write failed: {e}")),
-                                        hint: Some("Check database connectivity and try again.".into()),
+                                        error: Some(format!(
+                                            "Cookie import succeeded but DB write failed: {e}"
+                                        )),
+                                        hint: Some(
+                                            "Check database connectivity and try again.".into(),
+                                        ),
                                     }),
                                 }
                             }
@@ -783,7 +794,10 @@ pub async fn import_cookies(
                 let integrations = crate::db::queries::list_integrations(&state.db, user_id)
                     .await
                     .map_err(|e| e.to_string())?;
-                if integrations.iter().any(|i| i.provider_identifier == "reddit") {
+                if integrations
+                    .iter()
+                    .any(|i| i.provider_identifier == "reddit")
+                {
                     results.push(ImportResult {
                         provider: "reddit".into(),
                         status: "already_connected".into(),
@@ -811,8 +825,7 @@ pub async fn import_cookies(
                                     .as_str()
                                     .unwrap_or("Reddit User")
                                     .to_string();
-                                let id =
-                                    json["data"]["id"].as_str().unwrap_or("").to_string();
+                                let id = json["data"]["id"].as_str().unwrap_or("").to_string();
                                 let icon = json["data"]["icon_img"]
                                     .as_str()
                                     .and_then(|s| s.split('?').next())
@@ -847,8 +860,12 @@ pub async fn import_cookies(
                                         status: "error".into(),
                                         name: None,
                                         source: Some(cookies.source),
-                                        error: Some(format!("Cookie import succeeded but DB write failed: {e}")),
-                                        hint: Some("Check database connectivity and try again.".into()),
+                                        error: Some(format!(
+                                            "Cookie import succeeded but DB write failed: {e}"
+                                        )),
+                                        hint: Some(
+                                            "Check database connectivity and try again.".into(),
+                                        ),
                                     }),
                                 }
                             }
@@ -939,8 +956,7 @@ pub fn config_set(
         }
         to_write.push_str(&new_line);
         to_write.push('\n');
-        std::fs::write(&env_path, &to_write)
-            .map_err(|e| format!("Failed to write .env: {e}"))?;
+        std::fs::write(&env_path, &to_write).map_err(|e| format!("Failed to write .env: {e}"))?;
     }
 
     Ok(Json(serde_json::json!({
@@ -964,7 +980,9 @@ pub fn config_get(
             if let Ok(content) = std::fs::read_to_string(&env_path) {
                 for line in content.lines() {
                     let trimmed = line.trim();
-                    if trimmed.starts_with('#') || trimmed.is_empty() { continue; }
+                    if trimmed.starts_with('#') || trimmed.is_empty() {
+                        continue;
+                    }
                     if let Some((k, v)) = trimmed.split_once('=') {
                         if k.trim().to_uppercase() == key_upper {
                             return Some(v.to_string());

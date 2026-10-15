@@ -2,7 +2,7 @@
 // Bluesky AT Protocol tools (profile, timeline, create_post, search, feed).
 // Follows the same pattern as tools_youtube.rs.
 
-use rmcp::{Json, schemars::JsonSchema};
+use rmcp::{schemars::JsonSchema, Json};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use uuid::Uuid;
@@ -44,7 +44,10 @@ pub struct BsFeedInput {
 
 /// Find the Bluesky access token and DID (stored as `internal_id`).
 /// Returns `(access_token, did)`.
-async fn find_bs_token_and_did(state: &AppState, user_id: Uuid) -> Result<(String, String), String> {
+async fn find_bs_token_and_did(
+    state: &AppState,
+    user_id: Uuid,
+) -> Result<(String, String), String> {
     let integrations = crate::db::queries::list_integrations(&state.db, user_id)
         .await
         .map_err(|e| format!("DB error: {e}"))?;
@@ -192,10 +195,7 @@ pub async fn handle_bs_search(
     Ok(Json(json!({ "data": result })))
 }
 
-pub async fn handle_bs_feed(
-    state: &AppState,
-    input: &BsFeedInput,
-) -> Result<Json<Value>, String> {
+pub async fn handle_bs_feed(state: &AppState, input: &BsFeedInput) -> Result<Json<Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_bs_token(state, user_id).await?;
     let client = reqwest::Client::new();
@@ -327,16 +327,20 @@ pub async fn handle_bs_get_analytics(
 
     // Aggregate engagement from recent posts
     let feed = posts["feed"].as_array().cloned().unwrap_or_default();
-    let total_replies: i64 = feed.iter()
+    let total_replies: i64 = feed
+        .iter()
         .filter_map(|p| p["post"]["replyCount"].as_i64())
         .sum();
-    let total_reposts: i64 = feed.iter()
+    let total_reposts: i64 = feed
+        .iter()
         .filter_map(|p| p["post"]["repostCount"].as_i64())
         .sum();
-    let total_likes: i64 = feed.iter()
+    let total_likes: i64 = feed
+        .iter()
         .filter_map(|p| p["post"]["likeCount"].as_i64())
         .sum();
-    let total_quotes: i64 = feed.iter()
+    let total_quotes: i64 = feed
+        .iter()
         .filter_map(|p| p["post"]["quoteCount"].as_i64())
         .sum();
 

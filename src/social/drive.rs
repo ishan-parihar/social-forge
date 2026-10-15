@@ -15,8 +15,7 @@ pub struct DriveProvider {
 
 impl DriveProvider {
     pub fn new(config: &Config) -> Self {
-        let (client_id, client_secret) =
-            config.provider_credentials("youtube").unwrap_or_default();
+        let (client_id, client_secret) = config.provider_credentials("youtube").unwrap_or_default();
         Self {
             client_id,
             client_secret,
@@ -104,8 +103,7 @@ impl DriveProvider {
         query: &str,
         page_size: u32,
     ) -> Result<serde_json::Value, ProviderError> {
-        self.list_files(access_token, page_size, Some(query))
-            .await
+        self.list_files(access_token, page_size, Some(query)).await
     }
 
     /// List folders in Drive.
@@ -162,10 +160,7 @@ impl DriveProvider {
             return Err(ProviderError::Api(msg));
         }
         let bytes = resp.bytes().await?.to_vec();
-        let encoded = base64::Engine::encode(
-            &base64::engine::general_purpose::STANDARD,
-            &bytes,
-        );
+        let encoded = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &bytes);
         Ok(serde_json::json!({
             "file_id": file_id,
             "mime_type": mime_type,
@@ -217,12 +212,12 @@ impl SocialProvider for DriveProvider {
             ("access_type", "offline"),
             ("prompt", "consent"),
         ];
-        let url = url::Url::parse_with_params(
-            "https://accounts.google.com/o/oauth2/v2/auth",
-            &params,
-        )
-        .map_err(|e| ProviderError::Auth(format!("URL parse: {e}")))?;
-        Ok(AuthUrlResponse { url: url.to_string() })
+        let url =
+            url::Url::parse_with_params("https://accounts.google.com/o/oauth2/v2/auth", &params)
+                .map_err(|e| ProviderError::Auth(format!("URL parse: {e}")))?;
+        Ok(AuthUrlResponse {
+            url: url.to_string(),
+        })
     }
 
     async fn exchange_code(
@@ -330,10 +325,7 @@ impl SocialProvider for DriveProvider {
             .await?;
         Ok(PageInfo {
             id: user["id"].as_str().unwrap_or("").to_string(),
-            name: user["name"]
-                .as_str()
-                .unwrap_or("Google Drive")
-                .to_string(),
+            name: user["name"].as_str().unwrap_or("Google Drive").to_string(),
             access_token: Some(access_token.to_string()),
             picture: user["picture"].as_str().map(String::from),
             username: user["email"].as_str().map(String::from),

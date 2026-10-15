@@ -2,7 +2,7 @@
 // Tool handlers for webhook CRUD and test delivery.
 
 use chrono::{DateTime, Utc};
-use rmcp::{Json, schemars::JsonSchema};
+use rmcp::{schemars::JsonSchema, Json};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use uuid::Uuid;
@@ -20,8 +20,7 @@ pub struct WhCreateInput {
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
-pub struct WhListInput {
-}
+pub struct WhListInput {}
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct WhGetInput {
@@ -101,7 +100,10 @@ fn resolve_user(_token: &str, _state: &AppState) -> Result<Uuid, String> {
 }
 
 fn webhook_to_json(w: WebhookWithEvents) -> serde_json::Value {
-    let WebhookWithEvents { base: w, event_types } = w;
+    let WebhookWithEvents {
+        base: w,
+        event_types,
+    } = w;
     serde_json::json!({
         "id": w.id.to_string(),
         "user_id": w.user_id.to_string(),
@@ -227,7 +229,10 @@ pub async fn handle_wh_create(
         .map_err(|e| format!("Failed to commit webhook: {e}"))?;
 
     let event_types = load_event_types(&state.db, base.id).await?;
-    Ok(Json(webhook_to_json(WebhookWithEvents { base, event_types })))
+    Ok(Json(webhook_to_json(WebhookWithEvents {
+        base,
+        event_types,
+    })))
 }
 
 pub async fn handle_wh_list(
@@ -259,8 +264,8 @@ pub async fn handle_wh_get(
     input: &WhGetInput,
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = resolve_user("", state)?;
-    let webhook_id = Uuid::parse_str(&input.webhook_id)
-        .map_err(|_| "Invalid webhook ID format".to_string())?;
+    let webhook_id =
+        Uuid::parse_str(&input.webhook_id).map_err(|_| "Invalid webhook ID format".to_string())?;
 
     let row = fetch_webhook(&state.db, webhook_id, user_id)
         .await?
@@ -274,13 +279,16 @@ pub async fn handle_wh_update(
     input: &WhUpdateInput,
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = resolve_user("", state)?;
-    let webhook_id = Uuid::parse_str(&input.webhook_id)
-        .map_err(|_| "Invalid webhook ID format".to_string())?;
+    let webhook_id =
+        Uuid::parse_str(&input.webhook_id).map_err(|_| "Invalid webhook ID format".to_string())?;
 
     let current = fetch_webhook(&state.db, webhook_id, user_id)
         .await?
         .ok_or_else(|| "Webhook not found".to_string())?;
-    let WebhookWithEvents { base: current, event_types: current_event_types } = current;
+    let WebhookWithEvents {
+        base: current,
+        event_types: current_event_types,
+    } = current;
 
     let new_name = input.name.clone().unwrap_or(current.name);
     let new_url = input.url.clone().unwrap_or(current.url);
@@ -332,8 +340,8 @@ pub async fn handle_wh_delete(
     input: &WhDeleteInput,
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = resolve_user("", state)?;
-    let webhook_id = Uuid::parse_str(&input.webhook_id)
-        .map_err(|_| "Invalid webhook ID format".to_string())?;
+    let webhook_id =
+        Uuid::parse_str(&input.webhook_id).map_err(|_| "Invalid webhook ID format".to_string())?;
 
     let result = sqlx::query("DELETE FROM webhooks WHERE id = ? AND user_id = ?")
         .bind(webhook_id)
@@ -354,8 +362,8 @@ pub async fn handle_wh_test(
     input: &WhTestInput,
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = resolve_user("", state)?;
-    let webhook_id = Uuid::parse_str(&input.webhook_id)
-        .map_err(|_| "Invalid webhook ID format".to_string())?;
+    let webhook_id =
+        Uuid::parse_str(&input.webhook_id).map_err(|_| "Invalid webhook ID format".to_string())?;
 
     let row = fetch_webhook(&state.db, webhook_id, user_id)
         .await?

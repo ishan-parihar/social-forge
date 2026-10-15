@@ -14,8 +14,7 @@ pub struct ThreadsProvider {
 
 impl ThreadsProvider {
     pub fn new(config: &Config) -> Self {
-        let (client_id, client_secret) =
-            config.provider_credentials("threads").unwrap_or_default();
+        let (client_id, client_secret) = config.provider_credentials("threads").unwrap_or_default();
         Self {
             client_id,
             client_secret,
@@ -79,13 +78,12 @@ impl SocialProvider for ThreadsProvider {
             ("scope", scope.as_str()),
         ];
 
-        let url = url::Url::parse_with_params(
-            "https://www.threads.net/oauth/authorize",
-            &params,
-        )
-        .map_err(|e| ProviderError::Auth(format!("URL parse: {e}")))?;
+        let url = url::Url::parse_with_params("https://www.threads.net/oauth/authorize", &params)
+            .map_err(|e| ProviderError::Auth(format!("URL parse: {e}")))?;
 
-        Ok(AuthUrlResponse { url: url.to_string() })
+        Ok(AuthUrlResponse {
+            url: url.to_string(),
+        })
     }
 
     async fn exchange_code(
@@ -113,9 +111,7 @@ impl SocialProvider for ThreadsProvider {
         let status = resp.status();
         let json: serde_json::Value = resp.json().await?;
         if !status.is_success() {
-            let err_msg = json["error"]["message"]
-                .as_str()
-                .unwrap_or("Unknown error");
+            let err_msg = json["error"]["message"].as_str().unwrap_or("Unknown error");
             let err_code = json["error"]["code"].as_u64().unwrap_or(0);
             return Err(ProviderError::Api(format!(
                 "Threads token exchange failed (code {err_code}): {err_msg}"
@@ -276,7 +272,11 @@ impl SocialProvider for ThreadsProvider {
             .create_single_container(access_token, &user_id, post)
             .await?;
 
-        match self.container_status(access_token, &creation_id).await?.as_str() {
+        match self
+            .container_status(access_token, &creation_id)
+            .await?
+            .as_str()
+        {
             "FINISHED" => {
                 self.publish_container(access_token, &user_id, &creation_id)
                     .await
@@ -298,7 +298,11 @@ impl SocialProvider for ThreadsProvider {
         access_token: &str,
         creation_id: &str,
     ) -> Result<PublishResult, ProviderError> {
-        match self.container_status(access_token, creation_id).await?.as_str() {
+        match self
+            .container_status(access_token, creation_id)
+            .await?
+            .as_str()
+        {
             "FINISHED" => {
                 let user_id = self.resolve_user_id(access_token).await?;
                 self.publish_container(access_token, &user_id, creation_id)
@@ -327,7 +331,12 @@ impl SocialProvider for ThreadsProvider {
         ))
     }
 
-    async fn get_recent_posts(&self, access_token: &str, _internal_id: &str, limit: u32) -> Result<Vec<ExternalPostData>, ProviderError> {
+    async fn get_recent_posts(
+        &self,
+        access_token: &str,
+        _internal_id: &str,
+        limit: u32,
+    ) -> Result<Vec<ExternalPostData>, ProviderError> {
         let user_id = self.resolve_user_id(access_token).await?;
         let threads = self.get_threads(access_token, &user_id, limit).await?;
         let mut posts = Vec::new();
@@ -347,12 +356,15 @@ impl SocialProvider for ThreadsProvider {
                     author_name: None,
                     author_handle: None,
                     author_avatar: None,
-                    media: media_url.into_iter().map(|u| MediaAttachment {
-                        url: u,
-                        mime_type: String::new(),
-                        alt: None,
-                        poster_url: None,
-                    }).collect(),
+                    media: media_url
+                        .into_iter()
+                        .map(|u| MediaAttachment {
+                            url: u,
+                            mime_type: String::new(),
+                            alt: None,
+                            poster_url: None,
+                        })
+                        .collect(),
                     created_at: posted_at,
                     url: permalink,
                     metadata: None,
@@ -368,7 +380,9 @@ impl SocialProvider for ThreadsProvider {
         platform_post_id: &str,
     ) -> Result<Option<serde_json::Value>, ProviderError> {
         // get_thread_detail() returns like_count, reply_count, etc.
-        let json = self.get_thread_detail(access_token, platform_post_id).await?;
+        let json = self
+            .get_thread_detail(access_token, platform_post_id)
+            .await?;
         if json.get("error").is_some() || json.get("id").is_none() {
             return Ok(None);
         }
@@ -502,9 +516,7 @@ impl SocialProvider for ThreadsProvider {
             .await?;
         let id = json["id"].as_str().unwrap_or("").to_string();
         if id.is_empty() {
-            return Err(ProviderError::Api(format!(
-                "Threads reply failed: {json}"
-            )));
+            return Err(ProviderError::Api(format!("Threads reply failed: {json}")));
         }
         Ok(PublishResult {
             platform_post_id: id,
@@ -581,9 +593,12 @@ impl ThreadsProvider {
         Ok(json["id"]
             .as_str()
             .ok_or_else(|| {
-                let msg = json["error"]["message"].as_str().unwrap_or("No creation ID");
+                let msg = json["error"]["message"]
+                    .as_str()
+                    .unwrap_or("No creation ID");
                 let code = json["error"]["code"].as_u64().unwrap_or(0);
-                let raw = format!("Threads create failed (HTTP {create_status}, code {code}): {msg}");
+                let raw =
+                    format!("Threads create failed (HTTP {create_status}, code {code}): {msg}");
                 ProviderError::Api(friendly_error(
                     self.map_error(msg, create_status.as_u16()),
                     &raw,
@@ -601,10 +616,7 @@ impl ThreadsProvider {
         let resp = self
             .http
             .get(format!("{}/{creation_id}", self.graph_url()))
-            .query(&[
-                ("fields", "status_code"),
-                ("access_token", access_token),
-            ])
+            .query(&[("fields", "status_code"), ("access_token", access_token)])
             .send()
             .await?;
         let json: serde_json::Value = resp.json().await?;
@@ -624,10 +636,7 @@ impl ThreadsProvider {
         let pub_resp = self
             .http
             .post(format!("{}/{user_id}/threads_publish", self.graph_url()))
-            .form(&[(
-                "creation_id",
-                creation_id,
-            ), ("access_token", access_token)])
+            .form(&[("creation_id", creation_id), ("access_token", access_token)])
             .send()
             .await?;
 
@@ -640,9 +649,7 @@ impl ThreadsProvider {
                     .as_str()
                     .unwrap_or("Publish failed");
                 let code = pub_json["error"]["code"].as_u64().unwrap_or(0);
-                let raw = format!(
-                    "Threads publish failed (HTTP {pub_status}, code {code}): {msg}"
-                );
+                let raw = format!("Threads publish failed (HTTP {pub_status}, code {code}): {msg}");
                 ProviderError::Api(friendly_error(
                     self.map_error(msg, pub_status.as_u16()),
                     &raw,
@@ -675,7 +682,10 @@ impl ThreadsProvider {
             .ok_or_else(|| ProviderError::Auth("Could not resolve Threads user ID".into()))
     }
 
-    pub async fn get_profile(&self, access_token: &str) -> Result<serde_json::Value, ProviderError> {
+    pub async fn get_profile(
+        &self,
+        access_token: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
         let resp = self
             .http
             .get(format!("{}/me", self.graph_url()))
@@ -706,7 +716,10 @@ impl ThreadsProvider {
             .http
             .get(format!("{}/{user_id}/threads", self.graph_url()))
             .query(&[
-                ("fields", "id,text,media_type,media_url,permalink,timestamp,like_count,reply_count"),
+                (
+                    "fields",
+                    "id,text,media_type,media_url,permalink,timestamp,like_count,reply_count",
+                ),
                 ("access_token", access_token),
             ])
             .query(&[("limit", effective_limit.to_string())])
@@ -739,7 +752,10 @@ impl ThreadsProvider {
 
         if !resp.status().is_success() {
             let body = resp.text().await?;
-            return Err(ProviderError::Api(format!("get_thread_detail failed: {}", body)));
+            return Err(ProviderError::Api(format!(
+                "get_thread_detail failed: {}",
+                body
+            )));
         }
 
         let json: serde_json::Value = resp.json().await?;
@@ -763,7 +779,10 @@ impl ThreadsProvider {
 
         if !resp.status().is_success() {
             let body = resp.text().await?;
-            return Err(ProviderError::Api(format!("get_thread_replies failed: {}", body)));
+            return Err(ProviderError::Api(format!(
+                "get_thread_replies failed: {}",
+                body
+            )));
         }
 
         let json: serde_json::Value = resp.json().await?;
@@ -771,10 +790,7 @@ impl ThreadsProvider {
     }
 
     /// Accounts that have mentioned this profile — the @-autocomplete source.
-    pub async fn get_mentions(
-        &self,
-        user_id: &str,
-    ) -> Result<serde_json::Value, ProviderError> {
+    pub async fn get_mentions(&self, user_id: &str) -> Result<serde_json::Value, ProviderError> {
         let resp = self
             .http
             .get(format!("{}/{user_id}/mentions", self.graph_url()))
@@ -808,7 +824,10 @@ impl ThreadsProvider {
 
         if !resp.status().is_success() {
             let body = resp.text().await?;
-            return Err(ProviderError::Api(format!("reply_to_thread failed: {}", body)));
+            return Err(ProviderError::Api(format!(
+                "reply_to_thread failed: {}",
+                body
+            )));
         }
 
         let json: serde_json::Value = resp.json().await?;
@@ -879,7 +898,10 @@ impl ThreadsProvider {
 
         if !resp.status().is_success() {
             let body = resp.text().await?;
-            return Err(ProviderError::Api(format!("delete_thread failed: {}", body)));
+            return Err(ProviderError::Api(format!(
+                "delete_thread failed: {}",
+                body
+            )));
         }
 
         let json: serde_json::Value = resp.json().await?;
@@ -942,24 +964,19 @@ impl ThreadsProvider {
         // Publish
         let pub_resp = self
             .http
-            .post(format!(
-                "{}/{user_id}/threads_publish",
-                self.graph_url()
-            ))
-            .form(&[("creation_id", creation_id.as_str()), ("access_token", access_token)])
+            .post(format!("{}/{user_id}/threads_publish", self.graph_url()))
+            .form(&[
+                ("creation_id", creation_id.as_str()),
+                ("access_token", access_token),
+            ])
             .send()
             .await?;
 
         let pub_json: serde_json::Value = pub_resp.json().await?;
 
         Ok(PublishResult {
-            platform_post_id: pub_json["id"]
-                .as_str()
-                .unwrap_or("")
-                .to_string(),
-            platform_post_url: pub_json["permalink"]
-                .as_str()
-                .map(String::from),
+            platform_post_id: pub_json["id"].as_str().unwrap_or("").to_string(),
+            platform_post_url: pub_json["permalink"].as_str().map(String::from),
             status: "published".into(),
         })
     }
@@ -1037,7 +1054,10 @@ mod tests {
     fn publish_should_map_auth_error_to_user_facing_message() {
         let provider = ThreadsProvider::new(&test_config());
         let mapped = provider.map_error("Error validating access token: 190", 400);
-        assert!(mapped.unwrap().contains("access token expired"), "must keep the plain cause");
+        assert!(
+            mapped.unwrap().contains("access token expired"),
+            "must keep the plain cause"
+        );
     }
 
     // ── B4: map_error fixtures ──────────────────────────────
@@ -1063,7 +1083,9 @@ mod tests {
     #[test]
     fn map_error_explains_rejected_media() {
         let provider = ThreadsProvider::new(&test_config());
-        let msg = provider.map_error("The image upload was rejected", 422).unwrap();
+        let msg = provider
+            .map_error("The image upload was rejected", 422)
+            .unwrap();
         assert!(msg.contains("media"), "got: {msg}");
     }
 

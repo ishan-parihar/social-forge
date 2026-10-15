@@ -2,7 +2,7 @@
 // YouTube Data API v3 tools via the YoutubeProvider.
 // Follows the same pattern as tools_instagram_standalone.rs.
 
-use rmcp::{Json, schemars::JsonSchema};
+use rmcp::{schemars::JsonSchema, Json};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -65,7 +65,11 @@ pub struct YtGetSubscriptionsInput {
 
 // ── Helpers ──────────────────────────────────────────────────
 
-async fn find_yt_token(state: &AppState, user_id: Uuid, channel_id: &str) -> Result<String, String> {
+async fn find_yt_token(
+    state: &AppState,
+    user_id: Uuid,
+    channel_id: &str,
+) -> Result<String, String> {
     let yt = state
         .integration_by_internal_id(user_id, "youtube", channel_id)
         .await
@@ -183,7 +187,13 @@ pub async fn handle_yt_get_analytics(
     let token = find_yt_token(state, user_id, &input.channel_id).await?;
     let provider = create_yt_provider(state);
     let result = provider
-        .get_analytics(&token, &input.channel_id, &input.metrics, &input.start_date, &input.end_date)
+        .get_analytics(
+            &token,
+            &input.channel_id,
+            &input.metrics,
+            &input.start_date,
+            &input.end_date,
+        )
         .await
         .map_err(|e| format!("YouTube get analytics failed: {e}"))?;
     Ok(Json(serde_json::json!({ "data": result })))
@@ -232,7 +242,12 @@ pub async fn handle_yt_find_creators(
         .access_token
         .clone();
     let result = provider
-        .find_creators(&token, &input.query, input.min_subscribers, input.max_results)
+        .find_creators(
+            &token,
+            &input.query,
+            input.min_subscribers,
+            input.max_results,
+        )
         .await
         .map_err(|e| format!("YouTube find creators failed: {e}"))?;
     Ok(Json(serde_json::json!({ "data": result })))
@@ -335,7 +350,7 @@ pub async fn handle_yt_upload_video(
             poster_url: None,
         }],
         settings,
-            ..Default::default()
+        ..Default::default()
     };
 
     let result = provider

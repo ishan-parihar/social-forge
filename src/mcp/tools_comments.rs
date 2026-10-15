@@ -1,7 +1,7 @@
 // ─── MCP Comment Tools ─────────────────────────────────────────
 // Generic comment tools that work across platforms.
 
-use rmcp::{Json, schemars::JsonSchema};
+use rmcp::{schemars::JsonSchema, Json};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -48,36 +48,47 @@ pub async fn get_comments(
     input: &GetCommentsInput,
 ) -> Result<Json<GetCommentsOutput>, String> {
     let user_id = resolve_first_user(state).await?;
-    let integration_id = Uuid::parse_str(&input.integration_id)
-        .map_err(|_| "Invalid integration_id format")?;
+    let integration_id =
+        Uuid::parse_str(&input.integration_id).map_err(|_| "Invalid integration_id format")?;
 
     let integration = crate::db::queries::get_integration(&state.db, integration_id, user_id)
         .await
         .map_err(|e| format!("Integration not found: {e}"))?
         .ok_or_else(|| "Integration not found".to_string())?;
 
-    let provider = state.providers.get(&integration.provider_identifier)
+    let provider = state
+        .providers
+        .get(&integration.provider_identifier)
         .ok_or_else(|| format!("Provider {} not found", integration.provider_identifier))?;
 
-    let token = crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
+    let token =
+        crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
     let limit = input.limit.unwrap_or(50);
 
-    let comments = provider.get_post_comments(&token, &input.post_id)
+    let comments = provider
+        .get_post_comments(&token, &input.post_id)
         .await
         .map_err(|e| format!("Failed to get comments: {e}"))?;
 
-    let comment_infos: Vec<CommentInfo> = comments.into_iter().take(limit as usize).map(|c| CommentInfo {
-        id: c.id,
-        author_name: c.author_name,
-        text: c.text,
-        created_at: c.created_at.to_rfc3339(),
-        like_count: c.like_count,
-        reply_count: c.replies.len(),
-    }).collect();
+    let comment_infos: Vec<CommentInfo> = comments
+        .into_iter()
+        .take(limit as usize)
+        .map(|c| CommentInfo {
+            id: c.id,
+            author_name: c.author_name,
+            text: c.text,
+            created_at: c.created_at.to_rfc3339(),
+            like_count: c.like_count,
+            reply_count: c.replies.len(),
+        })
+        .collect();
 
     let total = comment_infos.len();
 
-    Ok(Json(GetCommentsOutput { comments: comment_infos, total }))
+    Ok(Json(GetCommentsOutput {
+        comments: comment_infos,
+        total,
+    }))
 }
 
 pub async fn reply_to_comment(
@@ -85,18 +96,21 @@ pub async fn reply_to_comment(
     input: &ReplyToCommentInput,
 ) -> Result<Json<ReplyToCommentOutput>, String> {
     let user_id = resolve_first_user(state).await?;
-    let integration_id = Uuid::parse_str(&input.integration_id)
-        .map_err(|_| "Invalid integration_id format")?;
+    let integration_id =
+        Uuid::parse_str(&input.integration_id).map_err(|_| "Invalid integration_id format")?;
 
     let integration = crate::db::queries::get_integration(&state.db, integration_id, user_id)
         .await
         .map_err(|e| format!("Integration not found: {e}"))?
         .ok_or_else(|| "Integration not found".to_string())?;
 
-    let provider = state.providers.get(&integration.provider_identifier)
+    let provider = state
+        .providers
+        .get(&integration.provider_identifier)
         .ok_or_else(|| format!("Provider {} not found", integration.provider_identifier))?;
 
-    let token = crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
+    let token =
+        crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
 
     let post_content = crate::social::PostContent {
         content: input.content.clone(),
@@ -105,7 +119,8 @@ pub async fn reply_to_comment(
         ..Default::default()
     };
 
-    let result = provider.reply_to_comment(&token, &input.comment_id, &post_content)
+    let result = provider
+        .reply_to_comment(&token, &input.comment_id, &post_content)
         .await
         .map_err(|e| format!("Failed to reply to comment: {e}"))?;
 

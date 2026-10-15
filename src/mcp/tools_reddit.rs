@@ -2,7 +2,7 @@
 // Reddit-specific read/query tools (browse, search, post detail, user info, DM, inbox).
 // These call inherent methods on RedditProvider directly.
 
-use rmcp::{Json, schemars::JsonSchema};
+use rmcp::{schemars::JsonSchema, Json};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -123,7 +123,8 @@ async fn find_reddit_token(state: &AppState, user_id: Uuid) -> Result<String, St
         .collect();
 
     // Priority 1: DB-stored cookie tokens (JSON blobs with reddit_session)
-    if let Some(preferred) = reddit_integrations.iter()
+    if let Some(preferred) = reddit_integrations
+        .iter()
         .find(|i| i.access_token.starts_with('{'))
     {
         let token = crypto::maybe_decrypt_token(&preferred.access_token, state.token_key.as_ref());
@@ -346,25 +347,47 @@ pub async fn handle_reddit_create_post(
     ];
     let text_val = input.text.as_deref().unwrap_or("");
     let url_val = input.url.as_deref().unwrap_or("");
-    if kind == "self" { form.push(("text", text_val)); }
-    else { form.push(("url", url_val)); }
-    if let Some(f) = &input.flair_id { form.push(("flair_id", f)); }
+    if kind == "self" {
+        form.push(("text", text_val));
+    } else {
+        form.push(("url", url_val));
+    }
+    if let Some(f) = &input.flair_id {
+        form.push(("flair_id", f));
+    }
 
     let resp = reqwest::Client::new()
         .post("https://oauth.reddit.com/api/submit")
         .header("Authorization", format!("Bearer {token}"))
         .header("User-Agent", "social-forge:v0.1.0 (by /u/social_forge)")
-        .form(&form).send().await
+        .form(&form)
+        .send()
+        .await
         .map_err(|e| format!("Reddit submit failed: {e}"))?;
 
-    let json: serde_json::Value = resp.json().await.map_err(|e| format!("Parse failed: {e}"))?;
-    let post_url = json["json"]["data"]["url"].as_str().unwrap_or("").to_string();
-    let post_id = json["json"]["data"]["id"].as_str().unwrap_or("").to_string();
+    let json: serde_json::Value = resp
+        .json()
+        .await
+        .map_err(|e| format!("Parse failed: {e}"))?;
+    let post_url = json["json"]["data"]["url"]
+        .as_str()
+        .unwrap_or("")
+        .to_string();
+    let post_id = json["json"]["data"]["id"]
+        .as_str()
+        .unwrap_or("")
+        .to_string();
 
     if post_id.is_empty() {
-        return Err(format!("Reddit submit error: {}", serde_json::to_string(&json).unwrap_or_default()));
+        return Err(format!(
+            "Reddit submit error: {}",
+            serde_json::to_string(&json).unwrap_or_default()
+        ));
     }
-    Ok(Json(RedditCreatePostOutput { post_id, url: post_url }))
+    Ok(Json(RedditCreatePostOutput {
+        post_id,
+        url: post_url,
+    }))
 }
 
 pub async fn handle_reddit_create_comment(
@@ -384,15 +407,29 @@ pub async fn handle_reddit_create_comment(
         .post("https://oauth.reddit.com/api/comment")
         .header("Authorization", format!("Bearer {token}"))
         .header("User-Agent", "social-forge:v0.1.0 (by /u/social_forge)")
-        .form(&[("api_type", "json"), ("thing_id", &thing_id), ("text", &input.text)])
-        .send().await
+        .form(&[
+            ("api_type", "json"),
+            ("thing_id", &thing_id),
+            ("text", &input.text),
+        ])
+        .send()
+        .await
         .map_err(|e| format!("Reddit comment failed: {e}"))?;
 
-    let json: serde_json::Value = resp.json().await.map_err(|e| format!("Parse failed: {e}"))?;
-    let comment_id = json["json"]["data"]["things"][0]["data"]["id"].as_str().unwrap_or("").to_string();
+    let json: serde_json::Value = resp
+        .json()
+        .await
+        .map_err(|e| format!("Parse failed: {e}"))?;
+    let comment_id = json["json"]["data"]["things"][0]["data"]["id"]
+        .as_str()
+        .unwrap_or("")
+        .to_string();
 
     if comment_id.is_empty() {
-        return Err(format!("Reddit comment error: {}", serde_json::to_string(&json).unwrap_or_default()));
+        return Err(format!(
+            "Reddit comment error: {}",
+            serde_json::to_string(&json).unwrap_or_default()
+        ));
     }
     Ok(Json(RedditCreateCommentOutput { comment_id }))
 }
@@ -407,10 +444,14 @@ pub async fn handle_reddit_get_karma(
         .get("https://oauth.reddit.com/api/v1/me/karma")
         .header("Authorization", format!("Bearer {token}"))
         .header("User-Agent", "social-forge:v0.1.0 (by /u/social_forge)")
-        .send().await
+        .send()
+        .await
         .map_err(|e| format!("Reddit karma failed: {e}"))?;
 
-    let json: serde_json::Value = resp.json().await.map_err(|e| format!("Parse failed: {e}"))?;
+    let json: serde_json::Value = resp
+        .json()
+        .await
+        .map_err(|e| format!("Parse failed: {e}"))?;
     Ok(Json(RedditGetKarmaOutput { data: json }))
 }
 
@@ -477,7 +518,9 @@ pub async fn handle_reddit_vote(
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_reddit_token(state, user_id).await?;
     let mut provider = create_provider(state, &token);
-    provider.vote(&input.thing_id, input.direction).await
+    provider
+        .vote(&input.thing_id, input.direction)
+        .await
         .map_err(|e| format!("Reddit vote failed: {e}"))?;
     Ok(Json(RedditActionOutput { success: true }))
 }
@@ -489,7 +532,9 @@ pub async fn handle_reddit_save(
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_reddit_token(state, user_id).await?;
     let mut provider = create_provider(state, &token);
-    provider.save(&input.thing_id).await
+    provider
+        .save(&input.thing_id)
+        .await
         .map_err(|e| format!("Reddit save failed: {e}"))?;
     Ok(Json(RedditActionOutput { success: true }))
 }
@@ -501,7 +546,9 @@ pub async fn handle_reddit_unsave(
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_reddit_token(state, user_id).await?;
     let mut provider = create_provider(state, &token);
-    provider.unsave(&input.thing_id).await
+    provider
+        .unsave(&input.thing_id)
+        .await
         .map_err(|e| format!("Reddit unsave failed: {e}"))?;
     Ok(Json(RedditActionOutput { success: true }))
 }
@@ -513,7 +560,9 @@ pub async fn handle_reddit_hide(
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_reddit_token(state, user_id).await?;
     let mut provider = create_provider(state, &token);
-    provider.hide(&input.thing_id).await
+    provider
+        .hide(&input.thing_id)
+        .await
         .map_err(|e| format!("Reddit hide failed: {e}"))?;
     Ok(Json(RedditActionOutput { success: true }))
 }
@@ -525,7 +574,9 @@ pub async fn handle_reddit_subscribe(
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_reddit_token(state, user_id).await?;
     let mut provider = create_provider(state, &token);
-    provider.subscribe(&input.subreddit, &input.action).await
+    provider
+        .subscribe(&input.subreddit, &input.action)
+        .await
         .map_err(|e| format!("Reddit subscribe failed: {e}"))?;
     Ok(Json(RedditActionOutput { success: true }))
 }
@@ -537,7 +588,9 @@ pub async fn handle_reddit_edit(
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_reddit_token(state, user_id).await?;
     let mut provider = create_provider(state, &token);
-    provider.edit_text(&input.thing_id, &input.text).await
+    provider
+        .edit_text(&input.thing_id, &input.text)
+        .await
         .map_err(|e| format!("Reddit edit failed: {e}"))?;
     Ok(Json(RedditActionOutput { success: true }))
 }
@@ -549,7 +602,9 @@ pub async fn handle_reddit_delete(
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_reddit_token(state, user_id).await?;
     let mut provider = create_provider(state, &token);
-    provider.delete(&input.thing_id).await
+    provider
+        .delete(&input.thing_id)
+        .await
         .map_err(|e| format!("Reddit delete failed: {e}"))?;
     Ok(Json(RedditActionOutput { success: true }))
 }
@@ -561,7 +616,9 @@ pub async fn handle_reddit_mod_remove(
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_reddit_token(state, user_id).await?;
     let mut provider = create_provider(state, &token);
-    provider.mod_remove(&input.thing_id, input.spam.unwrap_or(false)).await
+    provider
+        .mod_remove(&input.thing_id, input.spam.unwrap_or(false))
+        .await
         .map_err(|e| format!("Reddit mod remove failed: {e}"))?;
     Ok(Json(RedditActionOutput { success: true }))
 }
@@ -573,7 +630,9 @@ pub async fn handle_reddit_mod_approve(
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_reddit_token(state, user_id).await?;
     let mut provider = create_provider(state, &token);
-    provider.mod_approve(&input.thing_id).await
+    provider
+        .mod_approve(&input.thing_id)
+        .await
         .map_err(|e| format!("Reddit mod approve failed: {e}"))?;
     Ok(Json(RedditActionOutput { success: true }))
 }
@@ -585,7 +644,9 @@ pub async fn handle_reddit_mod_distinguish(
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_reddit_token(state, user_id).await?;
     let mut provider = create_provider(state, &token);
-    provider.mod_distinguish(&input.thing_id, &input.how).await
+    provider
+        .mod_distinguish(&input.thing_id, &input.how)
+        .await
         .map_err(|e| format!("Reddit mod distinguish failed: {e}"))?;
     Ok(Json(RedditActionOutput { success: true }))
 }
@@ -597,7 +658,9 @@ pub async fn handle_reddit_mod_sticky(
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_reddit_token(state, user_id).await?;
     let mut provider = create_provider(state, &token);
-    provider.mod_sticky(&input.thing_id, input.state).await
+    provider
+        .mod_sticky(&input.thing_id, input.state)
+        .await
         .map_err(|e| format!("Reddit mod sticky failed: {e}"))?;
     Ok(Json(RedditActionOutput { success: true }))
 }
@@ -609,7 +672,9 @@ pub async fn handle_reddit_mod_lock(
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_reddit_token(state, user_id).await?;
     let mut provider = create_provider(state, &token);
-    provider.mod_lock(&input.thing_id).await
+    provider
+        .mod_lock(&input.thing_id)
+        .await
         .map_err(|e| format!("Reddit mod lock failed: {e}"))?;
     Ok(Json(RedditActionOutput { success: true }))
 }
@@ -621,7 +686,9 @@ pub async fn handle_reddit_mod_unlock(
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_reddit_token(state, user_id).await?;
     let mut provider = create_provider(state, &token);
-    provider.mod_unlock(&input.thing_id).await
+    provider
+        .mod_unlock(&input.thing_id)
+        .await
         .map_err(|e| format!("Reddit mod unlock failed: {e}"))?;
     Ok(Json(RedditActionOutput { success: true }))
 }

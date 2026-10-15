@@ -2,7 +2,7 @@
 // Tool handlers for social media channel management.
 // Thin wrappers over the shared IntegrationService.
 
-use rmcp::{Json, schemars::JsonSchema};
+use rmcp::{schemars::JsonSchema, Json};
 use serde::{Deserialize, Serialize};
 
 use crate::api::AppState;
@@ -29,7 +29,9 @@ pub struct ProviderInfo {
     /// Support tier: `tier-1` (full depth: analytics, engagement, comments,
     /// mentions, targets), `tier-2` (publish-maintained only),
     /// `tier-3` (archive; listed only when ENABLE_ARCHIVE_PROVIDERS is set).
-    #[schemars(description = "Support tier: tier-1 (full depth), tier-2 (publish-maintained), tier-3 (archive)")]
+    #[schemars(
+        description = "Support tier: tier-1 (full depth), tier-2 (publish-maintained), tier-3 (archive)"
+    )]
     pub tier: String,
 }
 
@@ -183,20 +185,23 @@ pub async fn connect_integration(
             &token.provider_user_id,
             &token.access_token,
             token.refresh_token.as_deref(),
-            token.expires_in.map(|exp| {
-                chrono::Utc::now() + chrono::Duration::seconds(exp as i64)
-            }),
+            token
+                .expires_in
+                .map(|exp| chrono::Utc::now() + chrono::Duration::seconds(exp as i64)),
             Some(&token.name),
             token.picture.as_deref(),
             None,
             None,
-        None, // auth_method
+            None, // auth_method
         )
         .await
         .map_err(|e| e.to_string())?;
 
         return Ok(Json(ConnectOutput {
-            auth_url: format!("Connected to {} as {}. No browser OAuth needed.", input.provider, token.name),
+            auth_url: format!(
+                "Connected to {} as {}. No browser OAuth needed.",
+                input.provider, token.name
+            ),
             state: "auto".into(),
             instructions: format!(
                 "Connected to {} as {}. Store is complete.",
@@ -211,7 +216,8 @@ pub async fn connect_integration(
         user_id,
         &input.provider,
         &state.config.app_url,
-    ).await?;
+    )
+    .await?;
 
     Ok(Json(ConnectOutput {
         auth_url: result.auth_url,
@@ -240,7 +246,9 @@ pub async fn complete_connect_integration(
     )
     .await?;
 
-    Ok(Json(crate::mcp::McpJsonValue(serde_json::json!({"success": true, "message": "Integration connected successfully",}))))
+    Ok(Json(crate::mcp::McpJsonValue(
+        serde_json::json!({"success": true, "message": "Integration connected successfully",}),
+    )))
 }
 
 pub async fn disconnect_integration(
@@ -251,18 +259,17 @@ pub async fn disconnect_integration(
     let integration_id =
         uuid::Uuid::parse_str(&input.id).map_err(|_| "Invalid integration ID".to_string())?;
 
-    let deleted = IntegrationService::disconnect(
-        &state.db,
-        &state.broadcast,
-        user_id,
-        integration_id,
-    ).await?;
+    let deleted =
+        IntegrationService::disconnect(&state.db, &state.broadcast, user_id, integration_id)
+            .await?;
 
     if !deleted {
         return Err("Integration not found".into());
     }
 
-    Ok(Json(crate::mcp::McpJsonValue(serde_json::json!({"success": true, "message": "Integration disconnected",}))))
+    Ok(Json(crate::mcp::McpJsonValue(
+        serde_json::json!({"success": true, "message": "Integration disconnected",}),
+    )))
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
@@ -286,15 +293,26 @@ pub async fn list_targets(
         .map_err(|_| "Invalid integration ID".to_string())?;
 
     let integration = crate::db::queries::get_integration(&state.db, integration_id, user_id)
-        .await.map_err(|e| format!("DB error: {e}"))?
+        .await
+        .map_err(|e| format!("DB error: {e}"))?
         .ok_or_else(|| "Integration not found".to_string())?;
 
-    let provider = state.providers.get(&integration.provider_identifier)
-        .ok_or_else(|| format!("Provider '{}' not in registry", integration.provider_identifier))?;
+    let provider = state
+        .providers
+        .get(&integration.provider_identifier)
+        .ok_or_else(|| {
+            format!(
+                "Provider '{}' not in registry",
+                integration.provider_identifier
+            )
+        })?;
 
-    let token = crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
+    let token =
+        crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
 
-    let targets = provider.targets(&token).await
+    let targets = provider
+        .targets(&token)
+        .await
         .map_err(|e| format!("Failed to fetch targets: {}", e))?;
 
     Ok(Json(ListTargetsOutput {

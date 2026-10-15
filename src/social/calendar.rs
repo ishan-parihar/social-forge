@@ -15,8 +15,7 @@ pub struct CalendarProvider {
 
 impl CalendarProvider {
     pub fn new(config: &Config) -> Self {
-        let (client_id, client_secret) =
-            config.provider_credentials("youtube").unwrap_or_default();
+        let (client_id, client_secret) = config.provider_credentials("youtube").unwrap_or_default();
         Self {
             client_id,
             client_secret,
@@ -280,12 +279,12 @@ impl SocialProvider for CalendarProvider {
             ("access_type", "offline"),
             ("prompt", "consent"),
         ];
-        let url = url::Url::parse_with_params(
-            "https://accounts.google.com/o/oauth2/v2/auth",
-            &params,
-        )
-        .map_err(|e| ProviderError::Auth(format!("URL parse: {e}")))?;
-        Ok(AuthUrlResponse { url: url.to_string() })
+        let url =
+            url::Url::parse_with_params("https://accounts.google.com/o/oauth2/v2/auth", &params)
+                .map_err(|e| ProviderError::Auth(format!("URL parse: {e}")))?;
+        Ok(AuthUrlResponse {
+            url: url.to_string(),
+        })
     }
 
     async fn exchange_code(

@@ -94,10 +94,7 @@ impl IntegrationService {
             .ok_or_else(|| format!("Unknown provider: {provider_identifier}"))?;
 
         // Parse user_id and redirect_uri from stored redirect_uri
-        let stored_uri = oauth_state
-            .redirect_uri
-            .as_deref()
-            .unwrap_or("");
+        let stored_uri = oauth_state.redirect_uri.as_deref().unwrap_or("");
         let parts: Vec<&str> = stored_uri.split(':').collect();
         let user_id = Uuid::parse_str(parts.first().ok_or("Invalid state format")?)
             .map_err(|e| format!("Invalid user ID: {e}"))?;
@@ -124,11 +121,10 @@ impl IntegrationService {
                 .unwrap_or_else(|_| token.access_token.clone()),
             None => token.access_token.clone(),
         };
-        let enc_refresh_token = token.refresh_token.as_ref().and_then(|rt| {
-            token_key.and_then(|key| {
-                crate::crypto::encrypt_string(rt, key).ok()
-            })
-        });
+        let enc_refresh_token = token
+            .refresh_token
+            .as_ref()
+            .and_then(|rt| token_key.and_then(|key| crate::crypto::encrypt_string(rt, key).ok()));
 
         // Create or update integration
         let integration = queries::create_integration(
@@ -138,15 +134,17 @@ impl IntegrationService {
             provider.name(),
             &token.provider_user_id,
             &enc_access_token,
-            enc_refresh_token.as_deref().or(token.refresh_token.as_deref()),
-            token.expires_in.map(|exp| {
-                Utc::now() + chrono::Duration::seconds(exp as i64)
-            }),
+            enc_refresh_token
+                .as_deref()
+                .or(token.refresh_token.as_deref()),
+            token
+                .expires_in
+                .map(|exp| Utc::now() + chrono::Duration::seconds(exp as i64)),
             Some(&token.name),
             token.picture.as_deref(),
             None,
             None, // root_internal_id — set by pages API for sub-accounts
-        None, // auth_method
+            None, // auth_method
         )
         .await
         .map_err(|e| format!("Database error: {e}"))?;
@@ -163,10 +161,7 @@ impl IntegrationService {
     }
 
     /// List all integrations for a user
-    pub async fn list(
-        db: &SqlitePool,
-        user_id: Uuid,
-    ) -> ServiceResult<Vec<Integration>> {
+    pub async fn list(db: &SqlitePool, user_id: Uuid) -> ServiceResult<Vec<Integration>> {
         queries::list_integrations(db, user_id)
             .await
             .map_err(|e| format!("Database error: {e}"))

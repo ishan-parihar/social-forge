@@ -78,9 +78,9 @@ impl<'q> Encode<'q, Sqlite> for EpochUtc {
 impl<'r> Decode<'r, Sqlite> for EpochUtc {
     fn decode(value: SqliteValueRef<'r>) -> Result<Self, sqlx::error::BoxDynError> {
         let secs = <i64 as Decode<Sqlite>>::decode(value)?;
-        DateTime::from_timestamp(secs, 0)
-            .map(Self)
-            .ok_or_else(|| format!("epoch second {secs} is out of range for a UTC timestamp").into())
+        DateTime::from_timestamp(secs, 0).map(Self).ok_or_else(|| {
+            format!("epoch second {secs} is out of range for a UTC timestamp").into()
+        })
     }
 }
 
@@ -91,14 +91,18 @@ mod tests {
 
     #[test]
     fn round_trips_through_the_inner_datetime() {
-        let dt = chrono::Utc.with_ymd_and_hms(2026, 3, 14, 15, 9, 26).unwrap();
+        let dt = chrono::Utc
+            .with_ymd_and_hms(2026, 3, 14, 15, 9, 26)
+            .unwrap();
         let epoch = EpochUtc::from(dt);
         assert_eq!(DateTime::from(epoch), dt);
     }
 
     #[test]
     fn encodes_as_unix_epoch_seconds() {
-        let dt = chrono::Utc.with_ymd_and_hms(2026, 3, 14, 15, 9, 26).unwrap();
+        let dt = chrono::Utc
+            .with_ymd_and_hms(2026, 3, 14, 15, 9, 26)
+            .unwrap();
         assert_eq!(EpochUtc::from(dt).0.timestamp(), dt.timestamp());
     }
 
@@ -128,4 +132,3 @@ mod tests {
         assert_eq!(DateTime::from(epoch).timestamp(), dt.timestamp());
     }
 }
-

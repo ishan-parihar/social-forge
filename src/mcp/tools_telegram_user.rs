@@ -1,4 +1,4 @@
-use rmcp::{Json, schemars::JsonSchema};
+use rmcp::{schemars::JsonSchema, Json};
 use serde::{Deserialize, Serialize};
 
 use crate::api::AppState;
@@ -70,19 +70,20 @@ pub struct TuSignInOutput {
     pub data: serde_json::Value,
 }
 
-fn client_manager(state: &AppState) -> Result<&crate::services::telegram_client::TelegramClientManager, String> {
+fn client_manager(
+    state: &AppState,
+) -> Result<&crate::services::telegram_client::TelegramClientManager, String> {
     state
         .telegram_client_manager
         .as_ref()
         .map(|arc| arc.as_ref())
         .ok_or_else(|| {
-            "Telegram user client not configured. Set TELEGRAM_API_ID and TELEGRAM_API_HASH.".to_string()
+            "Telegram user client not configured. Set TELEGRAM_API_ID and TELEGRAM_API_HASH."
+                .to_string()
         })
 }
 
-pub async fn handle_tu_auth_status(
-    state: &AppState,
-) -> Result<Json<TuAuthStatusOutput>, String> {
+pub async fn handle_tu_auth_status(state: &AppState) -> Result<Json<TuAuthStatusOutput>, String> {
     let mgr = client_manager(state)?;
     let is_auth = mgr.is_authenticated().await?;
     let user = if is_auth {

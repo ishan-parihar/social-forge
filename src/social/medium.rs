@@ -122,11 +122,15 @@ impl SocialProvider for MediumProvider {
         let author_id = self.get_author_id(access_token).await?;
 
         // Extract title from post content (first line) or settings
-        let title = post.settings.get("title")
+        let title = post
+            .settings
+            .get("title")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string())
             .unwrap_or_else(|| {
-                post.content.lines().next()
+                post.content
+                    .lines()
+                    .next()
                     .unwrap_or("Untitled")
                     .trim_start_matches("# ")
                     .trim_start_matches("#")
@@ -135,7 +139,9 @@ impl SocialProvider for MediumProvider {
             });
 
         // Extract tags from settings
-        let tags: Vec<String> = post.settings.get("tags")
+        let tags: Vec<String> = post
+            .settings
+            .get("tags")
             .and_then(|v| v.as_array())
             .map(|arr| {
                 arr.iter()
@@ -145,7 +151,9 @@ impl SocialProvider for MediumProvider {
             .unwrap_or_default();
 
         // Extract publish status from settings
-        let publish_status = post.settings.get("publish_status")
+        let publish_status = post
+            .settings
+            .get("publish_status")
             .and_then(|v| v.as_str())
             .unwrap_or("draft");
 
@@ -171,13 +179,8 @@ impl SocialProvider for MediumProvider {
 
         if status == StatusCode::CREATED || status == StatusCode::OK {
             let post_data = &json["data"];
-            let post_id = post_data["id"]
-                .as_str()
-                .unwrap_or("")
-                .to_string();
-            let post_url = post_data["url"]
-                .as_str()
-                .map(String::from);
+            let post_id = post_data["id"].as_str().unwrap_or("").to_string();
+            let post_url = post_data["url"].as_str().map(String::from);
 
             Ok(PublishResult {
                 platform_post_id: post_id,
@@ -222,7 +225,9 @@ impl SocialProvider for MediumProvider {
                 username: user["username"].as_str().map(String::from),
             }])
         } else {
-            Err(ProviderError::Api("Failed to fetch Medium user info".into()))
+            Err(ProviderError::Api(
+                "Failed to fetch Medium user info".into(),
+            ))
         }
     }
 
@@ -232,9 +237,10 @@ impl SocialProvider for MediumProvider {
         _page_id: &str,
     ) -> Result<PageInfo, ProviderError> {
         let pages = self.pages(access_token).await?;
-        pages.into_iter().next().ok_or_else(|| {
-            ProviderError::Api("No Medium user info available".into())
-        })
+        pages
+            .into_iter()
+            .next()
+            .ok_or_else(|| ProviderError::Api("No Medium user info available".into()))
     }
 
     async fn comment(
@@ -244,7 +250,9 @@ impl SocialProvider for MediumProvider {
         _last_comment_id: Option<&str>,
         _post: &PostContent,
     ) -> Result<PublishResult, ProviderError> {
-        Err(ProviderError::Api("Medium does not support commenting via API".into()))
+        Err(ProviderError::Api(
+            "Medium does not support commenting via API".into(),
+        ))
     }
 
     async fn get_recent_posts(
@@ -274,58 +282,63 @@ impl SocialProvider for MediumProvider {
             return Err(ProviderError::Api(msg));
         }
 
-        let posts: Vec<ExternalPostData> = json["data"].as_array()
+        let posts: Vec<ExternalPostData> = json["data"]
+            .as_array()
             .map(|arr| {
-                arr.iter().map(|p| {
-                    let created_at = p["createdAt"].as_u64()
-                        .and_then(|ts| {
-                            chrono::DateTime::from_timestamp(ts as i64 / 1000, 0)
-                        })
-                        .unwrap_or_else(chrono::Utc::now);
-                    let mut media = Vec::new();
-                    // Medium v1 API doesn't provide post images directly,
-                    // but some response formats include imageUrl or virtuals.previewImage
-                    if let Some(img_url) = p["imageUrl"].as_str() {
-                        if !img_url.is_empty() {
+                arr.iter()
+                    .map(|p| {
+                        let created_at = p["createdAt"]
+                            .as_u64()
+                            .and_then(|ts| chrono::DateTime::from_timestamp(ts as i64 / 1000, 0))
+                            .unwrap_or_else(chrono::Utc::now);
+                        let mut media = Vec::new();
+                        // Medium v1 API doesn't provide post images directly,
+                        // but some response formats include imageUrl or virtuals.previewImage
+                        if let Some(img_url) = p["imageUrl"].as_str() {
+                            if !img_url.is_empty() {
+                                media.push(MediaAttachment {
+                                    url: img_url.to_string(),
+                                    mime_type: "image/jpeg".to_string(),
+                                    alt: p["title"].as_str().map(String::from),
+                                    poster_url: None,
+                                });
+                            }
+                        } else if let Some(img_id) =
+                            p["virtuals"]["previewImage"]["imageId"].as_str()
+                        {
+                            let img_url = format!("https://miro.medium.com/1/{img_id}");
                             media.push(MediaAttachment {
-                                url: img_url.to_string(),
+                                url: img_url,
                                 mime_type: "image/jpeg".to_string(),
                                 alt: p["title"].as_str().map(String::from),
                                 poster_url: None,
                             });
                         }
-                    } else if let Some(img_id) = p["virtuals"]["previewImage"]["imageId"].as_str() {
-                        let img_url = format!("https://miro.medium.com/1/{img_id}");
-                        media.push(MediaAttachment {
-                            url: img_url,
-                            mime_type: "image/jpeg".to_string(),
-                            alt: p["title"].as_str().map(String::from),
-                            poster_url: None,
-                        });
-                    }
-                    ExternalPostData {
-                        platform_post_id: p["id"].as_str().unwrap_or("").to_string(),
-                        text: p["content"].as_str()
-                            .or_else(|| p["body"].as_str())
-                            .unwrap_or("")
-                            .to_string(),
-                        author_name: p["author"]["name"].as_str().map(String::from),
-                        author_handle: p["author"]["username"].as_str().map(String::from),
-                        author_avatar: p["author"]["image"].as_str().map(String::from),
-                        created_at,
-                        url: p["url"].as_str().map(String::from),
-                        media,
-                        metadata: Some(serde_json::json!({
-                            "title": p["title"],
-                            "subtitle": p["subtitle"],
-                            "tags": p["tags"],
-                            "reading_time": p["readingTime"],
-                            "claps": p["claps"],
-                            "responses": p["responses"],
-                            "publication_id": p["publicationId"],
-                        })),
-                    }
-                }).collect()
+                        ExternalPostData {
+                            platform_post_id: p["id"].as_str().unwrap_or("").to_string(),
+                            text: p["content"]
+                                .as_str()
+                                .or_else(|| p["body"].as_str())
+                                .unwrap_or("")
+                                .to_string(),
+                            author_name: p["author"]["name"].as_str().map(String::from),
+                            author_handle: p["author"]["username"].as_str().map(String::from),
+                            author_avatar: p["author"]["image"].as_str().map(String::from),
+                            created_at,
+                            url: p["url"].as_str().map(String::from),
+                            media,
+                            metadata: Some(serde_json::json!({
+                                "title": p["title"],
+                                "subtitle": p["subtitle"],
+                                "tags": p["tags"],
+                                "reading_time": p["readingTime"],
+                                "claps": p["claps"],
+                                "responses": p["responses"],
+                                "publication_id": p["publicationId"],
+                            })),
+                        }
+                    })
+                    .collect()
             })
             .unwrap_or_default();
 

@@ -72,7 +72,11 @@ impl BlueskyProvider {
 
     /// Fetch the CID for a Bluesky record URI (needed for the `reply` field
     /// when threading). The URI looks like `at://did:plc:xxx/app.bsky.feed.post/yyy`.
-    async fn fetch_record_cid(&self, uri: &str, access_token: &str) -> Result<String, ProviderError> {
+    async fn fetch_record_cid(
+        &self,
+        uri: &str,
+        access_token: &str,
+    ) -> Result<String, ProviderError> {
         // Parse the URI to extract the repo (DID), collection, and rkey
         // Format: at://did:plc:xxx/app.bsky.feed.post/yyy
         let parts: Vec<&str> = uri.split('/').collect();
@@ -86,11 +90,7 @@ impl BlueskyProvider {
         let resp = self
             .http
             .get("https://bsky.social/xrpc/com.atproto.repo.getRecord")
-            .query(&[
-                ("repo", repo),
-                ("collection", collection),
-                ("rkey", rkey),
-            ])
+            .query(&[("repo", repo), ("collection", collection), ("rkey", rkey)])
             .header("Authorization", format!("Bearer {access_token}"))
             .send()
             .await?;
@@ -212,9 +212,7 @@ impl BlueskyProvider {
                                     .to_string(),
                                 created_at: post["record"]["createdAt"]
                                     .as_str()
-                                    .and_then(|s| {
-                                        chrono::DateTime::parse_from_rfc3339(s).ok()
-                                    })
+                                    .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
                                     .map(|dt| dt.with_timezone(&chrono::Utc))
                                     .unwrap_or_else(chrono::Utc::now),
                                 like_count: post["likeCount"].as_i64().unwrap_or(0) as i32,
@@ -227,7 +225,8 @@ impl BlueskyProvider {
             .unwrap_or_default();
 
         let mut roots: Vec<CommentData> = Vec::new();
-        let mut root_index: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+        let mut root_index: std::collections::HashMap<String, usize> =
+            std::collections::HashMap::new();
         for (uri, parent, comment) in flat {
             match parent
                 .as_deref()
@@ -300,7 +299,10 @@ impl BlueskyProvider {
             let total = json.get(key).and_then(|v| v.as_i64())?.to_string();
             Some(AnalyticsData {
                 label: label.into(),
-                data: vec![AnalyticsDataPoint { total, date: today.clone() }],
+                data: vec![AnalyticsDataPoint {
+                    total,
+                    date: today.clone(),
+                }],
                 percentage_change: 0.0,
             })
         })
@@ -321,7 +323,10 @@ impl BlueskyProvider {
             let total = metrics.get(key).and_then(|v| v.as_i64())?.to_string();
             Some(AnalyticsData {
                 label: label.into(),
-                data: vec![AnalyticsDataPoint { total, date: today.clone() }],
+                data: vec![AnalyticsDataPoint {
+                    total,
+                    date: today.clone(),
+                }],
                 percentage_change: 0.0,
             })
         })
@@ -457,10 +462,7 @@ impl SocialProvider for BlueskyProvider {
         })
     }
 
-    async fn refresh_token(
-        &self,
-        _refresh_token: &str,
-    ) -> Result<AuthToken, ProviderError> {
+    async fn refresh_token(&self, _refresh_token: &str) -> Result<AuthToken, ProviderError> {
         // Bluesky sessions are short-lived; just create a new one
         self.exchange_code("", "", "").await
     }
@@ -519,9 +521,11 @@ impl SocialProvider for BlueskyProvider {
         if status == 200 {
             let uri = json["uri"].as_str().unwrap_or("").to_string();
             let post_id = json["cid"].as_str().unwrap_or("").to_string();
-            let at_uri = format!("https://bsky.app/profile/{}/post/{}",
+            let at_uri = format!(
+                "https://bsky.app/profile/{}/post/{}",
                 self.handle,
-                uri.rsplit('/').next().unwrap_or(""));
+                uri.rsplit('/').next().unwrap_or("")
+            );
             Ok(PublishResult {
                 platform_post_id: post_id,
                 platform_post_url: Some(at_uri),
@@ -593,7 +597,9 @@ impl SocialProvider for BlueskyProvider {
         _access_token: &str,
         _page_id: &str,
     ) -> Result<PageInfo, ProviderError> {
-        Err(ProviderError::Api("Bluesky does not support page management".into()))
+        Err(ProviderError::Api(
+            "Bluesky does not support page management".into(),
+        ))
     }
 
     async fn get_recent_posts(
@@ -603,10 +609,15 @@ impl SocialProvider for BlueskyProvider {
         limit: u32,
     ) -> Result<Vec<ExternalPostData>, ProviderError> {
         // Use the passed JWT directly, or create a fresh session if expired
-        let jwt = if access_token.is_empty() { self.create_session().await? } else { access_token.to_string() };
+        let jwt = if access_token.is_empty() {
+            self.create_session().await?
+        } else {
+            access_token.to_string()
+        };
         let did = self.resolve_handle().await?;
 
-        let resp = self.http
+        let resp = self
+            .http
             .get("https://bsky.social/xrpc/app.bsky.feed.getAuthorFeed")
             .header("Authorization", format!("Bearer {jwt}"))
             .query(&[("actor", &did), ("limit", &limit.to_string())])
@@ -614,7 +625,10 @@ impl SocialProvider for BlueskyProvider {
             .await?;
 
         let json: serde_json::Value = resp.json().await?;
-        let feed = json["feed"].as_array().map(|a| a.to_vec()).unwrap_or_default();
+        let feed = json["feed"]
+            .as_array()
+            .map(|a| a.to_vec())
+            .unwrap_or_default();
 
         let mut posts = Vec::new();
         for item in &feed {
@@ -622,10 +636,13 @@ impl SocialProvider for BlueskyProvider {
             let record = &post["record"];
 
             let cid = post["cid"].as_str().unwrap_or("").to_string();
-            if cid.is_empty() { continue; }
+            if cid.is_empty() {
+                continue;
+            }
 
             let text = record["text"].as_str().unwrap_or("").to_string();
-            let created_at = record["createdAt"].as_str()
+            let created_at = record["createdAt"]
+                .as_str()
                 .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
                 .map(|dt| dt.with_timezone(&chrono::Utc))
                 .unwrap_or_else(chrono::Utc::now);
@@ -638,7 +655,8 @@ impl SocialProvider for BlueskyProvider {
             let mut media = Vec::new();
             if let Some(embed) = post.get("embed") {
                 let embed_type = embed["$type"].as_str().unwrap_or("");
-                if embed_type == "app.bsky.embed.video" || embed_type == "app.bsky.embed.video#view" {
+                if embed_type == "app.bsky.embed.video" || embed_type == "app.bsky.embed.video#view"
+                {
                     // Bluesky video — resolve blob reference to a playable URL
                     if let Some(video) = embed.get("video") {
                         let mime = video["mimeType"].as_str().unwrap_or("video/mp4");
@@ -650,13 +668,12 @@ impl SocialProvider for BlueskyProvider {
                                 alt: None,
                                 poster_url: None,
                             });
-                        } else if let Some(cid) = video["ref"]["$link"].as_str()
+                        } else if let Some(cid) = video["ref"]["$link"]
+                            .as_str()
                             .or_else(|| video["ref"]["cid"].as_str())
                         {
                             // Construct blob URL from DID + CID
-                            let did = post["author"]["did"]
-                                .as_str()
-                                .unwrap_or("");
+                            let did = post["author"]["did"].as_str().unwrap_or("");
                             let blob_url = format!(
                                 "https://bsky.social/xrpc/com.atproto.sync.getBlob?did={did}&cid={cid}"
                             );
@@ -670,7 +687,9 @@ impl SocialProvider for BlueskyProvider {
                     }
                 } else if let Some(images) = embed["images"].as_array() {
                     for img in images {
-                        if let Some(url) = img["fullsize"].as_str().or_else(|| img["thumb"].as_str()) {
+                        if let Some(url) =
+                            img["fullsize"].as_str().or_else(|| img["thumb"].as_str())
+                        {
                             media.push(MediaAttachment {
                                 url: url.to_string(),
                                 mime_type: "image/jpeg".to_string(),
@@ -758,7 +777,10 @@ impl SocialProvider for BlueskyProvider {
             let post_id = uri.rsplit('/').next().unwrap_or("").to_string();
             Ok(PublishResult {
                 platform_post_id: post_id.clone(),
-                platform_post_url: Some(format!("https://bsky.app/profile/{}/post/{}", self.handle, post_id)),
+                platform_post_url: Some(format!(
+                    "https://bsky.app/profile/{}/post/{}",
+                    self.handle, post_id
+                )),
                 status: "published".into(),
             })
         } else {
@@ -945,7 +967,9 @@ mod tests {
 
     #[test]
     fn check_status_annotates_401_with_friendly_copy() {
-        let err = provider().check_status(401, "Expired token", "getProfile").unwrap_err();
+        let err = provider()
+            .check_status(401, "Expired token", "getProfile")
+            .unwrap_err();
         let msg = format!("{err}");
         assert!(msg.contains("expired"), "got: {msg}");
         assert!(msg.contains("raw:"), "raw text must be preserved: {msg}");
@@ -971,7 +995,10 @@ mod tests {
         assert_eq!(comments.len(), 1);
         assert_eq!(comments[0].id, "at://d/app.bsky.feed.post/1");
         assert_eq!(comments[0].author_name.as_deref(), Some("Ada"));
-        assert_eq!(comments[0].author_avatar.as_deref(), Some("https://img/a.jpg"));
+        assert_eq!(
+            comments[0].author_avatar.as_deref(),
+            Some("https://img/a.jpg")
+        );
         assert_eq!(comments[0].like_count, 7);
         assert_eq!(comments[0].replies.len(), 1);
         assert_eq!(comments[0].replies[0].id, "at://d/app.bsky.feed.post/2");
@@ -988,7 +1015,9 @@ mod tests {
 
     #[test]
     fn parse_should_read_no_bluesky_replies_from_empty_thread() {
-        assert!(BlueskyProvider::parse_thread_replies(&serde_json::json!({ "thread": {} })).is_empty());
+        assert!(
+            BlueskyProvider::parse_thread_replies(&serde_json::json!({ "thread": {} })).is_empty()
+        );
     }
 
     #[test]
@@ -1005,6 +1034,8 @@ mod tests {
 
     #[test]
     fn parse_should_read_no_bluesky_mentions_from_empty_search() {
-        assert!(BlueskyProvider::parse_actor_search(&serde_json::json!({ "actors": [] })).is_empty());
+        assert!(
+            BlueskyProvider::parse_actor_search(&serde_json::json!({ "actors": [] })).is_empty()
+        );
     }
 }

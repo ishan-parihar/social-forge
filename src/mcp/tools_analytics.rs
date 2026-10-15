@@ -1,7 +1,7 @@
 // ─── MCP Analytics Tools ───────────────────────────────────────
 // Exposes provider analytics and per-post analytics as MCP tools.
 
-use rmcp::{Json, schemars::JsonSchema};
+use rmcp::{schemars::JsonSchema, Json};
 use serde::{Deserialize, Serialize};
 
 use crate::api::AppState;
@@ -51,7 +51,8 @@ pub async fn handle_analytics_get(
         .get(&input.provider)
         .ok_or_else(|| format!("Provider '{}' not found", input.provider))?;
 
-    let tok = crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
+    let tok =
+        crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
     let analytics = provider
         .analytics(&tok, &integration.internal_id, days)
         .await
@@ -78,21 +79,18 @@ pub async fn handle_analytics_get_post(
         .platform_post_id
         .ok_or_else(|| "Post has not been published yet".to_string())?;
 
-    let integration = crate::db::queries::get_integration(
-        &state.db,
-        post.integration_id,
-        user_id,
-    )
-    .await
-    .map_err(|e| format!("DB error: {e}"))?
-    .ok_or_else(|| "Integration not found".to_string())?;
+    let integration = crate::db::queries::get_integration(&state.db, post.integration_id, user_id)
+        .await
+        .map_err(|e| format!("DB error: {e}"))?
+        .ok_or_else(|| "Integration not found".to_string())?;
 
     let provider = state
         .providers
         .get(&integration.provider_identifier)
         .ok_or_else(|| format!("Provider '{}' not found", integration.provider_identifier))?;
 
-    let tok = crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
+    let tok =
+        crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
     let analytics = provider
         .post_analytics(&tok, &platform_post_id)
         .await

@@ -3,7 +3,7 @@
 // in social::GRAPH_VERSION).
 // Follows the same pattern as tools_instagram.rs.
 
-use rmcp::{Json, schemars::JsonSchema};
+use rmcp::{schemars::JsonSchema, Json};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -146,7 +146,13 @@ pub async fn handle_ias_create_container(
     let token = find_ias_token(state, user_id, &input.ig_id).await?;
     let provider = create_provider(state);
     let result = provider
-        .create_container(&token, &input.ig_id, &input.media_url, &input.caption, &input.media_type)
+        .create_container(
+            &token,
+            &input.ig_id,
+            &input.media_url,
+            &input.caption,
+            &input.media_type,
+        )
         .await
         .map_err(|e| format!("Instagram Standalone create container failed: {e}"))?;
     Ok(Json(serde_json::json!({ "data": result })))

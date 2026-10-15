@@ -8,14 +8,20 @@ pub async fn handle(action: NotificationsAction, state: &AppState) -> anyhow::Re
                 Ok(id) => id,
                 Err(e) => return Err(anyhow::anyhow!("Auth error: {e}")),
             };
-            let notifs = match crate::db::queries::list_notifications(&state.db, user_id, limit as i64, 0).await {
-                Ok(n) => n,
-                Err(e) => return Err(anyhow::anyhow!("DB error: {e}")),
-            };
-            let data: Vec<_> = notifs.into_iter().map(|n| {
-                let p: crate::db::models::NotificationPublic = n.into();
-                serde_json::to_value(p).unwrap_or_default()
-            }).collect();
+            let notifs =
+                match crate::db::queries::list_notifications(&state.db, user_id, limit as i64, 0)
+                    .await
+                {
+                    Ok(n) => n,
+                    Err(e) => return Err(anyhow::anyhow!("DB error: {e}")),
+                };
+            let data: Vec<_> = notifs
+                .into_iter()
+                .map(|n| {
+                    let p: crate::db::models::NotificationPublic = n.into();
+                    serde_json::to_value(p).unwrap_or_default()
+                })
+                .collect();
             Ok(serde_json::json!({ "data": data }))
         }
         NotificationsAction::Read { id } => {
@@ -27,7 +33,11 @@ pub async fn handle(action: NotificationsAction, state: &AppState) -> anyhow::Re
                 Ok(id) => id,
                 Err(_) => return Err(anyhow::anyhow!("Invalid notification ID")),
             };
-            let notif = match crate::db::queries::mark_notification_read(&state.db, notif_id, user_id).await {
+            let notif = match crate::db::queries::mark_notification_read(
+                &state.db, notif_id, user_id,
+            )
+            .await
+            {
                 Ok(Some(n)) => n,
                 Ok(None) => return Err(anyhow::anyhow!("Notification not found")),
                 Err(e) => return Err(anyhow::anyhow!("DB error: {e}")),
@@ -40,10 +50,11 @@ pub async fn handle(action: NotificationsAction, state: &AppState) -> anyhow::Re
                 Ok(id) => id,
                 Err(e) => return Err(anyhow::anyhow!("Auth error: {e}")),
             };
-            let count = match crate::db::queries::mark_all_notifications_read(&state.db, user_id).await {
-                Ok(c) => c,
-                Err(e) => return Err(anyhow::anyhow!("DB error: {e}")),
-            };
+            let count =
+                match crate::db::queries::mark_all_notifications_read(&state.db, user_id).await {
+                    Ok(c) => c,
+                    Err(e) => return Err(anyhow::anyhow!("DB error: {e}")),
+                };
             Ok(serde_json::json!({ "updated": count }))
         }
         NotificationsAction::Create { title, body } => {

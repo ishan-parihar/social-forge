@@ -83,13 +83,12 @@ impl SocialProvider for InstagramStandaloneProvider {
             ("scope", scope.as_str()),
         ];
 
-        let url = url::Url::parse_with_params(
-            "https://www.instagram.com/oauth/authorize",
-            &params,
-        )
-        .map_err(|e| ProviderError::Auth(format!("URL parse: {e}")))?;
+        let url = url::Url::parse_with_params("https://www.instagram.com/oauth/authorize", &params)
+            .map_err(|e| ProviderError::Auth(format!("URL parse: {e}")))?;
 
-        Ok(AuthUrlResponse { url: url.to_string() })
+        Ok(AuthUrlResponse {
+            url: url.to_string(),
+        })
     }
 
     async fn exchange_code(
@@ -262,7 +261,9 @@ impl SocialProvider for InstagramStandaloneProvider {
 
         let resp = self
             .http
-            .post(format!("https://graph.instagram.com/{GRAPH_VERSION}/{ig_id}/media"))
+            .post(format!(
+                "https://graph.instagram.com/{GRAPH_VERSION}/{ig_id}/media"
+            ))
             .form(&form)
             .send()
             .await?;
@@ -438,7 +439,9 @@ impl SocialProvider for InstagramStandaloneProvider {
         access_token: &str,
         platform_post_id: &str,
     ) -> Result<Option<serde_json::Value>, ProviderError> {
-        let mut detail = self.get_media_detail(access_token, platform_post_id).await?;
+        let mut detail = self
+            .get_media_detail(access_token, platform_post_id)
+            .await?;
         if detail.get("error").is_some() || detail.get("id").is_none() {
             return Ok(None);
         }
@@ -465,7 +468,9 @@ impl SocialProvider for InstagramStandaloneProvider {
                     }
                 }
             }
-            Err(e) => tracing::debug!("IG standalone insights unavailable for {platform_post_id}: {e}"),
+            Err(e) => {
+                tracing::debug!("IG standalone insights unavailable for {platform_post_id}: {e}")
+            }
         }
 
         Ok(Some(detail))
@@ -476,7 +481,9 @@ impl SocialProvider for InstagramStandaloneProvider {
         access_token: &str,
         platform_post_id: &str,
     ) -> Result<Vec<CommentData>, ProviderError> {
-        let json = self.get_media_comments(access_token, platform_post_id).await?;
+        let json = self
+            .get_media_comments(access_token, platform_post_id)
+            .await?;
         Ok(super::parse_graph_comments(&json))
     }
 
@@ -539,14 +546,15 @@ impl InstagramStandaloneProvider {
         limit: u32,
     ) -> Result<serde_json::Value, ProviderError> {
         let limit = limit.min(100);
-        let url = format!(
-            "https://graph.instagram.com/{GRAPH_VERSION}/{ig_user_id}/media",
-        );
+        let url = format!("https://graph.instagram.com/{GRAPH_VERSION}/{ig_user_id}/media",);
         let resp = self
             .http
             .get(&url)
             .query(&[
-                ("fields", "id,caption,media_type,media_url,permalink,timestamp,like_count,comments_count"),
+                (
+                    "fields",
+                    "id,caption,media_type,media_url,permalink,timestamp,like_count,comments_count",
+                ),
                 ("limit", &limit.to_string()),
                 ("access_token", access_token),
             ])
@@ -557,7 +565,9 @@ impl InstagramStandaloneProvider {
         if status.is_success() {
             Ok(json)
         } else if status == 429 {
-            Err(ProviderError::RateLimited("Instagram API rate limit".into()))
+            Err(ProviderError::RateLimited(
+                "Instagram API rate limit".into(),
+            ))
         } else if status == 401 {
             Err(ProviderError::TokenExpired)
         } else {
@@ -589,7 +599,9 @@ impl InstagramStandaloneProvider {
         if status.is_success() {
             Ok(json)
         } else if status == 429 {
-            Err(ProviderError::RateLimited("Instagram API rate limit".into()))
+            Err(ProviderError::RateLimited(
+                "Instagram API rate limit".into(),
+            ))
         } else if status == 401 {
             Err(ProviderError::TokenExpired)
         } else {
@@ -631,7 +643,9 @@ impl InstagramStandaloneProvider {
         if status.is_success() {
             Ok(json)
         } else if status == 429 {
-            Err(ProviderError::RateLimited("Instagram API rate limit".into()))
+            Err(ProviderError::RateLimited(
+                "Instagram API rate limit".into(),
+            ))
         } else if status == 401 {
             Err(ProviderError::TokenExpired)
         } else {
@@ -648,9 +662,7 @@ impl InstagramStandaloneProvider {
         access_token: &str,
         media_id: &str,
     ) -> Result<serde_json::Value, ProviderError> {
-        let url = format!(
-            "https://graph.instagram.com/{GRAPH_VERSION}/{media_id}/comments",
-        );
+        let url = format!("https://graph.instagram.com/{GRAPH_VERSION}/{media_id}/comments",);
         let resp = self
             .http
             .get(&url)
@@ -665,7 +677,9 @@ impl InstagramStandaloneProvider {
         if status.is_success() {
             Ok(json)
         } else if status == 429 {
-            Err(ProviderError::RateLimited("Instagram API rate limit".into()))
+            Err(ProviderError::RateLimited(
+                "Instagram API rate limit".into(),
+            ))
         } else if status == 401 {
             Err(ProviderError::TokenExpired)
         } else {
@@ -683,9 +697,7 @@ impl InstagramStandaloneProvider {
         comment_id: &str,
         message: &str,
     ) -> Result<serde_json::Value, ProviderError> {
-        let url = format!(
-            "https://graph.instagram.com/{GRAPH_VERSION}/{comment_id}/replies",
-        );
+        let url = format!("https://graph.instagram.com/{GRAPH_VERSION}/{comment_id}/replies",);
         let resp = self
             .http
             .post(&url)
@@ -697,7 +709,9 @@ impl InstagramStandaloneProvider {
         if status.is_success() {
             Ok(json)
         } else if status == 429 {
-            Err(ProviderError::RateLimited("Instagram API rate limit".into()))
+            Err(ProviderError::RateLimited(
+                "Instagram API rate limit".into(),
+            ))
         } else if status == 401 {
             Err(ProviderError::TokenExpired)
         } else {
@@ -720,10 +734,7 @@ impl InstagramStandaloneProvider {
             .http
             .get(url)
             .query(&[
-                (
-                    "fields",
-                    "id,username,profile_picture_url,text,timestamp",
-                ),
+                ("fields", "id,username,profile_picture_url,text,timestamp"),
                 ("access_token", access_token),
             ])
             .send()
@@ -733,7 +744,9 @@ impl InstagramStandaloneProvider {
         if status.is_success() {
             Ok(json)
         } else if status == 429 {
-            Err(ProviderError::RateLimited("Instagram API rate limit".into()))
+            Err(ProviderError::RateLimited(
+                "Instagram API rate limit".into(),
+            ))
         } else if status == 401 {
             Err(ProviderError::TokenExpired)
         } else {
@@ -754,9 +767,7 @@ impl InstagramStandaloneProvider {
         caption: &str,
         media_type: &str,
     ) -> Result<serde_json::Value, ProviderError> {
-        let url = format!(
-            "https://graph.instagram.com/{GRAPH_VERSION}/{ig_user_id}/media",
-        );
+        let url = format!("https://graph.instagram.com/{GRAPH_VERSION}/{ig_user_id}/media",);
         let mut params: Vec<(&str, &str)> = vec![
             ("media_type", media_type),
             ("caption", caption),
@@ -773,7 +784,9 @@ impl InstagramStandaloneProvider {
         if status.is_success() {
             Ok(json)
         } else if status == 429 {
-            Err(ProviderError::RateLimited("Instagram API rate limit".into()))
+            Err(ProviderError::RateLimited(
+                "Instagram API rate limit".into(),
+            ))
         } else if status == 401 {
             Err(ProviderError::TokenExpired)
         } else {
@@ -791,9 +804,8 @@ impl InstagramStandaloneProvider {
         ig_user_id: &str,
         creation_id: &str,
     ) -> Result<serde_json::Value, ProviderError> {
-        let url = format!(
-            "https://graph.instagram.com/{GRAPH_VERSION}/{ig_user_id}/media_publish",
-        );
+        let url =
+            format!("https://graph.instagram.com/{GRAPH_VERSION}/{ig_user_id}/media_publish",);
         let resp = self
             .http
             .post(&url)
@@ -805,7 +817,9 @@ impl InstagramStandaloneProvider {
         if status.is_success() {
             Ok(json)
         } else if status == 429 {
-            Err(ProviderError::RateLimited("Instagram API rate limit".into()))
+            Err(ProviderError::RateLimited(
+                "Instagram API rate limit".into(),
+            ))
         } else if status == 401 {
             Err(ProviderError::TokenExpired)
         } else {
@@ -836,9 +850,7 @@ impl InstagramStandaloneProvider {
                 .unwrap_or("Container status check failed");
             return Err(ProviderError::Api(msg.to_string()));
         }
-        let status_code = json["status_code"]
-            .as_str()
-            .unwrap_or("IN_PROGRESS");
+        let status_code = json["status_code"].as_str().unwrap_or("IN_PROGRESS");
         Ok(status_code.to_string())
     }
 }
@@ -939,7 +951,10 @@ mod tests {
 
     #[test]
     fn parse_should_map_merged_media_counts_and_insights() {
-        let e = super::super::parse_engagement_data("instagram-standalone", merged_media_and_insights());
+        let e = super::super::parse_engagement_data(
+            "instagram-standalone",
+            merged_media_and_insights(),
+        );
         assert_eq!(e.likes, 42);
         assert_eq!(e.comments, 12);
         assert_eq!(e.saves, 7);

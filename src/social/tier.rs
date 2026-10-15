@@ -107,7 +107,10 @@ pub const ARCHIVE_FLAG: &str = "ENABLE_ARCHIVE_PROVIDERS";
 /// the convention used elsewhere in the codebase.
 pub fn archive_providers_enabled() -> bool {
     match std::env::var(ARCHIVE_FLAG) {
-        Ok(v) => !matches!(v.trim().to_ascii_lowercase().as_str(), "" | "0" | "false" | "no" | "off"),
+        Ok(v) => !matches!(
+            v.trim().to_ascii_lowercase().as_str(),
+            "" | "0" | "false" | "no" | "off"
+        ),
         Err(_) => false,
     }
 }
@@ -339,7 +342,10 @@ mod tests {
         use crate::social::test_config;
 
         let registry = ProviderRegistry::new(&test_config(), None, None);
-        for (id, label) in [("x", "𝕏 (Twitter)"), ("instagram-standalone", "Instagram Standalone")] {
+        for (id, label) in [
+            ("x", "𝕏 (Twitter)"),
+            ("instagram-standalone", "Instagram Standalone"),
+        ] {
             let provider = registry
                 .get(id)
                 .unwrap_or_else(|| panic!("{id} is not registered"));

@@ -95,9 +95,7 @@ impl SocialProvider for FarcasterProvider {
 
         let address = creds["address"]
             .as_str()
-            .ok_or_else(|| {
-                ProviderError::Auth("Missing 'address' in credentials".into())
-            })?;
+            .ok_or_else(|| ProviderError::Auth("Missing 'address' in credentials".into()))?;
 
         if address.is_empty() {
             return Err(ProviderError::Auth("address must not be empty".into()));
@@ -132,9 +130,7 @@ impl SocialProvider for FarcasterProvider {
         post: &PostContent,
     ) -> Result<PublishResult, ProviderError> {
         let api_key = self.neynar_api_key.as_deref().ok_or_else(|| {
-            ProviderError::Api(
-                "NEYNAR_API_KEY not configured. Set it in your .env file.".into(),
-            )
+            ProviderError::Api("NEYNAR_API_KEY not configured. Set it in your .env file.".into())
         })?;
 
         let signer_uuid = access_token;
@@ -186,7 +182,11 @@ impl SocialProvider for FarcasterProvider {
 
     async fn pages(&self, access_token: &str) -> Result<Vec<PageInfo>, ProviderError> {
         let display = if access_token.len() > 10 {
-            format!("{}...{}", &access_token[..6], &access_token[access_token.len() - 4..])
+            format!(
+                "{}...{}",
+                &access_token[..6],
+                &access_token[access_token.len() - 4..]
+            )
         } else {
             access_token.to_string()
         };
@@ -206,7 +206,11 @@ impl SocialProvider for FarcasterProvider {
         _page_id: &str,
     ) -> Result<PageInfo, ProviderError> {
         let display = if access_token.len() > 10 {
-            format!("{}...{}", &access_token[..6], &access_token[access_token.len() - 4..])
+            format!(
+                "{}...{}",
+                &access_token[..6],
+                &access_token[access_token.len() - 4..]
+            )
         } else {
             access_token.to_string()
         };

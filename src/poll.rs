@@ -179,23 +179,18 @@ mod tests {
     /// of the delay-shaped tasks.
     #[tokio::test]
     async fn first_tick_controls_whether_the_body_runs_at_startup() {
-        for (first, expected_at_startup) in [(FirstTick::Now, true), (FirstTick::AfterDelay, false)] {
+        for (first, expected_at_startup) in [(FirstTick::Now, true), (FirstTick::AfterDelay, false)]
+        {
             let (tx, rx) = watch::channel(false);
             let runs = Arc::new(AtomicUsize::new(0));
 
-            spawn_poll(
-                Duration::from_secs(3600),
-                first,
-                rx,
-                "shutting down",
-                {
-                    let runs = runs.clone();
-                    move || {
-                        runs.fetch_add(1, Ordering::SeqCst);
-                        async {}
-                    }
-                },
-            );
+            spawn_poll(Duration::from_secs(3600), first, rx, "shutting down", {
+                let runs = runs.clone();
+                move || {
+                    runs.fetch_add(1, Ordering::SeqCst);
+                    async {}
+                }
+            });
 
             tokio::time::sleep(Duration::from_millis(30)).await;
             assert_eq!(

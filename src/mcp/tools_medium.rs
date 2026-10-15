@@ -1,7 +1,7 @@
 // ─── MCP Medium Tools ────────────────────────────────────────────
 // Medium API v1 tools via the MediumProvider (API key-based).
 
-use rmcp::{Json, schemars::JsonSchema};
+use rmcp::{schemars::JsonSchema, Json};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use uuid::Uuid;
@@ -22,11 +22,14 @@ pub struct MdCreatePostInput {
     pub tags: Option<Vec<String>>,
     /// Publish status: "draft", "public", or "unlisted" (default: "draft")
     pub publish_status: Option<String>,
+    /// §5.4: which connected Medium account to use — integration UUID,
+    /// "medium:Name", or empty for the first connected account.
+    #[serde(default)]
+    pub integration: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
-pub struct MdListPostsInput {
-}
+pub struct MdListPostsInput {}
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct MdGetPostInput {
@@ -63,7 +66,13 @@ pub async fn handle_md_create_post(
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     // §4.2: through the publish pipeline — posts row + idempotency + retries.
-    let integration = super::tools_posts::integration_for_provider(state, user_id, "medium").await?;
+    let integration = super::tools_posts::select_integration(
+        state,
+        user_id,
+        "medium",
+        input.integration.as_deref(),
+    )
+    .await?;
 
     let mut settings = json!({});
     if let Some(title) = &input.title {

@@ -2,7 +2,7 @@
 // Slack Web API tools for sending messages, listing channels, reading history, and listing users.
 // Uses OAuth user tokens stored in integrations table.
 
-use rmcp::{Json, schemars::JsonSchema};
+use rmcp::{schemars::JsonSchema, Json};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use uuid::Uuid;
@@ -18,11 +18,14 @@ pub struct SlSendMessageInput {
     pub channel: String,
     /// Message text content (up to 40,000 characters, supports mrkdwn)
     pub content: String,
+    /// §5.4: which connected Slack workspace to use — integration UUID,
+    /// "slack:Name", or empty for the first connected workspace.
+    #[serde(default)]
+    pub integration: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
-pub struct SlListChannelsInput {
-}
+pub struct SlListChannelsInput {}
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct SlChannelHistoryInput {
@@ -33,16 +36,12 @@ pub struct SlChannelHistoryInput {
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
-pub struct SlListUsersInput {
-}
+pub struct SlListUsersInput {}
 
 // ── Helpers ──────────────────────────────────────────────────
 
 /// Find a Slack integration for the given user and return its access token.
-async fn find_slack_token(
-    state: &AppState,
-    user_id: Uuid,
-) -> Result<String, String> {
+async fn find_slack_token(state: &AppState, user_id: Uuid) -> Result<String, String> {
     let integrations = crate::db::queries::list_integrations(&state.db, user_id)
         .await
         .map_err(|e| format!("DB error: {e}"))?;
@@ -54,7 +53,8 @@ async fn find_slack_token(
             "Slack not connected. Connect Slack first via integrations_connect.".to_string()
         })?;
 
-    let tok = crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
+    let tok =
+        crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
     Ok(tok)
 }
 
@@ -70,7 +70,13 @@ pub async fn handle_sl_send_message(
 ) -> Result<Json<Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     // §4.2: through the publish pipeline — posts row + idempotency + retries.
-    let integration = super::tools_posts::integration_for_provider(state, user_id, "slack").await?;
+    let integration = super::tools_posts::select_integration(
+        state,
+        user_id,
+        "slack",
+        input.integration.as_deref(),
+    )
+    .await?;
 
     let (_post_id, platform_id, url) = super::tools_posts::publish_now_via_pipeline(
         state,

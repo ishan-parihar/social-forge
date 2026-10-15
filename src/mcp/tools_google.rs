@@ -3,16 +3,16 @@
 // All use provider_identifier "google" for unified token lookup.
 // Follows the same pattern as tools_instagram_standalone.rs.
 
-use rmcp::{Json, schemars::JsonSchema};
+use rmcp::{schemars::JsonSchema, Json};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::api::AppState;
 use crate::crypto;
-use crate::social::youtube::YoutubeProvider;
-use crate::social::gmail::GmailProvider;
 use crate::social::calendar::CalendarProvider;
 use crate::social::drive::DriveProvider;
+use crate::social::gmail::GmailProvider;
+use crate::social::youtube::YoutubeProvider;
 
 // ══════════════════════════════════════════════════════════════
 // SHARED HELPERS
@@ -28,7 +28,9 @@ async fn find_goog_token(state: &AppState, user_id: Uuid) -> Result<String, Stri
     let goog = integrations
         .iter()
         .find(|i| i.provider_identifier == "google")
-        .ok_or_else(|| "Google not connected. Connect it via the onboarding page first.".to_string())?;
+        .ok_or_else(|| {
+            "Google not connected. Connect it via the onboarding page first.".to_string()
+        })?;
 
     let tok = crypto::maybe_decrypt_token(&goog.access_token, state.token_key.as_ref());
     Ok(tok)
@@ -200,7 +202,13 @@ pub async fn handle_goog_get_analytics(
     let token = find_goog_token(state, user_id).await?;
     let provider = YoutubeProvider::new(&state.config);
     let result = provider
-        .get_analytics(&token, &input.channel_id, &input.metrics, &input.start_date, &input.end_date)
+        .get_analytics(
+            &token,
+            &input.channel_id,
+            &input.metrics,
+            &input.start_date,
+            &input.end_date,
+        )
         .await
         .map_err(|e| format!("YouTube get analytics failed: {e}"))?;
     Ok(Json(serde_json::json!({ "data": result })))
@@ -229,7 +237,12 @@ pub async fn handle_goog_find_creators(
     let token = find_goog_token(state, user_id).await?;
     let provider = YoutubeProvider::new(&state.config);
     let result = provider
-        .find_creators(&token, &input.query, input.min_subscribers, input.max_results)
+        .find_creators(
+            &token,
+            &input.query,
+            input.min_subscribers,
+            input.max_results,
+        )
         .await
         .map_err(|e| format!("YouTube find creators failed: {e}"))?;
     Ok(Json(serde_json::json!({ "data": result })))
@@ -468,7 +481,13 @@ pub async fn handle_goog_list_events(
     let cal_id = input.calendar_id.as_deref().unwrap_or("primary");
     let max_results = input.max_results.unwrap_or(20);
     let result = provider
-        .list_events(&token, cal_id, max_results, input.time_min.as_deref(), input.time_max.as_deref())
+        .list_events(
+            &token,
+            cal_id,
+            max_results,
+            input.time_min.as_deref(),
+            input.time_max.as_deref(),
+        )
         .await
         .map_err(|e| format!("Calendar list events failed: {e}"))?;
     Ok(Json(serde_json::json!({ "data": result })))
@@ -498,7 +517,14 @@ pub async fn handle_goog_create_event(
     let provider = CalendarProvider::new(&state.config);
     let cal_id = input.calendar_id.as_deref().unwrap_or("primary");
     let result = provider
-        .create_event(&token, cal_id, &input.summary, &input.start_time, &input.end_time, input.description.as_deref())
+        .create_event(
+            &token,
+            cal_id,
+            &input.summary,
+            &input.start_time,
+            &input.end_time,
+            input.description.as_deref(),
+        )
         .await
         .map_err(|e| format!("Calendar create event failed: {e}"))?;
     Ok(Json(serde_json::json!({ "data": result })))
@@ -513,7 +539,13 @@ pub async fn handle_goog_update_event(
     let provider = CalendarProvider::new(&state.config);
     let cal_id = input.calendar_id.as_deref().unwrap_or("primary");
     let result = provider
-        .update_event(&token, cal_id, &input.event_id, input.summary.as_deref(), input.description.as_deref())
+        .update_event(
+            &token,
+            cal_id,
+            &input.event_id,
+            input.summary.as_deref(),
+            input.description.as_deref(),
+        )
         .await
         .map_err(|e| format!("Calendar update event failed: {e}"))?;
     Ok(Json(serde_json::json!({ "data": result })))

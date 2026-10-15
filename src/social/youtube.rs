@@ -48,8 +48,7 @@ pub struct YoutubeProvider {
 
 impl YoutubeProvider {
     pub fn new(config: &Config) -> Self {
-        let (client_id, client_secret) =
-            config.provider_credentials("youtube").unwrap_or_default();
+        let (client_id, client_secret) = config.provider_credentials("youtube").unwrap_or_default();
         Self {
             client_id,
             client_secret,
@@ -67,7 +66,8 @@ impl YoutubeProvider {
                 items
                     .iter()
                     .filter_map(|thread| {
-                        let mut comment = youtube_comment(thread.pointer("/snippet/topLevelComment")?)?;
+                        let mut comment =
+                            youtube_comment(thread.pointer("/snippet/topLevelComment")?)?;
                         comment.replies = thread
                             .pointer("/snippet/replies/comments")
                             .and_then(|r| r.as_array())
@@ -407,20 +407,39 @@ impl YoutubeProvider {
 
     /// Search for creators on a topic. Searches videos by query, groups by channel,
     /// and enriches each channel with subscriber count, email from description.
-    pub async fn find_creators(&self, access_token: &str, query: &str, min_subscribers: Option<u32>, max_results: Option<u32>) -> Result<serde_json::Value, ProviderError> {
+    pub async fn find_creators(
+        &self,
+        access_token: &str,
+        query: &str,
+        min_subscribers: Option<u32>,
+        max_results: Option<u32>,
+    ) -> Result<serde_json::Value, ProviderError> {
         let limit = max_results.unwrap_or(10).min(50);
-        let encoded_query: String = url::form_urlencoded::byte_serialize(query.as_bytes()).collect();
+        let encoded_query: String =
+            url::form_urlencoded::byte_serialize(query.as_bytes()).collect();
         let search_url = format!(
             "https://www.googleapis.com/youtube/v3/search?part=snippet&q={}&type=video&maxResults={}&access_token={}",
             encoded_query, limit, access_token
         );
-        let search_resp = self.http.get(&search_url)
-            .send().await.map_err(|e| ProviderError::Api(e.to_string()))?;
+        let search_resp = self
+            .http
+            .get(&search_url)
+            .send()
+            .await
+            .map_err(|e| ProviderError::Api(e.to_string()))?;
         let search_status = search_resp.status();
-        let search_text = search_resp.text().await.map_err(|e| ProviderError::Api(e.to_string()))?;
+        let search_text = search_resp
+            .text()
+            .await
+            .map_err(|e| ProviderError::Api(e.to_string()))?;
         if !search_status.is_success() {
             let v: serde_json::Value = serde_json::from_str(&search_text).unwrap_or_default();
-            return Err(ProviderError::Api(v["error"]["message"].as_str().unwrap_or(&search_text).into()));
+            return Err(ProviderError::Api(
+                v["error"]["message"]
+                    .as_str()
+                    .unwrap_or(&search_text)
+                    .into(),
+            ));
         }
         let search_data: serde_json::Value = serde_json::from_str(&search_text).unwrap_or_default();
 
@@ -445,13 +464,22 @@ impl YoutubeProvider {
             "https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id={}&access_token={}",
             ids_param, access_token
         );
-        let stats_resp = self.http.get(&stats_url)
-            .send().await.map_err(|e| ProviderError::Api(e.to_string()))?;
+        let stats_resp = self
+            .http
+            .get(&stats_url)
+            .send()
+            .await
+            .map_err(|e| ProviderError::Api(e.to_string()))?;
         let stats_status = stats_resp.status();
-        let stats_text = stats_resp.text().await.map_err(|e| ProviderError::Api(e.to_string()))?;
+        let stats_text = stats_resp
+            .text()
+            .await
+            .map_err(|e| ProviderError::Api(e.to_string()))?;
         if !stats_status.is_success() {
             let v: serde_json::Value = serde_json::from_str(&stats_text).unwrap_or_default();
-            return Err(ProviderError::Api(v["error"]["message"].as_str().unwrap_or(&stats_text).into()));
+            return Err(ProviderError::Api(
+                v["error"]["message"].as_str().unwrap_or(&stats_text).into(),
+            ));
         }
         let stats_data: serde_json::Value = serde_json::from_str(&stats_text).unwrap_or_default();
 
@@ -459,11 +487,14 @@ impl YoutubeProvider {
         let mut creators = Vec::new();
         if let Some(channels) = stats_data["items"].as_array() {
             for ch in channels {
-                let sub_count: i64 = ch["statistics"]["subscriberCount"].as_str()
-                    .and_then(|s| s.parse().ok()).unwrap_or(0);
+                let sub_count: i64 = ch["statistics"]["subscriberCount"]
+                    .as_str()
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(0);
                 if sub_count >= min_subs {
                     let description = ch["snippet"]["description"].as_str().unwrap_or("");
-                    let email = description.split_whitespace()
+                    let email = description
+                        .split_whitespace()
                         .find(|w| w.contains('@') && w.contains('.'))
                         .map(|e| e.trim_end_matches('.').trim_end_matches(',').to_string());
                     creators.push(serde_json::json!({
@@ -501,7 +532,11 @@ impl YoutubeProvider {
         if !internal_id.is_empty() {
             return Ok(Some(internal_id.to_string()));
         }
-        Ok(self.pages(access_token).await?.first().map(|c| c.id.clone()))
+        Ok(self
+            .pages(access_token)
+            .await?
+            .first()
+            .map(|c| c.id.clone()))
     }
 
     /// `statistics` sub-object of the first item in a Data API list response.
@@ -637,13 +672,13 @@ impl SocialProvider for YoutubeProvider {
             ("prompt", "consent"),
         ];
 
-        let url = url::Url::parse_with_params(
-            "https://accounts.google.com/o/oauth2/v2/auth",
-            &params,
-        )
-        .map_err(|e| ProviderError::Auth(format!("URL parse: {e}")))?;
+        let url =
+            url::Url::parse_with_params("https://accounts.google.com/o/oauth2/v2/auth", &params)
+                .map_err(|e| ProviderError::Auth(format!("URL parse: {e}")))?;
 
-        Ok(AuthUrlResponse { url: url.to_string() })
+        Ok(AuthUrlResponse {
+            url: url.to_string(),
+        })
     }
 
     async fn exchange_code(
@@ -749,17 +784,12 @@ impl SocialProvider for YoutubeProvider {
             .iter()
             .map(|item| PageInfo {
                 id: item["id"].as_str().unwrap_or("").to_string(),
-                name: item["snippet"]["title"]
-                    .as_str()
-                    .unwrap_or("")
-                    .to_string(),
+                name: item["snippet"]["title"].as_str().unwrap_or("").to_string(),
                 access_token: Some(access_token.to_string()),
                 picture: item["snippet"]["thumbnails"]["default"]["url"]
                     .as_str()
                     .map(String::from),
-                username: item["snippet"]["customUrl"]
-                    .as_str()
-                    .map(String::from),
+                username: item["snippet"]["customUrl"].as_str().map(String::from),
             })
             .collect())
     }
@@ -785,17 +815,12 @@ impl SocialProvider for YoutubeProvider {
         if let Some(item) = json["items"].as_array().and_then(|a| a.first()) {
             Ok(PageInfo {
                 id: item["id"].as_str().unwrap_or("").to_string(),
-                name: item["snippet"]["title"]
-                    .as_str()
-                    .unwrap_or("")
-                    .to_string(),
+                name: item["snippet"]["title"].as_str().unwrap_or("").to_string(),
                 access_token: Some(access_token.to_string()),
                 picture: item["snippet"]["thumbnails"]["default"]["url"]
                     .as_str()
                     .map(String::from),
-                username: item["snippet"]["customUrl"]
-                    .as_str()
-                    .map(String::from),
+                username: item["snippet"]["customUrl"].as_str().map(String::from),
             })
         } else {
             Err(ProviderError::Api("YouTube channel not found".into()))
@@ -818,7 +843,12 @@ impl SocialProvider for YoutubeProvider {
         })
     }
 
-    async fn get_recent_posts(&self, access_token: &str, _internal_id: &str, limit: u32) -> Result<Vec<ExternalPostData>, ProviderError> {
+    async fn get_recent_posts(
+        &self,
+        access_token: &str,
+        _internal_id: &str,
+        limit: u32,
+    ) -> Result<Vec<ExternalPostData>, ProviderError> {
         // Get the user's channel
         let channels = self.pages(access_token).await?;
         if channels.is_empty() {
@@ -852,7 +882,9 @@ impl SocialProvider for YoutubeProvider {
                 let title = snippet["title"].as_str().unwrap_or("");
                 let description = snippet["description"].as_str().unwrap_or("");
                 let published_at = snippet["publishedAt"].as_str().unwrap_or("");
-                let thumb = snippet["thumbnails"]["default"]["url"].as_str().map(|s| s.to_string());
+                let thumb = snippet["thumbnails"]["default"]["url"]
+                    .as_str()
+                    .map(|s| s.to_string());
 
                 let posted_at = crate::social::common::parse_timestamp(published_at);
 
@@ -970,8 +1002,7 @@ impl SocialProvider for YoutubeProvider {
     ) -> Result<PublishResult, ProviderError> {
         if post.media.is_empty() {
             return Err(ProviderError::InvalidRequest(
-                "YouTube video upload requires at least one media attachment (video file)."
-                    .into(),
+                "YouTube video upload requires at least one media attachment (video file).".into(),
             ));
         }
 
@@ -1037,8 +1068,7 @@ impl SocialProvider for YoutubeProvider {
             return Err(ProviderError::TokenExpired);
         }
         if !init_status.is_success() {
-            let err_body: serde_json::Value =
-                init_resp.json().await.unwrap_or_default();
+            let err_body: serde_json::Value = init_resp.json().await.unwrap_or_default();
             let msg = err_body["error"]["message"]
                 .as_str()
                 .unwrap_or("Failed to initialize resumable upload");
@@ -1060,14 +1090,10 @@ impl SocialProvider for YoutubeProvider {
             .headers()
             .get(reqwest::header::LOCATION)
             .ok_or_else(|| {
-                ProviderError::Api(
-                    "No Location header in resumable upload response".into(),
-                )
+                ProviderError::Api("No Location header in resumable upload response".into())
             })?
             .to_str()
-            .map_err(|e| {
-                ProviderError::Api(format!("Invalid Location header: {e}"))
-            })?
+            .map_err(|e| ProviderError::Api(format!("Invalid Location header: {e}")))?
             .to_string();
 
         // ── Step 2: Upload the video binary data ───────────────────────────
@@ -1085,8 +1111,7 @@ impl SocialProvider for YoutubeProvider {
             return Err(ProviderError::TokenExpired);
         }
         if !upload_status.is_success() {
-            let err_body: serde_json::Value =
-                upload_resp.json().await.unwrap_or_default();
+            let err_body: serde_json::Value = upload_resp.json().await.unwrap_or_default();
             let msg = err_body["error"]["message"]
                 .as_str()
                 .unwrap_or("Failed to upload video to YouTube");
@@ -1104,15 +1129,13 @@ impl SocialProvider for YoutubeProvider {
         }
 
         let json: serde_json::Value = upload_resp.json().await?;
-        let video_id = json["id"].as_str().ok_or_else(|| {
-            ProviderError::Api("YouTube did not return a video ID".into())
-        })?;
+        let video_id = json["id"]
+            .as_str()
+            .ok_or_else(|| ProviderError::Api("YouTube did not return a video ID".into()))?;
 
         Ok(PublishResult {
             platform_post_id: video_id.to_string(),
-            platform_post_url: Some(format!(
-                "https://www.youtube.com/watch?v={video_id}"
-            )),
+            platform_post_url: Some(format!("https://www.youtube.com/watch?v={video_id}")),
             status: "published".into(),
         })
     }
@@ -1261,9 +1284,17 @@ mod tests {
         let series = metrics_series(
             &stats,
             "2026-09-30",
-            &[("Subscribers", "subscriberCount"), ("Total Views", "viewCount"), ("Videos", "videoCount")],
+            &[
+                ("Subscribers", "subscriberCount"),
+                ("Total Views", "viewCount"),
+                ("Videos", "videoCount"),
+            ],
         );
-        assert_eq!(series.len(), 2, "missing videoCount must be skipped, not zero-filled");
+        assert_eq!(
+            series.len(),
+            2,
+            "missing videoCount must be skipped, not zero-filled"
+        );
         assert_eq!(series[0].label, "Subscribers");
         assert_eq!(series[0].data[0].total, "128");
         assert_eq!(series[1].data[0].date, "2026-09-30");
@@ -1288,7 +1319,9 @@ mod tests {
 
     #[test]
     fn map_error_explains_upload_limit() {
-        let msg = provider().map_error("The uploadLimitExceeded quota was exceeded", 403).unwrap();
+        let msg = provider()
+            .map_error("The uploadLimitExceeded quota was exceeded", 403)
+            .unwrap();
         assert!(msg.contains("daily upload quota"), "got: {msg}");
     }
 
@@ -1305,14 +1338,19 @@ mod tests {
 
     #[test]
     fn map_error_explains_api_quota() {
-        let msg = provider().map_error("Quota exceeded for quota metric", 403).unwrap();
+        let msg = provider()
+            .map_error("Quota exceeded for quota metric", 403)
+            .unwrap();
         assert!(msg.contains("API quota exceeded"), "got: {msg}");
     }
 
     #[test]
     fn map_error_explains_youtube_forbidden() {
         let msg = provider()
-            .map_error("The request cannot be completed because you have exceeded the quota for youtube", 403)
+            .map_error(
+                "The request cannot be completed because you have exceeded the quota for youtube",
+                403,
+            )
             .unwrap();
         assert!(msg.contains("youtube.upload"), "got: {msg}");
     }
@@ -1325,7 +1363,9 @@ mod tests {
 
     #[test]
     fn map_error_explains_rejected_media() {
-        let msg = provider().map_error("The video upload was rejected", 422).unwrap();
+        let msg = provider()
+            .map_error("The video upload was rejected", 422)
+            .unwrap();
         assert!(msg.contains("256 GB"), "got: {msg}");
     }
 
@@ -1378,7 +1418,10 @@ mod tests {
         assert_eq!(comments[0].id, "c1");
         assert_eq!(comments[0].text, "great video");
         assert_eq!(comments[0].author_name.as_deref(), Some("Ada"));
-        assert_eq!(comments[0].author_avatar.as_deref(), Some("https://img/a.jpg"));
+        assert_eq!(
+            comments[0].author_avatar.as_deref(),
+            Some("https://img/a.jpg")
+        );
         assert_eq!(comments[0].like_count, 4);
         assert_eq!(comments[0].replies.len(), 1);
         assert_eq!(comments[0].replies[0].id, "c2");

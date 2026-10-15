@@ -2,7 +2,7 @@
 // LinkedIn Company Page tools — list pages, get page info,
 // get page posts, and create comments as a page.
 
-use rmcp::{Json, schemars::JsonSchema};
+use rmcp::{schemars::JsonSchema, Json};
 use serde::{Deserialize, Serialize};
 
 use crate::api::AppState;
@@ -48,10 +48,7 @@ pub struct LipCreateCommentInput {
 
 // ── Helpers ──────────────────────────────────────────────────
 
-async fn find_linkedin_page_token(
-    state: &AppState,
-    lip_id: &str,
-) -> Result<String, String> {
+async fn find_linkedin_page_token(state: &AppState, lip_id: &str) -> Result<String, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let integration = state
         .integration_by_internal_id(user_id, "linkedin-page", lip_id)
@@ -64,7 +61,8 @@ async fn find_linkedin_page_token(
             )
         })?;
 
-    let tok = crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
+    let tok =
+        crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
     Ok(tok)
 }
 
@@ -208,13 +206,18 @@ pub async fn handle_lip_create_post(
         .header("X-Restli-Protocol-Version", "2.0.0")
         .header("LinkedIn-Version", LINKEDIN_VERSION)
         .header("Content-Type", "application/json")
-        .json(&body).send().await
+        .json(&body)
+        .send()
+        .await
         .map_err(|e| format!("LinkedIn post failed: {e}"))?;
 
     let status = resp.status();
-    let post_id = resp.headers().get("x-restli-id")
+    let post_id = resp
+        .headers()
+        .get("x-restli-id")
         .and_then(|v| v.to_str().ok())
-        .unwrap_or("").to_string();
+        .unwrap_or("")
+        .to_string();
 
     if !status.is_success() {
         return Err(format!("LinkedIn post failed ({})", status));
@@ -228,9 +231,13 @@ pub async fn handle_lip_get_analytics(
 ) -> Result<Json<LipGetAnalyticsOutput>, String> {
     let token = find_linkedin_page_token(state, &input.lip_id).await?;
     let provider = create_provider(state);
-    let data = provider.analytics(&token, &input.lip_id, 30).await
+    let data = provider
+        .analytics(&token, &input.lip_id, 30)
+        .await
         .map_err(|e| format!("LinkedIn analytics failed: {e}"))?;
-    Ok(Json(LipGetAnalyticsOutput { data: serde_json::to_value(data).unwrap_or_default() }))
+    Ok(Json(LipGetAnalyticsOutput {
+        data: serde_json::to_value(data).unwrap_or_default(),
+    }))
 }
 
 pub async fn handle_lip_get_post_analytics(
@@ -239,9 +246,13 @@ pub async fn handle_lip_get_post_analytics(
 ) -> Result<Json<LipGetAnalyticsOutput>, String> {
     let token = find_linkedin_page_token(state, &input.lip_id).await?;
     let provider = create_provider(state);
-    let data = provider.post_analytics(&token, &input.post_urn).await
+    let data = provider
+        .post_analytics(&token, &input.post_urn)
+        .await
         .map_err(|e| format!("LinkedIn post analytics failed: {e}"))?;
-    Ok(Json(LipGetAnalyticsOutput { data: serde_json::to_value(data).unwrap_or_default() }))
+    Ok(Json(LipGetAnalyticsOutput {
+        data: serde_json::to_value(data).unwrap_or_default(),
+    }))
 }
 
 pub async fn handle_lip_get_followers(
@@ -258,7 +269,8 @@ pub async fn handle_lip_get_followers(
         .header("Authorization", format!("Bearer {token}"))
         .header("LinkedIn-Version", LINKEDIN_VERSION)
         .header("X-Restli-Protocol-Version", "2.0.0")
-        .send().await
+        .send()
+        .await
         .map_err(|e| format!("LinkedIn followers failed: {e}"))?;
 
     if !resp.status().is_success() {
@@ -266,7 +278,9 @@ pub async fn handle_lip_get_followers(
     }
     let json: serde_json::Value = resp.json().await.map_err(|e| format!("Parse error: {e}"))?;
     let count = json["firstDegreeSize"].as_u64().unwrap_or(0);
-    Ok(Json(LipGetFollowersOutput { follower_count: count }))
+    Ok(Json(LipGetFollowersOutput {
+        follower_count: count,
+    }))
 }
 
 pub async fn handle_lip_delete_post(
@@ -283,15 +297,21 @@ pub async fn handle_lip_delete_post(
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Restli-Protocol-Version", "2.0.0")
         .header("LinkedIn-Version", LINKEDIN_VERSION)
-        .send().await
+        .send()
+        .await
         .map_err(|e| format!("LinkedIn delete failed: {e}"))?;
 
     let status = resp.status();
     if status.is_success() || status.as_u16() == 204 {
-        Ok(Json(serde_json::json!({"deleted": true, "post_urn": input.post_urn})))
+        Ok(Json(
+            serde_json::json!({"deleted": true, "post_urn": input.post_urn}),
+        ))
     } else {
         let body = resp.text().await.unwrap_or_default();
-        Err(format!("LinkedIn Page delete failed ({}): {}", status, body))
+        Err(format!(
+            "LinkedIn Page delete failed ({}): {}",
+            status, body
+        ))
     }
 }
 
@@ -309,7 +329,8 @@ pub async fn handle_lip_get_reactions(
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Restli-Protocol-Version", "2.0.0")
         .header("LinkedIn-Version", LINKEDIN_VERSION)
-        .send().await
+        .send()
+        .await
         .map_err(|e| format!("LinkedIn get reactions failed: {e}"))?;
 
     if !resp.status().is_success() {
@@ -333,7 +354,8 @@ pub async fn handle_lip_get_shares(
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Restli-Protocol-Version", "2.0.0")
         .header("LinkedIn-Version", LINKEDIN_VERSION)
-        .send().await
+        .send()
+        .await
         .map_err(|e| format!("LinkedIn get shares failed: {e}"))?;
 
     if !resp.status().is_success() {

@@ -3,7 +3,7 @@
 // Uses Bot token auth internally (from config.discord_bot_token), with OAuth user
 // token for channel/guild association lookup.
 
-use rmcp::{Json, schemars::JsonSchema};
+use rmcp::{schemars::JsonSchema, Json};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use uuid::Uuid;
@@ -40,7 +40,11 @@ pub struct DiGetThreadMembersInput {
 
 /// Find a Discord integration by channel_id (stored as internal_id) and return its access token.
 /// The bot_token is not returned — it is read from config by DiscordProvider internally.
-async fn find_di_token(state: &AppState, user_id: Uuid, channel_id: &str) -> Result<String, String> {
+async fn find_di_token(
+    state: &AppState,
+    user_id: Uuid,
+    channel_id: &str,
+) -> Result<String, String> {
     let discord = state
         .integration_by_internal_id(user_id, "discord", channel_id)
         .await
@@ -224,7 +228,12 @@ pub async fn handle_di_create_forum_post(
 ) -> Result<Json<Value>, String> {
     let provider = create_di_provider(state);
     provider
-        .create_forum_post(&input.channel_id, &input.name, &input.content, &input.applied_tags)
+        .create_forum_post(
+            &input.channel_id,
+            &input.name,
+            &input.content,
+            &input.applied_tags,
+        )
         .await
         .map(Json)
         .map_err(|e| e.to_string())

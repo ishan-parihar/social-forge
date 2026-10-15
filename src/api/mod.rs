@@ -2,7 +2,13 @@
 // axum HTTP router combining all route modules.
 // Protected routes use the auth middleware chain.
 
-use axum::{body::Body, extract::State, http::{Request, Response, StatusCode}, middleware::{self, Next}, Router};
+use axum::{
+    body::Body,
+    extract::State,
+    http::{Request, Response, StatusCode},
+    middleware::{self, Next},
+    Router,
+};
 use rust_embed::RustEmbed;
 use tower_http::cors::CorsLayer;
 use tower_http::limit::RequestBodyLimitLayer;
@@ -19,18 +25,22 @@ struct FrontendAssets;
 
 use crate::auth::middleware::{auth_middleware, AuthState};
 use crate::config::Config;
-use sqlx::SqlitePool;
 use crate::realtime::Broadcaster;
 use crate::services::telegram_client::OptionalTelegramClient;
 use crate::social::registry::ProviderRegistry;
 use crate::wa::OptionalWhaClient;
+use sqlx::SqlitePool;
 
-mod analytics;
 mod ai;
+mod analytics;
 mod auth;
-mod billing;  // only stripe_webhook (public, signature-verified) is used
+mod automation;
+mod billing; // only stripe_webhook (public, signature-verified) is used
 mod calendar;
+mod campaigns;
 mod comments;
+mod developer;
+mod dms;
 mod feed;
 mod integrations;
 mod media;
@@ -41,16 +51,12 @@ mod posts;
 mod profile;
 mod rate_limit;
 mod rss;
-mod sse;
 mod sets;
 mod signatures;
+mod sse;
 mod tags;
-mod developer;
 mod v1;
 mod webhooks;
-mod dms;
-mod automation;
-mod campaigns;
 
 /// Shared application state available to all handlers
 #[derive(Clone)]
@@ -103,43 +109,94 @@ pub fn build_router(state: AppState) -> Router {
     } else {
         CorsLayer::new()
             .allow_origin(tower_http::cors::AllowOrigin::exact(
-                cors_origin.parse::<axum::http::HeaderValue>().unwrap_or(axum::http::HeaderValue::from_static("*")),
+                cors_origin
+                    .parse::<axum::http::HeaderValue>()
+                    .unwrap_or(axum::http::HeaderValue::from_static("*")),
             ))
-            .allow_methods([axum::http::Method::GET, axum::http::Method::POST, axum::http::Method::PUT, axum::http::Method::DELETE, axum::http::Method::OPTIONS])
-            .allow_headers([axum::http::header::CONTENT_TYPE, axum::http::header::AUTHORIZATION])
+            .allow_methods([
+                axum::http::Method::GET,
+                axum::http::Method::POST,
+                axum::http::Method::PUT,
+                axum::http::Method::DELETE,
+                axum::http::Method::OPTIONS,
+            ])
+            .allow_headers([
+                axum::http::header::CONTENT_TYPE,
+                axum::http::header::AUTHORIZATION,
+            ])
     };
 
     // Public routes — no auth required
     let public_routes = Router::new()
         .route("/health", axum::routing::get(health_check))
-        .route("/ready", axum::routing::get({
-            let db_for_ready = state.db.clone();
-            move || ready_check(db_for_ready)
-        }))
-        .route("/api/metrics", axum::routing::get({
-            let db_for_metrics = state.db.clone();
-            move || metrics_check(db_for_metrics)
-        }))
-        .route("/api/streak", axum::routing::get({
-            let db_for_streak = state.db.clone();
-            move || streak_check(db_for_streak)
-        }))
+        .route(
+            "/ready",
+            axum::routing::get({
+                let db_for_ready = state.db.clone();
+                move || ready_check(db_for_ready)
+            }),
+        )
+        .route(
+            "/api/metrics",
+            axum::routing::get({
+                let db_for_metrics = state.db.clone();
+                move || metrics_check(db_for_metrics)
+            }),
+        )
+        .route(
+            "/api/streak",
+            axum::routing::get({
+                let db_for_streak = state.db.clone();
+                move || streak_check(db_for_streak)
+            }),
+        )
         .route("/api/auth/login", axum::routing::post(auth::login))
-        .route("/api/auth/callback", axum::routing::get(integrations::oauth_callback))
-        .route("/api/auth/callback/{provider}", axum::routing::get(integrations::oauth_callback))
-        .route("/integrations/social/{provider}", axum::routing::get(integrations::oauth_callback))
+        .route(
+            "/api/auth/callback",
+            axum::routing::get(integrations::oauth_callback),
+        )
+        .route(
+            "/api/auth/callback/{provider}",
+            axum::routing::get(integrations::oauth_callback),
+        )
+        .route(
+            "/integrations/social/{provider}",
+            axum::routing::get(integrations::oauth_callback),
+        )
         .route("/api/media/{id}", axum::routing::get(media::serve_media))
         .route("/api/proxy-media", axum::routing::get(media::proxy_media))
         // Public onboarding — browser-accessible OAuth flow (no JWT header needed)
         .route("/setup", axum::routing::get(onboard::onboard_page))
-        .route("/api/public/connect/x-cookies", axum::routing::get(onboard::x_cookies_form).post(onboard::x_cookies_submit))
-.route("/api/public/connect/x-cookies/import", axum::routing::post(onboard::x_cookies_import))
-.route("/api/public/connect/reddit-cookies", axum::routing::get(onboard::reddit_cookies_form).post(onboard::reddit_cookies_submit))
-.route("/api/public/connect/reddit-cookies/import", axum::routing::post(onboard::reddit_cookies_import))
-.route("/api/public/connect/telegram-bot-token", axum::routing::get(onboard::telegram_bot_token_form).post(onboard::telegram_bot_token_submit))
-        .route("/api/public/connect/{provider}", axum::routing::get(onboard::public_connect))
+        .route(
+            "/api/public/connect/x-cookies",
+            axum::routing::get(onboard::x_cookies_form).post(onboard::x_cookies_submit),
+        )
+        .route(
+            "/api/public/connect/x-cookies/import",
+            axum::routing::post(onboard::x_cookies_import),
+        )
+        .route(
+            "/api/public/connect/reddit-cookies",
+            axum::routing::get(onboard::reddit_cookies_form).post(onboard::reddit_cookies_submit),
+        )
+        .route(
+            "/api/public/connect/reddit-cookies/import",
+            axum::routing::post(onboard::reddit_cookies_import),
+        )
+        .route(
+            "/api/public/connect/telegram-bot-token",
+            axum::routing::get(onboard::telegram_bot_token_form)
+                .post(onboard::telegram_bot_token_submit),
+        )
+        .route(
+            "/api/public/connect/{provider}",
+            axum::routing::get(onboard::public_connect),
+        )
         // Stripe webhook — no auth (signature verification in handler)
-        .route("/api/billing/webhook", axum::routing::post(billing::stripe_webhook));
+        .route(
+            "/api/billing/webhook",
+            axum::routing::post(billing::stripe_webhook),
+        );
 
     // Protected routes — auth required
     let protected_routes = Router::new()
@@ -149,121 +206,371 @@ pub fn build_router(state: AppState) -> Router {
         // networked deployments (BUG #19). The auth_middleware validates
         // the sf_session cookie; the SSE handler then subscribes.
         .route("/api/events", axum::routing::get(sse::sse_handler))
-        .route("/api/posts", axum::routing::get(posts::list).post(posts::create))
-        .route("/api/posts/thread", axum::routing::post(posts::create_thread))
+        .route(
+            "/api/posts",
+            axum::routing::get(posts::list).post(posts::create),
+        )
+        .route(
+            "/api/posts/thread",
+            axum::routing::post(posts::create_thread),
+        )
         .route("/api/posts/validate", axum::routing::post(posts::validate))
-        .route("/api/ai/generate-post", axum::routing::post(ai::generate_post))
-        .route("/api/ai/generate-bulk", axum::routing::post(ai::generate_bulk))
-        .route("/api/ai/improve-writing", axum::routing::post(ai::improve_writing))
-        .route("/api/ai/suggest-hashtags", axum::routing::post(ai::suggest_hashtags))
+        .route(
+            "/api/ai/generate-post",
+            axum::routing::post(ai::generate_post),
+        )
+        .route(
+            "/api/ai/generate-bulk",
+            axum::routing::post(ai::generate_bulk),
+        )
+        .route(
+            "/api/ai/improve-writing",
+            axum::routing::post(ai::improve_writing),
+        )
+        .route(
+            "/api/ai/suggest-hashtags",
+            axum::routing::post(ai::suggest_hashtags),
+        )
         .route("/api/ai/change-tone", axum::routing::post(ai::change_tone))
         .route("/api/ai/summarize", axum::routing::post(ai::summarize))
-        .route("/api/providers", axum::routing::get(integrations::list_providers))
+        .route(
+            "/api/providers",
+            axum::routing::get(integrations::list_providers),
+        )
         .route(
             "/api/posts/{id}",
             axum::routing::get(posts::get)
                 .put(posts::update)
                 .delete(posts::delete),
         )
-        .route("/api/posts/{id}/schedule", axum::routing::post(posts::schedule))
-        .route("/api/posts/{id}/unschedule", axum::routing::post(posts::unschedule))
-        .route("/api/posts/{id}/date", axum::routing::put(posts::reschedule))
-        .route("/api/posts/{id}/publish", axum::routing::post(posts::publish_post))
-        .route("/api/posts/{id}/repeat", axum::routing::post(posts::repeat_post))
-        .route("/api/posts/{id}/tags", axum::routing::put(posts::set_post_tags))
-        .route("/api/posts/{id}/stage", axum::routing::patch(campaigns::update_stage))
-        .route("/api/posts/kanban-reorder", axum::routing::patch(posts::kanban_reorder))
+        .route(
+            "/api/posts/{id}/schedule",
+            axum::routing::post(posts::schedule),
+        )
+        .route(
+            "/api/posts/{id}/unschedule",
+            axum::routing::post(posts::unschedule),
+        )
+        .route(
+            "/api/posts/{id}/date",
+            axum::routing::put(posts::reschedule),
+        )
+        .route(
+            "/api/posts/{id}/publish",
+            axum::routing::post(posts::publish_post),
+        )
+        .route(
+            "/api/posts/{id}/repeat",
+            axum::routing::post(posts::repeat_post),
+        )
+        .route(
+            "/api/posts/{id}/tags",
+            axum::routing::put(posts::set_post_tags),
+        )
+        .route(
+            "/api/posts/{id}/stage",
+            axum::routing::patch(campaigns::update_stage),
+        )
+        .route(
+            "/api/posts/kanban-reorder",
+            axum::routing::patch(posts::kanban_reorder),
+        )
         .route("/api/posts/find-slot", axum::routing::get(posts::find_slot))
-        .route("/api/posts/group/{group_id}", axum::routing::get(posts::get_group))
+        .route(
+            "/api/posts/group/{group_id}",
+            axum::routing::get(posts::get_group),
+        )
         // Phase 7: Campaigns + Kanban
-        .route("/api/campaigns", axum::routing::get(campaigns::list).post(campaigns::create))
-        .route("/api/campaigns/{id}", axum::routing::put(campaigns::update).delete(campaigns::delete))
+        .route(
+            "/api/campaigns",
+            axum::routing::get(campaigns::list).post(campaigns::create),
+        )
+        .route(
+            "/api/campaigns/{id}",
+            axum::routing::put(campaigns::update).delete(campaigns::delete),
+        )
         .route("/api/integrations", axum::routing::get(integrations::list))
-        .route("/api/integrations/connect/{provider}", axum::routing::get(integrations::connect))
-        .route("/api/integrations/connect/{provider}/verify", axum::routing::post(integrations::verify_one_time_token))
-        .route("/api/integrations/connect/whatsapp/pair", axum::routing::post(integrations::whatsapp_pair))
-        .route("/api/integrations/connect/whatsapp/status", axum::routing::get(integrations::whatsapp_status))
-        .route("/api/integrations/connect/telegram-user/request-code", axum::routing::post(integrations::telegram_user_request_code))
-        .route("/api/integrations/connect/telegram-user/sign-in", axum::routing::post(integrations::telegram_user_sign_in))
-        .route("/api/integrations/connect/telegram-bot/token", axum::routing::post(integrations::connect_telegram_bot_token))
-        .route("/api/integrations/connect/api-key", axum::routing::post(integrations::connect_api_key))
-        .route("/api/integrations/connect/x-cookie", axum::routing::post(integrations::connect_x_cookie))
-        .route("/api/integrations/connect/reddit-cookie", axum::routing::post(integrations::connect_reddit_cookie))
-        .route("/api/integrations/connect/github-pat", axum::routing::post(integrations::connect_github_pat))
-        .route("/api/integrations/connect/web3", axum::routing::post(integrations::connect_web3))
-        .route("/api/integrations/{id}", axum::routing::delete(integrations::delete))
-        .route("/api/integrations/{id}/available-pages", axum::routing::get(integrations::available_pages))
-        .route("/api/integrations/{parent_id}/connect-page/{page_id}", axum::routing::post(integrations::connect_page))
-        .route("/api/integrations/{id}/timeslots", axum::routing::put(integrations::update_timeslots))
-        .route("/api/integrations/{id}/disable", axum::routing::put(integrations::toggle_disable))
-    .route("/api/integrations/{id}/refresh", axum::routing::post(integrations::refresh))
-    .route("/api/integrations/{id}/targets", axum::routing::get(integrations::list_targets))
-        .route("/api/integrations/{id}/mentions", axum::routing::get(integrations::search_mentions))
-        .route("/api/integrations/{id}/music", axum::routing::get(music::search_music))
+        .route(
+            "/api/integrations/connect/{provider}",
+            axum::routing::get(integrations::connect),
+        )
+        .route(
+            "/api/integrations/connect/{provider}/verify",
+            axum::routing::post(integrations::verify_one_time_token),
+        )
+        .route(
+            "/api/integrations/connect/whatsapp/pair",
+            axum::routing::post(integrations::whatsapp_pair),
+        )
+        .route(
+            "/api/integrations/connect/whatsapp/status",
+            axum::routing::get(integrations::whatsapp_status),
+        )
+        .route(
+            "/api/integrations/connect/telegram-user/request-code",
+            axum::routing::post(integrations::telegram_user_request_code),
+        )
+        .route(
+            "/api/integrations/connect/telegram-user/sign-in",
+            axum::routing::post(integrations::telegram_user_sign_in),
+        )
+        .route(
+            "/api/integrations/connect/telegram-bot/token",
+            axum::routing::post(integrations::connect_telegram_bot_token),
+        )
+        .route(
+            "/api/integrations/connect/api-key",
+            axum::routing::post(integrations::connect_api_key),
+        )
+        .route(
+            "/api/integrations/connect/x-cookie",
+            axum::routing::post(integrations::connect_x_cookie),
+        )
+        .route(
+            "/api/integrations/connect/reddit-cookie",
+            axum::routing::post(integrations::connect_reddit_cookie),
+        )
+        .route(
+            "/api/integrations/connect/github-pat",
+            axum::routing::post(integrations::connect_github_pat),
+        )
+        .route(
+            "/api/integrations/connect/web3",
+            axum::routing::post(integrations::connect_web3),
+        )
+        .route(
+            "/api/integrations/{id}",
+            axum::routing::delete(integrations::delete),
+        )
+        .route(
+            "/api/integrations/{id}/available-pages",
+            axum::routing::get(integrations::available_pages),
+        )
+        .route(
+            "/api/integrations/{parent_id}/connect-page/{page_id}",
+            axum::routing::post(integrations::connect_page),
+        )
+        .route(
+            "/api/integrations/{id}/timeslots",
+            axum::routing::put(integrations::update_timeslots),
+        )
+        .route(
+            "/api/integrations/{id}/disable",
+            axum::routing::put(integrations::toggle_disable),
+        )
+        .route(
+            "/api/integrations/{id}/refresh",
+            axum::routing::post(integrations::refresh),
+        )
+        .route(
+            "/api/integrations/{id}/targets",
+            axum::routing::get(integrations::list_targets),
+        )
+        .route(
+            "/api/integrations/{id}/mentions",
+            axum::routing::get(integrations::search_mentions),
+        )
+        .route(
+            "/api/integrations/{id}/music",
+            axum::routing::get(music::search_music),
+        )
         .route("/api/calendar", axum::routing::get(calendar::get))
         .route("/api/feed", axum::routing::get(feed::get))
         .route("/api/feed/import", axum::routing::post(feed::import))
         .route("/api/feed/accounts", axum::routing::get(feed::accounts))
         .route("/api/feed/analytics", axum::routing::get(feed::analytics))
-        .route("/api/feed/{post_id}/comments", axum::routing::get(feed::get_comments))
-        .route("/api/feed/{post_id}/repurpose", axum::routing::post(feed::repurpose_post))
-        .route("/api/feed/{post_id}/save", axum::routing::post(feed::save_post).delete(feed::unsave_post))
+        .route(
+            "/api/feed/{post_id}/comments",
+            axum::routing::get(feed::get_comments),
+        )
+        .route(
+            "/api/feed/{post_id}/repurpose",
+            axum::routing::post(feed::repurpose_post),
+        )
+        .route(
+            "/api/feed/{post_id}/save",
+            axum::routing::post(feed::save_post).delete(feed::unsave_post),
+        )
         .route(
             "/api/feed/{post_id}",
             axum::routing::put(feed::update_post).delete(feed::delete_post),
         )
         .route("/api/comments", axum::routing::get(comments::list))
-        .route("/api/comments/{id}/resolve", axum::routing::post(comments::resolve))
-        .route("/api/comments/{id}/reply", axum::routing::post(comments::reply))
+        .route(
+            "/api/comments/{id}/resolve",
+            axum::routing::post(comments::resolve),
+        )
+        .route(
+            "/api/comments/{id}/reply",
+            axum::routing::post(comments::reply),
+        )
         .route("/api/media", axum::routing::get(media::list))
         .route("/api/media/{id}", axum::routing::delete(media::delete))
         .route("/api/analytics", axum::routing::get(analytics::get))
-        .route("/api/analytics/summary", axum::routing::get(analytics::get_summary))
-        .route("/api/analytics/engagement", axum::routing::get(analytics::get_engagement))
-        .route("/api/analytics/adherence", axum::routing::get(analytics::get_adherence))
-        .route("/api/analytics/cadence", axum::routing::get(analytics::get_cadence))
-        .route("/api/analytics/post/{id}", axum::routing::get(analytics::get_post))
-        .route("/api/events/recent", axum::routing::get(analytics::get_recent_events))
+        .route(
+            "/api/analytics/summary",
+            axum::routing::get(analytics::get_summary),
+        )
+        .route(
+            "/api/analytics/engagement",
+            axum::routing::get(analytics::get_engagement),
+        )
+        .route(
+            "/api/analytics/adherence",
+            axum::routing::get(analytics::get_adherence),
+        )
+        .route(
+            "/api/analytics/cadence",
+            axum::routing::get(analytics::get_cadence),
+        )
+        .route(
+            "/api/analytics/post/{id}",
+            axum::routing::get(analytics::get_post),
+        )
+        .route(
+            "/api/events/recent",
+            axum::routing::get(analytics::get_recent_events),
+        )
         // v24-4: Brand profile (upsert + get).
-        .route("/api/profile", axum::routing::get(profile::get_profile).put(profile::update_profile))
-        .route("/api/tags", axum::routing::get(tags::list).post(tags::create))
-        .route("/api/tags/{id}", axum::routing::get(tags::get).put(tags::update).delete(tags::delete))
-        .route("/api/signatures", axum::routing::get(signatures::list).post(signatures::create))
-        .route("/api/signatures/{id}", axum::routing::put(signatures::update).delete(signatures::delete))
-        .route("/api/signatures/{id}/set-default", axum::routing::post(signatures::set_default))
-        .route("/api/signatures/default", axum::routing::get(signatures::get_default))
-        .route("/api/developer/api-keys", axum::routing::get(developer::list).post(developer::create))
-        .route("/api/developer/api-keys/{id}", axum::routing::delete(developer::revoke))
-        .route("/api/developer/api-keys/{id}/regenerate", axum::routing::post(developer::regenerate))
+        .route(
+            "/api/profile",
+            axum::routing::get(profile::get_profile).put(profile::update_profile),
+        )
+        .route(
+            "/api/tags",
+            axum::routing::get(tags::list).post(tags::create),
+        )
+        .route(
+            "/api/tags/{id}",
+            axum::routing::get(tags::get)
+                .put(tags::update)
+                .delete(tags::delete),
+        )
+        .route(
+            "/api/signatures",
+            axum::routing::get(signatures::list).post(signatures::create),
+        )
+        .route(
+            "/api/signatures/{id}",
+            axum::routing::put(signatures::update).delete(signatures::delete),
+        )
+        .route(
+            "/api/signatures/{id}/set-default",
+            axum::routing::post(signatures::set_default),
+        )
+        .route(
+            "/api/signatures/default",
+            axum::routing::get(signatures::get_default),
+        )
+        .route(
+            "/api/developer/api-keys",
+            axum::routing::get(developer::list).post(developer::create),
+        )
+        .route(
+            "/api/developer/api-keys/{id}",
+            axum::routing::delete(developer::revoke),
+        )
+        .route(
+            "/api/developer/api-keys/{id}/regenerate",
+            axum::routing::post(developer::regenerate),
+        )
         // Public API v1 — Bearer sf_… keys or session cookie, same as above.
         .merge(v1::router())
-        .route("/api/webhooks", axum::routing::get(webhooks::list).post(webhooks::create))
-        .route("/api/webhooks/{id}", axum::routing::get(webhooks::get).put(webhooks::update).delete(webhooks::delete))
-        .route("/api/webhooks/{id}/test", axum::routing::post(webhooks::test))
-        .route("/api/webhooks/{id}/deliveries", axum::routing::get(webhooks::deliveries))
-        .route("/api/notifications", axum::routing::get(notifications::list))
-        .route("/api/notifications/unread-count", axum::routing::get(notifications::unread_count))
-        .route("/api/notifications/prefs", axum::routing::get(notifications::get_prefs).put(notifications::update_prefs))
-        .route("/api/notifications/{id}/read", axum::routing::put(notifications::mark_read))
-        .route("/api/notifications/read-all", axum::routing::put(notifications::mark_all_read))
-        .route("/api/notifications/{id}", axum::routing::delete(notifications::delete))
+        .route(
+            "/api/webhooks",
+            axum::routing::get(webhooks::list).post(webhooks::create),
+        )
+        .route(
+            "/api/webhooks/{id}",
+            axum::routing::get(webhooks::get)
+                .put(webhooks::update)
+                .delete(webhooks::delete),
+        )
+        .route(
+            "/api/webhooks/{id}/test",
+            axum::routing::post(webhooks::test),
+        )
+        .route(
+            "/api/webhooks/{id}/deliveries",
+            axum::routing::get(webhooks::deliveries),
+        )
+        .route(
+            "/api/notifications",
+            axum::routing::get(notifications::list),
+        )
+        .route(
+            "/api/notifications/unread-count",
+            axum::routing::get(notifications::unread_count),
+        )
+        .route(
+            "/api/notifications/prefs",
+            axum::routing::get(notifications::get_prefs).put(notifications::update_prefs),
+        )
+        .route(
+            "/api/notifications/{id}/read",
+            axum::routing::put(notifications::mark_read),
+        )
+        .route(
+            "/api/notifications/read-all",
+            axum::routing::put(notifications::mark_all_read),
+        )
+        .route(
+            "/api/notifications/{id}",
+            axum::routing::delete(notifications::delete),
+        )
         // RSS autopost
-        .route("/api/rss/feeds", axum::routing::get(rss::list_feeds).post(rss::create_feed))
-        .route("/api/rss/feeds/{id}", axum::routing::delete(rss::delete_feed))
-        .route("/api/rss/feeds/{id}/toggle", axum::routing::put(rss::toggle_feed))
-        .route("/api/rss/feeds/{id}/poll", axum::routing::post(rss::poll_feed))
-        .route("/api/rss/feeds/{id}/items", axum::routing::get(rss::list_feed_items))
-        .route("/api/rss/feeds/{id}/items/{guid}/import", axum::routing::post(rss::import_item))
-        .route("/api/sets", axum::routing::get(sets::list_sets).post(sets::create_set))
+        .route(
+            "/api/rss/feeds",
+            axum::routing::get(rss::list_feeds).post(rss::create_feed),
+        )
+        .route(
+            "/api/rss/feeds/{id}",
+            axum::routing::delete(rss::delete_feed),
+        )
+        .route(
+            "/api/rss/feeds/{id}/toggle",
+            axum::routing::put(rss::toggle_feed),
+        )
+        .route(
+            "/api/rss/feeds/{id}/poll",
+            axum::routing::post(rss::poll_feed),
+        )
+        .route(
+            "/api/rss/feeds/{id}/items",
+            axum::routing::get(rss::list_feed_items),
+        )
+        .route(
+            "/api/rss/feeds/{id}/items/{guid}/import",
+            axum::routing::post(rss::import_item),
+        )
+        .route(
+            "/api/sets",
+            axum::routing::get(sets::list_sets).post(sets::create_set),
+        )
         .route("/api/sets/{id}", axum::routing::delete(sets::delete_set))
         // DMs
-        .route("/api/dms/conversations", axum::routing::get(dms::list_conversations))
+        .route(
+            "/api/dms/conversations",
+            axum::routing::get(dms::list_conversations),
+        )
         .route("/api/dms/send", axum::routing::post(dms::send_dm))
-        .route("/api/dms/{conversation_id}/messages", axum::routing::get(dms::get_messages))
+        .route(
+            "/api/dms/{conversation_id}/messages",
+            axum::routing::get(dms::get_messages),
+        )
         // Automation
-        .route("/api/automation/rules", axum::routing::get(automation::list_rules).post(automation::create_rule))
-        .route("/api/automation/rules/{id}", axum::routing::put(automation::update_rule).delete(automation::delete_rule))
-        .route("/api/automation/rules/{id}/logs", axum::routing::get(automation::get_logs))
+        .route(
+            "/api/automation/rules",
+            axum::routing::get(automation::list_rules).post(automation::create_rule),
+        )
+        .route(
+            "/api/automation/rules/{id}",
+            axum::routing::put(automation::update_rule).delete(automation::delete_rule),
+        )
+        .route(
+            "/api/automation/rules/{id}/logs",
+            axum::routing::get(automation::get_logs),
+        )
         // CSRF defense-in-depth: validates Origin (or Referer fallback)
         // on all state-changing requests. SameSite=Lax already blocks
         // cross-site POST/PUT/DELETE cookie sends, but this catches:
@@ -272,7 +579,9 @@ pub fn build_router(state: AppState) -> Router {
         // The check is a no-op for same-origin requests (which is the
         // only legitimate origin in single-user mode).
         .layer(middleware::from_fn_with_state(
-            CsrfState { allowed_origin: state.config.frontend_url.clone() },
+            CsrfState {
+                allowed_origin: state.config.frontend_url.clone(),
+            },
             csrf_origin_check,
         ))
         // Auth middleware: validates an `Authorization: Bearer sf_…` API
@@ -295,7 +604,9 @@ pub fn build_router(state: AppState) -> Router {
     let upload_route = Router::new()
         .route("/api/media", axum::routing::post(media::upload))
         .layer(middleware::from_fn_with_state(
-            CsrfState { allowed_origin: state.config.frontend_url.clone() },
+            CsrfState {
+                allowed_origin: state.config.frontend_url.clone(),
+            },
             csrf_origin_check,
         ))
         .layer(middleware::from_fn_with_state(
@@ -345,16 +656,14 @@ pub fn build_router(state: AppState) -> Router {
     }
 
     // Check for explicit filesystem override first (dev mode)
-    let fs_override = std::env::var("FRONTEND_DIR").ok()
-        .filter(|d| !d.is_empty());
+    let fs_override = std::env::var("FRONTEND_DIR").ok().filter(|d| !d.is_empty());
 
     if let Some(dir) = fs_override {
         let frontend_path = std::path::Path::new(&dir);
         if frontend_path.join("index.html").exists() {
             let index = frontend_path.join("index.html");
             return app.fallback_service(
-                ServeDir::new(frontend_path)
-                    .not_found_service(ServeFile::new(index)),
+                ServeDir::new(frontend_path).not_found_service(ServeFile::new(index)),
             );
         }
         tracing::warn!("FRONTEND_DIR={dir} has no index.html — falling back to embedded assets");
@@ -375,14 +684,13 @@ async fn embedded_frontend_handler(req: Request<Body>) -> Response<Body> {
     let path = req.uri().path().trim_start_matches('/');
 
     // Try exact path first, then with index.html appended (for directory routes)
-    let asset = FrontendAssets::get(path)
-        .or_else(|| {
-            if path.is_empty() || path.ends_with('/') {
-                FrontendAssets::get(&format!("{path}index.html"))
-            } else {
-                None
-            }
-        });
+    let asset = FrontendAssets::get(path).or_else(|| {
+        if path.is_empty() || path.ends_with('/') {
+            FrontendAssets::get(&format!("{path}index.html"))
+        } else {
+            None
+        }
+    });
 
     match asset {
         Some(file) => {
@@ -401,11 +709,14 @@ async fn embedded_frontend_handler(req: Request<Body>) -> Response<Body> {
                 .status(StatusCode::OK)
                 .header("content-type", mime.as_ref())
                 // Cache immutable hashed assets aggressively; HTML never
-                .header("cache-control", if path.contains("/_app/immutable/") {
-                    "public, max-age=31536000, immutable"
-                } else {
-                    "no-cache"
-                })
+                .header(
+                    "cache-control",
+                    if path.contains("/_app/immutable/") {
+                        "public, max-age=31536000, immutable"
+                    } else {
+                        "no-cache"
+                    },
+                )
                 .body(Body::from(file.data.into_owned()))
                 .unwrap_or_else(|_| not_found())
         }
@@ -461,7 +772,9 @@ pub fn set_draining() {
 /// the load balancer stops sending new traffic. Existing in-flight
 /// requests continue to be served — only new connections are
 /// de-registered by the LB.
-async fn ready_check(db: SqlitePool) -> Result<axum::Json<serde_json::Value>, (StatusCode, axum::Json<serde_json::Value>)> {
+async fn ready_check(
+    db: SqlitePool,
+) -> Result<axum::Json<serde_json::Value>, (StatusCode, axum::Json<serde_json::Value>)> {
     // If we're draining, return 503 immediately — don't even ping the DB.
     if DRAINING.load(std::sync::atomic::Ordering::SeqCst) {
         return Err((
@@ -474,7 +787,10 @@ async fn ready_check(db: SqlitePool) -> Result<axum::Json<serde_json::Value>, (S
         ));
     }
 
-    let db_ok = match sqlx::query_scalar::<_, i32>("SELECT 1").fetch_one(&db).await {
+    let db_ok = match sqlx::query_scalar::<_, i32>("SELECT 1")
+        .fetch_one(&db)
+        .await
+    {
         Ok(1) => true,
         Ok(_) => false,
         Err(e) => {
@@ -589,17 +905,16 @@ async fn metrics_check(db: SqlitePool) -> axum::Json<serde_json::Value> {
 async fn streak_check(db: SqlitePool) -> axum::Json<serde_json::Value> {
     use sqlx::Row;
     let user_id = crate::auth::middleware::DEFAULT_USER_ID;
-    let row = sqlx::query(
-        "SELECT streak_days, streak_since FROM users WHERE id = ?",
-    )
-    .bind(user_id)
-    .fetch_optional(&db)
-    .await;
+    let row = sqlx::query("SELECT streak_days, streak_since FROM users WHERE id = ?")
+        .bind(user_id)
+        .fetch_optional(&db)
+        .await;
 
     match row {
         Ok(Some(r)) => {
             let streak_days: i32 = r.try_get("streak_days").unwrap_or(0);
-            let streak_since: Option<chrono::DateTime<chrono::Utc>> = r.try_get("streak_since").ok();
+            let streak_since: Option<chrono::DateTime<chrono::Utc>> =
+                r.try_get("streak_since").ok();
             axum::Json(serde_json::json!({
                 "streak_days": streak_days,
                 "streak_since": streak_since.map(|d| d.to_rfc3339()),
@@ -681,16 +996,17 @@ async fn csrf_origin_check(
     // http://localhost:6543 for local dev) had to set CSRF_ALLOWED_ORIGIN=*
     // (disabling the check entirely). Now the operator can set
     // FRONTEND_URL=https://a.com,http://localhost:6543 and each is checked.
-    let allowed_origins: Vec<&str> = csrf.allowed_origin
+    let allowed_origins: Vec<&str> = csrf
+        .allowed_origin
         .split(',')
         .map(|s| s.trim())
         .filter(|s| !s.is_empty())
         .collect();
 
     let allowed = match request_origin.as_deref() {
-        Some(o) => allowed_origins.iter().any(|&allowed| {
-            o == allowed || o == allowed.trim_end_matches('/')
-        }),
+        Some(o) => allowed_origins
+            .iter()
+            .any(|&allowed| o == allowed || o == allowed.trim_end_matches('/')),
         None => false,
     };
 
@@ -714,5 +1030,3 @@ async fn csrf_origin_check(
 
     next.run(req).await
 }
-
-

@@ -2,6 +2,11 @@
 // Date-range queries for the content calendar.
 // Returns posts grouped by date for calendar grid rendering.
 
+use super::AppState;
+use crate::api::tags::TagResponse;
+use crate::auth::middleware::AuthenticatedUser;
+use crate::db::queries;
+use crate::error::AppError;
 use axum::{
     extract::{Query, State},
     Json,
@@ -9,11 +14,6 @@ use axum::{
 use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use crate::api::tags::TagResponse;
-use crate::auth::middleware::AuthenticatedUser;
-use crate::db::queries;
-use crate::error::AppError;
-use super::AppState;
 
 #[derive(Debug, Deserialize)]
 pub struct CalendarQuery {
@@ -75,33 +75,44 @@ pub async fn get(
     Query(query): Query<CalendarQuery>,
 ) -> Result<Json<CalendarResponse>, AppError> {
     // Parse date range
-    let start = parse_date_or_datetime(&query.start)
-        .ok_or_else(|| AppError::BadRequest("Invalid start date. Use ISO8601 (YYYY-MM-DD or full datetime)".into()))?;
+    let start = parse_date_or_datetime(&query.start).ok_or_else(|| {
+        AppError::BadRequest("Invalid start date. Use ISO8601 (YYYY-MM-DD or full datetime)".into())
+    })?;
     let end = parse_date_or_datetime(&query.end)
         .ok_or_else(|| AppError::BadRequest("Invalid end date".into()))?;
 
     // v23-4: parse optional integration_ids filter (comma-separated UUIDs).
-    let integration_ids: Option<Vec<Uuid>> = query.integration_ids.as_deref().map(|s| {
-        s.split(',')
-            .filter_map(|id| Uuid::parse_str(id.trim()).ok())
-            .collect::<Vec<_>>()
-    }).filter(|v| !v.is_empty());
+    let integration_ids: Option<Vec<Uuid>> = query
+        .integration_ids
+        .as_deref()
+        .map(|s| {
+            s.split(',')
+                .filter_map(|id| Uuid::parse_str(id.trim()).ok())
+                .collect::<Vec<_>>()
+        })
+        .filter(|v| !v.is_empty());
     let integration_ids_ref = integration_ids.as_deref();
 
     let posts = queries::get_calendar_posts_with_metrics(
-        &state.db, auth.user_id, start, end,
+        &state.db,
+        auth.user_id,
+        start,
+        end,
         integration_ids_ref,
         query.campaign_id,
-    ).await?;
+    )
+    .await?;
 
-    let mut day_map: std::collections::BTreeMap<String, Vec<CalendarPost>> = std::collections::BTreeMap::new();
+    let mut day_map: std::collections::BTreeMap<String, Vec<CalendarPost>> =
+        std::collections::BTreeMap::new();
     for p in posts {
         // Use published_at for published posts, scheduled_at for queued/draft posts
         let date_key = if p.state == "published" && p.published_at.is_some() {
             p.published_at.map(|d| d.format("%Y-%m-%d").to_string())
         } else {
             p.scheduled_at.map(|d| d.format("%Y-%m-%d").to_string())
-        }.unwrap_or_else(|| "unscheduled".into());
+        }
+        .unwrap_or_else(|| "unscheduled".into());
 
         let integration_name = p.integration_name.unwrap_or_else(|| "Unknown".into());
 
@@ -149,7 +160,11 @@ pub async fn get(
         .into_iter()
         .map(|(date, posts)| {
             let post_count = posts.len();
-            CalendarDay { date, posts, post_count }
+            CalendarDay {
+                date,
+                posts,
+                post_count,
+            }
         })
         .collect();
 

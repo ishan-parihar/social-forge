@@ -147,6 +147,24 @@ async fn main() -> anyhow::Result<()> {
     let config = config::Config::from_env()?;
     tracing::info!("Configuration loaded");
 
+    // ── §5.1(a): thin MCP ──────────────────────────────
+    // `social-forge mcp` used to boot the FULL server — writer lock,
+    // HTTP, all 6 pollers, Telegram/WhatsApp clients — so it died on
+    // the lock whenever the systemd `serve` daemon was running, and
+    // without systemd each agent session ran its own rival scheduler.
+    // Probe the lock first: held by a live daemon → thin mode (pool
+    // read-write, MCP on stdio only — the daemon's scheduler picks up
+    // the rows). Free → merged mode below behaves as before.
+    if matches!(cli_args.command, Command::Mcp)
+        && db::claim_writer_role(&config.database_url).is_err()
+    {
+        tracing::info!(
+            "Writer lock held by the serve daemon — thin MCP mode: \
+             no scheduler, no HTTP, no messaging clients"
+        );
+        return run_mcp_thin(config).await;
+    }
+
     // ── Database ──────────────────────────────────────────────
     // Single-writer discipline (G-08): this process runs the publish scheduler,
     // so it must be the ONLY long-lived writer on `database_url`. Claim the
@@ -211,11 +229,8 @@ async fn main() -> anyhow::Result<()> {
         };
 
     // ── Provider registry ─────────────────────────────────────
-    let providers = ProviderRegistry::new(
-        &config,
-        telegram_client_manager.clone(),
-        wa_client.clone(),
-    );
+    let providers =
+        ProviderRegistry::new(&config, telegram_client_manager.clone(), wa_client.clone());
     let providers_arc = Arc::new(providers);
 
     // ── Shared app state ─────────────────────────────────────
@@ -227,7 +242,9 @@ async fn main() -> anyhow::Result<()> {
     if token_key.is_some() {
         tracing::info!("Token encryption at rest: ENABLED");
     } else {
-        tracing::warn!("Token encryption at rest: DISABLED (set TOKEN_ENCRYPTION_KEY for production)");
+        tracing::warn!(
+            "Token encryption at rest: DISABLED (set TOKEN_ENCRYPTION_KEY for production)"
+        );
     }
 
     // ── Build shared state (clone for MCP if needed) ──────────
@@ -315,7 +332,9 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
             #[cfg(not(unix))]
-            { std::future::pending::<()>().await; }
+            {
+                std::future::pending::<()>().await;
+            }
         };
         tokio::select! {
             _ = ctrl_c => tracing::info!("Shutdown signal: Ctrl+C (SIGINT)"),
@@ -331,11 +350,13 @@ async fn main() -> anyhow::Result<()> {
 
         if !cert_path.exists() {
             std::fs::create_dir_all("data/tls")?;
-            let mut params = rcgen::CertificateParams::new(vec![
-                "localhost".into(),
-                "127.0.0.1".into(),
-            ])?;
-            params.subject_alt_names.push(rcgen::SanType::IpAddress(std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST)));
+            let mut params =
+                rcgen::CertificateParams::new(vec!["localhost".into(), "127.0.0.1".into()])?;
+            params
+                .subject_alt_names
+                .push(rcgen::SanType::IpAddress(std::net::IpAddr::V4(
+                    std::net::Ipv4Addr::LOCALHOST,
+                )));
             let key_pair = rcgen::KeyPair::generate()?;
             let cert = params.self_signed(&key_pair)?;
             std::fs::write(cert_path, cert.pem())?;
@@ -374,7 +395,9 @@ async fn main() -> anyhow::Result<()> {
         let notify = shutdown_rx_signal.clone();
         tokio::spawn(async move {
             if let Err(e) = axum::serve(listener, app)
-                .with_graceful_shutdown(async move { notify.notified().await; })
+                .with_graceful_shutdown(async move {
+                    notify.notified().await;
+                })
                 .await
             {
                 tracing::error!("HTTP server error: {e}");
@@ -431,4 +454,51 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("Server shut down gracefully");
     Ok(())
+}
+
+/// §5.1(a): thin MCP session — pool + MCP stdio, nothing else.
+///
+/// Runs when the `serve` daemon already owns the writer lock: the agent's
+/// process opens the SQLite pool (WAL handles the short writes) and serves
+/// the MCP tool surface on stdio. No pollers, no HTTP port, no Telegram /
+/// WhatsApp clients, no second scheduler — the daemon picks up the rows
+/// this session writes. ~15 MB RSS instead of a full server.
+async fn run_mcp_thin(config: social_forge::config::Config) -> anyhow::Result<()> {
+    let db = social_forge::db::create_pool(&config.database_url)
+        .await
+        .context("thin mcp: failed to create database pool")?;
+    if let Err(e) = social_forge::db::ensure_local_user(&db).await {
+        tracing::warn!("thin mcp: ensure_local_user: {e} — DB inserts may fail");
+    }
+
+    let token_key = config
+        .token_encryption_key
+        .as_ref()
+        .and_then(|k| social_forge::crypto::decode_hex_key(k).ok());
+
+    let media_http_client = reqwest::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(10))
+        .build()
+        .unwrap_or_else(|_| reqwest::Client::new());
+    let media_wreq_client = wreq::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(10))
+        .emulation(wreq_util::Emulation::Chrome131)
+        .gzip(true)
+        .brotli(true)
+        .build()
+        .unwrap_or_else(|_| wreq::Client::new());
+
+    let state = social_forge::api::AppState {
+        db,
+        config: config.clone(),
+        broadcast: social_forge::realtime::Broadcaster::new(),
+        providers: social_forge::social::registry::ProviderRegistry::new(&config, None, None),
+        token_key,
+        telegram_client_manager: None,
+        wa_client: None,
+        media_http_client,
+        media_wreq_client,
+    };
+
+    social_forge::mcp::run_mcp_stdio(state).await
 }

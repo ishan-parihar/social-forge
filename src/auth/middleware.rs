@@ -150,8 +150,7 @@ pub async fn auth_middleware(
         let Some(user_id) = user_id else {
             return Err(unauthorized("invalid_api_key"));
         };
-        req.extensions_mut()
-            .insert(AuthenticatedUser { user_id });
+        req.extensions_mut().insert(AuthenticatedUser { user_id });
         return Ok(next.run(req).await);
     }
 
@@ -167,8 +166,7 @@ pub async fn auth_middleware(
         None => return Err(unauthorized("no_session")),
     };
 
-    req.extensions_mut()
-        .insert(AuthenticatedUser { user_id });
+    req.extensions_mut().insert(AuthenticatedUser { user_id });
     Ok(next.run(req).await)
 }
 

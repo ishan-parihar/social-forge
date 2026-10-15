@@ -33,7 +33,10 @@ impl TelegramBotProvider {
         format!("https://api.telegram.org/bot{}/{}", token, method)
     }
 
-    fn resolve_bot_token_and_chat(&self, access_token: &str) -> Result<(String, String), ProviderError> {
+    fn resolve_bot_token_and_chat(
+        &self,
+        access_token: &str,
+    ) -> Result<(String, String), ProviderError> {
         if let Ok(v) = serde_json::from_str::<serde_json::Value>(access_token) {
             let bot_token = v["bot_token"].as_str().unwrap_or("").to_string();
             let chat_id = v["chat_id"].as_str().unwrap_or("").to_string();
@@ -46,7 +49,9 @@ impl TelegramBotProvider {
             }
         }
         // Legacy: access_token is just chat_id, use first env token
-        let bot_token = self.tokens.first()
+        let bot_token = self
+            .tokens
+            .first()
             .ok_or_else(|| ProviderError::Api("No Telegram bot token configured".into()))?
             .clone();
         Ok((bot_token, access_token.to_string()))
@@ -89,9 +94,7 @@ impl SocialProvider for TelegramBotProvider {
         _code_verifier: &str,
         _redirect_uri: &str,
     ) -> Result<AuthUrlResponse, ProviderError> {
-        Ok(AuthUrlResponse {
-            url: String::new(),
-        })
+        Ok(AuthUrlResponse { url: String::new() })
     }
 
     async fn exchange_code(
@@ -120,27 +123,22 @@ impl SocialProvider for TelegramBotProvider {
             let results = json["result"].as_array().cloned().unwrap_or_default();
 
             for update in &results {
-                let msg = update
-                    .get("message")
-                    .or_else(|| update.get("channel_post"));
+                let msg = update.get("message").or_else(|| update.get("channel_post"));
 
                 if let Some(m) = msg {
                     let text = m["text"].as_str().unwrap_or("");
 
                     if text == expected {
                         let chat_id = m["chat"]["id"].as_i64().unwrap_or(0);
-                        let chat_title = m["chat"]["title"]
-                            .as_str()
-                            .unwrap_or("Telegram Bot Chat");
-                        let chat_username = m["chat"]["username"]
-                            .as_str()
-                            .unwrap_or("");
+                        let chat_title = m["chat"]["title"].as_str().unwrap_or("Telegram Bot Chat");
+                        let chat_username = m["chat"]["username"].as_str().unwrap_or("");
 
                         // Store bot_token + chat_id as JSON
                         let access_token = serde_json::json!({
                             "bot_token": token,
                             "chat_id": chat_id.to_string(),
-                        }).to_string();
+                        })
+                        .to_string();
 
                         return Ok(AuthToken {
                             access_token,
@@ -197,10 +195,7 @@ impl SocialProvider for TelegramBotProvider {
 
             Ok(PublishResult {
                 platform_post_id: msg_id.to_string(),
-                platform_post_url: Some(format!(
-                    "https://t.me/c/{}",
-                    chat_id.replace("-100", ""),
-                )),
+                platform_post_url: Some(format!("https://t.me/c/{}", chat_id.replace("-100", ""),)),
                 status: "published".into(),
             })
         } else if post.media.len() == 1 {
@@ -225,10 +220,7 @@ impl SocialProvider for TelegramBotProvider {
 
             Ok(PublishResult {
                 platform_post_id: msg_id.to_string(),
-                platform_post_url: Some(format!(
-                    "https://t.me/c/{}",
-                    chat_id.replace("-100", ""),
-                )),
+                platform_post_url: Some(format!("https://t.me/c/{}", chat_id.replace("-100", ""),)),
                 status: "published".into(),
             })
         } else {
@@ -253,10 +245,7 @@ impl SocialProvider for TelegramBotProvider {
 
             Ok(PublishResult {
                 platform_post_id: msg_id.to_string(),
-                platform_post_url: Some(format!(
-                    "https://t.me/c/{}",
-                    chat_id.replace("-100", ""),
-                )),
+                platform_post_url: Some(format!("https://t.me/c/{}", chat_id.replace("-100", ""),)),
                 status: "published".into(),
             })
         }

@@ -20,7 +20,10 @@ pub const LINKEDIN_VERSION: &str = "202609";
 /// Warn once at startup when the pinned version is getting old, so a
 /// sunset never comes as a surprise (audit B10 self-check).
 /// Returns the (years, months) age of `version` at `now`.
-pub fn linkedin_version_age_years_months(version: &str, now: chrono::DateTime<chrono::Utc>) -> Option<(i32, i32)> {
+pub fn linkedin_version_age_years_months(
+    version: &str,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Option<(i32, i32)> {
     let digits: String = version.chars().filter(|c| c.is_ascii_digit()).collect();
     if digits.len() != 6 {
         return None;

@@ -6,7 +6,10 @@
 //   GET /ig_audio?audio_type=music&search_query=...
 //   POST /{ig-user-id}/media with audio_configuration={audio_id,...}
 
-use axum::{extract::{Path, Query, State}, Json};
+use axum::{
+    extract::{Path, Query, State},
+    Json,
+};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -51,13 +54,16 @@ pub async fn search_music(
         .ok_or_else(|| AppError::NotFound("Integration not found".into()))?;
 
     // Only Instagram supports the Audio API
-    if integration.provider_identifier != "instagram" && integration.provider_identifier != "instagram-standalone" {
+    if integration.provider_identifier != "instagram"
+        && integration.provider_identifier != "instagram-standalone"
+    {
         return Err(AppError::BadRequest(
             "Music search is only available for Instagram integrations".into(),
         ));
     }
 
-    let token = crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
+    let token =
+        crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
 
     let internal_id = &integration.internal_id;
     let audio_type = query.audio_type.as_deref().unwrap_or("music");

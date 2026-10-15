@@ -10,11 +10,15 @@ pub async fn handle(action: TagsAction, state: &AppState) -> anyhow::Result<()> 
                 Ok(id) => id,
                 Err(e) => return Err(anyhow::anyhow!("Auth error: {e}")),
             };
-            let tags = match sqlx::query!(r#"SELECT id as "id!: String", name, color,
+            let tags = match sqlx::query!(
+                r#"SELECT id as "id!: String", name, color,
                                                 created_at as "created_at: EpochUtc",
                                                 updated_at as "updated_at: EpochUtc"
-                                         FROM tags WHERE user_id = ? ORDER BY name"#, user_id)
-                .fetch_all(&state.db).await
+                                         FROM tags WHERE user_id = ? ORDER BY name"#,
+                user_id
+            )
+            .fetch_all(&state.db)
+            .await
             {
                 Ok(t) => t,
                 Err(e) => return Err(anyhow::anyhow!("DB error: {e}")),
@@ -37,8 +41,13 @@ pub async fn handle(action: TagsAction, state: &AppState) -> anyhow::Result<()> 
                    RETURNING id as "id!: String", name, color,
                              created_at as "created_at: EpochUtc",
                              updated_at as "updated_at: EpochUtc""#,
-                id, user_id, name, tag_color,
-            ).fetch_one(&state.db).await
+                id,
+                user_id,
+                name,
+                tag_color,
+            )
+            .fetch_one(&state.db)
+            .await
             {
                 Ok(t) => t,
                 Err(e) => return Err(anyhow::anyhow!("Create failed: {e}")),
@@ -57,8 +66,13 @@ pub async fn handle(action: TagsAction, state: &AppState) -> anyhow::Result<()> 
                 Ok(id) => id,
                 Err(_) => return Err(anyhow::anyhow!("Invalid tag ID")),
             };
-            let r = match sqlx::query!("DELETE FROM tags WHERE id = ? AND user_id = ?", tag_id, user_id)
-                .execute(&state.db).await
+            let r = match sqlx::query!(
+                "DELETE FROM tags WHERE id = ? AND user_id = ?",
+                tag_id,
+                user_id
+            )
+            .execute(&state.db)
+            .await
             {
                 Ok(r) => r,
                 Err(e) => return Err(anyhow::anyhow!("Delete failed: {e}")),
@@ -77,11 +91,16 @@ pub async fn handle(action: TagsAction, state: &AppState) -> anyhow::Result<()> 
                 Ok(id) => id,
                 Err(_) => return Err(anyhow::anyhow!("Invalid tag ID")),
             };
-            let tag = match sqlx::query!(r#"SELECT id as "id!: String", name, color,
+            let tag = match sqlx::query!(
+                r#"SELECT id as "id!: String", name, color,
                                                  created_at as "created_at: EpochUtc",
                                                  updated_at as "updated_at: EpochUtc"
-                                          FROM tags WHERE id = ? AND user_id = ?"#, tag_id, user_id)
-                .fetch_optional(&state.db).await
+                                          FROM tags WHERE id = ? AND user_id = ?"#,
+                tag_id,
+                user_id
+            )
+            .fetch_optional(&state.db)
+            .await
             {
                 Ok(Some(t)) => t,
                 Ok(None) => return Err(anyhow::anyhow!("Tag not found")),
@@ -101,8 +120,13 @@ pub async fn handle(action: TagsAction, state: &AppState) -> anyhow::Result<()> 
                 Ok(id) => id,
                 Err(_) => return Err(anyhow::anyhow!("Invalid tag ID")),
             };
-            let existing = match sqlx::query!(r#"SELECT id as "id!: String", name, color FROM tags WHERE id = ? AND user_id = ?"#, tag_id, user_id)
-                .fetch_optional(&state.db).await
+            let existing = match sqlx::query!(
+                r#"SELECT id as "id!: String", name, color FROM tags WHERE id = ? AND user_id = ?"#,
+                tag_id,
+                user_id
+            )
+            .fetch_optional(&state.db)
+            .await
             {
                 Ok(Some(t)) => t,
                 Ok(None) => return Err(anyhow::anyhow!("Tag not found")),

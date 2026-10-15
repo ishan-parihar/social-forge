@@ -1244,7 +1244,8 @@ pub(crate) async fn publish_post(
                                 post.user_id,
                                 "post.first_comment_failed",
                                 &payload,
-                            );                        }
+                            );
+                        }
                     }
                 }
 
@@ -1485,12 +1486,9 @@ async fn resolve_token(
             post.refresh_token.as_deref().unwrap_or(""),
             token_key.as_ref(),
         );
-        let token = provider
-            .refresh_token(&old_refresh)
-            .await
-            .map_err(|e| {
-                crate::error::annotate_scope_loss(&post.provider_identifier, &e.to_string())
-            })?;
+        let token = provider.refresh_token(&old_refresh).await.map_err(|e| {
+            crate::error::annotate_scope_loss(&post.provider_identifier, &e.to_string())
+        })?;
 
         // B8: update_integration_token encrypts internally and fails
         // (never downgrades) on encrypt error.
@@ -1920,7 +1918,10 @@ mod tests {
 
     /// In-memory pool carrying the real schema, plus a user and an
     /// integration wired to a seeded post in the given state.
-    async fn pool_with_post(state: &str, platform_post_id: Option<&str>) -> (crate::db::SqlitePool, uuid::Uuid) {
+    async fn pool_with_post(
+        state: &str,
+        platform_post_id: Option<&str>,
+    ) -> (crate::db::SqlitePool, uuid::Uuid) {
         let pool = crate::db::create_pool("sqlite::memory:").await.unwrap();
         let user_id = crate::auth::middleware::DEFAULT_USER_ID;
         crate::db::ensure_local_user(&pool).await.unwrap();

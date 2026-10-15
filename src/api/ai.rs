@@ -253,5 +253,8 @@ pub async fn generate_bulk(
         })
         .collect();
 
-    Ok(Json(GenerateBulkResponse { posts, suggested_dates }))
+    Ok(Json(GenerateBulkResponse {
+        posts,
+        suggested_dates,
+    }))
 }

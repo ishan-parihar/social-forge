@@ -81,7 +81,10 @@ impl PostService {
             return Err("Content cannot be empty".into());
         }
         if content.chars().count() > 2000 {
-            return Err(format!("Content exceeds 2000 chars (got {})", content.chars().count()));
+            return Err(format!(
+                "Content exceeds 2000 chars (got {})",
+                content.chars().count()
+            ));
         }
 
         let state = input.state.unwrap_or(PostState::Draft);
@@ -137,11 +140,7 @@ impl PostService {
     }
 
     /// Get a single post by ID (verifies ownership)
-    pub async fn get(
-        db: &SqlitePool,
-        user_id: Uuid,
-        post_id: Uuid,
-    ) -> ServiceResult<Post> {
+    pub async fn get(db: &SqlitePool, user_id: Uuid, post_id: Uuid) -> ServiceResult<Post> {
         let post = queries::get_post(db, post_id, user_id)
             .await
             .map_err(|e| format!("Database error: {e}"))?
@@ -318,7 +317,9 @@ impl PostService {
                 )
                 .await
                 {
-                    tracing::error!("Failed to record publish error for post {post_id}: {write_err}");
+                    tracing::error!(
+                        "Failed to record publish error for post {post_id}: {write_err}"
+                    );
                 }
                 Err(err)
             }
@@ -341,7 +342,10 @@ impl PostService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::social::{AuthToken, AuthUrlResponse, PageInfo, PostContent, ProviderError, PublishResult, SocialProvider};
+    use crate::social::{
+        AuthToken, AuthUrlResponse, PageInfo, PostContent, ProviderError, PublishResult,
+        SocialProvider,
+    };
     use std::sync::Arc;
 
     /// Returns whatever `PublishResult` the test hands it — including the
@@ -384,11 +388,7 @@ mod tests {
         async fn refresh_token(&self, _r: &str) -> Result<AuthToken, ProviderError> {
             unimplemented!()
         }
-        async fn fetch_page_info(
-            &self,
-            _t: &str,
-            _p: &str,
-        ) -> Result<PageInfo, ProviderError> {
+        async fn fetch_page_info(&self, _t: &str, _p: &str) -> Result<PageInfo, ProviderError> {
             unimplemented!()
         }
         async fn publish(
@@ -478,9 +478,16 @@ mod tests {
             status: "published".into(),
         });
 
-        let err = PostService::publish(&pool, &providers, &Broadcaster::new(), user_id, post_id, None)
-            .await
-            .expect_err("an empty platform_post_id is not a publish receipt");
+        let err = PostService::publish(
+            &pool,
+            &providers,
+            &Broadcaster::new(),
+            user_id,
+            post_id,
+            None,
+        )
+        .await
+        .expect_err("an empty platform_post_id is not a publish receipt");
         assert!(
             err.contains("no platform post id"),
             "error must name the cause: {err}"
@@ -506,7 +513,10 @@ mod tests {
         // Row keeps its retryable incoming state, with the reason attached.
         assert_eq!(post.state, PostState::Queued);
         assert!(
-            post.error_message.as_deref().unwrap_or("").contains("no platform post id"),
+            post.error_message
+                .as_deref()
+                .unwrap_or("")
+                .contains("no platform post id"),
             "error_message must explain the failure, got {:?}",
             post.error_message
         );
@@ -514,16 +524,25 @@ mod tests {
         // Audit trail: one failed attempt, so this is not invisible.
         // (Unified engine: the final failed attempt is recorded once, with
         // the engine's MAX_RETRIES attempt number — audit §4.1.)
-        let attempts: Vec<(i32, String, Option<String>)> =
-            sqlx::query_as("SELECT attempt_number, status, error_message FROM publish_attempts WHERE post_id = ?")
-                .bind(post_id)
-                .fetch_all(&pool)
-                .await
-                .expect("attempts");
-        assert_eq!(attempts.len(), 1, "expected one attempt row, got {attempts:?}");
+        let attempts: Vec<(i32, String, Option<String>)> = sqlx::query_as(
+            "SELECT attempt_number, status, error_message FROM publish_attempts WHERE post_id = ?",
+        )
+        .bind(post_id)
+        .fetch_all(&pool)
+        .await
+        .expect("attempts");
+        assert_eq!(
+            attempts.len(),
+            1,
+            "expected one attempt row, got {attempts:?}"
+        );
         assert_eq!(attempts[0].0, crate::scheduler::MAX_RETRIES as i32);
         assert_eq!(attempts[0].1, "failed");
-        assert!(attempts[0].2.as_deref().unwrap_or("").contains("no platform post id"));
+        assert!(attempts[0]
+            .2
+            .as_deref()
+            .unwrap_or("")
+            .contains("no platform post id"));
     }
 
     /// The control: a real id still publishes, and the id is what lands.
@@ -537,9 +556,16 @@ mod tests {
             status: "published".into(),
         });
 
-        let url = PostService::publish(&pool, &providers, &Broadcaster::new(), user_id, post_id, None)
-            .await
-            .expect("a real platform_post_id must publish");
+        let url = PostService::publish(
+            &pool,
+            &providers,
+            &Broadcaster::new(),
+            user_id,
+            post_id,
+            None,
+        )
+        .await
+        .expect("a real platform_post_id must publish");
         assert_eq!(url, "https://x.com/i/status/tweet-123");
 
         let post = queries::get_post(&pool, post_id, user_id)

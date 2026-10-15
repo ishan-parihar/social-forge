@@ -14,11 +14,11 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use super::*;
 use super::archive::farcaster;
 use super::mastodon;
 use super::slack;
 use super::tier::{self, ProviderTier};
+use super::*;
 use crate::config::Config;
 use crate::services::telegram_client::TelegramClientManager;
 use crate::wa::WhaClient;
@@ -126,7 +126,9 @@ impl CircuitBreaker {
                     // If another thread beat us to it, we'll see the
                     // updated state and fall through to the half-open
                     // branch below.
-                    let _ = self.state.compare_exchange(1, 2, Ordering::SeqCst, Ordering::SeqCst);
+                    let _ = self
+                        .state
+                        .compare_exchange(1, 2, Ordering::SeqCst, Ordering::SeqCst);
                     tracing::info!("Circuit breaker → half-open (cooldown elapsed)");
                     // Fall through to half-open handling: admit exactly one.
                     self.admit_one_from_half_open()
@@ -156,13 +158,17 @@ impl CircuitBreaker {
         // Try to flip 2 (half-open) → 1 (open). If we succeed, we're
         // the one admitted request. If we fail, someone else already
         // claimed the slot — reject.
-        match self.state.compare_exchange(2, 1, Ordering::SeqCst, Ordering::SeqCst) {
+        match self
+            .state
+            .compare_exchange(2, 1, Ordering::SeqCst, Ordering::SeqCst)
+        {
             Ok(_) => {
                 // We won the admission race. Set opened_at so the
                 // cooldown for the NEXT half-open attempt starts now
                 // (in case record_success/record_failure never fires,
                 // e.g. the task panics).
-                self.opened_at.store(chrono::Utc::now().timestamp(), Ordering::SeqCst);
+                self.opened_at
+                    .store(chrono::Utc::now().timestamp(), Ordering::SeqCst);
                 true
             }
             Err(_) => false, // someone else was admitted; reject
@@ -187,12 +193,10 @@ impl CircuitBreaker {
         let count = self.failure_count.fetch_add(1, Ordering::SeqCst) + 1;
         if count >= self.failure_threshold {
             let prev = self.state.swap(1, Ordering::SeqCst); // open
-            self.opened_at.store(chrono::Utc::now().timestamp(), Ordering::SeqCst);
+            self.opened_at
+                .store(chrono::Utc::now().timestamp(), Ordering::SeqCst);
             if prev != 1 {
-                tracing::warn!(
-                    "Circuit breaker → open ({} consecutive failures)",
-                    count
-                );
+                tracing::warn!("Circuit breaker → open ({} consecutive failures)", count);
             }
         }
     }
@@ -279,7 +283,9 @@ impl ProviderRegistry {
 
         providers.insert(
             "instagram-standalone",
-            Arc::new(instagram_standalone::InstagramStandaloneProvider::new(config)),
+            Arc::new(instagram_standalone::InstagramStandaloneProvider::new(
+                config,
+            )),
         );
 
         providers.insert("threads", Arc::new(threads::ThreadsProvider::new(config)));
@@ -297,13 +303,22 @@ impl ProviderRegistry {
         // Telegram User — Gramers-based MTProto client
         providers.insert(
             "telegram-user",
-            Arc::new(telegram_user::TelegramUserProvider::new(config, telegram_client_manager.clone())),
+            Arc::new(telegram_user::TelegramUserProvider::new(
+                config,
+                telegram_client_manager.clone(),
+            )),
         );
 
-        providers.insert("pinterest", Arc::new(pinterest::PinterestProvider::new(config)));
+        providers.insert(
+            "pinterest",
+            Arc::new(pinterest::PinterestProvider::new(config)),
+        );
 
         // WhatsApp — native wa-rs client with wacli fallback
-        providers.insert("whatsapp", Arc::new(whatsapp::WhatsAppProvider::new(config, wa_client.clone())));
+        providers.insert(
+            "whatsapp",
+            Arc::new(whatsapp::WhatsAppProvider::new(config, wa_client.clone())),
+        );
 
         // TikTok — OAuth-based video platform.
         // v25 §1: no separate `tiktok-business` provider. Business and
@@ -324,7 +339,10 @@ impl ProviderRegistry {
         // `instance_url`, so the custom-instance path is already part of
         // this provider rather than a gated sibling. `new` falls back to
         // mastodon.social when the instance env var is unset.
-        providers.insert("mastodon", Arc::new(mastodon::MastodonProvider::new(config)));
+        providers.insert(
+            "mastodon",
+            Arc::new(mastodon::MastodonProvider::new(config)),
+        );
 
         // Medium — API key-based publishing
         providers.insert("medium", Arc::new(medium::MediumProvider::new(config)));
@@ -333,7 +351,10 @@ impl ProviderRegistry {
         providers.insert("devto", Arc::new(devto::DevtoProvider::new(config)));
 
         // Hashnode — API key-based blogging
-        providers.insert("hashnode", Arc::new(hashnode::HashnodeProvider::new(config)));
+        providers.insert(
+            "hashnode",
+            Arc::new(hashnode::HashnodeProvider::new(config)),
+        );
 
         // GitHub — PAT-based
         providers.insert("github", Arc::new(github::GithubProvider::new(config)));
@@ -350,7 +371,10 @@ impl ProviderRegistry {
         providers.insert("skool", Arc::new(skool::SkoolProvider::new()));
 
         // WordPress — REST API + Application Password (no global credentials)
-        providers.insert("wordpress", Arc::new(wordpress::WordPressProvider::new(config)));
+        providers.insert(
+            "wordpress",
+            Arc::new(wordpress::WordPressProvider::new(config)),
+        );
 
         // Slack — OAuth-based messaging workspace provider
         providers.insert("slack", Arc::new(slack::SlackProvider::new(config)));
@@ -359,7 +383,10 @@ impl ProviderRegistry {
         // Compiles from `social::archive` but registers only when the
         // operator opts back in via ENABLE_ARCHIVE_PROVIDERS.
         if tier::archive_providers_enabled() {
-            providers.insert("farcaster", Arc::new(farcaster::FarcasterProvider::new(config)));
+            providers.insert(
+                "farcaster",
+                Arc::new(farcaster::FarcasterProvider::new(config)),
+            );
         }
 
         tracing::info!(
@@ -533,11 +560,20 @@ mod tests {
         let mut ids = registry.list();
         ids.sort_unstable();
 
-        let mut expected: Vec<&'static str> = tier::TIER_1.iter().chain(tier::TIER_2.iter()).copied().collect();
+        let mut expected: Vec<&'static str> = tier::TIER_1
+            .iter()
+            .chain(tier::TIER_2.iter())
+            .copied()
+            .collect();
         expected.sort_unstable();
         expected.dedup();
 
-        assert_eq!(ids, expected, "a clean environment must register all {} default providers", expected.len());
+        assert_eq!(
+            ids,
+            expected,
+            "a clean environment must register all {} default providers",
+            expected.len()
+        );
         assert_eq!(ids.len(), 26, "v25 §1: 12 Tier-1 + 14 Tier-2");
     }
 
@@ -559,8 +595,14 @@ mod tests {
     fn every_registered_provider_has_a_limiter_and_breaker() {
         let registry = ProviderRegistry::new(&test_config(), None, None);
         for id in registry.list() {
-            assert!(registry.concurrency(id).is_some(), "{id} has no concurrency limiter");
-            assert!(registry.circuit_breaker(id).is_some(), "{id} has no circuit breaker");
+            assert!(
+                registry.concurrency(id).is_some(),
+                "{id} has no concurrency limiter"
+            );
+            assert!(
+                registry.circuit_breaker(id).is_some(),
+                "{id} has no circuit breaker"
+            );
         }
     }
 }

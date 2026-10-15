@@ -2,15 +2,15 @@
 // X-specific read/write tools via Twitter API v2 using OAuth 2.0 Bearer tokens.
 // Follows the same pattern as tools_reddit.rs.
 
-use rmcp::{Json, schemars::JsonSchema};
+use rmcp::{schemars::JsonSchema, Json};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use super::auth::resolve_first_user;
 use crate::api::AppState;
 use crate::crypto;
 use crate::social::x::XProvider;
 use crate::social::SocialProvider;
-use super::auth::resolve_first_user;
 
 // ── Input/Output Types ──────────────────────────────────────
 
@@ -234,7 +234,8 @@ async fn find_x_token(state: &AppState, user_id: Uuid) -> Result<(String, String
         .filter(|i| i.provider_identifier == "x")
         .collect();
 
-    if let Some(preferred) = x_integrations.iter()
+    if let Some(preferred) = x_integrations
+        .iter()
         .find(|i| i.access_token.starts_with('{'))
     {
         let token = crypto::maybe_decrypt_token(&preferred.access_token, state.token_key.as_ref());
@@ -271,17 +272,16 @@ fn create_provider(state: &AppState, token: &str) -> XProvider {
     provider
 }
 
-
-
 // ── Tool Implementations ─────────────────────────────────────
 
-pub async fn x_get_me(
-    state: &AppState,
-) -> Result<Json<XGetMeOutput>, String> {
+pub async fn x_get_me(state: &AppState) -> Result<Json<XGetMeOutput>, String> {
     let user_id = resolve_first_user(state).await?;
     let (token, _) = find_x_token(state, user_id).await?;
     let provider = create_provider(state, &token);
-    let result = provider.get_me(&token).await.map_err(|e| format!("X get_me failed: {e}"))?;
+    let result = provider
+        .get_me(&token)
+        .await
+        .map_err(|e| format!("X get_me failed: {e}"))?;
     Ok(Json(XGetMeOutput { data: result }))
 }
 
@@ -294,7 +294,12 @@ pub async fn x_home_timeline(
     let provider = create_provider(state, &token);
     let max_results = input.max_results.unwrap_or(20).min(100);
     let result = provider
-        .home_timeline(&token, &my_id, max_results, input.pagination_token.as_deref())
+        .home_timeline(
+            &token,
+            &my_id,
+            max_results,
+            input.pagination_token.as_deref(),
+        )
         .await
         .map_err(|e| format!("X home timeline failed: {e}"))?;
     Ok(Json(XHomeTimelineOutput { data: result }))
@@ -337,7 +342,12 @@ pub async fn x_user_tweets(
     let provider = create_provider(state, &token);
     let max_results = input.max_results.unwrap_or(20).min(100);
     let result = provider
-        .user_tweets(&token, &input.user_id, max_results, input.pagination_token.as_deref())
+        .user_tweets(
+            &token,
+            &input.user_id,
+            max_results,
+            input.pagination_token.as_deref(),
+        )
         .await
         .map_err(|e| format!("X user tweets failed: {e}"))?;
     Ok(Json(XUserTweetsOutput { data: result }))
@@ -366,7 +376,12 @@ pub async fn x_search_tweets(
     let provider = create_provider(state, &token);
     let max_results = input.max_results.unwrap_or(20).min(100);
     let result = provider
-        .search_tweets(&token, &input.query, max_results, input.next_token.as_deref())
+        .search_tweets(
+            &token,
+            &input.query,
+            max_results,
+            input.next_token.as_deref(),
+        )
         .await
         .map_err(|e| format!("X search failed: {e}"))?;
     Ok(Json(XSearchTweetsOutput { data: result }))
@@ -451,7 +466,12 @@ pub async fn x_bookmarks(
     let provider = create_provider(state, &token);
     let max_results = input.max_results.unwrap_or(20).min(100);
     let result = provider
-        .bookmarks(&token, &my_id, max_results, input.pagination_token.as_deref())
+        .bookmarks(
+            &token,
+            &my_id,
+            max_results,
+            input.pagination_token.as_deref(),
+        )
         .await
         .map_err(|e| format!("X bookmarks failed: {e}"))?;
     Ok(Json(XBookmarksOutput { data: result }))
@@ -494,7 +514,12 @@ pub async fn x_followers(
     let provider = create_provider(state, &token);
     let max_results = input.max_results.unwrap_or(20).min(100);
     let result = provider
-        .followers(&token, &input.user_id, max_results, input.pagination_token.as_deref())
+        .followers(
+            &token,
+            &input.user_id,
+            max_results,
+            input.pagination_token.as_deref(),
+        )
         .await
         .map_err(|e| format!("X followers failed: {e}"))?;
     Ok(Json(XFollowersOutput { data: result }))
@@ -509,7 +534,12 @@ pub async fn x_following(
     let provider = create_provider(state, &token);
     let max_results = input.max_results.unwrap_or(20).min(100);
     let result = provider
-        .following(&token, &input.user_id, max_results, input.pagination_token.as_deref())
+        .following(
+            &token,
+            &input.user_id,
+            max_results,
+            input.pagination_token.as_deref(),
+        )
         .await
         .map_err(|e| format!("X following failed: {e}"))?;
     Ok(Json(XFollowingOutput { data: result }))
@@ -552,7 +582,12 @@ pub async fn x_list_timeline(
     let provider = create_provider(state, &token);
     let max_results = input.max_results.unwrap_or(20).min(100);
     let result = provider
-        .list_timeline(&token, &input.list_id, max_results, input.pagination_token.as_deref())
+        .list_timeline(
+            &token,
+            &input.list_id,
+            max_results,
+            input.pagination_token.as_deref(),
+        )
         .await
         .map_err(|e| format!("X list timeline failed: {e}"))?;
     Ok(Json(XListTimelineOutput { data: result }))
@@ -579,6 +614,10 @@ pub struct XCreateTweetInput {
     /// Optional media URLs (images/videos) to attach. Use media_upload first to get URLs.
     #[serde(default)]
     pub media_urls: Vec<String>,
+    /// §5.4: which connected X account to use — integration UUID,
+    /// "x:Name", or empty for the first connected account.
+    #[serde(default)]
+    pub integration: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
@@ -601,12 +640,22 @@ pub async fn x_create_tweet(
     // exists (posts row + idempotency + retries + lifecycle). Falls back
     // to direct publish ONLY for env/browser-cookie tokens, which have no
     // integration row to attach the post to.
-    let integrations = crate::db::queries::list_integrations(&state.db, user_id)
-        .await
-        .map_err(|e| format!("DB error: {e}"))?;
-    let x_integration = integrations
-        .into_iter()
-        .find(|i| i.provider_identifier == "x");
+    let x_integration = match super::tools_posts::select_integration(
+        state,
+        user_id,
+        "x",
+        input.integration.as_deref(),
+    )
+    .await
+    {
+        Ok(i) => Some(i),
+        // An explicit selector that matches nothing is a hard error —
+        // falling through to the env token would post from the WRONG
+        // account.
+        Err(e) if input.integration.is_some() => return Err(e),
+        // No connected account → legacy env/browser-cookie path below.
+        Err(_) => None,
+    };
 
     let media: Vec<crate::social::MediaAttachment> = input
         .media_urls
@@ -739,15 +788,20 @@ pub async fn x_list_dms(
         .get_dm_conversations(&token, limit)
         .await
         .map_err(|e| format!("X list DMs failed: {e}"))?;
-    let conv_values: Vec<serde_json::Value> = conversations.into_iter().map(|c| {
-        serde_json::json!({
-            "id": c.id,
-            "participant": c.participant,
-            "last_message": c.last_message,
-            "last_message_at": c.last_message_at.map(|dt| dt.to_rfc3339()),
+    let conv_values: Vec<serde_json::Value> = conversations
+        .into_iter()
+        .map(|c| {
+            serde_json::json!({
+                "id": c.id,
+                "participant": c.participant,
+                "last_message": c.last_message,
+                "last_message_at": c.last_message_at.map(|dt| dt.to_rfc3339()),
+            })
         })
-    }).collect();
-    Ok(Json(XListDmsOutput { conversations: conv_values }))
+        .collect();
+    Ok(Json(XListDmsOutput {
+        conversations: conv_values,
+    }))
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
@@ -773,15 +827,20 @@ pub async fn x_get_dm_conversation(
         .get_dm_messages(&token, &input.conversation_id, limit)
         .await
         .map_err(|e| format!("X get DM conversation failed: {e}"))?;
-    let msg_values: Vec<serde_json::Value> = messages.into_iter().map(|m| {
-        serde_json::json!({
-            "id": m.id,
-            "sender": m.sender,
-            "content": m.content,
-            "created_at": m.created_at.to_rfc3339(),
+    let msg_values: Vec<serde_json::Value> = messages
+        .into_iter()
+        .map(|m| {
+            serde_json::json!({
+                "id": m.id,
+                "sender": m.sender,
+                "content": m.content,
+                "created_at": m.created_at.to_rfc3339(),
+            })
         })
-    }).collect();
-    Ok(Json(XGetDmConversationOutput { messages: msg_values }))
+        .collect();
+    Ok(Json(XGetDmConversationOutput {
+        messages: msg_values,
+    }))
 }
 
 // ── Analytics ────────────────────────────────────────────────
@@ -793,7 +852,9 @@ pub struct XGetAnalyticsInput {
     pub days: u32,
 }
 
-fn default_days() -> u32 { 30 }
+fn default_days() -> u32 {
+    30
+}
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct XGetAnalyticsOutput {

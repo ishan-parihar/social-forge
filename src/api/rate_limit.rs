@@ -100,9 +100,10 @@ impl RateLimiter {
             cells.retain(|_, w| now.saturating_duration_since(w.start) < window_len);
         }
 
-        let window = cells
-            .entry((bucket, client.to_owned()))
-            .or_insert(Window { start: now, count: 0 });
+        let window = cells.entry((bucket, client.to_owned())).or_insert(Window {
+            start: now,
+            count: 0,
+        });
 
         let elapsed = now.saturating_duration_since(window.start);
         if elapsed >= window_len {
@@ -231,7 +232,10 @@ mod tests {
         let retry_after = rl
             .check_at(Bucket::Login, IP_A, now)
             .expect_err("attempt 11 must be rejected");
-        assert!(retry_after > Duration::ZERO, "rejection must advertise a wait");
+        assert!(
+            retry_after > Duration::ZERO,
+            "rejection must advertise a wait"
+        );
     }
 
     #[test]
@@ -245,9 +249,13 @@ mod tests {
         assert!(rl.check_at(Bucket::Login, IP_A, t0).is_err());
 
         // One second short of the window: still limited.
-        assert!(rl.check_at(Bucket::Login, IP_A, t0 + Duration::from_secs(59)).is_err());
+        assert!(rl
+            .check_at(Bucket::Login, IP_A, t0 + Duration::from_secs(59))
+            .is_err());
         // Window rolled over: allowed again.
-        assert!(rl.check_at(Bucket::Login, IP_A, t0 + MINUTE + Duration::from_secs(1)).is_ok());
+        assert!(rl
+            .check_at(Bucket::Login, IP_A, t0 + MINUTE + Duration::from_secs(1))
+            .is_ok());
     }
 
     #[test]
@@ -256,7 +264,8 @@ mod tests {
         let now = Instant::now();
 
         for _ in 0..LOGIN_MAX {
-            rl.check_at(Bucket::Login, IP_A, now).expect("within budget");
+            rl.check_at(Bucket::Login, IP_A, now)
+                .expect("within budget");
         }
         assert!(rl.check_at(Bucket::Login, IP_A, now).is_err());
         assert!(rl.check_at(Bucket::Login, IP_B, now).is_ok());
@@ -268,7 +277,8 @@ mod tests {
         let now = Instant::now();
 
         for _ in 0..LOGIN_MAX {
-            rl.check_at(Bucket::Login, IP_A, now).expect("within budget");
+            rl.check_at(Bucket::Login, IP_A, now)
+                .expect("within budget");
         }
         assert!(rl.check_at(Bucket::Login, IP_A, now).is_err());
         // Connect and upload budgets are untouched by login exhaustion.
@@ -338,7 +348,9 @@ mod tests {
 
     #[test]
     fn client_key_falls_back_when_no_proxy_headers_present() {
-        let req = Request::builder().body(Body::empty()).expect("valid request");
+        let req = Request::builder()
+            .body(Body::empty())
+            .expect("valid request");
 
         assert_eq!(client_key(&req), "no-forwarded-for");
     }

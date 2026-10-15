@@ -39,7 +39,10 @@ pub async fn handle(action: WebhooksAction, state: &AppState) -> anyhow::Result<
                 r#"INSERT INTO webhooks (id, user_id, name, url) VALUES (?, ?, ?, ?)
                  RETURNING id as "id!: String", name, url, is_active as "is_active!: i64",
                            created_at as "created_at: EpochUtc""#,
-                id, user_id, name, url,
+                id,
+                user_id,
+                name,
+                url,
             )
             .fetch_one(&state.db)
             .await
@@ -58,7 +61,9 @@ pub async fn handle(action: WebhooksAction, state: &AppState) -> anyhow::Result<
             .execute(&state.db)
             .await
             {
-                return Err(anyhow::anyhow!("Failed to subscribe webhook to events: {e}"));
+                return Err(anyhow::anyhow!(
+                    "Failed to subscribe webhook to events: {e}"
+                ));
             }
             Ok(serde_json::json!({
                 "id": row.id, "name": row.name, "url": row.url,
@@ -74,8 +79,13 @@ pub async fn handle(action: WebhooksAction, state: &AppState) -> anyhow::Result<
                 Ok(id) => id,
                 Err(_) => return Err(anyhow::anyhow!("Invalid webhook ID")),
             };
-            let del_result = match sqlx::query!("DELETE FROM webhooks WHERE id = ? AND user_id = ?", webhook_id, user_id)
-                .execute(&state.db).await
+            let del_result = match sqlx::query!(
+                "DELETE FROM webhooks WHERE id = ? AND user_id = ?",
+                webhook_id,
+                user_id
+            )
+            .execute(&state.db)
+            .await
             {
                 Ok(r) => r,
                 Err(e) => return Err(anyhow::anyhow!("Delete failed: {e}")),
@@ -94,10 +104,15 @@ pub async fn handle(action: WebhooksAction, state: &AppState) -> anyhow::Result<
                 Ok(id) => id,
                 Err(_) => return Err(anyhow::anyhow!("Invalid webhook ID")),
             };
-            let row = match sqlx::query!(r#"SELECT id as "id!: String", name, url, is_active as "is_active!: i64",
+            let row = match sqlx::query!(
+                r#"SELECT id as "id!: String", name, url, is_active as "is_active!: i64",
                                                   created_at as "created_at: EpochUtc"
-                                           FROM webhooks WHERE id = ? AND user_id = ?"#, webhook_id, user_id)
-                .fetch_optional(&state.db).await
+                                           FROM webhooks WHERE id = ? AND user_id = ?"#,
+                webhook_id,
+                user_id
+            )
+            .fetch_optional(&state.db)
+            .await
             {
                 Ok(Some(r)) => r,
                 Ok(None) => return Err(anyhow::anyhow!("Webhook not found")),
@@ -108,7 +123,12 @@ pub async fn handle(action: WebhooksAction, state: &AppState) -> anyhow::Result<
                 "is_active": row.is_active != 0, "created_at": row.created_at.0.to_rfc3339(),
             }))
         }
-        WebhooksAction::Update { id, name, url, active } => {
+        WebhooksAction::Update {
+            id,
+            name,
+            url,
+            active,
+        } => {
             let user_id = match crate::mcp::tools_posts::resolve_first_user(state).await {
                 Ok(id) => id,
                 Err(e) => return Err(anyhow::anyhow!("Auth error: {e}")),
@@ -117,9 +137,14 @@ pub async fn handle(action: WebhooksAction, state: &AppState) -> anyhow::Result<
                 Ok(id) => id,
                 Err(_) => return Err(anyhow::anyhow!("Invalid webhook ID")),
             };
-            let existing = match sqlx::query!(r#"SELECT id as "id!: String", name, url, is_active as "is_active!: i64"
-                                                 FROM webhooks WHERE id = ? AND user_id = ?"#, webhook_id, user_id)
-                .fetch_optional(&state.db).await
+            let existing = match sqlx::query!(
+                r#"SELECT id as "id!: String", name, url, is_active as "is_active!: i64"
+                                                 FROM webhooks WHERE id = ? AND user_id = ?"#,
+                webhook_id,
+                user_id
+            )
+            .fetch_optional(&state.db)
+            .await
             {
                 Ok(Some(r)) => r,
                 Ok(None) => return Err(anyhow::anyhow!("Webhook not found")),
@@ -128,8 +153,16 @@ pub async fn handle(action: WebhooksAction, state: &AppState) -> anyhow::Result<
             let new_name = name.unwrap_or(existing.name);
             let new_url = url.unwrap_or(existing.url);
             let new_active = active.map(i64::from).unwrap_or(existing.is_active);
-            match sqlx::query!("UPDATE webhooks SET name = ?, url = ?, is_active = ? WHERE id = ? AND user_id = ?", new_name, new_url, new_active, webhook_id, user_id)
-                .execute(&state.db).await
+            match sqlx::query!(
+                "UPDATE webhooks SET name = ?, url = ?, is_active = ? WHERE id = ? AND user_id = ?",
+                new_name,
+                new_url,
+                new_active,
+                webhook_id,
+                user_id
+            )
+            .execute(&state.db)
+            .await
             {
                 Ok(_) => Ok(serde_json::json!({ "updated": true })),
                 Err(e) => Err(format!("Update failed: {e}")),
@@ -144,17 +177,32 @@ pub async fn handle(action: WebhooksAction, state: &AppState) -> anyhow::Result<
                 Ok(id) => id,
                 Err(_) => return Err(anyhow::anyhow!("Invalid webhook ID")),
             };
-            let row = match sqlx::query!(r#"SELECT id as "id!: String", url FROM webhooks WHERE id = ? AND user_id = ?"#, webhook_id, user_id)
-                .fetch_optional(&state.db).await
+            let row = match sqlx::query!(
+                r#"SELECT id as "id!: String", url FROM webhooks WHERE id = ? AND user_id = ?"#,
+                webhook_id,
+                user_id
+            )
+            .fetch_optional(&state.db)
+            .await
             {
                 Ok(Some(r)) => r,
                 Ok(None) => return Err(anyhow::anyhow!("Webhook not found")),
                 Err(e) => return Err(anyhow::anyhow!("DB error: {e}")),
             };
-            let test_payload = serde_json::json!({"event": "test", "timestamp": chrono::Utc::now().to_rfc3339()});
-            match reqwest::Client::new().post(&row.url).json(&test_payload).send().await {
-                Ok(resp) => Ok(serde_json::json!({ "status": resp.status().as_u16(), "ok": resp.status().is_success() })),
-                Err(e) => Ok(serde_json::json!({ "status": 0, "ok": false, "error": e.to_string() })),
+            let test_payload =
+                serde_json::json!({"event": "test", "timestamp": chrono::Utc::now().to_rfc3339()});
+            match reqwest::Client::new()
+                .post(&row.url)
+                .json(&test_payload)
+                .send()
+                .await
+            {
+                Ok(resp) => Ok(
+                    serde_json::json!({ "status": resp.status().as_u16(), "ok": resp.status().is_success() }),
+                ),
+                Err(e) => {
+                    Ok(serde_json::json!({ "status": 0, "ok": false, "error": e.to_string() }))
+                }
             }
         }
     };

@@ -2,7 +2,7 @@
 // Pinterest API v5 tools for boards, pins, and analytics.
 // Follows the same pattern as tools_instagram_standalone.rs.
 
-use rmcp::{Json, schemars::JsonSchema};
+use rmcp::{schemars::JsonSchema, Json};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -200,6 +200,10 @@ pub struct PiCreatePinInput {
     pub media_urls: Vec<String>,
     /// Optional destination link
     pub link: Option<String>,
+    /// §5.4: which connected Pinterest account to use — integration UUID,
+    /// "pinterest:Name", or empty for the first connected account.
+    #[serde(default)]
+    pub integration: Option<String>,
 }
 
 /// Create and publish a new Pinterest pin immediately. Supports image pins
@@ -210,15 +214,24 @@ pub async fn handle_pi_create_pin(
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = resolve_first_user(state).await?;
     // §4.2: through the publish pipeline — posts row + idempotency + retries.
-    let integration =
-        super::tools_posts::integration_for_provider(state, user_id, "pinterest").await?;
+    let integration = super::tools_posts::select_integration(
+        state,
+        user_id,
+        "pinterest",
+        input.integration.as_deref(),
+    )
+    .await?;
 
     let media: Vec<crate::social::MediaAttachment> = input
         .media_urls
         .iter()
         .map(|url| crate::social::MediaAttachment {
             url: url.clone(),
-            mime_type: if url.ends_with(".mp4") { "video/mp4".into() } else { "image/jpeg".into() },
+            mime_type: if url.ends_with(".mp4") {
+                "video/mp4".into()
+            } else {
+                "image/jpeg".into()
+            },
             alt: Some(input.title.clone()),
             poster_url: None,
         })

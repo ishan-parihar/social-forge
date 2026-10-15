@@ -1,7 +1,7 @@
 // ─── MCP Tags Tools ─────────────────────────────────────────────
 // CRUD tools for user-defined tags.
 
-use rmcp::{Json, schemars::JsonSchema};
+use rmcp::{schemars::JsonSchema, Json};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -20,8 +20,7 @@ pub struct TagCreateInput {
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
-pub struct TagListInput {
-}
+pub struct TagListInput {}
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct TagGetInput {
@@ -126,8 +125,8 @@ pub async fn handle_tag_get(
     input: &TagGetInput,
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
-    let tag_id = Uuid::parse_str(&input.tag_id)
-        .map_err(|_| format!("Invalid tag ID: {}", input.tag_id))?;
+    let tag_id =
+        Uuid::parse_str(&input.tag_id).map_err(|_| format!("Invalid tag ID: {}", input.tag_id))?;
 
     let tag = sqlx::query!(
         r#"SELECT id as "id!: String", name, color,
@@ -159,8 +158,8 @@ pub async fn handle_tag_update(
     input: &TagUpdateInput,
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
-    let tag_id = Uuid::parse_str(&input.tag_id)
-        .map_err(|_| format!("Invalid tag ID: {}", input.tag_id))?;
+    let tag_id =
+        Uuid::parse_str(&input.tag_id).map_err(|_| format!("Invalid tag ID: {}", input.tag_id))?;
 
     let new_name = input.name.clone();
     let new_color = input.color.clone();
@@ -200,8 +199,8 @@ pub async fn handle_tag_delete(
     input: &TagDeleteInput,
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
-    let tag_id = Uuid::parse_str(&input.tag_id)
-        .map_err(|_| format!("Invalid tag ID: {}", input.tag_id))?;
+    let tag_id =
+        Uuid::parse_str(&input.tag_id).map_err(|_| format!("Invalid tag ID: {}", input.tag_id))?;
 
     let result = sqlx::query!(
         "DELETE FROM tags WHERE id = ? AND user_id = ?",

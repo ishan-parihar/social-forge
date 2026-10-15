@@ -28,9 +28,7 @@ use tokio_stream::wrappers::BroadcastStream;
 use crate::api::AppState;
 
 /// GET /api/events — SSE stream (auth-gated; see `mod.rs`)
-pub async fn sse_handler(
-    State(state): State<AppState>,
-) -> impl IntoResponse {
+pub async fn sse_handler(State(state): State<AppState>) -> impl IntoResponse {
     let rx = state.broadcast.subscribe();
     // Map the BroadcastStream directly into SSE Events — no custom
     // ReceiverStream wrapper needed (axum's Sse accepts any Stream
@@ -60,7 +58,12 @@ pub async fn sse_handler(
                 let dbg = format!("{_e:?}");
                 let count = dbg
                     .split_whitespace()
-                    .find_map(|tok| tok.trim_start_matches('(').trim_end_matches(')').parse::<u64>().ok())
+                    .find_map(|tok| {
+                        tok.trim_start_matches('(')
+                            .trim_end_matches(')')
+                            .parse::<u64>()
+                            .ok()
+                    })
                     .unwrap_or(0);
                 let data = serde_json::json!({ "lagged": true, "count": count }).to_string();
                 let sse = Event::default().event("lagged").data(data);

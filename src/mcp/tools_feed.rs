@@ -3,12 +3,11 @@
 // Mirrors the REST API /api/feed endpoints for AI agent access.
 
 use chrono::{DateTime, Utc};
-use rmcp::{Json, schemars::JsonSchema};
+use rmcp::{schemars::JsonSchema, Json};
 use serde::{Deserialize, Serialize};
 
 use crate::api::AppState;
 use crate::feed;
-
 
 // ── Input/Output Types ──────────────────────────────────────
 
@@ -121,9 +120,7 @@ pub async fn handle_feed_list(
 
 /// MCP tool: trigger an immediate import of recent posts from all connected providers.
 /// Works like POST /api/feed/import.
-pub async fn handle_feed_import(
-    state: &AppState,
-) -> Result<Json<FeedImportOutput>, String> {
+pub async fn handle_feed_import(state: &AppState) -> Result<Json<FeedImportOutput>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
 
     let count = feed::refresh_user_posts(

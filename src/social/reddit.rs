@@ -1265,7 +1265,10 @@ impl SocialProvider for RedditProvider {
                 .post("https://www.reddit.com/api/v1/access_token")
                 .header("Authorization", format!("Basic {auth}"))
                 .header("User-Agent", "social-forge:v0.1.0 (by /u/social_forge)")
-                .form(&[("grant_type", "refresh_token"), ("refresh_token", rt.as_str())])
+                .form(&[
+                    ("grant_type", "refresh_token"),
+                    ("refresh_token", rt.as_str()),
+                ])
                 .send()
                 .await?;
 

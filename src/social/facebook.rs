@@ -15,9 +15,8 @@ pub struct FacebookProvider {
 
 impl FacebookProvider {
     pub fn new(config: &Config) -> Self {
-        let (client_id, client_secret) = config
-            .provider_credentials("facebook")
-            .unwrap_or_default();
+        let (client_id, client_secret) =
+            config.provider_credentials("facebook").unwrap_or_default();
         Self {
             client_id,
             client_secret,
@@ -40,7 +39,9 @@ impl SocialProvider for FacebookProvider {
         "Facebook"
     }
 
-    fn is_between_steps(&self) -> bool { true }
+    fn is_between_steps(&self) -> bool {
+        true
+    }
 
     fn scopes(&self) -> Vec<String> {
         vec![
@@ -86,7 +87,9 @@ impl SocialProvider for FacebookProvider {
         )
         .map_err(|e| ProviderError::Auth(format!("URL parse: {e}")))?;
 
-        Ok(AuthUrlResponse { url: url.to_string() })
+        Ok(AuthUrlResponse {
+            url: url.to_string(),
+        })
     }
 
     async fn exchange_code(
@@ -105,7 +108,9 @@ impl SocialProvider for FacebookProvider {
 
         let token_resp = self
             .http
-            .get(format!("https://graph.facebook.com/{GRAPH_VERSION}/oauth/access_token"))
+            .get(format!(
+                "https://graph.facebook.com/{GRAPH_VERSION}/oauth/access_token"
+            ))
             .query(&token_params)
             .send()
             .await?;
@@ -126,7 +131,9 @@ impl SocialProvider for FacebookProvider {
 
         let long_resp = self
             .http
-            .get(format!("https://graph.facebook.com/{GRAPH_VERSION}/oauth/access_token"))
+            .get(format!(
+                "https://graph.facebook.com/{GRAPH_VERSION}/oauth/access_token"
+            ))
             .query(&long_params)
             .send()
             .await?;
@@ -141,7 +148,10 @@ impl SocialProvider for FacebookProvider {
         // Get Facebook user info (name + picture) for the root integration
         let me: serde_json::Value = self
             .http
-            .get(format!("{}/me?fields=id,name,picture.type(large)", self.graph_url()))
+            .get(format!(
+                "{}/me?fields=id,name,picture.type(large)",
+                self.graph_url()
+            ))
             .query(&[("access_token", &access_token)])
             .send()
             .await?
@@ -162,7 +172,7 @@ impl SocialProvider for FacebookProvider {
         //   GET  /api/integrations/{id}/available-pages  — list all pages
         //   POST /api/integrations/{parent_id}/connect-page/{page_id} — connect a page
         return Ok(AuthToken {
-            access_token,  // user-level token for listing pages via me/accounts
+            access_token, // user-level token for listing pages via me/accounts
             refresh_token: None,
             expires_in,
             provider_user_id: user_id,
@@ -172,10 +182,7 @@ impl SocialProvider for FacebookProvider {
         });
     }
 
-    async fn refresh_token(
-        &self,
-        _refresh_token: &str,
-    ) -> Result<AuthToken, ProviderError> {
+    async fn refresh_token(&self, _refresh_token: &str) -> Result<AuthToken, ProviderError> {
         Err(ProviderError::Auth(
             "Facebook long-lived tokens last 60 days. Reconnect the channel.".into(),
         ))
@@ -228,7 +235,8 @@ impl SocialProvider for FacebookProvider {
 
     async fn pages(&self, access_token: &str) -> Result<Vec<PageInfo>, ProviderError> {
         let fields = "id,access_token,username,name,picture.type(large)";
-        let mut pages_map: std::collections::HashMap<String, serde_json::Value> = std::collections::HashMap::new();
+        let mut pages_map: std::collections::HashMap<String, serde_json::Value> =
+            std::collections::HashMap::new();
 
         // Paginated fetch helper
         async fn collect_pages(
@@ -248,7 +256,11 @@ impl SocialProvider for FacebookProvider {
                 let json: serde_json::Value = resp.json().await?;
 
                 if let Some(err) = json["error"].as_object() {
-                    tracing::warn!("collect_pages skipped ({:?}): {}", url, err["message"].as_str().unwrap_or(""));
+                    tracing::warn!(
+                        "collect_pages skipped ({:?}): {}",
+                        url,
+                        err["message"].as_str().unwrap_or("")
+                    );
                     return Ok(());
                 }
 
@@ -300,14 +312,19 @@ impl SocialProvider for FacebookProvider {
                             "{}/{biz_id}/{endpoint}?fields={fields}&limit=100",
                             self.graph_url(),
                         );
-                        if let Err(e) = collect_pages(&self.http, &biz_url, access_token, &mut pages_map).await {
+                        if let Err(e) =
+                            collect_pages(&self.http, &biz_url, access_token, &mut pages_map).await
+                        {
                             tracing::warn!("Business Manager {endpoint} for {biz_id}: {e:?}");
                         }
                     }
                 }
             }
         } else {
-            tracing::debug!("/me/businesses not available: {:?}", biz_json["error"]["message"]);
+            tracing::debug!(
+                "/me/businesses not available: {:?}",
+                biz_json["error"]["message"]
+            );
         }
 
         let mut result: Vec<PageInfo> = pages_map
@@ -399,14 +416,16 @@ impl SocialProvider for FacebookProvider {
             .to_string();
         let until = chrono::Utc::now().format("%Y-%m-%d").to_string();
 
-        let json = self.get_page_insights(
-            access_token,
-            &page_id,
-            "page_impressions,page_engaged_users,page_fans",
-            "day",
-            Some(&since),
-            Some(&until),
-        ).await?;
+        let json = self
+            .get_page_insights(
+                access_token,
+                &page_id,
+                "page_impressions,page_engaged_users,page_fans",
+                "day",
+                Some(&since),
+                Some(&until),
+            )
+            .await?;
 
         Ok(super::parse_insights_data(&json))
     }
@@ -421,7 +440,10 @@ impl SocialProvider for FacebookProvider {
             .http
             .get(&url)
             .query(&[
-                ("metric", "post_impressions,post_engaged_users,post_reactions_by_type_total"),
+                (
+                    "metric",
+                    "post_impressions,post_engaged_users,post_reactions_by_type_total",
+                ),
                 ("period", "lifetime"),
                 ("access_token", access_token),
             ])
@@ -437,7 +459,10 @@ impl SocialProvider for FacebookProvider {
                 return Err(ProviderError::TokenExpired);
             } else {
                 return Err(ProviderError::Api(
-                    json["error"]["message"].as_str().unwrap_or("Facebook API error").to_string()
+                    json["error"]["message"]
+                        .as_str()
+                        .unwrap_or("Facebook API error")
+                        .to_string(),
                 ));
             }
         }
@@ -465,7 +490,9 @@ impl SocialProvider for FacebookProvider {
         let page_handle = page_info.as_ref().and_then(|p| p.username.clone());
         let page_avatar = page_info.as_ref().and_then(|p| p.picture.clone());
 
-        let json = self.get_page_feed(access_token, &page_id, limit, None, None).await?;
+        let json = self
+            .get_page_feed(access_token, &page_id, limit, None, None)
+            .await?;
 
         let mut posts = Vec::new();
         if let Some(data) = json["data"].as_array() {
@@ -473,8 +500,13 @@ impl SocialProvider for FacebookProvider {
                 let post_id = item["id"].as_str().unwrap_or("").to_string();
                 let message = item["message"].as_str().unwrap_or("").to_string();
                 let story = item["story"].as_str().map(|s| s.to_string());
-                let content = if message.is_empty() { story.unwrap_or_default() } else { message };
-                let created_time = item["created_time"].as_str()
+                let content = if message.is_empty() {
+                    story.unwrap_or_default()
+                } else {
+                    message
+                };
+                let created_time = item["created_time"]
+                    .as_str()
                     .map(crate::social::common::parse_timestamp)
                     .unwrap_or_else(chrono::Utc::now);
 
@@ -569,7 +601,9 @@ impl SocialProvider for FacebookProvider {
         access_token: &str,
         platform_post_id: &str,
     ) -> Result<Vec<CommentData>, ProviderError> {
-        let json = self.get_post_comments_raw(access_token, platform_post_id).await?;
+        let json = self
+            .get_post_comments_raw(access_token, platform_post_id)
+            .await?;
         Ok(super::parse_graph_comments(&json))
     }
 
@@ -585,9 +619,7 @@ impl SocialProvider for FacebookProvider {
             .await?;
         let id = json["id"].as_str().unwrap_or("").to_string();
         if id.is_empty() {
-            return Err(ProviderError::Api(format!(
-                "Facebook reply failed: {json}"
-            )));
+            return Err(ProviderError::Api(format!("Facebook reply failed: {json}")));
         }
         Ok(PublishResult {
             platform_post_url: None,
@@ -631,14 +663,17 @@ impl SocialProvider for FacebookProvider {
             .collect())
     }
 
-        async fn fetch_page_info(
+    async fn fetch_page_info(
         &self,
         access_token: &str,
         page_id: &str,
     ) -> Result<PageInfo, ProviderError> {
         let resp = self
             .http
-            .get(format!("{}/{page_id}?fields=id,name,username,picture.type(large)", self.graph_url()))
+            .get(format!(
+                "{}/{page_id}?fields=id,name,username,picture.type(large)",
+                self.graph_url()
+            ))
             .query(&[("access_token", access_token)])
             .send()
             .await?;
@@ -676,10 +711,12 @@ impl FacebookProvider {
             .json()
             .await?;
 
-        let pages = me["data"].as_array()
-            .ok_or_else(|| ProviderError::Auth("No pages found for token. Ensure you have a Facebook Page.".into()))?;
+        let pages = me["data"].as_array().ok_or_else(|| {
+            ProviderError::Auth("No pages found for token. Ensure you have a Facebook Page.".into())
+        })?;
 
-        pages.first()
+        pages
+            .first()
             .and_then(|page| page["id"].as_str().map(String::from))
             .ok_or_else(|| ProviderError::Auth("Could not resolve page ID from token.".into()))
     }
@@ -689,8 +726,12 @@ impl FacebookProvider {
 impl FacebookProvider {
     /// Get the page's feed (posts).
     pub async fn get_page_feed(
-        &self, access_token: &str, page_id: &str, limit: u32,
-        since: Option<&str>, until: Option<&str>
+        &self,
+        access_token: &str,
+        page_id: &str,
+        limit: u32,
+        since: Option<&str>,
+        until: Option<&str>,
     ) -> Result<serde_json::Value, ProviderError> {
         let limit = limit.min(100);
         let mut url = format!(
@@ -703,9 +744,12 @@ impl FacebookProvider {
         if let Some(u) = until {
             url.push_str(&format!("&until={u}"));
         }
-        let resp = self.http.get(&url)
+        let resp = self
+            .http
+            .get(&url)
             .header("Authorization", format!("Bearer {access_token}"))
-            .send().await?;
+            .send()
+            .await?;
         let status = resp.status();
         let json: serde_json::Value = resp.json().await?;
         if status.is_success() {
@@ -716,22 +760,30 @@ impl FacebookProvider {
             Err(ProviderError::TokenExpired)
         } else {
             Err(ProviderError::Api(
-                json["error"]["message"].as_str().unwrap_or("Facebook API error").to_string()
+                json["error"]["message"]
+                    .as_str()
+                    .unwrap_or("Facebook API error")
+                    .to_string(),
             ))
         }
     }
 
     /// Get a single post by ID.
     pub async fn get_page_post(
-        &self, access_token: &str, post_id: &str
+        &self,
+        access_token: &str,
+        post_id: &str,
     ) -> Result<serde_json::Value, ProviderError> {
         let url = format!(
             "{}/{post_id}?fields=id,message,created_time,permalink_url,comments.summary(true),reactions.summary(true)",
             self.graph_url()
         );
-        let resp = self.http.get(&url)
+        let resp = self
+            .http
+            .get(&url)
             .header("Authorization", format!("Bearer {access_token}"))
-            .send().await?;
+            .send()
+            .await?;
         let status = resp.status();
         let json: serde_json::Value = resp.json().await?;
         if status.is_success() {
@@ -742,7 +794,10 @@ impl FacebookProvider {
             Err(ProviderError::TokenExpired)
         } else {
             Err(ProviderError::Api(
-                json["error"]["message"].as_str().unwrap_or("Facebook API error").to_string()
+                json["error"]["message"]
+                    .as_str()
+                    .unwrap_or("Facebook API error")
+                    .to_string(),
             ))
         }
     }
@@ -782,7 +837,9 @@ impl FacebookProvider {
 
     /// Get comments on a post (raw Graph API response).
     pub async fn get_post_comments_raw(
-        &self, access_token: &str, post_id: &str
+        &self,
+        access_token: &str,
+        post_id: &str,
     ) -> Result<serde_json::Value, ProviderError> {
         let url = format!(
             "{}/{post_id}/comments?fields=id,message,from,created_time",
@@ -814,19 +871,24 @@ impl FacebookProvider {
 
     /// Create a text/link post on a page.
     pub async fn create_post(
-        &self, access_token: &str, page_id: &str, message: &str, link: Option<&str>
+        &self,
+        access_token: &str,
+        page_id: &str,
+        message: &str,
+        link: Option<&str>,
     ) -> Result<serde_json::Value, ProviderError> {
-        let mut params: Vec<(&str, &str)> = vec![
-            ("message", message),
-            ("access_token", access_token),
-        ];
+        let mut params: Vec<(&str, &str)> =
+            vec![("message", message), ("access_token", access_token)];
         if let Some(l) = link {
             params.push(("link", l));
         }
-        let resp = self.http.post(format!("{}/{page_id}/feed", self.graph_url()))
+        let resp = self
+            .http
+            .post(format!("{}/{page_id}/feed", self.graph_url()))
             .header("Authorization", format!("Bearer {access_token}"))
             .form(&params)
-            .send().await?;
+            .send()
+            .await?;
         let status = resp.status();
         let json: serde_json::Value = resp.json().await?;
         if status.is_success() {
@@ -837,24 +899,34 @@ impl FacebookProvider {
             Err(ProviderError::TokenExpired)
         } else {
             Err(ProviderError::Api(
-                json["error"]["message"].as_str().unwrap_or("Facebook API error").to_string()
+                json["error"]["message"]
+                    .as_str()
+                    .unwrap_or("Facebook API error")
+                    .to_string(),
             ))
         }
     }
 
     /// Create a photo post on a page.
     pub async fn create_photo_post(
-        &self, access_token: &str, page_id: &str, url: &str, caption: &str
+        &self,
+        access_token: &str,
+        page_id: &str,
+        url: &str,
+        caption: &str,
     ) -> Result<serde_json::Value, ProviderError> {
         let params: Vec<(&str, &str)> = vec![
             ("url", url),
             ("caption", caption),
             ("access_token", access_token),
         ];
-        let resp = self.http.post(format!("{}/{page_id}/photos", self.graph_url()))
+        let resp = self
+            .http
+            .post(format!("{}/{page_id}/photos", self.graph_url()))
             .header("Authorization", format!("Bearer {access_token}"))
             .form(&params)
-            .send().await?;
+            .send()
+            .await?;
         let status = resp.status();
         let json: serde_json::Value = resp.json().await?;
         if status.is_success() {
@@ -865,14 +937,22 @@ impl FacebookProvider {
             Err(ProviderError::TokenExpired)
         } else {
             Err(ProviderError::Api(
-                json["error"]["message"].as_str().unwrap_or("Facebook API error").to_string()
+                json["error"]["message"]
+                    .as_str()
+                    .unwrap_or("Facebook API error")
+                    .to_string(),
             ))
         }
     }
 
     /// Create a video post on a page.
     pub async fn create_video_post(
-        &self, access_token: &str, page_id: &str, file_url: &str, title: &str, description: &str
+        &self,
+        access_token: &str,
+        page_id: &str,
+        file_url: &str,
+        title: &str,
+        description: &str,
     ) -> Result<serde_json::Value, ProviderError> {
         let params: Vec<(&str, &str)> = vec![
             ("file_url", file_url),
@@ -880,10 +960,13 @@ impl FacebookProvider {
             ("description", description),
             ("access_token", access_token),
         ];
-        let resp = self.http.post(format!("{}/{page_id}/videos", self.graph_url()))
+        let resp = self
+            .http
+            .post(format!("{}/{page_id}/videos", self.graph_url()))
             .header("Authorization", format!("Bearer {access_token}"))
             .form(&params)
-            .send().await?;
+            .send()
+            .await?;
         let status = resp.status();
         let json: serde_json::Value = resp.json().await?;
         if status.is_success() {
@@ -894,20 +977,28 @@ impl FacebookProvider {
             Err(ProviderError::TokenExpired)
         } else {
             Err(ProviderError::Api(
-                json["error"]["message"].as_str().unwrap_or("Facebook API error").to_string()
+                json["error"]["message"]
+                    .as_str()
+                    .unwrap_or("Facebook API error")
+                    .to_string(),
             ))
         }
     }
 
     /// Delete a post by ID.
     pub async fn delete_post(
-        &self, access_token: &str, post_id: &str
+        &self,
+        access_token: &str,
+        post_id: &str,
     ) -> Result<serde_json::Value, ProviderError> {
         let url = format!("{}/{post_id}", self.graph_url());
-        let resp = self.http.delete(&url)
+        let resp = self
+            .http
+            .delete(&url)
             .header("Authorization", format!("Bearer {access_token}"))
             .query(&[("access_token", access_token)])
-            .send().await?;
+            .send()
+            .await?;
         let status = resp.status();
         let json: serde_json::Value = resp.json().await?;
         if status.is_success() {
@@ -918,23 +1009,29 @@ impl FacebookProvider {
             Err(ProviderError::TokenExpired)
         } else {
             Err(ProviderError::Api(
-                json["error"]["message"].as_str().unwrap_or("Facebook API error").to_string()
+                json["error"]["message"]
+                    .as_str()
+                    .unwrap_or("Facebook API error")
+                    .to_string(),
             ))
         }
     }
 
     /// Comment on a post.
     pub async fn comment_on_post(
-        &self, access_token: &str, post_id: &str, message: &str
+        &self,
+        access_token: &str,
+        post_id: &str,
+        message: &str,
     ) -> Result<serde_json::Value, ProviderError> {
-        let params: Vec<(&str, &str)> = vec![
-            ("message", message),
-            ("access_token", access_token),
-        ];
-        let resp = self.http.post(format!("{}/{post_id}/comments", self.graph_url()))
+        let params: Vec<(&str, &str)> = vec![("message", message), ("access_token", access_token)];
+        let resp = self
+            .http
+            .post(format!("{}/{post_id}/comments", self.graph_url()))
             .header("Authorization", format!("Bearer {access_token}"))
             .form(&params)
-            .send().await?;
+            .send()
+            .await?;
         let status = resp.status();
         let json: serde_json::Value = resp.json().await?;
         if status.is_success() {
@@ -945,23 +1042,32 @@ impl FacebookProvider {
             Err(ProviderError::TokenExpired)
         } else {
             Err(ProviderError::Api(
-                json["error"]["message"].as_str().unwrap_or("Facebook API error").to_string()
+                json["error"]["message"]
+                    .as_str()
+                    .unwrap_or("Facebook API error")
+                    .to_string(),
             ))
         }
-    }    /// Get the actual playable video source URL for a video ID.
+    }
+    /// Get the actual playable video source URL for a video ID.
     /// Facebook's feed endpoint `media.source` often returns a thumbnail/preview.
     /// This makes a dedicated call to `/{video_id}?fields=source,embeddable,format`
     /// which returns the actual playable mp4 URL.
     pub async fn get_video_source(
-        &self, access_token: &str, video_id: &str
+        &self,
+        access_token: &str,
+        video_id: &str,
     ) -> Result<String, ProviderError> {
         let url = format!(
             "{}/{video_id}?fields=source,embeddable,format",
             self.graph_url()
         );
-        let resp = self.http.get(&url)
+        let resp = self
+            .http
+            .get(&url)
             .header("Authorization", format!("Bearer {access_token}"))
-            .send().await?;
+            .send()
+            .await?;
         let status = resp.status();
         let json: serde_json::Value = resp.json().await?;
         if status.is_success() {
@@ -973,25 +1079,38 @@ impl FacebookProvider {
             }
             // Fallback: pick the highest-quality format from the `format` array
             if let Some(formats) = json["format"].as_array() {
-                if let Some(best) = formats.iter()
-                    .filter(|f| f["filetype"].as_str() == Some("mp4") && f["embeddable"].as_bool() == Some(true))
+                if let Some(best) = formats
+                    .iter()
+                    .filter(|f| {
+                        f["filetype"].as_str() == Some("mp4")
+                            && f["embeddable"].as_bool() == Some(true)
+                    })
                     .max_by_key(|f| f["quality"].as_str().unwrap_or(""))
                 {
-                    if let Some(url_str) = best["embed_url"].as_str().or_else(|| best["preview_url"].as_str()) {
+                    if let Some(url_str) = best["embed_url"]
+                        .as_str()
+                        .or_else(|| best["preview_url"].as_str())
+                    {
                         return Ok(url_str.to_string());
                     }
                 }
                 // If no embeddable mp4, try any mp4
-                if let Some(best) = formats.iter()
+                if let Some(best) = formats
+                    .iter()
                     .filter(|f| f["filetype"].as_str() == Some("mp4"))
                     .max_by_key(|f| f["quality"].as_str().unwrap_or(""))
                 {
-                    if let Some(url_str) = best["embed_url"].as_str().or_else(|| best["preview_url"].as_str()) {
+                    if let Some(url_str) = best["embed_url"]
+                        .as_str()
+                        .or_else(|| best["preview_url"].as_str())
+                    {
                         return Ok(url_str.to_string());
                     }
                 }
             }
-            Err(ProviderError::Api("No usable video source found in response".into()))
+            Err(ProviderError::Api(
+                "No usable video source found in response".into(),
+            ))
         } else if status == 429 {
             Err(ProviderError::RateLimited("Facebook API rate limit".into()))
         } else if status == 401 {
@@ -999,24 +1118,29 @@ impl FacebookProvider {
         } else {
             Err(ProviderError::Api(
                 json["error"]["message"]
-                    .as_str().unwrap_or("Facebook API error")
-                    .to_string()
+                    .as_str()
+                    .unwrap_or("Facebook API error")
+                    .to_string(),
             ))
         }
     }
 
     /// React to a post (LIKE, LOVE, WOW, HAHA, SAD, ANGRY).
     pub async fn react_to_post(
-        &self, access_token: &str, post_id: &str, reaction_type: &str
+        &self,
+        access_token: &str,
+        post_id: &str,
+        reaction_type: &str,
     ) -> Result<serde_json::Value, ProviderError> {
-        let params: Vec<(&str, &str)> = vec![
-            ("type", reaction_type),
-            ("access_token", access_token),
-        ];
-        let resp = self.http.post(format!("{}/{post_id}/reactions", self.graph_url()))
+        let params: Vec<(&str, &str)> =
+            vec![("type", reaction_type), ("access_token", access_token)];
+        let resp = self
+            .http
+            .post(format!("{}/{post_id}/reactions", self.graph_url()))
             .header("Authorization", format!("Bearer {access_token}"))
             .form(&params)
-            .send().await?;
+            .send()
+            .await?;
         let status = resp.status();
         let json: serde_json::Value = resp.json().await?;
         if status.is_success() {
@@ -1027,15 +1151,23 @@ impl FacebookProvider {
             Err(ProviderError::TokenExpired)
         } else {
             Err(ProviderError::Api(
-                json["error"]["message"].as_str().unwrap_or("Facebook API error").to_string()
+                json["error"]["message"]
+                    .as_str()
+                    .unwrap_or("Facebook API error")
+                    .to_string(),
             ))
         }
     }
 
     /// Get page insights for a given metric and period.
     pub async fn get_page_insights(
-        &self, access_token: &str, page_id: &str, metric: &str, period: &str,
-        since: Option<&str>, until: Option<&str>
+        &self,
+        access_token: &str,
+        page_id: &str,
+        metric: &str,
+        period: &str,
+        since: Option<&str>,
+        until: Option<&str>,
     ) -> Result<serde_json::Value, ProviderError> {
         let mut url = format!(
             "{}/{page_id}/insights?metric={metric}&period={period}",
@@ -1047,9 +1179,12 @@ impl FacebookProvider {
         if let Some(u) = until {
             url.push_str(&format!("&until={u}"));
         }
-        let resp = self.http.get(&url)
+        let resp = self
+            .http
+            .get(&url)
             .header("Authorization", format!("Bearer {access_token}"))
-            .send().await?;
+            .send()
+            .await?;
         let status = resp.status();
         let json: serde_json::Value = resp.json().await?;
         if status.is_success() {
@@ -1060,22 +1195,30 @@ impl FacebookProvider {
             Err(ProviderError::TokenExpired)
         } else {
             Err(ProviderError::Api(
-                json["error"]["message"].as_str().unwrap_or("Facebook API error").to_string()
+                json["error"]["message"]
+                    .as_str()
+                    .unwrap_or("Facebook API error")
+                    .to_string(),
             ))
         }
     }
 
     /// Get page conversations (inbox).
     pub async fn get_page_conversations(
-        &self, access_token: &str, page_id: &str
+        &self,
+        access_token: &str,
+        page_id: &str,
     ) -> Result<serde_json::Value, ProviderError> {
         let url = format!(
             "{}/{page_id}/conversations?fields=id,snippet,updated_time,participants,message_count",
             self.graph_url()
         );
-        let resp = self.http.get(&url)
+        let resp = self
+            .http
+            .get(&url)
             .header("Authorization", format!("Bearer {access_token}"))
-            .send().await?;
+            .send()
+            .await?;
         let status = resp.status();
         let json: serde_json::Value = resp.json().await?;
         if status.is_success() {
@@ -1086,22 +1229,30 @@ impl FacebookProvider {
             Err(ProviderError::TokenExpired)
         } else {
             Err(ProviderError::Api(
-                json["error"]["message"].as_str().unwrap_or("Facebook API error").to_string()
+                json["error"]["message"]
+                    .as_str()
+                    .unwrap_or("Facebook API error")
+                    .to_string(),
             ))
         }
     }
 
     /// Get messages in a conversation.
     pub async fn get_conversation_messages(
-        &self, access_token: &str, conversation_id: &str
+        &self,
+        access_token: &str,
+        conversation_id: &str,
     ) -> Result<serde_json::Value, ProviderError> {
         let url = format!(
             "{}/{conversation_id}/messages?fields=id,message,from,created_time",
             self.graph_url()
         );
-        let resp = self.http.get(&url)
+        let resp = self
+            .http
+            .get(&url)
             .header("Authorization", format!("Bearer {access_token}"))
-            .send().await?;
+            .send()
+            .await?;
         let status = resp.status();
         let json: serde_json::Value = resp.json().await?;
         if status.is_success() {
@@ -1112,23 +1263,29 @@ impl FacebookProvider {
             Err(ProviderError::TokenExpired)
         } else {
             Err(ProviderError::Api(
-                json["error"]["message"].as_str().unwrap_or("Facebook API error").to_string()
+                json["error"]["message"]
+                    .as_str()
+                    .unwrap_or("Facebook API error")
+                    .to_string(),
             ))
         }
     }
 
     /// Send a message in a conversation.
     pub async fn send_message(
-        &self, access_token: &str, conversation_id: &str, message: &str
+        &self,
+        access_token: &str,
+        conversation_id: &str,
+        message: &str,
     ) -> Result<serde_json::Value, ProviderError> {
-        let params: Vec<(&str, &str)> = vec![
-            ("message", message),
-            ("access_token", access_token),
-        ];
-        let resp = self.http.post(format!("{}/{conversation_id}/messages", self.graph_url()))
+        let params: Vec<(&str, &str)> = vec![("message", message), ("access_token", access_token)];
+        let resp = self
+            .http
+            .post(format!("{}/{conversation_id}/messages", self.graph_url()))
             .header("Authorization", format!("Bearer {access_token}"))
             .form(&params)
-            .send().await?;
+            .send()
+            .await?;
         let status = resp.status();
         let json: serde_json::Value = resp.json().await?;
         if status.is_success() {
@@ -1139,7 +1296,10 @@ impl FacebookProvider {
             Err(ProviderError::TokenExpired)
         } else {
             Err(ProviderError::Api(
-                json["error"]["message"].as_str().unwrap_or("Facebook API error").to_string()
+                json["error"]["message"]
+                    .as_str()
+                    .unwrap_or("Facebook API error")
+                    .to_string(),
             ))
         }
     }
@@ -1155,7 +1315,11 @@ impl FacebookProvider {
         // Check `media.source` first: this is the actual source URL for both videos and images.
         // Facebook returns `media.source` for video attachments and some image types.
         if let Some(url) = a["media"]["source"].as_str() {
-            let mime = if is_video || url.contains(".mp4") || url.contains(".webm") || url.contains(".mov") {
+            let mime = if is_video
+                || url.contains(".mp4")
+                || url.contains(".webm")
+                || url.contains(".mov")
+            {
                 "video/mp4"
             } else if url.contains(".gif") {
                 "image/gif"
@@ -1200,13 +1364,17 @@ impl FacebookProvider {
 
     /// Search for Facebook pages by query string.
     pub async fn search_pages(
-        &self, access_token: &str, query: &str
+        &self,
+        access_token: &str,
+        query: &str,
     ) -> Result<serde_json::Value, ProviderError> {
-        let resp = self.http
+        let resp = self
+            .http
             .get(format!("{}/search", self.graph_url()))
             .query(&[("q", query), ("type", "page")])
             .header("Authorization", format!("Bearer {access_token}"))
-            .send().await?;
+            .send()
+            .await?;
         let status = resp.status();
         let json: serde_json::Value = resp.json().await?;
         if status.is_success() {
@@ -1217,22 +1385,30 @@ impl FacebookProvider {
             Err(ProviderError::TokenExpired)
         } else {
             Err(ProviderError::Api(
-                json["error"]["message"].as_str().unwrap_or("Facebook API error").to_string()
+                json["error"]["message"]
+                    .as_str()
+                    .unwrap_or("Facebook API error")
+                    .to_string(),
             ))
         }
     }
 
     /// Get albums for a page.
     pub async fn get_page_albums(
-        &self, access_token: &str, page_id: &str
+        &self,
+        access_token: &str,
+        page_id: &str,
     ) -> Result<serde_json::Value, ProviderError> {
         let url = format!(
             "{}/{page_id}/albums?fields=id,name,count,cover_photo,created_time",
             self.graph_url()
         );
-        let resp = self.http.get(&url)
+        let resp = self
+            .http
+            .get(&url)
             .header("Authorization", format!("Bearer {access_token}"))
-            .send().await?;
+            .send()
+            .await?;
         let status = resp.status();
         let json: serde_json::Value = resp.json().await?;
         if status.is_success() {
@@ -1243,7 +1419,10 @@ impl FacebookProvider {
             Err(ProviderError::TokenExpired)
         } else {
             Err(ProviderError::Api(
-                json["error"]["message"].as_str().unwrap_or("Facebook API error").to_string()
+                json["error"]["message"]
+                    .as_str()
+                    .unwrap_or("Facebook API error")
+                    .to_string(),
             ))
         }
     }
@@ -1299,15 +1478,26 @@ mod tests {
     #[tokio::test]
     async fn test_generate_auth_url_contains_params() {
         let provider = FacebookProvider::new(&test_config());
-        let result = provider.generate_auth_url("test_state", "test_verifier", "http://localhost:3000/callback").await;
+        let result = provider
+            .generate_auth_url(
+                "test_state",
+                "test_verifier",
+                "http://localhost:3000/callback",
+            )
+            .await;
         let url = result.unwrap().url;
 
         assert!(url.contains("client_id="), "should contain client_id");
         assert!(url.contains("redirect_uri="), "should contain redirect_uri");
         assert!(url.contains("state=test_state"), "should contain state");
         assert!(url.contains("scope="), "should contain scope");
-        assert!(url.contains("response_type=code"), "should contain response_type");
-        assert!(url.starts_with(&format!("https://www.facebook.com/{GRAPH_VERSION}/dialog/oauth")));
+        assert!(
+            url.contains("response_type=code"),
+            "should contain response_type"
+        );
+        assert!(url.starts_with(&format!(
+            "https://www.facebook.com/{GRAPH_VERSION}/dialog/oauth"
+        )));
     }
 
     #[test]
@@ -1359,7 +1549,9 @@ mod tests {
     #[test]
     fn map_error_keeps_invalid_oauth_token_copy() {
         assert_eq!(
-            provider().map_error("Invalid OAuth access token.", 400).unwrap(),
+            provider()
+                .map_error("Invalid OAuth access token.", 400)
+                .unwrap(),
             "Facebook Page token is no longer valid. Reconnect the Page on the Channels \
              screen — Page tokens cannot be refreshed, they must be reissued."
         );
@@ -1367,7 +1559,9 @@ mod tests {
 
     #[test]
     fn map_error_explains_unsupported_post_request() {
-        let msg = provider().map_error("Unsupported post request.", 400).unwrap();
+        let msg = provider()
+            .map_error("Unsupported post request.", 400)
+            .unwrap();
         assert!(msg.contains("Page-scoped token"), "got: {msg}");
     }
 
@@ -1379,7 +1573,9 @@ mod tests {
 
     #[test]
     fn map_error_explains_rejected_media() {
-        let msg = provider().map_error("The video upload was rejected", 422).unwrap();
+        let msg = provider()
+            .map_error("The video upload was rejected", 422)
+            .unwrap();
         assert!(msg.contains("media"), "got: {msg}");
     }
 

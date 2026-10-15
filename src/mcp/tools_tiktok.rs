@@ -2,7 +2,7 @@
 // TikTok Content Posting API tools via the TikTokProvider.
 // Follows the same pattern as tools_youtube.rs.
 
-use rmcp::{Json, schemars::JsonSchema};
+use rmcp::{schemars::JsonSchema, Json};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -12,8 +12,7 @@ use crate::social::tiktok::TikTokProvider;
 // ── Input Types ─────────────────────────────────────────────
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
-pub struct TtProfileInput {
-}
+pub struct TtProfileInput {}
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct TtCreatePostInput {
@@ -23,6 +22,10 @@ pub struct TtCreatePostInput {
     pub video_data: Option<String>,
     /// URL of the video to download and upload
     pub video_url: Option<String>,
+    /// §5.4: which connected TikTok account to use — integration UUID,
+    /// "tiktok:Name", or empty for the first connected account.
+    #[serde(default)]
+    pub integration: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
@@ -85,8 +88,13 @@ pub async fn handle_tt_create_post(
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     // §4.2: through the publish pipeline — posts row + idempotency + retries
     // + the finalize polling the direct path lacked.
-    let integration =
-        super::tools_posts::integration_for_provider(state, user_id, "tiktok").await?;
+    let integration = super::tools_posts::select_integration(
+        state,
+        user_id,
+        "tiktok",
+        input.integration.as_deref(),
+    )
+    .await?;
 
     // Build media from video_url or video_data
     let mut media = Vec::new();
@@ -146,7 +154,9 @@ pub struct TtGetAnalyticsInput {
     pub days: u32,
 }
 
-fn default_days() -> u32 { 30 }
+fn default_days() -> u32 {
+    30
+}
 
 /// Get account-level analytics for the authenticated TikTok user
 /// (follower count, following count, likes, video count).
@@ -171,35 +181,19 @@ pub async fn handle_tt_get_analytics(
 
     let total_views: i64 = videos
         .as_array()
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|v| v["view_count"].as_i64())
-                .sum()
-        })
+        .map(|arr| arr.iter().filter_map(|v| v["view_count"].as_i64()).sum())
         .unwrap_or(0);
     let total_likes: i64 = videos
         .as_array()
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|v| v["like_count"].as_i64())
-                .sum()
-        })
+        .map(|arr| arr.iter().filter_map(|v| v["like_count"].as_i64()).sum())
         .unwrap_or(0);
     let total_comments: i64 = videos
         .as_array()
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|v| v["comment_count"].as_i64())
-                .sum()
-        })
+        .map(|arr| arr.iter().filter_map(|v| v["comment_count"].as_i64()).sum())
         .unwrap_or(0);
     let total_shares: i64 = videos
         .as_array()
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|v| v["share_count"].as_i64())
-                .sum()
-        })
+        .map(|arr| arr.iter().filter_map(|v| v["share_count"].as_i64()).sum())
         .unwrap_or(0);
 
     Ok(Json(serde_json::json!({

@@ -15,8 +15,7 @@ pub struct GoogleProvider {
 
 impl GoogleProvider {
     pub fn new(config: &Config) -> Self {
-        let (client_id, client_secret) =
-            config.provider_credentials("youtube").unwrap_or_default();
+        let (client_id, client_secret) = config.provider_credentials("youtube").unwrap_or_default();
         Self {
             client_id,
             client_secret,
@@ -298,18 +297,31 @@ impl GoogleProvider {
         max_results: Option<u32>,
     ) -> Result<serde_json::Value, ProviderError> {
         let limit = max_results.unwrap_or(10).min(50);
-        let encoded_query: String = url::form_urlencoded::byte_serialize(query.as_bytes()).collect();
+        let encoded_query: String =
+            url::form_urlencoded::byte_serialize(query.as_bytes()).collect();
         let search_url = format!(
             "https://www.googleapis.com/youtube/v3/search?part=snippet&q={}&type=video&maxResults={}&access_token={}",
             encoded_query, limit, access_token
         );
-        let search_resp = self.http.get(&search_url)
-            .send().await.map_err(|e| ProviderError::Api(e.to_string()))?;
+        let search_resp = self
+            .http
+            .get(&search_url)
+            .send()
+            .await
+            .map_err(|e| ProviderError::Api(e.to_string()))?;
         let search_status = search_resp.status();
-        let search_text = search_resp.text().await.map_err(|e| ProviderError::Api(e.to_string()))?;
+        let search_text = search_resp
+            .text()
+            .await
+            .map_err(|e| ProviderError::Api(e.to_string()))?;
         if !search_status.is_success() {
             let v: serde_json::Value = serde_json::from_str(&search_text).unwrap_or_default();
-            return Err(ProviderError::Api(v["error"]["message"].as_str().unwrap_or(&search_text).into()));
+            return Err(ProviderError::Api(
+                v["error"]["message"]
+                    .as_str()
+                    .unwrap_or(&search_text)
+                    .into(),
+            ));
         }
         let search_data: serde_json::Value = serde_json::from_str(&search_text).unwrap_or_default();
 
@@ -334,13 +346,22 @@ impl GoogleProvider {
             "https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id={}&access_token={}",
             ids_param, access_token
         );
-        let stats_resp = self.http.get(&stats_url)
-            .send().await.map_err(|e| ProviderError::Api(e.to_string()))?;
+        let stats_resp = self
+            .http
+            .get(&stats_url)
+            .send()
+            .await
+            .map_err(|e| ProviderError::Api(e.to_string()))?;
         let stats_status = stats_resp.status();
-        let stats_text = stats_resp.text().await.map_err(|e| ProviderError::Api(e.to_string()))?;
+        let stats_text = stats_resp
+            .text()
+            .await
+            .map_err(|e| ProviderError::Api(e.to_string()))?;
         if !stats_status.is_success() {
             let v: serde_json::Value = serde_json::from_str(&stats_text).unwrap_or_default();
-            return Err(ProviderError::Api(v["error"]["message"].as_str().unwrap_or(&stats_text).into()));
+            return Err(ProviderError::Api(
+                v["error"]["message"].as_str().unwrap_or(&stats_text).into(),
+            ));
         }
         let stats_data: serde_json::Value = serde_json::from_str(&stats_text).unwrap_or_default();
 
@@ -348,11 +369,14 @@ impl GoogleProvider {
         let mut creators = Vec::new();
         if let Some(channels) = stats_data["items"].as_array() {
             for ch in channels {
-                let sub_count: i64 = ch["statistics"]["subscriberCount"].as_str()
-                    .and_then(|s| s.parse().ok()).unwrap_or(0);
+                let sub_count: i64 = ch["statistics"]["subscriberCount"]
+                    .as_str()
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(0);
                 if sub_count >= min_subs {
                     let description = ch["snippet"]["description"].as_str().unwrap_or("");
-                    let email = description.split_whitespace()
+                    let email = description
+                        .split_whitespace()
                         .find(|w| w.contains('@') && w.contains('.'))
                         .map(|e| e.trim_end_matches('.').trim_end_matches(',').to_string());
                     creators.push(serde_json::json!({
@@ -873,8 +897,7 @@ impl GoogleProvider {
         query: &str,
         page_size: u32,
     ) -> Result<serde_json::Value, ProviderError> {
-        self.list_files(access_token, page_size, Some(query))
-            .await
+        self.list_files(access_token, page_size, Some(query)).await
     }
 
     /// List folders in Drive.
@@ -931,10 +954,7 @@ impl GoogleProvider {
             return Err(ProviderError::Api(msg));
         }
         let bytes = resp.bytes().await?.to_vec();
-        let encoded = base64::Engine::encode(
-            &base64::engine::general_purpose::STANDARD,
-            &bytes,
-        );
+        let encoded = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &bytes);
         Ok(serde_json::json!({
             "file_id": file_id,
             "mime_type": mime_type,
@@ -1003,13 +1023,13 @@ impl SocialProvider for GoogleProvider {
             ("prompt", "consent"),
         ];
 
-        let url = url::Url::parse_with_params(
-            "https://accounts.google.com/o/oauth2/v2/auth",
-            &params,
-        )
-        .map_err(|e| ProviderError::Auth(format!("URL parse: {e}")))?;
+        let url =
+            url::Url::parse_with_params("https://accounts.google.com/o/oauth2/v2/auth", &params)
+                .map_err(|e| ProviderError::Auth(format!("URL parse: {e}")))?;
 
-        Ok(AuthUrlResponse { url: url.to_string() })
+        Ok(AuthUrlResponse {
+            url: url.to_string(),
+        })
     }
 
     async fn exchange_code(
@@ -1115,17 +1135,12 @@ impl SocialProvider for GoogleProvider {
             .iter()
             .map(|item| PageInfo {
                 id: item["id"].as_str().unwrap_or("").to_string(),
-                name: item["snippet"]["title"]
-                    .as_str()
-                    .unwrap_or("")
-                    .to_string(),
+                name: item["snippet"]["title"].as_str().unwrap_or("").to_string(),
                 access_token: Some(access_token.to_string()),
                 picture: item["snippet"]["thumbnails"]["default"]["url"]
                     .as_str()
                     .map(String::from),
-                username: item["snippet"]["customUrl"]
-                    .as_str()
-                    .map(String::from),
+                username: item["snippet"]["customUrl"].as_str().map(String::from),
             })
             .collect())
     }
@@ -1151,17 +1166,12 @@ impl SocialProvider for GoogleProvider {
         if let Some(item) = json["items"].as_array().and_then(|a| a.first()) {
             Ok(PageInfo {
                 id: item["id"].as_str().unwrap_or("").to_string(),
-                name: item["snippet"]["title"]
-                    .as_str()
-                    .unwrap_or("")
-                    .to_string(),
+                name: item["snippet"]["title"].as_str().unwrap_or("").to_string(),
                 access_token: Some(access_token.to_string()),
                 picture: item["snippet"]["thumbnails"]["default"]["url"]
                     .as_str()
                     .map(String::from),
-                username: item["snippet"]["customUrl"]
-                    .as_str()
-                    .map(String::from),
+                username: item["snippet"]["customUrl"].as_str().map(String::from),
             })
         } else {
             Err(ProviderError::Api("YouTube channel not found".into()))
@@ -1191,8 +1201,7 @@ impl SocialProvider for GoogleProvider {
     ) -> Result<PublishResult, ProviderError> {
         if post.media.is_empty() {
             return Err(ProviderError::InvalidRequest(
-                "YouTube video upload requires at least one media attachment (video file)."
-                    .into(),
+                "YouTube video upload requires at least one media attachment (video file).".into(),
             ));
         }
 
@@ -1258,8 +1267,7 @@ impl SocialProvider for GoogleProvider {
             return Err(ProviderError::TokenExpired);
         }
         if !init_status.is_success() {
-            let err_body: serde_json::Value =
-                init_resp.json().await.unwrap_or_default();
+            let err_body: serde_json::Value = init_resp.json().await.unwrap_or_default();
             let msg = err_body["error"]["message"]
                 .as_str()
                 .unwrap_or("Failed to initialize resumable upload")
@@ -1271,14 +1279,10 @@ impl SocialProvider for GoogleProvider {
             .headers()
             .get(reqwest::header::LOCATION)
             .ok_or_else(|| {
-                ProviderError::Api(
-                    "No Location header in resumable upload response".into(),
-                )
+                ProviderError::Api("No Location header in resumable upload response".into())
             })?
             .to_str()
-            .map_err(|e| {
-                ProviderError::Api(format!("Invalid Location header: {e}"))
-            })?
+            .map_err(|e| ProviderError::Api(format!("Invalid Location header: {e}")))?
             .to_string();
 
         // ── Step 2: Upload the video binary data ───────────────────────────
@@ -1296,8 +1300,7 @@ impl SocialProvider for GoogleProvider {
             return Err(ProviderError::TokenExpired);
         }
         if !upload_status.is_success() {
-            let err_body: serde_json::Value =
-                upload_resp.json().await.unwrap_or_default();
+            let err_body: serde_json::Value = upload_resp.json().await.unwrap_or_default();
             let msg = err_body["error"]["message"]
                 .as_str()
                 .unwrap_or("Failed to upload video to YouTube")
@@ -1306,15 +1309,13 @@ impl SocialProvider for GoogleProvider {
         }
 
         let json: serde_json::Value = upload_resp.json().await?;
-        let video_id = json["id"].as_str().ok_or_else(|| {
-            ProviderError::Api("YouTube did not return a video ID".into())
-        })?;
+        let video_id = json["id"]
+            .as_str()
+            .ok_or_else(|| ProviderError::Api("YouTube did not return a video ID".into()))?;
 
         Ok(PublishResult {
             platform_post_id: video_id.to_string(),
-            platform_post_url: Some(format!(
-                "https://www.youtube.com/watch?v={video_id}"
-            )),
+            platform_post_url: Some(format!("https://www.youtube.com/watch?v={video_id}")),
             status: "published".into(),
         })
     }

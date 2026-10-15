@@ -51,10 +51,7 @@ pub async fn list(
     // For reply(), we still do a live provider API call to find the
     // matching comment's post — see that function for details.
 
-    let provider_filter: Option<&str> = query
-        .platform
-        .as_deref()
-        .filter(|p| *p != "all");
+    let provider_filter: Option<&str> = query.platform.as_deref().filter(|p| *p != "all");
 
     let cached = queries::list_cached_comments(&state.db, auth.user_id, provider_filter, 200)
         .await
@@ -71,7 +68,11 @@ pub async fn list(
         .map(|c| {
             let author = c.author_name.unwrap_or_else(|| "Unknown".into());
             let created_at = c.created_at.format("%Y-%m-%d %H:%M:%S").to_string();
-            let status = if resolved_ids.contains(&c.comment_id) { "resolved" } else { "new" };
+            let status = if resolved_ids.contains(&c.comment_id) {
+                "resolved"
+            } else {
+                "new"
+            };
             CommentItem {
                 id: c.comment_id,
                 post_id: c.post_id.to_string(),
@@ -144,7 +145,10 @@ pub async fn reply(
             .providers
             .get(&integration.provider_identifier)
             .ok_or_else(|| {
-                AppError::BadRequest(format!("Provider {} not found", integration.provider_identifier))
+                AppError::BadRequest(format!(
+                    "Provider {} not found",
+                    integration.provider_identifier
+                ))
             })?;
 
         let access_token =
@@ -156,7 +160,8 @@ pub async fn reply(
             settings: serde_json::json!({}),
             ..Default::default()
         };
-        provider.reply_to_comment(&access_token, &comment_id, &content)
+        provider
+            .reply_to_comment(&access_token, &comment_id, &content)
             .await
             .map_err(|e| AppError::Internal(format!("Failed to reply: {e}")))?;
         // Silence unused-variable warning for post_id — it's used for
@@ -168,7 +173,10 @@ pub async fn reply(
     // Cache miss — fall back to the old iterate-and-fetch path.
     // This is slow (up to 100 sequential API calls) but correct.
     // Log a warning so we can monitor how often this happens.
-    tracing::warn!("Comment {} not in cache — falling back to live fetch", comment_id);
+    tracing::warn!(
+        "Comment {} not in cache — falling back to live fetch",
+        comment_id
+    );
 
     let posts = queries::list_all_external_posts(&state.db, auth.user_id, None, None, 100)
         .await
@@ -182,7 +190,10 @@ pub async fn reply(
             None => continue,
         };
 
-        let integration = match integrations.iter().find(|i| i.provider_identifier == post.provider) {
+        let integration = match integrations
+            .iter()
+            .find(|i| i.provider_identifier == post.provider)
+        {
             Some(i) => i,
             None => continue,
         };
@@ -190,7 +201,10 @@ pub async fn reply(
         let access_token =
             crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
 
-        if let Ok(provider_comments) = provider.get_post_comments(&access_token, &post.platform_post_id).await {
+        if let Ok(provider_comments) = provider
+            .get_post_comments(&access_token, &post.platform_post_id)
+            .await
+        {
             if provider_comments.iter().any(|c| c.id == comment_id) {
                 let content = PostContent {
                     content: body.content.clone(),
@@ -198,7 +212,8 @@ pub async fn reply(
                     settings: serde_json::json!({}),
                     ..Default::default()
                 };
-                provider.reply_to_comment(&access_token, &comment_id, &content)
+                provider
+                    .reply_to_comment(&access_token, &comment_id, &content)
                     .await
                     .map_err(|e| AppError::Internal(format!("Failed to reply: {e}")))?;
 
@@ -207,5 +222,8 @@ pub async fn reply(
         }
     }
 
-    Err(AppError::NotFound(format!("Comment {} not found", comment_id)))
+    Err(AppError::NotFound(format!(
+        "Comment {} not found",
+        comment_id
+    )))
 }

@@ -26,20 +26,16 @@ pub struct PostsRepeatInput {
     pub post_id: String,
     /// Repeat interval in days (e.g. 7 for weekly, 30 for monthly)
     pub interval_days: i32,
-    /// End date for the repeat (RFC3339). Optional — if omitted, repeats indefinitely.
-    pub end_date: Option<String>,
+    /// End date for the repeat series (RFC3339, after the post's scheduled_at).
+    pub end_date: String,
 }
 
-#[derive(Default, sqlx::FromRow)]
-struct RepeatUpdate {
-    id: Uuid,
-    repeat_interval_days: Option<i32>,
-    repeat_end_date: Option<chrono::DateTime<chrono::Utc>>,
-}
-
-/// Set up a recurring/evergreen post. The scheduler will create a
-/// new queued copy of this post every `interval_days` days until
-/// `end_date` (or forever if not specified).
+/// B13: set up a recurring/evergreen post. Creates a queued copy of the
+/// post at every `interval_days` until `end_date` — the same
+/// set_post_recurring_with_copies path REST `/api/posts/{id}/repeat` uses.
+/// Previously this tool only wrote `repeat_interval_days`, which nothing
+/// reads: it told the agent "Post will repeat every N days" while no
+/// repeat ever fired.
 pub async fn handle_posts_repeat(
     state: &AppState,
     input: &PostsRepeatInput,
@@ -48,46 +44,58 @@ pub async fn handle_posts_repeat(
     let post_id =
         Uuid::parse_str(&input.post_id).map_err(|_| "Invalid post_id UUID".to_string())?;
 
-    let end_date = match input.end_date.as_deref() {
-        Some(d) if !d.is_empty() => Some(
-            chrono::DateTime::parse_from_rfc3339(d)
-                .map_err(|e| format!("Invalid end_date (use RFC3339): {e}"))?
-                .with_timezone(&chrono::Utc),
-        ),
-        _ => None,
-    };
-
     if input.interval_days < 1 {
         return Err("interval_days must be >= 1".into());
     }
 
-    // Verify ownership
-    let _post = queries::get_post(&state.db, post_id, user_id)
+    let post = queries::get_post(&state.db, post_id, user_id)
         .await
         .map_err(|e| format!("DB error: {e}"))?
         .ok_or_else(|| "Post not found".to_string())?;
+    let original_scheduled = post
+        .scheduled_at
+        .ok_or_else(|| "Post has no scheduled_at — schedule it before repeating".to_string())?;
 
-    let updated: RepeatUpdate = sqlx::query_as(
-        "UPDATE posts
-         SET repeat_interval_days = $1,
-             repeat_end_date = $2,
-             updated_at = NOW()
-         WHERE id = $3 AND user_id = $4
-         RETURNING id, repeat_interval_days, repeat_end_date",
+    let end_date = chrono::DateTime::parse_from_rfc3339(&input.end_date)
+        .map_err(|e| format!("Invalid end_date (use RFC3339): {e}"))?
+        .with_timezone(&chrono::Utc);
+    if end_date <= original_scheduled {
+        return Err("end_date must be after the post's scheduled_at".into());
+    }
+
+    // Guard against runaway copy loops (mirrors the REST handler).
+    const MAX_COPIES: i64 = 100;
+    let max_possible = (end_date - original_scheduled).num_days() / input.interval_days as i64 + 1;
+    if max_possible > MAX_COPIES {
+        return Err(format!(
+            "end_date implies {max_possible} copies; the cap is {MAX_COPIES}"
+        ));
+    }
+
+    let group_id = Uuid::new_v4();
+    let (post_ids, scheduled_dates) = queries::set_post_recurring_with_copies(
+        &state.db,
+        post_id,
+        user_id,
+        input.interval_days,
+        &end_date,
+        group_id,
+        &original_scheduled,
     )
-    .bind(input.interval_days)
-    .bind(end_date)
-    .bind(post_id)
-    .bind(user_id)
-    .fetch_one(&state.db)
     .await
     .map_err(|e| format!("Failed to set repeat: {e}"))?;
 
     Ok(Json(serde_json::json!({
-        "post_id": updated.id.to_string(),
-        "repeat_interval_days": updated.repeat_interval_days,
-        "repeat_end_date": updated.repeat_end_date.map(|d| d.to_rfc3339()),
-        "message": format!("Post will repeat every {} days", input.interval_days),
+        "group_id": group_id.to_string(),
+        "count": post_ids.len(),
+        "post_ids": post_ids.iter().map(|i| i.to_string()).collect::<Vec<_>>(),
+        "scheduled_dates": scheduled_dates,
+        "message": format!(
+            "Post will repeat every {} days until {} — {} copy/copies created",
+            input.interval_days,
+            end_date.to_rfc3339(),
+            post_ids.len() - 1
+        ),
     })))
 }
 

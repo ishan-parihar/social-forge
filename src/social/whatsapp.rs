@@ -6,8 +6,8 @@ use tokio::sync::Mutex;
 
 use super::*;
 use crate::config::Config;
+use crate::wa::chats::{list_chats, list_contacts};
 use crate::wa::WhaClient;
-use crate::wa::chats::{list_contacts, list_chats};
 
 /// WhatsApp Web provider, backed by the native `wa-rs` client.
 ///
@@ -21,16 +21,16 @@ pub struct WhatsAppProvider {
 }
 
 impl WhatsAppProvider {
-    pub fn new(
-        config: &Config,
-        wa_client: Option<Arc<Mutex<WhaClient>>>,
-    ) -> Self {
+    pub fn new(config: &Config, wa_client: Option<Arc<Mutex<WhaClient>>>) -> Self {
         let store_dir = config
             .whatsapp_store_dir
             .clone()
             .unwrap_or_else(|| "./data/whatsapp".into());
         let store_dir = PathBuf::from(&store_dir);
-        Self { store_dir, wa_client }
+        Self {
+            store_dir,
+            wa_client,
+        }
     }
 
     /// Returns the configured on-disk store directory for diagnostics.
@@ -75,9 +75,7 @@ impl SocialProvider for WhatsAppProvider {
         _code_verifier: &str,
         _redirect_uri: &str,
     ) -> Result<AuthUrlResponse, ProviderError> {
-        Ok(AuthUrlResponse {
-            url: String::new(),
-        })
+        Ok(AuthUrlResponse { url: String::new() })
     }
 
     async fn exchange_code(
@@ -93,7 +91,10 @@ impl SocialProvider for WhatsAppProvider {
         };
         let locked = wa_client.lock().await;
         if locked.is_authenticated() {
-            let jid = locked.inner().get_pn().await
+            let jid = locked
+                .inner()
+                .get_pn()
+                .await
                 .map(|j| j.to_string())
                 .unwrap_or_else(|| "unknown".into());
             return Ok(AuthToken {
@@ -112,9 +113,7 @@ impl SocialProvider for WhatsAppProvider {
     }
 
     async fn refresh_token(&self, _refresh_token: &str) -> Result<AuthToken, ProviderError> {
-        Err(ProviderError::Auth(
-            "WhatsApp tokens do not expire".into(),
-        ))
+        Err(ProviderError::Auth("WhatsApp tokens do not expire".into()))
     }
 
     async fn publish(
@@ -179,7 +178,12 @@ impl SocialProvider for WhatsAppProvider {
                 } else if !contact.push_name.is_empty() {
                     contact.push_name.clone()
                 } else {
-                    contact.jid.split('@').next().unwrap_or(&contact.jid).to_string()
+                    contact
+                        .jid
+                        .split('@')
+                        .next()
+                        .unwrap_or(&contact.jid)
+                        .to_string()
                 };
 
                 targets.push(TargetInfo {

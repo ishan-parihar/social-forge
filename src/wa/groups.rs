@@ -14,9 +14,7 @@ use crate::wa::WhaClient;
 /// # Errors
 ///
 /// - wa-rs store query error (e.g. missing session data).
-pub async fn list_groups(
-    client: &Arc<Mutex<WhaClient>>,
-) -> anyhow::Result<Vec<String>> {
+pub async fn list_groups(client: &Arc<Mutex<WhaClient>>) -> anyhow::Result<Vec<String>> {
     let locked = client.lock().await;
     let wa = locked.inner();
     let participating = wa
@@ -92,5 +90,3 @@ pub async fn get_group_invite_link(
         .with_context(|| format!("wa-rs get_invite_link failed for {group_jid}"))?;
     Ok(code)
 }
-
-

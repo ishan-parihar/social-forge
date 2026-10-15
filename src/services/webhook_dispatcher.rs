@@ -56,8 +56,8 @@ pub async fn send_webhook(
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
 
-    let body = serde_json::to_string(payload)
-        .map_err(|e| format!("Failed to serialize payload: {e}"))?;
+    let body =
+        serde_json::to_string(payload).map_err(|e| format!("Failed to serialize payload: {e}"))?;
 
     let mut request = client
         .post(url)
@@ -87,12 +87,7 @@ pub async fn send_webhook(
 
 /// Dispatch an event to all active webhooks matching the event type for a user.
 /// Runs synchronously (caller should spawn in background task if needed).
-pub async fn dispatch_event(
-    state: &AppState,
-    event_type: &str,
-    payload: &Value,
-    user_id: Uuid,
-) {
+pub async fn dispatch_event(state: &AppState, event_type: &str, payload: &Value, user_id: Uuid) {
     let webhooks = match sqlx::query_as::<_, WebhookDispatchRow>(
         r#"
         SELECT w.id, w.url, w.secret
@@ -167,10 +162,11 @@ pub async fn dispatch_event(
             tracing::error!("Failed to record webhook delivery: {e}");
         }
 
-        if let Err(e) = sqlx::query("UPDATE webhooks SET last_triggered_at = unixepoch() WHERE id = ?")
-            .bind(webhook_id)
-            .execute(&state.db)
-            .await
+        if let Err(e) =
+            sqlx::query("UPDATE webhooks SET last_triggered_at = unixepoch() WHERE id = ?")
+                .bind(webhook_id)
+                .execute(&state.db)
+                .await
         {
             tracing::error!("Failed to update webhook last_triggered_at: {e}");
         }

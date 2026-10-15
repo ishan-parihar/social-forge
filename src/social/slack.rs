@@ -17,8 +17,7 @@ pub struct SlackProvider {
 
 impl SlackProvider {
     pub fn new(config: &Config) -> Self {
-        let (client_id, client_secret) =
-            config.provider_credentials("slack").unwrap_or_default();
+        let (client_id, client_secret) = config.provider_credentials("slack").unwrap_or_default();
         Self {
             client_id,
             client_secret,
@@ -41,7 +40,9 @@ impl SlackProvider {
                 .and_then(|v| v.as_str())
                 .map(|s| format!(": {s}"))
                 .unwrap_or_default();
-            return Err(ProviderError::Api(format!("Slack API error: {error}{detail}")));
+            return Err(ProviderError::Api(format!(
+                "Slack API error: {error}{detail}"
+            )));
         }
         Ok(())
     }
@@ -55,7 +56,10 @@ impl SlackProvider {
             .http
             .get(format!("{SLACK_API_BASE}/conversations.list"))
             .header("Authorization", format!("Bearer {access_token}"))
-            .query(&[("limit", "200"), ("types", "public_channel,private_channel")])
+            .query(&[
+                ("limit", "200"),
+                ("types", "public_channel,private_channel"),
+            ])
             .send()
             .await?;
 
@@ -86,10 +90,7 @@ impl SlackProvider {
             .http
             .get(format!("{SLACK_API_BASE}/conversations.history"))
             .header("Authorization", format!("Bearer {access_token}"))
-            .query(&[
-                ("channel", channel),
-                ("limit", &clamped.to_string()),
-            ])
+            .query(&[("channel", channel), ("limit", &clamped.to_string())])
             .send()
             .await?;
 
@@ -182,13 +183,12 @@ impl SocialProvider for SlackProvider {
             ("state", state),
         ];
 
-        let url = url::Url::parse_with_params(
-            "https://slack.com/oauth/v2/authorize",
-            &params,
-        )
-        .map_err(|e| ProviderError::Auth(format!("URL parse: {e}")))?;
+        let url = url::Url::parse_with_params("https://slack.com/oauth/v2/authorize", &params)
+            .map_err(|e| ProviderError::Auth(format!("URL parse: {e}")))?;
 
-        Ok(AuthUrlResponse { url: url.to_string() })
+        Ok(AuthUrlResponse {
+            url: url.to_string(),
+        })
     }
 
     async fn exchange_code(
@@ -233,15 +233,9 @@ impl SocialProvider for SlackProvider {
             .unwrap_or("Slack Workspace")
             .to_string();
 
-        let team_id = json["team"]["id"]
-            .as_str()
-            .unwrap_or("")
-            .to_string();
+        let team_id = json["team"]["id"].as_str().unwrap_or("").to_string();
 
-        let authed_user_id = json["authed_user"]["id"]
-            .as_str()
-            .unwrap_or("")
-            .to_string();
+        let authed_user_id = json["authed_user"]["id"].as_str().unwrap_or("").to_string();
 
         Ok(AuthToken {
             access_token,
@@ -298,11 +292,9 @@ impl SocialProvider for SlackProvider {
         let json: serde_json::Value = resp.json().await?;
 
         if status.is_success() && json.get("ok").and_then(|v| v.as_bool()) == Some(true) {
-            let ts = json["ts"]
-                .as_str()
-                .unwrap_or("")
-                .to_string();
-            let permalink = json.get("message")
+            let ts = json["ts"].as_str().unwrap_or("").to_string();
+            let permalink = json
+                .get("message")
                 .and_then(|m| m.get("permalink"))
                 .or_else(|| json.get("permalink"))
                 .and_then(|v| v.as_str())
@@ -340,7 +332,9 @@ impl SocialProvider for SlackProvider {
             .unwrap_or(channel_ts);
 
         // The thread_ts is the parent message timestamp — defaults to channel_ts if provided
-        let thread_ts = post.settings.get("thread_ts")
+        let thread_ts = post
+            .settings
+            .get("thread_ts")
             .and_then(|v| v.as_str())
             .unwrap_or("");
 
@@ -374,11 +368,9 @@ impl SocialProvider for SlackProvider {
         let json: serde_json::Value = resp.json().await?;
 
         if status.is_success() && json.get("ok").and_then(|v| v.as_bool()) == Some(true) {
-            let ts = json["ts"]
-                .as_str()
-                .unwrap_or("")
-                .to_string();
-            let permalink = json.get("message")
+            let ts = json["ts"].as_str().unwrap_or("").to_string();
+            let permalink = json
+                .get("message")
                 .and_then(|m| m.get("permalink"))
                 .or_else(|| json.get("permalink"))
                 .and_then(|v| v.as_str())
@@ -414,7 +406,10 @@ impl SocialProvider for SlackProvider {
             let team = &json["team"];
             Ok(vec![PageInfo {
                 id: team["id"].as_str().unwrap_or("").to_string(),
-                name: team["name"].as_str().unwrap_or("Slack Workspace").to_string(),
+                name: team["name"]
+                    .as_str()
+                    .unwrap_or("Slack Workspace")
+                    .to_string(),
                 access_token: Some(access_token.to_string()),
                 picture: team["icon"]["image_132"]
                     .as_str()
@@ -437,9 +432,9 @@ impl SocialProvider for SlackProvider {
         _page_id: &str,
     ) -> Result<PageInfo, ProviderError> {
         let mut pages = self.pages(access_token).await?;
-        pages.pop().ok_or_else(|| {
-            ProviderError::Api("No Slack workspace info available".into())
-        })
+        pages
+            .pop()
+            .ok_or_else(|| ProviderError::Api("No Slack workspace info available".into()))
     }
 
     fn map_error(&self, body: &str, _status: u16) -> Option<String> {
@@ -452,9 +447,13 @@ impl SocialProvider for SlackProvider {
                     "invalid_auth" => "Invalid Slack token. Re-connect your Slack account.",
                     "account_inactive" => "Slack account is inactive. Re-connect.",
                     "token_revoked" => "Slack token was revoked. Re-connect.",
-                    "no_permission" => "Missing Slack permission scope. Re-install the app with required scopes.",
+                    "no_permission" => {
+                        "Missing Slack permission scope. Re-install the app with required scopes."
+                    }
                     "not_in_channel" => "The bot/user is not in this Slack channel.",
-                    "channel_not_found" => "Slack channel not found. Verify the channel ID or name.",
+                    "channel_not_found" => {
+                        "Slack channel not found. Verify the channel ID or name."
+                    }
                     "is_archived" => "Cannot post to an archived Slack channel.",
                     "msg_too_long" => "Message exceeds Slack's 40,000 character limit.",
                     "rate_limited" => "Slack API rate limit exceeded. Try again later.",

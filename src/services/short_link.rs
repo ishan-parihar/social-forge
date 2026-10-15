@@ -28,11 +28,7 @@ pub fn has_urls(text: &str) -> bool {
 /// Shorten all URLs in the text using Dub.co API.
 /// Returns the text with URLs replaced by short links.
 /// If the API key is not set or the request fails, returns the original text.
-pub async fn shorten_urls(
-    text: &str,
-    api_key: &str,
-    workspace: Option<&str>,
-) -> String {
+pub async fn shorten_urls(text: &str, api_key: &str, workspace: Option<&str>) -> String {
     let urls: Vec<&str> = url_regex().find_iter(text).map(|m| m.as_str()).collect();
     if urls.is_empty() {
         return text.to_string();

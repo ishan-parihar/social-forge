@@ -2,7 +2,10 @@
 // CRUD for reusable post templates (sets). Stored server-side so they
 // sync across devices and can be loaded into the composer with one click.
 
-use axum::{extract::{Path, State}, Json};
+use axum::{
+    extract::{Path, State},
+    Json,
+};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -76,7 +79,10 @@ async fn load_channel_ids(
 
     // A row that doesn't parse is a corrupt channel reference; skip it rather
     // than failing the whole list — the set itself is still usable.
-    Ok(ids.iter().filter_map(|id| Uuid::parse_str(id).ok()).collect())
+    Ok(ids
+        .iter()
+        .filter_map(|id| Uuid::parse_str(id).ok())
+        .collect())
 }
 
 /// GET /api/sets

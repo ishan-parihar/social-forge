@@ -108,10 +108,14 @@ pub async fn list_conversations(
         .providers
         .get(&integration.provider_identifier)
         .ok_or_else(|| {
-            AppError::BadRequest(format!("Provider {} not found", integration.provider_identifier))
+            AppError::BadRequest(format!(
+                "Provider {} not found",
+                integration.provider_identifier
+            ))
         })?;
 
-    let access_token = crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
+    let access_token =
+        crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
 
     let conversations = provider
         .get_dm_conversations(&access_token, query.limit)
@@ -158,10 +162,14 @@ pub async fn get_messages(
         .providers
         .get(&integration.provider_identifier)
         .ok_or_else(|| {
-            AppError::BadRequest(format!("Provider {} not found", integration.provider_identifier))
+            AppError::BadRequest(format!(
+                "Provider {} not found",
+                integration.provider_identifier
+            ))
         })?;
 
-    let access_token = crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
+    let access_token =
+        crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
 
     let messages = provider
         .get_dm_messages(&access_token, &conversation_id, query.limit)
@@ -204,10 +212,14 @@ pub async fn send_dm(
         .providers
         .get(&integration.provider_identifier)
         .ok_or_else(|| {
-            AppError::BadRequest(format!("Provider {} not found", integration.provider_identifier))
+            AppError::BadRequest(format!(
+                "Provider {} not found",
+                integration.provider_identifier
+            ))
         })?;
 
-    let access_token = crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
+    let access_token =
+        crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
 
     let content = PostContent {
         content: request.content,

@@ -64,9 +64,10 @@ pub async fn create_feed(
     auth: AuthenticatedUser,
     Json(body): Json<CreateFeedRequest>,
 ) -> Result<Json<RssFeed>, AppError> {
-    let integration_id: Uuid = body.integration_id.parse().map_err(|_| {
-        AppError::BadRequest("Invalid integration_id format".into())
-    })?;
+    let integration_id: Uuid = body
+        .integration_id
+        .parse()
+        .map_err(|_| AppError::BadRequest("Invalid integration_id format".into()))?;
 
     let integration = queries::get_integration(&state.db, integration_id, auth.user_id)
         .await?
@@ -166,8 +167,16 @@ pub async fn poll_feed(
             continue;
         }
 
-        queries::insert_rss_post(&state.db, feed.id, &guid, &title, &url, published, &content_hash)
-            .await?;
+        queries::insert_rss_post(
+            &state.db,
+            feed.id,
+            &guid,
+            &title,
+            &url,
+            published,
+            &content_hash,
+        )
+        .await?;
         new_count += 1;
     }
 
@@ -199,8 +208,7 @@ pub async fn list_feed_items(
         .and_then(|v| v.parse::<i64>().ok())
         .unwrap_or(0);
 
-    let items =
-        queries::list_rss_feed_items(&state.db, id, auth.user_id, limit, offset).await?;
+    let items = queries::list_rss_feed_items(&state.db, id, auth.user_id, limit, offset).await?;
 
     let response: Vec<RssFeedItemResponse> = items.into_iter().map(Into::into).collect();
     Ok(Json(response))

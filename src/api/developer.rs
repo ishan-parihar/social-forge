@@ -113,7 +113,9 @@ pub async fn create(
                         .map(|n| n.and_utc())
                         .map(|u| u.into())
                 })
-                .map_err(|_| AppError::BadRequest("Invalid expires_at format — use RFC 3339".into()))?;
+                .map_err(|_| {
+                    AppError::BadRequest("Invalid expires_at format — use RFC 3339".into())
+                })?;
             Some(dt.with_timezone(&Utc))
         }
         _ => None,
@@ -174,13 +176,11 @@ pub async fn revoke(
     auth: AuthenticatedUser,
     Path(id): Path<Uuid>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    let result = sqlx::query(
-        "UPDATE api_keys SET is_active = false WHERE id = ? AND user_id = ?",
-    )
-    .bind(id)
-    .bind(auth.user_id)
-    .execute(&state.db)
-    .await?;
+    let result = sqlx::query("UPDATE api_keys SET is_active = false WHERE id = ? AND user_id = ?")
+        .bind(id)
+        .bind(auth.user_id)
+        .execute(&state.db)
+        .await?;
 
     if result.rows_affected() == 0 {
         return Err(AppError::NotFound("API key not found".into()));

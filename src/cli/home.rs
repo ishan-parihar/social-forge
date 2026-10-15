@@ -22,15 +22,34 @@ pub fn handle_home() {
 
     // AXI §10: Tool identity header
     println!("bin: {}", bin_path);
-    println!("description: Post to 21 social platforms from a single CLI with auto content-splitting");
+    println!(
+        "description: Post to 21 social platforms from a single CLI with auto content-splitting"
+    );
     println!();
 
     // Supported platforms (minimal schema — AXI §2)
     let platforms = [
-        "x", "reddit", "linkedin", "facebook", "instagram", "bluesky",
-        "mastodon", "youtube", "tiktok", "threads", "discord", "slack",
-        "telegram", "whatsapp", "pinterest", "github", "wordpress",
-        "hashnode", "medium", "devto", "skool",
+        "x",
+        "reddit",
+        "linkedin",
+        "facebook",
+        "instagram",
+        "bluesky",
+        "mastodon",
+        "youtube",
+        "tiktok",
+        "threads",
+        "discord",
+        "slack",
+        "telegram",
+        "whatsapp",
+        "pinterest",
+        "github",
+        "wordpress",
+        "hashnode",
+        "medium",
+        "devto",
+        "skool",
     ];
 
     println!("platforms[{}]{{name}}:", platforms.len());

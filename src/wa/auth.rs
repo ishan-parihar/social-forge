@@ -68,10 +68,7 @@ pub async fn pair_with_code(
 ///     return Err(anyhow::anyhow!("User did not authenticate within 120 s"));
 /// }
 /// ```
-pub async fn wait_for_authentication(
-    client: &Arc<Mutex<WhaClient>>,
-    timeout: Duration,
-) -> bool {
+pub async fn wait_for_authentication(client: &Arc<Mutex<WhaClient>>, timeout: Duration) -> bool {
     let start = tokio::time::Instant::now();
     loop {
         {

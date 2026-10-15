@@ -310,12 +310,12 @@ pub async fn update_integration_token(
         None => access_token.to_string(),
     };
     let store_refresh = match (token_key, refresh_token) {
-        (Some(k), Some(rt)) => Some(crate::crypto::encrypt_string(rt, &k).map_err(
-            |reason| TokenUpdateError::Encryption {
+        (Some(k), Some(rt)) => Some(crate::crypto::encrypt_string(rt, &k).map_err(|reason| {
+            TokenUpdateError::Encryption {
                 integration_id: id,
                 reason,
-            },
-        )?),
+            }
+        })?),
         (_, rt) => rt.map(str::to_string),
     };
     sqlx::query!(
@@ -3743,9 +3743,16 @@ mod b03_b08_tests {
         let id = integration(&pool, user_id, "acct-a").await;
         let key = [7u8; 32];
 
-        update_integration_token(&pool, id, "new-access", Some("rotated-refresh"), None, Some(key))
-            .await
-            .expect("token update");
+        update_integration_token(
+            &pool,
+            id,
+            "new-access",
+            Some("rotated-refresh"),
+            None,
+            Some(key),
+        )
+        .await
+        .expect("token update");
 
         let (raw_access, raw_refresh): (String, String) =
             sqlx::query_as("SELECT access_token, refresh_token FROM integrations WHERE id = ?")
@@ -3783,9 +3790,16 @@ mod b03_b08_tests {
         let key = [7u8; 32];
 
         // Seed a stored refresh token first (rotated write).
-        update_integration_token(&pool, id, "access-1", Some("stored-refresh"), None, Some(key))
-            .await
-            .expect("seed");
+        update_integration_token(
+            &pool,
+            id,
+            "access-1",
+            Some("stored-refresh"),
+            None,
+            Some(key),
+        )
+        .await
+        .expect("seed");
 
         // A later refresh whose provider returned no rotated token.
         update_integration_token(&pool, id, "access-2", None, None, Some(key))

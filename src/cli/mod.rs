@@ -1,6 +1,6 @@
-pub mod run;
-pub mod platforms;
 pub mod home;
+pub mod platforms;
+pub mod run;
 pub use run::run_cli;
 
 use clap::{Parser, Subcommand};
@@ -32,6 +32,17 @@ pub enum Command {
 
     /// Start the MCP stdio server
     Mcp,
+
+    /// Call one MCP tool by name, in-process — the documented shell path
+    /// for agents (skills/quick-reference.md). Args are a JSON object.
+    McpCall {
+        /// Tool name as advertised by tools/list (e.g. posts_stage, x_create_tweet)
+        tool: String,
+
+        /// JSON object of tool arguments
+        #[arg(long, default_value = "{}")]
+        args: String,
+    },
 
     /// Initialize ~/.social-forge/ config directory with default .env template
     Init,
@@ -162,18 +173,17 @@ pub enum Command {
     },
 
     // ── Unified Commands (mirror MCP tools) ──────────────────
-
     /// Unified post command — post to any platform with auto content-splitting
     Post {
         /// Post text content
         text: String,
-    /// Target platforms (comma-separated: x,bluesky,linkedin,reddit,...). Uses all connected if omitted.
-    ///
-    /// EXACT identifier match wins: `instagram` targets ONLY `instagram`
-    /// (not `instagram-standalone`), `linkedin` ONLY `linkedin` (not
-    /// `linkedin-page`). To hit a suffixed variant name it explicitly
-    /// (`instagram,instagram-standalone`) or use `--integrations <uuid,...>`.
-    #[arg(long)]
+        /// Target platforms (comma-separated: x,bluesky,linkedin,reddit,...). Uses all connected if omitted.
+        ///
+        /// EXACT identifier match wins: `instagram` targets ONLY `instagram`
+        /// (not `instagram-standalone`), `linkedin` ONLY `linkedin` (not
+        /// `linkedin-page`). To hit a suffixed variant name it explicitly
+        /// (`instagram,instagram-standalone`) or use `--integrations <uuid,...>`.
+        #[arg(long)]
         platforms: Option<String>,
         /// Media URLs to attach (comma-separated)
         #[arg(long)]
@@ -484,9 +494,7 @@ pub enum PostsAction {
         offset: u32,
     },
     /// Get a single post by ID
-    Get {
-        id: String,
-    },
+    Get { id: String },
     /// Create a new post
     Create {
         content: String,
@@ -506,18 +514,11 @@ pub enum PostsAction {
         state: Option<String>,
     },
     /// Re-schedule an existing post
-    Schedule {
-        id: String,
-        scheduled_at: String,
-    },
+    Schedule { id: String, scheduled_at: String },
     /// Publish a queued or errored post immediately via the provider
-    Publish {
-        id: String,
-    },
+    Publish { id: String },
     /// Delete a post
-    Delete {
-        id: String,
-    },
+    Delete { id: String },
     /// Find the next available posting slot (optionally for one integration)
     FindSlot {
         #[arg(long)]
@@ -972,7 +973,8 @@ pub enum FacebookAction {
         /// Default: page_impressions,page_engaged_users,page_fans
         #[arg(long, default_value = "page_impressions,page_engaged_users,page_fans")]
         metric: String,
-    },    /// Comment on a post
+    },
+    /// Comment on a post
     Comment {
         /// Post ID to comment on
         post_id: String,
@@ -1593,9 +1595,7 @@ pub enum PinterestAction {
         board_id: String,
     },
     /// Get board details
-    Board {
-        board_id: String,
-    },
+    Board { board_id: String },
     /// Get pins on a board
     Pins {
         board_id: String,
@@ -1603,10 +1603,7 @@ pub enum PinterestAction {
         limit: u32,
     },
     /// Get a single pin
-    Pin {
-        board_id: String,
-        pin_id: String,
-    },
+    Pin { board_id: String, pin_id: String },
     /// Search pins
     Search {
         query: String,
@@ -1644,9 +1641,7 @@ pub enum GithubAction {
         limit: u32,
     },
     /// Get a user's profile
-    User {
-        login: String,
-    },
+    User { login: String },
     /// List repos for a user
     Repos {
         username: String,
@@ -1733,9 +1728,7 @@ pub enum WordpressAction {
         limit: u32,
     },
     /// Get a post by ID
-    Get {
-        id: i32,
-    },
+    Get { id: i32 },
     /// List categories
     Categories,
 }
@@ -1757,9 +1750,7 @@ pub enum HashnodeAction {
         page: Option<i32>,
     },
     /// Get a post
-    Get {
-        post_id: String,
-    },
+    Get { post_id: String },
 }
 
 // ─── Medium
@@ -1777,9 +1768,7 @@ pub enum MediumBlogAction {
     /// List posts
     List,
     /// Get a post
-    Get {
-        id: String,
-    },
+    Get { id: String },
 }
 
 // ─── Dev.to
@@ -1800,9 +1789,7 @@ pub enum DevtoAction {
     /// List articles
     List,
     /// Get an article
-    Get {
-        id: String,
-    },
+    Get { id: String },
 }
 
 // ─── Skool
@@ -1818,9 +1805,7 @@ pub enum SkoolAction {
         label: Option<String>,
     },
     /// Get community info
-    Info {
-        community_slug: String,
-    },
+    Info { community_slug: String },
     /// List posts
     Posts {
         community_slug: String,
@@ -1860,9 +1845,7 @@ pub enum GoogleAction {
         limit: u32,
     },
     /// Get channel stats
-    ChannelStats {
-        channel_id: String,
-    },
+    ChannelStats { channel_id: String },
 }
 
 // ─── Google Drive
@@ -1875,9 +1858,7 @@ pub enum DriveAction {
         limit: u32,
     },
     /// Get a file
-    File {
-        file_id: String,
-    },
+    File { file_id: String },
     /// Search files
     Search {
         query: String,
@@ -1890,14 +1871,9 @@ pub enum DriveAction {
         limit: u32,
     },
     /// Get file metadata
-    Metadata {
-        file_id: String,
-    },
+    Metadata { file_id: String },
     /// Export a file
-    Export {
-        file_id: String,
-        mime_type: String,
-    },
+    Export { file_id: String, mime_type: String },
 }
 
 // ─── Google Calendar
@@ -1965,9 +1941,7 @@ pub enum GmailAction {
         query: Option<String>,
     },
     /// Get a message
-    Message {
-        id: String,
-    },
+    Message { id: String },
     /// Send an email
     Send {
         to: String,
@@ -1977,9 +1951,7 @@ pub enum GmailAction {
     /// List labels
     Labels,
     /// Get a thread
-    Thread {
-        id: String,
-    },
+    Thread { id: String },
     /// Search messages
     Search {
         query: String,
@@ -2043,9 +2015,7 @@ pub enum NotificationsAction {
         limit: u32,
     },
     /// Mark a notification as read
-    Read {
-        id: String,
-    },
+    Read { id: String },
     /// Mark all notifications as read
     ReadAll,
     /// Create a notification
@@ -2070,9 +2040,7 @@ pub enum TagsAction {
         color: Option<String>,
     },
     /// Delete a tag
-    Delete {
-        id: String,
-    },
+    Delete { id: String },
 
     /// Get a tag by ID
     Get {

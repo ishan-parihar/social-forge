@@ -2,7 +2,7 @@
 // Date-range queries for the content calendar.
 
 use chrono::{DateTime, NaiveDate, Utc};
-use rmcp::{Json, schemars::JsonSchema};
+use rmcp::{schemars::JsonSchema, Json};
 use serde::{Deserialize, Serialize};
 
 use crate::api::AppState;
@@ -48,8 +48,7 @@ pub async fn get_calendar(
 
     let start = parse_date_or_datetime(&input.start)
         .ok_or_else(|| "Invalid start date. Use YYYY-MM-DD or ISO8601".to_string())?;
-    let end = parse_date_or_datetime(&input.end)
-        .ok_or_else(|| "Invalid end date".to_string())?;
+    let end = parse_date_or_datetime(&input.end).ok_or_else(|| "Invalid end date".to_string())?;
 
     let posts = queries::get_posts_by_date_range(&state.db, user_id, start, end)
         .await
@@ -65,20 +64,17 @@ pub async fn get_calendar(
             .unwrap_or_else(|| "unscheduled".into());
 
         let preview = p.content.chars().take(100).collect::<String>();
-        day_map
-            .entry(date_key)
-            .or_default()
-            .push(CalendarPost {
-                id: p.id.to_string(),
-                state: p.state.to_string(),
-                content_preview: if p.content.len() > 100 {
-                    format!("{preview}...")
-                } else {
-                    preview
-                },
-                scheduled_at: p.scheduled_at.map(|d| d.to_rfc3339()),
-                platform_post_url: p.platform_post_url,
-            });
+        day_map.entry(date_key).or_default().push(CalendarPost {
+            id: p.id.to_string(),
+            state: p.state.to_string(),
+            content_preview: if p.content.len() > 100 {
+                format!("{preview}...")
+            } else {
+                preview
+            },
+            scheduled_at: p.scheduled_at.map(|d| d.to_rfc3339()),
+            platform_post_url: p.platform_post_url,
+        });
     }
 
     let days: Vec<CalendarDay> = day_map
@@ -95,7 +91,10 @@ pub async fn get_calendar(
 
     let total: i32 = days.iter().map(|d| d.post_count).sum();
 
-    Ok(Json(CalendarOutput { days, total_posts: total }))
+    Ok(Json(CalendarOutput {
+        days,
+        total_posts: total,
+    }))
 }
 
 fn parse_date_or_datetime(s: &str) -> Option<DateTime<Utc>> {

@@ -4,6 +4,8 @@
 
 use uuid::Uuid;
 
+use rmcp::ServiceExt as _;
+
 use crate::api::AppState;
 use crate::config::Config;
 use crate::crypto;
@@ -233,6 +235,100 @@ async fn init_state() -> anyhow::Result<AppState> {
         media_http_client: reqwest::Client::new(),
         media_wreq_client: wreq::Client::new(),
     })
+}
+
+// ── MCP tool dispatch (§5.3) ────────────────────────────────
+
+/// Call one MCP tool by name, in-process — the shell path the agent
+/// skill documents (`social-forge mcp-call <tool> --args '<json>'`,
+/// ×116 references in skills/quick-reference.md) and that did not
+/// exist until now.
+async fn handle_mcp_call_with_state(
+    state: &AppState,
+    tool: &str,
+    args: &str,
+) -> anyhow::Result<()> {
+    let arguments: serde_json::Map<String, serde_json::Value> = if args.trim().is_empty() {
+        Default::default()
+    } else {
+        match serde_json::from_str::<serde_json::Value>(args) {
+            Ok(serde_json::Value::Object(map)) => map,
+            Ok(_) => anyhow::bail!("--args must be a JSON object, got: {args}"),
+            Err(e) => anyhow::bail!("--args must be a JSON object: {e}"),
+        }
+    };
+
+    let server = crate::mcp::SocialForgeMcpServer::new(state.clone());
+    let router = crate::mcp::SocialForgeMcpServer::router();
+    if router.get(tool).is_none() {
+        let mut names: Vec<String> = router
+            .list_all()
+            .iter()
+            .map(|t| t.name.to_string())
+            .collect();
+        names.sort();
+        anyhow::bail!(
+            "unknown tool '{tool}' — {} tools available: {}",
+            names.len(),
+            names.join(", ")
+        );
+    }
+
+    // In-process dispatch: a client and the real server over a duplex
+    // channel — the same handshake a spawned MCP session performs, with
+    // no private constructors. The server side fully implements
+    // ServerHandler, so the initialize handshake succeeds.
+    struct NoopClient;
+    impl rmcp::ClientHandler for NoopClient {}
+
+    let (client_io, server_io) = tokio::io::duplex(64 * 1024);
+    // Spawn the server handshake — serve() does not resolve until the client
+    // sends initialize, so awaiting it inline before building the client
+    // deadlocks. The task hands back the RunningService, which must stay
+    // ALIVE for the duration of the call (dropping it closes the transport).
+    let server_task = tokio::spawn(async move { server.serve(server_io).await });
+
+    let client = NoopClient
+        .serve(client_io)
+        .await
+        .map_err(|e| anyhow::anyhow!("mcp-call init failed: {e}"))?;
+    let server_svc = server_task
+        .await
+        .map_err(|e| anyhow::anyhow!("mcp-call server task panicked: {e}"))?
+        .map_err(|e| anyhow::anyhow!("mcp-call server init failed: {e}"))?;
+
+    let result = client
+        .call_tool(
+            rmcp::model::CallToolRequestParams::new(tool.to_string()).with_arguments(arguments),
+        )
+        .await
+        .map_err(|e| anyhow::anyhow!("mcp-call '{tool}' failed: {e}"))?;
+
+    drop(server_svc);
+
+    let mut text_out = String::new();
+    for content in &result.content {
+        match &content.raw {
+            rmcp::model::RawContent::Text(t) => {
+                text_out.push_str(&t.text);
+                text_out.push('\n');
+            }
+            other => {
+                // Json tool outputs arrive as structured/resource contents —
+                // serialize them so mcp-call's stdout stays one JSON blob.
+                if let Ok(s) = serde_json::to_string(other) {
+                    text_out.push_str(&s);
+                    text_out.push('\n');
+                }
+            }
+        }
+    }
+    print!("{text_out}");
+
+    if result.is_error.unwrap_or(false) {
+        anyhow::bail!("tool '{tool}' returned an error result");
+    }
+    Ok(())
 }
 
 // ── User Resolution ──────────────────────────────────────────
@@ -3226,6 +3322,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
         }
 
         Command::Providers => handle_providers_with_state(&state).await,
+        Command::McpCall { tool, args } => handle_mcp_call_with_state(&state, &tool, &args).await,
         Command::Audit => handle_audit_with_state(&state).await,
         Command::Connect { provider } => handle_connect_with_state(&state, &provider).await,
         Command::Doctor => handle_doctor_with_state(&state).await,

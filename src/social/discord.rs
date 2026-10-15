@@ -19,8 +19,7 @@ pub struct DiscordProvider {
 
 impl DiscordProvider {
     pub fn new(config: &Config) -> Self {
-        let (client_id, client_secret) =
-            config.provider_credentials("discord").unwrap_or_default();
+        let (client_id, client_secret) = config.provider_credentials("discord").unwrap_or_default();
         let bot_token = config.discord_bot_token.clone().unwrap_or_default();
         Self {
             client_id,
@@ -140,44 +139,88 @@ impl DiscordProvider {
         }
     }
 
-    pub async fn send_message(&self, channel_id: &str, content: &str) -> Result<Value, ProviderError> {
+    pub async fn send_message(
+        &self,
+        channel_id: &str,
+        content: &str,
+    ) -> Result<Value, ProviderError> {
         let url = format!("{}/channels/{}/messages", DISCORD_API_BASE, channel_id);
         let body = json!({"content": content});
-        let response = self.http.post(&url)
+        let response = self
+            .http
+            .post(&url)
             .header("Authorization", format!("Bot {}", self.bot_token))
             .header("Content-Type", "application/json")
             .json(&body)
-            .send().await.map_err(|e| ProviderError::Api(e.to_string()))?;
+            .send()
+            .await
+            .map_err(|e| ProviderError::Api(e.to_string()))?;
         let status = response.status();
-        let text = response.text().await.map_err(|e| ProviderError::Api(e.to_string()))?;
+        let text = response
+            .text()
+            .await
+            .map_err(|e| ProviderError::Api(e.to_string()))?;
         let v: Value = serde_json::from_str(&text).unwrap_or(json!({"raw": text}));
-        if status.is_success() { Ok(v) }
-        else if status == StatusCode::FORBIDDEN { Err(ProviderError::Auth(v["message"].as_str().unwrap_or("forbidden").into())) }
-        else { Err(ProviderError::Api(v["message"].as_str().unwrap_or(&text).into())) }
+        if status.is_success() {
+            Ok(v)
+        } else if status == StatusCode::FORBIDDEN {
+            Err(ProviderError::Auth(
+                v["message"].as_str().unwrap_or("forbidden").into(),
+            ))
+        } else {
+            Err(ProviderError::Api(
+                v["message"].as_str().unwrap_or(&text).into(),
+            ))
+        }
     }
 
-    pub async fn delete_message(&self, channel_id: &str, message_id: &str) -> Result<Value, ProviderError> {
-        let url = format!("{}/channels/{}/messages/{}", DISCORD_API_BASE, channel_id, message_id);
-        let response = self.http.delete(&url)
+    pub async fn delete_message(
+        &self,
+        channel_id: &str,
+        message_id: &str,
+    ) -> Result<Value, ProviderError> {
+        let url = format!(
+            "{}/channels/{}/messages/{}",
+            DISCORD_API_BASE, channel_id, message_id
+        );
+        let response = self
+            .http
+            .delete(&url)
             .header("Authorization", format!("Bot {}", self.bot_token))
-            .send().await.map_err(|e| ProviderError::Api(e.to_string()))?;
+            .send()
+            .await
+            .map_err(|e| ProviderError::Api(e.to_string()))?;
         let status = response.status();
-        if status.is_success() { Ok(json!({"deleted": true})) }
-        else {
+        if status.is_success() {
+            Ok(json!({"deleted": true}))
+        } else {
             let text = response.text().await.unwrap_or_default();
             Err(ProviderError::Api(text))
         }
     }
 
-    pub async fn add_reaction(&self, channel_id: &str, message_id: &str, emoji: &str) -> Result<Value, ProviderError> {
+    pub async fn add_reaction(
+        &self,
+        channel_id: &str,
+        message_id: &str,
+        emoji: &str,
+    ) -> Result<Value, ProviderError> {
         let encoded: String = url::form_urlencoded::byte_serialize(emoji.as_bytes()).collect();
-        let url = format!("{}/channels/{}/messages/{}/reactions/{}/@me", DISCORD_API_BASE, channel_id, message_id, encoded);
-        let response = self.http.put(&url)
+        let url = format!(
+            "{}/channels/{}/messages/{}/reactions/{}/@me",
+            DISCORD_API_BASE, channel_id, message_id, encoded
+        );
+        let response = self
+            .http
+            .put(&url)
             .header("Authorization", format!("Bot {}", self.bot_token))
-            .send().await.map_err(|e| ProviderError::Api(e.to_string()))?;
+            .send()
+            .await
+            .map_err(|e| ProviderError::Api(e.to_string()))?;
         let status = response.status();
-        if status.is_success() || status == StatusCode::NO_CONTENT { Ok(json!({"success": true})) }
-        else {
+        if status.is_success() || status == StatusCode::NO_CONTENT {
+            Ok(json!({"success": true}))
+        } else {
             let text = response.text().await.unwrap_or_default();
             Err(ProviderError::Api(text))
         }
@@ -185,31 +228,63 @@ impl DiscordProvider {
 
     pub async fn get_guild_channels(&self, guild_id: &str) -> Result<Value, ProviderError> {
         let url = format!("{}/guilds/{}/channels", DISCORD_API_BASE, guild_id);
-        let response = self.http.get(&url)
+        let response = self
+            .http
+            .get(&url)
             .header("Authorization", format!("Bot {}", self.bot_token))
-            .send().await.map_err(|e| ProviderError::Api(e.to_string()))?;
+            .send()
+            .await
+            .map_err(|e| ProviderError::Api(e.to_string()))?;
         let status = response.status();
-        let text = response.text().await.map_err(|e| ProviderError::Api(e.to_string()))?;
+        let text = response
+            .text()
+            .await
+            .map_err(|e| ProviderError::Api(e.to_string()))?;
         let v: Value = serde_json::from_str(&text).unwrap_or(json!({"raw": text}));
-        if status.is_success() { Ok(v) }
-        else if status == StatusCode::FORBIDDEN { Err(ProviderError::Auth("Missing permissions".into())) }
-        else { Err(ProviderError::Api(v["message"].as_str().unwrap_or(&text).into())) }
+        if status.is_success() {
+            Ok(v)
+        } else if status == StatusCode::FORBIDDEN {
+            Err(ProviderError::Auth("Missing permissions".into()))
+        } else {
+            Err(ProviderError::Api(
+                v["message"].as_str().unwrap_or(&text).into(),
+            ))
+        }
     }
 
     pub async fn get_server_info(&self, guild_id: &str) -> Result<Value, ProviderError> {
         let url = format!("{}/guilds/{}?with_counts=true", DISCORD_API_BASE, guild_id);
-        let response = self.http.get(&url)
+        let response = self
+            .http
+            .get(&url)
             .header("Authorization", format!("Bot {}", self.bot_token))
-            .send().await.map_err(|e| ProviderError::Api(e.to_string()))?;
+            .send()
+            .await
+            .map_err(|e| ProviderError::Api(e.to_string()))?;
         let status = response.status();
-        let text = response.text().await.map_err(|e| ProviderError::Api(e.to_string()))?;
+        let text = response
+            .text()
+            .await
+            .map_err(|e| ProviderError::Api(e.to_string()))?;
         let v: Value = serde_json::from_str(&text).unwrap_or(json!({"raw": text}));
-        if status.is_success() { Ok(v) }
-        else if status == StatusCode::FORBIDDEN { Err(ProviderError::Auth("Missing permissions".into())) }
-        else { Err(ProviderError::Api(v["message"].as_str().unwrap_or(&text).into())) }
+        if status.is_success() {
+            Ok(v)
+        } else if status == StatusCode::FORBIDDEN {
+            Err(ProviderError::Auth("Missing permissions".into()))
+        } else {
+            Err(ProviderError::Api(
+                v["message"].as_str().unwrap_or(&text).into(),
+            ))
+        }
     }
 
-    pub async fn create_forum_post(&self, channel_id: &str, name: &str, content: &str, applied_tags: &[String]) -> Result<Value, ProviderError> {
+    pub async fn create_forum_post(
+        &self,
+        channel_id: &str,
+        name: &str,
+        content: &str,
+        applied_tags: &[String],
+    ) -> Result<Value, ProviderError> {
         let url = format!("{}/channels/{}/threads", DISCORD_API_BASE, channel_id);
         let mut body = json!({
             "name": name,
@@ -218,17 +293,30 @@ impl DiscordProvider {
         if !applied_tags.is_empty() {
             body["applied_tags"] = json!(applied_tags);
         }
-        let response = self.http.post(&url)
+        let response = self
+            .http
+            .post(&url)
             .header("Authorization", format!("Bot {}", self.bot_token))
             .header("Content-Type", "application/json")
             .json(&body)
-            .send().await.map_err(|e| ProviderError::Api(e.to_string()))?;
+            .send()
+            .await
+            .map_err(|e| ProviderError::Api(e.to_string()))?;
         let status = response.status();
-        let text = response.text().await.map_err(|e| ProviderError::Api(e.to_string()))?;
+        let text = response
+            .text()
+            .await
+            .map_err(|e| ProviderError::Api(e.to_string()))?;
         let v: Value = serde_json::from_str(&text).unwrap_or(json!({"raw": text}));
-        if status.is_success() { Ok(v) }
-        else if status == StatusCode::FORBIDDEN { Err(ProviderError::Auth("Missing permissions".into())) }
-        else { Err(ProviderError::Api(v["message"].as_str().unwrap_or(&text).into())) }
+        if status.is_success() {
+            Ok(v)
+        } else if status == StatusCode::FORBIDDEN {
+            Err(ProviderError::Auth("Missing permissions".into()))
+        } else {
+            Err(ProviderError::Api(
+                v["message"].as_str().unwrap_or(&text).into(),
+            ))
+        }
     }
 }
 
@@ -270,13 +358,12 @@ impl SocialProvider for DiscordProvider {
             ("integration_type", "0"),
         ];
 
-        let url = url::Url::parse_with_params(
-            "https://discord.com/oauth2/authorize",
-            &params,
-        )
-        .map_err(|e| ProviderError::Auth(format!("URL parse: {e}")))?;
+        let url = url::Url::parse_with_params("https://discord.com/oauth2/authorize", &params)
+            .map_err(|e| ProviderError::Auth(format!("URL parse: {e}")))?;
 
-        Ok(AuthUrlResponse { url: url.to_string() })
+        Ok(AuthUrlResponse {
+            url: url.to_string(),
+        })
     }
 
     async fn exchange_code(
@@ -285,11 +372,10 @@ impl SocialProvider for DiscordProvider {
         _code_verifier: &str,
         redirect_uri: &str,
     ) -> Result<AuthToken, ProviderError> {
-        let auth_bytes =
-            base64::Engine::encode(
-                &base64::engine::general_purpose::STANDARD,
-                format!("{}:{}", self.client_id, self.client_secret),
-            );
+        let auth_bytes = base64::Engine::encode(
+            &base64::engine::general_purpose::STANDARD,
+            format!("{}:{}", self.client_id, self.client_secret),
+        );
         let auth_header = format!("Basic {auth_bytes}");
 
         let params: Vec<(&str, &str)> = vec![
@@ -332,10 +418,7 @@ impl SocialProvider for DiscordProvider {
             refresh_token,
             expires_in,
             provider_user_id: guild_id,
-            name: app["name"]
-                .as_str()
-                .unwrap_or("Discord Server")
-                .to_string(),
+            name: app["name"].as_str().unwrap_or("Discord Server").to_string(),
             username: app["bot"]["username"].as_str().unwrap_or("").to_string(),
             picture: Some(format!(
                 "https://cdn.discordapp.com/avatars/{}/{}.png",
@@ -346,11 +429,10 @@ impl SocialProvider for DiscordProvider {
     }
 
     async fn refresh_token(&self, refresh_token: &str) -> Result<AuthToken, ProviderError> {
-        let auth_bytes =
-            base64::Engine::encode(
-                &base64::engine::general_purpose::STANDARD,
-                format!("{}:{}", self.client_id, self.client_secret),
-            );
+        let auth_bytes = base64::Engine::encode(
+            &base64::engine::general_purpose::STANDARD,
+            format!("{}:{}", self.client_id, self.client_secret),
+        );
         let auth_header = format!("Basic {auth_bytes}");
 
         let params: Vec<(&str, &str)> = vec![
@@ -369,10 +451,7 @@ impl SocialProvider for DiscordProvider {
         let json: serde_json::Value = resp.json().await?;
 
         Ok(AuthToken {
-            access_token: json["access_token"]
-                .as_str()
-                .unwrap_or("")
-                .to_string(),
+            access_token: json["access_token"].as_str().unwrap_or("").to_string(),
             refresh_token: json["refresh_token"].as_str().map(String::from),
             expires_in: json["expires_in"].as_u64().map(|v| v as u32),
             provider_user_id: String::new(),
