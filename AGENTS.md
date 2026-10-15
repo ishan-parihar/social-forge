@@ -95,6 +95,7 @@ When implementing features inspired by postiz-app or other competitors, apply th
 | `README.md` | User-facing overview, platform tiers, CLI/MCP reference | For product context |
 | `docs/planning/PLAN_PARITY_DEPTH_SINGLEUSER_v25.md` | Live master plan: tier rationale (§1), parity phases | Before parity/feature work |
 | `docs/planning/AUDIT_2026-10-14.md` | End-to-end audit: P0 bugs, cookie/API matrix, fragmentation, phased plan | Before fixing publish/scheduler/provider bugs |
+| `docs/planning/GAPS_2026-10-15.md` | What the 13 landed audit commits did NOT close yet, re-verified against the current tree, with recommended order | Before starting the next audit phase (Phases 6–7, P1 leftovers) |
 | `docs/planning/VENDOR_PINS.md` | Pinned transitive deps enforced by `vendor-pull.sh --check` (CI gate) | Before touching `Cargo.toml` |
 | `SESSION_HOOKS.md` | Session-start ambient-context setup (AXI) | When wiring agent hooks |
 | `skills/social-forge-agent/SKILL.md` | Installed agent skill (via `make install-skill`) | When editing the skill |
