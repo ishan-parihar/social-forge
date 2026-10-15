@@ -996,6 +996,40 @@ pub(crate) async fn publish_post(
         })
         .collect();
 
+    // E1: media transform (opt-in via settings.transform_media). Aspect-
+    // ratio crop/resize for the platforms that hard-reject out-of-spec
+    // media (IG 4:5, TikTok 9:16) via the optional ffmpeg binary. A missing
+    // ffmpeg warns and publishes the original — nothing breaks locally.
+    let resolved_media = {
+        let opted_in = post
+            .settings
+            .get("transform_media")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let app_url_for_local = app_url.clone();
+        // Transformed files land in the SAME media dir — the /api/media/{id}
+        // route already serves it, so only the URL's filename changes.
+        let media_dir = std::env::var("MEDIA_DIR").unwrap_or_else(|_| "./uploads".into());
+        crate::services::media_transform::transform_attachments(
+            &post.provider_identifier,
+            resolved_media,
+            opted_in,
+            |url| {
+                // {APP_URL}/api/media/<file> (or /api/media/<file>) →
+                // ./uploads/<file> — the media route serves that dir.
+                let name = url
+                    .strip_prefix(&app_url_for_local)
+                    .unwrap_or(url)
+                    .trim_start_matches('/')
+                    .strip_prefix("api/media/")
+                    .map(str::to_string);
+                name.map(|n| std::path::PathBuf::from(format!("{media_dir}/{n}")))
+            },
+            std::path::Path::new(&media_dir),
+        )
+        .await
+    };
+
     // ── Thread linking ──────────────────────────────────────
     // If this post is part of a thread (has a group_id and sequence > 1),
     // look up the PREVIOUS post in the same group and use its
