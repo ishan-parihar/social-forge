@@ -8,7 +8,6 @@ use uuid::Uuid;
 
 use crate::api::AppState;
 use crate::social::tiktok::TikTokProvider;
-use crate::social::SocialProvider;
 
 // ── Input Types ─────────────────────────────────────────────
 
@@ -84,8 +83,10 @@ pub async fn handle_tt_create_post(
     input: &TtCreatePostInput,
 ) -> Result<Json<serde_json::value::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
-    let (stored_token, _) = find_tiktok_integration(state, user_id).await?;
-    let token = stored_token;
+    // §4.2: through the publish pipeline — posts row + idempotency + retries
+    // + the finalize polling the direct path lacked.
+    let integration =
+        super::tools_posts::integration_for_provider(state, user_id, "tiktok").await?;
 
     // Build media from video_url or video_data
     let mut media = Vec::new();
@@ -100,20 +101,22 @@ pub async fn handle_tt_create_post(
         }
     }
 
-    let post = crate::social::PostContent {
-        content: input.text.clone(),
+    let (_post_id, platform_id, url) = super::tools_posts::publish_now_via_pipeline(
+        state,
+        &integration,
+        &input.text,
+        None,
         media,
-        settings: serde_json::json!({}),
-        ..Default::default()
-    };
+        serde_json::json!({}),
+        None,
+    )
+    .await?;
 
-    let provider = create_tiktok_provider(state);
-    let result = provider
-        .publish(&token, &post)
-        .await
-        .map_err(|e| format!("TikTok create post failed: {e}"))?;
-
-    Ok(Json(serde_json::json!({ "data": result })))
+    Ok(Json(serde_json::json!({ "data": {
+        "platform_post_id": platform_id,
+        "platform_post_url": if url.is_empty() { None } else { Some(url) },
+        "status": "published",
+    } })))
 }
 
 pub async fn handle_tt_list_videos(

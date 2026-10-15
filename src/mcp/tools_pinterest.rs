@@ -64,19 +64,6 @@ async fn find_pi_token(state: &AppState, user_id: Uuid, board_id: &str) -> Resul
         })
 }
 
-/// Find any Pinterest integration token (for create_pin where we don't
-/// need a specific board_id to look up the token).
-async fn find_pi_token_any(state: &AppState, user_id: Uuid) -> Result<String, String> {
-    let integrations = crate::db::queries::list_integrations(&state.db, user_id)
-        .await
-        .map_err(|e| format!("DB error: {e}"))?;
-    integrations
-        .iter()
-        .find(|i| i.provider_identifier == "pinterest")
-        .map(|i| crate::crypto::maybe_decrypt_token(&i.access_token, state.token_key.as_ref()))
-        .ok_or_else(|| "Pinterest account not connected. Connect it via the onboarding page first.".to_string())
-}
-
 fn create_pi_provider(state: &AppState) -> PinterestProvider {
     PinterestProvider::new(&state.config)
 }
@@ -199,7 +186,6 @@ pub async fn handle_pi_search_pins(
 // ── Create Pin ───────────────────────────────────────────────
 
 use super::auth::resolve_first_user;
-use crate::social::SocialProvider;
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct PiCreatePinInput {
@@ -223,8 +209,9 @@ pub async fn handle_pi_create_pin(
     input: &PiCreatePinInput,
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = resolve_first_user(state).await?;
-    let token = find_pi_token_any(state, user_id).await?;
-    let provider = create_pi_provider(state);
+    // §4.2: through the publish pipeline — posts row + idempotency + retries.
+    let integration =
+        super::tools_posts::integration_for_provider(state, user_id, "pinterest").await?;
 
     let media: Vec<crate::social::MediaAttachment> = input
         .media_urls
@@ -245,21 +232,20 @@ pub async fn handle_pi_create_pin(
         settings["link"] = serde_json::json!(link);
     }
 
-    let post = crate::social::PostContent {
-        content: input.content.clone(),
+    let (_post_id, pin_id, url) = super::tools_posts::publish_now_via_pipeline(
+        state,
+        &integration,
+        &input.content,
+        None,
         media,
         settings,
-        ..Default::default()
-    };
-
-    let result = provider
-        .publish(&token, &post)
-        .await
-        .map_err(|e| format!("Pinterest create pin failed: {e}"))?;
+        None,
+    )
+    .await?;
 
     Ok(Json(serde_json::json!({
-        "pin_id": result.platform_post_id,
-        "url": result.platform_post_url,
-        "status": result.status,
+        "pin_id": pin_id,
+        "url": if url.is_empty() { None } else { Some(url) },
+        "status": "published",
     })))
 }

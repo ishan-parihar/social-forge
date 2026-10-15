@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 use crate::api::AppState;
 use crate::social::medium::MediumProvider;
-use crate::social::{PostContent, SocialProvider};
+use crate::social::SocialProvider;
 
 // ── Input Types ──────────────────────────────────────────────
 
@@ -62,8 +62,8 @@ pub async fn handle_md_create_post(
     input: &MdCreatePostInput,
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
-    let token = find_medium_token(state, user_id).await?;
-    let provider = create_medium_provider(state);
+    // §4.2: through the publish pipeline — posts row + idempotency + retries.
+    let integration = super::tools_posts::integration_for_provider(state, user_id, "medium").await?;
 
     let mut settings = json!({});
     if let Some(title) = &input.title {
@@ -76,19 +76,22 @@ pub async fn handle_md_create_post(
         settings["publish_status"] = json!(publish_status);
     }
 
-    let post = PostContent {
-        content: input.content.clone(),
-        media: vec![],
+    let (_post_id, platform_id, url) = super::tools_posts::publish_now_via_pipeline(
+        state,
+        &integration,
+        &input.content,
+        input.title.as_deref(),
+        vec![],
         settings,
-        ..Default::default()
-    };
+        None,
+    )
+    .await?;
 
-    let result = provider
-        .publish(&token, &post)
-        .await
-        .map_err(|e| format!("Medium publish failed: {e}"))?;
-
-    Ok(Json(json!(result)))
+    Ok(Json(json!({
+        "platform_post_id": platform_id,
+        "platform_post_url": if url.is_empty() { None } else { Some(url) },
+        "status": "published",
+    })))
 }
 
 pub async fn handle_md_list_posts(

@@ -8,7 +8,6 @@ use uuid::Uuid;
 
 use crate::api::AppState;
 use crate::social::hashnode::HashnodeProvider;
-use crate::social::{PostContent, SocialProvider};
 
 // ── Input Types ──────────────────────────────────────────────
 
@@ -68,8 +67,8 @@ pub async fn handle_hn_create_post(
     input: &HnCreatePostInput,
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
-    let token = find_hashnode_token(state, user_id).await?;
-    let provider = create_hashnode_provider(state);
+    // §4.2: through the publish pipeline — posts row + idempotency + retries.
+    let integration = super::tools_posts::integration_for_provider(state, user_id, "hashnode").await?;
 
     let mut settings = json!({
         "publication_id": input.publication_id,
@@ -86,19 +85,22 @@ pub async fn handle_hn_create_post(
         settings["canonical_url"] = json!(canonical_url);
     }
 
-    let post = PostContent {
-        content: input.content.clone(),
-        media: vec![],
+    let (_post_id, platform_id, url) = super::tools_posts::publish_now_via_pipeline(
+        state,
+        &integration,
+        &input.content,
+        Some(&input.title),
+        vec![],
         settings,
-        ..Default::default()
-    };
+        None,
+    )
+    .await?;
 
-    let result = provider
-        .publish(&token, &post)
-        .await
-        .map_err(|e| format!("Hashnode publish failed: {e}"))?;
-
-    Ok(Json(json!(result)))
+    Ok(Json(json!({
+        "platform_post_id": platform_id,
+        "platform_post_url": if url.is_empty() { None } else { Some(url) },
+        "status": "published",
+    })))
 }
 
 pub async fn handle_hn_list_posts(

@@ -10,6 +10,97 @@ use uuid::Uuid;
 use crate::api::AppState;
 use crate::services::posts::{PostService, UpdatePostInput as SvcUpdatePostInput};
 
+// ── Shared publish-now pipeline (audit §4.2) ─────────────────
+
+/// Best-effort MIME type from a media URL's extension. The provider
+/// re-detects from bytes on download; this only feeds validation and
+/// DB row shaping. Replaces per-tool hard-codes like `"image/jpeg"`
+/// that silently broke video posts.
+pub(crate) fn mime_from_url(url: &str) -> String {
+    let path = url.split('?').next().unwrap_or(url);
+    let ext = path.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
+    match ext.as_str() {
+        "png" => "image/png",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "mp4" | "m4v" => "video/mp4",
+        "mov" => "video/quicktime",
+        "webm" => "video/webm",
+        _ => "image/jpeg",
+    }
+    .to_string()
+}
+
+/// First integration row for a provider (audit §4.2 — the create-tools
+/// need the ROW, not just a token, so the post can be attached to it).
+pub(crate) async fn integration_for_provider(
+    state: &AppState,
+    user_id: Uuid,
+    provider: &str,
+) -> Result<crate::db::models::Integration, String> {
+    crate::db::queries::list_integrations(&state.db, user_id)
+        .await
+        .map_err(|e| format!("DB error: {e}"))?
+        .into_iter()
+        .find(|i| i.provider_identifier == provider)
+        .ok_or_else(|| {
+            format!("{provider} account not connected. Connect it via the onboarding page first.")
+        })
+}
+
+/// Publish NOW through the ONE pipeline (audit §4.2): creates a `posts`
+/// row for the integration (queued), then runs the shared engine via
+/// PostService::publish. The platform `*_create_*` tools call this
+/// instead of `provider.publish()` directly, so an agent-created post
+/// gets what the direct path skipped: a posts row (analytics link),
+/// idempotency key, retries with backoff, post_pending/finalize
+/// lifecycle, first-comment, attempt audit, and events.
+///
+/// Returns `(post_id, platform_post_id, platform_post_url)`.
+pub(crate) async fn publish_now_via_pipeline(
+    state: &AppState,
+    integration: &crate::db::models::Integration,
+    content: &str,
+    title: Option<&str>,
+    media: Vec<crate::social::MediaAttachment>,
+    settings: serde_json::Value,
+    first_comment: Option<&str>,
+) -> Result<(Uuid, String, String), String> {
+    let media_json = serde_json::to_value(&media).unwrap_or(serde_json::json!([]));
+    let post = crate::db::queries::create_post(
+        &state.db,
+        integration.user_id,
+        integration.id,
+        content,
+        title,
+        &media_json,
+        &settings,
+        None,
+        Some(crate::db::models::PostState::Queued),
+        first_comment,
+        0,
+    )
+    .await
+    .map_err(|e| format!("Failed to create post row: {e}"))?;
+
+    let url = PostService::publish(
+        &state.db,
+        &state.providers,
+        &state.broadcast,
+        integration.user_id,
+        post.id,
+        state.token_key,
+    )
+    .await?;
+
+    let row = crate::db::queries::get_post(&state.db, post.id, integration.user_id)
+        .await
+        .map_err(|e| format!("Failed to read back post: {e}"))?
+        .ok_or_else(|| "Post row not found after publish".to_string())?;
+
+    Ok((post.id, row.platform_post_id.unwrap_or_default(), url))
+}
+
 // ── Input/Output Types ──────────────────────────────────────
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]

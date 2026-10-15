@@ -600,20 +600,50 @@ pub async fn x_create_tweet(
     input: &XCreateTweetInput,
 ) -> Result<Json<XCreateTweetOutput>, String> {
     let user_id = resolve_first_user(state).await?;
-    let (token, _my_id) = find_x_token(state, user_id).await?;
-    let provider = create_provider(state, &token);
+
+    // §4.2: route through the publish pipeline when an X integration row
+    // exists (posts row + idempotency + retries + lifecycle). Falls back
+    // to direct publish ONLY for env/browser-cookie tokens, which have no
+    // integration row to attach the post to.
+    let integrations = crate::db::queries::list_integrations(&state.db, user_id)
+        .await
+        .map_err(|e| format!("DB error: {e}"))?;
+    let x_integration = integrations
+        .into_iter()
+        .find(|i| i.provider_identifier == "x");
 
     let media: Vec<crate::social::MediaAttachment> = input
         .media_urls
         .iter()
         .map(|url| crate::social::MediaAttachment {
             url: url.clone(),
-            mime_type: "image/jpeg".to_string(), // X auto-detects from URL
+            mime_type: crate::mcp::tools_posts::mime_from_url(url),
             alt: None,
             poster_url: None,
         })
         .collect();
 
+    if let Some(integration) = x_integration {
+        let (_post_id, tweet_id, url) = crate::mcp::tools_posts::publish_now_via_pipeline(
+            state,
+            &integration,
+            &input.content,
+            None,
+            media,
+            serde_json::json!({}),
+            None,
+        )
+        .await?;
+        return Ok(Json(XCreateTweetOutput {
+            tweet_id,
+            url: if url.is_empty() { None } else { Some(url) },
+            status: "published".to_string(),
+        }));
+    }
+
+    // No integration row — env/browser-cookie token, direct publish.
+    let (token, _my_id) = find_x_token(state, user_id).await?;
+    let provider = create_provider(state, &token);
     let post_content = crate::social::PostContent {
         content: input.content.clone(),
         media,

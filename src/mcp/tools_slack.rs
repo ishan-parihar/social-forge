@@ -9,7 +9,6 @@ use uuid::Uuid;
 
 use crate::api::AppState;
 use crate::social::slack::SlackProvider;
-use crate::social::SocialProvider;
 
 // ── Input Types ─────────────────────────────────────────────
 
@@ -70,26 +69,27 @@ pub async fn handle_sl_send_message(
     input: &SlSendMessageInput,
 ) -> Result<Json<Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
-    let stored_token = find_slack_token(state, user_id).await?;
-    let token = stored_token;
+    // §4.2: through the publish pipeline — posts row + idempotency + retries.
+    let integration = super::tools_posts::integration_for_provider(state, user_id, "slack").await?;
 
-    let provider = create_slack_provider(state);
-
-    let post = crate::social::PostContent {
-        content: input.content.clone(),
-        media: vec![],
-        settings: json!({
+    let (_post_id, platform_id, url) = super::tools_posts::publish_now_via_pipeline(
+        state,
+        &integration,
+        &input.content,
+        None,
+        vec![],
+        json!({
             "channel": input.channel,
         }),
-        ..Default::default()
-    };
+        None,
+    )
+    .await?;
 
-    let result = provider
-        .publish(&token, &post)
-        .await
-        .map_err(|e| format!("Slack send message failed: {e}"))?;
-
-    Ok(Json(json!(result)))
+    Ok(Json(json!({
+        "platform_post_id": platform_id,
+        "platform_post_url": if url.is_empty() { None } else { Some(url) },
+        "status": "published",
+    })))
 }
 
 pub async fn handle_sl_list_channels(

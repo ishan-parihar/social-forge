@@ -7,7 +7,6 @@ use uuid::Uuid;
 
 use crate::api::AppState;
 use crate::social::threads::ThreadsProvider;
-use crate::social::SocialProvider;
 
 // ── Input/Output Types ──────────────────────────────────────
 
@@ -171,45 +170,58 @@ pub async fn handle_th_create_thread(
     input: &ThreadsCreateThreadInput,
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
-    let token = find_threads_token(state, user_id, &input.threads_id).await?;
-    let provider = create_provider(state);
+    // §4.2: through the publish pipeline. This also FIXES B15 for the tool
+    // path: the engine's post_pending/finalize polls the media container
+    // to FINISHED before recording published — the direct publish used to
+    // error on any video/large image.
+    let integration = state
+        .integration_by_internal_id(user_id, "threads", &input.threads_id)
+        .await
+        .map_err(|e| format!("DB error: {e}"))?
+        .ok_or_else(|| {
+            format!(
+                "Threads account '{}' not connected. Connect it via the onboarding page first.",
+                input.threads_id
+            )
+        })?;
 
-    let post = crate::social::PostContent {
-        content: input.text.clone(),
-        media: if let Some(url) = &input.media_url {
-            vec![crate::social::MediaAttachment {
-                url: url.clone(),
-                mime_type: input
-                    .media_type
-                    .as_ref()
-                    .map(|t| match t.to_lowercase().as_str() {
-                        "video" | "mp4" => "video/mp4".to_string(),
-                        "image" | "jpg" | "jpeg" | "png" | "gif" | "webp" => {
-                            "image/jpeg".to_string()
-                        }
-                        _ => "application/octet-stream".to_string(),
-                    })
-                    .unwrap_or_else(|| "application/octet-stream".to_string()),
-                alt: None,
-                poster_url: None,
-            }]
-        } else {
-            vec![]
-        },
-        settings: serde_json::Value::Object(serde_json::Map::new()),
-        ..Default::default()
+    let media = if let Some(url) = &input.media_url {
+        vec![crate::social::MediaAttachment {
+            url: url.clone(),
+            mime_type: input
+                .media_type
+                .as_ref()
+                .map(|t| match t.to_lowercase().as_str() {
+                    "video" | "mp4" => "video/mp4".to_string(),
+                    "image" | "jpg" | "jpeg" | "png" | "gif" | "webp" => {
+                        "image/jpeg".to_string()
+                    }
+                    _ => "application/octet-stream".to_string(),
+                })
+                .unwrap_or_else(|| "application/octet-stream".to_string()),
+            alt: None,
+            poster_url: None,
+        }]
+    } else {
+        vec![]
     };
 
-    let result = provider
-        .publish(&token, &post)
-        .await
-        .map_err(|e| format!("Threads create thread failed: {e}"))?;
+    let (_post_id, platform_id, url) = super::tools_posts::publish_now_via_pipeline(
+        state,
+        &integration,
+        &input.text,
+        None,
+        media,
+        serde_json::Value::Object(serde_json::Map::new()),
+        None,
+    )
+    .await?;
 
     Ok(Json(serde_json::json!({
         "data": {
-            "id": result.platform_post_id,
-            "url": result.platform_post_url,
-            "status": result.status,
+            "id": platform_id,
+            "url": if url.is_empty() { None } else { Some(url) },
+            "status": "published",
         }
     })))
 }

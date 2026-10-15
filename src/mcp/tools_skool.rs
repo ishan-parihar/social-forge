@@ -9,7 +9,6 @@ use uuid::Uuid;
 
 use crate::api::AppState;
 use crate::social::skool::SkoolProvider;
-use crate::social::{PostContent, SocialProvider};
 
 // ── Input Types ──────────────────────────────────────────────
 
@@ -52,26 +51,29 @@ pub async fn handle_sk_publish(
     input: &SkPublishInput,
 ) -> Result<Json<Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
-    let token = find_sk_token(state, user_id).await?;
-    let provider = create_sk_provider();
+    // §4.2: through the publish pipeline — posts row + idempotency + retries.
+    let integration = super::tools_posts::integration_for_provider(state, user_id, "skool").await?;
 
-    let post = PostContent {
-        content: input.content.clone(),
-        media: vec![],
-        settings: json!({
+    let (_post_id, platform_id, url) = super::tools_posts::publish_now_via_pipeline(
+        state,
+        &integration,
+        &input.content,
+        Some(input.title.as_str()),
+        vec![],
+        json!({
             "groupId": input.group_id,
             "title": input.title,
             "label": input.label.clone().unwrap_or_default(),
         }),
-        ..Default::default()
-    };
+        None,
+    )
+    .await?;
 
-    let result = provider
-        .publish(&token, &post)
-        .await
-        .map_err(|e| format!("Skool publish failed: {e}"))?;
-
-    Ok(Json(json!(result)))
+    Ok(Json(json!({
+        "platform_post_id": platform_id,
+        "platform_post_url": if url.is_empty() { None } else { Some(url) },
+        "status": "published",
+    })))
 }
 
 // ── New Tool: Get Community Info ──────────────────────────────

@@ -163,26 +163,34 @@ pub async fn handle_li_create_post(
     input: &LiCreatePostInput,
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
-    let token = find_linkedin_token(state, user_id, &input.li_id).await?;
-    let provider = create_provider(state);
-
-    let post = crate::social::PostContent {
-        content: input.content.clone(),
-        media: vec![],
-        settings: serde_json::Value::Object(serde_json::Map::new()),
-        ..Default::default()
-    };
-
-    let result = provider
-        .publish(&token, &post)
+    // §4.2: through the publish pipeline — posts row + idempotency + retries.
+    let integration = state
+        .integration_by_internal_id(user_id, "linkedin", &input.li_id)
         .await
-        .map_err(|e| format!("LinkedIn create post failed: {e}"))?;
+        .map_err(|e| format!("DB error: {e}"))?
+        .ok_or_else(|| {
+            format!(
+                "LinkedIn account '{}' not connected. Connect it via the onboarding page first.",
+                input.li_id
+            )
+        })?;
+
+    let (_post_id, platform_id, url) = super::tools_posts::publish_now_via_pipeline(
+        state,
+        &integration,
+        &input.content,
+        None,
+        vec![],
+        serde_json::Value::Object(serde_json::Map::new()),
+        None,
+    )
+    .await?;
 
     Ok(Json(serde_json::json!({
         "data": {
-            "id": result.platform_post_id,
-            "url": result.platform_post_url,
-            "status": result.status,
+            "id": platform_id,
+            "url": if url.is_empty() { None } else { Some(url) },
+            "status": "published",
         }
     })))
 }
