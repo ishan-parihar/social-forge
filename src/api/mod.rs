@@ -789,6 +789,13 @@ async fn ready_check(
         ));
     }
 
+    // §6.3: scheduler liveness. A panicked scheduler task used to leave
+    // /ready green while NO publishes ran. If the last tick is older than
+    // 3 poll periods the process is up but not publishing — report 503 so
+    // the operator (or systemd watchdog) notices.
+    let scheduler_ok =
+        crate::scheduler::last_tick_age_secs() <= crate::scheduler::TICK_STALE_AFTER_SECS as i64;
+
     let db_ok = match sqlx::query_scalar::<_, i32>("SELECT 1")
         .fetch_one(&db)
         .await
@@ -800,6 +807,17 @@ async fn ready_check(
             false
         }
     };
+    if !scheduler_ok {
+        return Err((
+            StatusCode::SERVICE_UNAVAILABLE,
+            axum::Json(serde_json::json!({
+                "status": "scheduler_stalled",
+                "database": db_ok,
+                "last_tick_age_secs": crate::scheduler::last_tick_age_secs(),
+                "version": env!("CARGO_PKG_VERSION"),
+            })),
+        ));
+    }
     let status = if db_ok { "ok" } else { "degraded" };
     Ok(axum::Json(serde_json::json!({
         "status": status,

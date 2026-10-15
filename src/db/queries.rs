@@ -631,6 +631,8 @@ pub async fn create_thread_posts(
     )
     .await?;
     tx.commit().await?;
+    // §6.2: thread parts may be due sooner than the current sleep.
+    crate::scheduler::wake();
     Ok(posts)
 }
 
@@ -1094,6 +1096,9 @@ pub async fn schedule_post(
     .bind(user_id)
     .fetch_optional(pool)
     .await
+    // §6.2: a fresh scheduled_at — shorten the scheduler's sleep so the
+    // post goes out on time (not up to 30s late).
+    .inspect(|_| crate::scheduler::wake())
 }
 
 /// v24-1: Unschedule a post — transition it back to draft state.
@@ -1178,6 +1183,8 @@ pub async fn reset_post_for_republish(
     .bind(user_id)
     .fetch_optional(pool)
     .await
+    // §6.2: re-publish just got a new due time.
+    .inspect(|_| crate::scheduler::wake())
 }
 
 /// Phase v21: change a post's scheduled_at WITHOUT touching its state
@@ -1381,6 +1388,26 @@ const SCHEDULED_AT_EPOCH: &str = "CASE WHEN typeof(p.scheduled_at) = 'integer' \
 /// `social-forge serve` instances running in parallel do not double-publish
 /// the same post. Rows are still returned in `state = 'queued'`; the caller
 /// is expected to commit/rollback to release the lock.
+/// §6.2: the earliest `scheduled_at` (unix epoch) of any publishable
+/// queued post — the scheduler sleeps until min(this, poll period) so a
+/// "publish in 1 minute" isn't held hostage by the 30s poll. Runtime
+/// form: like get_due_posts, it claims nothing and needs no cache entry.
+/// (Mixed column types: the same CASE expression get_due_posts uses.)
+pub async fn next_queued_epoch(pool: &SqlitePool) -> Result<Option<i64>, sqlx::Error> {
+    sqlx::query_scalar::<_, Option<i64>>(
+        r#"SELECT MIN(CASE WHEN typeof(p.scheduled_at) = 'integer'
+                  THEN p.scheduled_at
+                  ELSE CAST(strftime('%s', p.scheduled_at) AS INTEGER) END)
+           FROM posts p
+           JOIN integrations i ON p.integration_id = i.id
+           WHERE p.state = 'queued' AND i.disabled = false
+             AND p.scheduled_at IS NOT NULL"#,
+    )
+    .fetch_optional(pool)
+    .await
+    .map(|row| row.flatten())
+}
+
 pub async fn get_due_posts(
     pool: &SqlitePool,
     limit: i64,
@@ -2318,6 +2345,8 @@ pub async fn set_post_recurring_with_copies(
     }
 
     tx.commit().await?;
+    // §6.2: the copies carry due times starting at the base schedule.
+    crate::scheduler::wake();
     Ok((post_ids, scheduled_dates))
 }
 

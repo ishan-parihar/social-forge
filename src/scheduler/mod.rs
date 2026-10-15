@@ -17,8 +17,57 @@ use crate::social::{PostContent, SocialProvider};
 use uuid::Uuid;
 
 use super::db::queries;
-/// How often to poll for due posts
+/// How often to poll for due posts (upper bound — a `Notify` wake-up or a
+/// nearer next_scheduled_at shortens the sleep, §6.2).
 const POLL_INTERVAL_SECS: u64 = 30;
+
+/// §6.7: reclaim threshold. 900s > worst legitimate publish (IG reel
+/// finalize ~200s + retries + backoff); at the old 300s a slow-but-healthy
+/// finalize got marked `error` mid-flight.
+const RECLAIM_AFTER_SECS: i64 = 900;
+
+/// §6.3: the scheduler is dead if the last tick is older than 3 poll
+/// periods — /ready flips to 503 so systemd (or the operator) sees it.
+pub(crate) const TICK_STALE_AFTER_SECS: u64 = POLL_INTERVAL_SECS * 3;
+
+/// §6.3: last tick unix timestamp — read by /ready, written by the
+/// scheduler engine each loop.
+static LAST_TICK: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(0);
+
+/// §6.2: poked by create/schedule paths so a post scheduled "in 1 minute"
+/// is not held hostage by the 30s poll.
+static WAKE: std::sync::LazyLock<tokio::sync::Notify> =
+    std::sync::LazyLock::new(tokio::sync::Notify::new);
+
+/// §6.2: wake the scheduler now (called after scheduling new posts).
+pub fn wake() {
+    WAKE.notify_one();
+    // The next sleep re-computes its deadline, so even a notify that
+    // arrives mid-tick shortens the NEXT wait to the new post's time.
+}
+
+/// §6.3: seconds since the scheduler's last tick (i64::MAX before boot).
+pub fn last_tick_age_secs() -> i64 {
+    let last = LAST_TICK.load(std::sync::atomic::Ordering::Relaxed);
+    if last == 0 {
+        return i64::MAX;
+    }
+    chrono::Utc::now().timestamp() - last
+}
+
+/// §6.3: sd_notify READY/WATCHDOG over the NOTIFY_SOCKET datagram — 20
+/// lines instead of a systemd crate. Silent no-op when the socket env is
+/// absent (non-systemd runs).
+fn sd_notify(msg: &str) {
+    let Some(path) = std::env::var_os("NOTIFY_SOCKET") else {
+        return;
+    };
+    let sock = match std::os::unix::net::UnixDatagram::unbound() {
+        Ok(s) => s,
+        Err(_) => return,
+    };
+    let _ = sock.send_to(msg.as_bytes(), path);
+}
 
 /// Maximum publish retries per post (pub(crate): PostService's tests
 /// pin the unified engine's audit-row contract)
@@ -53,74 +102,23 @@ pub fn start_scheduler(
     token_key: Option<[u8; 32]>,
     shutdown: tokio::sync::watch::Receiver<bool>,
 ) {
-    // Main post publishing scheduler
-    let db1 = db.clone();
-    let providers1 = providers.clone();
-    // The boot-time reclaim below runs once, before the loop's first
-    // iteration. Gating it on a captured flag keeps it in the same place
-    // in the sequence — before the per-tick reclaim, which also runs on
-    // the first tick — without spawning a second task for it.
-    let mut boot = true;
-    spawn_poll(
-        Duration::from_secs(POLL_INTERVAL_SECS),
-        FirstTick::Now,
-        shutdown.clone(),
-        "Scheduler shutting down...",
-        move || {
-            let boot = std::mem::take(&mut boot);
-            let db = db1.clone();
-            let providers = providers1.clone();
-            let broadcaster = broadcaster.clone();
-            async move {
-                if boot {
-                    tracing::info!("Scheduler started (poll interval: {POLL_INTERVAL_SECS}s)");
-
-                    // On startup, reclaim any posts stuck in `publishing` state
-                    // from a previous crash. 5 minutes is the threshold — anything
-                    // still publishing after 5 min is almost certainly a dead
-                    // process, not a slow API call.
-                    match queries::reclaim_stuck_publishing(&db, 300).await {
-                        Ok(count) if count > 0 => {
-                            tracing::warn!(
-                                "Reclaimed {count} post(s) stuck in 'publishing' state — marked as error for manual review"
-                            );
-                        }
-                        Ok(_) => {}
-                        Err(e) => {
-                            tracing::error!("Failed to reclaim stuck publishing posts: {e}");
-                        }
-                    }
-                }
-
-                // v22 Phase 1 (D.5): reclaim stuck publishing posts
-                // every tick (30s) instead of only on startup. This
-                // catches publishes that hung mid-API-call without
-                // waiting for a process restart. The UPDATE is cheap
-                // (single statement, indexed by state).
-                if let Err(e) = queries::reclaim_stuck_publishing(&db, 300).await {
-                    tracing::warn!("reclaim_stuck_publishing failed: {e}");
-                }
-                // Posting-gap detection: alert on posts the scheduler
-                // never got out the door. Runs on the existing tick —
-                // no separate task — and the query is bounded by
-                // POSTING_GAP_LIMIT and deduped against unread alerts,
-                // so a 30s cadence is cheap.
-                if let Err(e) = check_posting_gaps(&db, &broadcaster).await {
-                    tracing::warn!("check_posting_gaps failed: {e}");
-                }
-                if let Err(e) = process_due_posts(&db, &providers, &broadcaster, token_key).await {
-                    tracing::error!("Scheduler tick error: {e}");
-                }
-                // v23-2: drain the publish_outbox. This retries any
-                // post-state updates that failed after a successful
-                // platform publish (e.g. DB connection blip). The
-                // drain is idempotent — completed rows are skipped.
-                if let Err(e) = drain_publish_outbox(&db).await {
-                    tracing::warn!("publish_outbox drain failed: {e}");
-                }
-            }
-        },
-    );
+    let engine_db = db.clone();
+    let engine_providers = providers.clone();
+    let engine_shutdown = shutdown.clone();
+    tokio::spawn(async move {
+        SchedulerEngine {
+            db: engine_db,
+            providers: engine_providers,
+            broadcaster,
+            token_key,
+            shutdown: engine_shutdown,
+            join_set: tokio::task::JoinSet::new(),
+            inflight: std::collections::HashSet::new(),
+            boot: true,
+        }
+        .run()
+        .await;
+    });
 
     // Background cleanup task for expired oauth_states (runs every 10 minutes)
     let db_cleanup = db.clone();
@@ -207,6 +205,147 @@ pub fn start_scheduler(
             }
         },
     );
+}
+
+/// §6.1: the scheduler engine. Publishes spawn into a LONG-LIVED JoinSet
+/// owned by this task — a tick no longer waits for the slowest publish
+/// (a 3.5-min IG/X video finalize used to delay EVERY other due post,
+/// and the 300s drain timeout then flipped the whole tick to error).
+/// Ticks only claim+spawn; completed tasks are reaped opportunistically.
+struct SchedulerEngine {
+    db: SqlitePool,
+    providers: Arc<ProviderRegistry>,
+    broadcaster: Broadcaster,
+    token_key: Option<[u8; 32]>,
+    shutdown: tokio::sync::watch::Receiver<bool>,
+    join_set: tokio::task::JoinSet<uuid::Uuid>,
+    inflight: std::collections::HashSet<uuid::Uuid>,
+    boot: bool,
+}
+
+/// §6.2: sleep until the EARLIER of the next poll period and the next
+/// scheduled post — a "publish in 1 minute" goes out on time instead
+/// of waiting up to 30s.
+async fn engine_deadline(db: &SqlitePool) -> Duration {
+    let max = Duration::from_secs(POLL_INTERVAL_SECS);
+    match queries::next_queued_epoch(db).await {
+        Ok(Some(next)) => {
+            let now = chrono::Utc::now().timestamp();
+            if next <= now {
+                return Duration::from_secs(0);
+            }
+            Duration::from_secs((next - now) as u64).min(max)
+        }
+        _ => max,
+    }
+}
+
+/// §6.5: shutdown drain budget — bounded by 25s so it always finishes
+/// inside main's 30s window (and systemd's TimeoutStopSec=60).
+const DRAIN_BUDGET: Duration = Duration::from_secs(25);
+
+impl SchedulerEngine {
+    async fn run(mut self) {
+        tracing::info!(
+            "Scheduler started (poll upper bound {POLL_INTERVAL_SECS}s, wake-up on schedule)"
+        );
+        sd_notify("READY=1");
+
+        loop {
+            self.reap_finished();
+
+            tokio::select! {
+                _ = self.shutdown.changed() => {
+                    self.drain().await;
+                    break;
+                }
+                _ = WAKE.notified() => {}
+                _ = async {
+                    let d = engine_deadline(&self.db).await;
+                    tokio::time::sleep(d).await
+                } => {}
+            }
+
+            if std::mem::take(&mut self.boot) {
+                if let Ok(n) =
+                    queries::reclaim_stuck_publishing(&self.db, RECLAIM_AFTER_SECS).await
+                {
+                    if n > 0 {
+                        tracing::warn!(
+                            "Reclaimed {n} post(s) stuck in 'publishing' — marked error for manual review"
+                        );
+                    }
+                }
+            }
+
+            // §6.7: 900s — see RECLAIM_AFTER_SECS.
+            if let Err(e) = queries::reclaim_stuck_publishing(&self.db, RECLAIM_AFTER_SECS).await {
+                tracing::warn!("reclaim_stuck_publishing failed: {e}");
+            }
+            if let Err(e) = check_posting_gaps(&self.db, &self.broadcaster).await {
+                tracing::warn!("check_posting_gaps failed: {e}");
+            }
+            if let Err(e) = self.tick_spawn().await {
+                tracing::error!("Scheduler tick error: {e}");
+            }
+            if let Err(e) = drain_publish_outbox(&self.db).await {
+                tracing::warn!("publish_outbox drain failed: {e}");
+            }
+
+            LAST_TICK.store(chrono::Utc::now().timestamp(), std::sync::atomic::Ordering::Relaxed);
+            sd_notify("WATCHDOG=1");
+        }
+
+        tracing::info!("Scheduler shutting down...");
+    }
+
+    /// Reap completed publish tasks without blocking (their posts already
+    /// wrote their own terminal state; inflight tracking exists for the
+    /// B1-style "still running" diagnostics and the shutdown drain).
+    fn reap_finished(&mut self) {
+        while let Some(res) = self.join_set.try_join_next() {
+            if let Ok(pid) = res {
+                self.inflight.remove(&pid);
+            }
+        }
+    }
+
+    /// One tick: claim due posts and spawn their publishes into the
+    /// long-lived JoinSet (never awaited here).
+    async fn tick_spawn(&mut self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        process_due_posts(
+            &self.db,
+            &self.providers,
+            &self.broadcaster,
+            self.token_key,
+            &mut self.join_set,
+            &mut self.inflight,
+        )
+        .await
+    }
+
+    /// §6.5: shutdown drain — in-flight publishes keep their permits;
+    /// whatever remains at the deadline is aborted and left for the
+    /// boot-time reclaim.
+    async fn drain(&mut self) {
+        if self.join_set.is_empty() {
+            return;
+        }
+        tracing::info!("Draining {} in-flight publish(s)...", self.join_set.len());
+        let deadline = tokio::time::Instant::now() + DRAIN_BUDGET;
+        loop {
+            let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
+            if remaining.is_zero() {
+                break;
+            }
+            match tokio::time::timeout(remaining, self.join_set.join_next()).await {
+                Ok(Some(_)) => {}
+                Ok(None) | Err(_) => break,
+            }
+        }
+        self.join_set.abort_all();
+        tracing::info!("Scheduler drain complete");
+    }
 }
 
 /// Proactive token refresh: refreshes tokens expiring within 24h for providers that need cron refresh
@@ -374,6 +513,8 @@ async fn process_due_posts(
     providers: &ProviderRegistry,
     broadcaster: &Broadcaster,
     token_key: Option<[u8; 32]>,
+    engine_join_set: &mut tokio::task::JoinSet<uuid::Uuid>,
+    engine_inflight: &mut std::collections::HashSet<uuid::Uuid>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let mut posts = queries::get_due_posts(db, DUE_POSTS_LIMIT).await?;
 
@@ -432,20 +573,12 @@ async fn process_due_posts(
         return Ok(());
     }
 
-    // Tracked task set — we await all of these before returning.
-    let mut join_set: tokio::task::JoinSet<uuid::Uuid> = tokio::task::JoinSet::new();
-
-    // v22 Phase 2 (BUG #1): track post IDs that are still in-flight so
-    // that on scheduler timeout we can abort the JoinSet AND mark the
-    // remaining posts as `error` (instead of leaving them detached in
-    // `publishing` state until the next process restart).
-    // B1: post ids whose tasks are still in flight. Each spawned task
-    // returns its own post id when it completes, so the drain loop below
-    // can remove finished posts BEFORE the timeout arm — a timeout then
-    // only marks the posts that are genuinely still running as `error`
-    // (instead of overwriting already-published ones).
-    let mut inflight_post_ids: std::collections::HashSet<uuid::Uuid> =
-        std::collections::HashSet::with_capacity(posts_to_publish.len());
+    // §6.1: the JoinSet now belongs to the ENGINE — the tick only claims
+    // and spawns. The old local set was awaited in-tick, serializing every
+    // due post on the slowest publish.
+    let join_set = engine_join_set;
+    let inflight_post_ids = engine_inflight;
+    inflight_post_ids.reserve(posts_to_publish.len());
 
     for post in &posts_to_publish {
         let provider = match providers.get(&post.provider_identifier) {
@@ -513,6 +646,34 @@ async fn process_due_posts(
                     tracing::error!("Failed to publish post {}: {e}", post_clone.id);
                     let err_str = e.to_string();
                     mark_post_error(&db_clone, post_clone.id, &err_str).await;
+
+                    // §6.6: a terminally failed thread part must not let
+                    // later parts go out standalone — the B3 gate would
+                    // otherwise requeue them forever (the predecessor is
+                    // `error`, never `published`). Block the rest of THIS
+                    // integration's group so the operator sees the whole
+                    // thread failed, not a reply-less part 2 stuck in
+                    // queued purgatory.
+                    if let Some(group_id) = post_clone.group_id {
+                        let blocked =
+                            block_thread_successors(&db_clone, group_id, post_clone.integration_id, post_clone.sequence, &err_str)
+                                .await;
+                        if blocked > 0 {
+                            tracing::warn!(
+                                "Blocked {blocked} later thread part(s) of post {} — predecessor failed",
+                                post_clone.id
+                            );
+                            bcast.send(
+                                "post_failed",
+                                &serde_json::json!({
+                                    "id": post_clone.id.to_string(),
+                                    "blocked_successors": blocked,
+                                    "error": "thread predecessor failed — later parts blocked",
+                                }),
+                            );
+                        }
+                    }
+
                     let fail_payload = serde_json::json!({
                         "id": post_clone.id.to_string(),
                         "error": err_str,
@@ -534,67 +695,11 @@ async fn process_due_posts(
         });
     }
 
-    // Wait for all spawned publishes to complete before returning.
-    // This prevents the next scheduler tick from stacking on top of
-    // the current one. If a publish takes longer than one tick
-    // interval, the next tick simply starts later — no unbounded
-    // task growth.
-    while !join_set.is_empty() {
-        // Use a timeout so we don't block forever if a single publish
-        // hangs (e.g. a provider API that never responds). 5 minutes
-        // is generous; most publishes complete in <10s.
-        match tokio::time::timeout(Duration::from_secs(300), join_set.join_next()).await {
-            Ok(Some(Err(e))) => {
-                // Task panicked mid-publish: its post is (almost always)
-                // still `publishing`. Remove it from the in-flight set and
-                // mark it errored now — the gated write is a no-op if the
-                // task somehow wrote a terminal state before panicking.
-                tracing::error!("Publish task panicked: {e}");
-            }
-            Ok(Some(Ok(pid))) => {
-                // B1: this post finished on its own — it wrote its own
-                // terminal state. NEVER let the timeout arm touch it.
-                inflight_post_ids.remove(&pid);
-            }
-            Ok(None) => break, // JoinSet empty
-            Err(_) => {
-                // v22 Phase 2 (BUG #1): on timeout, ABORT all remaining
-                // tasks (don't leave them detached) and mark their posts
-                // as `error`. Previously the code just `break`ed, leaving
-                // the still-running tasks detached — they'd eventually
-                // write `published`/`error` from a context the operator
-                // had no visibility into, and the posts sat in
-                // `publishing` until the next process restart.
-                tracing::warn!(
-                    "Scheduler drain timed out after 300s — aborting {} remaining publish task(s)",
-                    join_set.len()
-                );
-                join_set.abort_all();
-                // B1: only the posts STILL in flight (their tasks never
-                // returned) get marked `error` — posts that finished earlier
-                // in the drain already wrote `published`/`error` and were
-                // removed from this set above. mark_post_error's
-                // `AND state='publishing'` gate is the second line of
-                // defense against racing a just-completed task.
-                for pid in &inflight_post_ids {
-                    let _ = mark_post_error(
-                        db,
-                        *pid,
-                        "Publish timed out after 300s — aborted by scheduler",
-                    )
-                    .await;
-                    broadcaster.send(
-                        "post_failed",
-                        &serde_json::json!({
-                            "id": pid.to_string(),
-                            "error": "Publish timed out after 300s — aborted by scheduler",
-                        }),
-                    );
-                }
-                break;
-            }
-        }
-    }
+    // §6.1: no in-tick wait — the engine owns the JoinSet, reaps finished
+    // tasks on every loop pass, and drains it on shutdown. The old 300s
+    // drain timeout (which B1's gated error write had to defend against)
+    // is gone; the safety net for genuinely hung publishes is
+    // reclaim_stuck_publishing at RECLAIM_AFTER_SECS=900.
 
     Ok(())
 }
@@ -1850,6 +1955,36 @@ async fn refresh_cache_cycle(
     }
 }
 
+/// §6.6: mark the LATER parts of this integration's thread group as
+/// `error` with "predecessor failed" — a reply-less part 2 would
+/// otherwise sit in queued purgatory (B3's gate requeues it forever
+/// because the predecessor is `error`, never `published`). One
+/// implementation shared by the publish task's Err arm and the
+/// regression test.
+pub(crate) async fn block_thread_successors(
+    db: &SqlitePool,
+    group_id: uuid::Uuid,
+    integration_id: uuid::Uuid,
+    sequence: i32,
+    err_str: &str,
+) -> u64 {
+    sqlx::query(
+        "UPDATE posts SET state = 'error',
+            error_message = 'predecessor failed: ' || ?,
+            updated_at = unixepoch()
+         WHERE group_id = ? AND integration_id = ?
+           AND sequence > ? AND state IN ('queued', 'draft')",
+    )
+    .bind(err_str)
+    .bind(group_id)
+    .bind(integration_id)
+    .bind(sequence)
+    .execute(db)
+    .await
+    .map(|r| r.rows_affected())
+    .unwrap_or(0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1994,5 +2129,132 @@ mod tests {
             Some("tweet-123"),
             "platform_post_id must survive"
         );
+    }
+
+    // ── §6.2: engine_deadline sleeps to the next queued post ────
+
+    #[tokio::test]
+    async fn engine_deadline_is_next_due_when_sooner_than_poll() {
+        let (pool, post_id) = pool_with_post("queued", None).await;
+
+        // Due in 7s — deadline must be 7s, not the 30s poll period.
+        let due = chrono::Utc::now() + chrono::Duration::seconds(7);
+        sqlx::query("UPDATE posts SET scheduled_at = ? WHERE id = ?")
+            .bind(due.timestamp())
+            .bind(post_id)
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let d = engine_deadline(&pool).await;
+        assert!(d <= std::time::Duration::from_secs(8), "got {d:?}");
+        assert!(d > std::time::Duration::from_secs(0));
+    }
+
+    #[tokio::test]
+    async fn engine_deadline_caps_at_poll_period_when_far_or_empty() {
+        let (pool, post_id) = pool_with_post("queued", None).await;
+
+        // Far-future post: deadline = poll period, not hours.
+        sqlx::query("UPDATE posts SET scheduled_at = ? WHERE id = ?")
+            .bind(chrono::Utc::now().timestamp() + 86_400)
+            .bind(post_id)
+            .execute(&pool)
+            .await
+            .unwrap();
+        assert_eq!(
+            engine_deadline(&pool).await,
+            std::time::Duration::from_secs(POLL_INTERVAL_SECS)
+        );
+
+        // Due-now post: deadline = 0 — tick immediately.
+        sqlx::query("UPDATE posts SET scheduled_at = ? WHERE id = ?")
+            .bind(chrono::Utc::now().timestamp())
+            .bind(post_id)
+            .execute(&pool)
+            .await
+            .unwrap();
+        assert_eq!(engine_deadline(&pool).await, std::time::Duration::from_secs(0));
+    }
+
+// ── §6.6: a failed thread part blocks its successors ──────
+    #[tokio::test]
+    async fn failed_thread_part_blocks_later_parts_of_same_integration() {
+        let (pool, seed_post_id) = pool_with_post("error", None).await;
+        let (user_id, integration_id): (uuid::Uuid, uuid::Uuid) = sqlx::query_as(
+            "SELECT user_id, integration_id FROM posts WHERE id = ?",
+        )
+        .bind(seed_post_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        let group = uuid::Uuid::new_v4();
+
+        // Head (seq 1) in error; parts 2, 3 queued; a DIFFERENT integration's
+        // part 2 queued in the same group (B3 scoping — must NOT be blocked).
+        let other_integration = uuid::Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO integrations
+                (id, user_id, provider_identifier, provider_name, internal_id,
+                 access_token, disabled, refresh_needed, posting_times, auth_method)
+             VALUES (?, ?, 'reddit', 'Reddit', 'r', 'tok', 0, 0, '[]', 'oauth')",
+        )
+        .bind(other_integration)
+        .bind(user_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        for (integration, seq, state) in [
+            (integration_id, 1, "error"),
+            (integration_id, 2, "queued"),
+            (integration_id, 3, "draft"),
+            (other_integration, 2, "queued"),
+        ] {
+            sqlx::query(
+                "INSERT INTO posts
+                    (id, user_id, integration_id, state, content, media, settings,
+                     group_id, sequence, idempotency_key)
+                 VALUES (?, ?, ?, ?, 'part', '[]', '{}', ?, ?, ?)",
+            )
+            .bind(uuid::Uuid::new_v4())
+            .bind(user_id)
+            .bind(integration)
+            .bind(state)
+            .bind(group)
+            .bind(seq)
+            .bind(uuid::Uuid::new_v4())
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
+
+        let blocked =
+            block_thread_successors(&pool, group, integration_id, 1, "X API down").await;
+        assert_eq!(blocked, 2, "parts 2+3 of THIS integration are blocked");
+
+        let (state, msg): (String, Option<String>) = sqlx::query_as(
+            "SELECT state, error_message FROM posts WHERE user_id = ? AND sequence = 2 AND integration_id = ?",
+        )
+        .bind(user_id)
+        .bind(integration_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(state, "error");
+        assert!(
+            msg.as_deref().unwrap_or("").contains("predecessor failed"),
+            "reason must name the failure: {msg:?}"
+        );
+
+        // The other integration's part 2 in the same group is untouched.
+        let other_state: String = sqlx::query_scalar(
+            "SELECT state FROM posts WHERE integration_id = ? AND sequence = 2",
+        )
+        .bind(other_integration)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(other_state, "queued", "other integrations stay queued (B3 scoping)");
     }
 }

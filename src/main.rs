@@ -441,9 +441,9 @@ async fn main() -> anyhow::Result<()> {
 
     // Give background tasks up to 30 seconds to drain (was 10s — too
     // short for a JoinSet of 50 publishes each potentially in retry
-    // backoff). The scheduler's process_due_posts now waits on its
-    // JoinSet, so this drain window is the upper bound on how long
-    // a single publish can hold up shutdown.
+    // backoff). The scheduler ENGINE drains its long-lived JoinSet with
+    // a 25s budget (DRAIN_BUDGET), so this window is a true upper bound
+    // on shutdown, not a guess.
     let drain_deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(30);
     loop {
         if tokio::time::Instant::now() >= drain_deadline {

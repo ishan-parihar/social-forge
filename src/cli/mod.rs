@@ -63,6 +63,13 @@ pub enum Command {
     /// and the live single-writer/busy-timeout posture of the SQLite pool
     Audit,
 
+    /// Install/uninstall the systemd user service for the serve daemon
+    /// (§6.4: no sudo — a user unit plus `loginctl enable-linger`)
+    Service {
+        #[command(subcommand)]
+        action: ServiceAction,
+    },
+
     /// Full guided onboarding: check status, import cookies, connect providers
     Setup,
 
@@ -563,6 +570,15 @@ pub enum MediaAction {
 }
 
 // ─── Config Management ─────────────────────────────────────────────────────
+
+#[derive(Subcommand, Debug)]
+pub enum ServiceAction {
+    /// Write the hardened user unit, daemon-reload, enable --now, and
+    /// enable-linger so it survives logout.
+    Install,
+    /// Stop and disable the user unit (leaves linger and data alone).
+    Uninstall,
+}
 
 #[derive(Subcommand, Debug)]
 pub enum ConfigAction {
