@@ -774,142 +774,20 @@ pub async fn reschedule(
         })?
         .with_timezone(&Utc);
 
-    // Fetch the post to verify ownership and get current scheduled_at + group_id
-    let post = queries::get_post(&state.db, id, auth.user_id)
-        .await
-        .map_err(|e| crate::error::AppError::Internal(format!("DB error: {e}")))?
-        .ok_or_else(|| crate::error::AppError::NotFound("Post not found".into()))?;
+    // One core behind REST and MCP posts_reschedule (§5.2 parity).
+    let value = PostService::reschedule(
+        &state.db,
+        &state.broadcast,
+        auth.user_id,
+        id,
+        new_scheduled_at,
+        body.move_group.unwrap_or(false),
+        body.action.as_deref(),
+    )
+    .await
+    .map_err(crate::error::AppError::BadRequest)?;
 
-    // Phase v21: published-post handling. The `action` param disambiguates
-    // between "re-publish at new time" (schedule) and "just re-date for
-    // archival" (update). Without `action`, we preserve the pre-v21
-    // behavior of rejecting published-post reschedules.
-    let action = body.action.as_deref().unwrap_or("");
-    if post.state == crate::db::models::PostState::Published
-        && action != "schedule"
-        && action != "update"
-    {
-        return Err(crate::error::AppError::BadRequest(
-            "Cannot reschedule a published post without specifying action. \
-             Use action: 'schedule' to re-publish, or action: 'update' to \
-             just re-date for archival."
-                .into(),
-        ));
-    }
-
-    // If move_group is true and post has a group_id, reschedule all posts in the group
-    let move_group = body.move_group.unwrap_or(false);
-    if move_group {
-        if let Some(group_id) = post.group_id.as_ref() {
-            let group_posts = queries::get_posts_by_group_id(&state.db, auth.user_id, *group_id)
-                .await
-                .map_err(|e| crate::error::AppError::Internal(format!("DB error: {e}")))?;
-
-            // Calculate the delta from the dragged post's current scheduled_at
-            let old_scheduled_at = post.scheduled_at.unwrap_or_else(Utc::now);
-            let delta = new_scheduled_at - old_scheduled_at;
-
-            // Apply the same delta to all posts in the group.
-            // For published posts in the group, honor the same `action`.
-            let mut updated_count = 0usize;
-            for group_post in &group_posts {
-                if let Some(ref old_at) = group_post.scheduled_at {
-                    let new_at = *old_at + delta;
-                    if group_post.state == crate::db::models::PostState::Published
-                        && action == "schedule"
-                    {
-                        // Re-publish: reset state + clear release fields.
-                        let _ = queries::reset_post_for_republish(
-                            &state.db,
-                            group_post.id,
-                            auth.user_id,
-                            new_at,
-                        )
-                        .await;
-                    } else if group_post.state == crate::db::models::PostState::Published
-                        && action == "update"
-                    {
-                        // Archive re-date: change scheduled_at only.
-                        let _ = queries::update_post_date_only(
-                            &state.db,
-                            group_post.id,
-                            auth.user_id,
-                            new_at,
-                        )
-                        .await;
-                    } else {
-                        // Normal reschedule for queued/draft posts.
-                        let _ =
-                            queries::schedule_post(&state.db, group_post.id, auth.user_id, new_at)
-                                .await;
-                    }
-                    updated_count += 1;
-                }
-            }
-
-            return Ok(Json(serde_json::json!({
-                "rescheduled": true,
-                "group_id": group_id,
-                "count": updated_count,
-                "action": action,
-                "new_scheduled_at": new_scheduled_at.to_rfc3339(),
-            })));
-        }
-    }
-
-    // Single post reschedule
-    if post.state == crate::db::models::PostState::Published && action == "schedule" {
-        // Re-publish: reset state to queued, clear release fields.
-        let updated =
-            queries::reset_post_for_republish(&state.db, id, auth.user_id, new_scheduled_at)
-                .await
-                .map_err(|e| crate::error::AppError::Internal(format!("DB error: {e}")))?
-                .ok_or_else(|| {
-                    crate::error::AppError::NotFound("Post not found after reschedule".into())
-                })?;
-
-        let public = PostPublic::from(updated);
-        state.broadcast.send("post_scheduled", &public);
-
-        return Ok(Json(serde_json::json!({
-            "rescheduled": true,
-            "action": "schedule",
-            "post": public,
-        })));
-    } else if post.state == crate::db::models::PostState::Published && action == "update" {
-        // Archive re-date: change scheduled_at only, leave state + release fields.
-        let updated = queries::update_post_date_only(&state.db, id, auth.user_id, new_scheduled_at)
-            .await
-            .map_err(|e| crate::error::AppError::Internal(format!("DB error: {e}")))?
-            .ok_or_else(|| {
-                crate::error::AppError::NotFound("Post not found after reschedule".into())
-            })?;
-
-        let public = PostPublic::from(updated);
-        state.broadcast.send("post_scheduled", &public);
-
-        return Ok(Json(serde_json::json!({
-            "rescheduled": true,
-            "action": "update",
-            "post": public,
-        })));
-    }
-
-    // Normal reschedule (queued or draft post)
-    let updated = queries::schedule_post(&state.db, id, auth.user_id, new_scheduled_at)
-        .await
-        .map_err(|e| crate::error::AppError::Internal(format!("DB error: {e}")))?
-        .ok_or_else(|| {
-            crate::error::AppError::NotFound("Post not found after reschedule".into())
-        })?;
-
-    let public = PostPublic::from(updated);
-    state.broadcast.send("post_scheduled", &public);
-
-    Ok(Json(serde_json::json!({
-        "rescheduled": true,
-        "post": public,
-    })))
+    Ok(Json(value))
 }
 
 /// DELETE /api/posts/:id
@@ -1273,7 +1151,9 @@ pub struct ValidationError {
 
 /// Validate post content against each selected integration's provider limits.
 /// Returns a list of validation errors (empty if all valid).
-fn validate_posts_for_integrations(
+/// Visibility for the MCP posts_validate tool (§5.2 parity) — same rules,
+/// one implementation.
+pub(crate) fn validate_posts_for_integrations(
     state: &AppState,
     body: &CreatePostRequest,
     integrations: &[crate::db::models::Integration],

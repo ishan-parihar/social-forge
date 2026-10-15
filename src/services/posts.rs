@@ -205,6 +205,127 @@ impl PostService {
         Ok(post)
     }
 
+    /// Reschedule a post — the ONE core behind REST PUT /api/posts/{id}/date
+    /// and the MCP posts_reschedule tool (audit §5.2 parity).
+    ///
+    /// `action` disambiguates PUBLISHED posts (v21):
+    /// - Some("schedule") → reset state to queued + clear release fields
+    ///   (re-publish at the new time);
+    /// - Some("update") → change scheduled_at only (archive re-date);
+    /// - None on a published post → hard error (never silently re-publish).
+    ///
+    /// `move_group = true` applies the same time DELTA to every post in the
+    /// thread/campaign group — one handle, one verb (§5.2).
+    pub async fn reschedule(
+        db: &SqlitePool,
+        broadcaster: &Broadcaster,
+        user_id: Uuid,
+        post_id: Uuid,
+        new_scheduled_at: DateTime<Utc>,
+        move_group: bool,
+        action: Option<&str>,
+    ) -> ServiceResult<serde_json::Value> {
+        let post = queries::get_post(db, post_id, user_id)
+            .await
+            .map_err(|e| format!("DB error: {e}"))?
+            .ok_or_else(|| "Post not found".to_string())?;
+
+        let action = action.unwrap_or("");
+        if post.state == crate::db::models::PostState::Published
+            && action != "schedule"
+            && action != "update"
+        {
+            return Err(
+                "Cannot reschedule a published post without specifying action. \
+                 Use action: 'schedule' to re-publish, or action: 'update' to \
+                 just re-date for archival."
+                    .into(),
+            );
+        }
+
+        if move_group {
+            if let Some(group_id) = post.group_id {
+                let group_posts = queries::get_posts_by_group_id(db, user_id, group_id)
+                    .await
+                    .map_err(|e| format!("DB error: {e}"))?;
+
+                let old_scheduled_at = post.scheduled_at.unwrap_or_else(Utc::now);
+                let delta = new_scheduled_at - old_scheduled_at;
+
+                let mut updated_count = 0usize;
+                for group_post in &group_posts {
+                    if let Some(old_at) = group_post.scheduled_at {
+                        let new_at = old_at + delta;
+                        if group_post.state == crate::db::models::PostState::Published
+                            && action == "schedule"
+                        {
+                            let _ = queries::reset_post_for_republish(
+                                db,
+                                group_post.id,
+                                user_id,
+                                new_at,
+                            )
+                            .await;
+                        } else if group_post.state == crate::db::models::PostState::Published
+                            && action == "update"
+                        {
+                            let _ =
+                                queries::update_post_date_only(db, group_post.id, user_id, new_at)
+                                    .await;
+                        } else {
+                            let _ =
+                                queries::schedule_post(db, group_post.id, user_id, new_at).await;
+                        }
+                        updated_count += 1;
+                    }
+                }
+
+                return Ok(serde_json::json!({
+                    "rescheduled": true,
+                    "group_id": group_id.to_string(),
+                    "count": updated_count,
+                    "action": action,
+                    "new_scheduled_at": new_scheduled_at.to_rfc3339(),
+                }));
+            }
+        }
+
+        if post.state == crate::db::models::PostState::Published && action == "schedule" {
+            let updated = queries::reset_post_for_republish(db, post_id, user_id, new_scheduled_at)
+                .await
+                .map_err(|e| format!("DB error: {e}"))?
+                .ok_or_else(|| "Post not found after reschedule".to_string())?;
+            broadcaster.send("post_scheduled", &serde_json::json!({"id": post_id.to_string()}));
+            return Ok(serde_json::json!({
+                "rescheduled": true,
+                "action": "schedule",
+                "post": serde_json::to_value(&updated).unwrap_or_default(),
+            }));
+        } else if post.state == crate::db::models::PostState::Published && action == "update" {
+            let updated = queries::update_post_date_only(db, post_id, user_id, new_scheduled_at)
+                .await
+                .map_err(|e| format!("DB error: {e}"))?
+                .ok_or_else(|| "Post not found after reschedule".to_string())?;
+            broadcaster.send("post_scheduled", &serde_json::json!({"id": post_id.to_string()}));
+            return Ok(serde_json::json!({
+                "rescheduled": true,
+                "action": "update",
+                "post": serde_json::to_value(&updated).unwrap_or_default(),
+            }));
+        }
+
+        let updated = queries::schedule_post(db, post_id, user_id, new_scheduled_at)
+            .await
+            .map_err(|e| format!("DB error: {e}"))?
+            .ok_or_else(|| "Post not found after reschedule".to_string())?;
+        broadcaster.send("post_scheduled", &serde_json::json!({"id": post_id.to_string()}));
+        Ok(serde_json::json!({
+            "rescheduled": true,
+            "action": action,
+            "post": serde_json::to_value(&updated).unwrap_or_default(),
+        }))
+    }
+
     /// Delete a post (ownership verified via `WHERE user_id = ?` in the query)
     pub async fn delete(
         db: &SqlitePool,

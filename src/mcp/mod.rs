@@ -6,8 +6,8 @@
 // Same business logic as the REST API — shared via AppState.
 
 use rmcp::{
-    handler::server::wrapper::Parameters, schemars::JsonSchema, tool, tool_router,
-    transport::stdio, Json, ServiceExt,
+    handler::server::wrapper::Parameters, schemars::JsonSchema, tool, tool_handler,
+    tool_router, transport::stdio, Json, ServiceExt,
 };
 use serde::{Deserialize, Serialize};
 
@@ -86,17 +86,131 @@ impl JsonSchema for McpJsonValue {
 // TOOL ROUTER
 // ══════════════════════════════════════════════════════════════
 
+// §5.5: input structs for the meta tools.
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct ToolsSearchInput {
+    /// Case-insensitive substring matched against tool names and descriptions.
+    pub query: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct ToolsEnableInput {
+    /// Toolsets to enable for this session: platform names (x, reddit,
+    /// linkedin, facebook, instagram, threads, tiktok, pinterest, youtube,
+    /// bluesky, mastodon, telegram, whatsapp, slack, discord, skool,
+    /// wordpress, medium, devto, hashnode, github, google) or "all".
+    pub sets: Vec<String>,
+}
+
+/// std Mutex isn't Clone; the cheap answer for a per-session set is Arc —
+/// clones share the SAME session state, which is what thin-mode and
+/// mcp-call both want (one session, one set).
+#[derive(Clone, Default)]
+pub struct Toolsets(std::sync::Arc<std::sync::Mutex<std::collections::HashSet<String>>>);
+
+impl Toolsets {
+    pub fn new(sets: std::collections::HashSet<String>) -> Self {
+        Self(std::sync::Arc::new(std::sync::Mutex::new(sets)))
+    }
+
+    pub fn get(&self) -> std::collections::HashSet<String> {
+        self.0
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+
+    pub fn insert(&self, set: String) {
+        self.0.lock().unwrap_or_else(|e| e.into_inner()).insert(set);
+    }
+}
+
 #[derive(Clone)]
 pub struct SocialForgeMcpServer {
     pub state: AppState,
+    /// §5.5: enabled toolsets for THIS session. Boot default comes from
+    /// SOCIAL_FORGE_TOOLSETS (default `core`); `tools_enable` adds sets at
+    /// runtime. Guards the per-session prompt cost: an agent only advertises
+    /// the toolsets it works with instead of all 329 schemas.
+    pub toolsets: Toolsets,
 }
 
 // Helper: get DB pool from state
 
-#[tool_router(server_handler)]
+#[tool_router]
 impl SocialForgeMcpServer {
     pub fn new(state: AppState) -> Self {
-        Self { state }
+        Self {
+            state,
+            toolsets: Toolsets::new(Self::boot_toolsets()),
+        }
+    }
+
+    /// §5.5: SOCIAL_FORGE_TOOLSETS (comma-separated). Default: `core`
+    /// (posts/stage/media/tags/notifications/setup/integrations/analytics/
+    /// feed + the meta tools). `all` disables filtering.
+    fn boot_toolsets() -> std::collections::HashSet<String> {
+        std::env::var("SOCIAL_FORGE_TOOLSETS")
+            .unwrap_or_else(|_| "core".into())
+            .split(',')
+            .map(|s| s.trim().to_ascii_lowercase())
+            .filter(|s| !s.is_empty())
+            .collect()
+    }
+
+    /// §5.5: which set a tool belongs to. Providers map to their platform
+    /// name; cross-platform lifecycle tools map to `core`.
+    fn toolset_of(name: &str) -> String {
+        match name {
+            "get_comments" | "reply_to_comment" | "send_dm" | "get_dm_messages"
+            | "list_dm_conversations" => "core".into(),
+            _ => match name.split('_').next().unwrap_or("") {
+                "posts" | "stage" | "media" | "tag" | "notif" | "setup" | "integrations"
+                | "signatures" | "calendar" | "analytics" | "feed" | "auth" => "core".into(),
+                "goog" => "google".into(),
+                "gh" => "github".into(),
+                "li" | "lip" => "linkedin".into(),
+                "fb" => "facebook".into(),
+                "ig" | "ias" => "instagram".into(),
+                "tb" | "tu" => "telegram".into(),
+                "di" => "discord".into(),
+                "ms" => "mastodon".into(),
+                "bs" => "bluesky".into(),
+                "yt" => "youtube".into(),
+                "sk" => "skool".into(),
+                "wa" => "whatsapp".into(),
+                "wh" => "webhooks".into(),
+                "sl" => "slack".into(),
+                // x, reddit, th(reads), tt, pi, wp, md, dv, hn + anything
+                // unknown map to their own prefix name.
+                other => other.into(),
+            },
+        }
+    }
+
+    /// The router this session advertises: every tool whose set is not
+    /// enabled is hidden (list) and rejected (call). Meta tools stay up.
+    pub(crate) fn filtered_tool_router(
+        &self,
+    ) -> rmcp::handler::server::router::tool::ToolRouter<Self> {
+        let mut router = Self::tool_router();
+        let enabled = self.toolsets.get();
+        if enabled.contains("all") {
+            return router;
+        }
+        let names: Vec<String> = router.list_all().iter().map(|t| t.name.to_string()).collect();
+        for name in names {
+            // Meta tools are never filtered — an agent must always be able
+            // to search and enable more toolsets.
+            if matches!(name.as_str(), "tools_search" | "tools_enable") {
+                continue;
+            }
+            let set = Self::toolset_of(&name);
+            if !enabled.contains(&set) {
+                router.disable_route(name);
+            }
+        }
+        router
     }
 
     // ── Auth Tools ──────────────────────────────────────────
@@ -289,6 +403,46 @@ impl SocialForgeMcpServer {
         params: Parameters<tools_posts::DeletePostInput>,
     ) -> Result<Json<McpJsonValue>, String> {
         tools_posts::delete_post(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Create a thread: ordered parts sharing one group_id, linked at publish time. Mirrors POST /api/posts/thread.")]
+    async fn posts_thread(
+        &self,
+        params: Parameters<tools_posts::ThreadInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_posts::create_thread(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Move a queued/draft/error post back to draft (unschedule). Mirrors POST /api/posts/{id}/unschedule.")]
+    async fn posts_unschedule(
+        &self,
+        params: Parameters<tools_posts::UnscheduleInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_posts::unschedule(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Reschedule a post, or its whole thread/campaign group with move_group. For published posts pass action: 'schedule' (re-publish) or 'update' (re-date). Mirrors PUT /api/posts/{id}/date.")]
+    async fn posts_reschedule(
+        &self,
+        params: Parameters<tools_posts::RescheduleInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_posts::reschedule(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Fetch every post in a campaign/thread group by group_id. Mirrors GET /api/posts/group/{id}.")]
+    async fn posts_group(
+        &self,
+        params: Parameters<tools_posts::GroupInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_posts::get_group(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Validate a post against every integration WITHOUT creating it (publish-time rules). Mirrors POST /api/posts/validate.")]
+    async fn posts_validate(
+        &self,
+        params: Parameters<tools_posts::ValidateInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_posts::validate(&self.state, &params.0).await
     }
 
     #[tool(description = "Find the next available free time")]
@@ -3253,7 +3407,68 @@ impl SocialForgeMcpServer {
             .await
             .map(|Json(v)| Json(McpJsonValue(v)))
     }
+
+    // ── §5.5 Meta Tools (always enabled) ──────────────────────
+
+    #[tool(description = "Search ALL available MCP tools by name/description (including ones not enabled for this session). Use this before tools_enable to discover toolsets.")]
+    pub async fn tools_search(
+        &self,
+        params: Parameters<ToolsSearchInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        let q = params.0.query.to_ascii_lowercase();
+        let enabled = self.toolsets.get();
+        let hits: Vec<serde_json::Value> = Self::tool_router()
+            .list_all()
+            .into_iter()
+            .filter(|t| {
+                t.name.to_ascii_lowercase().contains(&q)
+                    || t
+                        .description
+                        .as_ref()
+                        .is_some_and(|d| d.to_ascii_lowercase().contains(&q))
+            })
+            .map(|t| {
+                let set = Self::toolset_of(&t.name);
+                serde_json::json!({
+                    "name": t.name,
+                    "set": set,
+                    "enabled": enabled.contains("all") || enabled.contains(&set),
+                    "description": t.description.unwrap_or_default(),
+                })
+            })
+            .collect();
+        Ok(Json(McpJsonValue(serde_json::json!({
+            "query": params.0.query,
+            "matches": hits.len(),
+            "tools": hits,
+        }))))
+    }
+
+    #[tool(description = "Enable additional toolsets for this session (e.g. [\"x\", \"reddit\"]). Discover sets with tools_search. Ads are per-session; the boot default is SOCIAL_FORGE_TOOLSETS (default: core).")]
+    pub async fn tools_enable(
+        &self,
+        params: Parameters<ToolsEnableInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        let mut sets_ref = self.toolsets.0.lock().unwrap_or_else(|e| e.into_inner());
+        for s in &params.0.sets {
+            let s = s.trim().to_ascii_lowercase();
+            if !s.is_empty() {
+                sets_ref.insert(s);
+            }
+        }
+        let enabled: Vec<String> = sets_ref.iter().cloned().collect();
+        Ok(Json(McpJsonValue(serde_json::json!({
+            "enabled": enabled,
+            "note": "Newly enabled tools are advertised on the next tools/list call.",
+        }))))
+    }
 }
+
+// §5.5: the ServerHandler dispatches through the per-session FILTERED
+// router — hidden toolsets disappear from tools/list and tools/call rejects
+// them by name.
+#[tool_handler(router = self.filtered_tool_router())]
+impl rmcp::ServerHandler for SocialForgeMcpServer {}
 
 // ══════════════════════════════════════════════════════════════
 // RUNNER

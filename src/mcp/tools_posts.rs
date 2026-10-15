@@ -78,6 +78,245 @@ pub(crate) async fn select_integration(
     })
 }
 
+/// §5.2 lifecycle parity — REST routes that had no MCP tool.
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct ThreadInput {
+    /// Thread parts, in order (max 25).
+    pub content_parts: Vec<String>,
+    /// Integration IDs to thread on (each gets the full thread).
+    pub integration_ids: Vec<String>,
+    /// RFC3339. Omitted → drafts; provided → queued + scheduled.
+    pub scheduled_at: Option<String>,
+    /// Delay in minutes between thread parts (part N due at base + (N-1)*delay).
+    pub delay_minutes: Option<i64>,
+}
+
+/// Create a thread: ordered parts sharing one group_id, linked at publish
+/// time by the scheduler's predecessor gate. Mirrors POST /api/posts/thread.
+pub async fn create_thread(
+    state: &AppState,
+    input: &ThreadInput,
+) -> Result<Json<crate::mcp::McpJsonValue>, String> {
+    let user_id = resolve_first_user(state).await?;
+    if input.content_parts.is_empty() {
+        return Err("content_parts must not be empty".into());
+    }
+    if input.content_parts.len() > 25 {
+        return Err("Maximum 25 parts per thread".into());
+    }
+    let integration_ids: Vec<Uuid> = input
+        .integration_ids
+        .iter()
+        .map(|s| Uuid::parse_str(s).map_err(|_| format!("Invalid integration_id: {s}")))
+        .collect::<Result<_, _>>()?;
+    if integration_ids.is_empty() {
+        return Err("At least one integration_id is required".into());
+    }
+    for id in &integration_ids {
+        let integ = crate::db::queries::get_integration(&state.db, *id, user_id)
+            .await
+            .map_err(|e| format!("DB error: {e}"))?
+            .ok_or_else(|| format!("Integration {id} not found"))?;
+        if integ.disabled {
+            return Err(format!("Integration {id} is disabled"));
+        }
+    }
+
+    let scheduled_at = parse_rfc3339_opt(&input.scheduled_at)?;
+    let state_enum = if scheduled_at.is_some() {
+        crate::db::models::PostState::Queued
+    } else {
+        crate::db::models::PostState::Draft
+    };
+    let state_label = state_enum.to_string();
+    let group_id = Uuid::new_v4();
+    let posts = crate::db::queries::create_thread_posts(
+        &state.db,
+        user_id,
+        &integration_ids,
+        &input.content_parts,
+        scheduled_at,
+        Some(state_enum),
+        group_id,
+        input.delay_minutes,
+    )
+    .await
+    .map_err(|e| format!("Failed to create thread: {e}"))?;
+
+    for p in &posts {
+        state
+            .broadcast
+            .send("post_created", &serde_json::json!({"id": p.id.to_string()}));
+    }
+
+    Ok(Json(crate::mcp::McpJsonValue(serde_json::json!({
+        "group_id": group_id.to_string(),
+        "post_ids": posts.iter().map(|p| p.id.to_string()).collect::<Vec<_>>(),
+        "state": state_label,
+    }))))
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct UnscheduleInput {
+    pub post_id: String,
+}
+
+/// Move a queued/draft/error post back to draft (unschedule). Mirrors POST
+/// /api/posts/{id}/unschedule.
+pub async fn unschedule(
+    state: &AppState,
+    input: &UnscheduleInput,
+) -> Result<Json<crate::mcp::McpJsonValue>, String> {
+    let user_id = resolve_first_user(state).await?;
+    let post_id =
+        Uuid::parse_str(&input.post_id).map_err(|_| "Invalid post_id UUID".to_string())?;
+    let post = crate::db::queries::unschedule_post(&state.db, post_id, user_id)
+        .await
+        .map_err(|e| format!("DB error: {e}"))?
+        .ok_or_else(|| {
+            "Post not found or cannot be unscheduled (only queued/draft/error posts can)"
+                .to_string()
+        })?;
+    state.broadcast.send(
+        "post_scheduled",
+        &serde_json::json!({"id": post_id.to_string(), "unscheduled": true}),
+    );
+    Ok(Json(crate::mcp::McpJsonValue(serde_json::to_value(&post).unwrap_or_default())))
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct RescheduleInput {
+    pub post_id: String,
+    /// New time (RFC3339).
+    pub scheduled_at: String,
+    /// Apply the same time delta to every post in the thread/campaign group.
+    #[serde(default)]
+    pub move_group: Option<bool>,
+    /// For PUBLISHED posts only: "schedule" (re-publish) or "update"
+    /// (archive re-date). Required when the post is published.
+    #[serde(default)]
+    pub action: Option<String>,
+}
+
+/// Reschedule a post (or its whole group with move_group). Mirrors PUT
+/// /api/posts/{id}/date via the shared PostService::reschedule core.
+pub async fn reschedule(
+    state: &AppState,
+    input: &RescheduleInput,
+) -> Result<Json<crate::mcp::McpJsonValue>, String> {
+    let user_id = resolve_first_user(state).await?;
+    let post_id =
+        Uuid::parse_str(&input.post_id).map_err(|_| "Invalid post_id UUID".to_string())?;
+    let new_at = chrono::DateTime::parse_from_rfc3339(&input.scheduled_at)
+        .map_err(|e| format!("Invalid scheduled_at (use RFC3339): {e}"))?
+        .with_timezone(&chrono::Utc);
+    let value = crate::services::posts::PostService::reschedule(
+        &state.db,
+        &state.broadcast,
+        user_id,
+        post_id,
+        new_at,
+        input.move_group.unwrap_or(false),
+        input.action.as_deref(),
+    )
+    .await?;
+    Ok(Json(crate::mcp::McpJsonValue(value)))
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct GroupInput {
+    /// Campaign/thread group_id (from posts_stage or posts_thread).
+    pub group_id: String,
+}
+
+/// Fetch every post in a campaign group. Mirrors GET /api/posts/group/{id}.
+pub async fn get_group(
+    state: &AppState,
+    input: &GroupInput,
+) -> Result<Json<crate::mcp::McpJsonValue>, String> {
+    let user_id = resolve_first_user(state).await?;
+    let group_id =
+        Uuid::parse_str(&input.group_id).map_err(|_| "Invalid group_id UUID".to_string())?;
+    let posts = crate::db::queries::list_posts_by_group(&state.db, user_id, group_id)
+        .await
+        .map_err(|e| format!("DB error: {e}"))?;
+    Ok(Json(crate::mcp::McpJsonValue(serde_json::json!({
+        "group_id": group_id.to_string(),
+        "posts": posts,
+    }))))
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct ValidateInput {
+    pub integration_ids: Vec<String>,
+    pub content: String,
+    #[serde(default)]
+    pub title: Option<String>,
+    #[serde(default)]
+    pub media: Option<serde_json::Value>,
+    #[serde(default)]
+    pub settings: Option<serde_json::Value>,
+}
+
+/// Validate a post against every integration WITHOUT creating it — the
+/// same rules the scheduler enforces at publish time. Mirrors POST
+/// /api/posts/validate.
+pub async fn validate(
+    state: &AppState,
+    input: &ValidateInput,
+) -> Result<Json<crate::mcp::McpJsonValue>, String> {
+    let user_id = resolve_first_user(state).await?;
+    let integration_ids: Vec<Uuid> = input
+        .integration_ids
+        .iter()
+        .map(|s| Uuid::parse_str(s).map_err(|_| format!("Invalid integration_id: {s}")))
+        .collect::<Result<_, _>>()?;
+
+    let mut integrations = Vec::with_capacity(integration_ids.len());
+    for id in &integration_ids {
+        let integ = crate::db::queries::get_integration(&state.db, *id, user_id)
+            .await
+            .map_err(|e| format!("DB error: {e}"))?
+            .ok_or_else(|| format!("Integration {id} not found"))?;
+        integrations.push(integ);
+    }
+
+    let media: Vec<crate::social::MediaAttachment> =
+        serde_json::from_value(input.media.clone().unwrap_or(serde_json::json!([])))
+            .unwrap_or_default();
+
+    let body = crate::api::CreatePostRequest {
+        integration_ids,
+        content: input.content.clone(),
+        title: input.title.clone(),
+        media: input.media.clone(),
+        settings: input.settings.clone(),
+        scheduled_at: None,
+        tag_ids: None,
+        first_comment: None,
+        sequence: None,
+        overrides: None,
+    };
+    let errors = crate::api::validate_posts_for_integrations(state, &body, &integrations, &media);
+
+    Ok(Json(crate::mcp::McpJsonValue(serde_json::json!({
+        "valid": errors.is_empty(),
+        "errors": errors,
+    }))))
+}
+
+fn parse_rfc3339_opt(s: &Option<String>) -> Result<Option<chrono::DateTime<chrono::Utc>>, String> {
+    match s {
+        None => Ok(None),
+        Some(s) => Ok(Some(
+            chrono::DateTime::parse_from_rfc3339(s)
+                .map_err(|e| format!("Invalid date (use RFC3339): {e}"))?
+                .with_timezone(&chrono::Utc),
+        )),
+    }
+}
+
 /// Publish NOW through the ONE pipeline (audit §4.2): creates a `posts`
 /// row for the integration (queued), then runs the shared engine via
 /// PostService::publish. The platform `*_create_*` tools call this

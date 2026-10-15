@@ -48,6 +48,8 @@ mod music;
 mod notifications;
 mod onboard;
 mod posts;
+pub(crate) use posts::validate_posts_for_integrations;
+pub(crate) use posts::CreatePostRequest;
 mod profile;
 mod rate_limit;
 mod rss;
