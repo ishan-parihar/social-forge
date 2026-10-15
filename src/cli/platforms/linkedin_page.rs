@@ -38,7 +38,7 @@ pub async fn handle(action: LinkedinPageAction, state: &AppState) -> anyhow::Res
                         .post("https://api.linkedin.com/v2/rest/posts")
                         .header("Authorization", format!("Bearer {token}"))
                         .header("X-Restli-Protocol-Version", "2.0.0")
-                        .header("LinkedIn-Version", "202401")
+                        .header("LinkedIn-Version", crate::social::linkedin::LINKEDIN_VERSION)
                         .header("Content-Type", "application/json")
                         .json(&body).send().await
                     {
@@ -78,7 +78,7 @@ pub async fn handle(action: LinkedinPageAction, state: &AppState) -> anyhow::Res
                     match reqwest::Client::new()
                         .get(&url)
                         .header("Authorization", format!("Bearer {token}"))
-                        .header("LinkedIn-Version", "202401")
+                        .header("LinkedIn-Version", crate::social::linkedin::LINKEDIN_VERSION)
                         .header("X-Restli-Protocol-Version", "2.0.0")
                         .send().await
                     {

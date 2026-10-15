@@ -238,96 +238,83 @@ impl SocialProvider for ThreadsProvider {
     ) -> Result<PublishResult, ProviderError> {
         let user_id = self.resolve_user_id(access_token).await?;
 
-        // Build media params based on content type
-        let (media_type, url_key): (&str, &str) = if post.media.is_empty() {
-            ("TEXT", "")
-        } else if post.media.len() == 1 && post.media[0].url.contains(".mp4") {
-            ("VIDEO", "video_url")
-        } else if post.media.len() == 1 {
-            ("IMAGE", "image_url")
-        } else {
-            // Carousel: create child containers first
+        // Carousel: create child containers first
+        if post.media.len() > 1 {
             return self.publish_carousel(&user_id, access_token, post).await;
-        };
-
-        // Create container
-        let mut form: Vec<(&str, &str)> = vec![
-            ("media_type", media_type),
-            ("text", &post.content),
-            ("access_token", access_token),
-        ];
-
-        // Thread linking: Threads uses `reply_to_id` to link replies
-        if let Some(ref reply_to) = post.in_reply_to {
-            form.push(("reply_to_id", reply_to));
         }
 
-        if !url_key.is_empty() {
-            form.push((url_key, post.media[0].url.as_str()));
+        let creation_id = self
+            .create_single_container(access_token, &user_id, post)
+            .await?;
+
+        // Immediate publish: only valid when the container is already
+        // FINISHED (small images usually are). The scheduler/tool path
+        // goes through post_pending, which waits instead of failing.
+        self.publish_container(access_token, &user_id, &creation_id)
+            .await
+    }
+
+    /// B15: the publish lifecycle the ONE engine expects. A video or
+    /// large-image container is usually still `IN_PROGRESS` when it is
+    /// created — publishing it immediately errors. Return the creation id
+    /// as `pending` and let the engine's finalize poll drive it home.
+    async fn post_pending(
+        &self,
+        access_token: &str,
+        post: &PostContent,
+    ) -> Result<PublishResult, ProviderError> {
+        let user_id = self.resolve_user_id(access_token).await?;
+
+        if post.media.len() > 1 {
+            // ponytail: carousel children are not polled before
+            // threads_publish — rare path; upgrade = wait on each child
+            // container's status_code the same way as the single path.
+            return self.publish_carousel(&user_id, access_token, post).await;
         }
 
-        let resp = self
-            .http
-            .post(format!("{}/{user_id}/threads", self.graph_url()))
-            .form(&form)
-            .send()
+        let creation_id = self
+            .create_single_container(access_token, &user_id, post)
             .await?;
 
-        let create_status = resp.status();
-        let json: serde_json::Value = resp.json().await?;
-        let creation_id = json["id"]
-            .as_str()
-            .ok_or_else(|| {
-                let msg = json["error"]["message"].as_str().unwrap_or("No creation ID");
-                let code = json["error"]["code"].as_u64().unwrap_or(0);
-                let raw = format!("Threads create failed (HTTP {create_status}, code {code}): {msg}");
-                ProviderError::Api(friendly_error(
-                    self.map_error(msg, create_status.as_u16()),
-                    &raw,
-                ))
-            })?
-            .to_string();
+        match self.container_status(access_token, &creation_id).await?.as_str() {
+            "FINISHED" => {
+                self.publish_container(access_token, &user_id, &creation_id)
+                    .await
+            }
+            "ERROR" => Err(ProviderError::Api(
+                "Threads media container finished with ERROR status".into(),
+            )),
+            _ => Ok(PublishResult {
+                platform_post_id: creation_id,
+                platform_post_url: None,
+                status: "pending".into(),
+            }),
+        }
+    }
 
-        // Publish
-        let pub_resp = self
-            .http
-            .post(format!(
-                "{}/{user_id}/threads_publish",
-                self.graph_url()
-            ))
-            .form(&[("creation_id", creation_id.as_str()), ("access_token", access_token)])
-            .send()
-            .await?;
-
-        let pub_status = pub_resp.status();
-        let pub_json: serde_json::Value = pub_resp.json().await?;
-        let thread_id = pub_json["id"]
-            .as_str()
-            .ok_or_else(|| {
-                let msg = pub_json["error"]["message"]
-                    .as_str()
-                    .unwrap_or("Publish failed");
-                let code = pub_json["error"]["code"].as_u64().unwrap_or(0);
-                let raw = format!(
-                    "Threads publish failed (HTTP {pub_status}, code {code}): {msg}"
-                );
-                ProviderError::Api(friendly_error(
-                    self.map_error(msg, pub_status.as_u16()),
-                    &raw,
-                ))
-            })?
-            .to_string();
-
-        let permalink = pub_json["permalink"]
-            .as_str()
-            .unwrap_or("")
-            .to_string();
-
-        Ok(PublishResult {
-            platform_post_id: thread_id,
-            platform_post_url: Some(permalink),
-            status: "published".into(),
-        })
+    /// B15: finalize a pending container — poll to FINISHED, then publish.
+    async fn check_post_status(
+        &self,
+        access_token: &str,
+        creation_id: &str,
+    ) -> Result<PublishResult, ProviderError> {
+        match self.container_status(access_token, creation_id).await?.as_str() {
+            "FINISHED" => {
+                let user_id = self.resolve_user_id(access_token).await?;
+                self.publish_container(access_token, &user_id, creation_id)
+                    .await
+            }
+            "ERROR" => Ok(PublishResult {
+                platform_post_id: creation_id.to_string(),
+                platform_post_url: None,
+                status: "failed".into(),
+            }),
+            _ => Ok(PublishResult {
+                platform_post_id: creation_id.to_string(),
+                platform_post_url: None,
+                status: "pending".into(),
+            }),
+        }
     }
 
     async fn fetch_page_info(
@@ -551,6 +538,127 @@ impl SocialProvider for ThreadsProvider {
 }
 
 impl ThreadsProvider {
+    /// Create a single (non-carousel) media container. Returns the
+    /// creation_id. (B15 helper — inherent, not part of the trait.)
+    async fn create_single_container(
+        &self,
+        access_token: &str,
+        user_id: &str,
+        post: &PostContent,
+    ) -> Result<String, ProviderError> {
+        let (media_type, url_key): (&str, &str) = if post.media.is_empty() {
+            ("TEXT", "")
+        } else if post.media.len() == 1 && post.media[0].url.contains(".mp4") {
+            ("VIDEO", "video_url")
+        } else {
+            ("IMAGE", "image_url")
+        };
+
+        let mut form: Vec<(&str, &str)> = vec![
+            ("media_type", media_type),
+            ("text", &post.content),
+            ("access_token", access_token),
+        ];
+
+        // Thread linking: Threads uses `reply_to_id` to link replies
+        if let Some(ref reply_to) = post.in_reply_to {
+            form.push(("reply_to_id", reply_to));
+        }
+
+        if !url_key.is_empty() {
+            form.push((url_key, post.media[0].url.as_str()));
+        }
+
+        let resp = self
+            .http
+            .post(format!("{}/{user_id}/threads", self.graph_url()))
+            .form(&form)
+            .send()
+            .await?;
+
+        let create_status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        Ok(json["id"]
+            .as_str()
+            .ok_or_else(|| {
+                let msg = json["error"]["message"].as_str().unwrap_or("No creation ID");
+                let code = json["error"]["code"].as_u64().unwrap_or(0);
+                let raw = format!("Threads create failed (HTTP {create_status}, code {code}): {msg}");
+                ProviderError::Api(friendly_error(
+                    self.map_error(msg, create_status.as_u16()),
+                    &raw,
+                ))
+            })?
+            .to_string())
+    }
+
+    /// GET a container's `status_code` (FINISHED / IN_PROGRESS / ERROR).
+    async fn container_status(
+        &self,
+        access_token: &str,
+        creation_id: &str,
+    ) -> Result<String, ProviderError> {
+        let resp = self
+            .http
+            .get(format!("{}/{creation_id}", self.graph_url()))
+            .query(&[
+                ("fields", "status_code"),
+                ("access_token", access_token),
+            ])
+            .send()
+            .await?;
+        let json: serde_json::Value = resp.json().await?;
+        Ok(json["status_code"]
+            .as_str()
+            .unwrap_or("IN_PROGRESS")
+            .to_string())
+    }
+
+    /// POST threads_publish for a container id. Returns the live thread.
+    async fn publish_container(
+        &self,
+        access_token: &str,
+        user_id: &str,
+        creation_id: &str,
+    ) -> Result<PublishResult, ProviderError> {
+        let pub_resp = self
+            .http
+            .post(format!("{}/{user_id}/threads_publish", self.graph_url()))
+            .form(&[(
+                "creation_id",
+                creation_id,
+            ), ("access_token", access_token)])
+            .send()
+            .await?;
+
+        let pub_status = pub_resp.status();
+        let pub_json: serde_json::Value = pub_resp.json().await?;
+        let thread_id = pub_json["id"]
+            .as_str()
+            .ok_or_else(|| {
+                let msg = pub_json["error"]["message"]
+                    .as_str()
+                    .unwrap_or("Publish failed");
+                let code = pub_json["error"]["code"].as_u64().unwrap_or(0);
+                let raw = format!(
+                    "Threads publish failed (HTTP {pub_status}, code {code}): {msg}"
+                );
+                ProviderError::Api(friendly_error(
+                    self.map_error(msg, pub_status.as_u16()),
+                    &raw,
+                ))
+            })?
+            .to_string();
+
+        let permalink = pub_json["permalink"].as_str().unwrap_or("").to_string();
+
+        Ok(PublishResult {
+            platform_post_id: thread_id,
+            platform_post_url: Some(permalink),
+            status: "published".into(),
+        })
+    }
+
     async fn resolve_user_id(&self, access_token: &str) -> Result<String, ProviderError> {
         let user: serde_json::Value = self
             .http

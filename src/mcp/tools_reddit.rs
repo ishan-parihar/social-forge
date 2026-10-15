@@ -130,15 +130,10 @@ async fn find_reddit_token(state: &AppState, user_id: Uuid) -> Result<String, St
         return Ok(token);
     }
 
-    // Priority 2: Browser cookie extraction
-    if let Some(cookies) = crate::social::reddit_cookies::extract_reddit_cookies() {
-        tracing::info!("Reddit cookies extracted from browser: {}", cookies.source);
-        return Ok(crate::social::reddit_cookies::build_cookie_token(
-            &cookies.reddit_session, cookies.token_v2.as_deref(), Some(&cookies.cookie_string)
-        ));
-    }
+    // B12: no implicit browser extraction — see tools_x.rs. Import via
+    // /api/public/connect/reddit-cookies instead.
 
-    // Priority 3: OAuth DB tokens
+    // Priority 2: OAuth DB tokens
     if let Some(oauth) = reddit_integrations.first() {
         let token = crypto::maybe_decrypt_token(&oauth.access_token, state.token_key.as_ref());
         return Ok(token);

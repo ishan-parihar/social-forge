@@ -133,20 +133,17 @@ impl XProvider {
             cookie_string: None,
         };
 
-        // Priority 1: Env vars (X_AUTH_TOKEN + X_CT0)
-        // Priority 2: Browser cookie extraction (Chrome/Brave/Firefox)
-        // Priority 3: No cookies — will rely on OAuth v2 fallback
+        // B12: env-var credentials ONLY. Browser-cookie auto-extraction
+        // was removed from `new()`: on Linux it read encrypted values
+        // from the Chrome cookie DB and "succeeded" with ciphertext as the
+        // auth_token — at EVERY XProvider::new (registry boot, every X MCP
+        // call), poisoning connections that then failed with a misleading
+        // 401. Cookies are imported explicitly: the /connect/x-cookies
+        // endpoint, X_AUTH_TOKEN + X_CT0 env vars, or the OAuth flow.
         if let (Some(at), Some(ct)) = (auth_token, ct0) {
             if !at.is_empty() && !ct.is_empty() {
                 provider.set_credentials(at, ct, None);
             }
-        } else if let Some(cookies) = crate::social::x_cookies::extract_x_cookies() {
-            tracing::info!("X cookies extracted from browser: {}", cookies.source);
-            provider.set_credentials(
-                &cookies.auth_token,
-                &cookies.ct0,
-                Some(&cookies.cookie_string),
-            );
         }
 
         provider

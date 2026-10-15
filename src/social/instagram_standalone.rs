@@ -27,8 +27,8 @@ impl InstagramStandaloneProvider {
 
     /// Instagram Basic Display / Graph insights host (same pinned v21 as the
     /// Facebook-side providers — do not drift the version independently).
-    fn graph_url(&self) -> &'static str {
-        "https://graph.instagram.com/v21.0"
+    fn graph_url(&self) -> String {
+        format!("https://graph.instagram.com/{GRAPH_VERSION}")
     }
 }
 
@@ -167,7 +167,7 @@ impl SocialProvider for InstagramStandaloneProvider {
         // Get user info
         let user: serde_json::Value = self
             .http
-            .get("https://graph.instagram.com/v21.0/me")
+            .get(format!("https://graph.instagram.com/{GRAPH_VERSION}/me"))
             .query(&[
                 ("fields", "user_id,username,name,profile_picture_url"),
                 ("access_token", access_token.as_str()),
@@ -211,7 +211,7 @@ impl SocialProvider for InstagramStandaloneProvider {
 
         let user: serde_json::Value = self
             .http
-            .get("https://graph.instagram.com/v21.0/me")
+            .get(format!("https://graph.instagram.com/{GRAPH_VERSION}/me"))
             .query(&[
                 ("fields", "user_id,username,name,profile_picture_url"),
                 ("access_token", access_token.as_str()),
@@ -262,7 +262,7 @@ impl SocialProvider for InstagramStandaloneProvider {
 
         let resp = self
             .http
-            .post(format!("https://graph.instagram.com/v21.0/{ig_id}/media"))
+            .post(format!("https://graph.instagram.com/{GRAPH_VERSION}/{ig_id}/media"))
             .form(&form)
             .send()
             .await?;
@@ -296,7 +296,7 @@ impl SocialProvider for InstagramStandaloneProvider {
         let pub_resp = self
             .http
             .post(format!(
-                "https://graph.instagram.com/v21.0/{ig_id}/media_publish"
+                "https://graph.instagram.com/{GRAPH_VERSION}/{ig_id}/media_publish"
             ))
             .form(&pub_form)
             .send()
@@ -519,7 +519,7 @@ impl InstagramStandaloneProvider {
     async fn resolve_user_id(&self, access_token: &str) -> Result<String, ProviderError> {
         let user: serde_json::Value = self
             .http
-            .get("https://graph.instagram.com/v21.0/me")
+            .get(format!("https://graph.instagram.com/{GRAPH_VERSION}/me"))
             .query(&[("fields", "user_id"), ("access_token", access_token)])
             .send()
             .await?
@@ -540,7 +540,7 @@ impl InstagramStandaloneProvider {
     ) -> Result<serde_json::Value, ProviderError> {
         let limit = limit.min(100);
         let url = format!(
-            "https://graph.instagram.com/v21.0/{ig_user_id}/media",
+            "https://graph.instagram.com/{GRAPH_VERSION}/{ig_user_id}/media",
         );
         let resp = self
             .http
@@ -574,7 +574,7 @@ impl InstagramStandaloneProvider {
         access_token: &str,
         media_id: &str,
     ) -> Result<serde_json::Value, ProviderError> {
-        let url = format!("https://graph.instagram.com/v21.0/{media_id}",);
+        let url = format!("https://graph.instagram.com/{GRAPH_VERSION}/{media_id}",);
         let resp = self
             .http
             .get(&url)
@@ -649,7 +649,7 @@ impl InstagramStandaloneProvider {
         media_id: &str,
     ) -> Result<serde_json::Value, ProviderError> {
         let url = format!(
-            "https://graph.instagram.com/v21.0/{media_id}/comments",
+            "https://graph.instagram.com/{GRAPH_VERSION}/{media_id}/comments",
         );
         let resp = self
             .http
@@ -684,7 +684,7 @@ impl InstagramStandaloneProvider {
         message: &str,
     ) -> Result<serde_json::Value, ProviderError> {
         let url = format!(
-            "https://graph.instagram.com/v21.0/{comment_id}/replies",
+            "https://graph.instagram.com/{GRAPH_VERSION}/{comment_id}/replies",
         );
         let resp = self
             .http
@@ -755,7 +755,7 @@ impl InstagramStandaloneProvider {
         media_type: &str,
     ) -> Result<serde_json::Value, ProviderError> {
         let url = format!(
-            "https://graph.instagram.com/v21.0/{ig_user_id}/media",
+            "https://graph.instagram.com/{GRAPH_VERSION}/{ig_user_id}/media",
         );
         let mut params: Vec<(&str, &str)> = vec![
             ("media_type", media_type),
@@ -792,7 +792,7 @@ impl InstagramStandaloneProvider {
         creation_id: &str,
     ) -> Result<serde_json::Value, ProviderError> {
         let url = format!(
-            "https://graph.instagram.com/v21.0/{ig_user_id}/media_publish",
+            "https://graph.instagram.com/{GRAPH_VERSION}/{ig_user_id}/media_publish",
         );
         let resp = self
             .http
@@ -822,7 +822,7 @@ impl InstagramStandaloneProvider {
         access_token: &str,
         creation_id: &str,
     ) -> Result<String, ProviderError> {
-        let url = format!("https://graph.instagram.com/v21.0/{creation_id}",);
+        let url = format!("https://graph.instagram.com/{GRAPH_VERSION}/{creation_id}",);
         let resp = self
             .http
             .get(&url)
@@ -898,7 +898,10 @@ mod tests {
     #[test]
     fn test_graph_url_is_pinned_to_v21() {
         let provider = InstagramStandaloneProvider::new(&test_config());
-        assert_eq!(provider.graph_url(), "https://graph.instagram.com/v21.0");
+        assert_eq!(
+            provider.graph_url(),
+            format!("https://graph.instagram.com/{GRAPH_VERSION}")
+        );
     }
 
     #[test]

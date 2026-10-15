@@ -251,16 +251,12 @@ async fn find_x_token(state: &AppState, user_id: Uuid) -> Result<(String, String
         return Ok((token, String::new()));
     }
 
-    // Priority 3: Browser cookie extraction (Chrome/Brave/Firefox)
-    if let Some(cookies) = crate::social::x_cookies::extract_x_cookies() {
-        tracing::info!("X cookies extracted from browser: {}", cookies.source);
-        let token = crate::social::x_cookies::build_cookie_token(
-            &cookies.auth_token, &cookies.ct0, Some(&cookies.cookie_string)
-        );
-        return Ok((token, String::new()));
-    }
+    // B12: no implicit browser-cookie extraction on the hot path — the
+    // Linux extractor can hand back ciphertext as a token, and it would
+    // run on EVERY X tool call. Cookies are imported explicitly via
+    // /api/public/connect/x-cookies (which stores an integration row).
 
-    // Priority 4: OAuth DB tokens as last resort
+    // Priority 3: OAuth DB tokens as last resort
     if let Some(oauth) = x_integrations.first() {
         let token = crypto::maybe_decrypt_token(&oauth.access_token, state.token_key.as_ref());
         return Ok((token, oauth.internal_id.clone()));

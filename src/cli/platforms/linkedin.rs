@@ -41,7 +41,7 @@ pub async fn handle(action: LinkedinAction, state: &AppState) -> anyhow::Result<
                 .delete(&url)
                 .header("Authorization", format!("Bearer {token}"))
                 .header("X-Restli-Protocol-Version", "2.0.0")
-                .header("LinkedIn-Version", "202401")
+                .header("LinkedIn-Version", crate::social::linkedin::LINKEDIN_VERSION)
                 .send().await
                 .map_err(|e| format!("LinkedIn delete failed: {e}"));
             match resp {
@@ -59,7 +59,7 @@ pub async fn handle(action: LinkedinAction, state: &AppState) -> anyhow::Result<
                 .get(&url)
                 .header("Authorization", format!("Bearer {token}"))
                 .header("X-Restli-Protocol-Version", "2.0.0")
-                .header("LinkedIn-Version", "202401")
+                .header("LinkedIn-Version", crate::social::linkedin::LINKEDIN_VERSION)
                 .send().await
                 .map_err(|e| format!("LinkedIn reactions failed: {e}"));
             match resp {

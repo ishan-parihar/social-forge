@@ -219,6 +219,24 @@ impl ProviderRegistry {
     ) -> Self {
         let mut providers: HashMap<&'static str, Arc<dyn SocialProvider>> = HashMap::new();
 
+        // B10 startup self-check: warn loudly when the pinned LinkedIn
+        // version approaches its ~12-month sunset, so the bump never comes
+        // as a surprise outage.
+        if let Some((years, months)) = crate::social::linkedin::linkedin_version_age_years_months(
+            crate::social::linkedin::LINKEDIN_VERSION,
+            chrono::Utc::now(),
+        ) {
+            let age_months = years * 12 + months;
+            if age_months >= 11 {
+                tracing::warn!(
+                    "LinkedIn-Version {} is {}y{}m old — LinkedIn sunsets versions ~12 months after release. Bump LINKEDIN_VERSION.",
+                    crate::social::linkedin::LINKEDIN_VERSION,
+                    years,
+                    months
+                );
+            }
+        }
+
         // Every Tier-1 / Tier-2 provider registers UNCONDITIONALLY.
         //
         // Registration is a catalogue decision, not a credentials decision.

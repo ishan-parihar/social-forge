@@ -6,6 +6,7 @@ use async_trait::async_trait;
 
 use super::*;
 use crate::config::Config;
+use crate::social::linkedin::LINKEDIN_VERSION;
 
 pub struct LinkedInPageProvider {
     client_id: String,
@@ -72,7 +73,7 @@ impl LinkedInPageProvider {
                 "https://api.linkedin.com/rest/organizations/{org_id}?fields=logoV2"
             ))
             .header("Authorization", format!("Bearer {access_token}"))
-            .header("LinkedIn-Version", "202401")
+            .header("LinkedIn-Version", LINKEDIN_VERSION)
             .header("X-Restli-Protocol-Version", "2.0.0")
             .send()
             .await?;
@@ -85,7 +86,7 @@ impl LinkedInPageProvider {
                 .http
                 .get(format!("https://api.linkedin.com/rest/images/{encoded}"))
                 .header("Authorization", format!("Bearer {access_token}"))
-                .header("LinkedIn-Version", "202401")
+                .header("LinkedIn-Version", LINKEDIN_VERSION)
                 .send()
                 .await?;
             let img_json: serde_json::Value = img_resp.json().await.unwrap_or_default();
@@ -259,7 +260,7 @@ impl SocialProvider for LinkedInPageProvider {
             .get("https://api.linkedin.com/v2/userinfo")
             .header("Authorization", format!("Bearer {access_token}"))
             .header("X-Restli-Protocol-Version", "2.0.0")
-            .header("LinkedIn-Version", "202401")
+            .header("LinkedIn-Version", LINKEDIN_VERSION)
             .send()
             .await
         {
@@ -548,7 +549,7 @@ impl SocialProvider for LinkedInPageProvider {
             .http
             .get(&share_url)
             .header("Authorization", format!("Bearer {access_token}"))
-            .header("LinkedIn-Version", "202401")
+            .header("LinkedIn-Version", LINKEDIN_VERSION)
             .header("X-Restli-Protocol-Version", "2.0.0")
             .send()
             .await?;
@@ -584,7 +585,7 @@ impl SocialProvider for LinkedInPageProvider {
             .http
             .get(&follower_url)
             .header("Authorization", format!("Bearer {access_token}"))
-            .header("LinkedIn-Version", "202401")
+            .header("LinkedIn-Version", LINKEDIN_VERSION)
             .header("X-Restli-Protocol-Version", "2.0.0")
             .send()
             .await?;
@@ -629,7 +630,7 @@ impl SocialProvider for LinkedInPageProvider {
             .http
             .get(&url)
             .header("Authorization", format!("Bearer {access_token}"))
-            .header("LinkedIn-Version", "202401")
+            .header("LinkedIn-Version", LINKEDIN_VERSION)
             .header("X-Restli-Protocol-Version", "2.0.0")
             .send()
             .await?;
@@ -803,7 +804,7 @@ impl SocialProvider for LinkedInPageProvider {
             .get(&url)
             .header("Authorization", format!("Bearer {access_token}"))
             .header("X-Restli-Protocol-Version", "2.0.0")
-            .header("LinkedIn-Version", "202401")
+            .header("LinkedIn-Version", LINKEDIN_VERSION)
             .send()
             .await?;
 
@@ -838,7 +839,7 @@ impl SocialProvider for LinkedInPageProvider {
             ))
             .header("Authorization", format!("Bearer {access_token}"))
             .header("X-Restli-Protocol-Version", "2.0.0")
-            .header("LinkedIn-Version", "202401")
+            .header("LinkedIn-Version", LINKEDIN_VERSION)
             .send()
             .await?;
         let status = resp.status();
@@ -914,7 +915,7 @@ impl LinkedInPageProvider {
                 .get(&url)
                 .header("Authorization", format!("Bearer {access_token}"))
                 .header("X-Restli-Protocol-Version", "2.0.0")
-                .header("LinkedIn-Version", "202401")
+                .header("LinkedIn-Version", LINKEDIN_VERSION)
                 .send(),
         )
         .await;
@@ -970,7 +971,7 @@ impl LinkedInPageProvider {
             .get(&url)
             .header("Authorization", format!("Bearer {access_token}"))
             .header("X-Restli-Protocol-Version", "2.0.0")
-            .header("LinkedIn-Version", "202401")
+            .header("LinkedIn-Version", LINKEDIN_VERSION)
             .send()
             .await?;
 
@@ -1009,7 +1010,7 @@ impl LinkedInPageProvider {
             .post(&url)
             .header("Authorization", format!("Bearer {access_token}"))
             .header("X-Restli-Protocol-Version", "2.0.0")
-            .header("LinkedIn-Version", "202401")
+            .header("LinkedIn-Version", LINKEDIN_VERSION)
             .header("Content-Type", "application/json")
             .json(&body)
             .send()

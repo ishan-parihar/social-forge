@@ -1,5 +1,6 @@
 // ─── MCP Instagram Standalone Tools ──────────────────────────────
-// Instagram Basic Display API tools via graph.instagram.com/v21.0.
+// Instagram Basic Display API tools via graph.instagram.com (version pinned
+// in social::GRAPH_VERSION).
 // Follows the same pattern as tools_instagram.rs.
 
 use rmcp::{Json, schemars::JsonSchema};

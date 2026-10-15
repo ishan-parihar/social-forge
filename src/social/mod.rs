@@ -158,6 +158,14 @@ pub const MAX_POLL_ATTEMPTS: u32 = 40;
 /// Default gap between pending-publish polls (~3.5 min total budget).
 pub const DEFAULT_POLL_INTERVAL: Duration = Duration::from_secs(5);
 
+/// Meta Graph API version (audit 2026-10-14, P1 "mixed versions").
+/// ONE bump point for facebook.rs + instagram.rs (graph.facebook.com) and
+/// instagram_standalone.rs (graph.instagram.com). Threads runs its own API
+/// on graph.threads.net (v1.0 as of 2026-10 — do NOT bump it here).
+/// v26.0: released 2026-07-29. Older versions keep answering for ~2 years
+/// (v24.0 until 2028-02-18), so a missed bump degrades gracefully.
+pub const GRAPH_VERSION: &str = "v26.0";
+
 /// Drive `check` until it reports a terminal state (published or failed).
 ///
 /// The one piece of logic every async platform shares: poll, and stop at the

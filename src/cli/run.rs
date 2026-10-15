@@ -280,14 +280,8 @@ pub(crate) async fn find_x_token(
         return Ok((token, String::new()));
     }
 
-    if let Some(cookies) = crate::social::x_cookies::extract_x_cookies() {
-        let token = crate::social::x_cookies::build_cookie_token(
-            &cookies.auth_token,
-            &cookies.ct0,
-            Some(&cookies.cookie_string),
-        );
-        return Ok((token, String::new()));
-    }
+    // B12: no implicit browser extraction — explicit import only
+    // (/api/public/connect/x-cookies or env vars).
 
     if let Some(oauth) = x_integrations.first() {
         let token = oauth.access_token.clone();
@@ -314,13 +308,8 @@ pub(crate) async fn find_reddit_token(state: &AppState, user_id: Uuid) -> anyhow
         return Ok(token);
     }
 
-    if let Some(cookies) = crate::social::reddit_cookies::extract_reddit_cookies() {
-        return Ok(crate::social::reddit_cookies::build_cookie_token(
-            &cookies.reddit_session,
-            cookies.token_v2.as_deref(),
-            Some(&cookies.cookie_string),
-        ));
-    }
+    // B12: no implicit browser extraction — explicit import only
+    // (/api/public/connect/reddit-cookies).
 
     if let Some(oauth) = reddit_integrations.first() {
         let token = oauth.access_token.clone();
@@ -1578,7 +1567,7 @@ async fn handle_doctor_with_state(state: &AppState) -> anyhow::Result<()> {
                 }
             }
             "facebook" => {
-                let url = format!("https://graph.facebook.com/v19.0/{}?fields=name", integration.internal_id);
+                let url = format!("https://graph.facebook.com/{}/{}?fields=name", crate::social::GRAPH_VERSION, integration.internal_id);
                 match reqwest::Client::new().get(&url).bearer_auth(&token).send().await {
                     Ok(r) if r.status().is_success() => ("healthy".to_string(), None),
                     Ok(r) => {
@@ -1590,7 +1579,7 @@ async fn handle_doctor_with_state(state: &AppState) -> anyhow::Result<()> {
                 }
             }
             "instagram" | "instagram-standalone" => {
-                let url = format!("https://graph.facebook.com/v19.0/{}?fields=id,name", integration.internal_id);
+                let url = format!("https://graph.facebook.com/{}/{}?fields=id,name", crate::social::GRAPH_VERSION, integration.internal_id);
                 match reqwest::Client::new().get(&url).bearer_auth(&token).send().await {
                     Ok(r) if r.status().is_success() => ("healthy".to_string(), None),
                     Ok(r) => {

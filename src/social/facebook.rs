@@ -5,6 +5,7 @@ use async_trait::async_trait;
 
 use super::*;
 use crate::config::Config;
+use crate::social::GRAPH_VERSION;
 
 pub struct FacebookProvider {
     client_id: String,
@@ -24,8 +25,8 @@ impl FacebookProvider {
         }
     }
 
-    fn graph_url(&self) -> &'static str {
-        "https://graph.facebook.com/v21.0"
+    fn graph_url(&self) -> String {
+        format!("https://graph.facebook.com/{GRAPH_VERSION}")
     }
 }
 
@@ -80,7 +81,7 @@ impl SocialProvider for FacebookProvider {
         ];
 
         let url = url::Url::parse_with_params(
-            "https://www.facebook.com/v21.0/dialog/oauth",
+            &format!("https://www.facebook.com/{GRAPH_VERSION}/dialog/oauth"),
             &params,
         )
         .map_err(|e| ProviderError::Auth(format!("URL parse: {e}")))?;
@@ -104,7 +105,7 @@ impl SocialProvider for FacebookProvider {
 
         let token_resp = self
             .http
-            .get("https://graph.facebook.com/v21.0/oauth/access_token")
+            .get(format!("https://graph.facebook.com/{GRAPH_VERSION}/oauth/access_token"))
             .query(&token_params)
             .send()
             .await?;
@@ -125,7 +126,7 @@ impl SocialProvider for FacebookProvider {
 
         let long_resp = self
             .http
-            .get("https://graph.facebook.com/v21.0/oauth/access_token")
+            .get(format!("https://graph.facebook.com/{GRAPH_VERSION}/oauth/access_token"))
             .query(&long_params)
             .send()
             .await?;
@@ -1306,7 +1307,7 @@ mod tests {
         assert!(url.contains("state=test_state"), "should contain state");
         assert!(url.contains("scope="), "should contain scope");
         assert!(url.contains("response_type=code"), "should contain response_type");
-        assert!(url.starts_with("https://www.facebook.com/v21.0/dialog/oauth"));
+        assert!(url.starts_with(&format!("https://www.facebook.com/{GRAPH_VERSION}/dialog/oauth")));
     }
 
     #[test]

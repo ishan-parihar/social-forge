@@ -31,8 +31,8 @@ impl InstagramProvider {
         }
     }
 
-    fn graph_url(&self) -> &'static str {
-        "https://graph.facebook.com/v21.0"
+    fn graph_url(&self) -> String {
+        format!("https://graph.facebook.com/{GRAPH_VERSION}")
     }
 }
 
@@ -92,7 +92,10 @@ impl SocialProvider for InstagramProvider {
         ];
 
         let url =
-            url::Url::parse_with_params("https://www.facebook.com/v21.0/dialog/oauth", &params)
+            url::Url::parse_with_params(
+                &format!("https://www.facebook.com/{GRAPH_VERSION}/dialog/oauth"),
+                &params,
+            )
                 .map_err(|e| ProviderError::Auth(format!("URL parse: {e}")))?;
 
         Ok(AuthUrlResponse {
@@ -116,7 +119,7 @@ impl SocialProvider for InstagramProvider {
 
         let resp = self
             .http
-            .get("https://graph.facebook.com/v21.0/oauth/access_token")
+            .get(format!("https://graph.facebook.com/{GRAPH_VERSION}/oauth/access_token"))
             .query(&token_params)
             .send()
             .await?;
@@ -137,7 +140,7 @@ impl SocialProvider for InstagramProvider {
 
         let long_resp = self
             .http
-            .get("https://graph.facebook.com/v21.0/oauth/access_token")
+            .get(format!("https://graph.facebook.com/{GRAPH_VERSION}/oauth/access_token"))
             .query(&long_params)
             .send()
             .await?;
