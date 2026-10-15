@@ -7,11 +7,10 @@ use serde_json::Value;
 use sqlx::SqlitePool;
 use uuid::Uuid;
 
-use crate::db::models::{Post, PostState, PostWithIntegration};
+use crate::db::models::{Post, PostState};
 use crate::db::queries;
 use crate::realtime::Broadcaster;
 use crate::social::registry::ProviderRegistry;
-use crate::social::{PostContent, SocialProvider};
 
 /// Result type for service operations
 pub type ServiceResult<T> = Result<T, String>;
@@ -275,230 +274,54 @@ impl PostService {
             .get(&post.provider_identifier)
             .ok_or_else(|| format!("Provider '{}' not found", post.provider_identifier))?;
 
-        // Resolve token, refreshing if needed
-        let access_token = Self::resolve_token(db, provider.as_ref(), &post, token_key).await?;
-
-        // Build publish content (load media from post — matches scheduler behavior)
-        let media: Vec<crate::social::MediaAttachment> =
-            serde_json::from_value(post.media.clone()).unwrap_or_default();
-        // Resolve relative media URLs to absolute URLs for providers that need them
-        // (Instagram, Facebook, Threads, Reddit require absolute URLs)
-        let app_url = std::env::var("APP_URL").unwrap_or_else(|_| "https://localhost:6543".into());
-        let resolved_media: Vec<crate::social::MediaAttachment> = media.into_iter().map(|m| {
-            provider.resolve_media_url(&m, &app_url)
-        }).collect();
-
-        // ── Thread linking ──────────────────────────────────
-        // If this post is part of a thread (group_id + sequence > 1),
-        // look up the predecessor's platform_post_id for in_reply_to.
-        // B3: scoped to this integration — group_id is shared across
-        // integrations in a multi-platform thread.
-        let in_reply_to: Option<String> = if let Some(group_id) = post.group_id {
-            let seq = post.sequence;
-            if seq > 1 {
-                match queries::find_thread_predecessor(db, group_id, post.integration_id, seq - 1).await
-                {
-                    Ok(Some(pid)) => Some(pid),
-                    Ok(None) => {
-                        // B3: predecessor not published yet — refuse the
-                        // manual publish rather than posting standalone
-                        // (the post stays queued for the scheduler).
-                        tracing::info!(
-                            "Thread link: post {} (seq {}) predecessor not published yet — refusing manual publish",
-                            post.id, seq
-                        );
-                        return Err(format!(
-                            "Thread predecessor (part {}) is not published yet. Publish part {} first — or wait for the scheduler, which links parts automatically.",
-                            seq - 1,
-                            seq - 1
-                        ));
-                    }
-                    Err(e) => {
-                        tracing::warn!(
-                            "Thread link: failed to look up predecessor for post {} (seq {}): {e} — publishing as standalone",
-                            post.id, seq
-                        );
-                        None
-                    }
-                }
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-
-        let content = PostContent {
-            content: Self::sanitize_content(&post.content, provider.max_content_length()),
-            media: resolved_media,
-            settings: post.settings.clone(),
-            in_reply_to,
-            // v22 Phase 1 (BUG #15): pass the post's idempotency_key so
-            // providers that support the `Idempotency-Key` HTTP header
-            // (X v2, LinkedIn, Reddit, Slack) can deduplicate a retry
-            // after a crash. Previously this was `None`, meaning a
-            // manual "Post Now" after a stuck-publishing reclaim would
-            // create a duplicate post on the platform.
-            idempotency_key: Some(post.idempotency_key.to_string()),
-            delay_minutes: post.settings.get("delay_minutes")
-                .and_then(|v| v.as_u64())
-                .map(|v| v as u32),
-        };
-
-        // Validate
-        provider
-            .validate_post(&content)
-            .map_err(|e| format!("Content validation failed: {e}"))?;
-
-        provider
-            .validate_media(&content)
-            .map_err(|e| format!("Media validation failed: {e}"))?;
-
-        // Publish
-        let result = provider
-            .publish(&access_token, &content)
-            .await
-            .map_err(|e| format!("Publish failed: {e}"))?;
-
-        // G-01: a provider can report success and hand back no post id.
-        // X's GraphQL CreateTweet answers 200 with no `rest_id` when the
-        // tweet was never created, and the provider maps that to
-        // `platform_post_id: ""` with `status: "published"`. The
-        // scheduler's terminal-state check cannot catch this — the status
-        // literally reads "published" — so the empty id is the only signal
-        // left. Recording that row as published is the false success: the
-        // DB claims the post is live, nothing is live, and no retry runs.
-        //
-        // An empty id is never a publish receipt, so refuse to transition
-        // state and leave the row retryable.
-        if result.platform_post_id.trim().is_empty() {
-            let err = format!(
-                "Publish failed: {} reported success but returned no platform_post_id",
-                post.provider_identifier
-            );
-            tracing::error!("Post {}: {err}", post_id);
-
-            // Same audit contract as the scheduler: one row per publish call.
-            let _ = queries::record_publish_attempt(db, post_id, 1, "failed", Some(&err), Utc::now())
-                .await;
-
-            // Write the reason onto the row while keeping its incoming
-            // state (queued/error) — the post was never published, and the
-            // scheduler or the operator still has to retry it.
-            if let Err(e) = queries::update_post_state(
-                db,
-                post_id,
-                post.state.clone(),
-                None,
-                None,
-                Some(&err),
-            )
-            .await
-            {
-                tracing::error!("Failed to record publish error for post {post_id}: {e}");
-            }
-
-            return Err(err);
-        }
-
-        // Update state
-        queries::update_post_state(
+        // ── The ONE publish pipeline (audit §4.1) ────────────────────
+        // Delegates to the scheduler's engine (token refresh, thread
+        // linking, post_pending/finalize lifecycle, retries with backoff,
+        // outbox durability, first comment, attempt audit, events,
+        // webhooks). Previously this was a second pipeline that lagged:
+        // no post_pending polling, no retries, and every fix had to land
+        // twice (G-01's empty-id guard, B3's integration-scoped thread
+        // link, B8's encryption) — and drifted when it didn't.
+        let opts = crate::scheduler::PublishOpts { manual: true };
+        let outcome = crate::scheduler::publish_post(
             db,
-            post_id,
-            PostState::Published,
-            Some(&result.platform_post_id),
-            result.platform_post_url.as_deref(),
-            None,
+            provider.as_ref(),
+            &post,
+            broadcaster,
+            token_key,
+            opts,
         )
-        .await
-        .map_err(|e| format!("Database error: {e}"))?;
+        .await;
 
-        // Publish first_comment if present (matches scheduler behavior)
-        if let Some(ref comment_text) = post.first_comment {
-            if !comment_text.is_empty() {
-                let comment_content = PostContent {
-                    content: comment_text.clone(),
-                    media: vec![],
-                    settings: serde_json::json!({}),
-                    ..Default::default()
-                };
-                if let Err(e) = provider
-                    .comment(
-                        &access_token,
-                        &result.platform_post_id,
-                        None,
-                        &comment_content,
-                    )
-                    .await
-                {
-                    tracing::warn!("Failed to post first_comment for {}: {e}", post_id);
-                }
+        match outcome {
+            Ok(crate::scheduler::PublishOutcome::Published { platform_post_url }) => {
+                Ok(platform_post_url.unwrap_or_default())
             }
-        }
-
-        let platform_url = result.platform_post_url.unwrap_or_default();
-
-        broadcaster.send(
-            "post_published",
-            &serde_json::json!({
-                "id": post_id.to_string(),
-                "platform_post_url": platform_url,
-                "provider": post.provider_identifier,
-            }),
-        );
-
-        Ok(platform_url)
-    }
-
-    /// Resolve an access token, refreshing if it's about to expire.
-    ///
-    /// SECURITY (B8): the refreshed token is stored via
-    /// `update_integration_token`, the single encrypting writer — an
-    /// encryption failure fails the publish instead of silently
-    /// downgrading at-rest encryption.
-    async fn resolve_token(
-        db: &SqlitePool,
-        provider: &dyn SocialProvider,
-        post: &PostWithIntegration,
-        token_key: Option<[u8; 32]>,
-    ) -> ServiceResult<String> {
-        const TOKEN_REFRESH_BUFFER: i64 = 300; // 5 minutes
-
-        let needs_refresh = match post.token_expires_at {
-            Some(exp) => Utc::now() + chrono::Duration::seconds(TOKEN_REFRESH_BUFFER) >= exp,
-            None => false,
-        };
-
-        if needs_refresh {
-            // B8: refresh tokens are encrypted at rest — decrypt before use.
-            let old_refresh = crate::crypto::maybe_decrypt_token(
-                post.refresh_token.as_deref().unwrap_or(""),
-                token_key.as_ref(),
-            );
-            let token = provider
-                .refresh_token(&old_refresh)
+            Ok(crate::scheduler::PublishOutcome::Skipped) => Err(
+                "Thread predecessor is not published yet — publish the earlier part first"
+                    .to_string(),
+            ),
+            Err(e) => {
+                let err = e.to_string();
+                // The engine already recorded the failed attempt audit row
+                // and fired post.failed. Manual-path state policy: keep the
+                // row's incoming state (queued/error) and attach the
+                // reason — the post was never published, and the operator
+                // still has to retry it.
+                if let Err(write_err) = queries::update_post_state(
+                    db,
+                    post_id,
+                    post.state.clone(),
+                    None,
+                    None,
+                    Some(&err),
+                )
                 .await
-                .map_err(|e| format!("Token refresh failed: {e}"))?;
-
-            queries::update_integration_token(
-                db,
-                post.integration_id,
-                &token.access_token,
-                token.refresh_token.as_deref(),
-                token
-                    .expires_in
-                    .map(|e| Utc::now() + chrono::Duration::seconds(e as i64)),
-                token_key,
-            )
-            .await
-            .map_err(|e| format!("Failed to save refreshed token: {e}"))?;
-
-            Ok(token.access_token)
-        } else {
-            Ok(crate::crypto::maybe_decrypt_token(
-                &post.access_token,
-                token_key.as_ref(),
-            ))
+                {
+                    tracing::error!("Failed to record publish error for post {post_id}: {write_err}");
+                }
+                Err(err)
+            }
         }
     }
 
@@ -518,7 +341,7 @@ impl PostService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::social::{AuthToken, AuthUrlResponse, PageInfo, ProviderError, PublishResult};
+    use crate::social::{AuthToken, AuthUrlResponse, PageInfo, PostContent, ProviderError, PublishResult, SocialProvider};
     use std::sync::Arc;
 
     /// Returns whatever `PublishResult` the test hands it — including the
@@ -658,7 +481,10 @@ mod tests {
         let err = PostService::publish(&pool, &providers, &Broadcaster::new(), user_id, post_id, None)
             .await
             .expect_err("an empty platform_post_id is not a publish receipt");
-        assert!(err.contains("platform_post_id"), "error must name the cause: {err}");
+        assert!(
+            err.contains("no platform post id"),
+            "error must name the cause: {err}"
+        );
 
         let post = queries::get_post(&pool, post_id, user_id)
             .await
@@ -680,12 +506,14 @@ mod tests {
         // Row keeps its retryable incoming state, with the reason attached.
         assert_eq!(post.state, PostState::Queued);
         assert!(
-            post.error_message.as_deref().unwrap_or("").contains("platform_post_id"),
+            post.error_message.as_deref().unwrap_or("").contains("no platform post id"),
             "error_message must explain the failure, got {:?}",
             post.error_message
         );
 
         // Audit trail: one failed attempt, so this is not invisible.
+        // (Unified engine: the final failed attempt is recorded once, with
+        // the engine's MAX_RETRIES attempt number — audit §4.1.)
         let attempts: Vec<(i32, String, Option<String>)> =
             sqlx::query_as("SELECT attempt_number, status, error_message FROM publish_attempts WHERE post_id = ?")
                 .bind(post_id)
@@ -693,9 +521,9 @@ mod tests {
                 .await
                 .expect("attempts");
         assert_eq!(attempts.len(), 1, "expected one attempt row, got {attempts:?}");
-        assert_eq!(attempts[0].0, 1);
+        assert_eq!(attempts[0].0, crate::scheduler::MAX_RETRIES as i32);
         assert_eq!(attempts[0].1, "failed");
-        assert!(attempts[0].2.as_deref().unwrap_or("").contains("platform_post_id"));
+        assert!(attempts[0].2.as_deref().unwrap_or("").contains("no platform post id"));
     }
 
     /// The control: a real id still publishes, and the id is what lands.

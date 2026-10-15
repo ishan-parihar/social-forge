@@ -501,16 +501,21 @@ pub trait SocialProvider: Send + Sync {
     }
 
     /// Post a comment/reply to an existing post
+    ///
+    /// B7: the default delegates to [`Self::reply_to_comment`] with the
+    /// POST id — providers that implement comment-threading replies but
+    /// never implemented `comment()` (IG/FB/LinkedIn/X/Threads/YouTube/
+    /// Bluesky/Mastodon/TikTok) used to hit a hard "not supported" stub,
+    /// so `--first-comment` silently did nothing. Providers with a
+    /// native first-comment API still override this.
     async fn comment(
         &self,
-        _access_token: &str,
-        _post_id: &str,
+        access_token: &str,
+        post_id: &str,
         _last_comment_id: Option<&str>,
-        _post: &PostContent,
+        post: &PostContent,
     ) -> Result<PublishResult, ProviderError> {
-        Err(ProviderError::Api(
-            "Comments not supported by this provider".into(),
-        ))
+        self.reply_to_comment(access_token, post_id, post).await
     }
 
     /// Get analytics for a time range (dashboard)

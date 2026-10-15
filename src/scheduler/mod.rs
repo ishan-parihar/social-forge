@@ -20,8 +20,9 @@ use super::db::queries;
 /// How often to poll for due posts
 const POLL_INTERVAL_SECS: u64 = 30;
 
-/// Maximum publish retries per post
-const MAX_RETRIES: u32 = 3;
+/// Maximum publish retries per post (pub(crate): PostService's tests
+/// pin the unified engine's audit-row contract)
+pub(crate) const MAX_RETRIES: u32 = 3;
 
 /// Max posts processed per scheduler tick
 const DUE_POSTS_LIMIT: i64 = 50;
@@ -491,9 +492,19 @@ async fn process_due_posts(
                 None => None,
             };
 
-            match publish_post(&db_clone, provider_clone.as_ref(), &post_clone, &bcast, tk).await {
-                Ok(()) => {
-                    // Publish succeeded — record success in circuit breaker
+            match publish_post(
+                &db_clone,
+                provider_clone.as_ref(),
+                &post_clone,
+                &bcast,
+                tk,
+                PublishOpts::default(),
+            )
+            .await
+            {
+                Ok(_) => {
+                    // Publish succeeded (or the part was left queued for a
+                    // later tick) — record success in circuit breaker
                     if let Some(ref breaker) = cb {
                         breaker.record_success();
                     }
@@ -788,14 +799,50 @@ async fn write_to_outbox(
 ///   - `Auth` / `Api` / `InvalidRequest`: no retry (won't succeed)
 ///
 /// After `MAX_RETRIES` exhausted, the post is marked `Error` and the
+/// Caller-adjustable behavior for [`publish_post`] (audit §4.1: one
+/// pipeline, two callers).
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct PublishOpts {
+    /// TRUE for user-initiated publishes (REST publish-now, MCP,
+    /// `posts publish`). A manual publish REFUSES when the thread
+    /// predecessor is not published yet instead of silently
+    /// requeueing, and its errors keep the row's incoming state
+    /// (the scheduler's caller claims `publishing` and owns the
+    /// terminal `error` write).
+    pub manual: bool,
+}
+
+/// What [`publish_post`] did.
+#[derive(Debug, Clone)]
+pub(crate) enum PublishOutcome {
+    Published {
+        platform_post_url: Option<String>,
+    },
+    /// Nothing was attempted (thread predecessor not published yet —
+    /// the part was left queued for a later tick).
+    Skipped,
+}
+
+/// Publish a single post end to end: token resolve/refresh, thread
+/// linking, validation, retry loop with post_pending/finalize lifecycle,
+/// terminal-state and empty-id guards, outbox durability, first comment,
+/// attempt audit, events and webhooks.
+///
+/// The ONE publish pipeline (audit §4.1): the scheduler and
+/// PostService::publish (REST publish-now, MCP, CLI) both call it, so a
+/// fix lands once. Error-state policy stays with the caller: the
+/// scheduler's caller marks `publishing → error`; the manual path keeps
+/// the row's incoming state and writes `error_message`.
+///
 /// caller broadcasts `post_failed` + fires webhooks.
-async fn publish_post(
+pub(crate) async fn publish_post(
     db: &SqlitePool,
     provider: &dyn SocialProvider,
     post: &PostWithIntegration,
     broadcaster: &Broadcaster,
     token_key: Option<[u8; 32]>,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    opts: PublishOpts,
+) -> Result<PublishOutcome, Box<dyn std::error::Error + Send + Sync>> {
     // Resolve access token, potentially refreshed
     let mut access_token = resolve_token(db, provider, post, token_key).await?;
 
@@ -835,10 +882,18 @@ async fn publish_post(
                     Some(pid)
                 }
                 Ok(None) => {
-                    // B3: predecessor not published yet — leave this part
-                    // QUEUED for a later tick instead of publishing it
-                    // standalone (a standalone reply-less part breaks the
-                    // thread and can never be re-linked later).
+                    // B3: predecessor not published yet. Scheduler: leave
+                    // this part QUEUED for a later tick (a standalone
+                    // reply-less part breaks the thread). Manual: refuse
+                    // with an actionable message — the caller shows it.
+                    if opts.manual {
+                        return Err(format!(
+                            "Thread predecessor (part {}) is not published yet. Publish part {} first — or wait for the scheduler, which links parts automatically.",
+                            seq - 1,
+                            seq - 1
+                        )
+                        .into());
+                    }
                     tracing::info!(
                         "Thread link: post {} (seq {}) predecessor not published yet — leaving queued",
                         post.id, seq
@@ -852,7 +907,7 @@ async fn publish_post(
                             post.id
                         );
                     }
-                    return Ok(());
+                    return Ok(PublishOutcome::Skipped);
                 }
                 Err(e) => {
                     tracing::warn!(
@@ -1170,12 +1225,32 @@ async fn publish_post(
                             )
                             .await
                         {
+                            // B7: the post is live — a failed first comment
+                            // must not fail it. But it must be VISIBLE: event
+                            // + events_log so the dashboard/operator sees
+                            // the reply that never landed.
                             tracing::warn!("Failed to post first_comment for {}: {e}", post.id);
-                        }
+                            let payload = serde_json::json!({
+                                "id": post.id.to_string(),
+                                "platform_post_id": result.platform_post_id,
+                                "error": e.to_string(),
+                            });
+                            broadcaster.send("first_comment_failed", &payload);
+                            let _ = broadcaster
+                                .send_and_log(db, post.user_id, "first_comment_failed", &payload)
+                                .await;
+                            dispatch_webhook_background(
+                                db,
+                                post.user_id,
+                                "post.first_comment_failed",
+                                &payload,
+                            );                        }
                     }
                 }
 
-                return Ok(());
+                return Ok(PublishOutcome::Published {
+                    platform_post_url: result.platform_post_url,
+                });
             }
             Err(ProviderError::TokenExpired) if !did_refresh => {
                 tracing::warn!(
