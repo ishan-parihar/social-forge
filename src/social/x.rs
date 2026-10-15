@@ -762,20 +762,25 @@ impl XProvider {
         }
     }
 
-    /// Upload one attachment through the chunked INIT/APPEND/FINALIZE flow.
+    /// Upload one attachment. B5: mode-split —
+    /// - Cookie sessions use the web-shaped 1.1 chunked flow, now WITH
+    ///   `Cookie` + `x-csrf-token` (the public web bearer alone is rejected)
+    ///   and 4 MiB base64 segments (the old single-segment APPEND broke any
+    ///   media > 5 MiB and its response was never checked).
+    /// - OAuth tokens use `POST https://api.x.com/2/media/upload` (the
+    ///   v1.1 endpoint is deprecated for API keys), multipart RAW chunks.
     ///
-    /// Returns the `media_id` and whether X has finished processing the bytes.
-    /// FINALIZE answers long before a video is transcoded — it reports
-    /// `processing_info.state: pending|in_progress` while the reel is still
-    /// being encoded, and only `succeeded` once it is playable.
+    /// Returns the `media_id` and whether X has finished processing the
+    /// bytes. FINALIZE answers long before a video is transcoded — it
+    /// reports `processing_info.state: pending|in_progress` while the
+    /// video is still being encoded, and only `succeeded` once playable.
     async fn upload_single_media(
         &self,
-        _access_token: &str,
+        access_token: &str,
         media_url: &str,
         mime_type: &str,
     ) -> Result<(String, bool), ProviderError> {
         let bytes = self.fetch_media_bytes(media_url).await?;
-        let total_bytes = bytes.len();
 
         let media_category = if mime_type.starts_with("video/") {
             "tweet_video"
@@ -785,59 +790,82 @@ impl XProvider {
             "tweet_image"
         };
 
+        if Self::parse_cookie_token(access_token).is_some() {
+            self.upload_media_1_1_cookie(access_token, &bytes, mime_type, media_category)
+                .await
+        } else {
+            self.upload_media_v2(access_token, &bytes, mime_type, media_category)
+                .await
+        }
+    }
+
+    /// B5 (cookie mode): 1.1 chunked upload WITH cookie auth.
+    async fn upload_media_1_1_cookie(
+        &self,
+        access_token: &str,
+        bytes: &[u8],
+        mime_type: &str,
+        media_category: &str,
+    ) -> Result<(String, bool), ProviderError> {
+        let (ct0, cookie_str) = self.effective_cookie_str(access_token);
         let api_base = "https://upload.twitter.com/1.1/media/upload.json";
+        let auth_headers = |req: wreq::RequestBuilder| {
+            req.header(header::COOKIE, cookie_str.clone())
+                .header("x-csrf-token", ct0.clone())
+        };
 
         // INIT
         let init_body = format!(
-            "command=INIT&total_bytes={total_bytes}&media_type={}&media_category={media_category}",
+            "command=INIT&total_bytes={}&media_type={}&media_category={media_category}",
+            bytes.len(),
             urlencoding::encode(mime_type),
         );
-        let init_resp: serde_json::Value = self
-            .http
-            .post(api_base)
-            .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-            .body(init_body)
+        let init_resp = auth_headers(
+            self.http
+                .post(api_base)
+                .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+                .body(init_body),
+        )
+        .send()
+        .await
+        .map_err(|e| ProviderError::Api(format!("Media INIT error: {e}")))?;
+        let init_json = Self::checked_upload_json(init_resp, "INIT").await?;
+        let media_id = Self::media_id_from(&init_json)?;
+
+        // APPEND — 4 MiB base64 segments, each response checked (B5).
+        for (segment_index, chunk) in bytes.chunks(4 * 1024 * 1024).enumerate() {
+            let b64_data =
+                base64::Engine::encode(&base64::engine::general_purpose::STANDARD, chunk);
+            let append_body = format!(
+                "command=APPEND&media_id={media_id}&segment_index={segment_index}&media_data={}",
+                urlencoding::encode(&b64_data),
+            );
+            let append_resp = auth_headers(
+                self.http
+                    .post(api_base)
+                    .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+                    .body(append_body),
+            )
             .send()
             .await
-            .map_err(|e| ProviderError::Api(format!("Media INIT error: {e}")))?
-            .json()
-            .await
-            .map_err(|e| ProviderError::Api(e.to_string()))?;
-
-        let media_id = init_resp["media_id_string"]
-            .as_str()
-            .ok_or_else(|| ProviderError::Api(format!("Twitter INIT failed: {init_resp:?}")))?
-            .to_string();
-
-        // APPEND (base64-encoded per twitter-cli pattern)
-        let b64_data = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &bytes);
-        let append_body = format!(
-            "command=APPEND&media_id={media_id}&segment_index=0&media_data={}",
-            urlencoding::encode(&b64_data),
-        );
-        self.http
-            .post(api_base)
-            .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-            .body(append_body)
-            .send()
-            .await
-            .map_err(|e| ProviderError::Api(format!("Media APPEND error: {e}")))?;
+            .map_err(|e| ProviderError::Api(format!("Media APPEND {segment_index} error: {e}")))?;
+            Self::checked_upload_json(append_resp, &format!("APPEND {segment_index}")).await?;
+        }
 
         // FINALIZE
         let final_body = format!("command=FINALIZE&media_id={media_id}");
-        let finalize_resp: serde_json::Value = self
-            .http
-            .post(api_base)
-            .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-            .body(final_body)
-            .send()
-            .await
-            .map_err(|e| ProviderError::Api(format!("Media FINALIZE error: {e}")))?
-            .json()
-            .await
-            .map_err(|e| ProviderError::Api(e.to_string()))?;
+        let finalize_resp = auth_headers(
+            self.http
+                .post(api_base)
+                .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+                .body(final_body),
+        )
+        .send()
+        .await
+        .map_err(|e| ProviderError::Api(format!("Media FINALIZE error: {e}")))?;
+        let finalize_json = Self::checked_upload_json(finalize_resp, "FINALIZE").await?;
 
-        let ready = finalize_resp
+        let ready = finalize_json
             .pointer("/processing_info/state")
             .and_then(|s| s.as_str())
             .map(|state| !matches!(state, "pending" | "in_progress"))
@@ -847,6 +875,141 @@ impl XProvider {
         }
 
         Ok((media_id, ready))
+    }
+
+    /// B5 (OAuth mode): v2 upload at api.x.com — v1.1 is deprecated for
+    /// API-key auth. INIT/APPEND(multipart raw)/FINALIZE, 4 MiB segments.
+    async fn upload_media_v2(
+        &self,
+        access_token: &str,
+        bytes: &[u8],
+        mime_type: &str,
+        media_category: &str,
+    ) -> Result<(String, bool), ProviderError> {
+        let api_base = "https://api.x.com/2/media/upload";
+        let bearer = format!("Bearer {access_token}");
+
+        // INIT
+        let init_json: serde_json::Value = self
+            .http
+            .post(api_base)
+            .header(header::AUTHORIZATION, &bearer)
+            .json(&serde_json::json!({
+                "command": "INIT",
+                "media_type": mime_type,
+                "total_bytes": bytes.len(),
+                "media_category": media_category,
+            }))
+            .send()
+            .await
+            .map_err(|e| ProviderError::Api(format!("Media INIT error: {e}")))?
+            .json()
+            .await
+            .map_err(|e| ProviderError::Api(e.to_string()))?;
+        let media_id = Self::media_id_from(&init_json)?;
+
+        // APPEND — multipart RAW chunks (≤5 MiB; 4 MiB is safe).
+        // wreq's RequestBuilder has no .multipart(), so the body is
+        // assembled by hand (boring, dependency-free).
+        for (segment_index, chunk) in bytes.chunks(4 * 1024 * 1024).enumerate() {
+            let boundary = format!("sf-upload-{}", uuid::Uuid::new_v4().simple());
+            let mut body: Vec<u8> = Vec::with_capacity(chunk.len() + 512);
+            for (name, value) in [
+                ("command", "APPEND"),
+                ("media_id", media_id.as_str()),
+                ("segment_index", segment_index.to_string().as_str()),
+            ] {
+                body.extend_from_slice(
+                    format!(
+                        "--{boundary}\r\nContent-Disposition: form-data; name=\"{name}\"\r\n\r\n{value}\r\n"
+                    )
+                    .as_bytes(),
+                );
+            }
+            body.extend_from_slice(
+                format!(
+                    "--{boundary}\r\nContent-Disposition: form-data; name=\"media\"; filename=\"media.bin\"\r\nContent-Type: {mime_type}\r\n\r\n"
+                )
+                .as_bytes(),
+            );
+            body.extend_from_slice(chunk);
+            body.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
+
+            let append_resp = self
+                .http
+                .post(api_base)
+                .header(header::AUTHORIZATION, &bearer)
+                .header(
+                    header::CONTENT_TYPE,
+                    format!("multipart/form-data; boundary={boundary}"),
+                )
+                .body(body)
+                .send()
+                .await
+                .map_err(|e| {
+                    ProviderError::Api(format!("Media APPEND {segment_index} error: {e}"))
+                })?;
+            Self::checked_upload_json(append_resp, &format!("APPEND {segment_index}")).await?;
+        }
+
+        // FINALIZE
+        let finalize_json: serde_json::Value = self
+            .http
+            .post(api_base)
+            .header(header::AUTHORIZATION, &bearer)
+            .json(&serde_json::json!({
+                "command": "FINALIZE",
+                "media_id": media_id,
+            }))
+            .send()
+            .await
+            .map_err(|e| ProviderError::Api(format!("Media FINALIZE error: {e}")))?
+            .json()
+            .await
+            .map_err(|e| ProviderError::Api(e.to_string()))?;
+
+        let ready = finalize_json
+            .pointer("/data/processing_info/state")
+            .or_else(|| finalize_json.pointer("/processing_info/state"))
+            .and_then(|s| s.as_str())
+            .map(|state| !matches!(state, "pending" | "in_progress"))
+            .unwrap_or(true);
+        if !ready {
+            tracing::debug!("Media {media_id} still processing; the post goes out as pending");
+        }
+
+        Ok((media_id, ready))
+    }
+
+    /// Read an upload-endpoint response as JSON, failing on any non-2xx
+    /// (B5: APPEND/INIT failures were previously swallowed).
+    async fn checked_upload_json(
+        resp: wreq::Response,
+        what: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let status = resp.status();
+        let text = resp
+            .text()
+            .await
+            .map_err(|e| ProviderError::Api(format!("Media {what} body: {e}")))?;
+        if !status.is_success() {
+            return Err(ProviderError::Api(format!(
+                "X media {what} failed (HTTP {status}): {}",
+                text.chars().take(300).collect::<String>()
+            )));
+        }
+        serde_json::from_str(&text)
+            .map_err(|e| ProviderError::Api(format!("Media {what} JSON: {e}")))
+    }
+
+    /// Media id from either response shape: 1.1 `media_id_string`, v2
+    /// `data.id`.
+    fn media_id_from(json: &serde_json::Value) -> Result<String, ProviderError> {
+        json.get("media_id_string")
+            .and_then(|v| v.as_str())
+            .or_else(|| json.pointer("/data/id").and_then(|v| v.as_str()))
+            .map(str::to_string)
+            .ok_or_else(|| ProviderError::Api(format!("X media upload returned no id: {json:?}")))
     }
 
     /// Upload every attachment. Returns the media ids plus whether *all* of
@@ -1005,23 +1168,38 @@ impl XProvider {
             })
     }
 
-    /// `command=STATUS` on the chunked-upload endpoint — the documented way
-    /// to learn whether X finished encoding an upload.
+    /// `command=STATUS` on the upload endpoint — the documented way to learn
+    /// whether X finished encoding an upload. B5: authenticated per mode
+    /// (cookie sessions send Cookie + csrf; OAuth uses the v2 endpoint with
+    /// Bearer) — the unauthenticated GET used to read as "pending" forever
+    /// or, worse, as a false "succeeded".
     pub(crate) async fn media_processing_state(
         &self,
+        access_token: &str,
         media_id: &str,
     ) -> Result<String, ProviderError> {
-        let resp = self
-            .http
-            .get("https://upload.twitter.com/1.1/media/upload.json")
-            .query(&[
-                ("command", "STATUS"),
-                ("media_id", media_id),
-                ("media_category", "tweet_video"),
-            ])
-            .send()
-            .await
-            .map_err(|e| ProviderError::Api(format!("X media STATUS error: {e}")))?;
+        let resp = if Self::parse_cookie_token(access_token).is_some() {
+            let (ct0, cookie_str) = self.effective_cookie_str(access_token);
+            self.http
+                .get("https://upload.twitter.com/1.1/media/upload.json")
+                .query(&[
+                    ("command", "STATUS"),
+                    ("media_id", media_id),
+                    ("media_category", "tweet_video"),
+                ])
+                .header(header::COOKIE, cookie_str)
+                .header("x-csrf-token", ct0)
+                .send()
+                .await
+        } else {
+            self.http
+                .get("https://api.x.com/2/media/upload")
+                .query(&[("command", "STATUS"), ("media_id", media_id)])
+                .header(header::AUTHORIZATION, format!("Bearer {access_token}"))
+                .send()
+                .await
+        }
+        .map_err(|e| ProviderError::Api(format!("X media STATUS error: {e}")))?;
 
         // An unreadable STATUS reply means we cannot prove the media is ready.
         // Stay pending and let the bounded poll give up loudly rather than
@@ -1036,6 +1214,7 @@ impl XProvider {
             .map_err(|e| ProviderError::Api(format!("X media STATUS body: {e}")))?;
         Ok(json
             .pointer("/processing_info/state")
+            .or_else(|| json.pointer("/data/processing_info/state"))
             .and_then(|s| s.as_str())
             .unwrap_or("succeeded")
             .to_string())
@@ -1598,7 +1777,7 @@ impl SocialProvider for XProvider {
         let detail = self.tweet_detail(access_token, platform_post_id).await?;
         let state = match Self::first_media_id(&detail) {
             None => "succeeded".to_string(),
-            Some(media_id) => self.media_processing_state(&media_id).await?,
+            Some(media_id) => self.media_processing_state(access_token, &media_id).await?,
         };
 
         let status = match state.as_str() {
