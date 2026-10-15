@@ -55,6 +55,14 @@ pub struct ProviderRegistry {
     /// The scheduler acquires a permit before calling `provider.publish()`
     /// and releases it when the publish completes (success or failure).
     concurrency: Arc<HashMap<&'static str, Arc<tokio::sync::Semaphore>>>,
+    /// Boot-resolved per-provider permit budget — sizing source for each
+    /// account's semaphore on first use (C1: breaker + semaphore are per
+    /// ACCOUNT; the provider-level maps remain the fallback for env-token
+    /// calls that have no integration row).
+    concurrency_limits: Arc<HashMap<&'static str, usize>>,
+    /// Insert-on-demand per-account semaphores, key "{provider}:{integration_id}".
+    account_concurrency:
+        Arc<std::sync::Mutex<HashMap<String, Arc<tokio::sync::Semaphore>>>>,
     /// Per-provider circuit breaker. When a provider has N consecutive
     /// failures (e.g. 5xx from the platform API), the circuit opens and
     /// subsequent publish attempts are skipped for a cooldown period
@@ -63,6 +71,12 @@ pub struct ProviderRegistry {
     /// allowed through; if it succeeds, the circuit closes; if it fails,
     /// the cooldown restarts.
     circuit_breakers: Arc<HashMap<&'static str, Arc<CircuitBreaker>>>,
+    /// Boot-resolved (threshold, cooldown) per provider — sizing source
+    /// for per-account breakers.
+    cb_config: Arc<HashMap<&'static str, (u32, i64)>>,
+    /// Insert-on-demand per-account breakers, key "{provider}:{integration_id}".
+    account_breakers:
+        Arc<std::sync::Mutex<HashMap<String, Arc<CircuitBreaker>>>>,
 }
 
 /// Per-provider circuit breaker with three states: closed, open, half-open.
@@ -397,7 +411,9 @@ impl ProviderRegistry {
         // Build per-provider concurrency semaphores. Each provider
         // gets a budget based on its platform's rate-limit profile.
         let mut concurrency: HashMap<&'static str, Arc<tokio::sync::Semaphore>> = HashMap::new();
+        let mut concurrency_limits: HashMap<&'static str, usize> = HashMap::new();
         let mut circuit_breakers: HashMap<&'static str, Arc<CircuitBreaker>> = HashMap::new();
+        let mut cb_config: HashMap<&'static str, (u32, i64)> = HashMap::new();
         for &id in providers.keys() {
             let default = if HIGH_CONCURRENCY_PROVIDERS.contains(&id) {
                 3
@@ -415,6 +431,7 @@ impl ProviderRegistry {
                 .filter(|v: &usize| *v >= 1 && *v <= 20)
                 .unwrap_or(default);
             concurrency.insert(id, Arc::new(tokio::sync::Semaphore::new(limit)));
+            concurrency_limits.insert(id, limit);
 
             // Circuit breaker: 5 consecutive failures → open for 60s.
             // Configurable via PROVIDER_CB_THRESHOLD_{ID} and
@@ -436,6 +453,7 @@ impl ProviderRegistry {
             .filter(|v| *v >= 10 && *v <= 3600)
             .unwrap_or(60);
             circuit_breakers.insert(id, Arc::new(CircuitBreaker::new(threshold, cooldown)));
+            cb_config.insert(id, (threshold, cooldown));
         }
 
         // Tier drift guard: every registered provider must be a known tier
@@ -469,7 +487,11 @@ impl ProviderRegistry {
         Self {
             providers: Arc::new(providers),
             concurrency: Arc::new(concurrency),
+            concurrency_limits: Arc::new(concurrency_limits),
+            account_concurrency: Arc::new(std::sync::Mutex::new(HashMap::new())),
             circuit_breakers: Arc::new(circuit_breakers),
+            cb_config: Arc::new(cb_config),
+            account_breakers: Arc::new(std::sync::Mutex::new(HashMap::new())),
         }
     }
 
@@ -490,14 +512,26 @@ impl ProviderRegistry {
             .keys()
             .map(|id| (*id, Arc::new(tokio::sync::Semaphore::new(1))))
             .collect();
+        let concurrency_limits = map
+            .keys()
+            .map(|id| (*id, 1usize))
+            .collect();
         let circuit_breakers = map
             .keys()
             .map(|id| (*id, Arc::new(CircuitBreaker::new(5, 60))))
             .collect();
+        let cb_config = map
+            .keys()
+            .map(|id| (*id, (5u32, 60i64)))
+            .collect();
         Self {
             providers: Arc::new(map),
             concurrency: Arc::new(concurrency),
+            concurrency_limits: Arc::new(concurrency_limits),
+            account_concurrency: Arc::new(std::sync::Mutex::new(HashMap::new())),
             circuit_breakers: Arc::new(circuit_breakers),
+            cb_config: Arc::new(cb_config),
+            account_breakers: Arc::new(std::sync::Mutex::new(HashMap::new())),
         }
     }
 
@@ -520,6 +554,55 @@ impl ProviderRegistry {
     /// retried on the next tick after the cooldown elapses.
     pub fn circuit_breaker(&self, identifier: &str) -> Option<Arc<CircuitBreaker>> {
         self.circuit_breakers.get(identifier).cloned()
+    }
+
+    /// C1: the concurrency limiter for ONE account. `integration = None`
+    /// (env-token calls with no row) falls back to the provider-level
+    /// semaphore. Per-account entries are created on first use with the
+    /// provider's permit budget — two X accounts each get their own gate,
+    /// so one slow publish on @a does not block @b.
+    pub fn concurrency_for(
+        &self,
+        identifier: &str,
+        integration: Option<uuid::Uuid>,
+    ) -> Option<Arc<tokio::sync::Semaphore>> {
+        let integration = integration?;
+        let limit = self.concurrency_limits.get(identifier).copied()?;
+        let key = format!("{identifier}:{integration}");
+        let mut accounts = self
+            .account_concurrency
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        Some(
+            accounts
+                .entry(key)
+                .or_insert_with(|| Arc::new(tokio::sync::Semaphore::new(limit)))
+                .clone(),
+        )
+    }
+
+    /// C1: the circuit breaker for ONE account. `integration = None` falls
+    /// back to the provider-level breaker. A revoked token opens the breaker
+    /// for THAT account only — the other accounts of the same platform keep
+    /// publishing.
+    pub fn circuit_breaker_for(
+        &self,
+        identifier: &str,
+        integration: Option<uuid::Uuid>,
+    ) -> Option<Arc<CircuitBreaker>> {
+        let integration = integration?;
+        let (threshold, cooldown) = self.cb_config.get(identifier).copied()?;
+        let key = format!("{identifier}:{integration}");
+        let mut accounts = self
+            .account_breakers
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        Some(
+            accounts
+                .entry(key)
+                .or_insert_with(|| Arc::new(CircuitBreaker::new(threshold, cooldown)))
+                .clone(),
+        )
     }
 
     /// List all registered provider identifiers
@@ -546,6 +629,49 @@ impl ProviderRegistry {
 mod tests {
     use super::*;
     use crate::social::test_config;
+
+    /// C1: breakers are per ACCOUNT. Five failures on account A open ITS
+    /// circuit; account B of the same provider keeps publishing, and the
+    /// provider-level breaker (env-token fallback) is untouched.
+    #[test]
+    fn breaker_open_on_one_account_does_not_block_the_other() {
+        let registry = ProviderRegistry::new(&test_config(), None, None);
+        let a = uuid::Uuid::new_v4();
+        let b = uuid::Uuid::new_v4();
+
+        let breaker_a = registry.circuit_breaker_for("x", Some(a)).unwrap();
+        let breaker_b = registry.circuit_breaker_for("x", Some(b)).unwrap();
+        let provider_level = registry.circuit_breaker("x").unwrap();
+
+        // Open A: 5 consecutive failures (the test threshold).
+        for _ in 0..5 {
+            breaker_a.record_failure();
+        }
+        assert!(!breaker_a.allow_request(), "account A must be open");
+        assert!(breaker_b.allow_request(), "account B must stay closed");
+        assert!(
+            provider_level.allow_request(),
+            "provider-level fallback must stay closed"
+        );
+
+        // Distinct instances per account.
+        let breaker_a2 = registry.circuit_breaker_for("x", Some(a)).unwrap();
+        assert!(!breaker_a2.allow_request(), "same key must return the SAME breaker");
+    }
+
+    /// C1: `None` (env-token call, no integration row) falls back to the
+    /// provider-level maps — the old single-gate behavior.
+    #[test]
+    fn concurrency_for_none_falls_back_to_provider_level() {
+        let registry = ProviderRegistry::new(&test_config(), None, None);
+        let a = uuid::Uuid::new_v4();
+        assert!(
+            registry.concurrency_for("x", None).is_none(),
+            "None → callers fall back to concurrency()"
+        );
+        assert!(registry.concurrency_for("x", Some(a)).is_some());
+        assert!(registry.circuit_breaker_for("x", None).is_none());
+    }
 
     /// Registration must not depend on credentials.
     ///

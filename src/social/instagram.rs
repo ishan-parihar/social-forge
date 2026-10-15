@@ -175,8 +175,12 @@ impl SocialProvider for InstagramProvider {
 
         // Return user-level token so pages() + page-picker can discover IG accounts
         Ok(AuthToken {
-            access_token,        // user-level token for page discovery
-            refresh_token: None, // page token will be set when user picks an account
+            // C3: a long-lived FB user token is its own refresh grant
+            // (fb_exchange_token) — store it so refresh_token can extend it.
+            // Without this, the row's expires_at ticks to day 60 and
+            // resolve_token then had only an Err("reconnect") to offer.
+            refresh_token: Some(access_token.clone()),
+            access_token, // user-level token for page discovery
             expires_in,
             provider_user_id: fb_id,
             name: fb_name,
@@ -185,10 +189,25 @@ impl SocialProvider for InstagramProvider {
         })
     }
 
-    async fn refresh_token(&self, _refresh_token: &str) -> Result<AuthToken, ProviderError> {
-        Err(ProviderError::Auth(
-            "Instagram tokens last 60 days. Reconnect the channel.".into(),
-        ))
+    async fn refresh_token(&self, refresh_token: &str) -> Result<AuthToken, ProviderError> {
+        // C3: business-IG tokens are long-lived Facebook user tokens —
+        // extendable via fb_exchange_token (the same flow the Facebook
+        // provider uses). The stored refresh token IS the long-lived token
+        // (see exchange_code).
+        if refresh_token.trim().is_empty() {
+            return Err(ProviderError::Auth(
+                "No stored long-lived token — reconnect the channel once to enable \
+                 automatic refresh"
+                    .into(),
+            ));
+        }
+        crate::social::facebook::exchange_long_lived(
+            &self.http,
+            &self.client_id,
+            &self.client_secret,
+            refresh_token,
+        )
+        .await
     }
 
     async fn publish(

@@ -546,7 +546,12 @@ async fn process_due_posts(
     let mut skipped = 0u64;
     let mut posts_to_publish: Vec<PostWithIntegration> = Vec::new();
     for post in posts {
-        if let Some(cb) = providers.circuit_breaker(&post.provider_identifier) {
+        // C1: the breaker is per ACCOUNT — one revoked X token opens the
+        // circuit for that integration only, not for every X account.
+        if let Some(cb) = providers.circuit_breaker_for(
+            &post.provider_identifier,
+            Some(post.integration_id),
+        ) {
             if !cb.allow_request() {
                 // Circuit is open — push this post back to queued
                 let _ = sqlx::query(
@@ -604,14 +609,19 @@ async fn process_due_posts(
         // 60s, the Reddit/LinkedIn posts waited 60s before they even
         // started. Now each task acquires its own permit inside the
         // spawned future, so all providers make progress in parallel.
-        let semaphore = providers.concurrency(&post.provider_identifier).clone();
+        let semaphore = providers
+            .concurrency_for(&post.provider_identifier, Some(post.integration_id))
+            .or_else(|| providers.concurrency(&post.provider_identifier));
 
         let db_clone = db.clone();
         let provider_clone = provider.clone();
         let post_clone = post.clone();
         let bcast = broadcaster.clone();
         let tk = token_key; // Copy (Option<[u8; 32]> implements Copy)
-        let cb = providers.circuit_breaker(&post.provider_identifier);
+        let cb = providers.circuit_breaker_for(
+            &post.provider_identifier,
+            Some(post.integration_id),
+        );
         inflight_post_ids.insert(post.id);
         join_set.spawn(async move {
             // Acquire the per-provider concurrency permit INSIDE the

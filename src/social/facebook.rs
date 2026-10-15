@@ -29,6 +29,56 @@ impl FacebookProvider {
     }
 }
 
+/// C3: extend a long-lived FB-family user token (fb_exchange_token
+/// grant). A FREE function so the business-Instagram provider shares it
+/// (its tokens are FB user tokens minted by the IG app's own credentials)
+/// without depending on a FacebookProvider instance.
+pub(crate) async fn exchange_long_lived(
+    http: &reqwest::Client,
+    client_id: &str,
+    client_secret: &str,
+    long_token: &str,
+) -> Result<AuthToken, ProviderError> {
+    let params: Vec<(&str, &str)> = vec![
+        ("grant_type", "fb_exchange_token"),
+        ("client_id", client_id),
+        ("client_secret", client_secret),
+        ("fb_exchange_token", long_token),
+    ];
+    let resp = http
+        .get(format!(
+            "https://graph.facebook.com/{GRAPH_VERSION}/oauth/access_token"
+        ))
+        .query(&params)
+        .send()
+        .await?;
+    let status = resp.status();
+    let json: serde_json::Value = resp.json().await?;
+    if !status.is_success() {
+        let msg = json["error"]["message"]
+            .as_str()
+            .unwrap_or("token exchange failed");
+        return Err(ProviderError::Auth(format!(
+            "Facebook token refresh failed (HTTP {status}): {msg}"
+        )));
+    }
+    let access_token = json["access_token"]
+        .as_str()
+        .ok_or_else(|| ProviderError::Auth("refresh returned no access_token".into()))?
+        .to_string();
+    let expires_in = json["expires_in"].as_u64().map(|v| v as u32);
+    Ok(AuthToken {
+        // The new long-lived token doubles as the NEXT refresh grant.
+        refresh_token: Some(access_token.clone()),
+        access_token,
+        expires_in,
+        provider_user_id: String::new(),
+        name: String::new(),
+        username: String::new(),
+        picture: None,
+    })
+}
+
 #[async_trait]
 impl SocialProvider for FacebookProvider {
     fn identifier(&self) -> &'static str {
@@ -172,8 +222,10 @@ impl SocialProvider for FacebookProvider {
         //   GET  /api/integrations/{id}/available-pages  — list all pages
         //   POST /api/integrations/{parent_id}/connect-page/{page_id} — connect a page
         return Ok(AuthToken {
+            // C3: the long-lived token is its own refresh grant — store it
+            // so refresh_token can extend the row before day 60.
+            refresh_token: Some(access_token.clone()),
             access_token, // user-level token for listing pages via me/accounts
-            refresh_token: None,
             expires_in,
             provider_user_id: user_id,
             name: user_name.clone(),
@@ -182,10 +234,24 @@ impl SocialProvider for FacebookProvider {
         });
     }
 
-    async fn refresh_token(&self, _refresh_token: &str) -> Result<AuthToken, ProviderError> {
-        Err(ProviderError::Auth(
-            "Facebook long-lived tokens last 60 days. Reconnect the channel.".into(),
-        ))
+    async fn refresh_token(&self, refresh_token: &str) -> Result<AuthToken, ProviderError> {
+        // C3: extend the long-lived token instead of erroring at day 60.
+        // The stored refresh token IS the long-lived token (exchange_code
+        // stores it); fb_exchange_token mints a fresh ~60-day one.
+        if refresh_token.trim().is_empty() {
+            return Err(ProviderError::Auth(
+                "No stored long-lived token — reconnect the channel once to enable \
+                 automatic refresh"
+                    .into(),
+            ));
+        }
+        crate::social::facebook::exchange_long_lived(
+            &self.http,
+            &self.client_id,
+            &self.client_secret,
+            refresh_token,
+        )
+        .await
     }
 
     /// §8.2: delete a published Facebook post (Graph DELETE /{post_id}).
@@ -1629,6 +1695,22 @@ mod tests {
         // Page tokens have no refresh endpoint — refresh_token() errors by
         // design, so the scheduler must never try to refresh them.
         assert!(!provider().needs_cron_refresh());
+    }
+
+    // ── C3: long-lived-token refresh wiring ────────────────────
+
+    #[tokio::test]
+    async fn refresh_with_no_stored_grant_is_an_honest_reconnect_error() {
+        let err = provider().refresh_token("").await.unwrap_err();
+        match err {
+            ProviderError::Auth(msg) => {
+                assert!(
+                    msg.contains("reconnect the channel once"),
+                    "must tell the operator what to do, got: {msg}"
+                );
+            }
+            other => panic!("must be Auth, got {other:?}"),
+        }
     }
 
     // ── B3: comment read path wiring ────────────────────────

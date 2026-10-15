@@ -434,7 +434,14 @@ impl XProvider {
                 if let Some(first) = errors.first() {
                     let msg = first["message"].as_str().unwrap_or("GraphQL error");
                     if msg.contains("Not authorized") || msg.contains("authentication") {
-                        return Err(ProviderError::TokenExpired);
+                        // C2: GraphQL = cookie-session mode. A dead cookie is
+                        // not refreshable — say so instead of TokenExpired,
+                        // which the scheduler would "refresh" (impossible for
+                        // cookies) and misreport as an expired token.
+                        return Err(ProviderError::Auth(
+                            "X cookie session expired or was revoked — re-import cookies"
+                                .into(),
+                        ));
                     }
                     return Err(ProviderError::Api(msg.to_string()));
                 }
@@ -445,7 +452,12 @@ impl XProvider {
             return Err(ProviderError::RateLimited("X API rate limit".into()));
         }
         if status == 401 || status == 403 {
-            return Err(ProviderError::TokenExpired);
+            // C2: same reasoning as above — cookie sessions are re-imported,
+            // never refreshed.
+            return Err(ProviderError::Auth(
+                "X cookie session expired or was revoked (HTTP {status}) — re-import cookies"
+                    .replace("{status}", &status.as_u16().to_string()),
+            ));
         }
         let msg = json["errors"][0]["message"]
             .as_str()
@@ -3265,14 +3277,30 @@ mod tests {
     }
 
     #[test]
-    fn check_graphql_response_keeps_token_expired_for_auth_errors() {
+    fn check_graphql_response_maps_auth_errors_to_cookie_auth() {
+        // C2: GraphQL = cookie session. A dead cookie is NOT refreshable —
+        // Auth("re-import cookies"), never TokenExpired (the scheduler would
+        // try to "refresh" a cookie session, which is impossible).
         let err = provider()
             .check_graphql_response(
                 wreq::StatusCode::OK,
                 &serde_json::json!({ "errors": [{ "message": "Not authorized" }] }),
             )
             .unwrap_err();
-        assert!(matches!(err, ProviderError::TokenExpired), "got: {err:?}");
+        match err {
+            ProviderError::Auth(msg) => {
+                assert!(msg.contains("re-import cookies"), "got: {msg}")
+            }
+            other => panic!("must be Auth, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn check_graphql_response_maps_401_to_cookie_auth() {
+        let err = provider()
+            .check_graphql_response(wreq::StatusCode::UNAUTHORIZED, &serde_json::json!({}))
+            .unwrap_err();
+        assert!(matches!(err, ProviderError::Auth(_)), "got: {err:?}");
     }
 
     // ── B3: comments (cookie GraphQL + OAuth v2) ────────────
