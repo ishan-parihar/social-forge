@@ -1733,6 +1733,23 @@ impl SocialProvider for XProvider {
         })
     }
 
+    /// §8.2: delete a published tweet — both auth modes (GraphQL DeleteTweet
+    /// for cookie sessions, v2 DELETE /2/tweets/:id for OAuth).
+    async fn delete_published(
+        &self,
+        access_token: &str,
+        platform_post_id: &str,
+    ) -> Result<(), ProviderError> {
+        if platform_post_id.trim().is_empty() {
+            return Err(ProviderError::Api(
+                "post has no platform_post_id — nothing to delete on X".into(),
+            ));
+        }
+        self.delete_tweet(access_token, platform_post_id)
+            .await
+            .map(|_| ())
+    }
+
     async fn publish(
         &self,
         access_token: &str,

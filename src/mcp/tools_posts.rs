@@ -442,6 +442,13 @@ pub struct SchedulePostOutput {
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct DeletePostInput {
     pub id: String,
+    /// §8.2: also DELETE the published post on the platform (one verb for
+    /// both halves). Default false: only the local row is removed. When
+    /// true and the post is published, providers without a delete API
+    /// (edit-restricted platforms) fail loudly instead of silently
+    /// leaving a live post whose row is gone.
+    #[serde(default)]
+    pub delete_from_platform: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
@@ -624,10 +631,61 @@ pub async fn delete_post(
     let user_id = resolve_first_user(state).await?;
     let post_id = Uuid::parse_str(&input.id).map_err(|_| "Invalid post ID".to_string())?;
 
+    // §8.2: one verb for both halves — platform first (so a failure
+    // leaves the row + its platform_post_id intact for retry), then the
+    // local row.
+    if input.delete_from_platform {
+        let post = crate::db::queries::get_post_with_integration(&state.db, post_id, user_id)
+            .await
+            .map_err(|e| format!("DB error: {e}"))?
+            .ok_or_else(|| "Post not found".to_string())?;
+        if post.state != crate::db::models::PostState::Published {
+            return Err(
+                "delete_from_platform=true requires a PUBLISHED post — the local row is the only copy"
+                    .into(),
+            );
+        }
+        let platform_id = post
+            .platform_post_id
+            .as_deref()
+            .map(str::trim)
+            .unwrap_or("")
+            .to_string();
+        if platform_id.is_empty() {
+            return Err("post is published but carries no platform_post_id".into());
+        }
+        let provider = state
+            .providers
+            .get(&post.provider_identifier)
+            .ok_or_else(|| format!("Provider '{}' not found", post.provider_identifier))?
+        ;
+        let token = crate::crypto::maybe_decrypt_token(
+            &post.access_token,
+            state.token_key.as_ref(),
+        );
+        provider
+            .delete_published(&token, &platform_id)
+            .await
+            .map_err(|e| {
+                format!(
+                    "platform delete failed for {} {platform_id} — the local row was KEPT for retry: {e}",
+                    post.provider_identifier
+                )
+            })?;
+    }
+
     PostService::delete(&state.db, &state.broadcast, user_id, post_id).await?;
 
     Ok(Json(crate::mcp::McpJsonValue(
-        serde_json::json!({"success": true, "message": "Post deleted",}),
+        serde_json::json!({
+            "success": true,
+            "deleted_from_platform": input.delete_from_platform,
+            "message": if input.delete_from_platform {
+                "Post deleted on the platform and locally"
+            } else {
+                "Post deleted"
+            },
+        }),
     )))
 }
 

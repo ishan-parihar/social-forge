@@ -409,6 +409,42 @@ impl SocialProvider for LinkedInPageProvider {
         })
     }
 
+    /// §8.2: delete a published LinkedIn Page post (same /v2/rest/posts
+    /// endpoint as personal; the page token authorizes it).
+    async fn delete_published(
+        &self,
+        access_token: &str,
+        platform_post_id: &str,
+    ) -> Result<(), ProviderError> {
+        if platform_post_id.trim().is_empty() {
+            return Err(ProviderError::Api(
+                "post has no platform_post_id — nothing to delete on the page".into(),
+            ));
+        }
+        let url = format!(
+            "https://api.linkedin.com/v2/rest/posts/{}",
+            urlencoding::encode(platform_post_id)
+        );
+        let resp = self
+            .http
+            .delete(&url)
+            .header("Authorization", format!("Bearer {access_token}"))
+            .header("X-Restli-Protocol-Version", "2.0.0")
+            .header("LinkedIn-Version", crate::social::linkedin::LINKEDIN_VERSION)
+            .send()
+            .await?;
+        let status = resp.status();
+        if status.is_success() || status.as_u16() == 204 {
+            Ok(())
+        } else if status == 401 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            Err(ProviderError::Api(format!(
+                "LinkedIn Page delete failed (HTTP {status})"
+            )))
+        }
+    }
+
     async fn publish(
         &self,
         access_token: &str,

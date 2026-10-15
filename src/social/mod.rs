@@ -526,6 +526,34 @@ pub trait SocialProvider: Send + Sync {
         self.reply_to_comment(access_token, post_id, post).await
     }
 
+    /// §8.2: delete a PUBLISHED post on the platform. Default: unsupported
+    /// (providers that have a delete API override — X v2, Reddit, LinkedIn,
+    /// Facebook, WordPress…). Callers surface the failure rather than
+    /// pretending the local row's deletion removed the platform post.
+    async fn delete_published(
+        &self,
+        _access_token: &str,
+        _platform_post_id: &str,
+    ) -> Result<(), ProviderError> {
+        Err(ProviderError::Api(
+            "This provider does not support deleting a published post".into(),
+        ))
+    }
+
+    /// §8.2: edit a PUBLISHED post's content in place. Optional capability —
+    /// most platforms either forbid edits (X, IG) or replace-by-reference
+    /// (LinkedIn, FB). Unsupported by default.
+    async fn edit_published(
+        &self,
+        _access_token: &str,
+        _platform_post_id: &str,
+        _new_content: &PostContent,
+    ) -> Result<PublishResult, ProviderError> {
+        Err(ProviderError::Api(
+            "This provider does not support editing a published post".into(),
+        ))
+    }
+
     /// Get analytics for a time range (dashboard)
     async fn analytics(
         &self,

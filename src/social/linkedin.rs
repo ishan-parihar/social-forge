@@ -692,6 +692,20 @@ impl SocialProvider for LinkedInProvider {
         }
     }
 
+    /// §8.2: delete a published LinkedIn post (shares URN).
+    async fn delete_published(
+        &self,
+        access_token: &str,
+        platform_post_id: &str,
+    ) -> Result<(), ProviderError> {
+        if platform_post_id.trim().is_empty() {
+            return Err(ProviderError::Api(
+                "post has no platform_post_id — nothing to delete on LinkedIn".into(),
+            ));
+        }
+        self.delete_post(access_token, platform_post_id).await
+    }
+
     async fn publish(
         &self,
         access_token: &str,
