@@ -17,6 +17,28 @@ use crate::social::{PostContent, SocialProvider};
 use uuid::Uuid;
 
 use super::db::queries;
+/// F5: the publish path's error type (audit §4.8). Replaces the
+/// `Box<dyn Error + Send + Sync>` the engine used to throw — a concrete
+/// enum the scheduler, PostService and the MCP wrappers can match on
+/// instead of stringifying immediately. `anyhow` stays in main/CLI only.
+#[derive(Debug, thiserror::Error)]
+pub enum PublishError {
+    #[error(transparent)]
+    Provider(#[from] crate::social::ProviderError),
+    #[error("database error: {0}")]
+    Db(#[from] sqlx::Error),
+    #[error("token store failed: {0}")]
+    TokenStore(#[from] crate::db::queries::TokenUpdateError),
+    #[error("{0}")]
+    Other(String),
+}
+
+impl From<String> for PublishError {
+    fn from(s: String) -> Self {
+        PublishError::Other(s)
+    }
+}
+
 /// How often to poll for due posts (upper bound — a `Notify` wake-up or a
 /// nearer next_scheduled_at shortens the sleep, §6.2).
 const POLL_INTERVAL_SECS: u64 = 30;
@@ -312,7 +334,7 @@ impl SchedulerEngine {
 
     /// One tick: claim due posts and spawn their publishes into the
     /// long-lived JoinSet (never awaited here).
-    async fn tick_spawn(&mut self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    async fn tick_spawn(&mut self) -> Result<(), PublishError> {
         process_due_posts(
             &self.db,
             &self.providers,
@@ -353,7 +375,7 @@ async fn proactive_token_refresh(
     db: &SqlitePool,
     providers: &ProviderRegistry,
     token_key: Option<[u8; 32]>,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<(), PublishError> {
     const PROACTIVE_REFRESH_WINDOW_HOURS: i64 = 24;
 
     // Get all providers that need cron refresh
@@ -515,7 +537,7 @@ async fn process_due_posts(
     token_key: Option<[u8; 32]>,
     engine_join_set: &mut tokio::task::JoinSet<uuid::Uuid>,
     engine_inflight: &mut std::collections::HashSet<uuid::Uuid>,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<(), PublishError> {
     let mut posts = queries::get_due_posts(db, DUE_POSTS_LIMIT).await?;
 
     // Decrypt tokens in-place if token_key is configured
@@ -957,7 +979,7 @@ pub(crate) async fn publish_post(
     broadcaster: &Broadcaster,
     token_key: Option<[u8; 32]>,
     opts: PublishOpts,
-) -> Result<PublishOutcome, Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<PublishOutcome, PublishError> {
     // Resolve access token, potentially refreshed
     let mut access_token = resolve_token(db, provider, post, token_key).await?;
 
@@ -1046,6 +1068,20 @@ pub(crate) async fn publish_post(
     let processed_content = {
         let mut c = post.content.clone();
         let provider_id = &post.provider_identifier;
+
+        // E2: UTM auto-tagging. Opt-in per post: set settings.utm_campaign
+        // ("spring-launch") and every plain URL in the content gains
+        // utm_source=<provider>&utm_medium=social&utm_campaign=<campaign>.
+        // Media attachments and short links stay untouched; a URL that
+        // already carries ANY utm_ parameter is not double-tagged.
+        if let Some(campaign) = post
+            .settings
+            .get("utm_campaign")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+        {
+            c = crate::services::short_link::tag_urls_with_utm(&c, provider_id, campaign);
+        }
 
         // Strip links from X if configured
         let strip_x = std::env::var("STRIP_LINKS_FROM_X")
@@ -1587,7 +1623,7 @@ async fn resolve_token(
     provider: &dyn SocialProvider,
     post: &PostWithIntegration,
     token_key: Option<[u8; 32]>,
-) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<String, PublishError> {
     let needs_refresh = match post.token_expires_at {
         Some(exp) => Utc::now() + chrono::Duration::seconds(TOKEN_REFRESH_BUFFER_SECS) >= exp,
         None => false,
@@ -1687,7 +1723,7 @@ fn format_overdue(overdue: chrono::Duration) -> String {
 async fn check_posting_gaps(
     db: &SqlitePool,
     broadcast: &Broadcaster,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<(), PublishError> {
     let stuck = queries::find_stuck_posts(db, POSTING_GAP_GRACE_SECS, POSTING_GAP_LIMIT).await?;
     if stuck.is_empty() {
         return Ok(());
@@ -1828,7 +1864,7 @@ pub fn start_streak_reset(db: SqlitePool, shutdown: tokio::sync::watch::Receiver
 
 async fn reset_expired_streaks(
     db: &SqlitePool,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<(), PublishError> {
     // Reset streaks where no post has been published in the last 48 hours.
     // (48h gives a grace period so a streak isn't lost if you post at 11pm
     // one day and 1am the next — those are ~2h apart but count as 2 days.)

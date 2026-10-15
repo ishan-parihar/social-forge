@@ -3,15 +3,15 @@
 // Also supports stripping links from X posts (X downranks external links).
 
 use regex::Regex;
-use std::sync::OnceLock;
+use std::sync::LazyLock;
 
-static URL_REGEX: OnceLock<Regex> = OnceLock::new();
+static URL_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+    // Match http(s):// URLs that are not already shortened
+    Regex::new(r#"https?://[^\s<>"']+"#).unwrap()
+});
 
 fn url_regex() -> &'static Regex {
-    URL_REGEX.get_or_init(|| {
-        // Match http(s):// URLs that are not already shortened
-        Regex::new(r#"https?://[^\s<>"']+"#).unwrap()
-    })
+    &URL_REGEX
 }
 
 /// Strip all URLs from text. Used for X posts when
@@ -23,6 +23,32 @@ pub fn strip_links(text: &str) -> String {
 /// Check if the text contains any URLs that could be shortened.
 pub fn has_urls(text: &str) -> bool {
     url_regex().is_match(text)
+}
+
+/// E2: append `utm_source=<provider>&utm_medium=social&utm_campaign=<campaign>`
+/// to every plain URL in the text. A URL that already carries ANY utm_
+/// parameter is left untouched — nothing gets double-tagged. Fragment-
+/// bearing URLs are tagged before the `#` so the params reach the server.
+pub fn tag_urls_with_utm(text: &str, provider: &str, campaign: &str) -> String {
+    url_regex()
+        .replace_all(text, |caps: &regex::Captures| {
+            let url = &caps[0];
+            if url.contains("utm_") {
+                return url.to_string();
+            }
+            let (base, frag) = match url.split_once('#') {
+                Some((b, f)) => (b, Some(f)),
+                None => (url, None),
+            };
+            let sep = if base.contains('?') { '&' } else { '?' };
+            let tagged = format!(
+                "{base}{sep}utm_source={provider}&utm_medium=social&utm_campaign={}{}",
+                urlencoding::encode(campaign),
+                frag.map(|f| format!("#{f}")).unwrap_or_default()
+            );
+            tagged
+        })
+        .into_owned()
 }
 
 /// Shorten all URLs in the text using Dub.co API.
@@ -90,4 +116,53 @@ async fn shorten_single_url(
         .to_string();
 
     Ok(short_url)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn utm_tags_a_plain_url() {
+        let out = tag_urls_with_utm("see https://example.com/page now", "linkedin", "launch");
+        assert!(
+            out.contains("https://example.com/page?utm_source=linkedin&utm_medium=social&utm_campaign=launch"),
+            "got: {out}"
+        );
+    }
+
+    #[test]
+    fn utm_appends_with_ampersand_when_query_exists() {
+        let out = tag_urls_with_utm("https://example.com/?id=7", "x", "spring");
+        assert!(
+            out.contains("https://example.com/?id=7&utm_source=x&utm_medium=social&utm_campaign=spring"),
+            "got: {out}"
+        );
+    }
+
+    #[test]
+    fn utm_never_double_tags_and_keeps_fragment_last() {
+        let out = tag_urls_with_utm(
+            "https://example.com/a?utm_campaign=old https://example.com/b#top",
+            "reddit",
+            "launch",
+        );
+        assert!(
+            out.contains("https://example.com/a?utm_campaign=old"),
+            "already-tagged URL must stay untouched: {out}"
+        );
+        assert!(
+            out.contains("utm_campaign=launch#top"),
+            "fragment must stay at the end: {out}"
+        );
+    }
+
+    #[test]
+    fn utm_encodes_campaign_spaces() {
+        let out = tag_urls_with_utm("https://example.com/", "x", "spring launch");
+        assert!(
+            out.contains("utm_campaign=spring%20launch"),
+            "campaign must be URL-encoded: {out}"
+        );
+    }
 }

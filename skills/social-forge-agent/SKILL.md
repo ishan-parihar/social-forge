@@ -101,6 +101,11 @@ Does `social-forge <provider> <action>` exist in the recipes below?
   → NO:  Use `social-forge mcp-call <tool_name> --args '<json>'`
 ```
 
+> v11: `mcp-call`, toolsets (`tools_search`/`tools_enable`), staging v2
+> (`overrides`/`dry_run`/`force`/`next-slot`), the group lifecycle verbs and
+> the per-post `utm_campaign` setting are documented in
+> `references/quick-reference.md` § “MCP tool contracts (v11)".
+
 **Platforms with native CLI posting**:
 - X/Twitter → `social-forge x post "text"`
 - LinkedIn personal → `social-forge linkedin post "text"`

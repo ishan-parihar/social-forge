@@ -249,7 +249,7 @@ social-forge mcp-call <tool_name> --args '{"key":"value"}' # Call any tool
 |----------|---------------|
 | **Auth** | `auth_register`, `auth_login`, `auth_me` |
 | **Integrations** | `integrations_list`, `integrations_list_providers`, `integrations_connect`, `integrations_disconnect`, `integrations_list_targets` |
-| **Posts** | `posts_create`, `posts_list`, `posts_get`, `posts_update`, `posts_delete`, `posts_schedule`, `posts_publish`, `posts_find_slot` |
+| **Posts** | `posts_create`, `posts_list`, `posts_get`, `posts_update`, `posts_delete` (gains `delete_from_platform: true` to also delete the published post on the platform — X/LinkedIn/FB support it; failures keep the local row for retry), `posts_schedule`, `posts_publish`, `posts_find_slot`, `posts_stage` (v2: per-provider `overrides`, `dry_run`, `force`, campaign `group_id`, and `scheduled_at: "next-slot"` for each account's next free slot), `posts_thread`, `posts_unschedule`, `posts_reschedule` (incl. `move_group`), `posts_group`, `posts_validate`, `posts_repeat` (requires `post_id`, `scheduled_at`, `end_date`; creates the copies and returns `group_id` + `post_ids` + `scheduled_dates`) |
 | **Media** | `posts_media_upload`, `posts_media_upload_from_path`, `posts_media_upload_batch`, `posts_media_upload_from_url`, `posts_media_list` |
 | **Feed** | `feed_import`, `feed_list` |
 | **Calendar** | `calendar_get` |

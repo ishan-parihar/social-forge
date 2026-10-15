@@ -599,3 +599,15 @@ social-forge providers --pretty        # See what's connected
 social-forge connect <provider>        # Fix missing provider
 social-forge <cmd> --help              # Fix wrong flags
 ```
+
+---
+
+## MCP tool contracts (v11 — current)
+
+- **`mcp-call`** is real: `social-forge mcp-call <tool> --args '<json>'`. It runs in-process — works while the `serve` daemon holds the writer lock (thin MCP mode).
+- **Multi-account**: most `*_create_*` tools accept `integration` (UUID or `provider:Name`). Empty → first connected account.
+- **Toolsets**: boot default advertises `core` only. `SOCIAL_FORGE_TOOLSETS=x,reddit` pre-enables; at runtime `tools_search {"query":"…"}` finds any tool and reports its set + enabled flag; `tools_enable {"sets":["x"]}` adds sets for the session.
+- **Stage v2**: `posts_stage` takes `overrides` (per-provider content/settings), `dry_run` (readiness only, writes nothing), `force` (stage despite readiness errors), `group_id` (attach to a campaign), `scheduled_at: "next-slot"` (each account's next free slot). Readiness errors REJECT that integration unless forced.
+- **Lifecycle**: one campaign `group_id` works with `posts_reschedule` (`move_group: true` shifts the whole campaign), `posts_unschedule`, `posts_publish`, `posts_delete`, `posts_group`.
+- **Repeat**: `posts_repeat` requires `scheduled_at` + `end_date` (RFC3339) and returns the copies (`group_id`, `post_ids`, `scheduled_dates`).
+- **UTM**: put `"utm_campaign": "…"` in a post's settings — every plain URL in its content gets `utm_source=<platform>&utm_medium=social&utm_campaign=<campaign>` at publish time.

@@ -792,6 +792,9 @@ pub struct StagePostInput {
     /// every other platform (B14).
     pub settings: Option<serde_json::Value>,
     pub scheduled_at: Option<String>,
+    /// "next-slot" (case-insensitive): queue each integration at ITS own
+    /// next free posting slot (per-account posting queue, E4) instead of
+    /// one shared time.
     pub first_comment: Option<String>,
     /// Per-provider overrides (§5.2): {"reddit": {"settings": {"subreddit":
     /// "rust", "title": "…"}}, "x": {"content": "short copy"}}.
@@ -845,13 +848,23 @@ pub async fn stage_post(
         .map(|s| Uuid::parse_str(s).map_err(|_| format!("Invalid integration_id: {s}")))
         .collect::<Result<_, _>>()?;
 
-    let scheduled_at = match &input.scheduled_at {
-        Some(s) => {
-            let dt = chrono::DateTime::parse_from_rfc3339(s)
-                .map_err(|_| "Invalid date format, use ISO8601".to_string())?;
-            Some(dt.with_timezone(&chrono::Utc))
+    let next_slot = input
+        .scheduled_at
+        .as_deref()
+        .is_some_and(|s| s.trim().eq_ignore_ascii_case("next-slot"));
+    let scheduled_at = if next_slot {
+        // E4: per-integration slots are resolved inside stage_post — one
+        // shared time is meaningless for a multi-account queue.
+        None
+    } else {
+        match &input.scheduled_at {
+            Some(s) => {
+                let dt = chrono::DateTime::parse_from_rfc3339(s)
+                    .map_err(|_| "Invalid date format, use ISO8601 or 'next-slot'".to_string())?;
+                Some(dt.with_timezone(&chrono::Utc))
+            }
+            None => None,
         }
-        None => None,
     };
 
     let request = crate::services::staging::StagingRequest {
@@ -864,6 +877,7 @@ pub async fn stage_post(
         overrides: input.overrides.clone().unwrap_or(serde_json::Value::Null),
         dry_run: input.dry_run,
         force: input.force,
+        next_slot,
         group_id: input
             .group_id
             .as_deref()

@@ -27,6 +27,9 @@ pub struct StagingRequest {
     pub integration_ids: Vec<Uuid>,
     pub settings: serde_json::Value,
     pub scheduled_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// E4: queue each integration at its own next free posting slot
+    /// (per-account posting queue) instead of `scheduled_at`.
+    pub next_slot: bool,
     pub first_comment: Option<String>,
     // ── v2 ──
     /// Per-provider overrides: `{"reddit": {"settings": {"subreddit":
@@ -337,22 +340,36 @@ pub async fn stage_post(
     }
 
     // ── Write: ONE transaction for the whole stage (B4).
-    let state = if request.scheduled_at.is_some() {
+    let queued = request.scheduled_at.is_some() || request.next_slot;
+    let state = if queued {
         crate::db::models::PostState::Queued
     } else {
         crate::db::models::PostState::Draft
     };
-    let state_label = if request.scheduled_at.is_some() { "queued" } else { "draft" };
+    let state_label = if queued { "queued" } else { "draft" };
 
     let mut tx = pool.begin().await.map_err(|e| format!("Begin failed: {e}"))?;
     let mut staged = Vec::new();
     for plan in accepted {
+        // E4: next-slot mode — each integration lands on ITS next free slot;
+        // explicit scheduled_at — one shared time; draft — none.
+        let plan_scheduled_at = if request.next_slot {
+            Some(
+                queries::find_next_free_slot(pool, user_id, Some(plan.integration_id))
+                    .await
+                    .ok()
+                    .flatten()
+                    .unwrap_or_else(chrono::Utc::now),
+            )
+        } else {
+            request.scheduled_at
+        };
         let posts = queries::insert_stage_tx(
             &mut tx,
             user_id,
             plan.integration_id,
             &plan.parts,
-            request.scheduled_at,
+            plan_scheduled_at,
             state.clone(),
             group_id,
         )
@@ -418,11 +435,12 @@ mod tests {
             scheduled_at: None,
             first_comment: None,
             overrides,
-            dry_run: false,
-            force,
-            group_id: None,
-        }
+        dry_run: false,
+        force,
+        next_slot: false,
+        group_id: None,
     }
+}
 
     #[test]
     fn overrides_settings_shallow_merge_base_wins_keys_not_in_over() {
@@ -552,6 +570,7 @@ mod tests {
                 overrides: serde_json::Value::Null,
                 dry_run: false,
                 force: false,
+                next_slot: false,
                 group_id: None,
             },
         )
@@ -583,5 +602,71 @@ mod tests {
             assert_eq!(gid, group);
             assert!(seq >= 1);
         }
+    }
+
+    /// E4: schedule="next-slot" queues each integration at ITS own next
+    /// free slot — never a draft, never a missing scheduled_at.
+    #[tokio::test]
+    async fn next_slot_stages_queued_with_a_scheduled_time() {
+        let pool = test_pool().await;
+        let user = queries::create_user(&pool, "slot@test.local", "hash", "Slot")
+            .await
+            .expect("user");
+        let integration = queries::create_integration(
+            &pool,
+            user.id,
+            "bluesky",
+            "Bluesky",
+            "acct-1",
+            "access-token",
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await
+        .expect("integration");
+        let registry = ProviderRegistry::with_providers(vec![(
+            "bluesky",
+            Arc::new(SplitFake) as Arc<dyn SocialProvider>,
+        )]);
+
+        let result = stage_post(
+            &pool,
+            &registry,
+            user.id,
+            StagingRequest {
+                content: "slot me".into(),
+                media: serde_json::json!([]),
+                integration_ids: vec![integration.id],
+                settings: serde_json::json!({}),
+                scheduled_at: None,
+                next_slot: true,
+                first_comment: None,
+                overrides: serde_json::Value::Null,
+                dry_run: false,
+                force: false,
+                group_id: None,
+            },
+        )
+        .await
+        .expect("stage");
+
+        assert_eq!(result.staged[0].state, "queued", "next-slot must queue");
+        let (state, scheduled): (String, Option<i64>) = sqlx::query_as(
+            "SELECT state, scheduled_at FROM posts WHERE user_id = ?",
+        )
+        .bind(user.id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(state, "queued");
+        assert!(
+            scheduled.is_some(),
+            "next-slot must write a concrete scheduled_at"
+        );
     }
 }

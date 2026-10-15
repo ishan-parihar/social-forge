@@ -2878,6 +2878,7 @@ async fn handle_stage_with_state(
         overrides: serde_json::Value::Null,
         dry_run: false,
         force: false,
+        next_slot: false,
         group_id: None,
     };
     crate::services::staging::validate_staging_request(&request)
