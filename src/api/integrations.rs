@@ -472,23 +472,10 @@ pub async fn refresh(
             crypto::maybe_decrypt_token(refresh_token_encrypted, state.token_key.as_ref());
         match provider_obj.refresh_token(&refresh_token).await {
             Ok(new_token) => {
-                let (access_token, refresh_token_to_store) = if let Some(key) = state.token_key {
-                    let enc_access = crypto::encrypt_string(&new_token.access_token, &key)
-                        .map_err(|e| AppError::Internal(format!("Encryption failed: {e}")))?;
-                    let enc_refresh = new_token
-                        .refresh_token
-                        .as_ref()
-                        .map(|rt| crypto::encrypt_string(rt, &key))
-                        .transpose()
-                        .map_err(|e| AppError::Internal(format!("Encryption failed: {e}")))?;
-                    (enc_access, enc_refresh)
-                } else {
-                    (
-                        new_token.access_token.clone(),
-                        new_token.refresh_token.clone(),
-                    )
-                };
-
+                // B8: update_integration_token is the single encrypting
+                // writer — pass plaintext and let it encrypt. Keeping the
+                // plaintext here also means reconnect() below receives a
+                // usable token (it previously got the encrypted blob).
                 let expires_at = new_token
                     .expires_in
                     .map(|e| chrono::Utc::now() + chrono::Duration::seconds(e as i64));
@@ -496,13 +483,14 @@ pub async fn refresh(
                 queries::update_integration_token(
                     &state.db,
                     id,
-                    &access_token,
-                    refresh_token_to_store.as_deref(),
+                    &new_token.access_token,
+                    new_token.refresh_token.as_deref(),
                     expires_at,
+                    state.token_key,
                 )
                 .await?;
 
-                new_access_token = Some(access_token);
+                new_access_token = Some(new_token.access_token.clone());
 
                 if provider_obj.refresh_wait() {
                     tokio::time::sleep(std::time::Duration::from_secs(10)).await;
@@ -542,7 +530,7 @@ pub async fn refresh(
         })?;
 
     sqlx::query(
-        "UPDATE integrations SET profile_name = $1, profile_picture = COALESCE($2, profile_picture), refresh_needed = false, updated_at = NOW() WHERE id = $3 AND user_id = $4",
+        "UPDATE integrations SET profile_name = $1, profile_picture = COALESCE($2, profile_picture), refresh_needed = false, updated_at = unixepoch() WHERE id = $3 AND user_id = $4",
     )
     .bind(&info.name)
     .bind(info.picture.clone())

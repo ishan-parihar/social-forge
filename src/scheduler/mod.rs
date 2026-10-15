@@ -299,24 +299,7 @@ async fn proactive_token_refresh(
             // Attempt token refresh
             match provider.refresh_token(&decrypted_refresh_token).await {
                 Ok(new_token) => {
-                    // Encrypt new tokens if encryption is enabled
-                    let (access_token, refresh_token_to_store) = if let Some(key) = token_key {
-                        let enc_access =
-                            crate::crypto::encrypt_string(&new_token.access_token, &key)?;
-                        let enc_refresh = new_token
-                            .refresh_token
-                            .as_ref()
-                            .map(|rt| crate::crypto::encrypt_string(rt, &key))
-                            .transpose()?;
-                        (enc_access, enc_refresh)
-                    } else {
-                        (
-                            new_token.access_token.clone(),
-                            new_token.refresh_token.clone(),
-                        )
-                    };
-
-                    // Atomic persistence of the rotating refresh token
+                    // B8: update_integration_token encrypts internally.
                     let expires_at = new_token
                         .expires_in
                         .map(|e| Utc::now() + chrono::Duration::seconds(e as i64));
@@ -324,9 +307,10 @@ async fn proactive_token_refresh(
                     queries::update_integration_token(
                         db,
                         integration.id,
-                        &access_token,
-                        refresh_token_to_store.as_deref(),
+                        &new_token.access_token,
+                        new_token.refresh_token.as_deref(),
                         expires_at,
+                        token_key,
                     )
                     .await?;
 
@@ -448,13 +432,19 @@ async fn process_due_posts(
     }
 
     // Tracked task set — we await all of these before returning.
-    let mut join_set: tokio::task::JoinSet<()> = tokio::task::JoinSet::new();
+    let mut join_set: tokio::task::JoinSet<uuid::Uuid> = tokio::task::JoinSet::new();
 
     // v22 Phase 2 (BUG #1): track post IDs that are still in-flight so
     // that on scheduler timeout we can abort the JoinSet AND mark the
     // remaining posts as `error` (instead of leaving them detached in
     // `publishing` state until the next process restart).
-    let mut inflight_post_ids: Vec<uuid::Uuid> = Vec::with_capacity(posts_to_publish.len());
+    // B1: post ids whose tasks are still in flight. Each spawned task
+    // returns its own post id when it completes, so the drain loop below
+    // can remove finished posts BEFORE the timeout arm — a timeout then
+    // only marks the posts that are genuinely still running as `error`
+    // (instead of overwriting already-published ones).
+    let mut inflight_post_ids: std::collections::HashSet<uuid::Uuid> =
+        std::collections::HashSet::with_capacity(posts_to_publish.len());
 
     for post in &posts_to_publish {
         let provider = match providers.get(&post.provider_identifier) {
@@ -488,7 +478,7 @@ async fn process_due_posts(
         let bcast = broadcaster.clone();
         let tk = token_key; // Copy (Option<[u8; 32]> implements Copy)
         let cb = providers.circuit_breaker(&post.provider_identifier);
-        inflight_post_ids.push(post.id);
+        inflight_post_ids.insert(post.id);
         join_set.spawn(async move {
             // Acquire the per-provider concurrency permit INSIDE the
             // spawned task so the scheduler doesn't block on a slow
@@ -529,6 +519,7 @@ async fn process_due_posts(
                     }
                 }
             }
+            post_clone.id
         });
     }
 
@@ -543,9 +534,17 @@ async fn process_due_posts(
         // is generous; most publishes complete in <10s.
         match tokio::time::timeout(Duration::from_secs(300), join_set.join_next()).await {
             Ok(Some(Err(e))) => {
+                // Task panicked mid-publish: its post is (almost always)
+                // still `publishing`. Remove it from the in-flight set and
+                // mark it errored now — the gated write is a no-op if the
+                // task somehow wrote a terminal state before panicking.
                 tracing::error!("Publish task panicked: {e}");
             }
-            Ok(Some(Ok(()))) => { /* task completed normally */ }
+            Ok(Some(Ok(pid))) => {
+                // B1: this post finished on its own — it wrote its own
+                // terminal state. NEVER let the timeout arm touch it.
+                inflight_post_ids.remove(&pid);
+            }
             Ok(None) => break, // JoinSet empty
             Err(_) => {
                 // v22 Phase 2 (BUG #1): on timeout, ABORT all remaining
@@ -560,9 +559,12 @@ async fn process_due_posts(
                     join_set.len()
                 );
                 join_set.abort_all();
-                // Mark the posts we know are still in-flight as error.
-                // (Tasks that completed normally already wrote their own
-                // state; the abort_all above stops the rest.)
+                // B1: only the posts STILL in flight (their tasks never
+                // returned) get marked `error` — posts that finished earlier
+                // in the drain already wrote `published`/`error` and were
+                // removed from this set above. mark_post_error's
+                // `AND state='publishing'` gate is the second line of
+                // defense against racing a just-completed task.
                 for pid in &inflight_post_ids {
                     let _ = mark_post_error(
                         db,
@@ -816,26 +818,14 @@ async fn publish_post(
     // platform_post_id as in_reply_to. This makes the scheduler publish
     // real linked threads on X/Bluesky/Mastodon/Threads instead of
     // standalone posts.
-    let in_reply_to: Option<String> = if let Some(ref group_id) = post.group_id.as_ref() {
+    let in_reply_to: Option<String> = if let Some(group_id) = post.group_id {
         let seq = post.sequence;
         if seq > 1 {
-            // Find the previous post in this thread (sequence - 1)
-            // that was successfully published and has a platform_post_id.
-            match sqlx::query_scalar::<_, Option<String>>(
-                r#"SELECT platform_post_id
-                   FROM posts
-                   WHERE group_id = ?
-                     AND sequence = ?
-                     AND state = 'published'
-                     AND platform_post_id IS NOT NULL
-                   LIMIT 1"#,
-            )
-            .bind(group_id)
-            .bind(seq - 1)
-            .fetch_optional(db)
-            .await
+            // B3: scoped to THIS integration (group_id is shared across
+            // integrations in a multi-platform thread).
+            match queries::find_thread_predecessor(db, group_id, post.integration_id, seq - 1).await
             {
-                Ok(Some(Some(pid))) => {
+                Ok(Some(pid)) => {
                     tracing::info!(
                         "Thread link: post {} (seq {}) replying to platform_post_id {}",
                         post.id,
@@ -844,12 +834,25 @@ async fn publish_post(
                     );
                     Some(pid)
                 }
-                Ok(Some(None)) | Ok(None) => {
-                    tracing::warn!(
-                        "Thread link: post {} (seq {}) has no published predecessor in group {} — publishing as standalone",
-                        post.id, seq, group_id
+                Ok(None) => {
+                    // B3: predecessor not published yet — leave this part
+                    // QUEUED for a later tick instead of publishing it
+                    // standalone (a standalone reply-less part breaks the
+                    // thread and can never be re-linked later).
+                    tracing::info!(
+                        "Thread link: post {} (seq {}) predecessor not published yet — leaving queued",
+                        post.id, seq
                     );
-                    None
+                    if let Err(e) =
+                        queries::update_post_state(db, post.id, PostState::Queued, None, None, None)
+                            .await
+                    {
+                        tracing::warn!(
+                            "Failed to requeue unpublished thread part {}: {e} — skipping this tick",
+                            post.id
+                        );
+                    }
+                    return Ok(());
                 }
                 Err(e) => {
                     tracing::warn!(
@@ -920,21 +923,13 @@ async fn publish_post(
             .map(|v| v as u32),
     };
 
-    // v24-5: sleep before publishing if this is a thread part with a delay.
-    // Only applies to sequence > 1 (the first part has no delay).
-    if post.sequence > 1 {
-        if let Some(delay) = content.delay_minutes {
-            if delay > 0 {
-                tracing::info!(
-                    "Thread delay: sleeping {} minutes before publishing post {} (seq {})",
-                    delay,
-                    post.id,
-                    post.sequence
-                );
-                tokio::time::sleep(Duration::from_secs(delay as u64 * 60)).await;
-            }
-        }
-    }
+    // B2: the in-tick delay sleep is GONE. `create_thread_posts` already
+    // offsets each part's `scheduled_at` by `delay_minutes` (db/queries.rs),
+    // so the post only becomes due when the delay has elapsed. The old
+    // sleep applied the delay a SECOND time — a 30-minute thread part
+    // slept 30 minutes inside the tick, blocking every other due post on
+    // the JoinSet until the 300s drain timeout fired (which, pre-B1,
+    // marked the whole tick `error`).
 
     // Validate content against provider limits before publishing
     provider
@@ -1008,6 +1003,26 @@ async fn publish_post(
                     );
                     last_error = Some(format!(
                         "{} rejected the post after accepting it (status: {})",
+                        post.provider_identifier, result.status
+                    ));
+                    break;
+                }
+
+                // B6: a published result with an EMPTY platform id is not a
+                // publish. X's cookie path returns status:"published" with
+                // rest_id:"" on a malformed GraphQL 200 — recording that as
+                // published stores a post with no platform id, silently
+                // breaking analytics, first-comment, and thread linking.
+                // (PostService::publish has the same guard; this covers the
+                // scheduler path until Phase 2 unifies them into publish_one.)
+                if result.platform_post_id.trim().is_empty() {
+                    tracing::error!(
+                        "Post {} on {} reported published with an empty platform_post_id",
+                        post.id,
+                        post.provider_identifier
+                    );
+                    last_error = Some(format!(
+                        "{} returned status '{}' but no platform post id — not recording as published",
                         post.provider_identifier, result.status
                     ));
                     break;
@@ -1169,30 +1184,23 @@ async fn publish_post(
                     attempt
                 );
                 did_refresh = true;
-                let new_token = match provider
-                    .refresh_token(post.refresh_token.as_deref().unwrap_or(""))
-                    .await
-                {
+                // B8: refresh tokens are encrypted at rest — decrypt first.
+                let old_refresh = crate::crypto::maybe_decrypt_token(
+                    post.refresh_token.as_deref().unwrap_or(""),
+                    token_key.as_ref(),
+                );
+                let new_token = match provider.refresh_token(&old_refresh).await {
                     Ok(t) => {
-                        // Encrypt token before storing if encryption key is configured
-                        let enc_access_token = if let Some(ref k) = token_key {
-                            crate::crypto::encrypt_string(&t.access_token, k).unwrap_or_else(|e| {
-                                tracing::warn!(
-                                    "Failed to encrypt refreshed token for integration {}: {e}",
-                                    post.integration_id
-                                );
-                                t.access_token.clone()
-                            })
-                        } else {
-                            t.access_token.clone()
-                        };
+                        // B8: update_integration_token encrypts internally
+                        // and fails (never downgrades) on encrypt error.
                         queries::update_integration_token(
                             db,
                             post.integration_id,
-                            &enc_access_token,
+                            &t.access_token,
                             t.refresh_token.as_deref(),
                             t.expires_in
                                 .map(|e| Utc::now() + chrono::Duration::seconds(e as i64)),
+                            token_key,
                         )
                         .await?;
                         t.access_token
@@ -1396,49 +1404,60 @@ async fn resolve_token(
 
     if needs_refresh {
         tracing::info!("Token for post {} is expiring, refreshing", post.id);
+        // B8: refresh tokens are encrypted at rest once a key is
+        // configured — decrypt before handing to the provider.
+        let old_refresh = crate::crypto::maybe_decrypt_token(
+            post.refresh_token.as_deref().unwrap_or(""),
+            token_key.as_ref(),
+        );
         let token = provider
-            .refresh_token(post.refresh_token.as_deref().unwrap_or(""))
+            .refresh_token(&old_refresh)
             .await
             .map_err(|e| {
                 crate::error::annotate_scope_loss(&post.provider_identifier, &e.to_string())
             })?;
 
-        // Encrypt before storing if encryption key is configured.
-        let enc_access_token = if let Some(ref k) = token_key {
-            crate::crypto::encrypt_string(&token.access_token, k).unwrap_or_else(|e| {
-                tracing::warn!(
-                    "Failed to encrypt refreshed access token for integration {}: {e}. \
-                         Storing unencrypted (downgrade).",
-                    post.integration_id
-                );
-                token.access_token.clone()
-            })
-        } else {
-            token.access_token.clone()
-        };
-
+        // B8: update_integration_token encrypts internally and fails
+        // (never downgrades) on encrypt error.
         queries::update_integration_token(
             db,
             post.integration_id,
-            &enc_access_token,
+            &token.access_token,
             token.refresh_token.as_deref(),
             token
                 .expires_in
                 .map(|e| Utc::now() + chrono::Duration::seconds(e as i64)),
+            token_key,
         )
         .await?;
 
         Ok(token.access_token)
     } else {
-        Ok(post.access_token.clone())
+        Ok(crate::crypto::maybe_decrypt_token(
+            &post.access_token,
+            token_key.as_ref(),
+        ))
     }
 }
 
-/// Mark a post as error
+/// Mark a post as error — but only while it is still `publishing` (B1).
+///
+/// The scheduler drain-timeout path previously overwrote EVERY in-flight
+/// post, including ones whose task had already written `published` (with
+/// their platform_post_id) — flipping them to `error` while keeping the
+/// platform id, so an operator retry created duplicates on the platform.
+/// Gating on `state = 'publishing'` makes the late error write a no-op for
+/// any post that already reached a terminal state.
 async fn mark_post_error(db: &SqlitePool, post_id: uuid::Uuid, error: &str) {
-    if let Err(e) =
-        queries::update_post_state(db, post_id, PostState::Error, None, None, Some(error)).await
-    {
+    let result = sqlx::query(
+        r#"UPDATE posts SET state = 'error', error_message = ?, updated_at = unixepoch()
+         WHERE id = ? AND state = 'publishing'"#,
+    )
+    .bind(error)
+    .bind(post_id)
+    .execute(db)
+    .await;
+    if let Err(e) = result {
         tracing::error!("Failed to mark post {post_id} as error: {e}");
     }
 }
@@ -1820,5 +1839,84 @@ mod tests {
     #[test]
     fn overdue_label_renders_minutes_under_an_hour() {
         assert_eq!(format_overdue(Duration::minutes(47)), "47m");
+    }
+
+    // ── B1: gated error write (audit 2026-10-14) ────────────────
+
+    /// In-memory pool carrying the real schema, plus a user and an
+    /// integration wired to a seeded post in the given state.
+    async fn pool_with_post(state: &str, platform_post_id: Option<&str>) -> (crate::db::SqlitePool, uuid::Uuid) {
+        let pool = crate::db::create_pool("sqlite::memory:").await.unwrap();
+        let user_id = crate::auth::middleware::DEFAULT_USER_ID;
+        crate::db::ensure_local_user(&pool).await.unwrap();
+        let integration_id = uuid::Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO integrations
+                (id, user_id, provider_identifier, provider_name, internal_id,
+                 access_token, disabled, refresh_needed, posting_times, auth_method)
+             VALUES (?, ?, 'x', 'X', 'x', 'tok', 0, 0, '[]', 'oauth')",
+        )
+        .bind(integration_id)
+        .bind(user_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+        let post_id = uuid::Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO posts
+                (id, user_id, integration_id, state, content, media, settings,
+                 platform_post_id, idempotency_key)
+             VALUES (?, ?, ?, ?, 'content', '[]', '{}', ?, ?)",
+        )
+        .bind(post_id)
+        .bind(user_id)
+        .bind(integration_id)
+        .bind(state)
+        .bind(platform_post_id)
+        .bind(uuid::Uuid::new_v4())
+        .execute(&pool)
+        .await
+        .unwrap();
+        (pool, post_id)
+    }
+
+    /// B1: a post still `publishing` when the drain timeout fires gets its
+    /// error state — the gated write must actually fire.
+    #[tokio::test]
+    async fn timeout_error_write_lands_for_a_still_publishing_post() {
+        let (pool, post_id) = pool_with_post("publishing", None).await;
+        mark_post_error(&pool, post_id, "Publish timed out after 300s").await;
+        let state: String = sqlx::query_scalar("SELECT state FROM posts WHERE id = ?")
+            .bind(post_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(state, "error", "an in-flight post must become error");
+    }
+
+    /// B1: the regression. A post whose task FINISHED (wrote `published`
+    /// with its platform id) before the timeout arm ran used to be
+    /// overwritten to `error` while keeping the platform id — the operator
+    /// republished and duplicated it on the platform. The gate makes the
+    /// late write a no-op.
+    #[tokio::test]
+    async fn timeout_error_write_spares_an_already_published_post() {
+        let (pool, post_id) = pool_with_post("published", Some("tweet-123")).await;
+        mark_post_error(&pool, post_id, "Publish timed out after 300s").await;
+        let (state, pid): (String, Option<String>) =
+            sqlx::query_as("SELECT state, platform_post_id FROM posts WHERE id = ?")
+                .bind(post_id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(
+            state, "published",
+            "a finished post must never be flipped to error by the timeout arm"
+        );
+        assert_eq!(
+            pid.as_deref(),
+            Some("tweet-123"),
+            "platform_post_id must survive"
+        );
     }
 }

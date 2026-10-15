@@ -291,22 +291,35 @@ impl PostService {
         // ── Thread linking ──────────────────────────────────
         // If this post is part of a thread (group_id + sequence > 1),
         // look up the predecessor's platform_post_id for in_reply_to.
-        let in_reply_to: Option<String> = if let Some(ref group_id) = post.group_id.as_ref() {
+        // B3: scoped to this integration — group_id is shared across
+        // integrations in a multi-platform thread.
+        let in_reply_to: Option<String> = if let Some(group_id) = post.group_id {
             let seq = post.sequence;
             if seq > 1 {
-                match sqlx::query_scalar::<_, Option<String>>(
-                    r#"SELECT platform_post_id FROM posts
-                       WHERE group_id = ? AND sequence = ?
-                         AND state = 'published' AND platform_post_id IS NOT NULL
-                       LIMIT 1"#,
-                )
-                .bind(group_id)
-                .bind(seq - 1)
-                .fetch_optional(db)
-                .await
+                match queries::find_thread_predecessor(db, group_id, post.integration_id, seq - 1).await
                 {
-                    Ok(Some(Some(pid))) => Some(pid),
-                    _ => None,
+                    Ok(Some(pid)) => Some(pid),
+                    Ok(None) => {
+                        // B3: predecessor not published yet — refuse the
+                        // manual publish rather than posting standalone
+                        // (the post stays queued for the scheduler).
+                        tracing::info!(
+                            "Thread link: post {} (seq {}) predecessor not published yet — refusing manual publish",
+                            post.id, seq
+                        );
+                        return Err(format!(
+                            "Thread predecessor (part {}) is not published yet. Publish part {} first — or wait for the scheduler, which links parts automatically.",
+                            seq - 1,
+                            seq - 1
+                        ));
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            "Thread link: failed to look up predecessor for post {} (seq {}): {e} — publishing as standalone",
+                            post.id, seq
+                        );
+                        None
+                    }
                 }
             } else {
                 None
@@ -439,11 +452,10 @@ impl PostService {
 
     /// Resolve an access token, refreshing if it's about to expire.
     ///
-    /// SECURITY: when `token_key` is `Some`, the freshly-refreshed
-    /// access token is AES-256-GCM encrypted before being written to
-    /// the DB — matching the scheduler's behavior. Previously this
-    /// path stored the raw token, silently downgrading at-rest
-    /// encryption on every manual publish.
+    /// SECURITY (B8): the refreshed token is stored via
+    /// `update_integration_token`, the single encrypting writer — an
+    /// encryption failure fails the publish instead of silently
+    /// downgrading at-rest encryption.
     async fn resolve_token(
         db: &SqlitePool,
         provider: &dyn SocialProvider,
@@ -458,43 +470,35 @@ impl PostService {
         };
 
         if needs_refresh {
+            // B8: refresh tokens are encrypted at rest — decrypt before use.
+            let old_refresh = crate::crypto::maybe_decrypt_token(
+                post.refresh_token.as_deref().unwrap_or(""),
+                token_key.as_ref(),
+            );
             let token = provider
-                .refresh_token(post.refresh_token.as_deref().unwrap_or(""))
+                .refresh_token(&old_refresh)
                 .await
                 .map_err(|e| format!("Token refresh failed: {e}"))?;
-
-            // Encrypt the access token before storing if encryption is configured.
-            // On encryption failure we fall back to the raw token (with a warning)
-            // rather than failing the publish — matching scheduler behavior.
-            let enc_access_token = if let Some(ref k) = token_key {
-                crate::crypto::encrypt_string(&token.access_token, k)
-                    .unwrap_or_else(|e| {
-                        tracing::warn!(
-                            "Failed to encrypt refreshed access token for integration {}: {e}. \
-                             Storing unencrypted (downgrade).",
-                            post.integration_id
-                        );
-                        token.access_token.clone()
-                    })
-            } else {
-                token.access_token.clone()
-            };
 
             queries::update_integration_token(
                 db,
                 post.integration_id,
-                &enc_access_token,
+                &token.access_token,
                 token.refresh_token.as_deref(),
                 token
                     .expires_in
                     .map(|e| Utc::now() + chrono::Duration::seconds(e as i64)),
+                token_key,
             )
             .await
             .map_err(|e| format!("Failed to save refreshed token: {e}"))?;
 
             Ok(token.access_token)
         } else {
-            Ok(post.access_token.clone())
+            Ok(crate::crypto::maybe_decrypt_token(
+                &post.access_token,
+                token_key.as_ref(),
+            ))
         }
     }
 

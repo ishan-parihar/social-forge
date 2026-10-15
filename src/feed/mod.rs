@@ -112,12 +112,15 @@ async fn try_refresh_and_fetch(
     let expires_at = new_token
         .expires_in
         .map(|e| chrono::Utc::now() + chrono::Duration::seconds(e as i64));
+    // B8: single encrypting writer — pass plaintext + key; it never
+    // downgrades to plaintext on failure.
     if let Err(e) = crate::db::queries::update_integration_token(
         db,
         integration.id,
         &new_access,
         new_token.refresh_token.as_deref(),
         expires_at,
+        token_key,
     )
     .await
     {

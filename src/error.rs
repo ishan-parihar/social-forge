@@ -26,6 +26,11 @@ pub enum AppError {
     #[error("Database error: {0}")]
     Database(#[from] sqlx::Error),
 
+    /// A token store failed its at-rest encryption (or the DB write). Never
+    /// silently downgrades to plaintext — audit B8.
+    #[error("{0}")]
+    TokenUpdate(#[from] crate::db::queries::TokenUpdateError),
+
     #[error("Auth error: {0}")]
     Auth(#[from] jsonwebtoken::errors::Error),
 
@@ -185,6 +190,13 @@ impl IntoResponse for AppError {
             // truth for the human message (provider + integration id + hint).
             AppError::ScopeLost { .. } => (StatusCode::CONFLICT, self.to_string(), "scope_lost"),
             AppError::TokenExpired => (StatusCode::UNAUTHORIZED, "Token expired".into(), "token_expired"),
+            // B8: a failed token store (encrypt or DB write) is an internal
+            // error — the client must retry after the operator fixes the
+            // key/DB; the message is logged server-side.
+            AppError::TokenUpdate(e) => {
+                tracing::error!("Token store failed: {e}");
+                (StatusCode::INTERNAL_SERVER_ERROR, "Token store failed".into(), "token_update")
+            }
             AppError::RateLimited(msg) => (StatusCode::TOO_MANY_REQUESTS, msg.clone(), "rate_limited"),
             AppError::Internal(msg) => {
                 tracing::error!("Internal error: {}", msg);

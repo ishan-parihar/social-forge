@@ -240,19 +240,90 @@ pub async fn get_integration(
     .await
 }
 
+/// Error surfaced by [`update_integration_token`]: a failed DB write, or a
+/// failed encryption — which MUST abort the store instead of downgrading
+/// to plaintext (audit B8).
+#[derive(Debug, thiserror::Error)]
+pub enum TokenUpdateError {
+    #[error("token encryption failed for integration {integration_id}: {reason}")]
+    Encryption {
+        integration_id: Uuid,
+        reason: String,
+    },
+    #[error(transparent)]
+    Db(#[from] sqlx::Error),
+}
+
+/// B3: the `in_reply_to` predecessor for a thread part — the latest
+///   published part with `sequence - 1` in the SAME group AND the SAME
+///   integration.
+///
+/// `group_id` is shared across every integration of a multi-platform
+/// thread (`create_thread_posts`), so scoping to `integration_id` is
+/// what stops part 2 on X from replying to part 1's LinkedIn URN.
+/// Runtime form: inline in two call sites pre-extraction, and the
+/// `?`-bound UUIDs keep it cache-free.
+pub async fn find_thread_predecessor(
+    pool: &SqlitePool,
+    group_id: Uuid,
+    integration_id: Uuid,
+    sequence: i32,
+) -> Result<Option<String>, sqlx::Error> {
+    let row: Option<(Option<String>,)> = sqlx::query_as(
+        r#"SELECT platform_post_id FROM posts
+           WHERE group_id = ? AND integration_id = ? AND sequence = ?
+             AND state = 'published' AND platform_post_id IS NOT NULL
+           LIMIT 1"#,
+    )
+    .bind(group_id)
+    .bind(integration_id)
+    .bind(sequence)
+    .fetch_optional(pool)
+    .await?;
+    Ok(row.and_then(|(pid,)| pid))
+}
+
+/// Persist a (possibly rotated) OAuth token pair for an integration.
+///
+/// Single encrypting writer (audit B8): callers pass PLAINTEXT tokens.
+/// - When `token_key` is set, the access token and any rotated refresh
+///   token are AES-256-GCM encrypted HERE; an encryption failure returns
+///   `Err` — never a silent plaintext downgrade.
+/// - `refresh_token = COALESCE(?, refresh_token)`: providers that do not
+///   rotate refresh tokens (Reddit's are permanent) pass `None` and the
+///   previously stored token survives instead of being wiped.
 pub async fn update_integration_token(
     pool: &SqlitePool,
     id: Uuid,
     access_token: &str,
     refresh_token: Option<&str>,
     token_expires_at: Option<DateTime<Utc>>,
-) -> Result<(), sqlx::Error> {
+    token_key: Option<[u8; 32]>,
+) -> Result<(), TokenUpdateError> {
+    let store_access = match token_key {
+        Some(k) => crate::crypto::encrypt_string(access_token, &k).map_err(|reason| {
+            TokenUpdateError::Encryption {
+                integration_id: id,
+                reason,
+            }
+        })?,
+        None => access_token.to_string(),
+    };
+    let store_refresh = match (token_key, refresh_token) {
+        (Some(k), Some(rt)) => Some(crate::crypto::encrypt_string(rt, &k).map_err(
+            |reason| TokenUpdateError::Encryption {
+                integration_id: id,
+                reason,
+            },
+        )?),
+        (_, rt) => rt.map(str::to_string),
+    };
     sqlx::query!(
-        "UPDATE integrations SET access_token = ?, refresh_token = ?,
+        "UPDATE integrations SET access_token = ?, refresh_token = COALESCE(?, refresh_token),
          token_expires_at = ?, refresh_needed = false, updated_at = unixepoch()
          WHERE id = ?",
-        access_token,
-        refresh_token,
+        store_access,
+        store_refresh,
         token_expires_at,
         id,
     )
@@ -1263,7 +1334,7 @@ pub async fn get_due_posts(
            WHERE p.state = 'queued'
              AND {SCHEDULED_AT_EPOCH} <= unixepoch()
              AND i.disabled = false
-           ORDER BY {SCHEDULED_AT_EPOCH} ASC
+           ORDER BY {SCHEDULED_AT_EPOCH} ASC, p.sequence ASC
            LIMIT ?"#
     );
 
@@ -3509,5 +3580,250 @@ mod g02_tests {
             "the TEXT row is claimed, not silently starved"
         );
         assert_eq!(due[0].id, id);
+    }
+}
+/// Phase-1 regression coverage (audit 2026-10-14):
+/// - B3: thread predecessor lookup is scoped to the integration.
+/// - B8: update_integration_token is the single encrypting writer —
+///   ciphertext at rest, rotated refresh stored, and a provider
+///   that passes no rotated refresh token never wipes the stored one.
+#[cfg(test)]
+mod b03_b08_tests {
+    use super::*;
+
+    async fn fixture() -> (SqlitePool, Uuid) {
+        let pool = crate::db::create_pool("sqlite::memory:").await.unwrap();
+        let user_id = crate::auth::middleware::DEFAULT_USER_ID;
+        crate::db::ensure_local_user(&pool).await.unwrap();
+        (pool, user_id)
+    }
+
+    async fn integration(pool: &SqlitePool, user_id: Uuid, internal_id: &str) -> Uuid {
+        create_integration(
+            pool,
+            user_id,
+            "x",
+            "X",
+            internal_id,
+            "tok",
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await
+        .unwrap()
+        .id
+    }
+
+    async fn published_part(
+        pool: &SqlitePool,
+        user_id: Uuid,
+        integration_id: Uuid,
+        group_id: Uuid,
+        sequence: i32,
+        platform_post_id: &str,
+    ) -> Uuid {
+        let post = create_post(
+            pool,
+            user_id,
+            integration_id,
+            "part",
+            None,
+            &serde_json::json!([]),
+            &serde_json::json!({}),
+            None,
+            Some(PostState::Published),
+            None,
+            sequence,
+        )
+        .await
+        .unwrap();
+        sqlx::query(
+            "UPDATE posts SET group_id = ?, platform_post_id = ?,
+             platform_post_url = ?, published_at = unixepoch() WHERE id = ?",
+        )
+        .bind(group_id)
+        .bind(platform_post_id)
+        .bind(format!("https://example.com/{platform_post_id}"))
+        .bind(post.id)
+        .execute(pool)
+        .await
+        .unwrap();
+        post.id
+    }
+
+    /// B3: one `group_id` is shared across both integrations (exactly what
+    /// `create_thread_posts` produces for a multi-platform thread). Each
+    /// integration's part 2 must resolve to ITS OWN part 1 — without the
+    /// `integration_id` filter the lookup could hand part 2 on account A
+    /// part 1's platform id from account B.
+    #[tokio::test]
+    async fn thread_predecessor_is_scoped_to_the_integration() {
+        let (pool, user_id) = fixture().await;
+        let a = integration(&pool, user_id, "acct-a").await;
+        let b = integration(&pool, user_id, "acct-b").await;
+        let group = Uuid::new_v4();
+
+        published_part(&pool, user_id, a, group, 1, "pid-a-1").await;
+        published_part(&pool, user_id, b, group, 1, "pid-b-1").await;
+
+        let for_a = find_thread_predecessor(&pool, group, a, 1)
+            .await
+            .expect("lookup");
+        let for_b = find_thread_predecessor(&pool, group, b, 1)
+            .await
+            .expect("lookup");
+
+        assert_eq!(
+            for_a.as_deref(),
+            Some("pid-a-1"),
+            "account A must reply to its own part 1"
+        );
+        assert_eq!(
+            for_b.as_deref(),
+            Some("pid-b-1"),
+            "account B must reply to its own part 1"
+        );
+
+        // The other integration's part 1 is NOT a valid predecessor.
+        assert_eq!(
+            find_thread_predecessor(&pool, group, a, 2).await.unwrap(),
+            None,
+            "no seq-2 predecessor exists yet — must be None, not pid-b-1"
+        );
+    }
+
+    /// B3: an unpublished predecessor yields None (the scheduler leaves the
+    /// part queued instead of posting standalone).
+    #[tokio::test]
+    async fn thread_predecessor_none_until_predecessor_publishes() {
+        let (pool, user_id) = fixture().await;
+        let a = integration(&pool, user_id, "acct-a").await;
+        let group = Uuid::new_v4();
+
+        // Part 1 still queued — no platform_post_id yet.
+        create_post(
+            &pool,
+            user_id,
+            a,
+            "part 1",
+            None,
+            &serde_json::json!([]),
+            &serde_json::json!({}),
+            None,
+            Some(PostState::Queued),
+            None,
+            1,
+        )
+        .await
+        .unwrap();
+        sqlx::query("UPDATE posts SET group_id = ? WHERE sequence = 1")
+            .bind(group)
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            find_thread_predecessor(&pool, group, a, 1).await.unwrap(),
+            None,
+            "a queued predecessor must not be linkable"
+        );
+    }
+
+    /// B8: with a key configured, the stored access token is ciphertext
+    /// (decrypts to the plaintext we passed), and a rotated refresh token
+    /// is stored encrypted.
+    #[tokio::test]
+    async fn token_update_encrypts_at_rest_and_stores_rotated_refresh() {
+        let (pool, user_id) = fixture().await;
+        let id = integration(&pool, user_id, "acct-a").await;
+        let key = [7u8; 32];
+
+        update_integration_token(&pool, id, "new-access", Some("rotated-refresh"), None, Some(key))
+            .await
+            .expect("token update");
+
+        let (raw_access, raw_refresh): (String, String) =
+            sqlx::query_as("SELECT access_token, refresh_token FROM integrations WHERE id = ?")
+                .bind(id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+
+        assert_ne!(
+            raw_access, "new-access",
+            "access token must not be plaintext at rest"
+        );
+        assert_eq!(
+            crate::crypto::decrypt_string(&raw_access, &key).unwrap(),
+            "new-access",
+            "ciphertext must decrypt back to the token we passed"
+        );
+        assert_ne!(
+            raw_refresh, "rotated-refresh",
+            "rotated refresh token must not be plaintext at rest"
+        );
+        assert_eq!(
+            crate::crypto::decrypt_string(&raw_refresh, &key).unwrap(),
+            "rotated-refresh"
+        );
+    }
+
+    /// B8: providers that do not rotate refresh tokens (Reddit's are
+    /// permanent) pass `None` — the previously stored token must survive
+    /// (the old write set `refresh_token = NULL` and wiped it).
+    #[tokio::test]
+    async fn token_update_without_rotation_keeps_the_stored_refresh_token() {
+        let (pool, user_id) = fixture().await;
+        let id = integration(&pool, user_id, "acct-a").await;
+        let key = [7u8; 32];
+
+        // Seed a stored refresh token first (rotated write).
+        update_integration_token(&pool, id, "access-1", Some("stored-refresh"), None, Some(key))
+            .await
+            .expect("seed");
+
+        // A later refresh whose provider returned no rotated token.
+        update_integration_token(&pool, id, "access-2", None, None, Some(key))
+            .await
+            .expect("token update");
+
+        let raw_refresh: String =
+            sqlx::query_scalar("SELECT refresh_token FROM integrations WHERE id = ?")
+                .bind(id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        let refresh = crate::crypto::decrypt_string(&raw_refresh, &key)
+            .unwrap_or_else(|_| raw_refresh.clone());
+        assert_eq!(
+            refresh, "stored-refresh",
+            "a non-rotating provider must not wipe the stored refresh token"
+        );
+    }
+
+    /// B8: without a key configured the tokens are stored as-is (the
+    /// single writer must not break unencrypted single-user installs).
+    #[tokio::test]
+    async fn token_update_without_key_stores_plaintext() {
+        let (pool, user_id) = fixture().await;
+        let id = integration(&pool, user_id, "acct-a").await;
+
+        update_integration_token(&pool, id, "plain-access", Some("plain-refresh"), None, None)
+            .await
+            .expect("token update");
+
+        let (access, refresh): (String, String) =
+            sqlx::query_as("SELECT access_token, refresh_token FROM integrations WHERE id = ?")
+                .bind(id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(access, "plain-access");
+        assert_eq!(refresh, "plain-refresh");
     }
 }

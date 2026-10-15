@@ -3,6 +3,24 @@ use async_trait::async_trait;
 use super::*;
 use crate::config::Config;
 
+/// B9: which refresh-token grant `refresh_token` should redeem.
+///
+/// The PER-INTEGRATION token the caller passes (per-account web OAuth)
+/// always wins. The env-configured `REDDIT_REFRESH_TOKEN` is only a
+/// fallback for script-app setups that never went through per-account
+/// web OAuth — previously the argument was ignored entirely, so a
+/// scheduled refresh wrote account A's env grant into account B's
+/// integration row (cross-account token leak).
+/// Reddit refresh tokens are permanent (they do not rotate), so the
+/// same token is returned for storage.
+fn effective_grant_token(old_refresh_token: &str, env_fallback: Option<&str>) -> Option<String> {
+    if !old_refresh_token.is_empty() {
+        Some(old_refresh_token.to_string())
+    } else {
+        env_fallback.map(str::to_string)
+    }
+}
+
 pub struct RedditProvider {
     client_id: String,
     client_secret: String,
@@ -1233,9 +1251,10 @@ impl SocialProvider for RedditProvider {
         ))
     }
 
-    async fn refresh_token(&self, _old_refresh_token: &str) -> Result<AuthToken, ProviderError> {
-        // Use pre-configured REDDIT_REFRESH_TOKEN if available (auth code flow)
-        if let Some(rt) = &self.refresh_token {
+    async fn refresh_token(&self, old_refresh_token: &str) -> Result<AuthToken, ProviderError> {
+        let grant_token = effective_grant_token(old_refresh_token, self.refresh_token.as_deref());
+
+        if let Some(rt) = grant_token {
             let auth = base64::Engine::encode(
                 &base64::engine::general_purpose::STANDARD,
                 format!("{}:{}", self.client_id, self.client_secret),
@@ -1246,7 +1265,7 @@ impl SocialProvider for RedditProvider {
                 .post("https://www.reddit.com/api/v1/access_token")
                 .header("Authorization", format!("Basic {auth}"))
                 .header("User-Agent", "social-forge:v0.1.0 (by /u/social_forge)")
-                .form(&[("grant_type", "refresh_token"), ("refresh_token", rt)])
+                .form(&[("grant_type", "refresh_token"), ("refresh_token", rt.as_str())])
                 .send()
                 .await?;
 
@@ -1256,7 +1275,7 @@ impl SocialProvider for RedditProvider {
                 if let Some(new_token) = json["access_token"].as_str() {
                     return Ok(AuthToken {
                         access_token: new_token.to_string(),
-                        refresh_token: self.refresh_token.clone(),
+                        refresh_token: Some(rt),
                         expires_in: json["expires_in"].as_u64().map(|e| e as u32),
                         provider_user_id: String::new(),
                         name: String::new(),
@@ -1907,6 +1926,32 @@ mod tests {
 
     fn provider() -> RedditProvider {
         RedditProvider::new(&test_config())
+    }
+
+    // ── B9: per-integration refresh grant (audit 2026-10-14) ──────
+
+    #[test]
+    fn b9_refresh_uses_the_caller_token_when_present() {
+        // The per-integration token the scheduler passes (decrypted from
+        // this integration's row) must win over the env fallback.
+        assert_eq!(
+            effective_grant_token("per-account-token", Some("env-token")),
+            Some("per-account-token".to_string())
+        );
+    }
+
+    #[test]
+    fn b9_env_token_is_only_a_fallback_for_script_apps() {
+        // Script-app setups pass no per-integration token.
+        assert_eq!(
+            effective_grant_token("", Some("env-token")),
+            Some("env-token".to_string())
+        );
+    }
+
+    #[test]
+    fn b9_no_token_anywhere_is_none() {
+        assert_eq!(effective_grant_token("", None), None);
     }
 
     // ── B2c: karma analytics fixtures ────────────────────────

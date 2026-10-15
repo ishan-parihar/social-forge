@@ -230,33 +230,20 @@ pub async fn handle_integrations_refresh(
         .await
         .map_err(|e| format!("Token refresh failed: {e}"))?;
 
-    // Encrypt the new access token before storing
-    let enc_access_token = if let Some(ref k) = state.token_key {
-        crate::crypto::encrypt_string(&token.access_token, k).unwrap_or_else(|e| {
-            tracing::warn!("Failed to encrypt refreshed token: {e}");
-            token.access_token.clone()
-        })
-    } else {
-        token.access_token.clone()
-    };
-
+    // B8: update_integration_token encrypts internally (and its
+    // refresh_needed=false write makes the explicit UPDATE below redundant).
     queries::update_integration_token(
         &state.db,
         integration_id,
-        &enc_access_token,
+        &token.access_token,
         token.refresh_token.as_deref(),
         token
             .expires_in
             .map(|e| chrono::Utc::now() + chrono::Duration::seconds(e as i64)),
+        state.token_key,
     )
     .await
     .map_err(|e| format!("Failed to save refreshed token: {e}"))?;
-
-    // Clear the refresh_needed flag
-    let _ = sqlx::query("UPDATE integrations SET refresh_needed = false WHERE id = $1")
-        .bind(integration_id)
-        .execute(&state.db)
-        .await;
 
     Ok(Json(serde_json::json!({
         "integration_id": integration_id.to_string(),
