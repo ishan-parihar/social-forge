@@ -2679,6 +2679,10 @@ async fn handle_post_with_state(
         settings: Some(serde_json::json!({})),
         scheduled_at: schedule.map(String::from),
         first_comment: first_comment.map(String::from),
+        overrides: None,
+        dry_run: false,
+        force: false,
+        group_id: None,
     };
 
     let result = crate::mcp::tools_posts::stage_post(state, &input)
@@ -2767,6 +2771,10 @@ async fn handle_stage_with_state(
         settings: serde_json::json!({}),
         scheduled_at,
         first_comment: first_comment.map(String::from),
+        overrides: serde_json::Value::Null,
+        dry_run: false,
+        force: false,
+        group_id: None,
     };
     crate::services::staging::validate_staging_request(&request)
         .map_err(|e| anyhow::anyhow!("Validation failed: {e}"))?;

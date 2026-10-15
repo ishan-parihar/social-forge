@@ -78,16 +78,6 @@ pub(crate) async fn select_integration(
     })
 }
 
-/// First integration row for a provider (audit §4.2 — the create-tools
-/// need the ROW, not just a token, so the post can be attached to it).
-pub(crate) async fn integration_for_provider(
-    state: &AppState,
-    user_id: Uuid,
-    provider: &str,
-) -> Result<crate::db::models::Integration, String> {
-    select_integration(state, user_id, provider, None).await
-}
-
 /// Publish NOW through the ONE pipeline (audit §4.2): creates a `posts`
 /// row for the integration (queued), then runs the shared engine via
 /// PostService::publish. The platform `*_create_*` tools call this
@@ -500,9 +490,25 @@ pub struct StagePostInput {
     pub content: String,
     pub media: Option<serde_json::Value>,
     pub integration_ids: Vec<String>,
+    /// Base settings shared by every integration. Provider-specific keys
+    /// belong in `overrides` — a Reddit `subreddit` here would leak into
+    /// every other platform (B14).
     pub settings: Option<serde_json::Value>,
     pub scheduled_at: Option<String>,
     pub first_comment: Option<String>,
+    /// Per-provider overrides (§5.2): {"reddit": {"settings": {"subreddit":
+    /// "rust", "title": "…"}}, "x": {"content": "short copy"}}.
+    #[serde(default)]
+    pub overrides: Option<serde_json::Value>,
+    /// Report per-integration readiness and write NOTHING.
+    #[serde(default)]
+    pub dry_run: bool,
+    /// Stage integrations whose readiness reported errors anyway.
+    #[serde(default)]
+    pub force: bool,
+    /// Attach to an existing campaign group_id instead of minting one.
+    #[serde(default)]
+    pub group_id: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
@@ -512,6 +518,9 @@ pub struct StagedPostInfo {
     pub sequence: usize,
     pub total_segments: usize,
     pub state: String,
+    /// Campaign handle for every lifecycle verb (reschedule, unschedule,
+    /// publish-now, delete, status).
+    pub group_id: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
@@ -519,6 +528,12 @@ pub struct StagePostOutput {
     pub staged: Vec<StagedPostInfo>,
     pub total_posts: usize,
     pub warnings: Vec<String>,
+    /// Readiness errors (rejected or force-staged integrations, B14).
+    pub errors: Vec<String>,
+    /// Providers rejected by readiness (empty when force staged them).
+    pub rejected: Vec<String>,
+    /// One handle for the whole multi-platform campaign.
+    pub group_id: Option<String>,
 }
 
 pub async fn stage_post(
@@ -549,6 +564,13 @@ pub async fn stage_post(
         settings: input.settings.clone().unwrap_or(serde_json::json!({})),
         scheduled_at,
         first_comment: input.first_comment.clone(),
+        overrides: input.overrides.clone().unwrap_or(serde_json::Value::Null),
+        dry_run: input.dry_run,
+        force: input.force,
+        group_id: input
+            .group_id
+            .as_deref()
+            .and_then(|g| Uuid::parse_str(g).ok()),
     };
 
     crate::services::staging::validate_staging_request(&request)?;
@@ -565,6 +587,7 @@ pub async fn stage_post(
             sequence: s.sequence,
             total_segments: s.total_segments,
             state: s.state,
+            group_id: Some(s.group_id.to_string()),
         })
         .collect();
 
@@ -572,6 +595,9 @@ pub async fn stage_post(
         staged,
         total_posts: result.total_posts,
         warnings: result.warnings,
+        errors: result.errors,
+        rejected: result.rejected,
+        group_id: result.group_id.map(|g| g.to_string()),
     }))
 }
 

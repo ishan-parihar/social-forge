@@ -502,29 +502,56 @@ pub async fn create_post(
     .await
 }
 
-/// Create thread posts (multiple content parts sharing a group_id)
+/// One part of a thread/stage insert — everything the row needs, so the
+/// thread path and the staging path share ONE insert statement (B4).
+#[derive(Debug, Clone)]
+pub struct ThreadPart {
+    pub content: String,
+    pub media: serde_json::Value,
+    pub settings: serde_json::Value,
+    pub first_comment: Option<String>,
+}
+
+impl ThreadPart {
+    /// Plain text part (legacy create_thread_posts shape): no media, no
+    /// first comment, settings carry only the delay marker.
+    fn text(content: &str, delay_minutes: Option<i64>) -> Self {
+        Self {
+            content: content.to_string(),
+            media: serde_json::Value::Null,
+            settings: match delay_minutes {
+                Some(d) => serde_json::json!({"delay_minutes": d}),
+                None => serde_json::json!({}),
+            },
+            first_comment: None,
+        }
+    }
+}
+
+/// Insert thread parts for every integration inside ONE transaction (B4:
+/// a mid-loop failure can no longer leave half the platforms staged).
+/// Shared by create_thread_posts and the staging service.
 #[expect(
     clippy::too_many_arguments,
-    reason = "Thread post fields: all bound to DB columns, no nesting grouping available"
+    reason = "Thread insert fields: all bound to DB columns, no nesting grouping available"
 )]
-pub async fn create_thread_posts(
-    pool: &SqlitePool,
+async fn insert_thread_posts_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
     user_id: Uuid,
     integration_ids: &[Uuid],
-    content_parts: &[String],
+    parts: &[ThreadPart],
     scheduled_at: Option<DateTime<Utc>>,
-    state: Option<PostState>,
+    state: PostState,
     group_id: Uuid,
     delay_minutes: Option<i64>,
 ) -> Result<Vec<Post>, sqlx::Error> {
-    let st = state.unwrap_or(PostState::Draft);
-    let mut tx = pool.begin().await?;
     let mut posts = Vec::new();
-
-    for (seq, part) in (1i32..).zip(content_parts.iter()) {
+    for (seq, part) in (1i32..).zip(parts.iter()) {
         // Apply per-part delay: each part's scheduled_at is offset by
         // (seq - 1) * delay_minutes. Part 1 publishes at scheduled_at,
-        // part 2 at scheduled_at + delay, part 3 at scheduled_at + 2*delay, etc.
+        // part 2 at scheduled_at + delay, part 3 at scheduled_at + 2*delay,
+        // etc. (B2: the delay lives ONLY here — the scheduler no longer
+        // sleeps it a second time.)
         let part_scheduled_at = scheduled_at.map(|base| {
             if let Some(delay) = delay_minutes {
                 if delay > 0 && seq > 1 {
@@ -553,29 +580,84 @@ pub async fn create_thread_posts(
             .bind(Uuid::new_v4())
             .bind(user_id)
             .bind(integration_id)
-            .bind(part)
+            .bind(&part.content)
             .bind(None::<&str>)
-            .bind(&serde_json::Value::Null)
-            // v24-5: store delay_minutes in settings so the scheduler can
-            // read it and sleep between thread parts.
-            .bind(match delay_minutes {
-                Some(d) => serde_json::json!({"delay_minutes": d}),
-                None => serde_json::json!({}),
-            })
+            .bind(&part.media)
+            .bind(&part.settings)
             .bind(part_scheduled_at.map(EpochUtc::from))
-            .bind(&st)
-            .bind(None::<&str>)
+            .bind(&state)
+            .bind(part.first_comment.as_deref())
             .bind(seq)
             .bind(group_id)
             .bind(Uuid::new_v4())
-            .fetch_one(&mut *tx)
+            .fetch_one(&mut **tx)
             .await?;
             posts.push(post);
         }
     }
+    Ok(posts)
+}
 
+/// Create thread posts (multiple content parts sharing a group_id)
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Thread post fields: all bound to DB columns, no nesting grouping available"
+)]
+pub async fn create_thread_posts(
+    pool: &SqlitePool,
+    user_id: Uuid,
+    integration_ids: &[Uuid],
+    content_parts: &[String],
+    scheduled_at: Option<DateTime<Utc>>,
+    state: Option<PostState>,
+    group_id: Uuid,
+    delay_minutes: Option<i64>,
+) -> Result<Vec<Post>, sqlx::Error> {
+    let st = state.unwrap_or(PostState::Draft);
+    let parts: Vec<ThreadPart> = content_parts
+        .iter()
+        .map(|p| ThreadPart::text(p, delay_minutes))
+        .collect();
+    let mut tx = pool.begin().await?;
+    let posts = insert_thread_posts_tx(
+        &mut tx,
+        user_id,
+        integration_ids,
+        &parts,
+        scheduled_at,
+        st,
+        group_id,
+        delay_minutes,
+    )
+    .await?;
     tx.commit().await?;
     Ok(posts)
+}
+
+/// B4: staging service entry — per-integration content/settings/media inside
+/// ONE transaction, all rows sharing the stage's campaign `group_id`.
+pub async fn insert_stage_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    user_id: Uuid,
+    integration_id: Uuid,
+    parts: &[ThreadPart],
+    scheduled_at: Option<DateTime<Utc>>,
+    state: PostState,
+    group_id: Uuid,
+) -> Result<Vec<Post>, sqlx::Error> {
+    // Stage splits carry no inter-part delay: the parts become due together
+    // and the B3 predecessor gate publishes them in sequence order.
+    insert_thread_posts_tx(
+        tx,
+        user_id,
+        &[integration_id],
+        parts,
+        scheduled_at,
+        state,
+        group_id,
+        None,
+    )
+    .await
 }
 
 /// Get all posts sharing a group_id (for thread display)
