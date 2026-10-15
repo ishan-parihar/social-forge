@@ -234,10 +234,11 @@ async fn find_x_token(state: &AppState, user_id: Uuid) -> Result<(String, String
         .filter(|i| i.provider_identifier == "x")
         .collect();
 
-    if let Some(preferred) = x_integrations
-        .iter()
-        .find(|i| i.access_token.starts_with('{'))
-    {
+    if let Some(preferred) = x_integrations.iter().find(|i| {
+        // §6: explicit column first; the JSON-blob shape sniff stays as a
+        // fallback for rows connected before auth_method was written.
+        i.auth_method == "cookie" || i.access_token.starts_with('{')
+    }) {
         let token = crypto::maybe_decrypt_token(&preferred.access_token, state.token_key.as_ref());
         return Ok((token, preferred.internal_id.clone()));
     }

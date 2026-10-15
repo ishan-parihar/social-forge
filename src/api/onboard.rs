@@ -1027,7 +1027,7 @@ pub async fn x_cookies_submit(
         None,
         profile_picture.as_deref(),
         None,
-        None, // auth_method
+        Some("cookie"), // §6: explicit auth_mode — dispatch reads this, not the blob shape
     )
     .await?;
 
@@ -1120,7 +1120,7 @@ pub async fn x_cookies_import(
         None,
         profile_picture.as_deref(),
         None,
-        None, // auth_method
+        Some("cookie"), // §6: explicit auth_mode — dispatch reads this, not the blob shape
     )
     .await?;
 
@@ -1341,7 +1341,7 @@ pub async fn reddit_cookies_submit(
         None,
         profile_picture.as_deref(),
         None,
-        None,
+        Some("cookie"), // §6: explicit auth_mode
     )
     .await?;
 
@@ -1427,7 +1427,7 @@ pub async fn reddit_cookies_import(
         None,
         profile_picture.as_deref(),
         None,
-        None,
+        Some("cookie"), // §6: explicit auth_mode
     )
     .await?;
 

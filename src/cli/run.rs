@@ -466,10 +466,10 @@ pub(crate) async fn find_x_token(
         .filter(|i| i.provider_identifier == "x")
         .collect();
 
-    if let Some(preferred) = x_integrations
-        .iter()
-        .find(|i| i.access_token.starts_with('{'))
-    {
+    if let Some(preferred) = x_integrations.iter().find(|i| {
+        // §6: explicit column first; shape sniff as legacy-row fallback.
+        i.auth_method == "cookie" || i.access_token.starts_with('{')
+    }) {
         let token = preferred.access_token.clone();
         let token = crate::crypto::maybe_decrypt_token(&token, state.token_key.as_ref());
         return Ok((token, preferred.internal_id.clone()));
@@ -499,10 +499,10 @@ pub(crate) async fn find_reddit_token(state: &AppState, user_id: Uuid) -> anyhow
         .filter(|i| i.provider_identifier == "reddit")
         .collect();
 
-    if let Some(preferred) = reddit_integrations
-        .iter()
-        .find(|i| i.access_token.starts_with('{'))
-    {
+    if let Some(preferred) = reddit_integrations.iter().find(|i| {
+        // §6: explicit column first; shape sniff as legacy-row fallback.
+        i.auth_method == "cookie" || i.access_token.starts_with('{')
+    }) {
         let token = preferred.access_token.clone();
         let token = crate::crypto::maybe_decrypt_token(&token, state.token_key.as_ref());
         return Ok(token);
@@ -1223,21 +1223,21 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
                             .unwrap_or("")
                             .to_string();
 
-                        crate::db::queries::create_integration(
-                            &state.db,
-                            user_id,
-                            "x",
-                            "X (Twitter)",
-                            &id,
-                            &token_str,
-                            None,
-                            None,
-                            Some(name),
-                            None,
-                            avatar,
-                            None,
-                            None,
-                        )
+                         crate::db::queries::create_integration(
+                             &state.db,
+                             user_id,
+                             "x",
+                             "X (Twitter)",
+                             &id,
+                             &token_str,
+                             None,
+                             None,
+                             Some(name),
+                             None,
+                             avatar,
+                             None,
+                             Some("cookie"), // §6: explicit auth_mode
+                         )
                         .await?;
 
                         output_json(&serde_json::json!({
@@ -1309,7 +1309,7 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
                                 .and_then(|s| s.split('?').next())
                                 .map(String::from);
 
-                            crate::db::queries::create_integration(
+                             crate::db::queries::create_integration(
                                 &state.db,
                                 user_id,
                                 "reddit",
@@ -1322,7 +1322,7 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
                                 None,
                                 icon.as_deref(),
                                 None,
-                                None,
+                                Some("cookie"), // §6: explicit auth_mode
                             )
                             .await?;
 

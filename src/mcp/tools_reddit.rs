@@ -123,10 +123,10 @@ async fn find_reddit_token(state: &AppState, user_id: Uuid) -> Result<String, St
         .collect();
 
     // Priority 1: DB-stored cookie tokens (JSON blobs with reddit_session)
-    if let Some(preferred) = reddit_integrations
-        .iter()
-        .find(|i| i.access_token.starts_with('{'))
-    {
+    if let Some(preferred) = reddit_integrations.iter().find(|i| {
+        // §6: explicit column first; shape sniff as legacy-row fallback.
+        i.auth_method == "cookie" || i.access_token.starts_with('{')
+    }) {
         let token = crypto::maybe_decrypt_token(&preferred.access_token, state.token_key.as_ref());
         return Ok(token);
     }
