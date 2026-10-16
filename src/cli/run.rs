@@ -343,6 +343,32 @@ fn systemctl(args: &[&str]) -> anyhow::Result<()> {
 
 // ── MCP tool dispatch (§5.3) ────────────────────────
 
+/// `social-forge mcp-tools [--pretty]` — the shell path the agent skill
+/// documents (`social-forge mcp-tools --pretty`) and that did not exist
+/// until now. Plain output lists names (one per line, scriptable);
+/// --pretty aligns "name — description" and prints the count.
+async fn handle_mcp_tools_with_state(state: &AppState, pretty: bool) -> anyhow::Result<()> {
+    let _ = state; // the tool router is static — no DB needed.
+    let mut tools = crate::mcp::SocialForgeMcpServer::router().list_all();
+    tools.sort_by(|a, b| a.name.cmp(&b.name));
+    if pretty {
+        let width = tools.iter().map(|t| t.name.len()).max().unwrap_or(0);
+        for t in &tools {
+            println!(
+                "{:<width$}  {}",
+                t.name,
+                t.description.as_deref().unwrap_or("")
+            );
+        }
+        println!("\n{} tools", tools.len());
+    } else {
+        for t in &tools {
+            println!("{}", t.name);
+        }
+    }
+    Ok(())
+}
+
 /// Call one MCP tool by name, in-process — the shell path the agent
 /// skill documents (`social-forge mcp-call <tool> --args '<json>'`,
 /// ×116 references in skills/quick-reference.md) and that did not
@@ -3445,6 +3471,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
 
         Command::Providers => handle_providers_with_state(&state).await,
         Command::McpCall { tool, args } => handle_mcp_call_with_state(&state, &tool, &args).await,
+        Command::McpTools { pretty } => handle_mcp_tools_with_state(&state, pretty).await,
         Command::Audit => handle_audit_with_state(&state).await,
         Command::Connect { provider } => handle_connect_with_state(&state, &provider).await,
         Command::Doctor => handle_doctor_with_state(&state).await,

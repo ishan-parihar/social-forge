@@ -311,3 +311,90 @@ pub async fn handle_tb_unpin_message(
     )
     .await
 }
+
+// ─── E8: bot-side chat/channel discovery ─────────────────────────
+//
+// The Bot API has no "list my chats" endpoint — the only bot-visible chats
+// are the ones that produced an update. This sweep pages through pending
+// getUpdates (including channel_post) and collects the DISTINCT chats.
+// NOTE: paging with a rising offset CONFIRMS (consumes) updates, the same
+// as tb_get_updates — for full discovery regardless of activity, use the
+// user session's tu_list_dialogs.
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct TbListChatsInput {
+    pub token_index: usize,
+}
+
+pub async fn handle_tb_list_chats(
+    state: &AppState,
+    input: &TbListChatsInput,
+) -> Result<Json<TbApiOutput>, String> {
+    let tokens = get_telegram_bot_tokens(state);
+    let token = tokens.get(input.token_index).ok_or_else(|| {
+        format!(
+            "Token index {} out of range ({} bots)",
+            input.token_index,
+            tokens.len()
+        )
+    })?;
+    let http = reqwest::Client::new();
+
+    let mut chats = serde_json::Map::new();
+    let mut offset: i64 = 0;
+    const PAGES: i32 = 10;
+    for _ in 0..PAGES {
+        let resp = http
+            .post(format!(
+                "https://api.telegram.org/bot{token}/getUpdates"
+            ))
+            .json(&serde_json::json!({
+                "offset": offset,
+                "limit": 100,
+                "allowed_updates": ["message", "edited_message",
+                                    "channel_post", "edited_channel_post"],
+            }))
+            .send()
+            .await
+            .map_err(|e| format!("Request failed: {e}"))?;
+        let json: serde_json::Value =
+            resp.json().await.map_err(|e| format!("Parse failed: {e}"))?;
+        if !json["ok"].as_bool().unwrap_or(false) {
+            return Err(format!(
+                "Telegram API: {}",
+                json["description"].as_str().unwrap_or("unknown error")
+            ));
+        }
+        let updates = json["result"].as_array().cloned().unwrap_or_default();
+        if updates.is_empty() {
+            break;
+        }
+        for u in &updates {
+            offset = offset.max(u["update_id"].as_i64().unwrap_or(offset)) + 1;
+            // Both message and channel_post carry a `chat` object.
+            let chat = u
+                .pointer("/message/chat")
+                .or_else(|| u.pointer("/edited_message/chat"))
+                .or_else(|| u.pointer("/channel_post/chat"))
+                .or_else(|| u.pointer("/edited_channel_post/chat"));
+            if let Some(chat) = chat {
+                let id = chat["id"].as_i64().unwrap_or_default();
+                if id != 0 {
+                    chats.insert(id.to_string(), chat.clone());
+                }
+            }
+        }
+        if updates.len() < 100 {
+            break;
+        }
+    }
+
+    Ok(Json(TbApiOutput {
+        data: serde_json::json!({
+            "ok": true,
+            "chats": chats.values().collect::<Vec<_>>(),
+            "count": chats.len(),
+            "note": "Bot API only sees chats that produced an update (the sweep consumed them). For full channel discovery use tu_list_dialogs with the user session.",
+        }),
+    }))
+}

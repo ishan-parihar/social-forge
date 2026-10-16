@@ -1947,6 +1947,26 @@ impl SocialForgeMcpServer {
             .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
+    #[tool(description = "Post a message via a Discord webhook URL — zero setup, no bot or OAuth needed. Optionally override username/avatar; wait=true returns the sent message id.")]
+    pub async fn di_webhook_post(
+        &self,
+        params: Parameters<tools_discord::DiWebhookPostInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_discord::handle_di_webhook_post(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Inspect a Discord webhook URL: validates it and returns the name, channel and guild it posts to. Use before di_webhook_post to verify a URL.")]
+    pub async fn di_webhook_info(
+        &self,
+        params: Parameters<tools_discord::DiWebhookInfoInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_discord::handle_di_webhook_info(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
     // ── WhatsApp Tools ───────────────────────────────────────────
 
     #[tool(description = "Check WhatsApp authentication status")]
@@ -2423,6 +2443,14 @@ impl SocialForgeMcpServer {
         params: Parameters<tools_telegram_bot::TbGetUpdatesInput>,
     ) -> Result<Json<tools_telegram_bot::TbGetUpdatesOutput>, String> {
         tools_telegram_bot::handle_tb_get_updates(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Discover chats/channels the bot is in by sweeping pending updates (E8). Returns distinct chats with id, type and title. Note: consumes pending updates like tb_get_updates; for full discovery regardless of activity use tu_list_dialogs (user session).")]
+    pub async fn tb_list_chats(
+        &self,
+        params: Parameters<tools_telegram_bot::TbListChatsInput>,
+    ) -> Result<Json<tools_telegram_bot::TbApiOutput>, String> {
+        tools_telegram_bot::handle_tb_list_chats(&self.state, &params.0).await
     }
 
     #[tool(description = "Get Telegram bot info and username")]

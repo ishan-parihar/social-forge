@@ -238,3 +238,122 @@ pub async fn handle_di_create_forum_post(
         .map(Json)
         .map_err(|e| e.to_string())
 }
+
+// ── Webhook Tools (E7: zero-setup posting — no bot, no OAuth) ──
+
+/// Only discord.com/discordapp.com webhook URLs — the tool takes a
+/// caller-supplied URL, so a host guard keeps it from becoming a
+/// post-anything SSRF gadget.
+fn ensure_discord_webhook_url(url: &str) -> Result<(), String> {
+    let parsed = url::Url::parse(url).map_err(|_| "Invalid webhook URL".to_string())?;
+    let host = parsed.host_str().unwrap_or_default();
+    let ok = parsed.scheme() == "https"
+        && (host == "discord.com" || host == "discordapp.com")
+        && parsed.path().starts_with("/api/webhooks/");
+    if !ok {
+        return Err(
+            "Not a Discord webhook URL (expected https://discord.com/api/webhooks/...)"
+                .to_string(),
+        );
+    }
+    Ok(())
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct DiWebhookPostInput {
+    /// Discord webhook URL (https://discord.com/api/webhooks/...)
+    pub webhook_url: String,
+    pub content: String,
+    /// Override the webhook's display name for this message (optional)
+    pub username: Option<String>,
+    /// Override the webhook's avatar for this message (optional)
+    pub avatar_url: Option<String>,
+    /// true = wait for the delivered message and return its id
+    #[serde(default)]
+    pub wait: Option<bool>,
+}
+
+pub async fn handle_di_webhook_post(
+    state: &AppState,
+    input: &DiWebhookPostInput,
+) -> Result<Json<Value>, String> {
+    ensure_discord_webhook_url(&input.webhook_url)?;
+    let mut body = json!({ "content": input.content });
+    if let Some(u) = &input.username {
+        body["username"] = json!(u);
+    }
+    if let Some(a) = &input.avatar_url {
+        body["avatar_url"] = json!(a);
+    }
+    let url = if input.wait.unwrap_or(false) {
+        format!("{}?wait=true", input.webhook_url)
+    } else {
+        input.webhook_url.clone()
+    };
+    let resp = state
+        .media_http_client
+        .post(&url)
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| format!("Webhook post failed: {e}"))?;
+    let status = resp.status();
+    let payload: Value = resp
+        .json()
+        .await
+        .unwrap_or(Value::Null); // 204 No Content has no body
+    if !status.is_success() {
+        return Err(format!("Discord rejected the webhook ({status}): {payload}"));
+    }
+    Ok(Json(payload))
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct DiWebhookInfoInput {
+    /// Discord webhook URL to inspect (validates it and shows where it posts)
+    pub webhook_url: String,
+}
+
+pub async fn handle_di_webhook_info(
+    state: &AppState,
+    input: &DiWebhookInfoInput,
+) -> Result<Json<Value>, String> {
+    ensure_discord_webhook_url(&input.webhook_url)?;
+    let resp = state
+        .media_http_client
+        .get(&input.webhook_url)
+        .send()
+        .await
+        .map_err(|e| format!("Webhook info failed: {e}"))?;
+    let status = resp.status();
+    let payload: Value = resp
+        .json()
+        .await
+        .map_err(|e| format!("Bad webhook response: {e}"))?;
+    if !status.is_success() {
+        return Err(format!("Webhook not found or revoked ({status})"));
+    }
+    Ok(Json(payload))
+}
+
+#[cfg(test)]
+mod webhook_tests {
+    use super::*;
+
+    #[test]
+    fn discord_webhook_urls_are_host_guarded() {
+        assert!(ensure_discord_webhook_url(
+            "https://discord.com/api/webhooks/12345/abcdef"
+        )
+        .is_ok());
+        assert!(ensure_discord_webhook_url(
+            "https://discordapp.com/api/webhooks/12345/abcdef"
+        )
+        .is_ok());
+        // A bare host would turn the tool into a post-anything gadget.
+        assert!(ensure_discord_webhook_url("https://example.com/api/webhooks/1/x").is_err());
+        assert!(ensure_discord_webhook_url("http://discord.com/api/webhooks/1/x").is_err());
+        assert!(ensure_discord_webhook_url("https://discord.com/other/path").is_err());
+        assert!(ensure_discord_webhook_url("not a url").is_err());
+    }
+}

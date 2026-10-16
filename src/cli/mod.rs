@@ -44,6 +44,14 @@ pub enum Command {
         args: String,
     },
 
+    /// List every MCP tool with its description — the documented shell
+    /// path for agents (`social-forge mcp-tools --pretty`).
+    McpTools {
+        /// Aligned "name — description" table plus a count (plain lists names only)
+        #[arg(long)]
+        pretty: bool,
+    },
+
     /// Initialize ~/.social-forge/ config directory with default .env template
     Init,
 
