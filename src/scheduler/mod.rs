@@ -1032,16 +1032,15 @@ pub(crate) async fn publish_post(
         })
         .collect();
 
-    // E1: media transform (opt-in via settings.transform_media). Aspect-
-    // ratio crop/resize for the platforms that hard-reject out-of-spec
-    // media (IG 4:5, TikTok 9:16) via the optional ffmpeg binary. A missing
-    // ffmpeg warns and publishes the original — nothing breaks locally.
+    // E1 v2: media transform (opt-in via settings.transform_media).
+    // Crop/blur-pad + resize + trim for the platforms that hard-reject
+    // out-of-spec media (IG 4:5, TikTok 9:16, FB 4:5, YT Shorts) via the
+    // optional ffmpeg binary. A missing ffmpeg warns and publishes the
+    // original — nothing breaks locally.
     let resolved_media = {
-        let opted_in = post
-            .settings
-            .get("transform_media")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false);
+        let tf_settings = crate::services::media_transform::TransformSettings::from_settings(
+            &post.settings,
+        );
         let app_url_for_local = app_url.clone();
         // Transformed files land in the SAME media dir — the /api/media/{id}
         // route already serves it, so only the URL's filename changes.
@@ -1049,7 +1048,7 @@ pub(crate) async fn publish_post(
         crate::services::media_transform::transform_attachments(
             &post.provider_identifier,
             resolved_media,
-            opted_in,
+            &tf_settings,
             |url| {
                 // {APP_URL}/api/media/<file> (or /api/media/<file>) →
                 // ./uploads/<file> — the media route serves that dir.
