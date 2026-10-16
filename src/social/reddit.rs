@@ -503,6 +503,265 @@ impl RedditProvider {
         Ok(resp.json().await?)
     }
 
+    /// Helper: form POST to oauth.reddit.com with a Bearer token (mirrors
+    /// post_www for the OAuth half of the dual-auth path).
+    async fn post_oauth(
+        &self,
+        token: &str,
+        endpoint: &str,
+        form: &[(&str, &str)],
+    ) -> Result<serde_json::Value, ProviderError> {
+        let mut all_form: Vec<(&str, &str)> = form.to_vec();
+        all_form.push(("api_type", "json"));
+
+        let resp = self
+            .http
+            .post(format!("https://oauth.reddit.com{endpoint}"))
+            .header("Authorization", format!("Bearer {token}"))
+            .header("User-Agent", "social-forge:v0.1.0 (by /u/social_forge)")
+            .form(&all_form)
+            .send()
+            .await?;
+
+        let status = resp.status();
+        if !status.is_success() {
+            let body = resp.text().await.unwrap_or_default();
+            let raw = format!("Reddit API error ({status}): {body}");
+            return Err(ProviderError::Api(friendly_error(
+                self.map_error(&body, status.as_u16()),
+                &raw,
+            )));
+        }
+        Ok(resp.json().await?)
+    }
+
+    // ── P6.5 parity operations (reddit-lyr port, dual-auth) ────
+    // oauth.reddit.com mirrors the www JSON API at the same paths, so
+    // these route per token kind: cookie blobs → www (modhash + cookie
+    // form POST), OAuth tokens → Bearer form POST.
+
+    /// Dual-auth form POST to a Reddit JSON API endpoint.
+    pub async fn api_post(
+        &mut self,
+        token: &str,
+        endpoint: &str,
+        form: &[(&str, &str)],
+    ) -> Result<serde_json::Value, ProviderError> {
+        if Self::is_cookie_auth(token) {
+            self.post_www(endpoint, form).await
+        } else {
+            self.post_oauth(token, endpoint, form).await
+        }
+    }
+
+    /// Dual-auth GET to a Reddit JSON API endpoint.
+    pub async fn api_get(
+        &self,
+        token: &str,
+        endpoint: &str,
+        params: &[(&str, &str)],
+    ) -> Result<serde_json::Value, ProviderError> {
+        if Self::is_cookie_auth(token) {
+            self.get_www(endpoint, params).await
+        } else {
+            self.get_oauth(token, endpoint, params).await
+        }
+    }
+
+    /// Report a post/comment to the moderators. Provide at least one
+    /// non-empty reason field.
+    pub async fn report(
+        &mut self,
+        token: &str,
+        thing_id: &str,
+        reason: &str,
+        rule_reason: &str,
+        site_reason: &str,
+        other_reason: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let id = thing_id.to_string();
+        let mut form: Vec<(&str, &str)> = vec![("id", &id)];
+        for (key, val) in [
+            ("reason", reason),
+            ("rule_reason", rule_reason),
+            ("site_reason", site_reason),
+            ("other_reason", other_reason),
+        ] {
+            if !val.is_empty() {
+                form.push((key, val));
+            }
+        }
+        if form.len() == 1 {
+            return Err(ProviderError::InvalidRequest(
+                "report requires at least one non-empty reason".into(),
+            ));
+        }
+        self.api_post(token, "/api/report", &form).await
+    }
+
+    /// Block a user (they can no longer message you or see your posts).
+    pub async fn block_user(
+        &mut self,
+        token: &str,
+        username: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let name = username.to_string();
+        self.api_post(token, "/api/block", &[("name", &name)])
+            .await
+    }
+
+    /// List your friends.
+    pub async fn friends(&self, token: &str) -> Result<serde_json::Value, ProviderError> {
+        self.api_get(token, "/api/v1/me/friends", &[]).await
+    }
+
+    /// Add a friend. PUT /api/v1/me/friends/{name} with a JSON body —
+    /// the one Reddit endpoint that is neither www form POST nor plain
+    /// Bearer POST, so it gets a dedicated request instead of api_post.
+    pub async fn add_friend(
+        &mut self,
+        token: &str,
+        username: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let body = serde_json::json!({ "name": username });
+        let cookie_auth = Self::is_cookie_auth(token);
+        let (url, modhash) = if cookie_auth {
+            let mh = self.ensure_modhash().await?;
+            (
+                format!("https://www.reddit.com/api/v1/me/friends/{username}"),
+                Some(mh),
+            )
+        } else {
+            (
+                format!("https://oauth.reddit.com/api/v1/me/friends/{username}"),
+                None,
+            )
+        };
+        let mut req = self.http.put(&url).json(&body);
+        if let Some(mh) = modhash {
+            let cookies = self.cookie_string.clone().unwrap_or_default();
+            req = req.header("Cookie", cookies).header("X-Modhash", mh);
+        } else {
+            req = req
+                .header("Authorization", format!("Bearer {token}"))
+                .header(
+                    "User-Agent",
+                    "social-forge:v0.1.0 (by /u/social_forge)",
+                );
+        }
+        let resp = req.send().await?;
+        let status = resp.status();
+        if status == 401 || status == 403 {
+            return Err(ProviderError::TokenExpired);
+        }
+        if !status.is_success() {
+            let body = resp.text().await.unwrap_or_default();
+            return Err(ProviderError::Api(format!(
+                "Reddit add_friend error ({status}): {body}"
+            )));
+        }
+        Ok(resp.json().await?)
+    }
+
+    /// Remove a friend.
+    pub async fn remove_friend(
+        &mut self,
+        token: &str,
+        username: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let name = username.to_string();
+        self.api_post(token, "/api/unfriend", &[("name", &name), ("type", "friend")])
+            .await
+    }
+
+    /// Mark your own post NSFW.
+    pub async fn mark_nsfw(&mut self, token: &str, thing_id: &str) -> Result<serde_json::Value, ProviderError> {
+        let id = thing_id.to_string();
+        self.api_post(token, "/api/marknsfw", &[("id", &id)]).await
+    }
+
+    /// Remove the NSFW tag from your own post.
+    pub async fn unmark_nsfw(&mut self, token: &str, thing_id: &str) -> Result<serde_json::Value, ProviderError> {
+        let id = thing_id.to_string();
+        self.api_post(token, "/api/unmarknsfw", &[("id", &id)]).await
+    }
+
+    /// Mark your own post as a spoiler.
+    pub async fn mark_spoiler(&mut self, token: &str, thing_id: &str) -> Result<serde_json::Value, ProviderError> {
+        let id = thing_id.to_string();
+        self.api_post(token, "/api/spoiler", &[("id", &id)]).await
+    }
+
+    /// Remove the spoiler tag from your own post.
+    pub async fn unmark_spoiler(&mut self, token: &str, thing_id: &str) -> Result<serde_json::Value, ProviderError> {
+        let id = thing_id.to_string();
+        self.api_post(token, "/api/unspoiler", &[("id", &id)]).await
+    }
+
+    /// A subreddit's rules.
+    pub async fn get_rules(
+        &self,
+        token: &str,
+        subreddit: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let clean = subreddit.trim_start_matches("r/").to_lowercase();
+        self.api_get(token, &format!("/r/{clean}/about/rules"), &[])
+            .await
+    }
+
+    /// Your saved posts/comments. The username is looked up per call —
+    /// the cookie/config user may differ from the token's actual account.
+    pub async fn get_saved(
+        &self,
+        token: &str,
+        limit: u32,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let name = if Self::is_cookie_auth(token) {
+            let me = self.get_www("/api/me.json", &[]).await?;
+            me["data"]["name"].as_str().unwrap_or_default().to_string()
+        } else {
+            let me = self.get_oauth(token, "/api/v1/me", &[]).await?;
+            me["name"].as_str().unwrap_or_default().to_string()
+        };
+        if name.is_empty() {
+            return Err(ProviderError::Auth("Could not resolve account name".into()));
+        }
+        let limit_s = limit.to_string();
+        self.api_get(token, &format!("/user/{name}/saved"), &[("limit", &limit_s)])
+            .await
+    }
+
+    /// Mark all inbox messages read.
+    pub async fn read_all_messages(
+        &mut self,
+        token: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
+        self.api_post(token, "/api/read_all_messages", &[]).await
+    }
+
+    /// Crosspost an existing post into a subreddit.
+    pub async fn crosspost(
+        &mut self,
+        token: &str,
+        subreddit: &str,
+        title: &str,
+        crosspost_fullname: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let sr = subreddit.trim_start_matches("r/").to_string();
+        let t = title.to_string();
+        let cp = crosspost_fullname.to_string();
+        self.api_post(
+            token,
+            "/api/submit",
+            &[
+                ("sr", &sr),
+                ("title", &t),
+                ("crosspost_fullname", &cp),
+            ],
+        )
+        .await
+    }
+
     /// Browse a subreddit (equivalent to reddit-cli browse command)
     pub async fn browse(
         &self,

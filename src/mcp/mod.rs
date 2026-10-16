@@ -831,6 +831,110 @@ impl SocialForgeMcpServer {
         tools_reddit::handle_reddit_mod_unlock(&self.state, &params.0).await
     }
 
+    // ── Reddit Parity Tools (P6.5, reddit-lyr port) ──────────
+
+    #[tool(description = "Report a Reddit post or comment to the moderators. Provide at least one reason.")]
+    pub async fn reddit_report(
+        &self,
+        params: Parameters<tools_reddit::RedditReportInput>,
+    ) -> Result<Json<tools_reddit::RedditActionOutput>, String> {
+        tools_reddit::handle_reddit_report(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Block a Reddit user (they can no longer message you or see your posts).")]
+    pub async fn reddit_block_user(
+        &self,
+        params: Parameters<tools_reddit::RedditUsernameInput>,
+    ) -> Result<Json<tools_reddit::RedditActionOutput>, String> {
+        tools_reddit::handle_reddit_block_user(&self.state, &params.0).await
+    }
+
+    #[tool(description = "List your Reddit friends.")]
+    pub async fn reddit_list_friends(
+        &self,
+    ) -> Result<Json<tools_reddit::RedditDataOutput>, String> {
+        tools_reddit::handle_reddit_list_friends(&self.state).await
+    }
+
+    #[tool(description = "Add a Reddit friend.")]
+    pub async fn reddit_add_friend(
+        &self,
+        params: Parameters<tools_reddit::RedditUsernameInput>,
+    ) -> Result<Json<tools_reddit::RedditActionOutput>, String> {
+        tools_reddit::handle_reddit_add_friend(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Remove a Reddit friend.")]
+    pub async fn reddit_remove_friend(
+        &self,
+        params: Parameters<tools_reddit::RedditUsernameInput>,
+    ) -> Result<Json<tools_reddit::RedditActionOutput>, String> {
+        tools_reddit::handle_reddit_remove_friend(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Mark your own Reddit post as NSFW.")]
+    pub async fn reddit_mark_nsfw(
+        &self,
+        params: Parameters<tools_reddit::RedditThingInput>,
+    ) -> Result<Json<tools_reddit::RedditActionOutput>, String> {
+        tools_reddit::handle_reddit_mark_nsfw(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Remove the NSFW tag from your own Reddit post.")]
+    pub async fn reddit_unmark_nsfw(
+        &self,
+        params: Parameters<tools_reddit::RedditThingInput>,
+    ) -> Result<Json<tools_reddit::RedditActionOutput>, String> {
+        tools_reddit::handle_reddit_unmark_nsfw(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Mark your own Reddit post as a spoiler.")]
+    pub async fn reddit_mark_spoiler(
+        &self,
+        params: Parameters<tools_reddit::RedditThingInput>,
+    ) -> Result<Json<tools_reddit::RedditActionOutput>, String> {
+        tools_reddit::handle_reddit_mark_spoiler(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Remove the spoiler tag from your own Reddit post.")]
+    pub async fn reddit_unmark_spoiler(
+        &self,
+        params: Parameters<tools_reddit::RedditThingInput>,
+    ) -> Result<Json<tools_reddit::RedditActionOutput>, String> {
+        tools_reddit::handle_reddit_unmark_spoiler(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Get a subreddit's rules.")]
+    pub async fn reddit_get_rules(
+        &self,
+        params: Parameters<tools_reddit::RedditSubredditInput>,
+    ) -> Result<Json<tools_reddit::RedditDataOutput>, String> {
+        tools_reddit::handle_reddit_get_rules(&self.state, &params.0).await
+    }
+
+    #[tool(description = "List your saved Reddit posts and comments.")]
+    pub async fn reddit_get_saved(
+        &self,
+        params: Parameters<tools_reddit::RedditLimitInput>,
+    ) -> Result<Json<tools_reddit::RedditDataOutput>, String> {
+        tools_reddit::handle_reddit_get_saved(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Mark all your Reddit inbox messages as read.")]
+    pub async fn reddit_read_all_messages(
+        &self,
+    ) -> Result<Json<tools_reddit::RedditActionOutput>, String> {
+        tools_reddit::handle_reddit_read_all_messages(&self.state).await
+    }
+
+    #[tool(description = "Crosspost an existing Reddit post into a subreddit.")]
+    pub async fn reddit_crosspost(
+        &self,
+        params: Parameters<tools_reddit::RedditCrosspostInput>,
+    ) -> Result<Json<tools_reddit::RedditCreatePostOutput>, String> {
+        tools_reddit::handle_reddit_crosspost(&self.state, &params.0).await
+    }
+
     // ── X/Twitter Read Tools ─────────────────────────────────────
 
     #[tool(description = "Get the authenticated X/Twitter")]

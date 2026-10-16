@@ -692,3 +692,252 @@ pub async fn handle_reddit_mod_unlock(
         .map_err(|e| format!("Reddit mod unlock failed: {e}"))?;
     Ok(Json(RedditActionOutput { success: true }))
 }
+
+// ── P6.5 parity tools (reddit-lyr port, dual-auth) ─────────────────────
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct RedditReportInput {
+    /// Post ID (t3_xxx) or comment ID (t1_xxx) to report
+    pub thing_id: String,
+    pub reason: Option<String>,
+    /// Reason citing a specific subreddit rule
+    pub rule_reason: Option<String>,
+    /// Reason from Reddit's site-wide reason list
+    pub site_reason: Option<String>,
+    pub other_reason: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct RedditUsernameInput {
+    pub username: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct RedditSubredditInput {
+    pub subreddit: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct RedditLimitInput {
+    pub limit: Option<u32>,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct RedditCrosspostInput {
+    pub subreddit: String,
+    pub title: String,
+    /// Fullname of the post to crosspost (t3_xxx)
+    pub crosspost_fullname: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct RedditDataOutput {
+    pub data: serde_json::Value,
+}
+
+pub async fn handle_reddit_report(
+    state: &AppState,
+    input: &RedditReportInput,
+) -> Result<Json<RedditActionOutput>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let token = find_reddit_token(state, user_id).await?;
+    let mut provider = create_provider(state, &token);
+    provider
+        .report(
+            &token,
+            &input.thing_id,
+            input.reason.as_deref().unwrap_or(""),
+            input.rule_reason.as_deref().unwrap_or(""),
+            input.site_reason.as_deref().unwrap_or(""),
+            input.other_reason.as_deref().unwrap_or(""),
+        )
+        .await
+        .map_err(|e| format!("Reddit report failed: {e}"))?;
+    Ok(Json(RedditActionOutput { success: true }))
+}
+
+pub async fn handle_reddit_block_user(
+    state: &AppState,
+    input: &RedditUsernameInput,
+) -> Result<Json<RedditActionOutput>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let token = find_reddit_token(state, user_id).await?;
+    let mut provider = create_provider(state, &token);
+    provider
+        .block_user(&token, &input.username)
+        .await
+        .map_err(|e| format!("Reddit block failed: {e}"))?;
+    Ok(Json(RedditActionOutput { success: true }))
+}
+
+pub async fn handle_reddit_list_friends(
+    state: &AppState,
+) -> Result<Json<RedditDataOutput>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let token = find_reddit_token(state, user_id).await?;
+    let provider = create_provider(state, &token);
+    let data = provider
+        .friends(&token)
+        .await
+        .map_err(|e| format!("Reddit list friends failed: {e}"))?;
+    Ok(Json(RedditDataOutput { data }))
+}
+
+pub async fn handle_reddit_add_friend(
+    state: &AppState,
+    input: &RedditUsernameInput,
+) -> Result<Json<RedditActionOutput>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let token = find_reddit_token(state, user_id).await?;
+    let mut provider = create_provider(state, &token);
+    provider
+        .add_friend(&token, &input.username)
+        .await
+        .map_err(|e| format!("Reddit add friend failed: {e}"))?;
+    Ok(Json(RedditActionOutput { success: true }))
+}
+
+pub async fn handle_reddit_remove_friend(
+    state: &AppState,
+    input: &RedditUsernameInput,
+) -> Result<Json<RedditActionOutput>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let token = find_reddit_token(state, user_id).await?;
+    let mut provider = create_provider(state, &token);
+    provider
+        .remove_friend(&token, &input.username)
+        .await
+        .map_err(|e| format!("Reddit remove friend failed: {e}"))?;
+    Ok(Json(RedditActionOutput { success: true }))
+}
+
+pub async fn handle_reddit_mark_nsfw(
+    state: &AppState,
+    input: &RedditThingInput,
+) -> Result<Json<RedditActionOutput>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let token = find_reddit_token(state, user_id).await?;
+    let mut provider = create_provider(state, &token);
+    provider
+        .mark_nsfw(&token, &input.thing_id)
+        .await
+        .map_err(|e| format!("Reddit mark NSFW failed: {e}"))?;
+    Ok(Json(RedditActionOutput { success: true }))
+}
+
+pub async fn handle_reddit_unmark_nsfw(
+    state: &AppState,
+    input: &RedditThingInput,
+) -> Result<Json<RedditActionOutput>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let token = find_reddit_token(state, user_id).await?;
+    let mut provider = create_provider(state, &token);
+    provider
+        .unmark_nsfw(&token, &input.thing_id)
+        .await
+        .map_err(|e| format!("Reddit unmark NSFW failed: {e}"))?;
+    Ok(Json(RedditActionOutput { success: true }))
+}
+
+pub async fn handle_reddit_mark_spoiler(
+    state: &AppState,
+    input: &RedditThingInput,
+) -> Result<Json<RedditActionOutput>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let token = find_reddit_token(state, user_id).await?;
+    let mut provider = create_provider(state, &token);
+    provider
+        .mark_spoiler(&token, &input.thing_id)
+        .await
+        .map_err(|e| format!("Reddit mark spoiler failed: {e}"))?;
+    Ok(Json(RedditActionOutput { success: true }))
+}
+
+pub async fn handle_reddit_unmark_spoiler(
+    state: &AppState,
+    input: &RedditThingInput,
+) -> Result<Json<RedditActionOutput>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let token = find_reddit_token(state, user_id).await?;
+    let mut provider = create_provider(state, &token);
+    provider
+        .unmark_spoiler(&token, &input.thing_id)
+        .await
+        .map_err(|e| format!("Reddit unmark spoiler failed: {e}"))?;
+    Ok(Json(RedditActionOutput { success: true }))
+}
+
+pub async fn handle_reddit_get_rules(
+    state: &AppState,
+    input: &RedditSubredditInput,
+) -> Result<Json<RedditDataOutput>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let token = find_reddit_token(state, user_id).await?;
+    let provider = create_provider(state, &token);
+    let data = provider
+        .get_rules(&token, &input.subreddit)
+        .await
+        .map_err(|e| format!("Reddit get rules failed: {e}"))?;
+    Ok(Json(RedditDataOutput { data }))
+}
+
+pub async fn handle_reddit_get_saved(
+    state: &AppState,
+    input: &RedditLimitInput,
+) -> Result<Json<RedditDataOutput>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let token = find_reddit_token(state, user_id).await?;
+    let provider = create_provider(state, &token);
+    let data = provider
+        .get_saved(&token, input.limit.unwrap_or(25))
+        .await
+        .map_err(|e| format!("Reddit get saved failed: {e}"))?;
+    Ok(Json(RedditDataOutput { data }))
+}
+
+pub async fn handle_reddit_read_all_messages(
+    state: &AppState,
+) -> Result<Json<RedditActionOutput>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let token = find_reddit_token(state, user_id).await?;
+    let mut provider = create_provider(state, &token);
+    provider
+        .read_all_messages(&token)
+        .await
+        .map_err(|e| format!("Reddit mark all read failed: {e}"))?;
+    Ok(Json(RedditActionOutput { success: true }))
+}
+
+pub async fn handle_reddit_crosspost(
+    state: &AppState,
+    input: &RedditCrosspostInput,
+) -> Result<Json<RedditCreatePostOutput>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let token = find_reddit_token(state, user_id).await?;
+    let mut provider = create_provider(state, &token);
+    let resp = provider
+        .crosspost(
+            &token,
+            &input.subreddit,
+            &input.title,
+            &input.crosspost_fullname,
+        )
+        .await
+        .map_err(|e| format!("Reddit crosspost failed: {e}"))?;
+
+    let post_url = resp["json"]["data"]["url"].as_str().unwrap_or("");
+    let post_id = resp["json"]["data"]["id"]
+        .as_str()
+        .map(|id| format!("t3_{id}"))
+        .unwrap_or_default();
+    if post_id.is_empty() {
+        return Err(format!(
+            "Reddit crosspost failed: {}",
+            serde_json::to_string(&resp["json"]["errors"]).unwrap_or_default()
+        ));
+    }
+    Ok(Json(RedditCreatePostOutput {
+        post_id,
+        url: post_url.to_string(),
+    }))
+}
