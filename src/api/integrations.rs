@@ -97,7 +97,7 @@ pub async fn connect(
                     if let Some((_, tokens_str)) = state.config.provider_credentials("telegram-bot") {
                         let token = tokens_str.split(',').next().unwrap_or("").trim().to_string();
                         if !token.is_empty() {
-                            if let Ok(resp) = reqwest::Client::new()
+                            if let Ok(resp) = crate::social::shared_http()
                                 .get(format!("https://api.telegram.org/bot{token}/getMe"))
                                 .send().await
                             {
@@ -622,7 +622,7 @@ pub async fn connect_telegram_bot_token(
     }
 
     // Validate token via getMe
-    let http = reqwest::Client::new();
+    let http = crate::social::shared_http();
     let resp = http
         .get(format!("https://api.telegram.org/bot{token}/getMe"))
         .send()
@@ -845,7 +845,7 @@ pub async fn connect_x_cookie(
     let ct0 = body.ct0.trim();
     let bearer = "Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA";
 
-    let http = reqwest::Client::new();
+    let http = crate::social::shared_http();
 
     // Step 1: Get current user from multi/list
     let resp = http
@@ -966,7 +966,7 @@ pub async fn connect_reddit_cookie(
     );
 
     // Validate by fetching user info
-    let http = reqwest::Client::new();
+    let http = crate::social::shared_http();
     let me_resp = http
         .get("https://www.reddit.com/api/me.json")
         .header("Cookie", &parsed.cookie_string)
@@ -1034,7 +1034,7 @@ pub async fn connect_github_pat(
         return Err(AppError::BadRequest("pat is required".into()));
     }
 
-    let http = reqwest::Client::new();
+    let http = crate::social::shared_http();
     let resp = http
         .get("https://api.github.com/user")
         .header("Authorization", format!("Bearer {}", body.pat.trim()))

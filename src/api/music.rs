@@ -79,7 +79,7 @@ pub async fn search_music(
         }
     }
 
-    let client = reqwest::Client::new();
+    let client = crate::social::shared_http();
     let response = client
         .get(&url)
         .timeout(std::time::Duration::from_secs(15))

@@ -22,7 +22,7 @@ pub struct FarcasterProvider {
 impl FarcasterProvider {
     pub fn new(config: &Config) -> Self {
         Self {
-            client: reqwest::Client::new(),
+            client: shared_http(),
             neynar_api_key: config.neynar_api_key.clone(),
         }
     }

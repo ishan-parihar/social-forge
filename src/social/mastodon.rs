@@ -29,7 +29,7 @@ impl MastodonProvider {
             .clone()
             .unwrap_or_else(|| "mastodon.social".into());
         Self {
-            http: reqwest::Client::new(),
+            http: shared_http(),
             instance_url,
             app_credentials: Mutex::new(None),
         }

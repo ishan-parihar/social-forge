@@ -17,6 +17,18 @@ use crate::config::Config;
 const GITHUB_API_BASE: &str = "https://api.github.com";
 const USER_AGENT: &str = "social-forge/1.0";
 
+/// Shared GitHub HTTP client (F1): ONE UA-pinned pool. GitHub REQUIRES a
+/// User-Agent header; per-provider construction rebuilt it per tool call.
+fn github_http() -> reqwest::Client {
+    static CLIENT: std::sync::LazyLock<reqwest::Client> = std::sync::LazyLock::new(|| {
+        reqwest::Client::builder()
+            .user_agent(USER_AGENT)
+            .build()
+            .expect("Failed to build reqwest client")
+    });
+    CLIENT.clone()
+}
+
 pub struct GithubProvider {
     pub token: String,
     pub http: reqwest::Client,
@@ -29,10 +41,7 @@ impl GithubProvider {
             .map(|(_, t)| t)
             .unwrap_or_default();
 
-        let http = reqwest::Client::builder()
-            .user_agent(USER_AGENT)
-            .build()
-            .expect("Failed to build reqwest client");
+        let http = github_http();
 
         Self { token, http }
     }

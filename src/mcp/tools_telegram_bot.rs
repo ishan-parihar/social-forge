@@ -59,7 +59,7 @@ pub async fn handle_tb_send_message(
     }
 
     let token = &tokens[input.token_index];
-    let http = reqwest::Client::new();
+    let http = crate::social::shared_http();
 
     let url = format!("https://api.telegram.org/bot{}/sendMessage", token);
 
@@ -106,7 +106,7 @@ pub async fn handle_tb_get_updates(
     }
 
     let token = &tokens[input.token_index];
-    let http = reqwest::Client::new();
+    let http = crate::social::shared_http();
 
     let url = format!("https://api.telegram.org/bot{}/getUpdates", token);
 
@@ -198,7 +198,7 @@ async fn tb_call(
             tokens.len()
         )
     })?;
-    let resp = reqwest::Client::new()
+    let resp = crate::social::shared_http()
         .post(format!("https://api.telegram.org/bot{token}/{method}"))
         .json(&body)
         .send()
@@ -338,7 +338,7 @@ pub async fn handle_tb_list_chats(
             tokens.len()
         )
     })?;
-    let http = reqwest::Client::new();
+    let http = crate::social::shared_http();
 
     let mut chats = serde_json::Map::new();
     let mut offset: i64 = 0;

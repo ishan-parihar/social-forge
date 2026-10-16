@@ -251,12 +251,15 @@ async fn main() -> anyhow::Result<()> {
     }
 
     // ── Build shared state (clone for MCP if needed) ──────────
+    // Media clients are the shared statics (F1): `media_http_client` keeps
+    // its 10s connect timeout for CDN fetching, while `media_wreq_client`
+    // keeps Chrome131 emulation for video.twimg.com.
     let media_http_client = reqwest::Client::builder()
         .connect_timeout(std::time::Duration::from_secs(10))
         // No total timeout — needed for streaming large video files via proxy.
         // The browser manages video playback timeout independently.
         .build()
-        .unwrap_or_else(|_| reqwest::Client::new());
+        .unwrap_or_else(|_| social_forge::social::shared_http());
 
     // wreq client with Chrome TLS fingerprinting for X/Twitter CDN.
     // video.twimg.com blocks requests that don't match a real browser's TLS fingerprint.
@@ -266,7 +269,7 @@ async fn main() -> anyhow::Result<()> {
         .gzip(true)
         .brotli(true)
         .build()
-        .unwrap_or_else(|_| wreq::Client::new());
+        .unwrap_or_else(|_| social_forge::social::shared_wreq());
 
     let state = AppState {
         db: db.clone(),
@@ -490,17 +493,8 @@ async fn run_mcp_thin(config: social_forge::config::Config) -> anyhow::Result<()
         .as_ref()
         .and_then(|k| social_forge::crypto::decode_hex_key(k).ok());
 
-    let media_http_client = reqwest::Client::builder()
-        .connect_timeout(std::time::Duration::from_secs(10))
-        .build()
-        .unwrap_or_else(|_| reqwest::Client::new());
-    let media_wreq_client = wreq::Client::builder()
-        .connect_timeout(std::time::Duration::from_secs(10))
-        .emulation(wreq_util::Emulation::Chrome131)
-        .gzip(true)
-        .brotli(true)
-        .build()
-        .unwrap_or_else(|_| wreq::Client::new());
+    let media_http_client = social_forge::social::shared_http();
+    let media_wreq_client = social_forge::social::shared_wreq();
 
     let state = social_forge::api::AppState {
         db,

@@ -19,7 +19,7 @@ impl GmailProvider {
         Self {
             client_id,
             client_secret,
-            http: reqwest::Client::new(),
+            http: shared_http(),
         }
     }
 
@@ -319,34 +319,13 @@ impl SocialProvider for GmailProvider {
     }
 
     async fn refresh_token(&self, refresh_token: &str) -> Result<AuthToken, ProviderError> {
-        let params: Vec<(&str, &str)> = vec![
-            ("refresh_token", refresh_token),
-            ("client_id", self.client_id.as_str()),
-            ("client_secret", self.client_secret.as_str()),
-            ("grant_type", "refresh_token"),
-        ];
-        let resp = self
-            .http
-            .post("https://oauth2.googleapis.com/token")
-            .form(&params)
-            .send()
-            .await?;
-        let json: serde_json::Value = resp.json().await?;
-        let access_token = json["access_token"]
-            .as_str()
-            .ok_or_else(|| ProviderError::Auth("Missing access_token".into()))?
-            .to_string();
-        let expires_in = json["expires_in"].as_u64().map(|v| v as u32);
-
-        Ok(AuthToken {
-            access_token,
-            refresh_token: Some(refresh_token.to_string()),
-            expires_in,
-            provider_user_id: String::new(),
-            name: String::new(),
-            username: String::new(),
-            picture: None,
-        })
+        super::google_oauth::refresh(
+            &self.http,
+            &self.client_id,
+            &self.client_secret,
+            refresh_token,
+        )
+        .await
     }
 
     async fn publish(

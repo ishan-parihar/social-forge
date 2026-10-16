@@ -51,7 +51,7 @@ async fn call_llm(
         .as_ref()
         .ok_or_else(|| AppError::BadRequest("LLM_MODEL not configured".into()))?;
 
-    let client = reqwest::Client::new();
+    let client = crate::social::shared_http();
     let response = client
         .post(endpoint)
         .json(&serde_json::json!({

@@ -16,7 +16,7 @@ pub struct DevtoProvider {
 impl DevtoProvider {
     pub fn new(_config: &Config) -> Self {
         Self {
-            client: reqwest::Client::new(),
+            client: shared_http(),
         }
     }
 }

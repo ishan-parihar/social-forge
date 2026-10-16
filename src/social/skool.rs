@@ -7,6 +7,17 @@ pub struct SkoolProvider {
     http: reqwest::Client,
 }
 
+/// Shared Skool HTTP client (F1): ONE UA-pinned pool for the scraper.
+fn skool_http() -> reqwest::Client {
+    static CLIENT: std::sync::LazyLock<reqwest::Client> = std::sync::LazyLock::new(|| {
+        reqwest::Client::builder()
+            .user_agent("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36")
+            .build()
+            .expect("Failed to build reqwest client")
+    });
+    CLIENT.clone()
+}
+
 impl Default for SkoolProvider {
     fn default() -> Self {
         Self::new()
@@ -16,10 +27,7 @@ impl Default for SkoolProvider {
 impl SkoolProvider {
     pub fn new() -> Self {
         Self {
-            http: reqwest::Client::builder()
-                .user_agent("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36")
-                .build()
-                .expect("Failed to build reqwest client"),
+            http: skool_http(),
         }
     }
 

@@ -191,7 +191,7 @@ pub async fn handle(action: WebhooksAction, state: &AppState) -> anyhow::Result<
             };
             let test_payload =
                 serde_json::json!({"event": "test", "timestamp": chrono::Utc::now().to_rfc3339()});
-            match reqwest::Client::new()
+            match crate::social::shared_http()
                 .post(&row.url)
                 .json(&test_payload)
                 .send()

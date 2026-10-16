@@ -1084,13 +1084,13 @@ mod tests {
 
     #[test]
     fn selects_local_when_s3_unset() {
-        let backend = select_backend(None, "./uploads", &reqwest::Client::new());
+        let backend = select_backend(None, "./uploads", &crate::social::shared_http());
         assert_eq!(backend.backend(), "local");
     }
 
     #[test]
     fn selects_s3_when_configured() {
-        let backend = select_backend(Some(s3_env()), "./uploads", &reqwest::Client::new());
+        let backend = select_backend(Some(s3_env()), "./uploads", &crate::social::shared_http());
         assert_eq!(backend.backend(), "s3");
     }
 
@@ -1123,7 +1123,7 @@ mod tests {
 
     #[test]
     fn object_url_is_path_style_and_encodes_key() {
-        let s3 = S3::new(s3_env(), reqwest::Client::new());
+        let s3 = S3::new(s3_env(), crate::social::shared_http());
         assert_eq!(
             s3.object_url("ab cd.png"),
             "https://acct.r2.cloudflarestorage.com/media/ab%20cd.png"

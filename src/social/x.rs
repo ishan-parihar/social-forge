@@ -92,13 +92,11 @@ pub struct XProvider {
     cookie_string: Option<String>,
 }
 
-impl XProvider {
-    pub fn new(config: &Config) -> Self {
-        let (client_id, client_secret) = config.provider_credentials("x").unwrap_or_default();
-
-        let auth_token = config.x_auth_token.as_deref();
-        let ct0 = config.x_ct0.as_deref();
-
+/// Shared X wreq client (F1): ONE Chrome131-emulation pool with the static
+/// bearer + browser headers baked in. Previously rebuilt per XProvider::new
+/// — every MCP call paid a fresh TLS-fingerprint stack build.
+fn x_http() -> wreq::Client {
+    static CLIENT: std::sync::LazyLock<wreq::Client> = std::sync::LazyLock::new(|| {
         let mut headers = HeaderMap::new();
         headers.insert(header::USER_AGENT, HeaderValue::from_static(USER_AGENT));
         headers.insert(header::ACCEPT, HeaderValue::from_static("*/*"));
@@ -115,8 +113,7 @@ impl XProvider {
             header::AUTHORIZATION,
             HeaderValue::from_str(&format!("Bearer {}", TWITTER_BEARER_TOKEN)).unwrap(),
         );
-
-        let http = wreq::Client::builder()
+        wreq::Client::builder()
             .default_headers(headers)
             .emulation(Emulation::Chrome131)
             .gzip(true)
@@ -124,7 +121,19 @@ impl XProvider {
             .timeout(Duration::from_secs(30))
             .pool_idle_timeout(Duration::from_secs(90))
             .build()
-            .expect("Failed to build wreq client");
+            .expect("Failed to build wreq client")
+    });
+    CLIENT.clone()
+}
+
+impl XProvider {
+    pub fn new(config: &Config) -> Self {
+        let (client_id, client_secret) = config.provider_credentials("x").unwrap_or_default();
+
+        let auth_token = config.x_auth_token.as_deref();
+        let ct0 = config.x_ct0.as_deref();
+
+        let http = x_http();
 
         let mut provider = Self {
             client_id,

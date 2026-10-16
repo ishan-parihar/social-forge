@@ -8,6 +8,7 @@ use serde_json::{json, Value};
 use uuid::Uuid;
 
 use crate::api::AppState;
+use crate::social::shared_http;
 
 // ── Input Types ──────────────────────────────────────────────
 
@@ -77,7 +78,7 @@ pub async fn handle_bs_profile(
 ) -> Result<Json<Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_bs_token(state, user_id).await?;
-    let client = reqwest::Client::new();
+    let client = shared_http();
 
     let resp = client
         .get("https://bsky.social/xrpc/app.bsky.actor.getProfile")
@@ -101,7 +102,7 @@ pub async fn handle_bs_timeline(
 ) -> Result<Json<Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_bs_token(state, user_id).await?;
-    let client = reqwest::Client::new();
+    let client = shared_http();
 
     let limit = input.limit.unwrap_or(20);
     let mut query_params = vec![("limit", limit.to_string())];
@@ -175,7 +176,7 @@ pub async fn handle_bs_search(
 ) -> Result<Json<Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_bs_token(state, user_id).await?;
-    let client = reqwest::Client::new();
+    let client = shared_http();
 
     let limit = input.limit.unwrap_or(10);
 
@@ -198,7 +199,7 @@ pub async fn handle_bs_search(
 pub async fn handle_bs_feed(state: &AppState, input: &BsFeedInput) -> Result<Json<Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_bs_token(state, user_id).await?;
-    let client = reqwest::Client::new();
+    let client = shared_http();
 
     let limit = input.limit.unwrap_or(20);
 
@@ -239,7 +240,7 @@ pub async fn handle_bs_reply(
 ) -> Result<Json<Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let (token, did) = find_bs_token_and_did(state, user_id).await?;
-    let client = reqwest::Client::new();
+    let client = shared_http();
 
     let body = json!({
         "collection": "app.bsky.feed.post",
@@ -295,7 +296,7 @@ pub async fn handle_bs_get_analytics(
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let (token, did) = find_bs_token_and_did(state, user_id).await?;
     let actor = input.handle_or_did.as_deref().unwrap_or(&did);
-    let client = reqwest::Client::new();
+    let client = shared_http();
 
     // Get profile (includes follower/following/post counts)
     let profile_resp = client

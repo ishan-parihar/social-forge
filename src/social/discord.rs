@@ -25,7 +25,7 @@ impl DiscordProvider {
             client_id,
             client_secret,
             bot_token,
-            http: reqwest::Client::new(),
+            http: shared_http(),
         }
     }
 

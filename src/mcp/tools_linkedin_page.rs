@@ -200,7 +200,7 @@ pub async fn handle_lip_create_post(
         "lifecycleState": "PUBLISHED",
     });
 
-    let resp = reqwest::Client::new()
+    let resp = crate::social::shared_http()
         .post("https://api.linkedin.com/v2/rest/posts")
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Restli-Protocol-Version", "2.0.0")
@@ -264,7 +264,7 @@ pub async fn handle_lip_get_followers(
     let url = format!(
         "https://api.linkedin.com/rest/networkSizes/{org_urn}?edgeType=CompanyFollowedByMember"
     );
-    let resp = reqwest::Client::new()
+    let resp = crate::social::shared_http()
         .get(&url)
         .header("Authorization", format!("Bearer {token}"))
         .header("LinkedIn-Version", LINKEDIN_VERSION)
@@ -292,7 +292,7 @@ pub async fn handle_lip_delete_post(
         "https://api.linkedin.com/v2/rest/posts/{}",
         urlencoding::encode(&input.post_urn)
     );
-    let resp = reqwest::Client::new()
+    let resp = crate::social::shared_http()
         .delete(&url)
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Restli-Protocol-Version", "2.0.0")
@@ -324,7 +324,7 @@ pub async fn handle_lip_get_reactions(
         "https://api.linkedin.com/v2/rest/socialActions/{}/likes",
         input.post_urn
     );
-    let resp = reqwest::Client::new()
+    let resp = crate::social::shared_http()
         .get(&url)
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Restli-Protocol-Version", "2.0.0")
@@ -349,7 +349,7 @@ pub async fn handle_lip_get_shares(
         "https://api.linkedin.com/v2/rest/socialActions/{}/shares",
         input.post_urn
     );
-    let resp = reqwest::Client::new()
+    let resp = crate::social::shared_http()
         .get(&url)
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Restli-Protocol-Version", "2.0.0")

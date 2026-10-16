@@ -41,7 +41,7 @@ pub async fn handle(action: LinkedinAction, state: &AppState) -> anyhow::Result<
                 "https://api.linkedin.com/v2/rest/posts/{}",
                 urlencoding::encode(&post_urn)
             );
-            let resp = reqwest::Client::new()
+            let resp = crate::social::shared_http()
                 .delete(&url)
                 .header("Authorization", format!("Bearer {token}"))
                 .header("X-Restli-Protocol-Version", "2.0.0")
@@ -63,7 +63,7 @@ pub async fn handle(action: LinkedinAction, state: &AppState) -> anyhow::Result<
                 "https://api.linkedin.com/v2/rest/reactions/(entity:{})",
                 urlencoding::encode(&post_urn)
             );
-            let resp = reqwest::Client::new()
+            let resp = crate::social::shared_http()
                 .get(&url)
                 .header("Authorization", format!("Bearer {token}"))
                 .header("X-Restli-Protocol-Version", "2.0.0")

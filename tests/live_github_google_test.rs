@@ -2,7 +2,10 @@ use social_forge::config::Config;
 use social_forge::crypto;
 use social_forge::db;
 use social_forge::social::github::GithubProvider;
-use social_forge::social::google::GoogleProvider;
+use social_forge::social::calendar::CalendarProvider;
+use social_forge::social::drive::DriveProvider;
+use social_forge::social::gmail::GmailProvider;
+use social_forge::social::youtube::YoutubeProvider;
 use social_forge::social::SocialProvider;
 
 fn get_config() -> Config {
@@ -199,20 +202,22 @@ async fn test_gh_repo() {
 }
 
 // Google Suite — None when Google is not connected, so tests skip instead of
-// panicking on a box without live credentials.
-async fn google_provider_token() -> Option<(GoogleProvider, String)> {
-    let c = get_config();
-    let p = GoogleProvider::new(&c);
-    let t = get_google_token().await?;
-    Some((p, t))
+// panicking on a box without live credentials. F2: each API is exercised
+// through its canonical provider module (youtube/gmail/calendar/drive) —
+// the same types tools_google dispatches to.
+async fn google_token() -> Option<String> {
+    get_google_token().await
 }
+
+const SKIP_MSG: &str = "⏭ skipped: Google token not found. Connect Google Suite first.";
 
 #[tokio::test]
 async fn test_goog_search() {
-    let Some((p, t)) = google_provider_token().await else {
-        println!("⏭ skipped: Google token not found. Connect Google Suite first.");
+    let Some(t) = google_token().await else {
+        println!("{SKIP_MSG}");
         return;
     };
+    let p = YoutubeProvider::new(&get_config());
     let r = p.search_videos(&t, "Rust", 3).await.unwrap();
     println!(
         "OK yt_search: {}",
@@ -222,10 +227,11 @@ async fn test_goog_search() {
 
 #[tokio::test]
 async fn test_goog_channel() {
-    let Some((p, t)) = google_provider_token().await else {
-        println!("⏭ skipped: Google token not found. Connect Google Suite first.");
+    let Some(t) = google_token().await else {
+        println!("{SKIP_MSG}");
         return;
     };
+    let p = YoutubeProvider::new(&get_config());
     let pages: Vec<social_forge::social::PageInfo> = SocialProvider::pages(&p, &t).await.unwrap();
     if let Some(page) = pages.first() {
         let r = p.get_channel_stats(&t, &page.id).await.unwrap();
@@ -239,10 +245,11 @@ async fn test_goog_channel() {
 
 #[tokio::test]
 async fn test_goog_video() {
-    let Some((p, t)) = google_provider_token().await else {
-        println!("⏭ skipped: Google token not found. Connect Google Suite first.");
+    let Some(t) = google_token().await else {
+        println!("{SKIP_MSG}");
         return;
     };
+    let p = YoutubeProvider::new(&get_config());
     let s = p.search_videos(&t, "Rust", 1).await.unwrap();
     if let Some(v) = s["items"].as_array().and_then(|a| a.first()) {
         let vid = v["id"]["videoId"].as_str().unwrap_or("");
@@ -256,10 +263,11 @@ async fn test_goog_video() {
 
 #[tokio::test]
 async fn test_goog_playlists() {
-    let Some((p, t)) = google_provider_token().await else {
-        println!("⏭ skipped: Google token not found. Connect Google Suite first.");
+    let Some(t) = google_token().await else {
+        println!("{SKIP_MSG}");
         return;
     };
+    let p = YoutubeProvider::new(&get_config());
     let pages: Vec<social_forge::social::PageInfo> = SocialProvider::pages(&p, &t).await.unwrap();
     if let Some(page) = pages.first() {
         let r = p.get_playlists(&t, &page.id, 5).await.unwrap();
@@ -272,10 +280,11 @@ async fn test_goog_playlists() {
 
 #[tokio::test]
 async fn test_goog_comments() {
-    let Some((p, t)) = google_provider_token().await else {
-        println!("⏭ skipped: Google token not found. Connect Google Suite first.");
+    let Some(t) = google_token().await else {
+        println!("{SKIP_MSG}");
         return;
     };
+    let p = YoutubeProvider::new(&get_config());
     let s = p.search_videos(&t, "Rust", 1).await.unwrap();
     if let Some(v) = s["items"].as_array().and_then(|a| a.first()) {
         let vid = v["id"]["videoId"].as_str().unwrap_or("");
@@ -291,10 +300,11 @@ async fn test_goog_comments() {
 
 #[tokio::test]
 async fn test_goog_find() {
-    let Some((p, t)) = google_provider_token().await else {
-        println!("⏭ skipped: Google token not found. Connect Google Suite first.");
+    let Some(t) = google_token().await else {
+        println!("{SKIP_MSG}");
         return;
     };
+    let p = YoutubeProvider::new(&get_config());
     match p.find_creators(&t, "architecture", None, Some(3)).await {
         Ok(r) => println!(
             "OK creators: {}",
@@ -306,10 +316,11 @@ async fn test_goog_find() {
 
 #[tokio::test]
 async fn test_goog_analytics() {
-    let Some((p, t)) = google_provider_token().await else {
-        println!("⏭ skipped: Google token not found. Connect Google Suite first.");
+    let Some(t) = google_token().await else {
+        println!("{SKIP_MSG}");
         return;
     };
+    let p = YoutubeProvider::new(&get_config());
     let pages: Vec<social_forge::social::PageInfo> = SocialProvider::pages(&p, &t).await.unwrap();
     if let Some(page) = pages.first() {
         match p
@@ -333,10 +344,11 @@ async fn test_goog_analytics() {
 
 #[tokio::test]
 async fn test_goog_gmail() {
-    let Some((p, t)) = google_provider_token().await else {
-        println!("⏭ skipped: Google token not found. Connect Google Suite first.");
+    let Some(t) = google_token().await else {
+        println!("{SKIP_MSG}");
         return;
     };
+    let p = GmailProvider::new(&get_config());
     let r = p.get_profile(&t).await.unwrap();
     println!(
         "OK gmail: {} {} msgs",
@@ -346,10 +358,11 @@ async fn test_goog_gmail() {
 
 #[tokio::test]
 async fn test_goog_messages() {
-    let Some((p, t)) = google_provider_token().await else {
-        println!("⏭ skipped: Google token not found. Connect Google Suite first.");
+    let Some(t) = google_token().await else {
+        println!("{SKIP_MSG}");
         return;
     };
+    let p = GmailProvider::new(&get_config());
     let r = p.list_messages(&t, 5, None).await.unwrap();
     println!(
         "OK msgs: {}",
@@ -359,10 +372,11 @@ async fn test_goog_messages() {
 
 #[tokio::test]
 async fn test_goog_labels() {
-    let Some((p, t)) = google_provider_token().await else {
-        println!("⏭ skipped: Google token not found. Connect Google Suite first.");
+    let Some(t) = google_token().await else {
+        println!("{SKIP_MSG}");
         return;
     };
+    let p = GmailProvider::new(&get_config());
     let r = p.list_labels(&t).await.unwrap();
     println!(
         "OK labels: {}",
@@ -372,10 +386,11 @@ async fn test_goog_labels() {
 
 #[tokio::test]
 async fn test_goog_cal_list() {
-    let Some((p, t)) = google_provider_token().await else {
-        println!("⏭ skipped: Google token not found. Connect Google Suite first.");
+    let Some(t) = google_token().await else {
+        println!("{SKIP_MSG}");
         return;
     };
+    let p = CalendarProvider::new(&get_config());
     let r = p.list_calendars(&t).await.unwrap();
     println!(
         "OK calendars: {}",
@@ -385,10 +400,11 @@ async fn test_goog_cal_list() {
 
 #[tokio::test]
 async fn test_goog_events() {
-    let Some((p, t)) = google_provider_token().await else {
-        println!("⏭ skipped: Google token not found. Connect Google Suite first.");
+    let Some(t) = google_token().await else {
+        println!("{SKIP_MSG}");
         return;
     };
+    let p = CalendarProvider::new(&get_config());
     let r = p.list_events(&t, "primary", 5, None, None).await.unwrap();
     println!(
         "OK events: {}",
@@ -398,10 +414,11 @@ async fn test_goog_events() {
 
 #[tokio::test]
 async fn test_goog_cal_crud() {
-    let Some((p, t)) = google_provider_token().await else {
-        println!("⏭ skipped: Google token not found. Connect Google Suite first.");
+    let Some(t) = google_token().await else {
+        println!("{SKIP_MSG}");
         return;
     };
+    let p = CalendarProvider::new(&get_config());
     let created = p
         .create_event(
             &t,
@@ -423,10 +440,11 @@ async fn test_goog_cal_crud() {
 
 #[tokio::test]
 async fn test_goog_drive_files() {
-    let Some((p, t)) = google_provider_token().await else {
-        println!("⏭ skipped: Google token not found. Connect Google Suite first.");
+    let Some(t) = google_token().await else {
+        println!("{SKIP_MSG}");
         return;
     };
+    let p = DriveProvider::new(&get_config());
     let r = p.list_files(&t, 10, None).await.unwrap();
     println!(
         "OK drive: {} files",
@@ -436,10 +454,11 @@ async fn test_goog_drive_files() {
 
 #[tokio::test]
 async fn test_goog_drive_folders() {
-    let Some((p, t)) = google_provider_token().await else {
-        println!("⏭ skipped: Google token not found. Connect Google Suite first.");
+    let Some(t) = google_token().await else {
+        println!("{SKIP_MSG}");
         return;
     };
+    let p = DriveProvider::new(&get_config());
     let r = p.list_folders(&t, 10).await.unwrap();
     println!(
         "OK folders: {}",
@@ -449,10 +468,11 @@ async fn test_goog_drive_folders() {
 
 #[tokio::test]
 async fn test_goog_drive_meta() {
-    let Some((p, t)) = google_provider_token().await else {
-        println!("⏭ skipped: Google token not found. Connect Google Suite first.");
+    let Some(t) = google_token().await else {
+        println!("{SKIP_MSG}");
         return;
     };
+    let p = DriveProvider::new(&get_config());
     let files = p.list_files(&t, 1, None).await.unwrap();
     if let Some(f) = files["files"].as_array().and_then(|a| a.first()) {
         let m = p

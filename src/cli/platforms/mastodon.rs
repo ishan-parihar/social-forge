@@ -43,7 +43,7 @@ pub async fn handle(action: MastodonAction, state: &AppState) -> anyhow::Result<
                 "public" => format!("/api/v1/timelines/public?limit={}", limit.min(40)),
                 _ => format!("/api/v1/timelines/home?limit={}", limit.min(40)),
             };
-            match reqwest::Client::new()
+            match crate::social::shared_http()
                 .get(provider.api_url(&url))
                 .header("Authorization", format!("Bearer {token}"))
                 .send()
@@ -62,7 +62,7 @@ pub async fn handle(action: MastodonAction, state: &AppState) -> anyhow::Result<
                 urlencoding::encode(&query),
                 limit.min(40)
             );
-            match reqwest::Client::new()
+            match crate::social::shared_http()
                 .get(provider.api_url(&url))
                 .header("Authorization", format!("Bearer {token}"))
                 .send()
@@ -77,7 +77,7 @@ pub async fn handle(action: MastodonAction, state: &AppState) -> anyhow::Result<
         }
         MastodonAction::Post { text, visibility } => {
             let body = serde_json::json!({"status": text, "visibility": visibility});
-            match reqwest::Client::new()
+            match crate::social::shared_http()
                 .post(provider.api_url("/api/v1/statuses"))
                 .header("Authorization", format!("Bearer {token}"))
                 .header("Content-Type", "application/json")
@@ -93,7 +93,7 @@ pub async fn handle(action: MastodonAction, state: &AppState) -> anyhow::Result<
             }
         }
         MastodonAction::Get { status_id } => {
-            match reqwest::Client::new()
+            match crate::social::shared_http()
                 .get(provider.api_url(&format!("/api/v1/statuses/{status_id}")))
                 .header("Authorization", format!("Bearer {token}"))
                 .send()

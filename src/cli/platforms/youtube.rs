@@ -46,7 +46,7 @@ pub async fn handle(action: YoutubeAction, state: &AppState) -> anyhow::Result<(
             .await
             .map_err(|e| e.to_string()),
         YoutubeAction::Playlists { channel_id, limit } => {
-            let client = reqwest::Client::new();
+            let client = crate::social::shared_http();
             let url = format!("https://www.googleapis.com/youtube/v3/playlists?part=snippet&channelId={channel_id}&maxResults={limit}");
             match client.get(&url).bearer_auth(&token).send().await {
                 Ok(r) => r
@@ -57,7 +57,7 @@ pub async fn handle(action: YoutubeAction, state: &AppState) -> anyhow::Result<(
             }
         }
         YoutubeAction::Stats { channel_id } => {
-            let client = reqwest::Client::new();
+            let client = crate::social::shared_http();
             let url = format!(
                 "https://www.googleapis.com/youtube/v3/channels?part=statistics&id={channel_id}"
             );
@@ -75,7 +75,7 @@ pub async fn handle(action: YoutubeAction, state: &AppState) -> anyhow::Result<(
             start_date,
             end_date,
         } => {
-            let client = reqwest::Client::new();
+            let client = crate::social::shared_http();
             let url = format!("https://youtubeanalytics.googleapis.com/v2/reports?ids=channel=={channel_id}&startDate={start_date}&endDate={end_date}&metrics={metrics}");
             match client.get(&url).bearer_auth(&token).send().await {
                 Ok(r) => r
@@ -86,7 +86,7 @@ pub async fn handle(action: YoutubeAction, state: &AppState) -> anyhow::Result<(
             }
         }
         YoutubeAction::Subscriptions { channel_id, limit } => {
-            let client = reqwest::Client::new();
+            let client = crate::social::shared_http();
             let url = format!("https://www.googleapis.com/youtube/v3/subscriptions?part=snippet&channelId={channel_id}&maxResults={limit}");
             match client.get(&url).bearer_auth(&token).send().await {
                 Ok(r) => r
@@ -97,7 +97,7 @@ pub async fn handle(action: YoutubeAction, state: &AppState) -> anyhow::Result<(
             }
         }
         YoutubeAction::Creators { query, limit } => {
-            let client = reqwest::Client::new();
+            let client = crate::social::shared_http();
             let url = format!("https://www.googleapis.com/youtube/v3/search?part=snippet&type=channel&q={query}&maxResults={limit}");
             match client.get(&url).bearer_auth(&token).send().await {
                 Ok(r) => r

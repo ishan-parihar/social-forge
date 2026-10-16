@@ -16,7 +16,7 @@ pub struct MediumProvider {
 impl MediumProvider {
     pub fn new(_config: &Config) -> Self {
         Self {
-            client: reqwest::Client::new(),
+            client: shared_http(),
         }
     }
 

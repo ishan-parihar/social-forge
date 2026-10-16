@@ -232,8 +232,8 @@ async fn init_state() -> anyhow::Result<AppState> {
         token_key,
         telegram_client_manager: None,
         wa_client: None,
-        media_http_client: reqwest::Client::new(),
-        media_wreq_client: wreq::Client::new(),
+        media_http_client: crate::social::shared_http(),
+        media_wreq_client: crate::social::shared_wreq(),
     })
 }
 
@@ -1761,7 +1761,7 @@ async fn handle_doctor_with_state(state: &AppState) -> anyhow::Result<()> {
                     ("error".to_string(), Some("no GitHub PAT found — set GITHUB_TOKEN in ~/.social-forge/.env".to_string()))
                 } else {
                     let url = "https://api.github.com/user";
-                    match reqwest::Client::new()
+                    match crate::social::shared_http()
                         .get(url)
                         .header("Authorization", format!("Bearer {pat}"))
                         .header("Accept", "application/vnd.github+json")
@@ -1794,7 +1794,7 @@ async fn handle_doctor_with_state(state: &AppState) -> anyhow::Result<()> {
             }
             "facebook" => {
                 let url = format!("https://graph.facebook.com/{}/{}?fields=name", crate::social::GRAPH_VERSION, integration.internal_id);
-                match reqwest::Client::new().get(&url).bearer_auth(&token).send().await {
+                match crate::social::shared_http().get(&url).bearer_auth(&token).send().await {
                     Ok(r) if r.status().is_success() => ("healthy".to_string(), None),
                     Ok(r) => {
                         let status = r.status();
@@ -1806,7 +1806,7 @@ async fn handle_doctor_with_state(state: &AppState) -> anyhow::Result<()> {
             }
             "instagram" | "instagram-standalone" => {
                 let url = format!("https://graph.facebook.com/{}/{}?fields=id,name", crate::social::GRAPH_VERSION, integration.internal_id);
-                match reqwest::Client::new().get(&url).bearer_auth(&token).send().await {
+                match crate::social::shared_http().get(&url).bearer_auth(&token).send().await {
                     Ok(r) if r.status().is_success() => ("healthy".to_string(), None),
                     Ok(r) => {
                         let status = r.status();
@@ -3001,7 +3001,7 @@ async fn handle_media_with_state(state: &AppState, action: MediaAction) -> anyho
             output_json(&serde_json::to_value(result.0).unwrap_or_default());
         }
         MediaAction::Download { url, output } => {
-            let resp = reqwest::Client::new()
+            let resp = crate::social::shared_http()
                 .get(&url)
                 .send()
                 .await

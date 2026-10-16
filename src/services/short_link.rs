@@ -60,7 +60,7 @@ pub async fn shorten_urls(text: &str, api_key: &str, workspace: Option<&str>) ->
         return text.to_string();
     }
 
-    let client = reqwest::Client::new();
+    let client = crate::social::shared_http();
     let mut result = text.to_string();
 
     for url in urls {

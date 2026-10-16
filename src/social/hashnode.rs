@@ -16,7 +16,7 @@ pub struct HashnodeProvider {
 impl HashnodeProvider {
     pub fn new(_config: &Config) -> Self {
         Self {
-            http: reqwest::Client::new(),
+            http: shared_http(),
         }
     }
 

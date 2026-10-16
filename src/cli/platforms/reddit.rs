@@ -80,7 +80,7 @@ pub async fn handle(action: RedditAction, state: &AppState) -> anyhow::Result<()
                     form.push(("url", url_val));
                 }
 
-                let resp = reqwest::Client::new()
+                let resp = crate::social::shared_http()
                     .post("https://oauth.reddit.com/api/submit")
                     .header("Authorization", format!("Bearer {token}"))
                     .header(
@@ -129,7 +129,7 @@ pub async fn handle(action: RedditAction, state: &AppState) -> anyhow::Result<()
             } else {
                 format!("t3_{}", thing_id)
             };
-            let resp = reqwest::Client::new()
+            let resp = crate::social::shared_http()
                 .post("https://oauth.reddit.com/api/comment")
                 .header("Authorization", format!("Bearer {token}"))
                 .header(

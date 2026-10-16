@@ -21,27 +21,12 @@ fn effective_grant_token(old_refresh_token: &str, env_fallback: Option<&str>) ->
     }
 }
 
-pub struct RedditProvider {
-    client_id: String,
-    client_secret: String,
-    username: String,
-    password: String,
-    access_token: Option<String>,
-    refresh_token: Option<String>,
-    http: reqwest::Client,
-    /// Cookie string for www.reddit.com auth (dual-path)
-    cookie_string: Option<String>,
-    /// Cached modhash (CSRF token) for cookie-based POST requests
-    modhash: Option<String>,
-}
-
-impl RedditProvider {
-    pub fn new(config: &Config) -> Self {
-        let (client_id, client_secret) = config.provider_credentials("reddit").unwrap_or_default();
-        let username = config.reddit_username().unwrap_or_default();
-        let password = config.reddit_password().unwrap_or_default();
-        let access_token = config.reddit_access_token();
-        let refresh_token = config.reddit_refresh_token();
+/// Shared Reddit HTTP client (F1): ONE Firefox-UA + no-cache-headers pool.
+/// Reddit's www endpoints fingerprint the UA; per-provider construction
+/// rebuilt this TLS stack + pool on every tool call. Custom headers mean
+/// it can't share `shared_http()` — so it owns a per-type `LazyLock` static.
+fn reddit_http() -> reqwest::Client {
+    static CLIENT: std::sync::LazyLock<reqwest::Client> = std::sync::LazyLock::new(|| {
         let mut headers = reqwest::header::HeaderMap::new();
         headers.insert(
             reqwest::header::ACCEPT,
@@ -63,13 +48,39 @@ impl RedditProvider {
             reqwest::header::UPGRADE_INSECURE_REQUESTS,
             reqwest::header::HeaderValue::from_static("1"),
         );
-
-        let http = reqwest::Client::builder()
+        reqwest::Client::builder()
             .user_agent("Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0")
             .default_headers(headers)
             .http1_only()
             .build()
-            .expect("Failed to build reqwest client");
+            .expect("Failed to build reqwest client")
+    });
+    CLIENT.clone()
+}
+
+pub struct RedditProvider {
+    client_id: String,
+    client_secret: String,
+    username: String,
+    password: String,
+    access_token: Option<String>,
+    refresh_token: Option<String>,
+    http: reqwest::Client,
+    /// Cookie string for www.reddit.com auth (dual-path)
+    cookie_string: Option<String>,
+    /// Cached modhash (CSRF token) for cookie-based POST requests
+    modhash: Option<String>,
+}
+
+impl RedditProvider {
+    pub fn new(config: &Config) -> Self {
+        let (client_id, client_secret) = config.provider_credentials("reddit").unwrap_or_default();
+        let username = config.reddit_username().unwrap_or_default();
+        let password = config.reddit_password().unwrap_or_default();
+        let access_token = config.reddit_access_token();
+        let refresh_token = config.reddit_refresh_token();
+
+        let http = reddit_http();
 
         Self {
             client_id,

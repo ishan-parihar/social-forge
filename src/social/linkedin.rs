@@ -54,7 +54,7 @@ impl LinkedInProvider {
         Self {
             client_id,
             client_secret,
-            http: reqwest::Client::new(),
+            http: shared_http(),
         }
     }
 

@@ -36,6 +36,25 @@ async fn find_goog_token(state: &AppState, user_id: Uuid) -> Result<String, Stri
     Ok(tok)
 }
 
+// F1: one construction site per provider type. The per-tool-call cost is a
+// String clone + an Arc'd shared client clone — the providers themselves are
+// stateless config holders, so a registry round-trip buys nothing here.
+fn yt(state: &AppState) -> YoutubeProvider {
+    YoutubeProvider::new(&state.config)
+}
+
+fn gmail(state: &AppState) -> GmailProvider {
+    GmailProvider::new(&state.config)
+}
+
+fn cal(state: &AppState) -> CalendarProvider {
+    CalendarProvider::new(&state.config)
+}
+
+fn drv(state: &AppState) -> DriveProvider {
+    DriveProvider::new(&state.config)
+}
+
 // ══════════════════════════════════════════════════════════════
 // YOUTUBE — Input Types
 // ══════════════════════════════════════════════════════════════
@@ -112,7 +131,7 @@ pub async fn handle_goog_search_videos(
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_goog_token(state, user_id).await?;
-    let provider = YoutubeProvider::new(&state.config);
+    let provider = yt(state);
     let max_results = input.max_results.unwrap_or(10);
     let result = provider
         .search_videos(&token, &input.query, max_results)
@@ -127,7 +146,7 @@ pub async fn handle_goog_get_video(
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_goog_token(state, user_id).await?;
-    let provider = YoutubeProvider::new(&state.config);
+    let provider = yt(state);
     let result = provider
         .get_video(&token, &input.video_id)
         .await
@@ -141,7 +160,7 @@ pub async fn handle_goog_get_playlists(
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_goog_token(state, user_id).await?;
-    let provider = YoutubeProvider::new(&state.config);
+    let provider = yt(state);
     let max_results = input.max_results.unwrap_or(10);
     let result = provider
         .get_playlists(&token, &input.channel_id, max_results)
@@ -156,7 +175,7 @@ pub async fn handle_goog_get_playlist_items(
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_goog_token(state, user_id).await?;
-    let provider = YoutubeProvider::new(&state.config);
+    let provider = yt(state);
     let max_results = input.max_results.unwrap_or(10);
     let result = provider
         .get_playlist_items(&token, &input.playlist_id, max_results)
@@ -171,7 +190,7 @@ pub async fn handle_goog_get_comments(
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_goog_token(state, user_id).await?;
-    let provider = YoutubeProvider::new(&state.config);
+    let provider = yt(state);
     let max_results = input.max_results.unwrap_or(10);
     let result = provider
         .get_comments(&token, &input.video_id, max_results)
@@ -186,7 +205,7 @@ pub async fn handle_goog_get_channel_stats(
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_goog_token(state, user_id).await?;
-    let provider = YoutubeProvider::new(&state.config);
+    let provider = yt(state);
     let result = provider
         .get_channel_stats(&token, &input.channel_id)
         .await
@@ -200,7 +219,7 @@ pub async fn handle_goog_get_analytics(
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_goog_token(state, user_id).await?;
-    let provider = YoutubeProvider::new(&state.config);
+    let provider = yt(state);
     let result = provider
         .get_analytics(
             &token,
@@ -220,7 +239,7 @@ pub async fn handle_goog_get_subscriptions(
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_goog_token(state, user_id).await?;
-    let provider = YoutubeProvider::new(&state.config);
+    let provider = yt(state);
     let max_results = input.max_results.unwrap_or(10);
     let result = provider
         .get_subscriptions(&token, &input.channel_id, max_results)
@@ -235,7 +254,7 @@ pub async fn handle_goog_find_creators(
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_goog_token(state, user_id).await?;
-    let provider = YoutubeProvider::new(&state.config);
+    let provider = yt(state);
     let result = provider
         .find_creators(
             &token,
@@ -298,7 +317,7 @@ pub async fn handle_goog_get_profile(
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_goog_token(state, user_id).await?;
-    let provider = GmailProvider::new(&state.config);
+    let provider = gmail(state);
     let result = provider
         .get_profile(&token)
         .await
@@ -312,7 +331,7 @@ pub async fn handle_goog_list_messages(
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_goog_token(state, user_id).await?;
-    let provider = GmailProvider::new(&state.config);
+    let provider = gmail(state);
     let max_results = input.max_results.unwrap_or(20);
     let result = provider
         .list_messages(&token, max_results, input.query.as_deref())
@@ -327,7 +346,7 @@ pub async fn handle_goog_get_message(
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_goog_token(state, user_id).await?;
-    let provider = GmailProvider::new(&state.config);
+    let provider = gmail(state);
     let result = provider
         .get_message(&token, &input.message_id)
         .await
@@ -341,7 +360,7 @@ pub async fn handle_goog_send_message(
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_goog_token(state, user_id).await?;
-    let provider = GmailProvider::new(&state.config);
+    let provider = gmail(state);
     let result = provider
         .send_message(&token, &input.to, &input.subject, &input.body)
         .await
@@ -355,7 +374,7 @@ pub async fn handle_goog_list_labels(
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_goog_token(state, user_id).await?;
-    let provider = GmailProvider::new(&state.config);
+    let provider = gmail(state);
     let result = provider
         .list_labels(&token)
         .await
@@ -369,7 +388,7 @@ pub async fn handle_goog_get_thread(
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_goog_token(state, user_id).await?;
-    let provider = GmailProvider::new(&state.config);
+    let provider = gmail(state);
     let result = provider
         .get_thread(&token, &input.thread_id)
         .await
@@ -383,7 +402,7 @@ pub async fn handle_goog_search_messages(
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_goog_token(state, user_id).await?;
-    let provider = GmailProvider::new(&state.config);
+    let provider = gmail(state);
     let max_results = input.max_results.unwrap_or(20);
     let result = provider
         .search_messages(&token, &input.query, max_results)
@@ -463,7 +482,7 @@ pub async fn handle_goog_list_calendars(
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_goog_token(state, user_id).await?;
-    let provider = CalendarProvider::new(&state.config);
+    let provider = cal(state);
     let result = provider
         .list_calendars(&token)
         .await
@@ -477,7 +496,7 @@ pub async fn handle_goog_list_events(
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_goog_token(state, user_id).await?;
-    let provider = CalendarProvider::new(&state.config);
+    let provider = cal(state);
     let cal_id = input.calendar_id.as_deref().unwrap_or("primary");
     let max_results = input.max_results.unwrap_or(20);
     let result = provider
@@ -499,7 +518,7 @@ pub async fn handle_goog_get_event(
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_goog_token(state, user_id).await?;
-    let provider = CalendarProvider::new(&state.config);
+    let provider = cal(state);
     let cal_id = input.calendar_id.as_deref().unwrap_or("primary");
     let result = provider
         .get_event(&token, cal_id, &input.event_id)
@@ -514,7 +533,7 @@ pub async fn handle_goog_create_event(
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_goog_token(state, user_id).await?;
-    let provider = CalendarProvider::new(&state.config);
+    let provider = cal(state);
     let cal_id = input.calendar_id.as_deref().unwrap_or("primary");
     let result = provider
         .create_event(
@@ -536,7 +555,7 @@ pub async fn handle_goog_update_event(
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_goog_token(state, user_id).await?;
-    let provider = CalendarProvider::new(&state.config);
+    let provider = cal(state);
     let cal_id = input.calendar_id.as_deref().unwrap_or("primary");
     let result = provider
         .update_event(
@@ -557,7 +576,7 @@ pub async fn handle_goog_delete_event(
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_goog_token(state, user_id).await?;
-    let provider = CalendarProvider::new(&state.config);
+    let provider = cal(state);
     let cal_id = input.calendar_id.as_deref().unwrap_or("primary");
     let result = provider
         .delete_event(&token, cal_id, &input.event_id)
@@ -619,7 +638,7 @@ pub async fn handle_goog_list_files(
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_goog_token(state, user_id).await?;
-    let provider = DriveProvider::new(&state.config);
+    let provider = drv(state);
     let max_results = input.max_results.unwrap_or(20);
     let result = provider
         .list_files(&token, max_results, input.mime_type.as_deref())
@@ -634,7 +653,7 @@ pub async fn handle_goog_get_file(
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_goog_token(state, user_id).await?;
-    let provider = DriveProvider::new(&state.config);
+    let provider = drv(state);
     let result = provider
         .get_file(&token, &input.file_id)
         .await
@@ -648,7 +667,7 @@ pub async fn handle_goog_search_files(
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_goog_token(state, user_id).await?;
-    let provider = DriveProvider::new(&state.config);
+    let provider = drv(state);
     let max_results = input.max_results.unwrap_or(20);
     let result = provider
         .search_files(&token, &input.query, max_results)
@@ -663,7 +682,7 @@ pub async fn handle_goog_list_folders(
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_goog_token(state, user_id).await?;
-    let provider = DriveProvider::new(&state.config);
+    let provider = drv(state);
     let max_results = input.max_results.unwrap_or(50);
     let result = provider
         .list_folders(&token, max_results)
@@ -678,7 +697,7 @@ pub async fn handle_goog_get_file_metadata(
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_goog_token(state, user_id).await?;
-    let provider = DriveProvider::new(&state.config);
+    let provider = drv(state);
     let result = provider
         .get_file_metadata(&token, &input.file_id)
         .await
@@ -692,7 +711,7 @@ pub async fn handle_goog_export_file(
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_goog_token(state, user_id).await?;
-    let provider = DriveProvider::new(&state.config);
+    let provider = drv(state);
     let result = provider
         .export_file(&token, &input.file_id, &input.mime_type)
         .await

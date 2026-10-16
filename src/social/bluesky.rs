@@ -18,7 +18,7 @@ impl BlueskyProvider {
         Self {
             handle: config.bluesky_handle.clone().unwrap_or_default(),
             app_password: config.bluesky_app_password.clone().unwrap_or_default(),
-            http: reqwest::Client::new(),
+            http: shared_http(),
         }
     }
 

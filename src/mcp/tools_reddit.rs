@@ -356,7 +356,7 @@ pub async fn handle_reddit_create_post(
         form.push(("flair_id", f));
     }
 
-    let resp = reqwest::Client::new()
+    let resp = crate::social::shared_http()
         .post("https://oauth.reddit.com/api/submit")
         .header("Authorization", format!("Bearer {token}"))
         .header("User-Agent", "social-forge:v0.1.0 (by /u/social_forge)")
@@ -403,7 +403,7 @@ pub async fn handle_reddit_create_comment(
         format!("t3_{}", input.thing_id)
     };
 
-    let resp = reqwest::Client::new()
+    let resp = crate::social::shared_http()
         .post("https://oauth.reddit.com/api/comment")
         .header("Authorization", format!("Bearer {token}"))
         .header("User-Agent", "social-forge:v0.1.0 (by /u/social_forge)")
@@ -440,7 +440,7 @@ pub async fn handle_reddit_get_karma(
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     let token = find_reddit_token(state, user_id).await?;
 
-    let resp = reqwest::Client::new()
+    let resp = crate::social::shared_http()
         .get("https://oauth.reddit.com/api/v1/me/karma")
         .header("Authorization", format!("Bearer {token}"))
         .header("User-Agent", "social-forge:v0.1.0 (by /u/social_forge)")

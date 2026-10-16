@@ -35,7 +35,7 @@ pub async fn handle(action: LinkedinPageAction, state: &AppState) -> anyhow::Res
                         "distribution": {"feedDistribution": "MAIN_FEED"},
                         "lifecycleState": "PUBLISHED",
                     });
-                    match reqwest::Client::new()
+                    match crate::social::shared_http()
                         .post("https://api.linkedin.com/v2/rest/posts")
                         .header("Authorization", format!("Bearer {token}"))
                         .header("X-Restli-Protocol-Version", "2.0.0")
@@ -88,7 +88,7 @@ pub async fn handle(action: LinkedinPageAction, state: &AppState) -> anyhow::Res
                     let url = format!(
                         "https://api.linkedin.com/rest/networkSizes/{org_urn}?edgeType=CompanyFollowedByMember"
                     );
-                    match reqwest::Client::new()
+                    match crate::social::shared_http()
                         .get(&url)
                         .header("Authorization", format!("Bearer {token}"))
                         .header(

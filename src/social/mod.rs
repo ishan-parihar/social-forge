@@ -15,6 +15,7 @@ pub mod github;
 pub mod gmail;
 pub mod google;
 pub mod google_my_business;
+pub mod google_oauth;
 pub mod hashnode;
 pub mod instagram;
 pub mod instagram_standalone;
@@ -62,6 +63,35 @@ pub struct AuthToken {
     pub name: String,
     pub username: String,
     pub picture: Option<String>,
+}
+
+/// Shared plain HTTP client for providers (F1): ONE connection pool,
+/// Arc-cloned per provider instance. A `reqwest::Client::new()` builds a
+/// TLS stack + fresh pool every call — providers re-constructed per tool
+/// call must not pay that. Providers needing custom default headers
+/// (reddit, github) own a per-type `LazyLock` static instead, so their
+/// headers never leak into this one.
+pub fn shared_http() -> reqwest::Client {
+    static CLIENT: std::sync::LazyLock<reqwest::Client> =
+        std::sync::LazyLock::new(reqwest::Client::new);
+    CLIENT.clone()
+}
+
+/// Shared impersonating HTTP client (F1): ONE Chrome131 pool for code paths
+/// that need a real-browser TLS fingerprint. Mirrors `shared_http` so
+/// per-call sites (CLI platform runners, media proxy) never rebuild it.
+/// For X provider traffic prefer the `x_http()` static in `x.rs`, which
+/// additionally pins the bearer + browser default headers.
+pub fn shared_wreq() -> wreq::Client {
+    static CLIENT: std::sync::LazyLock<wreq::Client> = std::sync::LazyLock::new(|| {
+        wreq::Client::builder()
+            .emulation(wreq_util::Emulation::Chrome131)
+            .gzip(true)
+            .brotli(true)
+            .build()
+            .unwrap_or_else(|_| wreq::Client::new())
+    });
+    CLIENT.clone()
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]

@@ -25,7 +25,7 @@ impl TelegramBotProvider {
 
         Self {
             tokens,
-            http: reqwest::Client::new(),
+            http: shared_http(),
         }
     }
 

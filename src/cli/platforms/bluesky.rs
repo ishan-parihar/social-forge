@@ -31,7 +31,7 @@ pub async fn handle(action: BlueskyAction, state: &AppState) -> anyhow::Result<(
                 .map_err(|e| e.to_string())
         }
         BlueskyAction::Profile { handle } => {
-            match reqwest::Client::new()
+            match crate::social::shared_http()
                 .get("https://bsky.social/xrpc/app.bsky.actor.getProfile")
                 .query(&[("actor", &handle)])
                 .header("Authorization", format!("Bearer {token}"))
@@ -46,7 +46,7 @@ pub async fn handle(action: BlueskyAction, state: &AppState) -> anyhow::Result<(
             }
         }
         BlueskyAction::Timeline { limit } => {
-            match reqwest::Client::new()
+            match crate::social::shared_http()
                 .get("https://bsky.social/xrpc/app.bsky.feed.getTimeline")
                 .query(&[("limit", &limit.to_string())])
                 .header("Authorization", format!("Bearer {token}"))
@@ -61,7 +61,7 @@ pub async fn handle(action: BlueskyAction, state: &AppState) -> anyhow::Result<(
             }
         }
         BlueskyAction::Search { query, limit } => {
-            match reqwest::Client::new()
+            match crate::social::shared_http()
                 .get("https://bsky.social/xrpc/app.bsky.feed.searchPosts")
                 .query(&[("q", &query), ("limit", &limit.to_string())])
                 .header("Authorization", format!("Bearer {token}"))
@@ -90,7 +90,7 @@ pub async fn handle(action: BlueskyAction, state: &AppState) -> anyhow::Result<(
             feed_type: _,
             limit,
         } => {
-            match reqwest::Client::new()
+            match crate::social::shared_http()
                 .get("https://bsky.social/xrpc/app.bsky.feed.getTimeline")
                 .query(&[("limit", &limit.to_string())])
                 .header("Authorization", format!("Bearer {token}"))

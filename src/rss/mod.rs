@@ -234,7 +234,7 @@ async fn summarize_with_llm(
          Summary:"
     );
 
-    let client = reqwest::Client::new();
+    let client = crate::social::shared_http();
     let response = client
         .post(endpoint)
         .json(&serde_json::json!({
