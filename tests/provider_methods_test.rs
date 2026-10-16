@@ -48,9 +48,7 @@ async fn test_ias_get_media_with_bad_token() {
     let config = get_config();
     let provider = create_ig_provider(&config);
 
-    let result = provider
-        .get_media(BAD_TOKEN, "17841400000000000", 10)
-        .await;
+    let result = provider.get_media(BAD_TOKEN, "17841400000000000", 10).await;
 
     match &result {
         Err(e) => {
@@ -230,7 +228,9 @@ async fn test_ias_social_provider_publish_with_bad_token() {
     match &result {
         Err(e) => {
             let err_str = format!("{e}");
-            println!("✅ ias_publish (SocialProvider trait): Properly handled API error: {err_str}");
+            println!(
+                "✅ ias_publish (SocialProvider trait): Properly handled API error: {err_str}"
+            );
         }
         Ok(v) => println!("⚠️  ias_publish: Unexpected success: {v:?}"),
     }
@@ -267,9 +267,7 @@ async fn test_threads_get_threads_with_bad_token() {
     let config = get_config();
     let provider = create_threads_provider(&config);
 
-    let result = provider
-        .get_threads(BAD_TOKEN, "123456789", 10)
-        .await;
+    let result = provider.get_threads(BAD_TOKEN, "123456789", 10).await;
 
     match &result {
         Err(e) => {
@@ -354,7 +352,12 @@ async fn test_threads_get_insights_with_bad_token() {
     let provider = create_threads_provider(&config);
 
     let result = provider
-        .get_insights(BAD_TOKEN, "123456789", "likes,views,reposts,replies,quotes", "day")
+        .get_insights(
+            BAD_TOKEN,
+            "123456789",
+            "likes,views,reposts,replies,quotes",
+            "day",
+        )
         .await;
 
     match &result {
@@ -516,7 +519,12 @@ async fn test_linkedin_create_comment_with_bad_token() {
     let provider = create_linkedin_provider(&config);
 
     let result = provider
-        .create_comment(LINKEDIN_BAD_TOKEN, "urn:li:activity:test", "urn:li:person:test", "Test comment")
+        .create_comment(
+            LINKEDIN_BAD_TOKEN,
+            "urn:li:activity:test",
+            "urn:li:person:test",
+            "Test comment",
+        )
         .await;
 
     match &result {
@@ -618,7 +626,12 @@ async fn test_linkedin_page_create_comment_with_bad_token() {
     let provider = create_linkedin_page_provider(&config);
 
     let result = provider
-        .create_comment(LINKEDIN_BAD_TOKEN, "urn:li:activity:test", "urn:li:organization:test", "Test comment")
+        .create_comment(
+            LINKEDIN_BAD_TOKEN,
+            "urn:li:activity:test",
+            "urn:li:organization:test",
+            "Test comment",
+        )
         .await;
 
     match &result {
@@ -667,19 +680,35 @@ async fn test_ias_mcp_tool_handler_full_chain() {
 
     // Verify Instagram Standalone provider is registered
     let ias = state.providers.get("instagram-standalone");
-    assert!(ias.is_some(), "Instagram Standalone provider should be registered");
+    assert!(
+        ias.is_some(),
+        "Instagram Standalone provider should be registered"
+    );
     let ias = ias.unwrap();
     assert_eq!(ias.identifier(), "instagram-standalone");
     assert!(!ias.scopes().is_empty(), "Should have scopes configured");
 
     // Verify the provider generates valid auth URLs
     let auth_result = ias
-        .generate_auth_url("test_state", "test_verifier", "http://localhost:3000/api/auth/callback")
+        .generate_auth_url(
+            "test_state",
+            "test_verifier",
+            "http://localhost:3000/api/auth/callback",
+        )
         .await;
-    assert!(auth_result.is_ok(), "Auth URL should generate: {auth_result:?}");
+    assert!(
+        auth_result.is_ok(),
+        "Auth URL should generate: {auth_result:?}"
+    );
     let url = auth_result.unwrap().url;
-    assert!(url.contains("instagram.com/oauth/authorize"), "URL should go to Instagram OAuth");
-    assert!(url.contains("instagram_business_basic"), "Should contain business scopes (matching social-forge-app pattern)");
+    assert!(
+        url.contains("instagram.com/oauth/authorize"),
+        "URL should go to Instagram OAuth"
+    );
+    assert!(
+        url.contains("instagram_business_basic"),
+        "Should contain business scopes (matching social-forge-app pattern)"
+    );
 
     println!("✅ ias_mcp_handler: Full chain verified");
 }
@@ -720,16 +749,32 @@ async fn test_threads_mcp_tool_handler_full_chain() {
     assert!(threads.is_some(), "Threads provider should be registered");
     let threads = threads.unwrap();
     assert_eq!(threads.identifier(), "threads");
-    assert!(!threads.scopes().is_empty(), "Should have scopes configured");
+    assert!(
+        !threads.scopes().is_empty(),
+        "Should have scopes configured"
+    );
 
     // Verify the provider generates valid auth URLs
     let auth_result = threads
-        .generate_auth_url("test_state", "test_verifier", "http://localhost:3000/api/auth/callback")
+        .generate_auth_url(
+            "test_state",
+            "test_verifier",
+            "http://localhost:3000/api/auth/callback",
+        )
         .await;
-    assert!(auth_result.is_ok(), "Auth URL should generate: {auth_result:?}");
+    assert!(
+        auth_result.is_ok(),
+        "Auth URL should generate: {auth_result:?}"
+    );
     let url = auth_result.unwrap().url;
-    assert!(url.contains("threads.net/oauth/authorize"), "URL should go to Threads OAuth");
-    assert!(url.contains("threads_basic"), "Should contain the right scopes");
+    assert!(
+        url.contains("threads.net/oauth/authorize"),
+        "URL should go to Threads OAuth"
+    );
+    assert!(
+        url.contains("threads_basic"),
+        "Should contain the right scopes"
+    );
 
     println!("✅ threads_mcp_handler: Full chain verified");
 }
@@ -781,12 +826,25 @@ async fn test_linkedin_mcp_tool_handler_full_chain() {
 
     // Verify LinkedIn provider generates valid auth URLs
     let auth_result = li
-        .generate_auth_url("test_state", "test_verifier", "http://localhost:3000/api/auth/callback")
+        .generate_auth_url(
+            "test_state",
+            "test_verifier",
+            "http://localhost:3000/api/auth/callback",
+        )
         .await;
-    assert!(auth_result.is_ok(), "Auth URL should generate: {auth_result:?}");
+    assert!(
+        auth_result.is_ok(),
+        "Auth URL should generate: {auth_result:?}"
+    );
     let url = auth_result.unwrap().url;
-    assert!(url.contains("linkedin.com/oauth/v2/authorization"), "URL should go to LinkedIn OAuth");
-    assert!(url.contains("w_member_social"), "Should contain the right scopes");
+    assert!(
+        url.contains("linkedin.com/oauth/v2/authorization"),
+        "URL should go to LinkedIn OAuth"
+    );
+    assert!(
+        url.contains("w_member_social"),
+        "Should contain the right scopes"
+    );
 
     println!("✅ linkedin_mcp_handler: Full chain verified");
 }
@@ -801,17 +859,35 @@ async fn test_ias_and_threads_credentials_loaded() {
     let ias_creds = config.provider_credentials("instagram-standalone");
     assert!(ias_creds.is_some(), "Instagram Standalone credentials should be loaded from .env (INSTAGRAM_APP_ID/INSTAGRAM_APP_SECRET)");
     let (cid, secret) = ias_creds.unwrap();
-    assert!(!cid.is_empty(), "Instagram Standalone client_id should not be empty");
-    assert!(!secret.is_empty(), "Instagram Standalone client_secret should not be empty");
-    println!("✅ Instagram Standalone credentials loaded (client_id: {}...)", &cid[..5]);
+    assert!(
+        !cid.is_empty(),
+        "Instagram Standalone client_id should not be empty"
+    );
+    assert!(
+        !secret.is_empty(),
+        "Instagram Standalone client_secret should not be empty"
+    );
+    println!(
+        "✅ Instagram Standalone credentials loaded (client_id: {}...)",
+        &cid[..5]
+    );
 
     // Threads needs THREADS_APP_ID + THREADS_APP_SECRET
     let threads_creds = config.provider_credentials("threads");
-    assert!(threads_creds.is_some(), "Threads credentials should be loaded from .env (THREADS_APP_ID/THREADS_APP_SECRET)");
+    assert!(
+        threads_creds.is_some(),
+        "Threads credentials should be loaded from .env (THREADS_APP_ID/THREADS_APP_SECRET)"
+    );
     let (cid2, secret2) = threads_creds.unwrap();
     assert!(!cid2.is_empty(), "Threads client_id should not be empty");
-    assert!(!secret2.is_empty(), "Threads client_secret should not be empty");
-    println!("✅ Threads credentials loaded (client_id: {}...)", &cid2[..5]);
+    assert!(
+        !secret2.is_empty(),
+        "Threads client_secret should not be empty"
+    );
+    println!(
+        "✅ Threads credentials loaded (client_id: {}...)",
+        &cid2[..5]
+    );
 }
 
 // ── Discord Provider Method Tests ──────────────────────────────
@@ -865,7 +941,9 @@ async fn test_discord_get_server_info() {
 async fn test_discord_create_forum_post() {
     let config = get_config();
     let provider = DiscordProvider::new(&config);
-    let result = provider.create_forum_post("0", "Test Post", "Body text", &[]).await;
+    let result = provider
+        .create_forum_post("0", "Test Post", "Body text", &[])
+        .await;
     assert!(result.is_err());
     println!("✅ discord_create_forum_post: Properly handled API error");
 }
@@ -878,17 +956,23 @@ async fn test_skool_get_community_info() {
     let result = provider.get_community_info("test", "bad-token").await;
     match &result {
         Err(e) => println!("✅ skool_get_community_info: Got error (expected with bad token): {e}"),
-        Ok(v) => println!("⚠️  skool_get_community_info: Returned data (skool.com may not require auth): {v:?}"),
+        Ok(v) => println!(
+            "⚠️  skool_get_community_info: Returned data (skool.com may not require auth): {v:?}"
+        ),
     }
 }
 
 #[tokio::test]
 async fn test_skool_list_posts() {
     let provider = SkoolProvider::new();
-    let result = provider.list_posts("test", "bad-token", None, None, None).await;
+    let result = provider
+        .list_posts("test", "bad-token", None, None, None)
+        .await;
     match &result {
         Err(e) => println!("✅ skool_list_posts: Got error (expected with bad token): {e}"),
-        Ok(v) => println!("⚠️  skool_list_posts: Returned data (skool.com may not require auth): {v:?}"),
+        Ok(v) => {
+            println!("⚠️  skool_list_posts: Returned data (skool.com may not require auth): {v:?}")
+        }
     }
 }
 
@@ -903,7 +987,9 @@ async fn test_skool_get_post() {
 #[tokio::test]
 async fn test_skool_create_comment() {
     let provider = SkoolProvider::new();
-    let result = provider.create_comment("post1", "group1", "hello", "bad-token").await;
+    let result = provider
+        .create_comment("post1", "group1", "hello", "bad-token")
+        .await;
     assert!(result.is_err());
     println!("✅ skool_create_comment: Properly handled API error");
 }
@@ -914,7 +1000,9 @@ async fn test_skool_create_comment() {
 async fn test_youtube_find_creators() {
     let config = get_config();
     let provider = YoutubeProvider::new(&config);
-    let result = provider.find_creators("bad-token", "rust programming", None, None).await;
+    let result = provider
+        .find_creators("bad-token", "rust programming", None, None)
+        .await;
     assert!(result.is_err());
     println!("✅ youtube_find_creators: Properly handled API error");
 }
@@ -950,7 +1038,9 @@ async fn test_x_get_me() {
 async fn test_x_home_timeline() {
     let config = get_config();
     let provider = XProvider::new(&config);
-    let result = provider.home_timeline(X_BAD_TOKEN, "44196397", 5, None).await;
+    let result = provider
+        .home_timeline(X_BAD_TOKEN, "44196397", 5, None)
+        .await;
     match &result {
         Err(e) => println!("✅ x_home_timeline: Properly handled API error: {e}"),
         Ok(v) => println!("⚠️  x_home_timeline: Unexpected success: {v:?}"),
@@ -961,7 +1051,9 @@ async fn test_x_home_timeline() {
 async fn test_x_search_tweets() {
     let config = get_config();
     let provider = XProvider::new(&config);
-    let result = provider.search_tweets(X_BAD_TOKEN, "rust programming", 5, None).await;
+    let result = provider
+        .search_tweets(X_BAD_TOKEN, "rust programming", 5, None)
+        .await;
     match &result {
         Err(e) => println!("✅ x_search_tweets: Properly handled API error: {e}"),
         Ok(v) => println!("⚠️  x_search_tweets: Unexpected success: {v:?}"),
@@ -987,7 +1079,9 @@ const REDDIT_BAD_TOKEN: &str = "invalid_reddit_token_for_testing_12345";
 async fn test_reddit_browse() {
     let config = get_config();
     let provider = RedditProvider::new(&config);
-    let result = provider.browse(REDDIT_BAD_TOKEN, "rust", "hot", 5, "all").await;
+    let result = provider
+        .browse(REDDIT_BAD_TOKEN, "rust", "hot", 5, "all")
+        .await;
     match &result {
         Err(e) => println!("✅ reddit_browse: Properly handled API error: {e}"),
         Ok(v) => println!("⚠️  reddit_browse: Unexpected success: {v:?}"),
@@ -998,7 +1092,9 @@ async fn test_reddit_browse() {
 async fn test_reddit_search() {
     let config = get_config();
     let provider = RedditProvider::new(&config);
-    let result = provider.search(REDDIT_BAD_TOKEN, "test query", Some("all"), "new", 5, "all").await;
+    let result = provider
+        .search(REDDIT_BAD_TOKEN, "test query", Some("all"), "new", 5, "all")
+        .await;
     match &result {
         Err(e) => println!("✅ reddit_search: Properly handled API error: {e}"),
         Ok(v) => println!("⚠️  reddit_search: Unexpected success: {v:?}"),
@@ -1019,7 +1115,8 @@ async fn test_reddit_inbox() {
 // ── WordPress Provider Method Tests ─────────────────────────────
 // WordPress expects a JSON token {"site_url":"...","username":"...","app_password":"..."}
 
-const WP_BAD_TOKEN: &str = r#"{"site_url":"https://example.com","username":"admin","app_password":"bad"}"#;
+const WP_BAD_TOKEN: &str =
+    r#"{"site_url":"https://example.com","username":"admin","app_password":"bad"}"#;
 
 #[tokio::test]
 async fn test_wordpress_list_posts() {

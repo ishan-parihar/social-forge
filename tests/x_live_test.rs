@@ -9,7 +9,11 @@ fn get_config() -> Config {
 fn log(label: &str, result: &Result<serde_json::Value, impl std::fmt::Display>) {
     match result {
         Ok(v) => {
-            let preview = serde_json::to_string(v).unwrap_or_default().chars().take(80).collect::<String>();
+            let preview = serde_json::to_string(v)
+                .unwrap_or_default()
+                .chars()
+                .take(80)
+                .collect::<String>();
             eprintln!("  ✅ {label}: {preview}");
         }
         Err(e) => eprintln!("  ⚠️  {label}: {e}"),
@@ -39,7 +43,10 @@ async fn test_x_tools_live() {
     eprint!("1. UserByScreenName ... ");
     match provider.user_lookup_by_username(&token, "elonmusk").await {
         Ok(d) => {
-            let name = d.pointer("/data/user/result/legacy/name").and_then(|v| v.as_str()).unwrap_or("?");
+            let name = d
+                .pointer("/data/user/result/legacy/name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("?");
             eprintln!("✅ {name}");
         }
         Err(e) => eprintln!("❌ {e}"),
@@ -48,7 +55,10 @@ async fn test_x_tools_live() {
     eprint!("2. get_me ... ");
     let my_id = match provider.get_me(&token).await {
         Ok(d) => {
-            let id = d.pointer("/data/id").and_then(|v| v.as_str()).unwrap_or("44196397");
+            let id = d
+                .pointer("/data/id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("44196397");
             eprintln!("✅ id={id}");
             id.to_string()
         }
@@ -58,22 +68,65 @@ async fn test_x_tools_live() {
         }
     };
 
-    log("home_timeline", &provider.home_timeline(&token, &my_id, 5, None).await);
-    log("user_tweets", &provider.user_tweets(&token, &my_id, 5, None).await);
+    log(
+        "home_timeline",
+        &provider.home_timeline(&token, &my_id, 5, None).await,
+    );
+    log(
+        "user_tweets",
+        &provider.user_tweets(&token, &my_id, 5, None).await,
+    );
     log("tweet_detail", &provider.tweet_detail(&token, "20").await);
-    log("search_tweets", &provider.search_tweets(&token, "rust programming", 5, None).await);
-    log("user_lookup", &provider.user_lookup(&token, "44196397").await);
-    log("followers", &provider.followers(&token, "44196397", 5, None).await);
-    log("following", &provider.following(&token, "44196397", 5, None).await);
-    log("delete_tweet", &provider.delete_tweet(&token, "999999999999999999").await);
-    log("like_tweet", &provider.like_tweet(&token, &my_id, "20").await);
-    log("unlike_tweet", &provider.unlike_tweet(&token, &my_id, "20").await);
-    log("bookmarks", &provider.bookmarks(&token, &my_id, 5, None).await);
-    log("list_timeline", &provider.list_timeline(&token, "1449448327965741056", 5, None).await);
+    log(
+        "search_tweets",
+        &provider
+            .search_tweets(&token, "rust programming", 5, None)
+            .await,
+    );
+    log(
+        "user_lookup",
+        &provider.user_lookup(&token, "44196397").await,
+    );
+    log(
+        "followers",
+        &provider.followers(&token, "44196397", 5, None).await,
+    );
+    log(
+        "following",
+        &provider.following(&token, "44196397", 5, None).await,
+    );
+    log(
+        "delete_tweet",
+        &provider.delete_tweet(&token, "999999999999999999").await,
+    );
+    log(
+        "like_tweet",
+        &provider.like_tweet(&token, &my_id, "20").await,
+    );
+    log(
+        "unlike_tweet",
+        &provider.unlike_tweet(&token, &my_id, "20").await,
+    );
+    log(
+        "bookmarks",
+        &provider.bookmarks(&token, &my_id, 5, None).await,
+    );
+    log(
+        "list_timeline",
+        &provider
+            .list_timeline(&token, "1449448327965741056", 5, None)
+            .await,
+    );
     log("retweet", &provider.retweet(&token, &my_id, "20").await);
     log("unretweet", &provider.unretweet(&token, &my_id, "20").await);
-    log("follow_user", &provider.follow_user(&token, &my_id, "44196397").await);
-    log("unfollow_user", &provider.unfollow_user(&token, &my_id, "44196397").await);
+    log(
+        "follow_user",
+        &provider.follow_user(&token, &my_id, "44196397").await,
+    );
+    log(
+        "unfollow_user",
+        &provider.unfollow_user(&token, &my_id, "44196397").await,
+    );
 
     eprintln!("\n=== ALL 18 X TOOLS TESTED ===");
 }

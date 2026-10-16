@@ -3951,4 +3951,74 @@ mod b03_b08_tests {
         assert_eq!(access, "plain-access");
         assert_eq!(refresh, "plain-refresh");
     }
+
+    /// B13: `set_post_recurring_with_copies` — the shared path BOTH REST
+    /// `/api/posts/{id}/repeat` and the MCP `posts_repeat` tool call — must
+    /// create real queued copies at spaced dates and stamp the series on the
+    /// original. The pre-fix MCP tool only wrote `repeat_interval_days`,
+    /// which nothing read: zero copies, ever.
+    #[tokio::test]
+    async fn repeat_creates_spaced_copies_and_stamps_the_series() {
+        let (pool, user_id) = fixture().await;
+        let integration_id = integration(&pool, user_id, "acct-a").await;
+
+        let base = Utc::now();
+        let post = create_post(
+            &pool,
+            user_id,
+            integration_id,
+            "evergreen",
+            None,
+            &serde_json::json!([]),
+            &serde_json::json!({}),
+            Some(base),
+            Some(PostState::Queued),
+            None,
+            0,
+        )
+        .await
+        .unwrap();
+
+        // Every 2 days for 5 days → copies at +2d and +4d.
+        let end = base + chrono::Duration::days(5);
+        let group = Uuid::new_v4();
+        let (ids, dates) =
+            set_post_recurring_with_copies(&pool, post.id, user_id, 2, &end, group, &base)
+                .await
+                .unwrap();
+
+        assert_eq!(ids.len(), 2, "copies at +2d/+4d, got {ids:?}");
+        assert_eq!(dates.len(), 2);
+
+        let (state, copy_days, copy_group, scheduled): (
+            String,
+            Option<i64>,
+            Option<Uuid>,
+            Option<i64>,
+        ) = sqlx::query_as(
+            "SELECT state, repeat_interval_days, group_id, scheduled_at FROM posts WHERE id = ?",
+        )
+        .bind(ids[0])
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(state, "queued", "copies must go out on schedule, not sit as drafts");
+        assert_eq!(copy_days, None, "copies must not themselves recur (runaway guard)");
+        assert_eq!(copy_group, Some(group), "copies join the series group");
+        let delta = (scheduled.unwrap() - base.timestamp()).abs();
+        assert!(
+            (delta - 2 * 86400).abs() <= 1,
+            "first copy due ~2 days after base, got {delta}s"
+        );
+
+        // The original carries the repeat contract + the same group.
+        let (orig_days, orig_group): (Option<i64>, Option<Uuid>) =
+            sqlx::query_as("SELECT repeat_interval_days, group_id FROM posts WHERE id = ?")
+                .bind(post.id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(orig_days, Some(2));
+        assert_eq!(orig_group, Some(group));
+    }
 }

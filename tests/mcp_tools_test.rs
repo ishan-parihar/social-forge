@@ -37,13 +37,33 @@ async fn test_provider_registry_has_all_providers() {
 
     let mut expected: Vec<&str> = vec![
         // Tier-1 (12)
-        "x", "linkedin", "linkedin-page", "facebook", "instagram",
-        "instagram-standalone", "threads", "youtube", "tiktok", "reddit",
-        "bluesky", "pinterest",
+        "x",
+        "linkedin",
+        "linkedin-page",
+        "facebook",
+        "instagram",
+        "instagram-standalone",
+        "threads",
+        "youtube",
+        "tiktok",
+        "reddit",
+        "bluesky",
+        "pinterest",
         // Tier-2 (14)
-        "telegram-bot", "telegram-user", "discord", "slack", "whatsapp",
-        "wordpress", "mastodon", "medium", "devto", "hashnode", "github",
-        "google", "google_my_business", "skool",
+        "telegram-bot",
+        "telegram-user",
+        "discord",
+        "slack",
+        "whatsapp",
+        "wordpress",
+        "mastodon",
+        "medium",
+        "devto",
+        "hashnode",
+        "github",
+        "google",
+        "google_my_business",
+        "skool",
     ];
     expected.sort();
 
@@ -72,16 +92,46 @@ async fn test_x_provider_creation() {
 
     // Verify expanded scopes
     let scopes = x.scopes();
-    assert!(scopes.contains(&"bookmark.read".to_string()), "Should have bookmark.read scope");
-    assert!(scopes.contains(&"bookmark.write".to_string()), "Should have bookmark.write scope");
-    assert!(scopes.contains(&"like.read".to_string()), "Should have like.read scope");
-    assert!(scopes.contains(&"like.write".to_string()), "Should have like.write scope");
-    assert!(scopes.contains(&"follows.read".to_string()), "Should have follows.read scope");
-    assert!(scopes.contains(&"follows.write".to_string()), "Should have follows.write scope");
-    assert!(scopes.contains(&"list.read".to_string()), "Should have list.read scope");
-    assert!(scopes.contains(&"tweet.read".to_string()), "Should have tweet.read scope");
-    assert!(scopes.contains(&"tweet.write".to_string()), "Should have tweet.write scope");
-    assert!(scopes.contains(&"offline.access".to_string()), "Should have offline.access scope");
+    assert!(
+        scopes.contains(&"bookmark.read".to_string()),
+        "Should have bookmark.read scope"
+    );
+    assert!(
+        scopes.contains(&"bookmark.write".to_string()),
+        "Should have bookmark.write scope"
+    );
+    assert!(
+        scopes.contains(&"like.read".to_string()),
+        "Should have like.read scope"
+    );
+    assert!(
+        scopes.contains(&"like.write".to_string()),
+        "Should have like.write scope"
+    );
+    assert!(
+        scopes.contains(&"follows.read".to_string()),
+        "Should have follows.read scope"
+    );
+    assert!(
+        scopes.contains(&"follows.write".to_string()),
+        "Should have follows.write scope"
+    );
+    assert!(
+        scopes.contains(&"list.read".to_string()),
+        "Should have list.read scope"
+    );
+    assert!(
+        scopes.contains(&"tweet.read".to_string()),
+        "Should have tweet.read scope"
+    );
+    assert!(
+        scopes.contains(&"tweet.write".to_string()),
+        "Should have tweet.write scope"
+    );
+    assert!(
+        scopes.contains(&"offline.access".to_string()),
+        "Should have offline.access scope"
+    );
 
     println!("✅ XProvider: {} scopes configured", scopes.len());
 }
@@ -95,21 +145,46 @@ async fn test_x_generate_auth_url() {
     let x = registry.get("x").expect("X provider should exist");
 
     let result = x
-        .generate_auth_url("test_state", "test_verifier", "http://localhost:3000/api/auth/callback")
+        .generate_auth_url(
+            "test_state",
+            "test_verifier",
+            "http://localhost:3000/api/auth/callback",
+        )
         .await;
 
     assert!(result.is_ok(), "X auth URL generation should succeed");
     let url = result.unwrap().url;
-    assert!(url.contains("twitter.com/i/oauth2/authorize"), "URL should point to Twitter authorize endpoint");
-    assert!(url.contains("code_challenge_method=S256"), "Should use PKCE S256");
-    assert!(url.contains("bookmark.read"), "URL should contain expanded bookmark.read scope");
-    assert!(url.contains("like.read"), "URL should contain like.read scope");
-    assert!(url.contains("follows.read"), "URL should contain follows.read scope");
-    assert!(url.contains("list.read"), "URL should contain list.read scope");
-    assert!(url.contains("redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fauth%2Fcallback"), "URL should contain redirect_uri");
+    assert!(
+        url.contains("twitter.com/i/oauth2/authorize"),
+        "URL should point to Twitter authorize endpoint"
+    );
+    assert!(
+        url.contains("code_challenge_method=S256"),
+        "Should use PKCE S256"
+    );
+    assert!(
+        url.contains("bookmark.read"),
+        "URL should contain expanded bookmark.read scope"
+    );
+    assert!(
+        url.contains("like.read"),
+        "URL should contain like.read scope"
+    );
+    assert!(
+        url.contains("follows.read"),
+        "URL should contain follows.read scope"
+    );
+    assert!(
+        url.contains("list.read"),
+        "URL should contain list.read scope"
+    );
+    assert!(
+        url.contains("redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fauth%2Fcallback"),
+        "URL should contain redirect_uri"
+    );
 
     println!("✅ XProvider: Auth URL generated with {} scopes", 11);
-    println!("   URL: {}...{}", &url[..60], &url[url.len()-30..]);
+    println!("   URL: {}...{}", &url[..60], &url[url.len() - 30..]);
 }
 
 // ── Test 4: XProvider error handling ─────────────────────────────
@@ -130,7 +205,10 @@ async fn test_x_bad_token_error_handling() {
         &base64::engine::general_purpose::STANDARD,
         format!("{}:{}", "test_client", "test_secret"),
     );
-    assert!(!credentials.is_empty(), "Base64 credentials should not be empty");
+    assert!(
+        !credentials.is_empty(),
+        "Base64 credentials should not be empty"
+    );
 
     println!("✅ XProvider: Error handling patterns verified");
 }
@@ -142,7 +220,9 @@ async fn test_reddit_provider_creation() {
     let config = get_config();
     let registry = get_registry(&config);
 
-    let reddit = registry.get("reddit").expect("Reddit provider should exist");
+    let reddit = registry
+        .get("reddit")
+        .expect("Reddit provider should exist");
     assert_eq!(reddit.identifier(), "reddit");
 
     let scopes = reddit.scopes();
@@ -164,28 +244,39 @@ async fn test_multi_account_data_model() {
         .await
         .expect("Failed to connect to DB");
 
-    // Check that the integrations table has root_internal_id column
+    // Check that the integrations table has root_internal_id column.
+    // SQLite: pragma_table_info is the catalog (the old query used the
+    // Postgres-only information_schema).
     let count: (i64,) = sqlx::query_as(
-        "SELECT COUNT(*)::int8 FROM information_schema.columns WHERE table_name='integrations' AND column_name='root_internal_id'"
+        "SELECT COUNT(*) FROM pragma_table_info('integrations') WHERE name = 'root_internal_id'",
     )
-        .fetch_one(&db)
-        .await
-        .expect("Failed to query schema");
+    .fetch_one(&db)
+    .await
+    .expect("Failed to query schema");
 
-    assert_eq!(count.0, 1, "integrations table should have root_internal_id column");
+    assert_eq!(
+        count.0, 1,
+        "integrations table should have root_internal_id column"
+    );
     println!("✅ Multi-account: root_internal_id column exists");
 
+    // The upsert path's ON CONFLICT (user_id, provider_identifier,
+    // internal_id) depends on a UNIQUE index — SQLite exposes them via
+    // pragma_index_list (pg_constraint is Postgres).
     let constraints: Vec<(String,)> = sqlx::query_as(
-        "SELECT conname FROM pg_constraint WHERE conrelid = 'integrations'::regclass AND contype = 'u'"
+        "SELECT name FROM pragma_index_list('integrations') WHERE \"unique\" = 1",
     )
-        .fetch_all(&db)
-        .await
-        .expect("Failed to query constraints");
+    .fetch_all(&db)
+    .await
+    .expect("Failed to query constraints");
 
     for (name,) in &constraints {
-        println!("✅ Multi-account: UNIQUE constraint '{}'", name);
+        println!("✅ Multi-account: UNIQUE index '{}'", name);
     }
-    assert!(!constraints.is_empty(), "Should have at least one UNIQUE constraint on integrations");
+    assert!(
+        !constraints.is_empty(),
+        "Should have at least one UNIQUE constraint on integrations"
+    );
 }
 
 // ── Test 7: MCP tool router registration ────────────────────────
@@ -219,8 +310,14 @@ async fn test_mcp_tools_registration() {
 
     let server = SocialForgeMcpServer::new(state.clone());
     // Verify server creation succeeds (tests that all #[tool] macros compile)
-    assert!(server.state.config.provider_credentials("x").is_some(), "X credentials should be loaded");
-    assert!(server.state.config.provider_credentials("reddit").is_some(), "Reddit credentials should be loaded");
+    assert!(
+        server.state.config.provider_credentials("x").is_some(),
+        "X credentials should be loaded"
+    );
+    assert!(
+        server.state.config.provider_credentials("reddit").is_some(),
+        "Reddit credentials should be loaded"
+    );
 
     println!("✅ MCP server: SocialForgeMcpServer instantiated successfully");
     println!("✅ MCP tools: All {} #[tool] entries compile", 115); // 7 reddit + 20 x + 16 fb + 17 ig + 7 ias + 9 th + 6 li + 4 lip + 9 yt + 7 pi + 10 di + 5 sk
@@ -236,30 +333,27 @@ async fn test_db_has_x_and_reddit_integrations() {
         .expect("Failed to connect to DB");
 
     // Check for X integrations
-    let x_count: (i64,) = sqlx::query_as(
-        "SELECT COUNT(*) FROM integrations WHERE provider_identifier = 'x'"
-    )
-        .fetch_one(&db)
-        .await
-        .expect("Failed to query x integrations");
+    let x_count: (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM integrations WHERE provider_identifier = 'x'")
+            .fetch_one(&db)
+            .await
+            .expect("Failed to query x integrations");
     println!("✅ X/Twitter integrations in DB: {}", x_count.0);
 
     // Check for Reddit integrations
-    let reddit_count: (i64,) = sqlx::query_as(
-        "SELECT COUNT(*) FROM integrations WHERE provider_identifier = 'reddit'"
-    )
-        .fetch_one(&db)
-        .await
-        .expect("Failed to query reddit integrations");
+    let reddit_count: (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM integrations WHERE provider_identifier = 'reddit'")
+            .fetch_one(&db)
+            .await
+            .expect("Failed to query reddit integrations");
     println!("✅ Reddit integrations in DB: {}", reddit_count.0);
 
     // Check multi-account support (multiple accounts per provider)
-    let multi_count: (i64,) = sqlx::query_as(
-        "SELECT COUNT(*) FROM integrations WHERE root_internal_id IS NOT NULL"
-    )
-        .fetch_one(&db)
-        .await
-        .expect("Failed to query child integrations");
+    let multi_count: (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM integrations WHERE root_internal_id IS NOT NULL")
+            .fetch_one(&db)
+            .await
+            .expect("Failed to query child integrations");
     println!("✅ Multi-account (root_internal_id set): {}", multi_count.0);
 }
 
@@ -270,20 +364,41 @@ async fn test_facebook_provider_creation() {
     let config = get_config();
     let registry = get_registry(&config);
 
-    let fb = registry.get("facebook").expect("Facebook provider should exist");
+    let fb = registry
+        .get("facebook")
+        .expect("Facebook provider should exist");
     assert_eq!(fb.identifier(), "facebook");
     assert_eq!(fb.name(), "Facebook");
 
     let scopes = fb.scopes();
     assert!(scopes.contains(&"pages_show_list".to_string()));
     assert!(scopes.contains(&"pages_manage_posts".to_string()));
-    assert!(scopes.contains(&"pages_manage_engagement".to_string()), "Should have pages_manage_engagement scope");
-    assert!(scopes.contains(&"pages_manage_metadata".to_string()), "Should have pages_manage_metadata scope");
-    assert!(scopes.contains(&"pages_read_user_content".to_string()), "Should have pages_read_user_content scope");
-    assert!(scopes.contains(&"read_insights".to_string()), "Should have read_insights scope");
-    assert!(scopes.contains(&"business_management".to_string()), "Should have business_management scope");
+    assert!(
+        scopes.contains(&"pages_manage_engagement".to_string()),
+        "Should have pages_manage_engagement scope"
+    );
+    assert!(
+        scopes.contains(&"pages_manage_metadata".to_string()),
+        "Should have pages_manage_metadata scope"
+    );
+    assert!(
+        scopes.contains(&"pages_read_user_content".to_string()),
+        "Should have pages_read_user_content scope"
+    );
+    assert!(
+        scopes.contains(&"read_insights".to_string()),
+        "Should have read_insights scope"
+    );
+    assert!(
+        scopes.contains(&"business_management".to_string()),
+        "Should have business_management scope"
+    );
 
-    println!("✅ FacebookProvider: {} scopes configured ({})", scopes.len(), scopes.join(", "));
+    println!(
+        "✅ FacebookProvider: {} scopes configured ({})",
+        scopes.len(),
+        scopes.join(", ")
+    );
 }
 
 // ── Test 10: InstagramProvider creation and scopes ────────────────
@@ -293,7 +408,9 @@ async fn test_instagram_provider_creation() {
     let config = get_config();
     let registry = get_registry(&config);
 
-    let ig = registry.get("instagram").expect("Instagram provider should exist");
+    let ig = registry
+        .get("instagram")
+        .expect("Instagram provider should exist");
     assert_eq!(ig.identifier(), "instagram");
     assert_eq!(ig.name(), "Instagram");
 
@@ -302,11 +419,24 @@ async fn test_instagram_provider_creation() {
     assert!(scopes.contains(&"instagram_content_publish".to_string()));
     assert!(scopes.contains(&"instagram_manage_comments".to_string()));
     assert!(scopes.contains(&"instagram_manage_insights".to_string()));
-    assert!(scopes.contains(&"pages_manage_engagement".to_string()), "Should have pages_manage_engagement scope");
-    assert!(scopes.contains(&"pages_read_user_content".to_string()), "Should have pages_read_user_content scope");
-    assert!(scopes.contains(&"read_insights".to_string()), "Should have read_insights scope");
+    assert!(
+        scopes.contains(&"pages_manage_engagement".to_string()),
+        "Should have pages_manage_engagement scope"
+    );
+    assert!(
+        scopes.contains(&"pages_read_user_content".to_string()),
+        "Should have pages_read_user_content scope"
+    );
+    assert!(
+        scopes.contains(&"read_insights".to_string()),
+        "Should have read_insights scope"
+    );
 
-    println!("✅ InstagramProvider: {} scopes configured ({})", scopes.len(), scopes.join(", "));
+    println!(
+        "✅ InstagramProvider: {} scopes configured ({})",
+        scopes.len(),
+        scopes.join(", ")
+    );
 }
 
 // ── Test 11: FacebookProvider multi-step (is_between_steps) ──────
@@ -316,10 +446,18 @@ async fn test_facebook_is_between_steps() {
     let config = get_config();
     let registry = get_registry(&config);
 
-    let fb = registry.get("facebook").expect("Facebook provider should exist");
-    assert!(fb.is_between_steps(), "Facebook should be multi-step (exchange_code returns user-level token)");
+    let fb = registry
+        .get("facebook")
+        .expect("Facebook provider should exist");
+    assert!(
+        fb.is_between_steps(),
+        "Facebook should be multi-step (exchange_code returns user-level token)"
+    );
 
-    println!("✅ FacebookProvider: is_between_steps() = {}", fb.is_between_steps());
+    println!(
+        "✅ FacebookProvider: is_between_steps() = {}",
+        fb.is_between_steps()
+    );
 }
 
 // ── Test 12: InstagramProvider multi-step (is_between_steps) ─────
@@ -329,10 +467,18 @@ async fn test_instagram_is_between_steps() {
     let config = get_config();
     let registry = get_registry(&config);
 
-    let ig = registry.get("instagram").expect("Instagram provider should exist");
-    assert!(ig.is_between_steps(), "Instagram should be multi-step (exchange_code returns user-level token)");
+    let ig = registry
+        .get("instagram")
+        .expect("Instagram provider should exist");
+    assert!(
+        ig.is_between_steps(),
+        "Instagram should be multi-step (exchange_code returns user-level token)"
+    );
 
-    println!("✅ InstagramProvider: is_between_steps() = {}", ig.is_between_steps());
+    println!(
+        "✅ InstagramProvider: is_between_steps() = {}",
+        ig.is_between_steps()
+    );
 }
 
 // ── Test 13: InstagramStandaloneProvider creation and scopes ─────
@@ -342,7 +488,9 @@ async fn test_instagram_standalone_provider_creation() {
     let config = get_config();
     let registry = get_registry(&config);
 
-    let ias = registry.get("instagram-standalone").expect("Instagram Standalone provider should exist");
+    let ias = registry
+        .get("instagram-standalone")
+        .expect("Instagram Standalone provider should exist");
     assert_eq!(ias.identifier(), "instagram-standalone");
 
     let scopes = ias.scopes();
@@ -350,7 +498,11 @@ async fn test_instagram_standalone_provider_creation() {
     assert!(scopes.contains(&"instagram_business_content_publish".to_string()));
     assert!(scopes.contains(&"instagram_business_manage_comments".to_string()));
 
-    println!("✅ InstagramStandaloneProvider: {} scopes configured ({})", scopes.len(), scopes.join(", "));
+    println!(
+        "✅ InstagramStandaloneProvider: {} scopes configured ({})",
+        scopes.len(),
+        scopes.join(", ")
+    );
 }
 
 // ── Test 14: ThreadsProvider creation and scopes ─────────────────
@@ -360,7 +512,9 @@ async fn test_threads_provider_creation() {
     let config = get_config();
     let registry = get_registry(&config);
 
-    let threads = registry.get("threads").expect("Threads provider should exist");
+    let threads = registry
+        .get("threads")
+        .expect("Threads provider should exist");
     assert_eq!(threads.identifier(), "threads");
 
     let scopes = threads.scopes();
@@ -369,7 +523,11 @@ async fn test_threads_provider_creation() {
     assert!(scopes.contains(&"threads_manage_replies".to_string()));
     assert!(scopes.contains(&"threads_manage_insights".to_string()));
 
-    println!("✅ ThreadsProvider: {} scopes configured ({})", scopes.len(), scopes.join(", "));
+    println!(
+        "✅ ThreadsProvider: {} scopes configured ({})",
+        scopes.len(),
+        scopes.join(", ")
+    );
 }
 
 // ── Test 15: LinkedInProvider creation and scopes ────────────────
@@ -379,7 +537,9 @@ async fn test_linkedin_provider_creation() {
     let config = get_config();
     let registry = get_registry(&config);
 
-    let li = registry.get("linkedin").expect("LinkedIn provider should exist");
+    let li = registry
+        .get("linkedin")
+        .expect("LinkedIn provider should exist");
     assert_eq!(li.identifier(), "linkedin");
     assert_eq!(li.name(), "LinkedIn");
 
@@ -389,7 +549,11 @@ async fn test_linkedin_provider_creation() {
     assert!(scopes.contains(&"email".to_string()));
     assert!(scopes.contains(&"w_member_social".to_string()));
 
-    println!("✅ LinkedInProvider: {} scopes configured ({})", scopes.len(), scopes.join(", "));
+    println!(
+        "✅ LinkedInProvider: {} scopes configured ({})",
+        scopes.len(),
+        scopes.join(", ")
+    );
 }
 
 // ── Test 16: LinkedInPageProvider creation and scopes ────────────
@@ -399,7 +563,9 @@ async fn test_linkedin_page_provider_creation() {
     let config = get_config();
     let registry = get_registry(&config);
 
-    let lip = registry.get("linkedin-page").expect("LinkedIn Page provider should exist");
+    let lip = registry
+        .get("linkedin-page")
+        .expect("LinkedIn Page provider should exist");
     assert_eq!(lip.identifier(), "linkedin-page");
     assert_eq!(lip.name(), "LinkedIn Page");
 
@@ -409,7 +575,11 @@ async fn test_linkedin_page_provider_creation() {
     assert!(scopes.contains(&"w_organization_social".to_string()));
     assert!(scopes.contains(&"r_organization_social".to_string()));
 
-    println!("✅ LinkedInPageProvider: {} scopes configured ({})", scopes.len(), scopes.join(", "));
+    println!(
+        "✅ LinkedInPageProvider: {} scopes configured ({})",
+        scopes.len(),
+        scopes.join(", ")
+    );
     assert!(lip.is_between_steps(), "LinkedIn Page should be multi-step");
 }
 
@@ -420,7 +590,9 @@ async fn test_google_provider_creation() {
     let config = get_config();
     let registry = get_registry(&config);
 
-    let google = registry.get("google").expect("Google Suite provider should exist");
+    let google = registry
+        .get("google")
+        .expect("Google Suite provider should exist");
     assert_eq!(google.identifier(), "google");
     assert_eq!(google.name(), "Google Suite");
 
@@ -430,7 +602,11 @@ async fn test_google_provider_creation() {
     assert!(scopes.contains(&"https://www.googleapis.com/auth/calendar".to_string()));
     assert!(scopes.contains(&"https://www.googleapis.com/auth/drive.readonly".to_string()));
 
-    println!("✅ GoogleSuite: {} scopes configured ({})", scopes.len(), scopes.join(", "));
+    println!(
+        "✅ GoogleSuite: {} scopes configured ({})",
+        scopes.len(),
+        scopes.join(", ")
+    );
 }
 
 // ── Test 18: Pinterest provider creation and scopes ──────────────
@@ -440,7 +616,9 @@ async fn test_pinterest_provider_creation() {
     let config = get_config();
     let registry = get_registry(&config);
 
-    let pi = registry.get("pinterest").expect("Pinterest provider should exist");
+    let pi = registry
+        .get("pinterest")
+        .expect("Pinterest provider should exist");
     assert_eq!(pi.identifier(), "pinterest");
     assert_eq!(pi.name(), "Pinterest");
 
@@ -448,7 +626,11 @@ async fn test_pinterest_provider_creation() {
     assert!(scopes.contains(&"boards:read".to_string()));
     assert!(scopes.contains(&"pins:read".to_string()));
 
-    println!("✅ PinterestProvider: {} scopes configured ({})", scopes.len(), scopes.join(", "));
+    println!(
+        "✅ PinterestProvider: {} scopes configured ({})",
+        scopes.len(),
+        scopes.join(", ")
+    );
 }
 
 // ── Test 19: Discord provider creation and scopes ────────────────
@@ -472,7 +654,11 @@ async fn test_discord_provider_creation() {
     assert!(scopes.contains(&"identify".to_string()));
     assert!(scopes.contains(&"guilds".to_string()));
 
-    println!("✅ DiscordProvider: {} scopes configured ({})", scopes.len(), scopes.join(", "));
+    println!(
+        "✅ DiscordProvider: {} scopes configured ({})",
+        scopes.len(),
+        scopes.join(", ")
+    );
 }
 
 // ── Test 20: Skool provider creation and scopes ──────────────────
@@ -490,5 +676,9 @@ async fn test_skool_provider_creation() {
     assert!(!sk.uses_oauth(), "Skool should not use OAuth");
     assert!(sk.is_chrome_extension(), "Skool should be Chrome extension");
 
-    println!("✅ SkoolProvider: uses_oauth={}, is_chrome_extension={}", sk.uses_oauth(), sk.is_chrome_extension());
+    println!(
+        "✅ SkoolProvider: uses_oauth={}, is_chrome_extension={}",
+        sk.uses_oauth(),
+        sk.is_chrome_extension()
+    );
 }

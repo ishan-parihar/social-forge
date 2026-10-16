@@ -86,11 +86,22 @@ async fn test_linkedin_providers_registered() {
     assert_eq!(lip.identifier(), "linkedin-page");
     assert_eq!(lip.name(), "LinkedIn Page");
     assert!(lip.is_between_steps(), "LinkedIn Page must be multi-step");
-    assert!(lip.tooltip().is_some(), "LinkedIn Page should have a tooltip");
+    assert!(
+        lip.tooltip().is_some(),
+        "LinkedIn Page should have a tooltip"
+    );
 
     println!("✅ LinkedIn providers registered and metadata verified");
-    println!("   Personal: {} (scopes: {})", li.identifier(), li.scopes().join(", "));
-    println!("   Page:     {} (scopes: {})", lip.identifier(), lip.scopes().join(", "));
+    println!(
+        "   Personal: {} (scopes: {})",
+        li.identifier(),
+        li.scopes().join(", ")
+    );
+    println!(
+        "   Page:     {} (scopes: {})",
+        lip.identifier(),
+        lip.scopes().join(", ")
+    );
 }
 
 #[tokio::test]
@@ -104,20 +115,50 @@ async fn test_linkedin_scopes_correct() {
     assert!(scopes.contains(&"openid".into()), "Missing openid scope");
     assert!(scopes.contains(&"profile".into()), "Missing profile scope");
     assert!(scopes.contains(&"email".into()), "Missing email scope");
-    assert!(scopes.contains(&"w_member_social".into()), "Missing w_member_social scope");
-    assert!(scopes.contains(&"r_member_social".into()), "Missing r_member_social scope");
-    assert_eq!(scopes.len(), 5, "Personal LinkedIn should have exactly 5 scopes");
+    assert!(
+        scopes.contains(&"w_member_social".into()),
+        "Missing w_member_social scope"
+    );
+    assert!(
+        scopes.contains(&"r_member_social".into()),
+        "Missing r_member_social scope"
+    );
+    assert_eq!(
+        scopes.len(),
+        5,
+        "Personal LinkedIn should have exactly 5 scopes"
+    );
 
     // Page scopes
     let lip = registry.get("linkedin-page").unwrap();
     let lip_scopes = lip.scopes();
-    assert!(lip_scopes.contains(&"w_member_social".into()), "Missing w_member_social scope");
-    assert!(lip_scopes.contains(&"rw_organization_admin".into()), "Missing rw_organization_admin scope");
-    assert!(lip_scopes.contains(&"w_organization_social".into()), "Missing w_organization_social scope");
-    assert!(lip_scopes.contains(&"r_organization_social".into()), "Missing r_organization_social scope");
-    assert_eq!(lip_scopes.len(), 7, "LinkedIn Page should have exactly 7 scopes");
+    assert!(
+        lip_scopes.contains(&"w_member_social".into()),
+        "Missing w_member_social scope"
+    );
+    assert!(
+        lip_scopes.contains(&"rw_organization_admin".into()),
+        "Missing rw_organization_admin scope"
+    );
+    assert!(
+        lip_scopes.contains(&"w_organization_social".into()),
+        "Missing w_organization_social scope"
+    );
+    assert!(
+        lip_scopes.contains(&"r_organization_social".into()),
+        "Missing r_organization_social scope"
+    );
+    assert_eq!(
+        lip_scopes.len(),
+        7,
+        "LinkedIn Page should have exactly 7 scopes"
+    );
 
-    println!("✅ LinkedIn scopes verified: personal={}, page={}", scopes.len(), lip_scopes.len());
+    println!(
+        "✅ LinkedIn scopes verified: personal={}, page={}",
+        scopes.len(),
+        lip_scopes.len()
+    );
 }
 
 // ═════════════════════════════════════════════════════════════════
@@ -131,7 +172,11 @@ async fn test_linkedin_auth_url_generation() {
     let li = registry.get("linkedin").unwrap();
 
     let result = li
-        .generate_auth_url("test_state_abc", "test_verifier", "http://localhost:3000/api/auth/callback")
+        .generate_auth_url(
+            "test_state_abc",
+            "test_verifier",
+            "http://localhost:3000/api/auth/callback",
+        )
         .await;
 
     assert!(result.is_ok(), "Auth URL should generate successfully");
@@ -142,15 +187,24 @@ async fn test_linkedin_auth_url_generation() {
         url.starts_with("https://www.linkedin.com/oauth/v2/authorization"),
         "URL should point to LinkedIn auth endpoint: {url}"
     );
-    assert!(url.contains("response_type=code"), "Should request authorization code");
+    assert!(
+        url.contains("response_type=code"),
+        "Should request authorization code"
+    );
     assert!(url.contains("client_id="), "Should include client_id");
     assert!(url.contains("redirect_uri="), "Should include redirect_uri");
-    assert!(url.contains("state=test_state_abc"), "Should include state parameter");
+    assert!(
+        url.contains("state=test_state_abc"),
+        "Should include state parameter"
+    );
     assert!(url.contains("scope="), "Should include scopes");
-    assert!(url.contains("w_member_social"), "Should include w_member_social scope");
+    assert!(
+        url.contains("w_member_social"),
+        "Should include w_member_social scope"
+    );
 
     println!("✅ LinkedIn auth URL generated successfully");
-    println!("   URL: {}...{}", &url[..80], &url[url.len()-40..]);
+    println!("   URL: {}...{}", &url[..80], &url[url.len() - 40..]);
 }
 
 #[tokio::test]
@@ -160,7 +214,11 @@ async fn test_linkedin_page_auth_url_generation() {
     let lip = registry.get("linkedin-page").unwrap();
 
     let result = lip
-        .generate_auth_url("test_state_xyz", "test_verifier", "http://localhost:3000/api/auth/callback")
+        .generate_auth_url(
+            "test_state_xyz",
+            "test_verifier",
+            "http://localhost:3000/api/auth/callback",
+        )
         .await;
 
     assert!(result.is_ok(), "Auth URL should generate successfully");
@@ -171,12 +229,21 @@ async fn test_linkedin_page_auth_url_generation() {
         url.starts_with("https://www.linkedin.com/oauth/v2/authorization"),
         "URL should point to LinkedIn auth endpoint: {url}"
     );
-    assert!(url.contains("state=test_state_xyz"), "Should include state parameter");
-    assert!(url.contains("w_organization_social"), "Should include organization scope");
-    assert!(url.contains("rw_organization_admin"), "Should include admin scope");
+    assert!(
+        url.contains("state=test_state_xyz"),
+        "Should include state parameter"
+    );
+    assert!(
+        url.contains("w_organization_social"),
+        "Should include organization scope"
+    );
+    assert!(
+        url.contains("rw_organization_admin"),
+        "Should include admin scope"
+    );
 
     println!("✅ LinkedIn Page auth URL generated successfully");
-    println!("   URL: {}...{}", &url[..80], &url[url.len()-40..]);
+    println!("   URL: {}...{}", &url[..80], &url[url.len() - 40..]);
 }
 
 // ═════════════════════════════════════════════════════════════════
@@ -188,19 +255,34 @@ async fn test_linkedin_credentials_loaded() {
     let config = get_config();
 
     let creds = config.provider_credentials("linkedin");
-    assert!(creds.is_some(), "LinkedIn credentials must be loaded from LINKEDIN_CLIENT_ID/LINKEDIN_CLIENT_SECRET");
+    assert!(
+        creds.is_some(),
+        "LinkedIn credentials must be loaded from LINKEDIN_CLIENT_ID/LINKEDIN_CLIENT_SECRET"
+    );
     let (cid, secret) = creds.unwrap();
     assert!(!cid.is_empty(), "LinkedIn client_id must not be empty");
-    assert!(!secret.is_empty(), "LinkedIn client_secret must not be empty");
+    assert!(
+        !secret.is_empty(),
+        "LinkedIn client_secret must not be empty"
+    );
 
     // LinkedIn Page uses same credentials
     let page_creds = config.provider_credentials("linkedin");
-    assert!(page_creds.is_some(), "LinkedIn Page should share credentials");
+    assert!(
+        page_creds.is_some(),
+        "LinkedIn Page should share credentials"
+    );
     let (pid, psecret) = page_creds.unwrap();
-    assert_eq!(cid, pid, "Both LinkedIn providers should use the same client_id");
+    assert_eq!(
+        cid, pid,
+        "Both LinkedIn providers should use the same client_id"
+    );
     assert_eq!(secret, psecret, "Both should use the same client_secret");
 
-    println!("✅ LinkedIn credentials verified: client_id={}...", &cid[..8]);
+    println!(
+        "✅ LinkedIn credentials verified: client_id={}...",
+        &cid[..8]
+    );
 }
 
 #[tokio::test]
@@ -239,7 +321,11 @@ async fn test_linkedin_mcp_server_startup_and_registration() {
 
     // Verify server created
     assert!(
-        server.state.config.provider_credentials("linkedin").is_some(),
+        server
+            .state
+            .config
+            .provider_credentials("linkedin")
+            .is_some(),
         "LinkedIn credentials must load"
     );
 
@@ -254,7 +340,10 @@ async fn test_linkedin_mcp_server_startup_and_registration() {
 
     // Verify credentials are in the server's config
     let creds = server.state.config.provider_credentials("linkedin");
-    assert!(creds.is_some(), "LinkedIn credentials must be loaded in server state");
+    assert!(
+        creds.is_some(),
+        "LinkedIn credentials must be loaded in server state"
+    );
 
     println!("✅ LinkedIn MCP server starts with all tools registered");
 }
@@ -269,34 +358,43 @@ async fn test_linkedin_li_tools_return_user_friendly_error_when_no_integration()
 
     // The test verifies the handler produces the correct error type (not a crash/panic)
 
-    let users: Vec<(String,)> = sqlx::query_as(
-        "SELECT id::text FROM users LIMIT 1"
-    )
+    let users: Vec<(uuid::Uuid,)> = sqlx::query_as("SELECT id FROM users LIMIT 1")
         .fetch_all(&state.db)
         .await
         .expect("Failed to query users");
 
-    if let Some((uid_str,)) = users.first() {
-        let uid: uuid::Uuid = uid_str.parse().expect("valid UUID");
-        let integrations = social_forge::db::queries::list_integrations(&state.db, uid)
+    if let Some((uid,)) = users.first() {
+        let integrations = social_forge::db::queries::list_integrations(&state.db, *uid)
             .await
             .expect("Failed to list integrations");
 
-        let li_count = integrations.iter()
+        let li_count = integrations
+            .iter()
             .filter(|i| i.provider_identifier == "linkedin")
             .count();
-        let lip_count = integrations.iter()
+        let lip_count = integrations
+            .iter()
             .filter(|i| i.provider_identifier == "linkedin-page")
             .count();
 
-        println!("   DB has {} LinkedIn and {} LinkedIn Page integrations", li_count, lip_count);
+        println!(
+            "   DB has {} LinkedIn and {} LinkedIn Page integrations",
+            li_count, lip_count
+        );
 
         assert_eq!(li_count, 0, "Expected 0 LinkedIn integrations in test DB");
-        assert_eq!(lip_count, 0, "Expected 0 LinkedIn Page integrations in test DB");
+        assert_eq!(
+            lip_count, 0,
+            "Expected 0 LinkedIn Page integrations in test DB"
+        );
 
-        let found = integrations.iter()
+        let found = integrations
+            .iter()
             .find(|i| i.provider_identifier == "linkedin" && i.internal_id == "test-li-id");
-        assert!(found.is_none(), "Should not find a LinkedIn integration for fake li_id");
+        assert!(
+            found.is_none(),
+            "Should not find a LinkedIn integration for fake li_id"
+        );
     } else {
         println!("   No users in DB - skipping integration lookup test");
     }
@@ -314,7 +412,11 @@ async fn test_linkedin_mcp_tool_handler_full_chain() {
 
     // Auth URL generation
     let auth = li
-        .generate_auth_url("e2e_test_state", "test_verifier", "http://localhost:3000/api/auth/callback")
+        .generate_auth_url(
+            "e2e_test_state",
+            "test_verifier",
+            "http://localhost:3000/api/auth/callback",
+        )
         .await
         .expect("Auth URL must generate");
     assert!(auth.url.contains("linkedin.com/oauth/v2/authorization"));
@@ -333,19 +435,33 @@ async fn test_linkedin_mcp_tool_handler_full_chain() {
     let result = provider.publish("INVALID_TOKEN", &post).await;
     assert!(result.is_err(), "Publishing with invalid token should fail");
     let err = result.unwrap_err();
-    assert!(format!("{err}").contains("token") || format!("{err}").contains("expired") || format!("{err}").contains("401") || format!("{err}").contains("error"),
-        "Should get TokenExpired or API error: {err}");
+    assert!(
+        format!("{err}").contains("token")
+            || format!("{err}").contains("expired")
+            || format!("{err}").contains("401")
+            || format!("{err}").contains("error"),
+        "Should get TokenExpired or API error: {err}"
+    );
 
     // LinkedIn Page provider verification
-    let lip = state.providers.get("linkedin-page").expect("LinkedIn Page provider");
+    let lip = state
+        .providers
+        .get("linkedin-page")
+        .expect("LinkedIn Page provider");
     assert_eq!(lip.identifier(), "linkedin-page");
 
     // Page auth URL generation
     let page_auth = lip
-        .generate_auth_url("e2e_page_state", "test_verifier", "http://localhost:3000/api/auth/callback")
+        .generate_auth_url(
+            "e2e_page_state",
+            "test_verifier",
+            "http://localhost:3000/api/auth/callback",
+        )
         .await
         .expect("Page auth URL must generate");
-    assert!(page_auth.url.contains("linkedin.com/oauth/v2/authorization"));
+    assert!(page_auth
+        .url
+        .contains("linkedin.com/oauth/v2/authorization"));
     assert!(page_auth.url.contains("w_organization_social"));
 
     // LinkedIn Page publish via trait
@@ -357,14 +473,30 @@ async fn test_linkedin_mcp_tool_handler_full_chain() {
         ..Default::default()
     };
     let lip_result = lip_provider.publish("INVALID_TOKEN", &lip_post).await;
-    assert!(lip_result.is_err(), "Page publish with invalid token should fail");
+    assert!(
+        lip_result.is_err(),
+        "Page publish with invalid token should fail"
+    );
     let lip_err = lip_result.unwrap_err();
-    assert!(format!("{lip_err}").contains("token") || format!("{lip_err}").contains("expired") || format!("{lip_err}").contains("401") || format!("{lip_err}").contains("error"),
-        "Should get TokenExpired or API error: {lip_err}");
+    assert!(
+        format!("{lip_err}").contains("token")
+            || format!("{lip_err}").contains("expired")
+            || format!("{lip_err}").contains("401")
+            || format!("{lip_err}").contains("error"),
+        "Should get TokenExpired or API error: {lip_err}"
+    );
 
     println!("✅ LinkedIn MCP tool handler full chain verified");
-    println!("   - Personal: identifier={}, scopes={}", li.identifier(), li.scopes().len());
-    println!("   - Page:     identifier={}, scopes={}", lip.identifier(), lip.scopes().len());
+    println!(
+        "   - Personal: identifier={}, scopes={}",
+        li.identifier(),
+        li.scopes().len()
+    );
+    println!(
+        "   - Page:     identifier={}, scopes={}",
+        lip.identifier(),
+        lip.scopes().len()
+    );
     println!("   - Personal publish: error={err}");
     println!("   - Page publish:     error={lip_err}");
 }
@@ -393,13 +525,21 @@ async fn test_linkedin_social_provider_trait_dispatch() {
 
     // Auth URL generation through dynamic dispatch
     let li_auth = li_dyn
-        .generate_auth_url("dyn_test_state", "verifier", "http://localhost:3000/callback")
+        .generate_auth_url(
+            "dyn_test_state",
+            "verifier",
+            "http://localhost:3000/callback",
+        )
         .await
         .expect("Dynamic dispatch auth URL");
     assert!(li_auth.url.contains("linkedin.com/oauth/v2/authorization"));
 
     let lip_auth = lip_dyn
-        .generate_auth_url("dyn_page_state", "verifier", "http://localhost:3000/callback")
+        .generate_auth_url(
+            "dyn_page_state",
+            "verifier",
+            "http://localhost:3000/callback",
+        )
         .await
         .expect("Dynamic dispatch page auth URL");
     assert!(lip_auth.url.contains("linkedin.com/oauth/v2/authorization"));
@@ -421,9 +561,15 @@ async fn test_linkedin_page_provider_pages_method_chain() {
 
     // LinkedIn API returns Ok([]) for invalid tokens on org endpoints
     let result = provider.pages("INVALID_TOKEN").await;
-    assert!(result.is_ok(), "pages() should return Ok (LinkedIn API behavior)");
+    assert!(
+        result.is_ok(),
+        "pages() should return Ok (LinkedIn API behavior)"
+    );
     let pages = result.unwrap();
-    assert!(pages.is_empty(), "pages() with bad token should be empty list");
+    assert!(
+        pages.is_empty(),
+        "pages() with bad token should be empty list"
+    );
     println!("✅ LinkedIn Page pages() returns empty list with invalid token (expected)");
 }
 
@@ -434,9 +580,15 @@ async fn test_linkedin_page_provider_fetch_page_info_chain() {
 
     // LinkedIn API returns 200 with empty body for bad tokens on org endpoints
     let result = provider.fetch_page_info("INVALID_TOKEN", "12345678").await;
-    assert!(result.is_ok(), "fetch_page_info should return Ok (LinkedIn API behavior)");
+    assert!(
+        result.is_ok(),
+        "fetch_page_info should return Ok (LinkedIn API behavior)"
+    );
     let info = result.unwrap();
-    assert!(info.name.is_empty(), "fetch_page_info with bad token should return empty name");
+    assert!(
+        info.name.is_empty(),
+        "fetch_page_info with bad token should return empty name"
+    );
     println!("✅ LinkedIn Page fetch_page_info() returns empty with invalid token (expected)");
 }
 
@@ -445,8 +597,13 @@ async fn test_linkedin_page_provider_get_page_posts_chain() {
     let config = get_config();
     let provider = LinkedInPageProvider::new(&config);
 
-    let result = provider.get_page_posts("INVALID_TOKEN", "12345678", 5).await;
-    assert!(result.is_err(), "get_page_posts with invalid token should fail");
+    let result = provider
+        .get_page_posts("INVALID_TOKEN", "12345678", 5)
+        .await;
+    assert!(
+        result.is_err(),
+        "get_page_posts with invalid token should fail"
+    );
     let err = result.unwrap_err();
     println!("✅ LinkedIn Page get_page_posts() error handling: {err}");
 }
@@ -457,9 +614,17 @@ async fn test_linkedin_page_provider_create_comment_chain() {
     let provider = LinkedInPageProvider::new(&config);
 
     let result = provider
-        .create_comment("INVALID_TOKEN", "urn:li:activity:test", "urn:li:organization:test", "Test")
+        .create_comment(
+            "INVALID_TOKEN",
+            "urn:li:activity:test",
+            "urn:li:organization:test",
+            "Test",
+        )
         .await;
-    assert!(result.is_err(), "create_comment with invalid token should fail");
+    assert!(
+        result.is_err(),
+        "create_comment with invalid token should fail"
+    );
     let err = result.unwrap_err();
     println!("✅ LinkedIn Page create_comment() error handling: {err}");
 }
@@ -470,7 +635,10 @@ async fn test_linkedin_personal_provider_get_profile_chain() {
     let provider = LinkedInProvider::new(&config);
 
     let result = provider.get_profile("INVALID_TOKEN").await;
-    assert!(result.is_err(), "get_profile with invalid token should fail");
+    assert!(
+        result.is_err(),
+        "get_profile with invalid token should fail"
+    );
     let err = result.unwrap_err();
     println!("✅ LinkedIn get_profile() error handling: {err}");
 }
@@ -494,9 +662,17 @@ async fn test_linkedin_personal_provider_create_comment_chain() {
     let provider = LinkedInProvider::new(&config);
 
     let result = provider
-        .create_comment("INVALID_TOKEN", "urn:li:activity:test", "urn:li:person:test", "Test comment")
+        .create_comment(
+            "INVALID_TOKEN",
+            "urn:li:activity:test",
+            "urn:li:person:test",
+            "Test comment",
+        )
         .await;
-    assert!(result.is_err(), "create_comment with invalid token should fail");
+    assert!(
+        result.is_err(),
+        "create_comment with invalid token should fail"
+    );
     let err = result.unwrap_err();
     println!("✅ LinkedIn create_comment() error handling: {err}");
 }
@@ -514,9 +690,15 @@ async fn test_linkedin_page_reconnect_chain() {
         .reconnect("INVALID_TOKEN", "fake-internal-id", "12345678")
         .await;
     // LinkedIn API returns Ok with empty fields for bad tokens on org endpoints
-    assert!(result.is_ok(), "reconnect should return Ok (LinkedIn API behavior)");
+    assert!(
+        result.is_ok(),
+        "reconnect should return Ok (LinkedIn API behavior)"
+    );
     let info = result.unwrap();
-    assert!(info.name.is_empty(), "reconnect with bad token should return empty name");
+    assert!(
+        info.name.is_empty(),
+        "reconnect with bad token should return empty name"
+    );
     println!("✅ LinkedIn Page reconnect() returns empty with invalid token (expected)");
 }
 
@@ -538,7 +720,10 @@ async fn test_linkedin_publish_full_flow() {
             ..Default::default()
         };
         let result = provider.publish("BAD_TOKEN", &post).await;
-        assert!(result.is_err(), "Personal publish with bad token should fail");
+        assert!(
+            result.is_err(),
+            "Personal publish with bad token should fail"
+        );
         println!("   ✅ Personal publish: error={}", result.unwrap_err());
     }
 
@@ -581,8 +766,14 @@ async fn test_linkedin_publish_full_flow() {
             ..Default::default()
         };
         let validation = provider.validate_post(&long_post);
-        assert!(validation.is_err(), "Content exceeding max_length should fail validation");
-        println!("   ✅ Content length validation: {}", validation.unwrap_err());
+        assert!(
+            validation.is_err(),
+            "Content exceeding max_length should fail validation"
+        );
+        println!(
+            "   ✅ Content length validation: {}",
+            validation.unwrap_err()
+        );
     }
 
     println!("✅ LinkedIn publish flows all verified");
@@ -600,38 +791,52 @@ async fn test_linkedin_db_schema_support() {
         .await
         .expect("Failed to connect to DB");
 
-    // Check that the integrations table has the columns LinkedIn needs
-    let columns: Vec<(String, String)> = sqlx::query_as(
-        "SELECT column_name, data_type FROM information_schema.columns
-         WHERE table_name='integrations'
-         AND column_name IN ('provider_identifier', 'internal_id', 'access_token', 'refresh_token', 'token_expires_at', 'profile_name', 'disabled')"
+    // Check that the integrations table has the columns LinkedIn needs.
+    // SQLite: pragma_table_info is the catalog (information_schema is
+    // Postgres/MySQL and has never existed on this store).
+    let columns: Vec<(String,)> = sqlx::query_as(
+        "SELECT name FROM pragma_table_info('integrations')
+         WHERE name IN ('provider_identifier', 'internal_id', 'access_token', 'refresh_token', 'token_expires_at', 'profile_name', 'disabled')",
     )
-        .fetch_all(&db)
-        .await
-        .expect("Failed to query schema");
+    .fetch_all(&db)
+    .await
+    .expect("Failed to query schema");
 
-    let col_names: Vec<&str> = columns.iter().map(|(n, _)| n.as_str()).collect();
-    assert!(col_names.contains(&"provider_identifier"), "Missing provider_identifier");
+    let col_names: Vec<&str> = columns.iter().map(|(n,)| n.as_str()).collect();
+    assert!(
+        col_names.contains(&"provider_identifier"),
+        "Missing provider_identifier"
+    );
     assert!(col_names.contains(&"internal_id"), "Missing internal_id");
     assert!(col_names.contains(&"access_token"), "Missing access_token");
-    assert!(col_names.contains(&"refresh_token"), "Missing refresh_token");
-    assert!(col_names.contains(&"token_expires_at"), "Missing token_expires_at");
+    assert!(
+        col_names.contains(&"refresh_token"),
+        "Missing refresh_token"
+    );
+    assert!(
+        col_names.contains(&"token_expires_at"),
+        "Missing token_expires_at"
+    );
     assert!(col_names.contains(&"profile_name"), "Missing profile_name");
     assert!(col_names.contains(&"disabled"), "Missing disabled");
 
-    // Verify the unique constraint exists for (user_id, provider_identifier, internal_id)
+    // Verify the unique constraint exists for (user_id, provider_identifier,
+    // internal_id) — SQLite exposes unique indexes via pragma_index_list
+    // (pg_constraint is Postgres).
     let unique_cols: Vec<(String,)> = sqlx::query_as(
-        "SELECT conname FROM pg_constraint
-         WHERE conrelid = 'integrations'::regclass
-         AND contype = 'u'"
+        "SELECT name FROM pragma_index_list('integrations') WHERE \"unique\" = 1",
     )
-        .fetch_all(&db)
-        .await
-        .expect("Failed to query constraints");
+    .fetch_all(&db)
+    .await
+    .expect("Failed to query constraints");
 
     assert!(!unique_cols.is_empty(), "Should have unique constraints");
 
-    println!("✅ DB schema supports LinkedIn: {} columns, {} constraints", columns.len(), unique_cols.len());
+    println!(
+        "✅ DB schema supports LinkedIn: {} columns, {} constraints",
+        columns.len(),
+        unique_cols.len()
+    );
     for (name,) in &unique_cols {
         println!("   Constraint: {}", name);
     }
