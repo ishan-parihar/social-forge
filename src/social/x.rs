@@ -1594,11 +1594,26 @@ impl SocialProvider for XProvider {
     }
 
     fn scopes(&self) -> Vec<String> {
+        // Each v2 endpoint the tools call needs its scope: like/unlike →
+        // like.write, bookmarks → bookmark.read/write, follow/unfollow →
+        // follows.*, list timeline → list.read, DMs → dm.read/write. Request
+        // them all so OAuth-mode tools stay functional; enable the matching
+        // products in the X developer portal or authorize fails on the
+        // missing scope. Cookie-mode calls are unaffected.
         vec![
             "tweet.read".into(),
             "tweet.write".into(),
             "users.read".into(),
             "offline.access".into(),
+            "like.read".into(),
+            "like.write".into(),
+            "bookmark.read".into(),
+            "bookmark.write".into(),
+            "follows.read".into(),
+            "follows.write".into(),
+            "list.read".into(),
+            "dm.read".into(),
+            "dm.write".into(),
         ]
     }
 
