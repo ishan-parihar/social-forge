@@ -61,3 +61,6 @@ frontend/package-lock.json
 .sisyphus/
 .oh-my-opencode/
 .history/
+
+# Local agent tooling cache — index metadata only, never commit
+.token-savior-cache.json

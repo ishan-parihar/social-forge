@@ -1,9 +1,11 @@
 name: CI
 
-# Portfolio CI policy: tag-only triggers (v* tags) + manual dispatch.
-# Release.yml stays manual-only (workflow_dispatch); CI gates every version tag.
+# CI gates master pushes AND every version tag (v*) + manual dispatch.
+# Release.yml stays manual-only (workflow_dispatch). The audit's lint gate
+# is only real if it runs on regular pushes, not just tags.
 on:
   push:
+    branches: [master]
     tags: ['v*']
   workflow_dispatch:
 concurrency:

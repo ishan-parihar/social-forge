@@ -47,7 +47,7 @@ These are the core design decisions that define social-forge's identity. They we
 
 ### 4. Triple interface: CLI + REST API + MCP server
 - All three interfaces must have feature parity for core operations. If a feature is added to REST, it should be exposed via MCP (for AI agents) and CLI (for shell users).
-- The MCP server is the primary interface for AI agents (Claude, Cursor). It must be comprehensive — 327 tools is the target, not a limitation.
+- The MCP server is the primary interface for AI agents (Claude, Cursor). It must be comprehensive — 334 tools is the target, not a limitation.
 - The CLI mirrors the MCP tools for shell-based automation.
 
 ### 5. Security-first design
@@ -113,10 +113,10 @@ Social Forge is a **single-user, self-hosted social media management platform** 
 **Architecture in one paragraph:** A single Rust binary (`social-forge`) runs an axum HTTP server (REST API + embedded SvelteKit frontend), an rmcp MCP server (stdio, for AI agents like Claude/Cursor), an in-process scheduler (polls for due posts every 30s), an SSE broadcaster (realtime updates to the frontend), and background tasks (RSS poller, feed refresher, analytics cache refresher). All state lives in a local SQLite file. OAuth tokens are AES-256-GCM encrypted at rest when `TOKEN_ENCRYPTION_KEY` is set.
 
 **Key numbers (as of v11):**
-- 327 MCP tools across 41 files in `src/mcp/`
+- 334 MCP tools across 41 files in `src/mcp/`
 - 26 providers registered by default in `src/social/registry.rs` — 12 Tier-1 (depth) + 14 Tier-2 (publish-maintained), plus 1 Tier-3 (Farcaster) registered only when `ENABLE_ARCHIVE_PROVIDERS` is set. Tier membership lives in `src/social/tier.rs` (plan §1); `kick`/`vk`/`whop`/`lemmy` were removed outright.
 - 2 SQL migrations in `migrations/`
-- ~76,500 LOC of Rust + ~13,000 LOC of Svelte/TS frontend
+- ~85,700 LOC of Rust + ~25,700 LOC of Svelte/TS frontend
 
 ---
 
@@ -143,10 +143,10 @@ social-forge/
 │   │   ├── middleware.rs    # auth_middleware (validates sf_session cookie), AuthenticatedUser extractor, DEFAULT_USER_ID
 │   │   └── jwt.rs           # hash_password / verify_password (argon2), create_token / validate_token (jsonwebtoken)
 │   ├── cli/                 # CLI commands (mirrors MCP tools)
-│   │   ├── run.rs           # Main CLI dispatcher (~2889 LOC)
+│   │   ├── run.rs           # Main CLI dispatcher (~3729 LOC)
 │   │   └── platforms/       # 32 platform shims (thin wrappers around unified commands)
-│   ├── mcp/                 # MCP server (327 tools)
-│   │   ├── mod.rs           # SocialForgeMcpServer impl + #[tool] method registration (~2800 LOC)
+│   ├── mcp/                 # MCP server (334 tools)
+│   │   ├── mod.rs           # SocialForgeMcpServer impl + #[tool] method registration (~3492 LOC)
 │   │   ├── tools_posts.rs   # Post CRUD MCP tools
 │   │   ├── tools_admin.rs   # v9 parity wrappers (posts_repeat, posts_set_tags, media_delete, etc.)
 │   │   ├── tools_x.rs       # X-specific tools (create_tweet, reply, like, retweet, search, timeline)
@@ -155,13 +155,13 @@ social-forge/
 │   ├── social/              # Provider trait + 31 provider implementations
 │   │   ├── mod.rs           # SocialProvider trait, ProviderError enum, PostContent, MediaAttachment
 │   │   ├── registry.rs      # ProviderRegistry (provider lookup + per-provider Semaphore)
-│   │   ├── x.rs             # X/Twitter (wreq + GraphQL cookie auth, ~2873 LOC)
-│   │   ├── reddit.rs        # Reddit (OAuth + cookie auth, ~1980 LOC)
+│   │   ├── x.rs             # X/Twitter (wreq + GraphQL cookie auth, ~3413 LOC)
+│   │   ├── reddit.rs        # Reddit (OAuth + cookie auth, ~2140 LOC)
 │   │   └── ...              # linkedin, facebook, instagram, threads, youtube, tiktok, bluesky, mastodon, pinterest, discord, slack, telegram_bot, telegram_user, whatsapp, wordpress, medium, devto, hashnode, github, google, skool, google_my_business, farcaster (see tier.rs for membership)
 │   ├── db/
 │   │   ├── mod.rs           # create_pool() — SqlitePoolOptions with env-configurable limits
 │   │   ├── models.rs        # PostState enum (Draft/Queued/Publishing/Published/Error), Post, PostWithIntegration, Integration, etc.
-│   │   └── queries.rs       # All SQL queries (~3423 LOC)
+│   │   └── queries.rs       # All SQL queries (~4024 LOC)
 │   ├── scheduler/
 │   │   └── mod.rs           # In-process scheduler: process_due_posts (JoinSet + Semaphore), publish_post (retry + backoff), proactive_token_refresh, analytics cache refresh
 │   ├── services/
@@ -626,7 +626,7 @@ social-forge automation list
 }
 ```
 
-### Key MCP tool categories (327 total)
+### Key MCP tool categories (334 total)
 | Category | Sample tools |
 |---|---|
 | Posts | `posts_create`, `posts_list`, `posts_publish`, `posts_repeat`, `posts_set_tags`, `posts_stage` |
