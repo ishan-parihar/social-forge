@@ -3,7 +3,6 @@
 // GraphQL path uses wreq for Chrome TLS fingerprint emulation.
 // OAuth path is the fallback used by the web onboarding flow.
 
-use std::collections::HashMap;
 use std::sync::LazyLock;
 const RATE_LIMIT_RETRIES: u32 = 2;
 async fn rate_limit_sleep(attempt: u32) {
@@ -33,29 +32,6 @@ static USER_AGENT: &str = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (K
 
 // sec_ch_ua() and sec_ch_ua_full_version_list() removed — unused dead code
 
-// GraphQL Query IDs (hardcoded fallbacks — updated from JS bundle when stale)
-static FALLBACK_QUERY_IDS: LazyLock<HashMap<&'static str, &'static str>> = LazyLock::new(|| {
-    let mut m = HashMap::new();
-    m.insert("HomeTimeline", "c-CzHF1LboFilMpsx4ZCrQ");
-    m.insert("HomeLatestTimeline", "BKB7oi212Fi7kQtCBGE4zA");
-    m.insert("UserByScreenName", "1VOOyvKkiI3FMmkeDNxM9A");
-    m.insert("UserTweets", "q6xj5bs0hapm9309hexA_g");
-    m.insert("TweetDetail", "xd_EMdYvB9hfZsZ6Idri0w");
-    m.insert("Likes", "lIDpu_NWL7_VhimGGt0o6A");
-    m.insert("SearchTimeline", "VhUd6vHVmLBcw0uX-6jMLA");
-    m.insert("Bookmarks", "2neUNDqrrFzbLui8yallcQ");
-    m.insert("CreateTweet", "IID9x6WsdMnTlXnzXGq8ng");
-    m.insert("DeleteTweet", "VaenaVgh5q5ih7kvyVjgtg");
-    m.insert("FavoriteTweet", "lI07N6Otwv1PhnEgXILM7A");
-    m.insert("UnfavoriteTweet", "ZYKSe-w7KEslx3JhSIk5LA");
-    m.insert("CreateRetweet", "ojPdsZsimiJrUGLR1sjUtA");
-    m.insert("DeleteRetweet", "iQtK4dl5hBmXewYZuEOKVw");
-    m.insert("CreateBookmark", "aoDbu3RHznuiSkQ9aNM67Q");
-    m.insert("DeleteBookmark", "Wlmlj2-xzyS1GN3a6cj-mQ");
-    m.insert("TweetResultByRestId", "7xflPyRiUxGVbJd4uWmbfg");
-    m.insert("ListLatestTweetsTimeline", "RlZzktZY_9wJynoepm8ZsA");
-    m
-});
 
 static GRAPHQL_FEATURES: LazyLock<serde_json::Value> = LazyLock::new(|| {
     serde_json::json!({
@@ -1101,11 +1077,9 @@ impl XProvider {
 
             Self::write_delay();
 
-            let query_id = FALLBACK_QUERY_IDS
-                .get("CreateTweet")
+            let query_id = crate::social::x_queryids::lookup("CreateTweet")
                 .ok_or_else(|| ProviderError::Api("Missing CreateTweet queryId".into()))?;
-            let json = self
-                .graphql_post(query_id, "CreateTweet", &variables, access_token)
+            let json = self.graphql_post(&query_id, "CreateTweet", &variables, access_token)
                 .await?;
 
             let tweet_id = json["data"]["create_tweet"]["tweet_results"]["result"]["rest_id"]
@@ -2068,11 +2042,9 @@ impl SocialProvider for XProvider {
                 "count": 40,
                 "rankingMode": "Relevance",
             });
-            let qid = FALLBACK_QUERY_IDS
-                .get("TweetDetail")
+            let qid = crate::social::x_queryids::lookup("TweetDetail")
                 .ok_or_else(|| ProviderError::Api("Missing TweetDetail queryId".into()))?;
-            let json = self
-                .graphql_get(qid, "TweetDetail", &vars, access_token)
+            let json = self.graphql_get(&qid, "TweetDetail", &vars, access_token)
                 .await?;
             return Ok(Self::parse_graphql_comments(&json, platform_post_id));
         }
@@ -2134,11 +2106,9 @@ impl SocialProvider for XProvider {
 
             Self::write_delay();
 
-            let query_id = FALLBACK_QUERY_IDS
-                .get("CreateTweet")
+            let query_id = crate::social::x_queryids::lookup("CreateTweet")
                 .ok_or_else(|| ProviderError::Api("Missing CreateTweet queryId".into()))?;
-            let json = self
-                .graphql_post(query_id, "CreateTweet", &variables, access_token)
+            let json = self.graphql_post(&query_id, "CreateTweet", &variables, access_token)
                 .await?;
 
             let tweet_id = json["data"]["create_tweet"]["tweet_results"]["result"]["rest_id"]
@@ -2346,11 +2316,10 @@ impl XProvider {
                         return Ok(json);
                     }
                     let vars = serde_json::json!({"screen_name": screen_name, "withSafetyModeUserFields": true});
-                    let qid = FALLBACK_QUERY_IDS.get("UserByScreenName").ok_or_else(|| {
+                    let qid = crate::social::x_queryids::lookup("UserByScreenName").ok_or_else(|| {
                         ProviderError::Api("Missing UserByScreenName queryId".into())
                     })?;
-                    let profile = self
-                        .graphql_get(qid, "UserByScreenName", &vars, access_token)
+                    let profile = self.graphql_get(&qid, "UserByScreenName", &vars, access_token)
                         .await?;
                     let data = profile
                         .pointer("/data/user/result")
@@ -2472,11 +2441,9 @@ impl XProvider {
         if let Some((_at, _ct0)) = Self::parse_cookie_token(access_token) {
             let vars =
                 serde_json::json!({"screen_name": username, "withSafetyModeUserFields": true});
-            let qid = FALLBACK_QUERY_IDS
-                .get("UserByScreenName")
+            let qid = crate::social::x_queryids::lookup("UserByScreenName")
                 .ok_or_else(|| ProviderError::Api("Missing UserByScreenName queryId".into()))?;
-            let json = self
-                .graphql_get(qid, "UserByScreenName", &vars, access_token)
+            let json = self.graphql_get(&qid, "UserByScreenName", &vars, access_token)
                 .await?;
             let result = json.pointer("/data/user/result").cloned().unwrap_or(json);
             Ok(serde_json::json!({"data": {
@@ -2514,11 +2481,9 @@ impl XProvider {
             if let Some(cursor) = pagination_token {
                 vars["cursor"] = serde_json::json!(cursor);
             }
-            let qid = FALLBACK_QUERY_IDS
-                .get("HomeLatestTimeline")
+            let qid = crate::social::x_queryids::lookup("HomeLatestTimeline")
                 .ok_or_else(|| ProviderError::Api("Missing HomeLatestTimeline queryId".into()))?;
-            let json = self
-                .graphql_get(qid, "HomeLatestTimeline", &vars, access_token)
+            let json = self.graphql_get(&qid, "HomeLatestTimeline", &vars, access_token)
                 .await?;
             let cursor = Self::extract_next_cursor(&json);
             let timeline = json
@@ -2560,11 +2525,9 @@ impl XProvider {
             if let Some(cursor) = pagination_token {
                 vars["cursor"] = serde_json::json!(cursor);
             }
-            let qid = FALLBACK_QUERY_IDS
-                .get("UserTweets")
+            let qid = crate::social::x_queryids::lookup("UserTweets")
                 .ok_or_else(|| ProviderError::Api("Missing UserTweets queryId".into()))?;
-            let json = self
-                .graphql_get(qid, "UserTweets", &vars, access_token)
+            let json = self.graphql_get(&qid, "UserTweets", &vars, access_token)
                 .await?;
             let cursor = Self::extract_next_cursor(&json);
             let timeline = json
@@ -2606,11 +2569,9 @@ impl XProvider {
                 "withBirdwatchNotes": true,
                 "withVoice": true,
             });
-            let qid = FALLBACK_QUERY_IDS
-                .get("TweetDetail")
+            let qid = crate::social::x_queryids::lookup("TweetDetail")
                 .ok_or_else(|| ProviderError::Api("Missing TweetDetail queryId".into()))?;
-            let json = self
-                .graphql_get(qid, "TweetDetail", &vars, access_token)
+            let json = self.graphql_get(&qid, "TweetDetail", &vars, access_token)
                 .await?;
             // Extract the focal tweet from the response
             let tweet = json
@@ -2649,11 +2610,9 @@ impl XProvider {
             if let Some(cursor) = next_token {
                 vars["cursor"] = serde_json::json!(cursor);
             }
-            let qid = FALLBACK_QUERY_IDS
-                .get("SearchTimeline")
+            let qid = crate::social::x_queryids::lookup("SearchTimeline")
                 .ok_or_else(|| ProviderError::Api("Missing SearchTimeline queryId".into()))?;
-            let json = self
-                .graphql_post(qid, "SearchTimeline", &vars, access_token)
+            let json = self.graphql_post(&qid, "SearchTimeline", &vars, access_token)
                 .await?;
             let cursor = Self::extract_next_cursor(&json);
             let mut result = serde_json::json!({ "data": json });
@@ -2685,11 +2644,9 @@ impl XProvider {
                 "tweet_id": tweet_id,
                 "dark_request": false,
             });
-            let qid = FALLBACK_QUERY_IDS
-                .get("DeleteTweet")
+            let qid = crate::social::x_queryids::lookup("DeleteTweet")
                 .ok_or_else(|| ProviderError::Api("Missing DeleteTweet queryId".into()))?;
-            let json = self
-                .graphql_post(qid, "DeleteTweet", &vars, access_token)
+            let json = self.graphql_post(&qid, "DeleteTweet", &vars, access_token)
                 .await?;
             Self::write_delay();
             return Ok(serde_json::json!({ "data": json.get("data") }));
@@ -2706,11 +2663,9 @@ impl XProvider {
     ) -> Result<serde_json::Value, ProviderError> {
         if let Some((_at, _ct0)) = Self::parse_cookie_token(access_token) {
             let vars = serde_json::json!({ "tweet_id": tweet_id });
-            let qid = FALLBACK_QUERY_IDS
-                .get("FavoriteTweet")
+            let qid = crate::social::x_queryids::lookup("FavoriteTweet")
                 .ok_or_else(|| ProviderError::Api("Missing FavoriteTweet queryId".into()))?;
-            let json = self
-                .graphql_post(qid, "FavoriteTweet", &vars, access_token)
+            let json = self.graphql_post(&qid, "FavoriteTweet", &vars, access_token)
                 .await?;
             Self::write_delay();
             return Ok(serde_json::json!({ "data": json.get("data") }));
@@ -2731,11 +2686,9 @@ impl XProvider {
                 "tweet_id": tweet_id,
                 "dark_request": false,
             });
-            let qid = FALLBACK_QUERY_IDS
-                .get("UnfavoriteTweet")
+            let qid = crate::social::x_queryids::lookup("UnfavoriteTweet")
                 .ok_or_else(|| ProviderError::Api("Missing UnfavoriteTweet queryId".into()))?;
-            let json = self
-                .graphql_post(qid, "UnfavoriteTweet", &vars, access_token)
+            let json = self.graphql_post(&qid, "UnfavoriteTweet", &vars, access_token)
                 .await?;
             Self::write_delay();
             return Ok(serde_json::json!({ "data": json.get("data") }));
@@ -2755,11 +2708,9 @@ impl XProvider {
                 "tweet_id": tweet_id,
                 "dark_request": false,
             });
-            let qid = FALLBACK_QUERY_IDS
-                .get("CreateRetweet")
+            let qid = crate::social::x_queryids::lookup("CreateRetweet")
                 .ok_or_else(|| ProviderError::Api("Missing CreateRetweet queryId".into()))?;
-            let json = self
-                .graphql_post(qid, "CreateRetweet", &vars, access_token)
+            let json = self.graphql_post(&qid, "CreateRetweet", &vars, access_token)
                 .await?;
             Self::write_delay();
             return Ok(serde_json::json!({ "data": json.get("data") }));
@@ -2780,11 +2731,9 @@ impl XProvider {
                 "source_tweet_id": tweet_id,
                 "dark_request": false,
             });
-            let qid = FALLBACK_QUERY_IDS
-                .get("DeleteRetweet")
+            let qid = crate::social::x_queryids::lookup("DeleteRetweet")
                 .ok_or_else(|| ProviderError::Api("Missing DeleteRetweet queryId".into()))?;
-            let json = self
-                .graphql_post(qid, "DeleteRetweet", &vars, access_token)
+            let json = self.graphql_post(&qid, "DeleteRetweet", &vars, access_token)
                 .await?;
             Self::write_delay();
             return Ok(serde_json::json!({ "data": json.get("data") }));
@@ -2809,11 +2758,9 @@ impl XProvider {
             if let Some(cursor) = pagination_token {
                 vars["cursor"] = serde_json::json!(cursor);
             }
-            let qid = FALLBACK_QUERY_IDS
-                .get("Bookmarks")
+            let qid = crate::social::x_queryids::lookup("Bookmarks")
                 .ok_or_else(|| ProviderError::Api("Missing Bookmarks queryId".into()))?;
-            let json = self
-                .graphql_get(qid, "Bookmarks", &vars, access_token)
+            let json = self.graphql_get(&qid, "Bookmarks", &vars, access_token)
                 .await?;
             let cursor = Self::extract_next_cursor(&json);
             let timeline = json
@@ -2845,11 +2792,9 @@ impl XProvider {
     ) -> Result<serde_json::Value, ProviderError> {
         if let Some((_at, _ct0)) = Self::parse_cookie_token(access_token) {
             let vars = serde_json::json!({ "tweet_id": tweet_id });
-            let qid = FALLBACK_QUERY_IDS
-                .get("CreateBookmark")
+            let qid = crate::social::x_queryids::lookup("CreateBookmark")
                 .ok_or_else(|| ProviderError::Api("Missing CreateBookmark queryId".into()))?;
-            let json = self
-                .graphql_post(qid, "CreateBookmark", &vars, access_token)
+            let json = self.graphql_post(&qid, "CreateBookmark", &vars, access_token)
                 .await?;
             return Ok(serde_json::json!({ "data": json.get("data") }));
         }
@@ -2866,11 +2811,9 @@ impl XProvider {
     ) -> Result<serde_json::Value, ProviderError> {
         if let Some((_at, _ct0)) = Self::parse_cookie_token(access_token) {
             let vars = serde_json::json!({ "tweet_id": tweet_id });
-            let qid = FALLBACK_QUERY_IDS
-                .get("DeleteBookmark")
+            let qid = crate::social::x_queryids::lookup("DeleteBookmark")
                 .ok_or_else(|| ProviderError::Api("Missing DeleteBookmark queryId".into()))?;
-            let json = self
-                .graphql_post(qid, "DeleteBookmark", &vars, access_token)
+            let json = self.graphql_post(&qid, "DeleteBookmark", &vars, access_token)
                 .await?;
             return Ok(serde_json::json!({ "data": json.get("data") }));
         }
@@ -2896,12 +2839,10 @@ impl XProvider {
             if let Some(cursor) = pagination_token {
                 vars["cursor"] = serde_json::json!(cursor);
             }
-            let qid = FALLBACK_QUERY_IDS
-                .get("UserByScreenName")
+            let qid = crate::social::x_queryids::lookup("UserByScreenName")
                 .ok_or_else(|| ProviderError::Api("Missing UserByScreenName queryId".into()))?;
             // Followers is a POST GraphQL query
-            let json = self
-                .graphql_post(qid, "Followers", &vars, access_token)
+            let json = self.graphql_post(&qid, "Followers", &vars, access_token)
                 .await?;
             let cursor = Self::extract_next_cursor(&json);
             let mut result = serde_json::json!({ "data": json });
@@ -2936,11 +2877,9 @@ impl XProvider {
             if let Some(cursor) = pagination_token {
                 vars["cursor"] = serde_json::json!(cursor);
             }
-            let qid = FALLBACK_QUERY_IDS
-                .get("UserByScreenName")
+            let qid = crate::social::x_queryids::lookup("UserByScreenName")
                 .ok_or_else(|| ProviderError::Api("Missing UserByScreenName queryId".into()))?;
-            let json = self
-                .graphql_post(qid, "Following", &vars, access_token)
+            let json = self.graphql_post(&qid, "Following", &vars, access_token)
                 .await?;
             let cursor = Self::extract_next_cursor(&json);
             let mut result = serde_json::json!({ "data": json });
@@ -3052,13 +2991,11 @@ impl XProvider {
             if let Some(cursor) = pagination_token {
                 vars["cursor"] = serde_json::json!(cursor);
             }
-            let qid = FALLBACK_QUERY_IDS
-                .get("ListLatestTweetsTimeline")
+            let qid = crate::social::x_queryids::lookup("ListLatestTweetsTimeline")
                 .ok_or_else(|| {
                     ProviderError::Api("Missing ListLatestTweetsTimeline queryId".into())
                 })?;
-            let json = self
-                .graphql_get(qid, "ListLatestTweetsTimeline", &vars, access_token)
+            let json = self.graphql_get(&qid, "ListLatestTweetsTimeline", &vars, access_token)
                 .await?;
             let cursor = Self::extract_next_cursor(&json);
             let timeline = json

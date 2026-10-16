@@ -224,8 +224,8 @@ async fn init_state() -> anyhow::Result<AppState> {
         .as_ref()
         .and_then(|k| crypto::decode_hex_key(k).ok());
     let providers = ProviderRegistry::new(&config, None, None);
-    Ok(AppState {
-        db,
+    let state = AppState {
+        db: db.clone(),
         config,
         broadcast: broadcaster,
         providers,
@@ -234,7 +234,12 @@ async fn init_state() -> anyhow::Result<AppState> {
         wa_client: None,
         media_http_client: crate::social::shared_http(),
         media_wreq_client: crate::social::shared_wreq(),
-    })
+    };
+    // F4: load the discovered X queryIds from the DB so one-shot CLI X
+    // commands use the freshest cached ids. No network here — the daemon
+    // owns discovery; the static table is the final fallback.
+    crate::social::x_queryids::hydrate_from_db(&db).await;
+    Ok(state)
 }
 
 // ── systemd user service (§6.4) ─────────────────────

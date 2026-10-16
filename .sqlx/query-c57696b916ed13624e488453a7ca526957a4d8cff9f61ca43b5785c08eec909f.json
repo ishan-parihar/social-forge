@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT op_name, query_id, fetched_at FROM x_query_ids",
+  "describe": {
+    "columns": [
+      {
+        "name": "op_name",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "query_id",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "fetched_at",
+        "ordinal": 2,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "c57696b916ed13624e488453a7ca526957a4d8cff9f61ca43b5785c08eec909f"
+}

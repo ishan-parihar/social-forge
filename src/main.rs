@@ -284,6 +284,22 @@ async fn main() -> anyhow::Result<()> {
     };
     let state_for_mcp = state.clone();
 
+    // ── F4: X queryId discovery ─────────────────────
+    // Hydrate the in-memory map from the DB, then re-scan x.com bundles if
+    // the DB copy is stale. Best-effort background task — the static
+    // fallback table keeps publish working if it never completes.
+    {
+        let db_for_qids = db.clone();
+        tokio::spawn(async move {
+            social_forge::social::x_queryids::hydrate_from_db(&db_for_qids).await;
+            social_forge::social::x_queryids::refresh_if_stale(
+                &db_for_qids,
+                &social_forge::social::shared_wreq(),
+            )
+            .await;
+        });
+    }
+
     // ── Start scheduler ───────────────────────────────────────
     let (shutdown_tx, _) = tokio::sync::watch::channel(false);
     let scheduler_drained = spawn_pollers(

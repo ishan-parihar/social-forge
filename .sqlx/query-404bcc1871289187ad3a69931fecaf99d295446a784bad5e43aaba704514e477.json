@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO x_query_ids (op_name, query_id, fetched_at) VALUES (?, ?, ?)\n         ON CONFLICT(op_name) DO UPDATE SET\n           query_id = excluded.query_id,\n           fetched_at = excluded.fetched_at",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "404bcc1871289187ad3a69931fecaf99d295446a784bad5e43aaba704514e477"
+}

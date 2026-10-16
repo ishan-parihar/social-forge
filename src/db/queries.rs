@@ -170,6 +170,43 @@ pub async fn create_integration(
     .await
 }
 
+// ══════════════════════════════════════════════════════════════
+// X QUERY IDS (F4)
+// ══════════════════════════════════════════════════════════════
+
+/// All discovered X GraphQL queryIds with their fetch time (epoch seconds).
+pub async fn list_x_query_ids(pool: &SqlitePool) -> Result<Vec<(String, String, i64)>, sqlx::Error> {
+    let rows =
+        sqlx::query!(r#"SELECT op_name, query_id, fetched_at FROM x_query_ids"#)
+            .fetch_all(pool)
+            .await?;
+    Ok(rows
+        .into_iter()
+        .map(|r| (r.op_name, r.query_id, r.fetched_at))
+        .collect())
+}
+
+/// Upsert one discovered queryId. `fetched_at` is epoch seconds.
+pub async fn upsert_x_query_id(
+    pool: &SqlitePool,
+    op_name: &str,
+    query_id: &str,
+    fetched_at: i64,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        r#"INSERT INTO x_query_ids (op_name, query_id, fetched_at) VALUES (?, ?, ?)
+         ON CONFLICT(op_name) DO UPDATE SET
+           query_id = excluded.query_id,
+           fetched_at = excluded.fetched_at"#,
+        op_name,
+        query_id,
+        fetched_at,
+    )
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
 pub async fn list_integrations(
     pool: &SqlitePool,
     user_id: Uuid,

@@ -38,6 +38,7 @@ pub mod whatsapp;
 pub mod wordpress;
 pub mod x;
 pub mod x_cookies;
+pub mod x_queryids;
 pub mod youtube;
 
 use std::future::Future;
