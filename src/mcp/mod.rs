@@ -30,6 +30,7 @@ pub mod tools_google;
 pub mod tools_hashnode;
 pub mod tools_instagram;
 pub mod tools_instagram_standalone;
+pub mod tools_inbox;
 pub mod tools_integrations;
 pub mod tools_linkedin;
 pub mod tools_linkedin_page;
@@ -166,7 +167,7 @@ impl SocialForgeMcpServer {
             | "list_dm_conversations" => "core".into(),
             _ => match name.split('_').next().unwrap_or("") {
                 "posts" | "stage" | "media" | "tag" | "notif" | "setup" | "integrations"
-                | "signatures" | "calendar" | "analytics" | "feed" | "auth" => "core".into(),
+                | "signatures" | "calendar" | "analytics" | "feed" | "auth" | "inbox" => "core".into(),
                 "goog" => "google".into(),
                 "gh" => "github".into(),
                 "li" | "lip" => "linkedin".into(),
@@ -527,6 +528,36 @@ impl SocialForgeMcpServer {
         params: Parameters<tools_posts::CreateCarouselInput>,
     ) -> Result<Json<tools_posts::CreateCarouselOutput>, String> {
         tools_posts::create_carousel(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Best time to post per account, from stored engagement history (E5): a ranked weekday×hour histogram of engagement on published posts. Small samples are noisy — treat as a hint.")]
+    pub async fn posts_best_times(
+        &self,
+        params: Parameters<tools_posts::PostsBestTimesInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_posts::handle_posts_best_times(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Unified inbox (E3): recent comments (swept over each account's latest published posts) plus DM conversations, merged across every connected provider, newest first. One reply verb: inbox_reply.")]
+    pub async fn inbox_list(
+        &self,
+        params: Parameters<tools_inbox::InboxListInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_inbox::handle_inbox_list(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Answer an inbox item with one verb (E3). For a comment: provider + kind='comment' + comment_id. For a DM: provider + kind='dm' + recipient. Text is the reply body.")]
+    pub async fn inbox_reply(
+        &self,
+        params: Parameters<tools_inbox::InboxReplyInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_inbox::handle_inbox_reply(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     // ── Comment Tools ───────────────────────────────────────

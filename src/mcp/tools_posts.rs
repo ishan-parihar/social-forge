@@ -959,3 +959,103 @@ pub async fn create_carousel(
         created_at: post.created_at.to_rfc3339(),
     }))
 }
+
+// ── E5: best time to post ─────────────────────────────────────────
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct PostsBestTimesInput {
+    /// Optional account selector: UUID or `provider:name`. Omitted → every account.
+    pub integration: Option<String>,
+    /// How many top slots to report per account (default 3)
+    pub top: Option<usize>,
+}
+
+const WEEKDAYS: [&str; 7] = [
+    "Sunday",
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+];
+
+/// E5: best-time-to-post from stored engagement history — the honest
+/// smallest version: a per-account weekday×hour histogram of engagement
+/// on published posts, ranked. Accounts without engagement data still
+/// report their posting-frequency histogram (engagement 0).
+pub async fn handle_posts_best_times(
+    state: &AppState,
+    input: &PostsBestTimesInput,
+) -> Result<Json<serde_json::Value>, String> {
+    let user_id = resolve_first_user(state).await?;
+
+    // Resolve the optional account selector to its provider — the engagement
+    // history (imported posts) is per-provider.
+    let provider_filter: Option<String> = match &input.integration {
+        Some(sel) if !sel.trim().is_empty() => {
+            let all = crate::db::queries::list_integrations(&state.db, user_id)
+                .await
+                .map_err(|e| format!("DB error: {e}"))?;
+            let found = Uuid::parse_str(sel.trim())
+                .ok()
+                .and_then(|id| all.iter().find(|i| i.id == id))
+                .or_else(|| {
+                    let (provider, name) = sel.split_once(':').unwrap_or((sel.trim(), ""));
+                    all.iter().find(|i| {
+                        i.provider_identifier == provider
+                            && (name.is_empty()
+                                || i.internal_id.eq_ignore_ascii_case(name)
+                                || i.provider_name.eq_ignore_ascii_case(name))
+                    })
+                })
+                .ok_or_else(|| format!("No integration matches '{sel}'"))?;
+            Some(found.provider_identifier.clone())
+        }
+        _ => None,
+    };
+
+    let rows = crate::db::queries::engagement_histogram_by_slot(
+        &state.db,
+        user_id,
+        provider_filter.as_deref(),
+    )
+    .await
+    .map_err(|e| format!("DB error: {e}"))?;
+
+    let top = input.top.unwrap_or(3).max(1);
+
+    // Group slots per provider, then rank by engagement (posts as tiebreak).
+    let mut per_provider: std::collections::HashMap<String, Vec<(i32, i32, i64, i64)>> =
+        std::collections::HashMap::new();
+    for (provider, weekday, hour, posts, engagement) in rows {
+        per_provider
+            .entry(provider)
+            .or_default()
+            .push((weekday, hour, posts, engagement));
+    }
+
+    let mut providers = Vec::new();
+    for (provider, mut slots) in per_provider {
+        slots.sort_by(|a, b| b.3.cmp(&a.3).then(b.2.cmp(&a.2)));
+        let posts_analyzed: i64 = slots.iter().map(|s| s.2).sum();
+        providers.push(serde_json::json!({
+            "provider": provider,
+            "posts_analyzed": posts_analyzed,
+            "best_slots": slots.iter().take(top).map(|(wd, h, posts, eng)| serde_json::json!({
+                "weekday": WEEKDAYS[*wd as usize],
+                "hour": h,
+                "label": format!("{} {:02}:00–{:02}:00 UTC", WEEKDAYS[*wd as usize], h, (h + 1) % 24),
+                "posts": posts,
+                "engagement": eng,
+            })).collect::<Vec<_>>(),
+        }));
+    }
+    // Stable, useful order: most-engaged providers first.
+    providers.sort_by_key(|p| -(p["posts_analyzed"].as_i64().unwrap_or(0)));
+
+    Ok(Json(serde_json::json!({
+        "providers": providers,
+        "note": "Ranked weekday×hour histogram of engagement on IMPORTED posts with synced metrics (build history via `social-forge import <provider>`), bucketed by the platform post's UTC timestamp. Small samples are noisy — treat as a hint, not a law.",
+    })))
+}

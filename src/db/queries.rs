@@ -2641,6 +2641,61 @@ pub async fn get_post_engagement_by_post_id(
     .await
 }
 
+/// E5: per-(provider, weekday, hour) engagement histogram over imported
+/// posts with synced engagement — the input for best-time-to-post
+/// suggestions. The engagement history for the user's own posts lives on
+/// external_posts (the `social-forge import` flow + the feed refresher's
+/// engagement sync); weekday is SQLite's %w (0=Sunday..6=Saturday),
+/// hour 0-23, both UTC over the platform post timestamp.
+pub async fn engagement_histogram_by_slot(
+    pool: &SqlitePool,
+    user_id: Uuid,
+    provider: Option<&str>,
+) -> Result<Vec<(String, i32, i32, i64, i64)>, sqlx::Error> {
+    sqlx::query_as(
+        r#"SELECT ep.provider,
+           CAST(strftime('%w', datetime(ep.created_at, 'unixepoch')) AS INTEGER),
+           CAST(strftime('%H', datetime(ep.created_at, 'unixepoch')) AS INTEGER),
+           COUNT(*),
+           SUM(COALESCE(pe.likes, 0) + COALESCE(pe.comments, 0) + COALESCE(pe.shares, 0))
+          FROM external_posts ep
+          INNER JOIN post_engagement pe ON pe.post_id = ep.id
+         WHERE ep.user_id = ?
+           AND ep.hidden_at IS NULL
+           AND (? IS NULL OR ep.provider = ?)
+           AND (COALESCE(pe.likes, 0) + COALESCE(pe.comments, 0) + COALESCE(pe.shares, 0)) > 0
+         GROUP BY 1, 2, 3"#,
+    )
+    .bind(user_id)
+    .bind(provider)
+    .bind(provider)
+    .fetch_all(pool)
+    .await
+}
+
+/// E3: the most recent platform_post_ids of an integration's published
+/// posts — the inbox fans out get_post_comments over these.
+pub async fn recent_platform_post_ids(
+    pool: &SqlitePool,
+    user_id: Uuid,
+    integration_id: Uuid,
+    limit: i64,
+) -> Result<Vec<(String,)>, sqlx::Error> {
+    sqlx::query_as(
+        r#"SELECT platform_post_id FROM posts
+            WHERE user_id = ? AND integration_id = ?
+              AND state = 'published'
+              AND platform_post_id IS NOT NULL
+              AND deleted_at IS NULL
+         ORDER BY published_at DESC LIMIT ?"#,
+    )
+    .bind(user_id)
+    .bind(integration_id)
+    .bind(limit)
+    .fetch_all(pool)
+    .await
+}
+
 /// List external posts with their engagement data LEFT JOINed.
 /// Returns posts with engagement_* prefixed fields.
 pub async fn list_all_external_posts_with_engagement(
@@ -4020,5 +4075,101 @@ mod b03_b08_tests {
                 .unwrap();
         assert_eq!(orig_days, Some(2));
         assert_eq!(orig_group, Some(group));
+    }
+
+    /// E5: the best-times histogram buckets imported posts with synced
+    /// engagement by the platform post's UTC weekday×hour.
+    #[tokio::test]
+    async fn engagement_histogram_buckets_by_weekday_and_hour() {
+        let (pool, user_id) = fixture().await;
+
+        // Imported (external) posts — the engagement history source.
+        // 2026-10-14 is a Wednesday (%w = 3); 2026-10-11 a Sunday (%w = 0).
+        let wed_14 = chrono::DateTime::parse_from_rfc3339("2026-10-14T14:30:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        let sun_09 = chrono::DateTime::parse_from_rfc3339("2026-10-11T09:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        let mut ids = Vec::new();
+        for (i, at) in [wed_14, sun_09].into_iter().enumerate() {
+            let id = Uuid::new_v4();
+            sqlx::query(
+                "INSERT INTO external_posts (id, user_id, provider, platform_post_id, text, created_at)
+                 VALUES (?, ?, 'x', ?, 'imported', ?)",
+            )
+            .bind(id)
+            .bind(user_id)
+            .bind(format!("plat-{i}"))
+            .bind(at.timestamp())
+            .execute(&pool)
+            .await
+            .unwrap();
+            ids.push(id);
+        }
+
+        // Engagement on the Wednesday post only: 10 + 4 + 1 = 15.
+        upsert_post_engagement(
+            &pool,
+            ids[0],
+            &crate::social::EngagementRow {
+                likes: 10,
+                comments: 4,
+                shares: 1,
+                views: 0,
+                saves: 0,
+                quotes: 0,
+                reposts: 0,
+                replies: 0,
+                reactions: serde_json::json!({}),
+                upvotes: 0,
+                downvotes: 0,
+                upvote_ratio: None,
+                awards: 0,
+                raw: serde_json::json!({}),
+            },
+        )
+        .await
+        .unwrap();
+        // The Sunday post has zero engagement everywhere — it must NOT
+        // appear (INNER JOIN, > 0 filter).
+        upsert_post_engagement(
+            &pool,
+            ids[1],
+            &crate::social::EngagementRow {
+                likes: 0,
+                comments: 0,
+                shares: 0,
+                views: 0,
+                saves: 0,
+                quotes: 0,
+                reposts: 0,
+                replies: 0,
+                reactions: serde_json::json!({}),
+                upvotes: 0,
+                downvotes: 0,
+                upvote_ratio: None,
+                awards: 0,
+                raw: serde_json::json!({}),
+            },
+        )
+        .await
+        .unwrap();
+
+        let rows = engagement_histogram_by_slot(&pool, user_id, None)
+            .await
+            .unwrap();
+        assert_eq!(rows.len(), 1, "only the engaged post buckets: {rows:?}");
+        let (provider, wd, h, posts, engagement) = &rows[0];
+        assert_eq!(provider, "x");
+        assert_eq!((*wd, *h), (3, 14), "Wednesday 14:00 UTC bucket");
+        assert_eq!(*posts, 1);
+        assert_eq!(*engagement, 15, "likes+comments+shares summed");
+
+        // The provider filter narrows correctly.
+        let filtered = engagement_histogram_by_slot(&pool, user_id, Some("reddit"))
+            .await
+            .unwrap();
+        assert!(filtered.is_empty(), "filter must exclude other providers");
     }
 }
