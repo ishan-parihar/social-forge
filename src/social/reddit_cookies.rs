@@ -1,12 +1,10 @@
 // ─── Reddit Browser Cookie Extraction ─────────────────────────
 // Extracts reddit_session and token_v2 from Chrome, Brave, Firefox, Zen browsers.
-// Mirrors the pattern from x_cookies.rs but for reddit.com domain.
+//
+// F3: the browser walk + DB reads live in browser_cookies.rs; this file is
+// only the Reddit spec, the rows→result mapping, and the DB token-blob API.
 
-use std::path::{Path, PathBuf};
-
-use super::browser_cookies::{
-    chrome_default_profile as shared_chrome_default_profile, home_dir as shared_home_dir,
-};
+use super::browser_cookies::{extract_from_browsers, CookieRow, CookieSpec};
 
 /// Result of browser cookie extraction
 #[derive(Debug)]
@@ -17,25 +15,63 @@ pub struct ExtractedRedditCookies {
     pub source: String,
 }
 
-/// Function type for browser cookie extractors
-type BrowserExtractor = fn() -> Option<ExtractedRedditCookies>;
+const REDDIT_SPEC: CookieSpec = CookieSpec {
+    hosts: &["reddit.com"],
+    names: &[
+        "reddit_session",
+        "token_v2",
+        "csrf_token",
+        "loid",
+        "session_tracker",
+        "edgebucket",
+    ],
+};
 
 /// Try to extract Reddit cookies from all known browsers in order
+/// (brave → chrome → zen → firefox; a browser counts only if its rows
+/// yield reddit_session OR token_v2).
 pub fn extract_reddit_cookies() -> Option<ExtractedRedditCookies> {
-    let browsers: Vec<(&str, BrowserExtractor)> = vec![
-        ("brave", extract_brave),
-        ("chrome", extract_chrome),
-        ("zen", extract_zen),
-        ("firefox", extract_firefox),
-    ];
+    let ((session, token_v2, cookie_string), source) =
+        extract_from_browsers(&REDDIT_SPEC, "reddit_cookies", map_reddit_rows)?;
+    Some(ExtractedRedditCookies {
+        reddit_session: session,
+        token_v2,
+        cookie_string,
+        source: source.to_string(),
+    })
+}
 
-    for (name, extractor) in &browsers {
-        if let Some(mut result) = extractor() {
-            result.source = name.to_string();
-            return Some(result);
+/// Reddit mapping: keep every wanted cookie in the header string; require
+/// reddit_session OR token_v2.
+fn map_reddit_rows(rows: &[CookieRow]) -> Option<(String, Option<String>, String)> {
+    let mut reddit_session = String::new();
+    let mut token_v2 = String::new();
+    for (name, value, _) in rows {
+        match name.as_str() {
+            "reddit_session" => reddit_session = value.clone(),
+            "token_v2" => token_v2 = value.clone(),
+            _ => {}
         }
     }
-    None
+    if reddit_session.is_empty() && token_v2.is_empty() {
+        return None; // insufficient rows — walk continues
+    }
+
+    let cookie_string = rows
+        .iter()
+        .map(|(k, v, _)| format!("{k}={v}"))
+        .collect::<Vec<_>>()
+        .join("; ");
+
+    Some((
+        reddit_session,
+        if token_v2.is_empty() {
+            None
+        } else {
+            Some(token_v2)
+        },
+        cookie_string,
+    ))
 }
 
 /// Build the JSON token blob for storage in DB
@@ -105,223 +141,29 @@ pub fn parse_cookie_string(cookie_str: &str) -> Option<ExtractedRedditCookies> {
     })
 }
 
-// ── Helpers ─────────────────────────────────────────────────
+#[cfg(test)]
+mod f3_tests {
+    use super::*;
 
-fn home_dir() -> PathBuf {
-    shared_home_dir()
-}
+    /// Reddit mapping: requires session OR token_v2; keeps every row in
+    /// the header string; incomplete rows are refused so the walk moves on.
+    #[test]
+    fn reddit_mapping_requires_session_or_token() {
+        let rows: Vec<CookieRow> = vec![
+            ("reddit_session".into(), "s1".into(), ".reddit.com".into()),
+            ("loid".into(), "loid-1".into(), ".reddit.com".into()),
+        ];
+        let (session, token_v2, cookie_string) =
+            map_reddit_rows(&rows).expect("session alone suffices");
+        assert_eq!(session, "s1");
+        assert_eq!(token_v2, None);
+        assert_eq!(cookie_string, "reddit_session=s1; loid=loid-1");
 
-fn chrome_default_profile(home: &Path, config_dir: &str) -> PathBuf {
-    shared_chrome_default_profile(home, config_dir)
-}
-
-// ── Chrome / Brave ─────────────────────────────────────────
-
-fn extract_chrome_impl(profile_dir: &Path, browser: &str) -> Option<ExtractedRedditCookies> {
-    let cookie_db = profile_dir.join("Cookies");
-    if !cookie_db.exists() {
-        return None;
+        let rows2: Vec<CookieRow> =
+            vec![("loid".into(), "loid-1".into(), ".reddit.com".into())];
+        assert!(
+            map_reddit_rows(&rows2).is_none(),
+            "rows with neither session nor token_v2 must be refused"
+        );
     }
-
-    let tmp_copy = std::env::temp_dir().join(format!("reddit_cookies_{}.db", browser));
-    let _ = std::fs::remove_file(&tmp_copy);
-    if std::fs::copy(&cookie_db, &tmp_copy).is_err() {
-        return None;
-    }
-
-    let result = read_chrome_cookies(&tmp_copy);
-    let _ = std::fs::remove_file(&tmp_copy);
-    result
-}
-
-fn read_chrome_cookies(db_path: &Path) -> Option<ExtractedRedditCookies> {
-    let conn = rusqlite::Connection::open(db_path).ok()?;
-    let mut stmt = conn
-        .prepare(
-            "SELECT name, value, encrypted_value
-             FROM cookies
-             WHERE host_key LIKE '%reddit.com'
-             AND name IN ('reddit_session', 'token_v2', 'csrf_token', 'loid', 'session_tracker', 'edgebucket')",
-        )
-        .ok()?;
-
-    let mut reddit_session = String::new();
-    let mut token_v2 = String::new();
-    let mut all_cookies: Vec<(String, String)> = Vec::new();
-
-    let rows = stmt
-        .query_map([], |row| {
-            let name: String = row.get(0)?;
-            let value: String = row.get(1)?;
-            let _encrypted_value: Vec<u8> = row.get(2)?;
-            Ok((name, value))
-        })
-        .ok()?;
-
-    for row in rows.flatten() {
-        let (name, value) = row;
-        if value.is_empty() {
-            continue;
-        }
-        match name.as_str() {
-            "reddit_session" => reddit_session = value.clone(),
-            "token_v2" => token_v2 = value.clone(),
-            _ => {}
-        }
-        all_cookies.push((name, value));
-    }
-
-    // Need at least reddit_session OR token_v2
-    if reddit_session.is_empty() && token_v2.is_empty() {
-        return None;
-    }
-
-    let cookie_string = all_cookies
-        .iter()
-        .map(|(k, v)| format!("{k}={v}"))
-        .collect::<Vec<_>>()
-        .join("; ");
-
-    Some(ExtractedRedditCookies {
-        reddit_session,
-        token_v2: if token_v2.is_empty() {
-            None
-        } else {
-            Some(token_v2)
-        },
-        cookie_string,
-        source: String::new(),
-    })
-}
-
-// ── Firefox / Zen ─────────────────────────────────────────
-
-fn extract_firefox_impl(profile_dir: &Path) -> Option<ExtractedRedditCookies> {
-    let cookie_db = profile_dir.join("cookies.sqlite");
-    if !cookie_db.exists() {
-        return None;
-    }
-
-    let tmp_copy = std::env::temp_dir().join("reddit_cookies_firefox.db");
-    let _ = std::fs::remove_file(&tmp_copy);
-    if std::fs::copy(&cookie_db, &tmp_copy).is_err() {
-        return None;
-    }
-
-    let conn = rusqlite::Connection::open(&tmp_copy).ok()?;
-    let mut stmt = conn
-        .prepare(
-            "SELECT name, value
-             FROM moz_cookies
-             WHERE baseDomain LIKE '%reddit.com'
-             AND name IN ('reddit_session', 'token_v2', 'csrf_token', 'loid', 'session_tracker', 'edgebucket')",
-        )
-        .ok()?;
-
-    let mut reddit_session = String::new();
-    let mut token_v2 = String::new();
-    let mut all_cookies: Vec<(String, String)> = Vec::new();
-
-    let rows = stmt
-        .query_map([], |row| {
-            let name: String = row.get(0)?;
-            let value: String = row.get(1)?;
-            Ok((name, value))
-        })
-        .ok()?;
-
-    for row in rows.flatten() {
-        let (name, value) = row;
-        if value.is_empty() {
-            continue;
-        }
-        match name.as_str() {
-            "reddit_session" => reddit_session = value.clone(),
-            "token_v2" => token_v2 = value.clone(),
-            _ => {}
-        }
-        all_cookies.push((name, value));
-    }
-
-    let _ = std::fs::remove_file(&tmp_copy);
-
-    if reddit_session.is_empty() && token_v2.is_empty() {
-        return None;
-    }
-
-    let cookie_string = all_cookies
-        .iter()
-        .map(|(k, v)| format!("{k}={v}"))
-        .collect::<Vec<_>>()
-        .join("; ");
-
-    Some(ExtractedRedditCookies {
-        reddit_session,
-        token_v2: if token_v2.is_empty() {
-            None
-        } else {
-            Some(token_v2)
-        },
-        cookie_string,
-        source: String::new(),
-    })
-}
-
-// ── Browser-specific entry points ────────────────────────────
-
-fn extract_chrome() -> Option<ExtractedRedditCookies> {
-    let home = home_dir();
-    extract_chrome_impl(&chrome_default_profile(&home, "google-chrome"), "chrome")
-}
-
-fn extract_brave() -> Option<ExtractedRedditCookies> {
-    let home = home_dir();
-    // Keep in sync with x_cookies::extract_brave — Brave-Origin is the
-    // current stable Linux profile-dir spelling.
-    let profiles = [
-        chrome_default_profile(&home, "BraveSoftware/Brave-Browser"),
-        chrome_default_profile(&home, "BraveSoftware/Brave-Origin"),
-        chrome_default_profile(&home, "BraveSoftware/Brave-Origin-Beta"),
-    ];
-    for profile in &profiles {
-        if let Some(result) = extract_chrome_impl(profile, "brave") {
-            return Some(result);
-        }
-    }
-    None
-}
-
-fn extract_firefox() -> Option<ExtractedRedditCookies> {
-    let home = home_dir();
-    let mozilla_dir = home.join(".mozilla").join("firefox");
-    if let Ok(entries) = std::fs::read_dir(&mozilla_dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_dir() {
-                if let Some(result) = extract_firefox_impl(&path) {
-                    return Some(result);
-                }
-            }
-        }
-    }
-    None
-}
-
-fn extract_zen() -> Option<ExtractedRedditCookies> {
-    let home = home_dir();
-    let zen_dir = home.join(".zen");
-    if !zen_dir.exists() {
-        return None;
-    }
-    if let Ok(entries) = std::fs::read_dir(&zen_dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_dir() {
-                if let Some(result) = extract_firefox_impl(&path) {
-                    return Some(result);
-                }
-            }
-        }
-    }
-    None
 }

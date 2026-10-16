@@ -4,12 +4,11 @@
 // Chrome/Brave: cookie values are OS-encrypted (v10/v11); the value column
 // is empty and this build does not decrypt them, so those browsers return
 // None (B12: never fabricate a token from ciphertext).
+//
+// F3: the browser walk + DB reads live in browser_cookies.rs; this file is
+// only the X spec and the rows→result mapping.
 
-use std::path::{Path, PathBuf};
-
-use super::browser_cookies::{
-    chrome_default_profile as shared_chrome_default_profile, home_dir as shared_home_dir,
-};
+use super::browser_cookies::{extract_from_browsers, CookieRow, CookieSpec};
 
 /// Result of browser cookie extraction
 #[derive(Debug)]
@@ -20,353 +19,95 @@ pub struct ExtractedCookies {
     pub source: String,
 }
 
-/// Function type for browser cookie extractors
-type BrowserExtractor = fn() -> Option<(String, String, String)>;
+const X_SPEC: CookieSpec = CookieSpec {
+    hosts: &["x.com", ".twitter.com", "twitter.com"],
+    names: &[
+        "auth_token",
+        "ct0",
+        "guest_id",
+        "kdt",
+        "twid",
+        "lang",
+        "personalization_id",
+    ],
+};
 
 /// Try to extract X cookies from all known browsers in order
+/// (brave → chrome → zen → firefox; a browser counts only if its rows
+/// yield BOTH auth_token and ct0).
 pub fn extract_x_cookies() -> Option<ExtractedCookies> {
-    // Priority order: Brave, Chrome, Zen, Firefox
-    let browsers: Vec<(&str, BrowserExtractor)> = vec![
-        ("brave", extract_brave),
-        ("chrome", extract_chrome),
-        ("zen", extract_zen),
-        ("firefox", extract_firefox),
-    ];
-
-    for (name, extractor) in &browsers {
-        if let Some((at, ct0, cookie_str)) = extractor() {
-            return Some(ExtractedCookies {
-                auth_token: at,
-                ct0,
-                cookie_string: cookie_str,
-                source: name.to_string(),
-            });
-        }
-    }
-    None
+    let ((auth_token, ct0, cookie_string), source) =
+        extract_from_browsers(&X_SPEC, "x_cookies", map_x_rows)?;
+    Some(ExtractedCookies {
+        auth_token,
+        ct0,
+        cookie_string,
+        source: source.to_string(),
+    })
 }
 
-// ── Chrome / Brave ─────────────────────────────────────────────
-
-fn home_dir() -> PathBuf {
-    shared_home_dir()
-}
-
-fn chrome_cookie_path(profile_dir: &Path) -> PathBuf {
-    profile_dir.join("Cookies")
-}
-
-fn chrome_default_profile(home: &Path, config_dir: &str) -> PathBuf {
-    shared_chrome_default_profile(home, config_dir)
-}
-
-fn extract_chrome_impl(profile_dir: &Path, browser: &str) -> Option<(String, String, String)> {
-    let cookie_db = chrome_cookie_path(profile_dir);
-    if !cookie_db.exists() {
-        return None;
-    }
-
-    let tmp_copy = std::env::temp_dir().join(format!("x_cookies_{}.db", browser));
-    let _ = std::fs::remove_file(&tmp_copy);
-    if std::fs::copy(&cookie_db, &tmp_copy).is_err() {
-        return None;
-    }
-
-    // Chromium-family cookies are OS-encrypted (v10/v11 on Linux, DPAPI on
-    // Windows, Keychain on macOS) and the value column is empty. The old code
-    // pretended to recover the key with a zero-key AES-GCM "decrypt" (which
-    // never succeeds on a real install) and then fabricated cookie values via
-    // from_utf8_lossy(ciphertext) — minting a broken integration that failed
-    // later with a misleading 401. Read plaintext rows only; an encrypted-only
-    // DB honestly yields None and the caller falls through to Firefox/Zen.
-    // ponytail: implement v10/v11 PBKDF2-AES-128-CBC decrypt if Chromium
-    // import ever becomes a real need (needs pbkdf2+sha1+cbc crates).
-    let result = read_chrome_cookies(&tmp_copy);
-    let _ = std::fs::remove_file(&tmp_copy);
-    result
-}
-
-fn read_chrome_cookies(db_path: &Path) -> Option<(String, String, String)> {
-    let conn = rusqlite::Connection::open(db_path).ok()?;
-    let mut stmt = conn
-        .prepare(
-            "SELECT name, value, encrypted_value, host_key, path
-             FROM cookies
-             WHERE (host_key LIKE '%x.com' OR host_key LIKE '%.twitter.com' OR host_key LIKE '%twitter.com')
-             AND name IN ('auth_token', 'ct0', 'guest_id', 'kdt', 'twid', 'lang', 'personalization_id')",
-        )
-        .ok()?;
-
-    let mut auth_token = String::new();
-    let mut ct0 = String::new();
-    let mut all_cookies: Vec<(String, String)> = Vec::new();
-
-    let rows = stmt
-        .query_map([], |row| {
-            let name: String = row.get(0)?;
-            let value: String = row.get(1)?;
-            let encrypted_value: Vec<u8> = row.get(2)?;
-            let host_key: String = row.get(3)?;
-            let path: String = row.get(4)?;
-            Ok((name, value, encrypted_value, host_key, path))
-        })
-        .ok()?;
-
-    for row in rows.flatten() {
-        let (name, value, _encrypted_value, _host, _path) = row;
-        // B12: a real Chromium cookie DB stores the value encrypted (value
-        // column empty). We do not decrypt, so an encrypted-only row is
-        // unusable — skip it. NEVER fall back to from_utf8_lossy(ciphertext):
-        // that minted ciphertext-as-auth_token, which "connected" fine and
-        // then failed every request with a misleading 401.
-        if value.is_empty() {
-            continue;
-        }
-        let val = value;
-
-        match name.as_str() {
-            "auth_token" => auth_token = val.clone(),
-            "ct0" => ct0 = val.clone(),
-            _ => {}
-        }
-        all_cookies.push((name, val));
-    }
-
-    if auth_token.is_empty() || ct0.is_empty() {
-        return None;
-    }
-
-    let cookie_string = all_cookies
+/// X mapping: prefer rows whose host is x.com (fall back to twitter.com),
+/// require auth_token AND ct0 from the chosen domain bucket.
+fn map_x_rows(rows: &[CookieRow]) -> Option<(String, String, String)> {
+    let all_refs: Vec<&CookieRow> = rows.iter().collect();
+    let x_domain: Vec<&CookieRow> = rows
         .iter()
-        .map(|(k, v)| format!("{k}={v}"))
-        .collect::<Vec<_>>()
-        .join("; ");
-
-    Some((auth_token, ct0, cookie_string))
-}
-
-// ── Firefox / Zen ─────────────────────────────────────────────
-
-fn firefox_profile_dir(home: &Path, config_dir: &str) -> Vec<PathBuf> {
-    let profiles_ini = home.join(".mozilla").join(config_dir).join("profiles.ini");
-    let mut profiles = Vec::new();
-
-    if let Ok(content) = std::fs::read_to_string(&profiles_ini) {
-        for line in content.lines() {
-            if let Some(path) = line.strip_prefix("Path=") {
-                let p = home.join(".mozilla").join(config_dir).join(path);
-                if p.join("cookies.sqlite").exists() {
-                    profiles.push(p);
-                }
-            }
-        }
-    }
-
-    // Fallback: scan for .default directories
-    let mozilla_dir = home.join(".mozilla").join(config_dir);
-    if let Ok(entries) = std::fs::read_dir(&mozilla_dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_dir() && path.join("cookies.sqlite").exists() && !profiles.contains(&path) {
-                profiles.push(path);
-            }
-        }
-    }
-
-    profiles
-}
-
-fn extract_firefox_impl(profile_dir: &Path, _browser: &str) -> Option<(String, String, String)> {
-    let cookie_db = profile_dir.join("cookies.sqlite");
-    if !cookie_db.exists() {
-        return None;
-    }
-
-    // Firefox cookies are NOT encrypted — plaintext in SQLite
-    let tmp_copy = std::env::temp_dir().join("x_cookies_firefox.db");
-    let _ = std::fs::remove_file(&tmp_copy);
-    if std::fs::copy(&cookie_db, &tmp_copy).is_err() {
-        return None;
-    }
-
-    let conn = rusqlite::Connection::open(&tmp_copy).ok()?;
-    let mut stmt = conn
-        .prepare(
-            "SELECT name, value, host, path
-             FROM moz_cookies
-             WHERE (host LIKE '%x.com' OR host LIKE '%.twitter.com' OR host LIKE '%twitter.com')
-             AND name IN ('auth_token', 'ct0', 'guest_id', 'kdt', 'twid', 'lang', 'personalization_id')",
-        )
-        .ok()?;
+        .filter(|(_, _, h)| h.contains("x.com"))
+        .collect();
+    let chosen: &[&CookieRow] = if x_domain.is_empty() {
+        &all_refs
+    } else {
+        &x_domain
+    };
 
     let mut auth_token = String::new();
     let mut ct0 = String::new();
-    let mut all_cookies: Vec<(String, String)> = Vec::new();
-
-    // Collect into two domain buckets so auth_token+ct0 are from same domain
-    let mut x_domain: Vec<(String, String)> = Vec::new();
-    let mut tw_domain: Vec<(String, String)> = Vec::new();
-
-    let rows = stmt
-        .query_map([], |row| {
-            let name: String = row.get(0)?;
-            let value: String = row.get(1)?;
-            let host: String = row.get(2)?;
-            Ok((name, value, host))
-        })
-        .ok()?;
-
-    for row in rows.flatten() {
-        let (name, value, host) = row;
-        if host.contains("x.com") {
-            x_domain.push((name, value));
-        } else {
-            tw_domain.push((name, value));
-        }
-    }
-
-    // Prefer x.com cookies; fall back to twitter.com
-    let chosen = if !x_domain.is_empty() {
-        &x_domain
-    } else {
-        &tw_domain
-    };
-    for (name, value) in chosen {
+    for (name, value, _) in chosen {
         match name.as_str() {
             "auth_token" => auth_token = value.clone(),
             "ct0" => ct0 = value.clone(),
             _ => {}
         }
-        all_cookies.push((name.clone(), value.clone()));
     }
-
-    let _ = std::fs::remove_file(&tmp_copy);
-
     if auth_token.is_empty() || ct0.is_empty() {
-        return None;
+        return None; // this browser's rows are insufficient — walk continues
     }
 
-    let cookie_string = all_cookies
+    let cookie_string = chosen
         .iter()
-        .map(|(k, v)| format!("{k}={v}"))
+        .map(|(k, v, _)| format!("{k}={v}"))
         .collect::<Vec<_>>()
         .join("; ");
 
     Some((auth_token, ct0, cookie_string))
 }
 
-// ── Browser-specific entry points ────────────────────────────
-
-fn extract_chrome() -> Option<(String, String, String)> {
-    let home = home_dir();
-    let profile = chrome_default_profile(&home, "google-chrome");
-    extract_chrome_impl(&profile, "chrome")
-}
-
-fn extract_brave() -> Option<(String, String, String)> {
-    let home = home_dir();
-    // Brave ships several profile-dir spellings; Brave-Origin is the current
-    // stable layout on Linux (seen holding the only live session on this host).
-    let profiles = [
-        chrome_default_profile(&home, "BraveSoftware/Brave-Browser"),
-        chrome_default_profile(&home, "BraveSoftware/Brave-Origin"),
-        chrome_default_profile(&home, "BraveSoftware/Brave-Origin-Beta"),
-    ];
-    for profile in &profiles {
-        if let Some(result) = extract_chrome_impl(profile, "brave") {
-            return Some(result);
-        }
-    }
-    None
-}
-
-fn extract_firefox() -> Option<(String, String, String)> {
-    let home = home_dir();
-    let profiles = firefox_profile_dir(&home, "firefox");
-    for profile in profiles {
-        if let Ok(c) = std::fs::read_dir(&profile) {
-            for entry in c.flatten() {
-                let path = entry.path();
-                if path.is_dir() && path.join("cookies.sqlite").exists() {
-                    if let Some(result) = extract_firefox_impl(&path, "firefox") {
-                        return Some(result);
-                    }
-                }
-            }
-        }
-        if let Some(result) = extract_firefox_impl(&profile, "firefox") {
-            return Some(result);
-        }
-    }
-    None
-}
-
-fn extract_zen() -> Option<(String, String, String)> {
-    let home = home_dir();
-    let zen_dir = home.join(".zen");
-    if !zen_dir.exists() {
-        return None;
-    }
-
-    // Zen stores everything in ~/.zen/, NOT ~/.mozilla/zen/
-    let profiles_ini = zen_dir.join("profiles.ini");
-    let mut profiles: Vec<PathBuf> = Vec::new();
-
-    if let Ok(content) = std::fs::read_to_string(&profiles_ini) {
-        for line in content.lines() {
-            if let Some(path) = line.strip_prefix("Path=") {
-                let p = zen_dir.join(path);
-                if p.join("cookies.sqlite").exists() {
-                    profiles.push(p);
-                }
-            }
-        }
-    }
-
-    if profiles.is_empty() {
-        if let Ok(entries) = std::fs::read_dir(&zen_dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.is_dir() && path.join("cookies.sqlite").exists() {
-                    profiles.push(path);
-                }
-            }
-        }
-    }
-
-    for profile in &profiles {
-        if let Some(result) = extract_firefox_impl(profile, "zen") {
-            return Some(result);
-        }
-    }
-    None
-}
-
-/// Parse a full cookie string (from browser export/curl) into components
+/// Parse a manually pasted cookie header string into
+/// `(auth_token, ct0, cookie_string)` — the tuple shape every caller
+/// (onboard paste flow, CLI, setup tools) destructures positionally.
 pub fn parse_cookie_string(cookie_str: &str) -> Option<(String, String, String)> {
     let mut auth_token = None;
     let mut ct0 = None;
-
     for part in cookie_str.split(';') {
-        let part = part.trim();
-        if let Some((k, v)) = part.split_once('=') {
-            let k = k.trim();
-            let v = v.trim().trim_matches('"');
-            match k {
-                "auth_token" => auth_token = Some(v.to_string()),
-                "ct0" => ct0 = Some(v.to_string()),
+        if let Some((k, v)) = part.trim().split_once('=') {
+            match k.trim() {
+                "auth_token" => auth_token = Some(v.trim().to_string()),
+                "ct0" => ct0 = Some(v.trim().to_string()),
                 _ => {}
             }
         }
     }
-
-    let at = auth_token?;
-    let c = ct0?;
-    Some((at, c, cookie_str.to_string()))
+    Some((auth_token?, ct0?, cookie_str.to_string()))
 }
 
-/// Build the JSON token blob for storage in DB or env
-pub fn build_cookie_token(auth_token: &str, ct0: &str, cookie_string: Option<&str>) -> String {
+/// Build the JSON token blob stored in the integration row
+/// (`{auth_token, ct0[, cookie_string]}` — the shape XProvider's
+/// `parse_cookie_token`/`extract_cookie_string` read back).
+pub fn build_cookie_token(
+    auth_token: &str,
+    ct0: &str,
+    cookie_string: Option<&str>,
+) -> String {
     let mut m = serde_json::Map::new();
     m.insert(
         "auth_token".into(),
@@ -375,7 +116,10 @@ pub fn build_cookie_token(auth_token: &str, ct0: &str, cookie_string: Option<&st
     m.insert("ct0".into(), serde_json::Value::String(ct0.into()));
     if let Some(cs) = cookie_string {
         if !cs.is_empty() {
-            m.insert("cookie_string".into(), serde_json::Value::String(cs.into()));
+            m.insert(
+                "cookie_string".into(),
+                serde_json::Value::String(cs.into()),
+            );
         }
     }
     serde_json::Value::Object(m).to_string()
@@ -384,6 +128,7 @@ pub fn build_cookie_token(auth_token: &str, ct0: &str, cookie_string: Option<&st
 #[cfg(test)]
 mod b12_tests {
     use super::*;
+    use crate::social::browser_cookies::read_chromium_cookies;
 
     fn chrome_cookie_db(tag: &str, rows: &[(&str, &str, Option<&[u8]>)]) -> std::path::PathBuf {
         let path =
@@ -408,7 +153,7 @@ mod b12_tests {
 
     /// B12 regression: a real Chromium cookie DB stores the session value
     /// encrypted with an empty `value` column. The extractor must refuse
-    /// (None) — previously it minted from_utf8_lossy(ciphertext) as the
+    /// (no rows) — previously it minted from_utf8_lossy(ciphertext) as the
     /// auth_token, which "connected" and then failed every call with a
     /// misleading 401.
     #[test]
@@ -420,16 +165,27 @@ mod b12_tests {
                 ("ct0", "plain-ct0", None),
             ],
         );
+        let rows = read_chromium_cookies(&db, &X_SPEC).unwrap_or_default();
+        // The encrypted auth_token row must be skipped — its value must
+        // never appear as a fabricated plaintext token.
         assert!(
-            read_chrome_cookies(&db).is_none(),
-            "encrypted-only Chromium cookies must be refused, never fabricated"
+            !rows.iter().any(|(n, _, _)| n == "auth_token"),
+            "encrypted-only Chromium cookie must be skipped, never fabricated"
+        );
+        // And with no auth_token in the surviving rows, the X mapping
+        // refuses — the walk moves on to the next browser.
+        assert!(
+            map_x_rows(&rows).is_none(),
+            "no fabricated auth_token → mapping must refuse"
         );
         let _ = std::fs::remove_file(&db);
     }
 
-    /// Positive control: plaintext rows still extract.
+    /// Positive control: plaintext rows read, and the X mapping accepts a
+    /// complete pair / rejects an incomplete one (the retry semantics the
+    /// browser walk relies on).
     #[test]
-    fn b12_plaintext_chromium_rows_still_read() {
+    fn b12_plaintext_chromium_rows_still_read_and_map() {
         let db = chrome_cookie_db(
             "plain",
             &[
@@ -437,11 +193,37 @@ mod b12_tests {
                 ("ct0", "real-ct0", None),
             ],
         );
-        let (at, ct0, cookie_str) =
-            read_chrome_cookies(&db).expect("plaintext rows must extract");
+        let rows = read_chromium_cookies(&db, &X_SPEC).expect("plaintext rows must read");
+        let (at, ct0, cookie_str) = map_x_rows(&rows).expect("complete pair must map");
         assert_eq!(at, "real-token");
         assert_eq!(ct0, "real-ct0");
         assert!(cookie_str.contains("auth_token=real-token"));
+
+        // Incomplete rows (no ct0) must be refused so the walk continues.
+        let db2 = chrome_cookie_db("incomplete", &[("auth_token", "real-token", None)]);
+        let rows2 = read_chromium_cookies(&db2, &X_SPEC).expect("rows read");
+        assert!(
+            map_x_rows(&rows2).is_none(),
+            "rows without ct0 must not map — next browser must be tried"
+        );
+
         let _ = std::fs::remove_file(&db);
+        let _ = std::fs::remove_file(&db2);
+    }
+
+    /// Domain preference: rows are bucketed by host — x.com rows win over
+    /// twitter.com rows when both exist.
+    #[test]
+    fn x_rows_prefer_x_com_domain() {
+        let rows: Vec<CookieRow> = vec![
+            ("auth_token".into(), "from-twitter".into(), ".twitter.com".into()),
+            ("ct0".into(), "tw-ct0".into(), ".twitter.com".into()),
+            ("auth_token".into(), "from-x".into(), ".x.com".into()),
+            ("ct0".into(), "x-ct0".into(), ".x.com".into()),
+        ];
+        let (at, ct0, cookie_str) = map_x_rows(&rows).expect("x.com bucket must win");
+        assert_eq!(at, "from-x");
+        assert_eq!(ct0, "x-ct0");
+        assert_eq!(cookie_str, "auth_token=from-x; ct0=x-ct0");
     }
 }
