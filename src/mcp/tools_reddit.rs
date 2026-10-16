@@ -881,6 +881,20 @@ pub async fn handle_reddit_get_rules(
     Ok(Json(RedditDataOutput { data }))
 }
 
+pub async fn handle_reddit_list_flairs(
+    state: &AppState,
+    input: &RedditSubredditInput,
+) -> Result<Json<RedditDataOutput>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let token = find_reddit_token(state, user_id).await?;
+    let provider = create_provider(state, &token);
+    let data = provider
+        .list_flairs(&token, &input.subreddit)
+        .await
+        .map_err(|e| format!("Reddit list flairs failed: {e}"))?;
+    Ok(Json(RedditDataOutput { data }))
+}
+
 pub async fn handle_reddit_get_saved(
     state: &AppState,
     input: &RedditLimitInput,

@@ -166,6 +166,24 @@ impl RedditProvider {
         Ok(resp.json().await?)
     }
 
+    /// Reddit POSTs with api_type=json answer `{"json":{"errors":[…]}}`.
+    /// A non-empty errors array means the operation FAILED even though the
+    /// HTTP status is 200 — surface it instead of letting callers report
+    /// success (P6.5 audit bug: 9 handlers returned success on error
+    /// envelopes). Non-envelope bodies pass through untouched.
+    fn ensure_no_reddit_errors(json: &serde_json::Value) -> Result<(), ProviderError> {
+        let Some(errors) = json["json"]["errors"].as_array() else {
+            return Ok(());
+        };
+        let Some(first) = errors.first() else {
+            return Ok(());
+        };
+        // Entry shape: [code, message, fields?]
+        let code = first.get(0).and_then(|v| v.as_str()).unwrap_or("UNKNOWN");
+        let msg = first.get(1).and_then(|v| v.as_str()).unwrap_or("");
+        Err(ProviderError::Api(format!("Reddit error {code}: {msg}")))
+    }
+
     /// POST request via www.reddit.com with cookie auth + modhash
     async fn post_www(
         &mut self,
@@ -201,7 +219,9 @@ impl RedditProvider {
                 "Reddit www POST error ({status}): {body}"
             )));
         }
-        Ok(resp.json().await?)
+        let json: serde_json::Value = resp.json().await?;
+        Self::ensure_no_reddit_errors(&json)?;
+        Ok(json)
     }
 
     /// Fetch modhash (CSRF token) from /api/me.json
@@ -532,7 +552,9 @@ impl RedditProvider {
                 &raw,
             )));
         }
-        Ok(resp.json().await?)
+        let json: serde_json::Value = resp.json().await?;
+        Self::ensure_no_reddit_errors(&json)?;
+        Ok(json)
     }
 
     // ── P6.5 parity operations (reddit-lyr port, dual-auth) ────
@@ -562,7 +584,13 @@ impl RedditProvider {
         params: &[(&str, &str)],
     ) -> Result<serde_json::Value, ProviderError> {
         if Self::is_cookie_auth(token) {
-            self.get_www(endpoint, params).await
+            // www.reddit.com serves JSON only under the .json extension;
+            // oauth needs no suffix. Callers pass extension-less paths and
+            // the suffix is added here — without it the cookie path fetches
+            // HTML and the json decode fails (P6.5 audit bug: rules, saved
+            // and friends were all broken on cookie auth).
+            let www_endpoint = format!("{endpoint}.json");
+            self.get_www(&www_endpoint, params).await
         } else {
             self.get_oauth(token, endpoint, params).await
         }
@@ -606,7 +634,7 @@ impl RedditProvider {
         username: &str,
     ) -> Result<serde_json::Value, ProviderError> {
         let name = username.to_string();
-        self.api_post(token, "/api/block", &[("name", &name)])
+        self.api_post(token, "/api/block_user", &[("name", &name)])
             .await
     }
 
@@ -709,6 +737,19 @@ impl RedditProvider {
             .await
     }
 
+    /// A subreddit's link flairs — the id/text pairs usable as
+    /// `reddit_create_post`'s flair_id (completes the outline's
+    /// "rules/flair" parity: flair ids were previously undiscoverable).
+    pub async fn list_flairs(
+        &self,
+        token: &str,
+        subreddit: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let clean = subreddit.trim_start_matches("r/").to_lowercase();
+        self.api_get(token, &format!("/r/{clean}/api/link_flair_v2"), &[("limit", "100")])
+            .await
+    }
+
     /// Your saved posts/comments. The username is looked up per call —
     /// the cookie/config user may differ from the token's actual account.
     pub async fn get_saved(
@@ -756,6 +797,10 @@ impl RedditProvider {
             &[
                 ("sr", &sr),
                 ("title", &t),
+                // kind=crosspost is what makes /api/submit a crosspost —
+                // without it Reddit ignores crosspost_fullname and creates
+                // an empty self post (P6.5 audit bug).
+                ("kind", "crosspost"),
                 ("crosspost_fullname", &cp),
             ],
         )
@@ -2196,6 +2241,32 @@ impl SocialProvider for RedditProvider {
 mod tests {
     use super::*;
     use crate::social::test_config;
+
+        /// P6.5 audit fix: a Reddit 200-with-errors envelope must surface as
+        /// an error, not success. Non-envelope and empty-errors bodies pass.
+        #[test]
+        fn reddit_error_envelope_surfaces_as_error() {
+            let err = RedditProvider::ensure_no_reddit_errors(
+                &serde_json::json!({"json": {"errors": [
+                    ["RATELIMIT", "you are doing that too much", "ratelimit"]
+                ]}}),
+            )
+            .unwrap_err();
+            assert!(err.to_string().contains("RATELIMIT"));
+
+            assert!(RedditProvider::ensure_no_reddit_errors(
+                &serde_json::json!({"json": {"errors": []}})
+            )
+            .is_ok());
+            assert!(RedditProvider::ensure_no_reddit_errors(
+                &serde_json::json!({"json": {"data": {"id": "abc"}}})
+            )
+            .is_ok());
+            assert!(RedditProvider::ensure_no_reddit_errors(
+                &serde_json::json!({})
+            )
+            .is_ok());
+        }
 
     fn provider() -> RedditProvider {
         RedditProvider::new(&test_config())

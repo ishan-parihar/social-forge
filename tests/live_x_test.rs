@@ -26,11 +26,25 @@ fn get_token() -> String {
     serde_json::json!({ "auth_token": at, "ct0": ct0 }).to_string()
 }
 
+/// One get_me per binary: eleven tests each hitting the UserByScreenName
+/// endpoint concurrently trips X's connection throttle and fails the gate
+/// with transport resets (the recurring false-red). The first test to run
+/// populates the cell; the rest reuse its result.
+static ME: tokio::sync::OnceCell<serde_json::Value> = tokio::sync::OnceCell::const_new();
+
+async fn me() -> &'static serde_json::Value {
+    ME.get_or_init(|| async {
+        create_provider()
+            .get_me(&get_token())
+            .await
+            .expect("get_me failed")
+    })
+    .await
+}
+
 #[tokio::test]
 async fn test_x_get_me() {
-    let provider = create_provider();
-    let token = get_token();
-    let result = provider.get_me(&token).await.expect("get_me failed");
+    let result = me().await.clone();
     println!("\n✅ X get_me succeeded:");
     println!(
         "   Response: {}",
@@ -96,7 +110,7 @@ async fn test_x_user_tweets() {
     let token = get_token();
 
     // First get "me" so we have our user ID
-    let me = provider.get_me(&token).await.expect("get_me failed");
+    let me = me().await.clone();
     let my_id = me
         .get("data")
         .and_then(|d| d.get("id"))
@@ -130,7 +144,7 @@ async fn test_x_followers() {
     let provider = create_provider();
     let token = get_token();
 
-    let me = provider.get_me(&token).await.expect("get_me failed");
+    let me = me().await.clone();
     let my_id = me
         .get("data")
         .and_then(|d| d.get("id"))
@@ -160,7 +174,7 @@ async fn test_x_following() {
     let provider = create_provider();
     let token = get_token();
 
-    let me = provider.get_me(&token).await.expect("get_me failed");
+    let me = me().await.clone();
     let my_id = me
         .get("data")
         .and_then(|d| d.get("id"))
@@ -206,7 +220,7 @@ async fn test_x_like_unlike() {
     let provider = create_provider();
     let token = get_token();
 
-    let me = provider.get_me(&token).await.expect("get_me failed");
+    let me = me().await.clone();
     let my_id = me
         .get("data")
         .and_then(|d| d.get("id"))
@@ -237,7 +251,7 @@ async fn test_x_retweet_unretweet() {
     let provider = create_provider();
     let token = get_token();
 
-    let me = provider.get_me(&token).await.expect("get_me failed");
+    let me = me().await.clone();
     let my_id = me
         .get("data")
         .and_then(|d| d.get("id"))

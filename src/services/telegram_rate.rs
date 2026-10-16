@@ -200,7 +200,11 @@ where
 {
     if !store.contains_key(key) {
         if store.len() >= MAX_PEER_BUCKETS {
-            // FIFO eviction — account buckets never reach the cap.
+            // Arbitrary-bucket eviction: HashMap iteration order is
+            // randomized, not FIFO. At the cap the price is dropping
+            // one peer's pacing history (one possible extra burst —
+            // the conservative caps absorb that). Account buckets
+            // never approach the cap (accounts × 5 categories).
             if let Some(oldest) = store.keys().next() {
                 let oldest = oldest.clone();
                 store.remove(&oldest);

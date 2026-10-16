@@ -103,6 +103,13 @@ pub async fn handle_di_history(
     state: &AppState,
     input: &DiHistoryInput,
 ) -> Result<Json<Value>, String> {
+    if input.before.is_some() && input.after.is_some() {
+        return Err(
+            "`before` and `after` are mutually exclusive cursors — pass one, \
+             not both (Discord's API ignores the pair)."
+                .into(),
+        );
+    }
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     // The integration lookup is the connection gate; the Bot API reads its
     // credentials from config, so the token itself is unused here.

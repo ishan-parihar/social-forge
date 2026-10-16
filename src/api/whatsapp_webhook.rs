@@ -37,10 +37,17 @@ pub fn verify_signature(secret: &str, body: &[u8], header: &str) -> bool {
     diff == 0
 }
 
+/// Meta's handshake uses DOTTED query params: hub.mode, hub.verify_token,
+/// hub.challenge. The renames are load-bearing — without them every field
+/// deserializes to None and `verify` 403s forever, so the webhook can never
+/// be enrolled (E6 audit bug).
 #[derive(Debug, Deserialize)]
 pub struct VerifyQuery {
+    #[serde(rename = "hub.mode")]
     pub mode: Option<String>,
+    #[serde(rename = "hub.verify_token")]
     pub verify_token: Option<String>,
+    #[serde(rename = "hub.challenge")]
     pub challenge: Option<String>,
 }
 
@@ -72,20 +79,28 @@ pub async fn receive(
     headers: axum::http::HeaderMap,
     body: axum::body::Bytes,
 ) -> axum::response::Response {
-    if let Some(secret) = state
+    let secret = state
         .config
         .whatsapp_cloud_app_secret
         .as_deref()
-        .filter(|s| !s.is_empty())
-    {
-        let header = headers
-            .get("x-hub-signature-256")
-            .and_then(|v| v.to_str().ok())
-            .unwrap_or_default();
-        if !verify_signature(secret, &body, header) {
-            tracing::warn!("whatsapp webhook: bad signature");
-            return axum::http::StatusCode::UNAUTHORIZED.into_response();
+        .filter(|s| !s.is_empty());
+    match secret {
+        Some(secret) => {
+            let header = headers
+                .get("x-hub-signature-256")
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or_default();
+            if !verify_signature(secret, &body, header) {
+                tracing::warn!("whatsapp webhook: bad signature");
+                return axum::http::StatusCode::UNAUTHORIZED.into_response();
+            }
         }
+        // Fail-open by design (no secret configured) but never silently —
+        // the doc contract is "accepted but flagged in the log" (E6 audit:
+        // this path had no log line, so an unset secret went unnoticed).
+        None => tracing::warn!(
+            "whatsapp webhook: WHATSAPP_CLOUD_APP_SECRET not set — accepting UNSIGNED payload"
+        ),
     }
 
     let raw: serde_json::Value = match serde_json::from_slice(&body) {
@@ -179,5 +194,20 @@ mod tests {
             }
         }
         assert_eq!((messages, statuses), (1, 3));
+    }
+
+    /// Meta's handshake sends DOTTED hub.* query params — the renames are
+    /// what makes GET verify() echo the challenge instead of 403-ing
+    /// forever (E6 audit bug). Uses axum's own Query deserializer.
+    #[test]
+    fn verify_query_deserializes_meta_hub_params() {
+        let uri: axum::http::Uri = "https://host/api/webhooks/whatsapp\
+            ?hub.mode=subscribe&hub.verify_token=tok&hub.challenge=cha"
+            .parse()
+            .unwrap();
+        let q = Query::<VerifyQuery>::try_from_uri(&uri).unwrap().0;
+        assert_eq!(q.mode.as_deref(), Some("subscribe"));
+        assert_eq!(q.verify_token.as_deref(), Some("tok"));
+        assert_eq!(q.challenge.as_deref(), Some("cha"));
     }
 }

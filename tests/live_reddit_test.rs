@@ -85,6 +85,12 @@ async fn test_reddit_get_rules() {
         }
         Err(e) => panic!("get_rules failed: {e}"),
     }
+    // Flair listing rides the same dual-auth GET path — verify it on both
+    // auth kinds when creds exist (the .json suffix fix for cookie auth).
+    match p.list_flairs(&token, "rust").await {
+        Ok(v) => eprintln!("✅ list_flairs: {} entries", v.as_array().map(Vec::len).unwrap_or(0)),
+        Err(e) => panic!("list_flairs failed: {e}"),
+    }
 }
 
 #[tokio::test]

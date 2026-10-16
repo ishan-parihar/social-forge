@@ -912,6 +912,14 @@ impl SocialForgeMcpServer {
         tools_reddit::handle_reddit_get_rules(&self.state, &params.0).await
     }
 
+    #[tool(description = "List a subreddit's link flairs — the id pairs usable as reddit_create_post's flair_id.")]
+    pub async fn reddit_list_flairs(
+        &self,
+        params: Parameters<tools_reddit::RedditSubredditInput>,
+    ) -> Result<Json<tools_reddit::RedditDataOutput>, String> {
+        tools_reddit::handle_reddit_list_flairs(&self.state, &params.0).await
+    }
+
     #[tool(description = "List your saved Reddit posts and comments.")]
     pub async fn reddit_get_saved(
         &self,

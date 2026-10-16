@@ -174,14 +174,19 @@ impl DiscordProvider {
         channel_id: Option<&str>,
         limit: u32,
     ) -> Result<serde_json::Value, ProviderError> {
-        let mut url =
-            format!("{DISCORD_API_BASE}/guilds/{guild_id}/messages/search?content={query}");
+        // .query() percent-encodes the content term — a raw format! put '&' or
+        // '#' into the URL and silently truncated/corrupted the search
+        // (E7-read audit bug).
+        let mut params: Vec<(&str, &str)> = vec![("content", query)];
         if let Some(cid) = channel_id {
-            url.push_str(&format!("&channel_id={cid}"));
+            params.push(("channel_id", cid));
         }
         let resp = self
             .http
-            .get(&url)
+            .get(format!(
+                "{DISCORD_API_BASE}/guilds/{guild_id}/messages/search"
+            ))
+            .query(&params)
             .header("Authorization", format!("Bot {}", self.bot_token))
             .send()
             .await?;
