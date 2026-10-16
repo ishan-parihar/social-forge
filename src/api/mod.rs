@@ -573,6 +573,38 @@ pub fn build_router(state: AppState) -> Router {
             "/api/automation/rules/{id}/logs",
             axum::routing::get(automation::get_logs),
         )
+        // F8 (audit §5.1b): MCP streamable-HTTP on the daemon — remote
+        // agents connect by URL (POST {APP_URL}/mcp) with zero processes
+        // spawned, behind the same auth as the REST API (Authorization:
+        // Bearer sf_… API key, or the sf_session cookie). rmcp's tower
+        // service hosts it; each MCP session gets a fresh in-process
+        // SocialForgeMcpServer (thin-MCP coexistence: the stdio `social-forge
+        // mcp` path is unchanged).
+        .route_service(
+            "/mcp",
+            {
+                let mcp_state = state.clone();
+                let mut mcp_cfg =
+                    rmcp::transport::streamable_http_server::StreamableHttpServerConfig::default();
+                // rmcp's default Host allow-list is loopback-only (DNS-
+                // rebinding guard). Admit the configured APP_URL host so a
+                // networked deployment stays reachable; loopback remains
+                // allowed by default.
+                if let Some(host) = url::Url::parse(&state.config.app_url)
+                    .ok()
+                    .and_then(|u| u.host_str().map(str::to_string))
+                {
+                    mcp_cfg.allowed_hosts.push(host);
+                }
+                rmcp::transport::streamable_http_server::StreamableHttpService::new(
+                    move || Ok(crate::mcp::SocialForgeMcpServer::new(mcp_state.clone())),
+                    std::sync::Arc::new(
+                        rmcp::transport::streamable_http_server::session::local::LocalSessionManager::default(),
+                    ),
+                    mcp_cfg,
+                )
+            },
+        )
         // CSRF defense-in-depth: validates Origin (or Referer fallback)
         // on all state-changing requests. SameSite=Lax already blocks
         // cross-site POST/PUT/DELETE cookie sends, but this catches:
@@ -980,6 +1012,15 @@ async fn csrf_origin_check(
     // Skip check for safe methods.
     let method = req.method().clone();
     if matches!(method, Method::GET | Method::HEAD | Method::OPTIONS) {
+        return next.run(req).await;
+    }
+
+    // /mcp is a non-browser JSON-RPC endpoint (F8, audit §5.1b): MCP
+    // clients send no Origin/Referer at all, so this check would reject
+    // every legitimate one. Its cookie-CSRF class is already covered by
+    // SameSite=Lax (which blocks cross-site POST cookie sends), and the
+    // auth middleware still gates it — Bearer API key or session cookie.
+    if req.uri().path() == "/mcp" {
         return next.run(req).await;
     }
 

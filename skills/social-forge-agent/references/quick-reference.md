@@ -605,6 +605,7 @@ social-forge <cmd> --help              # Fix wrong flags
 ## MCP tool contracts (v11 — current)
 
 - **`mcp-call`** is real: `social-forge mcp-call <tool> --args '<json>'`. It runs in-process — works while the `serve` daemon holds the writer lock (thin MCP mode).
+- **Remote/HTTP MCP (F8)**: with the `serve` daemon running, the same tool surface is served at `POST {APP_URL}/mcp` (MCP streamable-HTTP). Connect an MCP client by URL with `Authorization: Bearer sf_<api-key>` (create one in the WebUI's developer page) or the `sf_session` cookie. Zero processes spawned; toolsets behave as in stdio mode (`SOCIAL_FORGE_TOOLSETS` at daemon boot).
 - **Multi-account**: most `*_create_*` tools accept `integration` (UUID or `provider:Name`). Empty → first connected account.
 - **Toolsets**: boot default advertises `core` only. `SOCIAL_FORGE_TOOLSETS=x,reddit` pre-enables; at runtime `tools_search {"query":"…"}` finds any tool and reports its set + enabled flag; `tools_enable {"sets":["x"]}` adds sets for the session.
 - **Stage v2**: `posts_stage` takes `overrides` (per-provider content/settings), `dry_run` (readiness only, writes nothing), `force` (stage despite readiness errors), `group_id` (attach to a campaign), `scheduled_at: "next-slot"` (each account's next free slot). Readiness errors REJECT that integration unless forced.
