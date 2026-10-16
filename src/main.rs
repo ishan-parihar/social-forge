@@ -45,9 +45,9 @@ fn spawn_pollers(
     token_key: Option<[u8; 32]>,
     config: config::Config,
     shutdown_tx: &tokio::sync::watch::Sender<bool>,
-) {
+) -> tokio::sync::watch::Receiver<bool> {
     let scheduler_rx = shutdown_tx.subscribe();
-    scheduler::start_scheduler(
+    let scheduler_drained = scheduler::start_scheduler(
         db.clone(),
         providers_arc.clone(),
         broadcaster.clone(),
@@ -101,6 +101,8 @@ fn spawn_pollers(
         token_key,
         plug_rx,
     );
+
+    scheduler_drained
 }
 
 #[tokio::main]
@@ -280,7 +282,7 @@ async fn main() -> anyhow::Result<()> {
 
     // ── Start scheduler ───────────────────────────────────────
     let (shutdown_tx, _) = tokio::sync::watch::channel(false);
-    spawn_pollers(
+    let scheduler_drained = spawn_pollers(
         db.clone(),
         providers_arc.clone(),
         broadcaster.clone(),
@@ -439,17 +441,28 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("Broadcasting shutdown to background tasks…");
     let _ = shutdown_tx.send(true);
 
-    // Give background tasks up to 30 seconds to drain (was 10s — too
-    // short for a JoinSet of 50 publishes each potentially in retry
-    // backoff). The scheduler ENGINE drains its long-lived JoinSet with
-    // a 25s budget (DRAIN_BUDGET), so this window is a true upper bound
-    // on shutdown, not a guess.
-    let drain_deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(30);
-    loop {
-        if tokio::time::Instant::now() >= drain_deadline {
-            break;
+    // Wait for the scheduler engine to finish draining its JoinSet (25s
+    // budget), capped at 30s wall clock — exits the moment the last
+    // in-flight publish lands instead of always sleeping the full window.
+    // The cap still covers the other pollers and a wedged engine alike.
+    let mut scheduler_drained = scheduler_drained;
+    let drained_done = async {
+        loop {
+            if scheduler_drained.changed().await.is_err() {
+                break; // sender dropped — engine task already gone
+            }
+            if *scheduler_drained.borrow() {
+                break;
+            }
         }
-        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    };
+    tokio::select! {
+        _ = drained_done => {
+            tracing::info!("Scheduler drained — in-flight publishes settled");
+        }
+        _ = tokio::time::sleep(std::time::Duration::from_secs(30)) => {
+            tracing::warn!("Drain window elapsed (30s) — exiting with tasks possibly in flight");
+        }
     }
 
     tracing::info!("Server shut down gracefully");

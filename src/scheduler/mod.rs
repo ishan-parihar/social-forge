@@ -117,13 +117,17 @@ const POSTING_GAP_LIMIT: i64 = 20;
 
 /// Start the scheduler background task.
 /// Pass a watch::Receiver that resolves to `true` to trigger graceful shutdown.
+/// The returned receiver flips to `true` once the engine has drained its
+/// in-flight publishes — lets main exit as soon as draining finishes
+/// instead of always burning the full 30s cap.
 pub fn start_scheduler(
     db: SqlitePool,
     providers: Arc<ProviderRegistry>,
     broadcaster: Broadcaster,
     token_key: Option<[u8; 32]>,
     shutdown: tokio::sync::watch::Receiver<bool>,
-) {
+) -> tokio::sync::watch::Receiver<bool> {
+    let (drained_tx, drained_rx) = tokio::sync::watch::channel(false);
     let engine_db = db.clone();
     let engine_providers = providers.clone();
     let engine_shutdown = shutdown.clone();
@@ -134,6 +138,7 @@ pub fn start_scheduler(
             broadcaster,
             token_key,
             shutdown: engine_shutdown,
+            drained: drained_tx,
             join_set: tokio::task::JoinSet::new(),
             inflight: std::collections::HashSet::new(),
             boot: true,
@@ -227,6 +232,8 @@ pub fn start_scheduler(
             }
         },
     );
+
+    drained_rx
 }
 
 /// §6.1: the scheduler engine. Publishes spawn into a LONG-LIVED JoinSet
@@ -240,6 +247,9 @@ struct SchedulerEngine {
     broadcaster: Broadcaster,
     token_key: Option<[u8; 32]>,
     shutdown: tokio::sync::watch::Receiver<bool>,
+    /// Flips to `true` when the engine finishes its shutdown drain so
+    /// main can exit the moment the last in-flight publish lands.
+    drained: tokio::sync::watch::Sender<bool>,
     join_set: tokio::task::JoinSet<uuid::Uuid>,
     inflight: std::collections::HashSet<uuid::Uuid>,
     boot: bool,
@@ -272,6 +282,10 @@ impl SchedulerEngine {
             "Scheduler started (poll upper bound {POLL_INTERVAL_SECS}s, wake-up on schedule)"
         );
         sd_notify("READY=1");
+        // Liveness starts NOW, not after the first (up to 30s) deadline
+        // sleep — /ready would otherwise report `scheduler_stalled` for
+        // the whole first poll window after boot.
+        LAST_TICK.store(chrono::Utc::now().timestamp(), std::sync::atomic::Ordering::Relaxed);
 
         loop {
             self.reap_finished();
@@ -284,7 +298,15 @@ impl SchedulerEngine {
                 _ = WAKE.notified() => {}
                 _ = async {
                     let d = engine_deadline(&self.db).await;
-                    tokio::time::sleep(d).await
+                    // First tick lands within 5s so the boot reclaim
+                    // (crash-recovered 'publishing' rows) doesn't wait a
+                    // full poll window.
+                    let cap = if self.boot {
+                        Duration::from_secs(5)
+                    } else {
+                        Duration::from_secs(POLL_INTERVAL_SECS)
+                    };
+                    tokio::time::sleep(d.min(cap)).await
                 } => {}
             }
 
@@ -319,6 +341,7 @@ impl SchedulerEngine {
         }
 
         tracing::info!("Scheduler shutting down...");
+        let _ = self.drained.send(true);
     }
 
     /// Reap completed publish tasks without blocking (their posts already
@@ -1150,12 +1173,11 @@ pub(crate) async fn publish_post(
         // and stays stable across retries; only a re-publish (action=
         // 'schedule' on reschedule) generates a new key.
         idempotency_key: Some(post.idempotency_key.to_string()),
-        // v24-5: per-row delay for thread parts. If this post is part of
-        // a thread (sequence > 1) and has a delay_minutes set in its
-        // settings, the scheduler sleeps for that duration before
-        // publishing. This allows spaced-out thread publishing (e.g.
-        // "part 1, wait 30min, part 2"). The delay is stored in the
-        // post's settings JSONB under 'delay_minutes'.
+        // v24-5: per-row delay for thread parts, surfaced for provider info.
+        // B2: the scheduler does NOT sleep for this — `create_thread_posts`
+        // already offset each part's `scheduled_at` by (sequence-1)*delay,
+        // so the part simply becomes due later. Kept in settings JSON
+        // under 'delay_minutes' for re-scheduling arithmetic.
         delay_minutes: post
             .settings
             .get("delay_minutes")
@@ -1253,8 +1275,10 @@ pub(crate) async fn publish_post(
                 // rest_id:"" on a malformed GraphQL 200 — recording that as
                 // published stores a post with no platform id, silently
                 // breaking analytics, first-comment, and thread linking.
-                // (PostService::publish has the same guard; this covers the
-                // scheduler path until Phase 2 unifies them into publish_one.)
+                // B6: the empty-id guard. The publish pipelines are unified:
+                // PostService::publish, the scheduler and every platform
+                // `*_create_*` MCP tool all route through THIS function
+                // (scheduler::publish_post) — one guard covers all callers.
                 if result.platform_post_id.trim().is_empty() {
                     tracing::error!(
                         "Post {} on {} reported published with an empty platform_post_id",

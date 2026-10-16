@@ -87,15 +87,14 @@ pub struct PostContent {
     /// The key is a UUID v4 string.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub idempotency_key: Option<String>,
-    /// v24-5: delay (in minutes) before publishing this row of a thread.
-    /// When the scheduler publishes a multi-part thread, it sleeps for
-    /// `delay_minutes` minutes between rows. This allows the user to
-    /// space out thread parts (e.g. "post part 1, wait 30min, post
-    /// part 2"). Only applies to posts with sequence > 1 in a thread
-    /// group. A value of 0 or None means no delay.
+    /// v24-5: delay (in minutes) between this row and its thread
+    /// predecessor. B2: the delay lives ONLY in each part's
+    /// `scheduled_at` (offset by (sequence-1)*delay at creation — see
+    /// `create_thread_posts`); the scheduler never sleeps for it.
+    /// A value of 0 or None means no delay.
     ///
     /// Postiz uses a similar mechanism (per-row `delay` field in the
-    /// composer store, slept in the Temporal workflow).
+    /// composer store, applied to the scheduled time).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub delay_minutes: Option<u32>,
 }
