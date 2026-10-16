@@ -369,6 +369,7 @@ impl PostService {
         db: &SqlitePool,
         providers: &ProviderRegistry,
         broadcaster: &Broadcaster,
+        config: &crate::config::Config,
         user_id: Uuid,
         post_id: Uuid,
         token_key: Option<[u8; 32]>,
@@ -409,6 +410,7 @@ impl PostService {
             &post,
             broadcaster,
             token_key,
+            config,
             opts,
         )
         .await;
@@ -603,6 +605,7 @@ mod tests {
             &pool,
             &providers,
             &Broadcaster::new(),
+            &crate::config::Config::from_env().expect("test config"),
             user_id,
             post_id,
             None,
@@ -681,6 +684,7 @@ mod tests {
             &pool,
             &providers,
             &Broadcaster::new(),
+            &crate::config::Config::from_env().expect("test config"),
             user_id,
             post_id,
             None,

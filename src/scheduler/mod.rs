@@ -125,6 +125,7 @@ pub fn start_scheduler(
     providers: Arc<ProviderRegistry>,
     broadcaster: Broadcaster,
     token_key: Option<[u8; 32]>,
+    config: crate::config::Config,
     shutdown: tokio::sync::watch::Receiver<bool>,
 ) -> tokio::sync::watch::Receiver<bool> {
     let (drained_tx, drained_rx) = tokio::sync::watch::channel(false);
@@ -137,6 +138,7 @@ pub fn start_scheduler(
             providers: engine_providers,
             broadcaster,
             token_key,
+            config,
             shutdown: engine_shutdown,
             drained: drained_tx,
             join_set: tokio::task::JoinSet::new(),
@@ -246,6 +248,10 @@ struct SchedulerEngine {
     providers: Arc<ProviderRegistry>,
     broadcaster: Broadcaster,
     token_key: Option<[u8; 32]>,
+    /// F6: the publish path reads its knobs (APP_URL, MEDIA_DIR,
+    /// STRIP_LINKS_FROM_X, DUB_CO_*) from Config — one boot-time parse
+    /// instead of per-publish env reads.
+    config: crate::config::Config,
     shutdown: tokio::sync::watch::Receiver<bool>,
     /// Flips to `true` when the engine finishes its shutdown drain so
     /// main can exit the moment the last in-flight publish lands.
@@ -363,6 +369,7 @@ impl SchedulerEngine {
             &self.providers,
             &self.broadcaster,
             self.token_key,
+            &self.config,
             &mut self.join_set,
             &mut self.inflight,
         )
@@ -558,6 +565,7 @@ async fn process_due_posts(
     providers: &ProviderRegistry,
     broadcaster: &Broadcaster,
     token_key: Option<[u8; 32]>,
+    config: &crate::config::Config,
     engine_join_set: &mut tokio::task::JoinSet<uuid::Uuid>,
     engine_inflight: &mut std::collections::HashSet<uuid::Uuid>,
 ) -> Result<(), PublishError> {
@@ -663,6 +671,7 @@ async fn process_due_posts(
         let post_clone = post.clone();
         let bcast = broadcaster.clone();
         let tk = token_key; // Copy (Option<[u8; 32]> implements Copy)
+        let cfg = config.clone();
         let cb = providers.circuit_breaker_for(
             &post.provider_identifier,
             Some(post.integration_id),
@@ -686,6 +695,7 @@ async fn process_due_posts(
                 &post_clone,
                 &bcast,
                 tk,
+                &cfg,
                 PublishOpts::default(),
             )
             .await
@@ -1001,6 +1011,7 @@ pub(crate) async fn publish_post(
     post: &PostWithIntegration,
     broadcaster: &Broadcaster,
     token_key: Option<[u8; 32]>,
+    config: &crate::config::Config,
     opts: PublishOpts,
 ) -> Result<PublishOutcome, PublishError> {
     // Resolve access token, potentially refreshed
@@ -1009,7 +1020,9 @@ pub(crate) async fn publish_post(
     // Build post content - resolve media URLs to absolute paths
     let media: Vec<crate::social::MediaAttachment> =
         serde_json::from_value(post.media.clone()).unwrap_or_default();
-    let app_url = std::env::var("APP_URL").unwrap_or_else(|_| "https://localhost:6543".into());
+    // F6: APP_URL comes from Config (read once at boot) — the old per-publish
+    // env read re-parsed the environment on every scheduled post.
+    let app_url = config.app_url.clone();
     let resolved_media: Vec<crate::social::MediaAttachment> = media
         .into_iter()
         .map(|m| {
@@ -1032,7 +1045,7 @@ pub(crate) async fn publish_post(
         let app_url_for_local = app_url.clone();
         // Transformed files land in the SAME media dir — the /api/media/{id}
         // route already serves it, so only the URL's filename changes.
-        let media_dir = std::env::var("MEDIA_DIR").unwrap_or_else(|_| "./uploads".into());
+        let media_dir = config.media_dir.clone();
         crate::services::media_transform::transform_attachments(
             &post.provider_identifier,
             resolved_media,
@@ -1141,21 +1154,19 @@ pub(crate) async fn publish_post(
         }
 
         // Strip links from X if configured
-        let strip_x = std::env::var("STRIP_LINKS_FROM_X")
-            .map(|v| v == "true" || v == "1")
-            .unwrap_or(false);
-        if provider_id == "x" && strip_x {
+        if provider_id == "x" && config.strip_links_from_x {
             c = crate::services::short_link::strip_links(&c);
         }
 
         // Shorten URLs if Dub.co is configured
-        if let Ok(api_key) = std::env::var("DUB_CO_API_KEY") {
-            if !api_key.is_empty() && crate::services::short_link::has_urls(&c) {
-                let workspace = std::env::var("DUB_CO_WORKSPACE")
-                    .ok()
-                    .filter(|s| !s.is_empty());
-                c = crate::services::short_link::shorten_urls(&c, &api_key, workspace.as_deref())
-                    .await;
+        if let Some(api_key) = config.dub_co_api_key.as_deref().filter(|k| !k.is_empty()) {
+            if crate::services::short_link::has_urls(&c) {
+                c = crate::services::short_link::shorten_urls(
+                    &c,
+                    api_key,
+                    config.dub_co_workspace.as_deref().filter(|s| !s.is_empty()),
+                )
+                .await;
             }
         }
 

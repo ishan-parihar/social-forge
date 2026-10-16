@@ -52,6 +52,7 @@ fn spawn_pollers(
         providers_arc.clone(),
         broadcaster.clone(),
         token_key,
+        config.clone(),
         scheduler_rx,
     );
 

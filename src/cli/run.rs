@@ -3318,6 +3318,7 @@ async fn handle_posts_with_state(state: &AppState, action: PostsAction) -> anyho
                 &state.db,
                 &state.providers,
                 &state.broadcast,
+                &state.config,
                 user_id,
                 post_id,
                 state.token_key,

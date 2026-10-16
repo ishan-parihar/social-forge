@@ -1100,6 +1100,7 @@ pub async fn publish_post(
         &state.db,
         &state.providers,
         &state.broadcast,
+        &state.config,
         auth.user_id,
         id,
         state.token_key,
