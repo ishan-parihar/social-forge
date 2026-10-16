@@ -1,7 +1,9 @@
 // ─── X/Twitter Browser Cookie Extraction ──────────────────────
 // Extracts auth_token and ct0 from Chrome, Brave, Firefox, Zen browsers.
-// Chrome/Brave: reads encrypted cookies from SQLite store via aes-gcm
-// Firefox/Zen: reads plaintext cookies from SQLite store
+// Firefox/Zen: reads plaintext cookies from SQLite store — works.
+// Chrome/Brave: cookie values are OS-encrypted (v10/v11); the value column
+// is empty and this build does not decrypt them, so those browsers return
+// None (B12: never fabricate a token from ciphertext).
 
 use std::path::{Path, PathBuf};
 
@@ -54,13 +56,6 @@ fn chrome_cookie_path(profile_dir: &Path) -> PathBuf {
     profile_dir.join("Cookies")
 }
 
-fn chrome_local_state_path(profile_dir: &Path) -> PathBuf {
-    profile_dir
-        .parent()
-        .map(|p| p.join("Local State"))
-        .unwrap_or_else(|| profile_dir.join("Local State"))
-}
-
 fn chrome_default_profile(home: &Path, config_dir: &str) -> PathBuf {
     shared_chrome_default_profile(home, config_dir)
 }
@@ -77,64 +72,21 @@ fn extract_chrome_impl(profile_dir: &Path, browser: &str) -> Option<(String, Str
         return None;
     }
 
-    // Get encryption key from Local State
-    let enc_key = get_chrome_encryption_key(&chrome_local_state_path(profile_dir))?;
-
-    // Read cookies from the copied DB
-    let result = read_chrome_cookies(&tmp_copy, &enc_key);
+    // Chromium-family cookies are OS-encrypted (v10/v11 on Linux, DPAPI on
+    // Windows, Keychain on macOS) and the value column is empty. The old code
+    // pretended to recover the key with a zero-key AES-GCM "decrypt" (which
+    // never succeeds on a real install) and then fabricated cookie values via
+    // from_utf8_lossy(ciphertext) — minting a broken integration that failed
+    // later with a misleading 401. Read plaintext rows only; an encrypted-only
+    // DB honestly yields None and the caller falls through to Firefox/Zen.
+    // ponytail: implement v10/v11 PBKDF2-AES-128-CBC decrypt if Chromium
+    // import ever becomes a real need (needs pbkdf2+sha1+cbc crates).
+    let result = read_chrome_cookies(&tmp_copy);
     let _ = std::fs::remove_file(&tmp_copy);
     result
 }
 
-fn get_chrome_encryption_key(local_state_path: &Path) -> Option<Vec<u8>> {
-    let content = std::fs::read_to_string(local_state_path).ok()?;
-    let state: serde_json::Value = serde_json::from_str(&content).ok()?;
-    let enc_key_b64 = state
-        .pointer("/os_crypt/encrypted_key")
-        .and_then(|v| v.as_str())?;
-
-    let enc_key =
-        base64::Engine::decode(&base64::engine::general_purpose::STANDARD, enc_key_b64).ok()?;
-
-    // Chrome format: "DPAPI" prefix (5 bytes), then actual encrypted data
-    // On Linux, the key is encrypted with the OS keyring
-    // For simplicity, try the Windows/Mac path: strip "DPAPI" prefix
-    if enc_key.len() > 5 {
-        let ciphertext = &enc_key[5..];
-        // Try to decrypt with a null key (works when keyring returns empty string
-        // or when the key is stored in plaintext on some Linux DE setups)
-        if let Ok(key) = decrypt_chrome_key_linux(ciphertext) {
-            return Some(key);
-        }
-    }
-
-    None
-}
-
-fn decrypt_chrome_key_linux(encrypted: &[u8]) -> Result<Vec<u8>, aes_gcm::Error> {
-    if encrypted.len() >= 15 {
-        let nonce_len =
-            u32::from_ne_bytes([encrypted[0], encrypted[1], encrypted[2], encrypted[3]]) as usize;
-        if nonce_len > 0 && nonce_len + 4 + 16 <= encrypted.len() && nonce_len <= 32 {
-            let nonce = &encrypted[4..4 + nonce_len];
-            let ciphertext_and_tag = &encrypted[4 + nonce_len..];
-
-            use aes_gcm::aead::Aead;
-            use aes_gcm::{Aes256Gcm, Key, KeyInit, Nonce};
-            let fallback_key = Key::<Aes256Gcm>::from_slice(&[0u8; 32]);
-            let cipher = Aes256Gcm::new(fallback_key);
-            let nonce_obj = Nonce::from_slice(nonce);
-
-            if let Ok(pt) = cipher.decrypt(nonce_obj, ciphertext_and_tag) {
-                return Ok(pt);
-            }
-        }
-    }
-
-    Err(aes_gcm::Error)
-}
-
-fn read_chrome_cookies(db_path: &Path, _enc_key: &[u8]) -> Option<(String, String, String)> {
+fn read_chrome_cookies(db_path: &Path) -> Option<(String, String, String)> {
     let conn = rusqlite::Connection::open(db_path).ok()?;
     let mut stmt = conn
         .prepare(
@@ -161,16 +113,16 @@ fn read_chrome_cookies(db_path: &Path, _enc_key: &[u8]) -> Option<(String, Strin
         .ok()?;
 
     for row in rows.flatten() {
-        let (name, value, encrypted_value, _host, _path) = row;
-        // Use plaintext value if available, otherwise try decryption
-        let val = if !value.is_empty() {
-            value
-        } else if !encrypted_value.is_empty() {
-            // Try decryption (may fail without proper key)
-            String::from_utf8_lossy(&encrypted_value).to_string()
-        } else {
+        let (name, value, _encrypted_value, _host, _path) = row;
+        // B12: a real Chromium cookie DB stores the value encrypted (value
+        // column empty). We do not decrypt, so an encrypted-only row is
+        // unusable — skip it. NEVER fall back to from_utf8_lossy(ciphertext):
+        // that minted ciphertext-as-auth_token, which "connected" fine and
+        // then failed every request with a misleading 401.
+        if value.is_empty() {
             continue;
-        };
+        }
+        let val = value;
 
         match name.as_str() {
             "auth_token" => auth_token = val.clone(),
@@ -427,4 +379,69 @@ pub fn build_cookie_token(auth_token: &str, ct0: &str, cookie_string: Option<&st
         }
     }
     serde_json::Value::Object(m).to_string()
+}
+
+#[cfg(test)]
+mod b12_tests {
+    use super::*;
+
+    fn chrome_cookie_db(tag: &str, rows: &[(&str, &str, Option<&[u8]>)]) -> std::path::PathBuf {
+        let path =
+            std::env::temp_dir().join(format!("x_cookies_b12_{tag}_{}.db", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        let conn = rusqlite::Connection::open(&path).unwrap();
+        conn.execute(
+            "CREATE TABLE cookies (name TEXT, value TEXT, encrypted_value BLOB, host_key TEXT, path TEXT)",
+            [],
+        )
+        .unwrap();
+        for (name, value, enc) in rows {
+            conn.execute(
+                "INSERT INTO cookies (name, value, encrypted_value, host_key, path)
+                 VALUES (?1, ?2, ?3, '.x.com', '/')",
+                rusqlite::params![name, value, enc.map(<[u8]>::to_vec).unwrap_or_default()],
+            )
+            .unwrap();
+        }
+        path
+    }
+
+    /// B12 regression: a real Chromium cookie DB stores the session value
+    /// encrypted with an empty `value` column. The extractor must refuse
+    /// (None) — previously it minted from_utf8_lossy(ciphertext) as the
+    /// auth_token, which "connected" and then failed every call with a
+    /// misleading 401.
+    #[test]
+    fn b12_encrypted_only_chromium_rows_are_refused_not_fabricated() {
+        let db = chrome_cookie_db(
+            "refuse",
+            &[
+                ("auth_token", "", Some(&[0x76, 0x31, 0x30, 0xAA, 0xBB, 0xCC])),
+                ("ct0", "plain-ct0", None),
+            ],
+        );
+        assert!(
+            read_chrome_cookies(&db).is_none(),
+            "encrypted-only Chromium cookies must be refused, never fabricated"
+        );
+        let _ = std::fs::remove_file(&db);
+    }
+
+    /// Positive control: plaintext rows still extract.
+    #[test]
+    fn b12_plaintext_chromium_rows_still_read() {
+        let db = chrome_cookie_db(
+            "plain",
+            &[
+                ("auth_token", "real-token", None),
+                ("ct0", "real-ct0", None),
+            ],
+        );
+        let (at, ct0, cookie_str) =
+            read_chrome_cookies(&db).expect("plaintext rows must extract");
+        assert_eq!(at, "real-token");
+        assert_eq!(ct0, "real-ct0");
+        assert!(cookie_str.contains("auth_token=real-token"));
+        let _ = std::fs::remove_file(&db);
+    }
 }
