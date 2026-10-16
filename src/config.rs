@@ -111,6 +111,15 @@ pub struct Config {
     pub instagram_app_id: Option<String>,
     pub instagram_app_secret: Option<String>,
     pub whatsapp_store_dir: Option<String>,
+    // WhatsApp Cloud API (E6) — business-number path alongside the wa-rs
+    // Web session. Token is a Meta system-user access token.
+    pub whatsapp_cloud_token: Option<String>,
+    pub whatsapp_cloud_phone_number_id: Option<String>,
+    pub whatsapp_cloud_waba_id: Option<String>,
+    /// Webhook subscription verification token (Meta App Dashboard).
+    pub whatsapp_cloud_verify_token: Option<String>,
+    /// App secret for X-Hub-Signature-256 webhook verification.
+    pub whatsapp_cloud_app_secret: Option<String>,
 
     // Slack
     pub slack_client_id: Option<String>,
@@ -274,6 +283,11 @@ impl Config {
             instagram_app_id: opt("INSTAGRAM_APP_ID"),
             instagram_app_secret: opt("INSTAGRAM_APP_SECRET"),
             whatsapp_store_dir: opt("WHATSAPP_STORE_DIR"),
+            whatsapp_cloud_token: opt("WHATSAPP_CLOUD_TOKEN"),
+            whatsapp_cloud_phone_number_id: opt("WHATSAPP_CLOUD_PHONE_NUMBER_ID"),
+            whatsapp_cloud_waba_id: opt("WHATSAPP_CLOUD_WABA_ID"),
+            whatsapp_cloud_verify_token: opt("WHATSAPP_CLOUD_VERIFY_TOKEN"),
+            whatsapp_cloud_app_secret: opt("WHATSAPP_CLOUD_APP_SECRET"),
             slack_client_id: opt("SLACK_CLIENT_ID"),
             slack_client_secret: opt("SLACK_CLIENT_SECRET"),
             tiktok_client_id: opt("TIKTOK_CLIENT_ID"),

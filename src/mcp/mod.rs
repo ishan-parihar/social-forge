@@ -2082,6 +2082,38 @@ impl SocialForgeMcpServer {
             .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
+    // ── Discord Read Tools (E7-read, discord-cli port) ───────
+
+    #[tool(description = "Fetch deep channel history with cursor pagination (100/request). Returns messages chronologically. Pass `before` for backfill or `after` for incremental sync.")]
+    pub async fn di_history(
+        &self,
+        params: Parameters<tools_discord::DiHistoryInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_discord::handle_di_history(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Search messages across a Discord guild (and optionally one channel) using Discord's built-in search.")]
+    pub async fn di_search(
+        &self,
+        params: Parameters<tools_discord::DiSearchInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_discord::handle_di_search(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Tail a Discord channel: latest messages snapshot. Pass `after` = the previous call's newest_id to fetch only what arrived since.")]
+    pub async fn di_tail(
+        &self,
+        params: Parameters<tools_discord::DiTailInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_discord::handle_di_tail(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
     #[tool(description = "Post a message via a Discord webhook URL — zero setup, no bot or OAuth needed. Optionally override username/avatar; wait=true returns the sent message id.")]
     pub async fn di_webhook_post(
         &self,
@@ -2171,6 +2203,40 @@ impl SocialForgeMcpServer {
         params: Parameters<tools_whatsapp::WaGroupInviteLinkInput>,
     ) -> Result<Json<tools_whatsapp::WaGroupInviteLinkOutput>, String> {
         tools_whatsapp::handle_wa_group_invite_link(&self.state, &params.0).await
+    }
+
+    // ── WhatsApp Cloud API (E6) ───────────────────────────────
+
+    #[tool(description = "List WhatsApp Cloud message templates (business numbers).")]
+    pub async fn wc_list_templates(
+        &self,
+        params: Parameters<tools_whatsapp::WcListTemplatesInput>,
+    ) -> Result<Json<tools_whatsapp::WcListTemplatesOutput>, String> {
+        tools_whatsapp::handle_wc_list_templates(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Create a WhatsApp Cloud message template (Marketing/Utility/Authentication; components is the raw Meta component array).")]
+    pub async fn wc_create_template(
+        &self,
+        params: Parameters<tools_whatsapp::WcCreateTemplateInput>,
+    ) -> Result<Json<tools_whatsapp::WcCreateTemplateOutput>, String> {
+        tools_whatsapp::handle_wc_create_template(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Delete a WhatsApp Cloud message template by name.")]
+    pub async fn wc_delete_template(
+        &self,
+        params: Parameters<tools_whatsapp::WcDeleteTemplateInput>,
+    ) -> Result<Json<tools_whatsapp::WcDeleteTemplateOutput>, String> {
+        tools_whatsapp::handle_wc_delete_template(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Send a WhatsApp Cloud template message (the compliant outbound path outside the 24h window).")]
+    pub async fn wc_send_template(
+        &self,
+        params: Parameters<tools_whatsapp::WcSendTemplateInput>,
+    ) -> Result<Json<tools_whatsapp::WcSendTemplateOutput>, String> {
+        tools_whatsapp::handle_wc_send_template(&self.state, &params.0).await
     }
 
     // ── WordPress Tools ───────────────────────────────────────────────
@@ -2708,6 +2774,55 @@ impl SocialForgeMcpServer {
         params: Parameters<tools_telegram_user::TuSignInInput>,
     ) -> Result<Json<tools_telegram_user::TuSignInOutput>, String> {
         tools_telegram_user::handle_tu_sign_in(&self.state, &params.0).await
+    }
+
+    // ── Telegram User-Session Parity (P6.4, tg-cli port) ───────
+
+    #[tool(description = "Fetch a Telegram chat's message history (chronological). Pass offset_id = the previous page's oldest_id to continue back in time.")]
+    pub async fn tu_history(
+        &self,
+        params: Parameters<tools_telegram_user::TuHistoryInput>,
+    ) -> Result<Json<tools_telegram_user::TuHistoryOutput>, String> {
+        tools_telegram_user::handle_tu_history(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Tail a Telegram chat: latest messages, optionally only newer than after_id (the previous call's newest_id).")]
+    pub async fn tu_tail(
+        &self,
+        params: Parameters<tools_telegram_user::TuTailInput>,
+    ) -> Result<Json<tools_telegram_user::TuTailOutput>, String> {
+        tools_telegram_user::handle_tu_tail(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Edit a message you sent in a Telegram chat.")]
+    pub async fn tu_edit(
+        &self,
+        params: Parameters<tools_telegram_user::TuEditMessageInput>,
+    ) -> Result<Json<tools_telegram_user::TuEditMessageOutput>, String> {
+        tools_telegram_user::handle_tu_edit_message(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Delete a message you sent in a Telegram chat.")]
+    pub async fn tu_delete(
+        &self,
+        params: Parameters<tools_telegram_user::TuDeleteMessageInput>,
+    ) -> Result<Json<tools_telegram_user::TuDeleteMessageOutput>, String> {
+        tools_telegram_user::handle_tu_delete_message(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Queue a Telegram send through the rate-limited write queue (paced per Telegram limits; use for bursts).")]
+    pub async fn tu_queue_send(
+        &self,
+        params: Parameters<tools_telegram_user::TuQueueSendInput>,
+    ) -> Result<Json<tools_telegram_user::TuQueueSendOutput>, String> {
+        tools_telegram_user::handle_tu_queue_send(&self.state, &params.0).await
+    }
+
+    #[tool(description = "Check the Telegram write queue depth (pending sends).")]
+    pub async fn tu_queue_status(
+        &self,
+    ) -> Result<Json<tools_telegram_user::TuHistoryOutput>, String> {
+        tools_telegram_user::handle_tu_queue_status(&self.state).await
     }
 
     // ── Skool Tools ─────────────────────────────────────────────────

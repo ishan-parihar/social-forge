@@ -72,11 +72,10 @@ pub struct TuSignInOutput {
 
 fn client_manager(
     state: &AppState,
-) -> Result<&crate::services::telegram_client::TelegramClientManager, String> {
+) -> Result<&std::sync::Arc<crate::services::telegram_client::TelegramClientManager>, String> {
     state
         .telegram_client_manager
         .as_ref()
-        .map(|arc| arc.as_ref())
         .ok_or_else(|| {
             "Telegram user client not configured. Set TELEGRAM_API_ID and TELEGRAM_API_HASH."
                 .to_string()
@@ -151,4 +150,131 @@ pub async fn handle_tu_sign_in(
     let mgr = client_manager(state)?;
     let result = mgr.sign_in(&input.phone, &input.code).await?;
     Ok(Json(TuSignInOutput { data: result }))
+}
+
+// ── P6.4: user-session parity (tg-cli port) ──────────────────────
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct TuHistoryInput {
+    /// Username or "user:<id>"
+    pub peer: String,
+    pub limit: Option<u32>,
+    /// Pagination cursor: the oldest_id of the previous page (continue
+    /// back in time).
+    pub offset_id: Option<i32>,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct TuHistoryOutput {
+    pub data: serde_json::Value,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct TuTailInput {
+    /// Username or "user:<id>"
+    pub peer: String,
+    pub limit: Option<u32>,
+    /// Only messages newer than this id (the previous call's newest_id).
+    pub after_id: Option<i32>,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct TuTailOutput {
+    pub data: serde_json::Value,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct TuEditMessageInput {
+    /// Username or "user:<id>"
+    pub peer: String,
+    pub message_id: i32,
+    pub text: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct TuEditMessageOutput {
+    pub data: serde_json::Value,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct TuDeleteMessageInput {
+    /// Username or "user:<id>"
+    pub peer: String,
+    pub message_id: i32,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct TuDeleteMessageOutput {
+    pub data: serde_json::Value,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct TuQueueSendInput {
+    /// Username or "user:<id>"
+    pub peer: String,
+    pub text: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct TuQueueSendOutput {
+    pub data: serde_json::Value,
+}
+
+pub async fn handle_tu_history(
+    state: &AppState,
+    input: &TuHistoryInput,
+) -> Result<Json<TuHistoryOutput>, String> {
+    let mgr = client_manager(state)?;
+    let result = mgr
+        .fetch_history(&input.peer, input.limit.unwrap_or(50), input.offset_id)
+        .await?;
+    Ok(Json(TuHistoryOutput { data: result }))
+}
+
+pub async fn handle_tu_tail(
+    state: &AppState,
+    input: &TuTailInput,
+) -> Result<Json<TuTailOutput>, String> {
+    let mgr = client_manager(state)?;
+    let result = mgr
+        .tail_messages(&input.peer, input.limit.unwrap_or(25), input.after_id)
+        .await?;
+    Ok(Json(TuTailOutput { data: result }))
+}
+
+pub async fn handle_tu_edit_message(
+    state: &AppState,
+    input: &TuEditMessageInput,
+) -> Result<Json<TuEditMessageOutput>, String> {
+    let mgr = client_manager(state)?;
+    let result = mgr
+        .edit_message(&input.peer, input.message_id, &input.text)
+        .await?;
+    Ok(Json(TuEditMessageOutput { data: result }))
+}
+
+pub async fn handle_tu_delete_message(
+    state: &AppState,
+    input: &TuDeleteMessageInput,
+) -> Result<Json<TuDeleteMessageOutput>, String> {
+    let mgr = client_manager(state)?;
+    let result = mgr.delete_message(&input.peer, input.message_id).await?;
+    Ok(Json(TuDeleteMessageOutput { data: result }))
+}
+
+pub async fn handle_tu_queue_send(
+    state: &AppState,
+    input: &TuQueueSendInput,
+) -> Result<Json<TuQueueSendOutput>, String> {
+    let mgr = client_manager(state)?;
+    let result = mgr.queue_send(&input.peer, &input.text).await?;
+    Ok(Json(TuQueueSendOutput { data: result }))
+}
+
+pub async fn handle_tu_queue_status(state: &AppState) -> Result<Json<TuHistoryOutput>, String> {
+    let mgr = client_manager(state)?;
+    let len = mgr.queue_len().await;
+    Ok(Json(TuHistoryOutput {
+        data: serde_json::json!({ "queue_len": len }),
+    }))
 }

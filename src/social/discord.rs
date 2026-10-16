@@ -85,6 +85,135 @@ impl DiscordProvider {
         }
     }
 
+    /// E7-read: deep channel history with cursor pagination, ported from
+    /// ../discord-cli fetch_messages. Discord caps one request at 100 and
+    /// returns newest-first; this walks the cursor (`before` older-ward for
+    /// history, `after` newer-ward for incremental sync) until `max_messages`
+    /// or the channel start. Output is chronological (oldest first) so
+    /// callers can process a conversation top-down.
+    pub async fn fetch_channel_history(
+        &self,
+        channel_id: &str,
+        max_messages: u32,
+        before: Option<&str>,
+        after: Option<&str>,
+    ) -> Result<Vec<serde_json::Value>, ProviderError> {
+        let mut all: Vec<serde_json::Value> = Vec::new();
+        let mut remaining = max_messages;
+        let mut before = before.map(str::to_string);
+        let mut after = after.map(str::to_string);
+
+        while remaining > 0 {
+            let batch = remaining.min(100);
+            let mut url = format!(
+                "{DISCORD_API_BASE}/channels/{channel_id}/messages?limit={batch}"
+            );
+            if let Some(b) = &before {
+                url.push_str(&format!("&before={b}"));
+            }
+            if let Some(a) = &after {
+                url.push_str(&format!("&after={a}"));
+            }
+
+            let resp = self
+                .http
+                .get(&url)
+                .header("Authorization", format!("Bot {}", self.bot_token))
+                .send()
+                .await?;
+            let status = resp.status();
+            if status == 401 || status == 403 {
+                return Err(ProviderError::TokenExpired);
+            }
+            if !status.is_success() {
+                let json: serde_json::Value = resp.json().await.unwrap_or_default();
+                let msg = json["message"]
+                    .as_str()
+                    .unwrap_or("Discord API error")
+                    .to_string();
+                return Err(ProviderError::Api(msg));
+            }
+            let batch_json: Vec<serde_json::Value> = resp.json().await?;
+            let n = batch_json.len();
+            if n == 0 {
+                break;
+            }
+            // Cursor moves to the newest (after-walk) or oldest (before-walk)
+            // message of this batch — Discord returns newest-first.
+            let cursor = if after.is_some() {
+                batch_json[0]["id"].as_str().unwrap_or_default().to_string()
+            } else {
+                batch_json[n - 1]["id"].as_str().unwrap_or_default().to_string()
+            };
+            all.extend(batch_json);
+            remaining = remaining.saturating_sub(n as u32);
+            if n < batch as usize {
+                break;
+            }
+            if after.is_some() {
+                after = Some(cursor);
+            } else {
+                before = Some(cursor);
+            }
+        }
+
+        // Chronological order (snowflake ids sort numerically).
+        all.sort_by_key(|m| {
+            m["id"].as_str().and_then(|s| s.parse::<u64>().ok()).unwrap_or(0)
+        });
+        Ok(all)
+    }
+
+    /// E7-read: guild-wide message search via Discord's built-in search
+    /// (ported from ../discord-cli search_guild_messages). Requires the
+    /// Read Message History permission in the matched channels.
+    pub async fn search_guild_messages(
+        &self,
+        guild_id: &str,
+        query: &str,
+        channel_id: Option<&str>,
+        limit: u32,
+    ) -> Result<serde_json::Value, ProviderError> {
+        let mut url =
+            format!("{DISCORD_API_BASE}/guilds/{guild_id}/messages/search?content={query}");
+        if let Some(cid) = channel_id {
+            url.push_str(&format!("&channel_id={cid}"));
+        }
+        let resp = self
+            .http
+            .get(&url)
+            .header("Authorization", format!("Bot {}", self.bot_token))
+            .send()
+            .await?;
+        let status = resp.status();
+        let json: serde_json::Value = resp.json().await?;
+        if status.is_success() {
+            // The response nests hit messages inside per-result groups.
+            let hits: Vec<serde_json::Value> = json["messages"]
+                .as_array()
+                .map(|groups| {
+                    groups
+                        .iter()
+                        .flat_map(|g| g.as_array().cloned().unwrap_or_default())
+                        .filter(|m| m["hit"].as_bool().unwrap_or(false))
+                        .collect()
+                })
+                .unwrap_or_default();
+            Ok(serde_json::json!({
+                "total_results": json["total_results"].as_u64().unwrap_or(0),
+                "messages": hits.into_iter().take(limit as usize).collect::<Vec<_>>(),
+            }))
+        } else if status == 401 || status == 403 {
+            Err(ProviderError::TokenExpired)
+        } else {
+            let msg = json["message"]
+                .as_str()
+                .unwrap_or("Discord API error")
+                .to_string();
+            Err(ProviderError::Api(msg))
+        }
+    }
+
     pub async fn get_guild(
         &self,
         _access_token: &str,

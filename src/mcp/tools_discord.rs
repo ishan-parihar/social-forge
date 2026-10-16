@@ -64,6 +64,135 @@ fn create_di_provider(state: &AppState) -> DiscordProvider {
     DiscordProvider::new(&state.config)
 }
 
+// ── E7-read: history / search / tail ────────────────────────
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct DiHistoryInput {
+    pub channel_id: String,
+    /// Total messages to fetch (paginated 100/request). Default 200.
+    pub limit: Option<u32>,
+    /// Return messages OLDER than this message id (history walk).
+    pub before: Option<String>,
+    /// Return messages NEWER than this message id (incremental sync).
+    pub after: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct DiSearchInput {
+    pub guild_id: String,
+    pub query: String,
+    /// Restrict the search to one channel
+    pub channel_id: Option<String>,
+    /// Max hits to return (Discord returns groups of 25)
+    pub limit: Option<u32>,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct DiTailInput {
+    pub channel_id: String,
+    /// Only messages newer than this message id (snapshot watch cursor)
+    pub after: Option<String>,
+    /// Default 25
+    pub limit: Option<u32>,
+}
+
+/// Deep channel history, chronological (oldest→newest). Walks Discord's
+/// 100-per-request cursor either way: `before` for backfill, `after` for
+/// incremental sync.
+pub async fn handle_di_history(
+    state: &AppState,
+    input: &DiHistoryInput,
+) -> Result<Json<Value>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    // The integration lookup is the connection gate; the Bot API reads its
+    // credentials from config, so the token itself is unused here.
+    let _token = find_di_token(state, user_id, &input.channel_id).await?;
+    let provider = create_di_provider(state);
+    let messages = provider
+        .fetch_channel_history(
+            &input.channel_id,
+            input.limit.unwrap_or(200),
+            input.before.as_deref(),
+            input.after.as_deref(),
+        )
+        .await
+        .map_err(|e| format!("Discord history failed: {e}"))?;
+    Ok(Json(json!({
+        "channel_id": input.channel_id,
+        "count": messages.len(),
+        "messages": messages,
+    })))
+}
+
+/// Guild-wide message search (Discord built-in search).
+pub async fn handle_di_search(
+    state: &AppState,
+    input: &DiSearchInput,
+) -> Result<Json<Value>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    // Search is guild-wide; a channel-scoped integration is not required,
+    // so fall back to any connected Discord integration's token.
+    // Connection gate only (Bot API creds come from config).
+    let _token = match input.channel_id.as_deref() {
+        Some(cid) if !cid.is_empty() => find_di_token(state, user_id, cid).await,
+        _ => any_discord_token(state, user_id).await,
+    }?;
+    let provider = create_di_provider(state);
+    let result = provider
+        .search_guild_messages(
+            &input.guild_id,
+            &input.query,
+            input.channel_id.as_deref(),
+            input.limit.unwrap_or(25),
+        )
+        .await
+        .map_err(|e| format!("Discord search failed: {e}"))?;
+    Ok(Json(result))
+}
+
+/// Latest snapshot of a channel — the `tail -f` style watch cursor:
+/// pass `after` = the newest message id from the previous call to get
+/// only what arrived since.
+pub async fn handle_di_tail(
+    state: &AppState,
+    input: &DiTailInput,
+) -> Result<Json<Value>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    // Connection gate only (Bot API creds come from config).
+    let _token = find_di_token(state, user_id, &input.channel_id).await?;
+    let provider = create_di_provider(state);
+    let messages = provider
+        .fetch_channel_history(
+            &input.channel_id,
+            input.limit.unwrap_or(25),
+            None,
+            input.after.as_deref(),
+        )
+        .await
+        .map_err(|e| format!("Discord tail failed: {e}"))?;
+    Ok(Json(json!({
+        "channel_id": input.channel_id,
+        "count": messages.len(),
+        "messages": messages,
+        "newest_id": messages.last().and_then(|m| m["id"].as_str()),
+    })))
+}
+
+/// Any connected Discord integration's token — the guild-wide tools
+/// (di_search) don't need a channel-scoped one.
+async fn any_discord_token(state: &AppState, user_id: Uuid) -> Result<String, String> {
+    let integrations = crate::db::queries::list_integrations(&state.db, user_id)
+        .await
+        .map_err(|e| format!("DB error: {e}"))?;
+    integrations
+        .iter()
+        .find(|i| i.provider_identifier == "discord")
+        .map(|i| crate::crypto::maybe_decrypt_token(&i.access_token, state.token_key.as_ref()))
+        .ok_or_else(|| {
+            "Discord not connected. Connect Discord first via integrations_connect.".to_string()
+        })
+}
+
 // ── Tool Implementations ─────────────────────────────────────
 
 pub async fn handle_di_get_channel(

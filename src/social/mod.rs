@@ -35,6 +35,7 @@ pub mod threads;
 pub mod tier;
 pub mod tiktok;
 pub mod whatsapp;
+pub mod whatsapp_cloud;
 pub mod wordpress;
 pub mod x;
 pub mod x_cookies;
@@ -1769,6 +1770,11 @@ pub(crate) fn test_config() -> crate::config::Config {
         pinterest_client_id: None,
         pinterest_client_secret: None,
         whatsapp_store_dir: None,
+        whatsapp_cloud_token: None,
+        whatsapp_cloud_phone_number_id: None,
+        whatsapp_cloud_waba_id: None,
+        whatsapp_cloud_verify_token: None,
+        whatsapp_cloud_app_secret: None,
         slack_client_id: None,
         slack_client_secret: None,
         instagram_app_id: None,

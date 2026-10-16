@@ -18,6 +18,9 @@ use crate::wa::WhaClient;
 pub struct WhatsAppProvider {
     store_dir: PathBuf,
     wa_client: Option<Arc<Mutex<WhaClient>>>,
+    /// E6: Cloud API path, active when WHATSAPP_CLOUD_* creds are set AND a
+    /// post's settings say auth_method=cloud. None keeps the Web-session path.
+    cloud: Option<crate::social::whatsapp_cloud::WhatsAppCloudProvider>,
 }
 
 impl WhatsAppProvider {
@@ -30,6 +33,7 @@ impl WhatsAppProvider {
         Self {
             store_dir,
             wa_client,
+            cloud: crate::social::whatsapp_cloud::WhatsAppCloudProvider::from_config(config),
         }
     }
 
@@ -121,6 +125,51 @@ impl SocialProvider for WhatsAppProvider {
         access_token: &str,
         post: &PostContent,
     ) -> Result<PublishResult, ProviderError> {
+        // E6: Cloud path — settings.auth_method=cloud routes a scheduled post
+        // through a template-message send (the compliant outbound path).
+        if post.settings.get("auth_method").and_then(|v| v.as_str()) == Some("cloud") {
+            let cloud = self.cloud.as_ref().ok_or_else(|| {
+                ProviderError::Api(
+                    "auth_method=cloud but WHATSAPP_CLOUD_* credentials are not set \
+                     (WHATSAPP_CLOUD_TOKEN, WHATSAPP_CLOUD_PHONE_NUMBER_ID, WHATSAPP_CLOUD_WABA_ID)"
+                        .into(),
+                )
+            })?;
+            let template = post
+                .settings
+                .get("template")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| {
+                    ProviderError::Api(
+                        "Cloud publish needs settings.template (the approved template name)\
+                         plus optional template_language and template_components"
+                            .into(),
+                    )
+                })?;
+            let language = post
+                .settings
+                .get("template_language")
+                .and_then(|v| v.as_str())
+                .unwrap_or("en");
+            let components = post
+                .settings
+                .get("template_components")
+                .cloned()
+                .unwrap_or_else(|| serde_json::json!([]));
+            let resp = cloud
+                .send_template(access_token, template, language, components)
+                .await?;
+            let msg_id = resp["messages"][0]["id"]
+                .as_str()
+                .unwrap_or("sent")
+                .to_string();
+            return Ok(PublishResult {
+                platform_post_id: msg_id,
+                platform_post_url: None,
+                status: "published".into(),
+            });
+        }
+
         let to = access_token;
 
         if !post.media.is_empty() {

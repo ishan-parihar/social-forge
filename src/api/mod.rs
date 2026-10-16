@@ -59,6 +59,7 @@ mod sse;
 mod tags;
 mod v1;
 mod webhooks;
+pub mod whatsapp_webhook;
 
 /// Shared application state available to all handlers
 #[derive(Clone)]
@@ -198,6 +199,13 @@ pub fn build_router(state: AppState) -> Router {
         .route(
             "/api/billing/webhook",
             axum::routing::post(billing::stripe_webhook),
+        )
+        // WhatsApp Cloud webhook (E6) — no auth: GET echoes Meta's
+        // hub.challenge against WHATSAPP_CLOUD_VERIFY_TOKEN, POST verifies
+        // the X-Hub-Signature-256 HMAC when WHATSAPP_CLOUD_APP_SECRET is set.
+        .route(
+            "/api/webhooks/whatsapp",
+            axum::routing::get(whatsapp_webhook::verify).post(whatsapp_webhook::receive),
         );
 
     // Protected routes — auth required

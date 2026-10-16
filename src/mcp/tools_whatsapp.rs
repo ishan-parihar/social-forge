@@ -206,3 +206,123 @@ pub async fn handle_wa_group_invite_link(
         .map_err(|e| format!("WhatsApp invite link failed: {e}"))?;
     Ok(Json(WaGroupInviteLinkOutput { invite_link: link }))
 }
+
+// ─── WhatsApp Cloud API (E6) ─────────────────────────────────
+
+use crate::social::whatsapp_cloud::WhatsAppCloudProvider;
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct WcListTemplatesInput {
+    pub limit: Option<u32>,
+    /// Pagination cursor from a previous page's paging.cursors.after.
+    pub after: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct WcListTemplatesOutput {
+    pub data: serde_json::Value,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct WcCreateTemplateInput {
+    pub name: String,
+    /// BCP-47 code, e.g. "en" or "en_US".
+    pub language: String,
+    /// MARKETING | UTILITY | AUTHENTICATION
+    pub category: String,
+    /// Raw Meta component array (HEADER/BODY/FOOTER/BUTTONS objects).
+    pub components: serde_json::Value,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct WcCreateTemplateOutput {
+    pub data: serde_json::Value,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct WcDeleteTemplateInput {
+    pub name: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct WcDeleteTemplateOutput {
+    pub data: serde_json::Value,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct WcSendTemplateInput {
+    /// Recipient E.164 number, e.g. "15551234567".
+    pub to: String,
+    pub template: String,
+    pub language: Option<String>,
+    /// Component params for the template (BODY/HEADER variables).
+    pub components: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct WcSendTemplateOutput {
+    pub data: serde_json::Value,
+}
+
+fn cloud_provider(state: &AppState) -> Result<WhatsAppCloudProvider, String> {
+    WhatsAppCloudProvider::from_config(&state.config)
+        .ok_or_else(|| "WhatsApp Cloud not configured. Set WHATSAPP_CLOUD_TOKEN, WHATSAPP_CLOUD_PHONE_NUMBER_ID, WHATSAPP_CLOUD_WABA_ID.".to_string())
+}
+
+pub async fn handle_wc_list_templates(
+    state: &AppState,
+    input: &WcListTemplatesInput,
+) -> Result<Json<WcListTemplatesOutput>, String> {
+    let provider = cloud_provider(state)?;
+    let result = provider
+        .list_templates(input.limit.unwrap_or(50), input.after.as_deref())
+        .await
+        .map_err(|e| format!("WhatsApp template list failed: {e}"))?;
+    Ok(Json(WcListTemplatesOutput { data: result }))
+}
+
+pub async fn handle_wc_create_template(
+    state: &AppState,
+    input: &WcCreateTemplateInput,
+) -> Result<Json<WcCreateTemplateOutput>, String> {
+    let provider = cloud_provider(state)?;
+    let result = provider
+        .create_template(
+            &input.name,
+            &input.language,
+            &input.category,
+            input.components.clone(),
+        )
+        .await
+        .map_err(|e| format!("WhatsApp template create failed: {e}"))?;
+    Ok(Json(WcCreateTemplateOutput { data: result }))
+}
+
+pub async fn handle_wc_delete_template(
+    state: &AppState,
+    input: &WcDeleteTemplateInput,
+) -> Result<Json<WcDeleteTemplateOutput>, String> {
+    let provider = cloud_provider(state)?;
+    let result = provider
+        .delete_template(&input.name)
+        .await
+        .map_err(|e| format!("WhatsApp template delete failed: {e}"))?;
+    Ok(Json(WcDeleteTemplateOutput { data: result }))
+}
+
+pub async fn handle_wc_send_template(
+    state: &AppState,
+    input: &WcSendTemplateInput,
+) -> Result<Json<WcSendTemplateOutput>, String> {
+    let provider = cloud_provider(state)?;
+    let result = provider
+        .send_template(
+            &input.to,
+            &input.template,
+            input.language.as_deref().unwrap_or("en"),
+            input.components.clone().unwrap_or(serde_json::json!([])),
+        )
+        .await
+        .map_err(|e| format!("WhatsApp template send failed: {e}"))?;
+    Ok(Json(WcSendTemplateOutput { data: result }))
+}

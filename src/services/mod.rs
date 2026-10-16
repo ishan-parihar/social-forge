@@ -12,6 +12,7 @@ pub mod posts;
 pub mod short_link;
 pub mod staging;
 pub mod telegram_client;
+pub mod telegram_rate;
 pub mod webhook_dispatcher;
 
 pub use integrations::IntegrationService;

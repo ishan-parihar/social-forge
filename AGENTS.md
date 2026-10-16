@@ -47,7 +47,7 @@ These are the core design decisions that define social-forge's identity. They we
 
 ### 4. Triple interface: CLI + REST API + MCP server
 - All three interfaces must have feature parity for core operations. If a feature is added to REST, it should be exposed via MCP (for AI agents) and CLI (for shell users).
-- The MCP server is the primary interface for AI agents (Claude, Cursor). It must be comprehensive — 353 tools is the target, not a limitation.
+- The MCP server is the primary interface for AI agents (Claude, Cursor). It must be comprehensive — 366 tools is the target, not a limitation.
 - The CLI mirrors the MCP tools for shell-based automation.
 
 ### 5. Security-first design
@@ -113,7 +113,7 @@ Social Forge is a **single-user, self-hosted social media management platform** 
 **Architecture in one paragraph:** A single Rust binary (`social-forge`) runs an axum HTTP server (REST API + embedded SvelteKit frontend), an rmcp MCP server (stdio, for AI agents like Claude/Cursor), an in-process scheduler (polls for due posts every 30s), an SSE broadcaster (realtime updates to the frontend), and background tasks (RSS poller, feed refresher, analytics cache refresher). All state lives in a local SQLite file. OAuth tokens are AES-256-GCM encrypted at rest when `TOKEN_ENCRYPTION_KEY` is set.
 
 **Key numbers (as of v11):**
-- 353 MCP tools across 41 files in `src/mcp/`
+- 366 MCP tools across 41 files in `src/mcp/`
 - 26 providers registered by default in `src/social/registry.rs` — 12 Tier-1 (depth) + 14 Tier-2 (publish-maintained), plus 1 Tier-3 (Farcaster) registered only when `ENABLE_ARCHIVE_PROVIDERS` is set. Tier membership lives in `src/social/tier.rs` (plan §1); `kick`/`vk`/`whop`/`lemmy` were removed outright.
 - 2 SQL migrations in `migrations/`
 - ~85,700 LOC of Rust + ~25,700 LOC of Svelte/TS frontend
@@ -145,7 +145,7 @@ social-forge/
 │   ├── cli/                 # CLI commands (mirrors MCP tools)
 │   │   ├── run.rs           # Main CLI dispatcher (~3729 LOC)
 │   │   └── platforms/       # 32 platform shims (thin wrappers around unified commands)
-│   ├── mcp/                 # MCP server (353 tools)
+│   ├── mcp/                 # MCP server (366 tools)
 │   │   ├── mod.rs           # SocialForgeMcpServer impl + #[tool] method registration (~3492 LOC)
 │   │   ├── tools_posts.rs   # Post CRUD MCP tools
 │   │   ├── tools_admin.rs   # v9 parity wrappers (posts_repeat, posts_set_tags, media_delete, etc.)

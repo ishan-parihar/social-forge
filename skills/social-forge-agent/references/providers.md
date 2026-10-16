@@ -283,17 +283,17 @@ social-forge mcp-call <tool_name> --args '{"key":"value"}' # Call any tool
 ### Bluesky (5 tools)
 `bs_timeline`, `bs_search`, `bs_create_post`, `bs_profile`, `bs_feed`
 
-### Discord (10 tools)
-`di_send_message`, `di_get_messages`, `di_get_channel`, `di_get_guild`, `di_get_guild_channels`, `di_get_server_info`, `di_add_reaction`, `di_delete_message`, `di_create_forum_post`, `di_get_thread_members`
+### Discord (13 tools)
+`di_send_message`, `di_get_messages`, `di_get_channel`, `di_get_guild`, `di_get_guild_channels`, `di_get_server_info`, `di_add_reaction`, `di_delete_message`, `di_create_forum_post`, `di_get_thread_members`, `di_history` (paginated, chronological), `di_search` (guild-wide), `di_tail` (newest-id cursor for watch loops)
 
 ### Telegram Bot (9 tools)
 `tb_send_message`, `tb_send_photo`, `tb_send_document`, `tb_get_chat`, `tb_get_chat_member_count`, `tb_get_me`, `tb_get_updates`, `tb_pin_message`, `tb_unpin_message`, `tb_forward_message`
 
-### Telegram User (7 tools)
-`tu_auth_status`, `tu_list_contacts`, `tu_list_dialogs`, `tu_search`, `tu_send_message`, `tu_request_code`, `tu_sign_in`
+### Telegram User (13 tools)
+`tu_auth_status`, `tu_list_contacts`, `tu_list_dialogs`, `tu_search`, `tu_send_message`, `tu_request_code`, `tu_sign_in`, `tu_history` (chronological, offset_id paging), `tu_tail` (after_id cursor), `tu_edit`, `tu_delete`, `tu_queue_send` (rate-limited write queue), `tu_queue_status`
 
-### WhatsApp (9 tools)
-`wa_auth_status`, `wa_chats`, `wa_contacts`, `wa_send_text`, `wa_edit_message`, `wa_revoke_message`, `wa_create_group`, `wa_list_groups`, `wa_group_invite_link`
+### WhatsApp (13 tools)
+`wa_auth_status`, `wa_chats`, `wa_contacts`, `wa_send_text`, `wa_edit_message`, `wa_revoke_message`, `wa_create_group`, `wa_list_groups`, `wa_group_invite_link`, `wc_list_templates`, `wc_create_template`, `wc_delete_template`, `wc_send_template` (WhatsApp Cloud API for business numbers; scheduled posts with settings.auth_method=cloud publish via approved templates)
 
 ### GitHub (18 tools)
 `gh_list_my_repos`, `gh_list_repos`, `gh_get_repo`, `gh_get_repo_content`, `gh_list_issues`, `gh_get_issue`, `gh_create_issue`, `gh_close_issue`, `gh_list_pull_requests`, `gh_get_pull_request`, `gh_list_branches`, `gh_list_commits`, `gh_list_releases`, `gh_list_contributors`, `gh_get_authenticated_user`, `gh_get_user`, `gh_search_code`, `gh_search_repos`
