@@ -2654,7 +2654,7 @@ impl SocialForgeMcpServer {
         tools_telegram_bot::handle_tb_get_updates(&self.state, &params.0).await
     }
 
-    #[tool(description = "Discover chats/channels the bot is in by sweeping pending updates (E8). Returns distinct chats with id, type and title. Note: consumes pending updates like tb_get_updates; for full discovery regardless of activity use tu_list_dialogs (user session).")]
+    #[tool(description = "Discover chats/channels the bot is in by sweeping pending updates (E8). Returns distinct chats with id, type and title. Consumes pending updates like tb_get_updates; tu_list_dialogs (user session) lists all.")]
     pub async fn tb_list_chats(
         &self,
         params: Parameters<tools_telegram_bot::TbListChatsInput>,
