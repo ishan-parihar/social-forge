@@ -64,3 +64,6 @@ frontend/package-lock.json
 
 # Local agent tooling cache — index metadata only, never commit
 .token-savior-cache.json
+
+# kb flock artifacts
+*.lock

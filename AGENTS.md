@@ -94,15 +94,20 @@ When implementing features inspired by postiz-app or other competitors, apply th
 | `AGENTS.md` (this file) | Build/test/git/security protocol | Always, first |
 | `README.md` | User-facing overview, platform tiers, CLI/MCP reference | For product context |
 | `docs/planning/PLAN_PARITY_DEPTH_SINGLEUSER_v25.md` | Live master plan: tier rationale (§1), parity phases | Before parity/feature work |
-| `docs/planning/AUDIT_2026-10-14.md` | End-to-end audit: P0 bugs, cookie/API matrix, fragmentation, phased plan | Before fixing publish/scheduler/provider bugs |
-| `docs/planning/GAPS_2026-10-15.md` | What the 13 landed audit commits did NOT close yet, re-verified against the current tree, with recommended order | Before starting the next audit phase (Phases 6–7, P1 leftovers) |
+| `docs/planning/AUDIT_2026-10-14.md` | End-to-end audit: P0 bugs, cookie/API matrix, fragmentation, phased plan — executed through the 2026-10-15/16 cycles; **history** | For audit context on the P0 fixes and the cookie/API matrix |
+| `docs/planning/GAPS_2026-10-15.md` | What the 13 landed audit commits did NOT close at the time — superseded by the OUTLINE succession; **history** | For what was still open after the 13 landed commits, and how it was tracked before the register |
 | `docs/planning/VENDOR_PINS.md` | Pinned transitive deps enforced by `vendor-pull.sh --check` (CI gate) | Before touching `Cargo.toml` |
+| `docs/planning/OUTLINE-2026-10-17.md` | The live working queue: Wave A live-verification, Wave B consolidation, Wave C reliability + standing notes and recommended order | Before starting ANY implementation work |
+| `docs/planning/OUTLINE-2026-10-16.md` | Executed + red-team-audited predecessor outline (execution `d5b9bbd..7873f84`, audit `ca63a9e`) — history, not queue | For provenance of what landed 2026-10-16/17 |
+| `TODO.md` | The register: live status per work item (`scripts/kb status` is the supervised transition), seeded from the 2026-10-17 outline | To see or claim what's open |
+| `worklog.md` | The multi-agent worklog — this protocol, §8 | Before starting work; after finishing |
+| `docs/decisions/` | AD-NNN decision records, immutable once numbered (`scripts/kb ad` mints them) | When a direction change is ratified |
 | `SESSION_HOOKS.md` | Session-start ambient-context setup (AXI) | When wiring agent hooks |
 | `skills/social-forge-agent/SKILL.md` | Installed agent skill (via `make install-skill`) | When editing the skill |
 | `skills/social-forge-agent/references/providers.md` | Per-platform provider reference | When editing provider docs |
 | `skills/social-forge-agent/references/quick-reference.md` | 601-line command cheat-sheet (NOT auto-installed) | Reference only; install manually if needed |
 
-Deleted 2026-09-30: 14 stale docs (v19/v20/v22/v24 plans, plans-archive/, root `SKILL.md`, `COLD_START_HANDOFF.md`). If a doc isn't in this table, it doesn't exist — don't go looking for it.
+Superseded docs move to `docs/archive/` with a tombstone at the original path — nothing is deleted. (2026-09-30 saw the last deletion of 14 stale docs; that practice is retired.) If a doc isn't in this table and has no tombstone, it doesn't exist — don't go looking for it.
 
 ### Rust style: `rust-best-practices` skill
 
@@ -509,7 +514,7 @@ Every publish attempt (success or failure) is recorded in the `publish_attempts`
 
 ## 8. Multi-Agent Worklog Protocol
 
-If multiple agents are working on the repo in sequence, use the shared worklog at `/home/z/my-project/worklog.md`:
+If multiple agents are working on the repo in sequence, use the shared worklog at `worklog.md` in the repo root:
 
 1. **Before starting work:** Read `worklog.md` to see what previous agents did.
 2. **After finishing work:** Append a new section (do NOT overwrite) using this template:
