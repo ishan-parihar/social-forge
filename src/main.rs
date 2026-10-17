@@ -157,24 +157,36 @@ async fn main() -> anyhow::Result<()> {
     // without systemd each agent session ran its own rival scheduler.
     // Probe the lock first: held by a live daemon → thin mode (pool
     // read-write, MCP on stdio only — the daemon's scheduler picks up
-    // the rows). Free → merged mode below behaves as before.
-    if matches!(cli_args.command, Command::Mcp)
-        && db::claim_writer_role(&config.database_url).is_err()
-    {
-        tracing::info!(
-            "Writer lock held by the serve daemon — thin MCP mode: \
-             no scheduler, no HTTP, no messaging clients"
-        );
-        return run_mcp_thin(config).await;
-    }
+    // the rows). Free (or stale-adopted) → merged mode below behaves
+    // as before. NOTE: claim_writer_role is check-and-acquire — the
+    // probe's successful claim IS the merge-mode guard; re-claiming at
+    // line 176 self-collided and killed every `mcp` start after a
+    // kill -9 left a stale lock (observed 2026-10-17).
+    let probe_claim = if matches!(cli_args.command, Command::Mcp) {
+        match db::claim_writer_role(&config.database_url) {
+            Ok(guard) => Some(guard),
+            Err(_) => {
+                tracing::info!(
+                    "Writer lock held by the serve daemon — thin MCP mode: \
+                     no scheduler, no HTTP, no messaging clients"
+                );
+                return run_mcp_thin(config).await;
+            }
+        }
+    } else {
+        None
+    };
 
     // ── Database ──────────────────────────────────────────────
     // Single-writer discipline (G-08): this process runs the publish scheduler,
     // so it must be the ONLY long-lived writer on `database_url`. Claim the
     // lock BEFORE opening the pool — a second `serve` on the same DATABASE_URL
     // then fails loudly here instead of silently double-publishing.
-    let _writer_lock = db::claim_writer_role(&config.database_url)
-        .context("Failed to claim the SQLite single-writer lock")?;
+    let _writer_lock = match probe_claim {
+        Some(guard) => guard,
+        None => db::claim_writer_role(&config.database_url)
+            .context("Failed to claim the SQLite single-writer lock")?,
+    };
 
     let db = db::create_pool(&config.database_url)
         .await
