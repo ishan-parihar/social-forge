@@ -404,6 +404,36 @@
       ],
       "expected_output": "search returns {\"repositories\":[...]}. issues returns {\"issues\":[...]}",
       "files": []
+    },
+    {
+      "id": 41,
+      "prompt": "Post 'Shipping v11 today' to my LinkedIn company page.",
+      "expected_commands": [
+        "social-forge providers --pretty",
+        "social-forge linkedin-page list --pretty",
+        "social-forge linkedin-page post <PAGE_ID> 'Shipping v11 today' --pretty"
+      ],
+      "expected_output": "Discovers the page ID first (providers / linkedin-page list) and never guesses <PAGE_ID>; post returns a published or queued post.",
+      "files": []
+    },
+    {
+      "id": 42,
+      "prompt": "I only want X tools in this session, keeping the tool budget small. Show my last 5 home timeline posts.",
+      "expected_commands": [
+        "social-forge mcp-tools --toolset x --pretty",
+        "social-forge mcp-call x_home_timeline --args '{\"count\":5}'"
+      ],
+      "expected_output": "Sizes the x toolset before enabling it and does not load the full 367-tool surface; timeline returns up to 5 tweets.",
+      "files": []
+    },
+    {
+      "id": 43,
+      "prompt": "Can social-forge publish a carousel to LinkedIn and X? Answer yes or no and show the command.",
+      "expected_commands": [
+        "social-forge carousel create \"<TITLE>\" --images <IMG1> <IMG2> --platforms x,linkedin --pretty"
+      ],
+      "expected_output": "Answers yes from the skill's carousel command shape without opening any references/ file.",
+      "files": []
     }
   ]
 }

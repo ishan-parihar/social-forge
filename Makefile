@@ -77,6 +77,8 @@ install-skill:
 	@mkdir -p $(SKILL_DEST)/references
 	@cp $(SKILL_SRC)/SKILL.md $(SKILL_DEST)/SKILL.md
 	@cp $(SKILL_SRC)/references/providers.md $(SKILL_DEST)/references/providers.md
+	@cp $(SKILL_SRC)/references/platform-matrices.md $(SKILL_DEST)/references/platform-matrices.md
+	@cp $(SKILL_SRC)/references/recipes-extended.md $(SKILL_DEST)/references/recipes-extended.md
 	@echo "✓ Installed skill to $(SKILL_DEST)"
 
 # ── Auto-watch (requires cargo-watch) ──────────────────────────

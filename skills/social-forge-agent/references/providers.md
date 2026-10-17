@@ -241,7 +241,8 @@ social-forge mcp-call ig_publish_container --args '{"ig_id":"<IG_ACCOUNT_ID>","c
 When CLI doesn't have a command for what you need, use `mcp-call`:
 
 ```bash
-social-forge mcp-tools --pretty                    # List all 302 tools (bridge-accessible)
+social-forge mcp-tools --pretty                    # List all 367 tools (bridge-accessible)
+social-forge mcp-tools --toolset x --pretty         # Only the X toolset (session-sizing; mirrors SOCIAL_FORGE_TOOLSETS filtering)
 social-forge mcp-call <tool_name> --args '{"key":"value"}' # Call any tool
 ```
 
@@ -315,3 +316,5 @@ social-forge mcp-call <tool_name> --args '{"key":"value"}' # Call any tool
 | **TikTok** | `tt_create_post`, `tt_list_videos`, `tt_profile` |
 | **Skool** | `sk_publish`, `sk_list_posts`, `sk_get_post`, `sk_create_comment`, `sk_get_info` |
 | **Slack** | `sl_send_message`, `sl_list_channels`, `sl_channel_history`, `sl_list_users` |
+| **Threads** | `th_get_profile`, `th_get_threads`, `th_get_thread_detail`, `th_get_replies`, `th_create_thread`, `th_reply_to_thread`, `th_delete_thread`, `th_get_insights`, `th_poll_publish_status` |
+| **YouTube** | `yt_upload_video`, `yt_reply_comment` |
