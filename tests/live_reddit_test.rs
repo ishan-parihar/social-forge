@@ -52,8 +52,20 @@ fn make_provider(config: &Config, token: &str) -> RedditProvider {
     p
 }
 
+/// All tests hit the SAME account; cargo's default parallel dispatch trips
+/// Reddit's per-account rate limits mid-roundtrip (live-pass finding:
+/// the write test 403'd at a different step on every parallel run, green
+/// when isolated). One binary-wide lock serializes them regardless of
+/// --test-threads.
+static LIVE_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+async fn live_guard() -> tokio::sync::MutexGuard<'static, ()> {
+    LIVE_LOCK.lock().await
+}
+
 #[tokio::test]
 async fn test_reddit_list_friends() {
+    let _g = live_guard().await;
     let config = get_config();
     let Some(token) = reddit_token(&config).await else {
         eprintln!("⏭ skipped: no Reddit token (REDDIT_COOKIE_TOKEN or REDDIT_ACCESS_TOKEN)");
@@ -71,6 +83,7 @@ async fn test_reddit_list_friends() {
 
 #[tokio::test]
 async fn test_reddit_get_rules() {
+    let _g = live_guard().await;
     let config = get_config();
     let Some(token) = reddit_token(&config).await else {
         eprintln!("⏭ skipped: no Reddit token");
@@ -95,6 +108,7 @@ async fn test_reddit_get_rules() {
 
 #[tokio::test]
 async fn test_reddit_get_saved() {
+    let _g = live_guard().await;
     let config = get_config();
     let Some(token) = reddit_token(&config).await else {
         eprintln!("⏭ skipped: no Reddit token");
@@ -111,6 +125,7 @@ async fn test_reddit_get_saved() {
 
 #[tokio::test]
 async fn test_reddit_read_all_messages() {
+    let _g = live_guard().await;
     let config = get_config();
     let Some(token) = reddit_token(&config).await else {
         eprintln!("⏭ skipped: no Reddit token");
@@ -125,6 +140,7 @@ async fn test_reddit_read_all_messages() {
 
 #[tokio::test]
 async fn test_reddit_write_parity_roundtrip() {
+    let _g = live_guard().await;
     let config = get_config();
     let Some(token) = reddit_token(&config).await else {
         eprintln!("⏭ skipped: no Reddit token");

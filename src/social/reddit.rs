@@ -58,6 +58,26 @@ fn reddit_http() -> reqwest::Client {
     CLIENT.clone()
 }
 
+/// Cookie-auth www client. Reddit's edge blocks TWO fingerprints with
+/// 403: plain reqwest/rustls (the original failure) AND wreq's
+/// Chrome131 impersonation profile — known impersonation-library
+/// fingerprints are specifically flagged (P6.5 live-pass finding;
+/// reddit-lyr ships curl_cffi for the same fight). wreq's own default
+/// fingerprint passes: empirically 200 on the same cookies that 403
+/// under both alternatives. OAuth traffic stays on `reddit_http()` —
+/// oauth.reddit.com accepts the registered-app fingerprint.
+fn reddit_www_wreq() -> wreq::Client {
+    static CLIENT: std::sync::LazyLock<wreq::Client> = std::sync::LazyLock::new(|| {
+        wreq::Client::builder()
+            .user_agent("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
+            .gzip(true)
+            .brotli(true)
+            .build()
+            .unwrap_or_else(|_| wreq::Client::new())
+    });
+    CLIENT.clone()
+}
+
 pub struct RedditProvider {
     client_id: String,
     client_secret: String,
@@ -145,13 +165,13 @@ impl RedditProvider {
         let mut all_params: Vec<(&str, &str)> = params.to_vec();
         all_params.push(("raw_json", "1"));
 
-        let resp = self
-            .http
+        let resp = reddit_www_wreq()
             .get(format!("https://www.reddit.com{endpoint}"))
             .header("Cookie", cookies)
             .query(&all_params)
             .send()
-            .await?;
+            .await
+            .map_err(|e| ProviderError::Api(e.to_string()))?;
 
         let status = resp.status();
         if status == 401 || status == 403 {
@@ -163,7 +183,10 @@ impl RedditProvider {
                 "Reddit www API error ({status}): {body}"
             )));
         }
-        Ok(resp.json().await?)
+        resp
+            .json()
+            .await
+            .map_err(|e| ProviderError::Api(e.to_string()))
     }
 
     /// Reddit POSTs with api_type=json answer `{"json":{"errors":[…]}}`.
@@ -201,13 +224,13 @@ impl RedditProvider {
         all_form.push(("uh", &modhash));
         all_form.push(("api_type", "json"));
 
-        let resp = self
-            .http
+        let resp = reddit_www_wreq()
             .post(format!("https://www.reddit.com{endpoint}"))
             .header("Cookie", &cookies)
             .form(&all_form)
             .send()
-            .await?;
+            .await
+            .map_err(|e| ProviderError::Api(e.to_string()))?;
 
         let status = resp.status();
         if status == 401 || status == 403 {
@@ -219,7 +242,16 @@ impl RedditProvider {
                 "Reddit www POST error ({status}): {body}"
             )));
         }
-        let json: serde_json::Value = resp.json().await?;
+        if status == 202 {
+            // Reddit's async www endpoints (read_all_messages is the known
+            // one) answer 202 + an HTML "Accepted" page — success, but not
+            // a JSON envelope (P6.5 live-pass finding).
+            return Ok(serde_json::json!({ "accepted": true }));
+        }
+        let json: serde_json::Value = resp
+            .json()
+            .await
+            .map_err(|e| ProviderError::Api(e.to_string()))?;
         Self::ensure_no_reddit_errors(&json)?;
         Ok(json)
     }
@@ -646,49 +678,19 @@ impl RedditProvider {
     /// Add a friend. PUT /api/v1/me/friends/{name} with a JSON body —
     /// the one Reddit endpoint that is neither www form POST nor plain
     /// Bearer POST, so it gets a dedicated request instead of api_post.
+    /// Add a friend. The v1 REST endpoint (PUT /api/v1/me/friends/{name})
+    /// only exists on the oauth host — www 403s the PUT verb outright
+    /// (live-pass finding; reddit-lyr's cookie-mode add_friend has the
+    /// same flaw). The classic /api/friend form POST is the www path and
+    /// works under both auth kinds.
     pub async fn add_friend(
         &mut self,
         token: &str,
         username: &str,
     ) -> Result<serde_json::Value, ProviderError> {
-        let body = serde_json::json!({ "name": username });
-        let cookie_auth = Self::is_cookie_auth(token);
-        let (url, modhash) = if cookie_auth {
-            let mh = self.ensure_modhash().await?;
-            (
-                format!("https://www.reddit.com/api/v1/me/friends/{username}"),
-                Some(mh),
-            )
-        } else {
-            (
-                format!("https://oauth.reddit.com/api/v1/me/friends/{username}"),
-                None,
-            )
-        };
-        let mut req = self.http.put(&url).json(&body);
-        if let Some(mh) = modhash {
-            let cookies = self.cookie_string.clone().unwrap_or_default();
-            req = req.header("Cookie", cookies).header("X-Modhash", mh);
-        } else {
-            req = req
-                .header("Authorization", format!("Bearer {token}"))
-                .header(
-                    "User-Agent",
-                    "social-forge:v0.1.0 (by /u/social_forge)",
-                );
-        }
-        let resp = req.send().await?;
-        let status = resp.status();
-        if status == 401 || status == 403 {
-            return Err(ProviderError::TokenExpired);
-        }
-        if !status.is_success() {
-            let body = resp.text().await.unwrap_or_default();
-            return Err(ProviderError::Api(format!(
-                "Reddit add_friend error ({status}): {body}"
-            )));
-        }
-        Ok(resp.json().await?)
+        let name = username.to_string();
+        self.api_post(token, "/api/friend", &[("name", &name), ("type", "friend")])
+            .await
     }
 
     /// Remove a friend.
