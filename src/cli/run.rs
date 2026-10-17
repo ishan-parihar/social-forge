@@ -224,14 +224,60 @@ async fn init_state() -> anyhow::Result<AppState> {
         .as_ref()
         .and_then(|k| crypto::decode_hex_key(k).ok());
     let providers = ProviderRegistry::new(&config, None, None);
+    // The CLI/mcp-call path previously hard-wired both to None — every
+    // tu_* / wa_* tool was unreachable from the CLI surface even with
+    // creds set (parity bug caught during the V1b live pass). Mirror
+    // main.rs's construction, but degrade with a warn instead of
+    // failing: a malformed TELEGRAM_API_ID must not break `posts list`.
+    let telegram_client_manager =
+        match (&config.telegram_api_id, &config.telegram_api_hash) {
+            (Some(id_str), Some(hash)) if !id_str.is_empty() && !hash.is_empty() => {
+                match id_str.parse::<i32>() {
+                    Ok(api_id) => {
+                        let session_dir = config
+                            .telegram_session_dir
+                            .clone()
+                            .unwrap_or_else(|| "./data/telegram".into());
+                        Some(std::sync::Arc::new(crate::services::telegram_client::TelegramClientManager::new(
+                            api_id,
+                            hash.clone(),
+                            std::path::PathBuf::from(session_dir),
+                        )))
+                    }
+                    Err(_) => {
+                        tracing::warn!(
+                            "Invalid TELEGRAM_API_ID — Telegram user client disabled"
+                        );
+                        None
+                    }
+                }
+            }
+            _ => None,
+        };
+    let wa_client: crate::wa::OptionalWhaClient = if let Some(dir) = &config.whatsapp_store_dir {
+        let store_dir = std::path::PathBuf::from(dir);
+        match crate::wa::WhaClient::new(store_dir).await {
+            Ok(client) => {
+                tracing::info!("WhatsApp Web client (wa-rs): initialized");
+                Some(std::sync::Arc::new(tokio::sync::Mutex::new(client)))
+            }
+            Err(e) => {
+                tracing::warn!("Failed to initialize WhatsApp client: {e}");
+                None
+            }
+        }
+    } else {
+        tracing::warn!("WHATSAPP_STORE_DIR not set -- WhatsApp tools disabled");
+        None
+    };
     let state = AppState {
         db: db.clone(),
         config,
         broadcast: broadcaster,
         providers,
         token_key,
-        telegram_client_manager: None,
-        wa_client: None,
+        telegram_client_manager,
+        wa_client,
         media_http_client: crate::social::shared_http(),
         media_wreq_client: crate::social::shared_wreq(),
     };
