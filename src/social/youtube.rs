@@ -545,6 +545,108 @@ impl YoutubeProvider {
     }
 }
 
+// ── C1: the one resumable-upload path for every YouTube publisher ────
+// google.rs (Google Suite) and this module carried byte-identical flows
+// until the 2026-10-17 consolidation: init (metadata JSON) → Location →
+// single PUT of the video bytes → the created video's JSON.
+
+/// Upload one video through YouTube's resumable-upload session endpoint.
+/// `metadata` is the snippet/status object; returns the created video's
+/// JSON (callers extract `id`).
+pub(crate) async fn resumable_upload(
+    http: &reqwest::Client,
+    access_token: &str,
+    metadata: &serde_json::Value,
+    video_bytes: Vec<u8>,
+    mime_type: &str,
+) -> Result<serde_json::Value, ProviderError> {
+    let init_resp = http
+        .post(
+            "https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status",
+        )
+        .header("Authorization", format!("Bearer {access_token}"))
+        .header("Content-Type", "application/json")
+        .header("X-Upload-Content-Type", mime_type)
+        .header(
+            "X-Upload-Content-Length",
+            video_bytes.len().to_string(),
+        )
+        .body(
+            serde_json::to_string(metadata)
+                .map_err(|e| ProviderError::Api(e.to_string()))?,
+        )
+        .send()
+        .await?;
+
+    let init_status = init_resp.status();
+    if init_status == 401 {
+        return Err(ProviderError::TokenExpired);
+    }
+    if !init_status.is_success() {
+        let err_body: serde_json::Value = init_resp.json().await.unwrap_or_default();
+        return Err(upload_step_error(
+            init_status,
+            &err_body,
+            "Failed to initialize resumable upload",
+        ));
+    }
+
+    let upload_url = init_resp
+        .headers()
+        .get(reqwest::header::LOCATION)
+        .ok_or_else(|| {
+            ProviderError::Api("No Location header in resumable upload response".into())
+        })?
+        .to_str()
+        .map_err(|e| ProviderError::Api(format!("Invalid Location header: {e}")))?
+        .to_string();
+
+    let upload_resp = http
+        .put(&upload_url)
+        .header("Content-Type", mime_type)
+        .header("Content-Length", video_bytes.len().to_string())
+        .body(video_bytes)
+        .send()
+        .await?;
+
+    let upload_status = upload_resp.status();
+    if upload_status == 401 {
+        return Err(ProviderError::TokenExpired);
+    }
+    if !upload_status.is_success() {
+        let err_body: serde_json::Value = upload_resp.json().await.unwrap_or_default();
+        return Err(upload_step_error(
+            upload_status,
+            &err_body,
+            "Failed to upload video to YouTube",
+        ));
+    }
+
+    Ok(upload_resp.json().await?)
+}
+
+/// One error shape for both upload steps: reason + message from the error
+/// body, with a status hint prepended for the two operator-actionable ones.
+fn upload_step_error(
+    status: reqwest::StatusCode,
+    body: &serde_json::Value,
+    fallback: &str,
+) -> ProviderError {
+    let msg = body["error"]["message"].as_str().unwrap_or(fallback);
+    let reason = body["error"]["errors"]
+        .as_array()
+        .and_then(|e| e.first())
+        .and_then(|e| e["reason"].as_str())
+        .unwrap_or_default();
+    let raw = format!("YouTube upload error (HTTP {status}, {reason}): {msg}");
+    let hint = match status.as_u16() {
+        403 => "YouTube API access forbidden. Check token scopes.",
+        429 => "YouTube API rate limit exceeded. Try again later.",
+        _ => return ProviderError::Api(raw),
+    };
+    ProviderError::Api(friendly_error(Some(hint.into()), &raw))
+}
+
 #[async_trait]
 impl SocialProvider for YoutubeProvider {
     fn identifier(&self) -> &'static str {
@@ -1020,92 +1122,15 @@ impl SocialProvider for YoutubeProvider {
             }
         });
 
-        // ── Step 1: Initialize resumable upload ────────────────────────────
-        let init_resp = self
-            .http
-            .post(
-                "https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status",
-            )
-            .header("Authorization", format!("Bearer {access_token}"))
-            .header("Content-Type", "application/json")
-            .header("X-Upload-Content-Type", mime_type)
-            .header(
-                "X-Upload-Content-Length",
-                video_bytes.len().to_string(),
-            )
-            .body(
-                serde_json::to_string(&metadata)
-                    .map_err(|e| ProviderError::Api(e.to_string()))?,
-            )
-            .send()
-            .await?;
-
-        let init_status = init_resp.status();
-        if init_status == 401 {
-            return Err(ProviderError::TokenExpired);
-        }
-        if !init_status.is_success() {
-            let err_body: serde_json::Value = init_resp.json().await.unwrap_or_default();
-            let msg = err_body["error"]["message"]
-                .as_str()
-                .unwrap_or("Failed to initialize resumable upload");
-            let reason = err_body["error"]["errors"]
-                .as_array()
-                .and_then(|e| e.first())
-                .and_then(|e| e["reason"].as_str())
-                .unwrap_or_default();
-            let raw = format!(
-                "YouTube resumable upload init failed (HTTP {init_status}, {reason}): {msg}"
-            );
-            return Err(ProviderError::Api(friendly_error(
-                self.map_error(msg, init_status.as_u16()),
-                &raw,
-            )));
-        }
-
-        let upload_url = init_resp
-            .headers()
-            .get(reqwest::header::LOCATION)
-            .ok_or_else(|| {
-                ProviderError::Api("No Location header in resumable upload response".into())
-            })?
-            .to_str()
-            .map_err(|e| ProviderError::Api(format!("Invalid Location header: {e}")))?
-            .to_string();
-
-        // ── Step 2: Upload the video binary data ───────────────────────────
-        let upload_resp = self
-            .http
-            .put(&upload_url)
-            .header("Content-Type", mime_type)
-            .header("Content-Length", video_bytes.len().to_string())
-            .body(video_bytes)
-            .send()
-            .await?;
-
-        let upload_status = upload_resp.status();
-        if upload_status == 401 {
-            return Err(ProviderError::TokenExpired);
-        }
-        if !upload_status.is_success() {
-            let err_body: serde_json::Value = upload_resp.json().await.unwrap_or_default();
-            let msg = err_body["error"]["message"]
-                .as_str()
-                .unwrap_or("Failed to upload video to YouTube");
-            let reason = err_body["error"]["errors"]
-                .as_array()
-                .and_then(|e| e.first())
-                .and_then(|e| e["reason"].as_str())
-                .unwrap_or_default();
-            let raw =
-                format!("YouTube video upload failed (HTTP {upload_status}, {reason}): {msg}");
-            return Err(ProviderError::Api(friendly_error(
-                self.map_error(msg, upload_status.as_u16()),
-                &raw,
-            )));
-        }
-
-        let json: serde_json::Value = upload_resp.json().await?;
+        // C1: one shared resumable-upload path (see resumable_upload above).
+        let json = resumable_upload(
+            &self.http,
+            access_token,
+            &metadata,
+            video_bytes,
+            mime_type,
+        )
+        .await?;
         let video_id = json["id"]
             .as_str()
             .ok_or_else(|| ProviderError::Api("YouTube did not return a video ID".into()))?;

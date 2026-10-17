@@ -4,12 +4,12 @@
 
 /// Character limits per platform.
 ///
-/// TODO: this duplicates `SocialProvider::max_content_length()`. The
-/// splitter should take `&dyn SocialProvider` instead of a `&str` so
-/// the limits live on the providers themselves. For now, dead providers
-/// (twitch/nostr/mewe/moltbook) and the v25 §1 removals
-/// (kick/vk/whop/lemmy) have been dropped. `farcaster` stays because
-/// the archive flag can re-register it.
+/// Deliberately NOT `SocialProvider::max_content_length()` — the values
+/// diverge on purpose (discord 2000 here vs the 1980 headroom impl,
+/// medium 100000 vs the 15000 essay hint). This table is the SPLITTING
+/// policy (where to cut a post into a thread); the provider impl is the
+/// hard API limit. Preview/staging callers only have an identifier
+/// string, not a provider instance, so the table stands on its own.
 pub fn platform_limit(provider: &str) -> usize {
     match provider {
         "x" => 4000,

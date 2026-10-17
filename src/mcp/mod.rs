@@ -2818,7 +2818,7 @@ impl SocialForgeMcpServer {
         tools_telegram_user::handle_tu_delete_message(&self.state, &params.0).await
     }
 
-    #[tool(description = "Queue a Telegram send through the rate-limited write queue (paced per Telegram limits; use for bursts).")]
+    #[tool(description = "Queue a Telegram send through the rate-limited write queue (paced per Telegram limits; use for bursts). The queue is in-memory — a server restart drops pending sends; use tu_send_message for must-not-be-lost sends.")]
     pub async fn tu_queue_send(
         &self,
         params: Parameters<tools_telegram_user::TuQueueSendInput>,

@@ -1542,9 +1542,8 @@ pub async fn reclaim_stuck_publishing(
     stuck_after_secs: i64,
 ) -> Result<u64, sqlx::Error> {
     // SQLite has no make_interval() and stores timestamps as INTEGER
-    // epoch, so the cutoff is computed in Rust.
-    // TODO(seam): wrap in db::types::EpochUtc once the seam lane lands it.
-    let cutoff = (Utc::now() - chrono::Duration::seconds(stuck_after_secs)).timestamp();
+    // epoch, so the cutoff is computed in Rust and bound as EpochUtc.
+    let cutoff = EpochUtc::from(Utc::now() - chrono::Duration::seconds(stuck_after_secs));
     let message =
         format!("Post was stuck in publishing state for > {stuck_after_secs} seconds -- manual review required");
     let result = sqlx::query(
@@ -1595,8 +1594,8 @@ pub async fn find_stuck_posts(
     limit: i64,
 ) -> Result<Vec<StuckPost>, sqlx::Error> {
     // SQLite has no make_interval(); the cutoff is computed in Rust and
-    // bound as an INTEGER epoch. TODO(seam): wrap in db::types::EpochUtc.
-    let cutoff = (Utc::now() - chrono::Duration::seconds(grace_secs)).timestamp();
+    // bound as EpochUtc (INTEGER epoch under the db::types seam).
+    let cutoff = EpochUtc::from(Utc::now() - chrono::Duration::seconds(grace_secs));
     sqlx::query_as::<_, StuckPost>(
         r#"SELECT p.id, p.user_id,
                   p.state AS state,

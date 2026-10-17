@@ -290,7 +290,7 @@ social-forge mcp-call <tool_name> --args '{"key":"value"}' # Call any tool
 `tb_send_message`, `tb_send_photo`, `tb_send_document`, `tb_get_chat`, `tb_get_chat_member_count`, `tb_get_me`, `tb_get_updates`, `tb_pin_message`, `tb_unpin_message`, `tb_forward_message`
 
 ### Telegram User (13 tools)
-`tu_auth_status`, `tu_list_contacts`, `tu_list_dialogs`, `tu_search`, `tu_send_message`, `tu_request_code`, `tu_sign_in`, `tu_history` (chronological, offset_id paging), `tu_tail` (after_id cursor), `tu_edit`, `tu_delete`, `tu_queue_send` (rate-limited write queue), `tu_queue_status`
+`tu_auth_status`, `tu_list_contacts`, `tu_list_dialogs`, `tu_search`, `tu_send_message`, `tu_request_code`, `tu_sign_in`, `tu_history` (chronological, offset_id paging), `tu_tail` (after_id cursor), `tu_edit`, `tu_delete`, `tu_queue_send` (rate-limited write queue; in-memory — a restart drops pending jobs), `tu_queue_status`
 
 ### WhatsApp (13 tools)
 `wa_auth_status`, `wa_chats`, `wa_contacts`, `wa_send_text`, `wa_edit_message`, `wa_revoke_message`, `wa_create_group`, `wa_list_groups`, `wa_group_invite_link`, `wc_list_templates`, `wc_create_template`, `wc_delete_template`, `wc_send_template` (WhatsApp Cloud API for business numbers; scheduled posts with settings.auth_method=cloud publish via approved templates)
