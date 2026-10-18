@@ -151,9 +151,9 @@ Landed after the first pass (AUD-6, AUD-7, AUD-9, AUD-10, AUD-11):
 ## Cycle 4 (public-route security pass)
 
 - **AUD-23 (done):** `/api/proxy-media` moved from `public_routes` into `protected_routes` (`src/api/mod.rs`). An anonymous request reached the upstream fetch: 500 before the fix, 401 after. `tests/proxy_media_auth_test.rs` fails on the old route table and passes on the new one. AGENTS §6.4 and the auth list at line 444 now name the route as gated. The frontend's only caller (`frontend/src/lib/api/feed.ts:72`) is same-origin and carries the cookie.
-- **AUD-24 (open):** the redirect target is not checked against the host allowlist. Not changed here: the shared media clients also serve `src/mcp/tools_discord.rs` (Discord attachments), so a host allowlist on them would break those fetches. The fix needs a dedicated proxy client.
+- **AUD-24 (done):** `src/api/media.rs` checks each redirect hop against the media allowlist. wreq takes the policy per request. reqwest 0.12 has no per-request policy, so the proxy uses a dedicated client (`PROXY_HTTP_CLIENT`) whose policy is set at build time and fails closed. The shared media clients (Discord attachments in `tools_discord.rs`) are unchanged. Mutation check: with the policy replaced by `follow`, both redirect tests fail.
 - **AUD-22 (done, decision made):** removed the plug runner (`src/services/plugs.rs`, its `pub mod` line, and the spawn in `src/main.rs`). The user chose "remove the runner, keep the table": `post_plugs` stays in place, unused, so the migration rule holds. The live automation feature is `automation_rules`.
-- **Gate:** clippy `--all-targets --all-features --locked -D warnings` exit 0; `cargo test --all-targets` 699 passed, 0 failed (698 before this cycle plus the new test; the count is unchanged by the plug removal because plugs had no tests).
+- **Gate:** clippy `--all-targets --all-features --locked -D warnings` exit 0; `cargo test --all-targets` 702 passed, 0 failed.
 
 ## Decisions for the user
 

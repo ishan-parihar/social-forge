@@ -805,6 +805,69 @@ pub async fn serve_media(
         .expect("static headers and body are valid"))
 }
 
+/// Hosts `proxy_media` may fetch. Checked on the request URL and on every
+/// redirect hop, so a redirect cannot carry the fetch off the list.
+fn is_proxyable_media_host(scheme: &str, host: &str) -> bool {
+    scheme == "https"
+        && (matches!(
+            host,
+            "video.twimg.com"
+                | "pbs.twimg.com"
+                | "media.tenor.com"
+                | "www.instagram.com"
+                | "i.ytimg.com"
+                | "files.catbox.moe"
+                | "i.imgur.com"
+        ) || (host.starts_with("scontent-") && host.contains(".fbcdn.")))
+}
+
+const PROXY_MAX_REDIRECTS: usize = 5;
+
+/// Redirect policy for the reqwest proxy client: follow only allowlisted hops.
+fn reqwest_proxy_redirects() -> reqwest::redirect::Policy {
+    reqwest::redirect::Policy::custom(|attempt| {
+        let url = attempt.url();
+        if attempt.previous().len() >= PROXY_MAX_REDIRECTS {
+            attempt.error("too many redirects")
+        } else if is_proxyable_media_host(url.scheme(), url.host_str().unwrap_or("")) {
+            attempt.follow()
+        } else {
+            attempt.error("redirect to a host outside the media allowlist")
+        }
+    })
+}
+
+/// Same rule as `reqwest_proxy_redirects`, for wreq (set per request).
+fn wreq_proxy_redirects() -> wreq::redirect::Policy {
+    wreq::redirect::Policy::custom(|attempt| {
+        let uri = attempt.uri();
+        if attempt.previous().len() >= PROXY_MAX_REDIRECTS {
+            attempt.error("too many redirects")
+        } else if is_proxyable_media_host(uri.scheme_str().unwrap_or(""), uri.host().unwrap_or(""))
+        {
+            attempt.follow()
+        } else {
+            attempt.error("redirect to a host outside the media allowlist")
+        }
+    })
+}
+
+// ponytail: the reqwest client is a separate pool from the shared media client
+// (reqwest 0.12 has no per-request redirect policy). Its redirect policy is set
+// at build time, and it fails closed (no redirects) if the build errors.
+static PROXY_HTTP_CLIENT: std::sync::LazyLock<reqwest::Client> = std::sync::LazyLock::new(|| {
+    reqwest::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(10))
+        .redirect(reqwest_proxy_redirects())
+        .build()
+        .unwrap_or_else(|_| {
+            reqwest::Client::builder()
+                .redirect(reqwest::redirect::Policy::none())
+                .build()
+                .unwrap_or_default()
+        })
+});
+
 /// GET /api/proxy-media?url=... — proxy external media to bypass CORS/CDN restrictions
 /// Used for X/Twitter video CDN which returns 403 when loaded directly from browser.
 /// Uses wreq (Chrome TLS fingerprinting) for X/Twitter CDN domains to bypass bot detection.
@@ -820,17 +883,7 @@ pub async fn proxy_media(
     let url = &params.url;
     let parsed = url::Url::parse(url).map_err(|_| AppError::BadRequest("Invalid URL".into()))?;
     let host = parsed.host_str().unwrap_or("");
-    let allowed = (parsed.scheme() == "https")
-        && (host == "video.twimg.com"
-            || host == "pbs.twimg.com"
-            || host == "media.tenor.com"
-            || host == "www.instagram.com"
-            || host == "i.ytimg.com"
-            || host == "files.catbox.moe"
-            || host == "i.imgur.com"
-            || (host.starts_with("scontent-") && host.contains(".fbcdn.")));
-
-    if !allowed {
+    if !is_proxyable_media_host(parsed.scheme(), host) {
         return Err(AppError::BadRequest(
             "Domain not allowed for proxying".into(),
         ));
@@ -856,6 +909,7 @@ pub async fn proxy_media(
         let mut req = state
             .media_wreq_client
             .get(url)
+            .redirect(wreq_proxy_redirects())
             .header(header::REFERER, UPSTREAM_REFERER)
             .header(header::USER_AGENT, UPSTREAM_UA);
         if let Some(ref range) = range_header {
@@ -887,8 +941,7 @@ pub async fn proxy_media(
             .map_err(|e| AppError::Internal(format!("Failed to read upstream body (wreq): {e}")))?;
         (status, ct, cl, cr, bytes)
     } else {
-        let mut req = state
-            .media_http_client
+        let mut req = PROXY_HTTP_CLIENT
             .get(url)
             .header(header::REFERER, UPSTREAM_REFERER)
             .header(header::USER_AGENT, UPSTREAM_UA);
@@ -1344,5 +1397,63 @@ mod tests {
             resolve_mime("application/octet-stream", &png).unwrap(),
             "image/png"
         );
+    }
+
+    /// Serves `/start` with a 302 to `/blocked` and records every path it sees.
+    async fn redirect_server() -> (String, Arc<std::sync::Mutex<Vec<String>>>) {
+        use tokio::io::AsyncReadExt;
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let base = format!("http://{}", listener.local_addr().unwrap());
+        let hits = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let log = hits.clone();
+        let blocked = format!("{base}/blocked");
+        tokio::spawn(async move {
+            while let Ok((mut sock, _)) = listener.accept().await {
+                let mut buf = vec![0u8; 4096];
+                let n = sock.read(&mut buf).await.unwrap_or(0);
+                let path = String::from_utf8_lossy(&buf[..n])
+                    .split_whitespace()
+                    .nth(1)
+                    .unwrap_or("/")
+                    .to_string();
+                log.lock().unwrap().push(path.clone());
+                let resp = if path == "/start" {
+                    format!("HTTP/1.1 302 Found\r\nLocation: {blocked}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+                } else {
+                    "HTTP/1.1 200 OK\r\nContent-Length: 6\r\nConnection: close\r\n\r\nleaked".to_string()
+                };
+                let _ = sock.write_all(resp.as_bytes()).await;
+            }
+        });
+        (base, hits)
+    }
+
+    #[tokio::test]
+    async fn proxy_reqwest_refuses_redirect_off_allowlist() {
+        let (base, hits) = redirect_server().await;
+        let res = PROXY_HTTP_CLIENT.get(format!("{base}/start")).send().await;
+        assert!(res.is_err());
+        assert_eq!(*hits.lock().unwrap(), vec!["/start".to_string()]);
+    }
+
+    #[tokio::test]
+    async fn proxy_wreq_refuses_redirect_off_allowlist() {
+        let (base, hits) = redirect_server().await;
+        let res = wreq::Client::new()
+            .get(format!("{base}/start"))
+            .redirect(wreq_proxy_redirects())
+            .send()
+            .await;
+        assert!(res.is_err());
+        assert_eq!(*hits.lock().unwrap(), vec!["/start".to_string()]);
+    }
+
+    #[test]
+    fn proxy_host_allowlist_accepts_cdn_hosts_over_https_only() {
+        assert!(is_proxyable_media_host("https", "pbs.twimg.com"));
+        assert!(is_proxyable_media_host("https", "scontent-iad3-1.xx.fbcdn.net"));
+        assert!(!is_proxyable_media_host("http", "pbs.twimg.com"));
+        assert!(!is_proxyable_media_host("https", "evil.example"));
+        assert!(!is_proxyable_media_host("https", "scontent-x.example.com"));
     }
 }
