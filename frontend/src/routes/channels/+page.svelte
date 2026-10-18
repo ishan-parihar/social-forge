@@ -53,7 +53,7 @@
     return centralProviderLabel(provider);
   }
 
-  // Connectable providers — the same 26 the backend registry always registers
+  // Connectable providers - the same 26 the backend registry always registers
   // (`ProviderRegistry::new` in src/social/registry.rs, unconditional since
   // registration was decoupled from credentials). This literal previously
   // drifted: `youtube` was missing here while the registry, `$lib/providers`
@@ -257,7 +257,7 @@
     // connect method, including the OAuth pop-up. The pop-up used to run a 1s
     // setInterval to guess whether it had closed and then re-fetch the whole
     // integration list on a timer.
-    // `lagged` is the server's synthetic "you missed events" signal — refetch
+    // `lagged` is the server's synthetic "you missed events" signal - refetch
     // the list so a backgrounded tab doesn't show stale connections.
     const events = ['integration_connected', 'integration_disconnected', 'lagged'];
     for (const evt of events) {
@@ -271,12 +271,12 @@
 </script>
 
 <div class="page-enter space-y-6">
-  <h2 class="text-xl font-semibold">Channel Management</h2>
+  <h1 class="text-xl font-semibold">Channel Management</h1>
 
   <!-- Connected channels -->
   <div class="bg-surface border border-line rounded-xl p-4">
     <div class="flex items-center justify-between mb-3 gap-3 flex-wrap">
-      <h3 class="text-sm font-semibold text-muted uppercase tracking-wider">Connected Channels</h3>
+      <h2 class="text-sm font-semibold text-muted uppercase tracking-wider">Connected Channels</h2>
       {#if !loading && integrations.length > 0}
         <!--
           F4: the page-level answer to "is anything wrong right now?". A list of
@@ -336,7 +336,7 @@
 
   <!-- Available providers grid -->
   <div class="bg-surface border border-line rounded-xl p-4">
-    <h3 class="text-sm font-semibold text-muted uppercase tracking-wider mb-3">Available Providers</h3>
+    <h2 class="text-sm font-semibold text-muted uppercase tracking-wider mb-3">Available Providers</h2>
     {#if connectableProviders.length === 0}
       <p class="text-sm text-muted py-6 text-center">
         Every supported platform is connected. Add more accounts from a channel's context menu.
@@ -371,7 +371,7 @@
 {#if onboardDialog}
 <div class="fixed inset-0 bg-overlay flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true" aria-label="Connect {providerLabel(onboardDialog.provider)}" tabindex="-1" use:focusTrap>
   <div class="bg-surface border border-line rounded-xl p-6 w-full max-w-sm elev-lg">
-    <h3 class="text-lg font-semibold mb-3">Connect {providerLabel(onboardDialog.provider)}</h3>
+    <h2 class="text-lg font-semibold mb-3">Connect {providerLabel(onboardDialog.provider)}</h2>
 
     {#if onboardDialog.step === "phone"}
       <p class="text-sm text-muted mb-3">

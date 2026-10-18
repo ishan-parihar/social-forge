@@ -75,6 +75,9 @@
 
 {#if items.length > 0}
   <!-- Carousel container -->
+  <!-- Arrow keys step through slides, so the region stays focusable. -->
+  <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
   <div
     bind:this={containerEl}
     class="group relative rounded-xl overflow-hidden bg-background-input ring-1 ring-surface-hover"
@@ -112,6 +115,8 @@
             ></iframe>
           {:else if isVideo(item.mime_type, item.url)}
             <div class="relative w-full h-full">
+              <!-- Uploaded clips carry no caption files to attach. -->
+              <!-- svelte-ignore a11y_media_has_caption -->
               <video
                 src={proxyMediaUrl(item.url)}
                 controls
@@ -129,7 +134,7 @@
                 <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
                   <!-- v25 F1: this disc is a fixed-contrast control laid over
                        arbitrary user media, so it deliberately does NOT follow the
-                       theme — a near-white disc with a near-black glyph is the only
+                       theme - a near-white disc with a near-black glyph is the only
                        pairing guaranteed to read against any photo. Tokens still
                        apply everywhere the carousel sits on the app's own surface. -->
                   <div class="w-14 h-14 rounded-full bg-white/90 flex items-center justify-center shadow-lg">
@@ -159,7 +164,7 @@
       {/each}
 
       <!-- Overlay gradient for nav buttons -->
-      <div class="absolute inset-0 pointer-events-none" />
+      <div class="absolute inset-0 pointer-events-none"></div>
 
       <!-- Prev / Next buttons -->
       {#if items.length > 1}
@@ -212,7 +217,7 @@
               class="rounded-full transition-all duration-300 {i === current ? 'w-2.5 h-2.5 bg-accent shadow-[0_0_6px_rgb(var(--brand-rgb)/0.3)]' : 'w-2 h-2 bg-line-hover'}"
               aria-label={`Go to slide ${i + 1}`}
               aria-current={i === current ? 'true' : undefined}
-            />
+            ></button>
           {/each}
         </div>
 
@@ -243,9 +248,9 @@
     aria-modal="true"
     aria-label="Fullscreen media viewer"
     tabindex="-1"
-    class="fixed inset-0 z-50 bg-black/95 backdrop-blur-xl flex items-center justify-center"
+    class="fixed inset-0 z-50 bg-black/95 flex items-center justify-center"
     onkeydown={handleKeydown}
-    onclick={closeFullscreen}
+    onclick={(e) => e.target === e.currentTarget && closeFullscreen()}
     ontouchstart={handleTouchStart}
     ontouchend={handleTouchEnd}
     use:focusTrap
@@ -296,7 +301,7 @@
     {/if}
 
     <!-- Current slide in fullscreen -->
-    <div class="max-w-[90vw] max-h-[90vh]" onclick={(e) => e.stopPropagation()}>
+    <div class="max-w-[90vw] max-h-[90vh]">
       {#if isEmbed(items[current]?.mime_type ?? '')}
         <iframe
           src={items[current].url}
@@ -307,12 +312,14 @@
           referrerpolicy="strict-origin-when-cross-origin"
         ></iframe>
       {:else if isVideo(items[current]?.mime_type ?? '', items[current]?.url ?? '')}
+        <!-- Uploaded clips carry no caption files to attach. -->
+        <!-- svelte-ignore a11y_media_has_caption -->
         <video
           src={proxyMediaUrl(items[current].url)}
           controls
           autoplay
           class="max-w-full max-h-[85vh] rounded-lg"
-        />
+        ></video>
       {:else}
         <img
           src={proxyMediaUrl(items[current].url)}

@@ -1,5 +1,5 @@
 <script lang="ts">
-  // v25 F4 — method chooser for providers that offer more than one way in.
+  // v25 F4 - method chooser for providers that offer more than one way in.
   //
   // Replaces the channels page's bespoke `connectChoice` dialog, which was a
   // hardcoded if/else on provider id: adding a provider meant editing a
@@ -47,7 +47,7 @@
   };
 
   // v25 F5: `aria-checked` was hardcoded to "false" on every option, so the
-  // radiogroup announced "none selected" no matter what — and nothing moved a
+  // radiogroup announced "none selected" no matter what - and nothing moved a
   // selection without the pointer. Now the selection is real state and the
   // ARIA radio keyboard contract (arrows move AND select, roving tabindex) is
   // implemented, because a radiogroup that only answers to clicks is a

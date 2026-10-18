@@ -1,4 +1,4 @@
-// Global modal store with stacking (Phase 0 — keystone foundation).
+// Global modal store with stacking (Phase 0 - keystone foundation).
 //
 // This module provides a Svelte 5 runes-based modal manager that supports:
 //   - A stack of modals (zIndex = 200 + index)
@@ -11,7 +11,7 @@
 //
 // Inspired by postiz-app's useModalStore (Zustand) but adapted for Svelte 5
 // runes and Social Forge's architectural preferences (no external deps,
-// no Mantine, no Headless UI — just Svelte + Tailwind).
+// no Mantine, no Headless UI - just Svelte + Tailwind).
 //
 // Usage:
 //   import { modals } from '$lib/stores/modals.svelte';
@@ -160,7 +160,7 @@ class ModalStore {
     this.close(this.stack[this.stack.length - 1].id, confirmed);
   }
 
-  /** Close all modals (no onClose callbacks invoked — force close). */
+  /** Close all modals (no onClose callbacks invoked - force close). */
   closeAll(): void {
     this.stack = [];
   }
@@ -175,7 +175,7 @@ class ModalStore {
     danger?: boolean;
   }): Promise<boolean> {
     return new Promise<boolean>((resolve) => {
-      // Inline confirm modal component — we render it via a snippet
+      // Inline confirm modal component - we render it via a snippet
       // in ModalManager. To keep this store framework-agnostic, we
       // stash the resolver in a pending-confirm slot that ModalManager
       // reads.

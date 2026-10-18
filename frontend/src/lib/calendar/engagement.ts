@@ -1,4 +1,4 @@
-// ─── Engagement helpers — platform-aware metric display ──────
+// ─── Engagement helpers - platform-aware metric display ──────
 // Unifies likes/upvotes/reactions, shares/reposts/quotes, comments/replies
 // into single slots with platform-appropriate icons and labels.
 

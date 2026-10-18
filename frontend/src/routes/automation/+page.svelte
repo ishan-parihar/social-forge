@@ -27,7 +27,7 @@
   let formIntegrationId = $state<string>("");
   let saving = $state(false);
 
-  // v22 Phase 1 (BUG #26 — frontend automation NIL UUID):
+  // v22 Phase 1 (BUG #26 - frontend automation NIL UUID):
   // Previously the page created every rule with
   // `integration_id: "00000000-0000-0000-0000-000000000000"`, which the
   // backend rejected (FK constraint) or silently created a broken rule.
@@ -85,7 +85,7 @@
     formResponseType = rule.response_type;
     formTemplate = "";
     // When editing, we don't know the integration_id from the slim
-    // AutomationRuleDisplay type — pre-select the first matching the
+    // AutomationRuleDisplay type - pre-select the first matching the
     // rule's platform. The user can change it if needed.
     const matching = integrations.find(i => i.provider_identifier === formPlatform);
     formIntegrationId = (matching || integrations[0])?.id || "";
@@ -184,8 +184,8 @@
 
 <div class="page-enter space-y-6">
   <div class="flex items-center justify-between">
-    <h2 class="text-xl font-semibold">Automation Rules</h2>
-    <button onclick={openCreate} class="px-3 py-1.5 bg-accent-fill hover:bg-accent-fill-hover rounded-lg text-sm transition-colors">+ New Rule</button>
+    <h1 class="text-xl font-semibold">Automation Rules</h1>
+    <button onclick={openCreate} class="px-3 py-1.5 bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg text-sm transition-colors">+ New Rule</button>
   </div>
 
   {#if error}
@@ -196,7 +196,7 @@
     <EmptyState
       icon="automation"
       title="No automation rules yet"
-      description="Rules watch your accounts and act on their own — auto-reply, publish, or DM on trigger."
+      description="Rules watch your accounts and act on their own - auto-reply, publish, or DM on trigger."
       actionLabel="Create a rule"
       onaction={() => showModal = true}
     />
@@ -238,53 +238,53 @@
 {#if showModal}
   <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50" role="dialog">
     <div class="bg-background-input border border-line rounded-xl p-6 w-full max-w-md">
-      <h3 class="text-lg font-semibold mb-4">{editingRule ? "Edit" : "Create"} Automation Rule</h3>
+      <h2 class="text-lg font-semibold mb-4">{editingRule ? "Edit" : "Create"} Automation Rule</h2>
       
-      <label class="block text-sm text-muted mb-1">Name</label>
-      <input type="text" bind:value={formName} placeholder="Auto-reply to comments" class="w-full mb-3 px-3 py-2 bg-surface-hover border border-line rounded text-sm" />
+      <label for="rule-name" class="block text-sm text-muted mb-1">Name</label>
+      <input id="rule-name" type="text" bind:value={formName} placeholder="Auto-reply to comments" class="w-full mb-3 px-3 py-2 bg-surface-hover border border-line rounded text-sm" />
 
-      <label class="block text-sm text-muted mb-1">Platform</label>
-      <select bind:value={formPlatform} onchange={onPlatformChange} class="w-full mb-3 px-3 py-2 bg-surface-hover border border-line rounded text-sm">
+      <label for="rule-platform" class="block text-sm text-muted mb-1">Platform</label>
+      <select id="rule-platform" bind:value={formPlatform} onchange={onPlatformChange} class="w-full mb-3 px-3 py-2 bg-surface-hover border border-line rounded text-sm">
         {#each platforms as p}
           <option value={p}>{p}</option>
         {/each}
       </select>
 
-      <label class="block text-sm text-muted mb-1">Channel (connected account)</label>
+      <label for="rule-integration" class="block text-sm text-muted mb-1">Channel (connected account)</label>
       {#if platformIntegrations.length === 0}
         <div class="w-full mb-3 px-3 py-2 bg-surface-hover border border-line rounded text-sm text-error">
           No connected {formPlatform} accounts. Connect one in the <a href="/channels" class="underline">Channels</a> page.
         </div>
       {:else}
-        <select bind:value={formIntegrationId} class="w-full mb-3 px-3 py-2 bg-surface-hover border border-line rounded text-sm">
+        <select id="rule-integration" bind:value={formIntegrationId} class="w-full mb-3 px-3 py-2 bg-surface-hover border border-line rounded text-sm">
           {#each platformIntegrations as integ (integ.id)}
             <option value={integ.id}>{integ.provider_name || integ.provider_identifier}</option>
           {/each}
         </select>
       {/if}
 
-      <label class="block text-sm text-muted mb-1">Trigger Type</label>
-      <select bind:value={formTrigger} class="w-full mb-3 px-3 py-2 bg-surface-hover border border-line rounded text-sm">
+      <label for="rule-trigger" class="block text-sm text-muted mb-1">Trigger Type</label>
+      <select id="rule-trigger" bind:value={formTrigger} class="w-full mb-3 px-3 py-2 bg-surface-hover border border-line rounded text-sm">
         {#each triggers as t}
           <option value={t}>{t}</option>
         {/each}
       </select>
 
-      <label class="block text-sm text-muted mb-1">Response Type</label>
-      <select bind:value={formResponseType} class="w-full mb-3 px-3 py-2 bg-surface-hover border border-line rounded text-sm">
+      <label for="rule-response-type" class="block text-sm text-muted mb-1">Response Type</label>
+      <select id="rule-response-type" bind:value={formResponseType} class="w-full mb-3 px-3 py-2 bg-surface-hover border border-line rounded text-sm">
         {#each responseTypes as rt}
           <option value={rt}>{rt.replace("_", " ")}</option>
         {/each}
       </select>
 
-      <label class="block text-sm text-muted mb-1">Response Template</label>
-      <textarea bind:value={formTemplate} placeholder="Thanks for your comment! {'{user}'} said: {'{comment}'}" rows="4" class="w-full mb-4 px-3 py-2 bg-surface-hover border border-line rounded text-sm font-mono"></textarea>
+      <label for="rule-template" class="block text-sm text-muted mb-1">Response Template</label>
+      <textarea id="rule-template" bind:value={formTemplate} placeholder="Thanks for your comment! {'{user}'} said: {'{comment}'}" rows="4" class="w-full mb-4 px-3 py-2 bg-surface-hover border border-line rounded text-sm font-mono"></textarea>
 
       {#if error}<p class="text-error text-sm mb-3">{error}</p>{/if}
 
       <div class="flex gap-3 justify-end">
         <button onclick={() => showModal = false} class="px-4 py-2 text-sm text-muted hover:text-content">Cancel</button>
-        <button onclick={saveRule} disabled={saving || !formName.trim()} class="px-4 py-2 text-sm bg-accent-fill hover:bg-accent-fill-hover rounded disabled:opacity-50">
+        <button onclick={saveRule} disabled={saving || !formName.trim()} class="px-4 py-2 text-sm bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded disabled:opacity-50">
           {saving ? "Saving..." : editingRule ? "Update" : "Create"}
         </button>
       </div>
@@ -297,7 +297,7 @@
   <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50" role="dialog">
     <div class="bg-background-input border border-line rounded-xl p-6 w-full max-w-lg max-h-[80vh] overflow-hidden flex flex-col">
       <div class="flex items-center justify-between mb-4">
-        <h3 class="text-lg font-semibold">Execution Logs</h3>
+        <h2 class="text-lg font-semibold">Execution Logs</h2>
         <button onclick={() => showLogs = null} class="text-muted hover:text-content">✕</button>
       </div>
       {#if loadingLogs}

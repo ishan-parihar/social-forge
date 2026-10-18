@@ -1,5 +1,5 @@
 <script lang="ts">
-  // v25 F4 — cookie-paste connect path (X, Reddit).
+  // v25 F4 - cookie-paste connect path (X, Reddit).
   //
   // Moved out of routes/channels/+page.svelte, where it was an inline
   // `credDialog` with a hand-rolled `bg-black/60` overlay, no Escape handler,

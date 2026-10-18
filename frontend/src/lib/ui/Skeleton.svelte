@@ -4,12 +4,12 @@
   // v22 Phase 3: single shimmer block.
   // v25 F1: added `rows` + `variant` so the ~20 routes that used to hand-roll
   //   their own loading markup (or a bare "Loading..." string) share ONE shape.
-  //   The point is not the shimmer — it is that the placeholder reserves the
+  //   The point is not the shimmer - it is that the placeholder reserves the
   //   same space the real content will occupy, so the page does not jump when
   //   data lands. `variant` picks that reserved shape:
-  //     text — a paragraph of ragged lines (settings panels, detail views)
-  //     row  — a list of one-line rows        (tables, small-item lists)
-  //     card — a list of tall cards            (feeds, grids, dashboards)
+  //     text - a paragraph of ragged lines (settings panels, detail views)
+  //     row  - a list of one-line rows        (tables, small-item lists)
+  //     card - a list of tall cards            (feeds, grids, dashboards)
   //   Colour comes from the `.skeleton` class in app.css, which is token-driven,
   //   so a placeholder reads in both themes with no per-theme branch.
   let {

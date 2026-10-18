@@ -1,5 +1,5 @@
 <script lang="ts">
-  // SelectCurrent — pill tab strip for switching between Global and
+  // SelectCurrent - pill tab strip for switching between Global and
   // per-channel editor modes (Phase 3).
   //
   // Inspired by postiz-app's SelectCurrent (select.current.tsx):
@@ -34,7 +34,7 @@
 </script>
 
 <!-- v25 F5: this is a tablist (pick WHICH channel the next edit applies to),
-     but it announced as a row of plain buttons with no selected state — the
+     but it announced as a row of plain buttons with no selected state - the
      only signal was background colour. `role="tab"` + aria-selected exposes it,
      and the strip is now a single tab stop with arrow-key movement rather than
      N tab stops. -->

@@ -19,7 +19,7 @@ export const commentsApi = {
     return api.get<{ comments: Comment[] }>(`/api/comments?${q}`);
   },
   resolve: (id: string) =>
-    api.post<{ success: boolean }>(`/api/comments/${id}/resolve`),
+    api.post<{ ok: boolean }>(`/api/comments/${id}/resolve`),
   reply: (id: string, content: string) =>
-    api.post<{ success: boolean }>(`/api/comments/${id}/reply`, { content }),
+    api.post<{ ok: boolean }>(`/api/comments/${id}/reply`, { content }),
 };

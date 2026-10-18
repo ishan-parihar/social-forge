@@ -3,7 +3,7 @@
   //
   // Shows all campaigns as a grid of cards with progress bars, status
   // badges, and post counts. Clicking a card navigates to the detail
-  // page. This is the entry point for campaign management — previously
+  // page. This is the entry point for campaign management - previously
   // campaigns were only accessible via the kanban filter.
   import { onMount, onDestroy } from 'svelte';
   import { campaignsApi, type Campaign } from '$lib/api/campaigns';
@@ -24,6 +24,10 @@
   let showCreateModal = $state(false);
   let newCampaignName = $state('');
   let creating = $state(false);
+  let nameInput = $state<HTMLInputElement>();
+  $effect(() => {
+    nameInput?.focus();
+  });
 
   async function load() {
     loading = true;
@@ -113,7 +117,7 @@
 
 <div class="page-enter space-y-6">
   <PageHeader title="Campaigns" subtitle="Strategic content campaigns with goals and progress tracking">
-    <button onclick={openCreateModal} class="px-4 py-2 bg-accent-fill hover:bg-accent-fill-hover rounded-lg text-sm font-medium transition-colors">
+    <button onclick={openCreateModal} class="px-4 py-2 bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg text-sm font-medium transition-colors">
       + New Campaign
     </button>
   </PageHeader>
@@ -157,7 +161,7 @@
           <div class="flex items-start justify-between mb-3">
             <div class="flex items-center gap-2">
               <span class="w-3 h-3 rounded-full" style="background: {c.color}"></span>
-              <h3 class="font-medium text-content group-hover:text-accent transition-colors">{c.name}</h3>
+              <h2 class="font-medium text-content group-hover:text-accent transition-colors">{c.name}</h2>
             </div>
             <Badge variant={statusVariant[c.status] || 'default'}>{c.status}</Badge>
           </div>
@@ -210,18 +214,18 @@
 {#if showCreateModal}
   <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50" role="dialog">
     <div class="bg-background-input border border-line rounded-xl p-6 w-full max-w-md">
-      <h3 class="text-lg font-semibold mb-4">Create Campaign</h3>
+      <h2 class="text-lg font-semibold mb-4">Create Campaign</h2>
       <input
         type="text"
         bind:value={newCampaignName}
         onkeydown={(e) => { if (e.key === 'Enter') confirmCreate(); }}
         placeholder="Campaign name (e.g. Q4 Launch)"
         class="w-full mb-4 px-3 py-2 bg-surface-hover border border-line rounded text-sm focus:border-accent outline-none"
-        autofocus
+        bind:this={nameInput}
       />
       <div class="flex gap-3 justify-end">
         <button onclick={() => showCreateModal = false} class="px-4 py-2 text-sm text-muted hover:text-content">Cancel</button>
-        <button onclick={confirmCreate} disabled={creating || !newCampaignName.trim()} class="px-4 py-2 text-sm bg-accent-fill hover:bg-accent-fill-hover disabled:opacity-50 rounded transition-colors">
+        <button onclick={confirmCreate} disabled={creating || !newCampaignName.trim()} class="px-4 py-2 text-sm bg-accent-fill hover:bg-accent-fill-hover text-accent-fg disabled:opacity-50 rounded transition-colors">
           {creating ? 'Creating...' : 'Create'}
         </button>
       </div>

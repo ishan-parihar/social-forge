@@ -1,5 +1,5 @@
 <script lang="ts">
-  // v25 F4 — token-paste connect path (GitHub PAT, Telegram bot token).
+  // v25 F4 - token-paste connect path (GitHub PAT, Telegram bot token).
   //
   // Both are "paste a long-lived secret the provider issued you" flows, so
   // they share one component. They were separate inline branches in the

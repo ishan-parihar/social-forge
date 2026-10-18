@@ -11,8 +11,8 @@
   //
   // This component owns the whole cluster. The layout renders it once per
   // breakpoint via `variant`:
-  //   "bar"   — full width, sticky, hamburger + brand + widgets (mobile)
-  //   "rail"  — the brand mark only, no widgets; used inside the collapsed
+  //   "bar"   - full width, sticky, hamburger + brand + widgets (mobile)
+  //   "rail"  - the brand mark only, no widgets; used inside the collapsed
   //             sidebar, where there is no room for a badge
   // The desktop sidebar header keeps the `rail` variant; the page-level bar is
   // the one place the widgets live on desktop too.

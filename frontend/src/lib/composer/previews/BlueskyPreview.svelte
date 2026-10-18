@@ -40,7 +40,7 @@
         {text.slice(0, limit)}<span class="bg-red-100 text-red-600 rounded-sm">{text.slice(limit)}</span>
       </p>
       {#if isOver}
-        <p class="text-[10px] text-red-600 mt-1">{count}/{limit} — will be rejected, trim {count - limit} more</p>
+        <p class="text-[10px] text-red-600 mt-1">{count}/{limit} - will be rejected, trim {count - limit} more</p>
       {/if}
       {#if images.length > 0}
         <div class="mt-2 grid grid-cols-2 gap-0.5 rounded-lg overflow-hidden">

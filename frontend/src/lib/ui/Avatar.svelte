@@ -1,5 +1,5 @@
 <script lang="ts">
-  // v22 Phase 3: Avatar primitive — image with fallback initial.
+  // v22 Phase 3: Avatar primitive - image with fallback initial.
   // Used by feed, comments, channel selector.
   let {
     src,

@@ -10,7 +10,7 @@ export interface Integration {
   root_internal_id?: string;
   /**
    * v25 F4: ISO-8601 expiry of the stored access token, when the API sends
-   * one. Optional on purpose — `IntegrationPublic` in src/db/models.rs does
+   * one. Optional on purpose - `IntegrationPublic` in src/db/models.rs does
    * NOT expose `token_expires_at` yet, so today this is always undefined and
    * channelStatus() falls back to connected / refresh-needed. It is declared
    * ahead of the backend so enabling the "expiring" status is a one-line Rust
@@ -82,7 +82,7 @@ export const integrationsApi = {
   connectXCookie: (auth_token: string, ct0: string) =>
     api.post<{ integration: Integration }>("/api/integrations/connect/x-cookie", { auth_token, ct0 }),
   connectRedditCookie: (cookie_string: string) =>
-    api.post<{ integration: Integration }>("/api/integrations/connect/reddit-cookie", { cookie_string }),
+    api.post<{ integration: { id: string; provider_name: string; profile_name: string } }>("/api/integrations/connect/reddit-cookie", { cookie_string }),
   connectGithubPat: (pat: string, label?: string) =>
     api.post<{ integration: Integration }>("/api/integrations/connect/github-pat", { pat, label }),
   verifyOneTimeToken: (provider: string, code: string) =>

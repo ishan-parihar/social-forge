@@ -1,5 +1,5 @@
 <script lang="ts">
-  // ChannelQuickMenu — per-channel ⋯ dropdown for the calendar sidebar
+  // ChannelQuickMenu - per-channel ⋯ dropdown for the calendar sidebar
   // (Phase 5, v19).
   //
   // Quick actions for a channel without leaving the current page:
@@ -14,7 +14,7 @@
   //
   // This is distinct from ChannelContextMenu.svelte (which is a
   // presentational component used by ChannelCard on the /channels page).
-  // ChannelQuickMenu is self-contained — it does the API calls itself.
+  // ChannelQuickMenu is self-contained - it does the API calls itself.
 
   import { integrationsApi, type Integration } from '$lib/api/integrations';
   import { composer } from '$lib/stores/composer.svelte';

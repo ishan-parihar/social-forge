@@ -1,5 +1,5 @@
 <script lang="ts">
-  // v22 Phase 3: StatCard primitive — number + label + optional trend
+  // v22 Phase 3: StatCard primitive - number + label + optional trend
   // delta. Used by the dashboard widgets.
   let {
     label,

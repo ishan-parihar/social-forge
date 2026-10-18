@@ -1,5 +1,5 @@
 <script lang="ts">
-  // v22 Phase 3: Pagination primitive — page numbers + prev/next.
+  // v22 Phase 3: Pagination primitive - page numbers + prev/next.
   // Replaces ad-hoc pagination in posts list, feed, search.
   let {
     page = $bindable(),

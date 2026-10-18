@@ -1,5 +1,5 @@
 <script lang="ts">
-  // v26-5: MentionPicker — a custom @mention suggestion popup for TipTap.
+  // v26-5: MentionPicker - a custom @mention suggestion popup for TipTap.
   //
   // No new deps. Instead of installing @tiptap/extension-mention, this
   // component listens to editor updates, detects the `@query` pattern at
@@ -152,7 +152,7 @@
   // v25 F5: aria-activedescendant on the editor.
   // The mention list is the textbook activedescendant pattern: focus MUST stay
   // in the caret or typing breaks, so the options can never receive it. But
-  // nothing announced which option the arrow keys had moved to — the popup
+  // nothing announced which option the arrow keys had moved to - the popup
   // updated silently and Enter picked something the user could not see
   // highlighted. Pointing the editor's own aria-activedescendant at the
   // selected option is what makes the existing key handling perceivable.
@@ -188,7 +188,7 @@
     {#if loading}
       <!-- v25 F5: role=status. The roving selection below is driven from the
            editor (focus must stay in the caret to keep typing), so the whole
-           popup's state has to be announced — this was the one piece of the
+           popup's state has to be announced - this was the one piece of the
            interaction with no channel to AT at all. -->
       <div class="px-3 py-2 text-xs text-muted" role="status">Searching...</div>
     {:else}

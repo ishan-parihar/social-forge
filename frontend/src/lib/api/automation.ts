@@ -1,7 +1,7 @@
 import { api } from './client';
 
 // Mirrors src/api/automation.rs RuleResponse. The backend currently
-// returns a slimmed-down view of the rule — fields like trigger_filter,
+// returns a slimmed-down view of the rule - fields like trigger_filter,
 // response_template, ai_model, cooldown_minutes, max_responses_per_hour
 // exist in the DB but are not returned by list_rules. If you need them
 // on the frontend, extend RuleResponse in the backend first.
@@ -15,7 +15,7 @@ export interface AutomationRule {
 }
 
 // Fields the frontend automation page uses for display but the backend
-// doesn't currently return. They'll be `undefined` at runtime — the
+// doesn't currently return. They'll be `undefined` at runtime - the
 // page guards with optional chaining. Marked optional here so the
 // type-checker doesn't complain.
 export interface AutomationRuleDisplay extends AutomationRule {
@@ -41,7 +41,7 @@ export interface ExecutionLogDisplay extends ExecutionLog {
   output_text?: string;
 }
 
-// Create-rule payload — matches CreateRuleRequest in the backend.
+// Create-rule payload - matches CreateRuleRequest in the backend.
 export interface CreateRulePayload {
   integration_id: string;
   name: string;
@@ -58,9 +58,9 @@ export const automationApi = {
   listRules: () =>
     api.get<{ rules: AutomationRule[] }>('/api/automation/rules'),
   createRule: (rule: CreateRulePayload) =>
-    api.post<{ rule: AutomationRule }>('/api/automation/rules', rule),
+    api.post<{ id: string; name: string; is_active: boolean }>('/api/automation/rules', rule),
   updateRule: (id: string, updates: Partial<AutomationRule>) =>
-    api.put<{ rule: AutomationRule }>(`/api/automation/rules/${id}`, updates),
+    api.put<{ success: boolean; message: string }>(`/api/automation/rules/${id}`, updates),
   deleteRule: (id: string) =>
     api.del<{ success: boolean }>(`/api/automation/rules/${id}`),
   getLogs: (ruleId: string) =>

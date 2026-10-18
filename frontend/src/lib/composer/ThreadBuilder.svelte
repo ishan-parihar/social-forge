@@ -1,8 +1,8 @@
 <script lang="ts">
-  // v26-4: ThreadBuilder — a generic thread builder with per-row delay.
+  // v26-4: ThreadBuilder - a generic thread builder with per-row delay.
   //
   // Replaces the X-only ThreadFinisher. Works for ANY provider (X,
-  // Bluesky, Mastodon, Threads, Reddit, etc. — any that supports
+  // Bluesky, Mastodon, Threads, Reddit, etc. - any that supports
   // multi-post threads). Each part is editable, has a per-row char count
   // against the provider's char limit, and the delay between parts can
   // be set in minutes (the backend v24-5 supports delay_minutes).
@@ -20,7 +20,7 @@
     submitting = false,
   }: {
     content?: string;
-    /** Provider identifier (e.g. 'x', 'bluesky', 'reddit') — used for char limit. */
+    /** Provider identifier (e.g. 'x', 'bluesky', 'reddit') - used for char limit. */
     provider?: string;
     onCreateThread?: (parts: string[], delayMinutes?: number) => void;
     submitting?: boolean;
@@ -64,7 +64,7 @@
   function splitFromContent() {
     parts = splitIntoThread(content, charLimit).slice(0, MAX_PARTS);
     if (parts.length === 0) {
-      // No content to split — start with one empty part.
+      // No content to split - start with one empty part.
       parts = [''];
     }
   }
@@ -189,8 +189,9 @@
           class="px-2 py-1 text-xs text-accent hover:text-accent-strong disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >+ Add part</button>
         <div class="flex items-center gap-2">
-          <label class="text-xs text-muted">Delay between parts:</label>
+          <label for="thread-delay" class="text-xs text-muted">Delay between parts:</label>
           <input
+            id="thread-delay"
             type="number"
             bind:value={delayMinutes}
             min="0"

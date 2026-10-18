@@ -72,7 +72,7 @@ export function proxyMediaUrl(url: string): string {
       return `/api/proxy-media?url=${encodeURIComponent(url)}`;
     }
   } catch {
-    // Not a valid URL — return as-is
+    // Not a valid URL - return as-is
   }
   return url;
 }
@@ -118,7 +118,7 @@ export const feedApi = {
   },
   /**
    * Update an imported feed post's cached text/media/metadata.
-   * Does NOT touch the original post on the platform — only the cached copy
+   * Does NOT touch the original post on the platform - only the cached copy
    * in `external_posts`. Use cases: fix import errors, annotate metadata.
    */
   update: (postId: string, d: { text?: string; media?: unknown; metadata?: unknown }) =>

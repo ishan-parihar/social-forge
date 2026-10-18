@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Keyboard shortcuts cheat-sheet (Phase 0 — migrated to ModalManager).
+  // Keyboard shortcuts cheat-sheet (Phase 0 - migrated to ModalManager).
   //
   // Previously this was an inline hand-rolled overlay in +layout.svelte.
   // Now it's a component rendered by ModalManager via the modals store,

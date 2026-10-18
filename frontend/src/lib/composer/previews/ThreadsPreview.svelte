@@ -1,7 +1,7 @@
 <script lang="ts">
   // v25 F2: Threads post preview.
   // Light chrome = destination-platform simulation (see previews/index.ts).
-  // F2 added the 500-char overflow mark — Threads rejects rather than crops,
+  // F2 added the 500-char overflow mark - Threads rejects rather than crops,
   // and it is the tightest limit among the Meta properties after X.
   import { charLimitFor, countFor, plainText } from '../platforms';
   import type { MediaItem } from '$lib/api/media';
@@ -37,7 +37,7 @@
         {text.slice(0, limit)}<span class="bg-red-100 text-red-600 rounded-sm">{text.slice(limit)}</span>
       </p>
       {#if isOver}
-        <p class="text-[10px] text-red-600 mt-1">{count}/{limit} — will be rejected, trim {count - limit} more</p>
+        <p class="text-[10px] text-red-600 mt-1">{count}/{limit} - will be rejected, trim {count - limit} more</p>
       {/if}
       {#if images.length > 0}
         <div class="mt-2 rounded-lg overflow-hidden border border-gray-200">

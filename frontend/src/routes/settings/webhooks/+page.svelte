@@ -36,7 +36,7 @@
     loading = true;
     const r = await webhooksApi.list();
     if (r.data) {
-      webhooks = r.data.webhooks;
+      webhooks = r.data;
     } else if (r.error) {
       toast(`Failed to load webhooks: ${r.error}`, "error");
     }
@@ -117,7 +117,7 @@
     loadingDeliveries = true;
     const r = await webhooksApi.deliveries(id);
     if (r.data) {
-      deliveries = r.data.deliveries;
+      deliveries = r.data;
     } else if (r.error) {
       toast(`Failed to load deliveries: ${r.error}`, "error");
     }
@@ -137,8 +137,8 @@
 
 <div class="page-enter space-y-6">
   <div class="flex items-center justify-between">
-    <h2 class="text-xl font-semibold">Webhooks</h2>
-    <button onclick={openCreate} class="px-4 py-2 bg-accent-fill hover:bg-accent-fill-hover rounded-lg text-sm transition-colors">
+    <h1 class="text-xl font-semibold">Webhooks</h1>
+    <button onclick={openCreate} class="px-4 py-2 bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg text-sm transition-colors">
       + Add Webhook
     </button>
   </div>
@@ -188,22 +188,22 @@
 {#if showModal}
   <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50" role="dialog">
     <div class="bg-background-input border border-line rounded-xl p-6 w-full max-w-md">
-      <h3 class="text-lg font-semibold mb-4">{editingWebhook ? "Edit Webhook" : "New Webhook"}</h3>
+      <h2 class="text-lg font-semibold mb-4">{editingWebhook ? "Edit Webhook" : "New Webhook"}</h2>
       <div class="page-enter space-y-6">
         <div>
-          <label class="text-xs text-muted mb-1 block">Name</label>
-          <input bind:value={formName} placeholder="My Webhook" class="w-full px-3 py-2 bg-surface-hover border border-line rounded text-sm" />
+          <label for="webhook-name" class="text-xs text-muted mb-1 block">Name</label>
+          <input id="webhook-name" bind:value={formName} placeholder="My Webhook" class="w-full px-3 py-2 bg-surface-hover border border-line rounded text-sm" />
         </div>
         <div>
-          <label class="text-xs text-muted mb-1 block">URL</label>
-          <input bind:value={formUrl} placeholder="https://example.com/webhook" class="w-full px-3 py-2 bg-surface-hover border border-line rounded text-sm" />
+          <label for="webhook-url" class="text-xs text-muted mb-1 block">URL</label>
+          <input id="webhook-url" bind:value={formUrl} placeholder="https://example.com/webhook" class="w-full px-3 py-2 bg-surface-hover border border-line rounded text-sm" />
         </div>
         <div>
-          <label class="text-xs text-muted mb-1 block">Secret (optional)</label>
-          <input bind:value={formSecret} type="password" placeholder="Webhook signing secret" class="w-full px-3 py-2 bg-surface-hover border border-line rounded text-sm" />
+          <label for="webhook-secret" class="text-xs text-muted mb-1 block">Secret (optional)</label>
+          <input id="webhook-secret" bind:value={formSecret} type="password" placeholder="Webhook signing secret" class="w-full px-3 py-2 bg-surface-hover border border-line rounded text-sm" />
         </div>
         <div>
-          <label class="text-xs text-muted mb-2 block">Event Types</label>
+          <span class="text-xs text-muted mb-2 block">Event Types</span>
           <div class="page-enter space-y-1">
             {#each availableEventTypes as et}
               <label class="flex items-center gap-2 text-sm cursor-pointer">
@@ -220,7 +220,7 @@
       </div>
       <div class="flex gap-3 justify-end mt-6">
         <button onclick={() => showModal = null} class="px-4 py-2 text-sm text-muted hover:text-content">Cancel</button>
-        <button onclick={saveWebhook} disabled={saving || !formName.trim() || !formUrl.trim()} class="px-4 py-2 text-sm bg-accent-fill hover:bg-accent-fill-hover rounded disabled:opacity-50">
+        <button onclick={saveWebhook} disabled={saving || !formName.trim() || !formUrl.trim()} class="px-4 py-2 text-sm bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded disabled:opacity-50">
           {saving ? "Saving..." : "Save"}
         </button>
       </div>
@@ -233,7 +233,7 @@
   <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50" role="dialog">
     <div class="bg-background-input border border-line rounded-xl p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
       <div class="flex items-center justify-between mb-4">
-        <h3 class="text-lg font-semibold">Delivery History</h3>
+        <h2 class="text-lg font-semibold">Delivery History</h2>
         <button onclick={() => showDeliveries = null} class="text-muted hover:text-content">✕</button>
       </div>
       {#if loadingDeliveries}

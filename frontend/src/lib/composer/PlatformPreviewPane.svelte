@@ -1,10 +1,10 @@
 <script lang="ts">
-  // PlatformPreviewPane — the right-column live preview (v25 F2).
+  // PlatformPreviewPane - the right-column live preview (v25 F2).
   //
   // F2 changed the shape of this component. Before, it rendered ONE preview:
   // whichever channel the SelectCurrent tab strip happened to be on. That is
   // a fine design for a two-channel post and a bad one for the thing this app
-  // is for — a solo founder firing the same thought at X, LinkedIn, a Page,
+  // is for - a solo founder firing the same thought at X, LinkedIn, a Page,
   // Facebook, IG, Threads, YouTube, TikTok, Reddit, Bluesky and Pinterest at
   // once. You cannot see what any of them will look like without clicking
   // through every tab. So it now renders one frame per SELECTED channel, and
@@ -15,8 +15,8 @@
   // integration at once. That also removes the old prop mismatch where the
   // parent could only hand over a single `content` string.
   //
-  // Every frame gets the full post context — title, media, first comment,
-  // schedule, TikTok sound, Pinterest board — because a preview that omits the
+  // Every frame gets the full post context - title, media, first comment,
+  // schedule, TikTok sound, Pinterest board - because a preview that omits the
   // required field is not frame-accurate; it is decoration.
 
   import { getPreviewComponent, hasDedicatedPreview } from './previews/index.js';

@@ -1,17 +1,17 @@
 <script lang="ts">
-  // ComposerModal — the modal-based composer (Phase 2).
+  // ComposerModal - the modal-based composer (Phase 2).
   //
   // This is the keystone of the v18 refactor: it replaces the full-page
   // /posts/new and /posts/[id] edit flows with a single modal that opens
   // in-place from anywhere (calendar, dashboard, posts list, keyboard 'n').
   //
   // Design decisions (per docs/planning/PLAN_PARITY_DEPTH_SINGLEUSER_v25.md phases F1-F5):
-  //   - Full-screen modal (max-w-[1400px], h-[90vh]) — like postiz-app
+  //   - Full-screen modal (max-w-[1400px], h-[90vh]) - like postiz-app
   //   - Two-column layout on lg+: editor left, preview right (580px)
   //   - Single column on mobile (preview collapses to a toggle)
-  //   - askClose: true — confirm before closing if content is non-empty
+  //   - askClose: true - confirm before closing if content is non-empty
   //   - Reuses existing composer widgets (ChannelSelector, RichTextEditor,
-  //     MediaUpload, SchedulePicker, TagPicker, etc.) — no rewrite
+  //     MediaUpload, SchedulePicker, TagPicker, etc.) - no rewrite
   //   - Create and edit share the same UI; edit mode pre-fills from API
   //
   // The composer store (lib/stores/composer.svelte.ts) drives open/close
@@ -73,7 +73,7 @@
   let providerOverride = $state<Map<string, string>>(new Map());
   let showPostSets = $state(false);
   let loading = $state(true);
-  // Phase 8: mobile preview toggle — on < lg screens, the preview pane
+  // Phase 8: mobile preview toggle - on < lg screens, the preview pane
   // is hidden by default and can be toggled with a button in the footer.
   let showPreviewMobile = $state(false);
 
@@ -109,7 +109,7 @@
   );
   // v26-4: primary provider for the ThreadBuilder's char limit display.
   // Uses the first selected integration's provider. This is a best-effort
-  // UX hint — the actual per-platform validation happens on submit.
+  // UX hint - the actual per-platform validation happens on submit.
   let primaryProvider = $derived(
     selectedIntegrations.length > 0
       ? (integrationProviders.get(selectedIntegrations[0]) || 'x')
@@ -142,7 +142,7 @@
    *
    * F2's headline change: these BLOCK submit instead of being discovered by the
    * server after a round-trip. The server check in submit() is deliberately
-   * still there — this is a UX affordance, that is the authority, and the two
+   * still there - this is a UX affordance, that is the authority, and the two
    * read their limits from the same table so they should agree.
    */
   let blockers = $derived.by(() => {
@@ -295,7 +295,7 @@
     }
     // Phase v21/5.7: load prefilled media items (from repurpose flow).
     // The media URLs already point to uploaded/proxied assets, so we just
-    // wrap them in MediaItem-shaped objects — no upload needed.
+    // wrap them in MediaItem-shaped objects - no upload needed.
     if (composer.prefilledMedia && composer.prefilledMedia.length > 0) {
       mediaItems = composer.prefilledMedia.map(m => ({
         id: crypto.randomUUID(),
@@ -307,8 +307,8 @@
     }
     // Phase v21/v22: auto-append the user's default signature when
     // creating a new post (postiz-app pattern). Only fires if:
-    //   - we're in create mode (not edit — editing shouldn't re-append)
-    //   - no draft was restored (draft takes precedence — user already
+    //   - we're in create mode (not edit - editing shouldn't re-append)
+    //   - no draft was restored (draft takes precedence - user already
     //     has the signature from their last session)
     //   - no prefilled content was set (repurpose/duplicate flows bring
     //     their own content; appending a signature would be noise)
@@ -323,7 +323,7 @@
           content = '\n' + sigRes.data.content;
         }
       } catch {
-        // 404 or network error — no default signature set, silently skip.
+        // 404 or network error - no default signature set, silently skip.
       }
     }
     if (composer.mode === 'edit' && composer.editingPostId) {
@@ -339,7 +339,7 @@
     // Realtime: refresh integrations if connected/disconnected in another tab.
     unsubscribers.push(realtime.on('integration_connected', loadIntegrations));
     unsubscribers.push(realtime.on('integration_disconnected', loadIntegrations));
-    // Server-side "you missed events" signal — the channel selector is the
+    // Server-side "you missed events" signal - the channel selector is the
     // composer's most staled list, so refetch that.
     unsubscribers.push(realtime.on('lagged', loadIntegrations));
 
@@ -439,7 +439,7 @@
    *
    * `fetchTargets` existed and was never called from anywhere, so
    * `integrationTargets` stayed empty and the TargetPicker block below it was
-   * dead code — a user could not pick the Facebook Page a post goes to, nor
+   * dead code - a user could not pick the Facebook Page a post goes to, nor
    * the Pinterest board, which is a hard requirement on that platform. F2
    * wires it: whenever the selected set changes, fetch the missing ones.
    */
@@ -478,7 +478,7 @@
       tag_ids: selectedTagIds,
       first_comment: firstComment || undefined,
       // v22 Phase 7: include alt text in the payload (was `alt: undefined`
-      // — a no-op that silently dropped all alt text on submit).
+      // - a no-op that silently dropped all alt text on submit).
       media: mediaItems.length > 0 ? mediaItems.map(m => ({ id: m.id, url: m.url, mime_type: m.mime_type, alt: m.alt })) : undefined,
       overrides: Object.keys(overridesObj).length > 0 ? overridesObj : undefined,
       settings: {
@@ -487,7 +487,7 @@
       },
       // Phase v21: wire recurring schedule into the payload so it actually
       // gets sent to the backend. Previously SchedulePicker wrote to
-      // `recurring` state but buildPayload() never included it — the field
+      // `recurring` state but buildPayload() never included it - the field
       // was silently dropped and no repeat series was ever created.
       recurring: recurring ? { interval_days: recurring.intervalDays, end_date: recurring.endDate } : undefined,
     };
@@ -507,9 +507,9 @@
    * accepts content/title/media/settings; it does NOT change scheduled_at
    * (use the separate reschedule endpoint for that) and does NOT change
    * integration_ids (you can't move a post to a different channel after
-   * creation — that's a duplicate-and-delete flow).
+   * creation - that's a duplicate-and-delete flow).
    *
-   * Recurring schedule is wired into the create flow only — for edit mode,
+   * Recurring schedule is wired into the create flow only - for edit mode,
    * the user must use the dedicated "Repeat" action on the post (outside
    * the composer) because the repeat endpoint requires an existing post id.
    */
@@ -567,16 +567,19 @@
 
         // Phase v21: wire recurring schedule. After successful creation,
         // if recurring is set, call postsApi.repeat() to spawn the series.
-        if (recurring && r.data?.posts?.[0]?.id) {
-          const repeatRes = await postsApi.repeat(
-            r.data.posts[0].id,
-            recurring.intervalDays,
-            recurring.endDate,
-          );
-          if (repeatRes.error) {
-            toast(`Post created but repeat setup failed: ${repeatRes.error}`, 'error');
+        // Each channel gets its own recurring series, so repeat every created post.
+        if (recurring && r.data?.posts?.length) {
+          let copies = 0;
+          const failures: string[] = [];
+          for (const p of r.data.posts) {
+            const repeatRes = await postsApi.repeat(p.id, recurring.intervalDays, recurring.endDate);
+            if (repeatRes.error) failures.push(`${p.integration_name}: ${repeatRes.error}`);
+            else copies += repeatRes.data?.count || 0;
+          }
+          if (failures.length) {
+            toast(`Repeat setup failed for ${failures.join('; ')}`, 'error');
           } else {
-            toast(`Post scheduled + ${repeatRes.data?.count || 0} recurring copies created`, 'success');
+            toast(`Post scheduled + ${copies} recurring copies created`, 'success');
           }
         }
 
@@ -628,10 +631,13 @@
         // Create mode: create + publish.
         const r = await postsApi.create({ ...payload, scheduled_at: undefined });
         if (r.error) { error = r.error; return; }
-        if (r.data?.posts?.[0]?.id) {
-          const pub = await postsApi.publish(r.data.posts[0].id);
-          if (pub.error) { error = pub.error; return; }
+        // One post per selected channel: publish every one, not just the first.
+        const failures: string[] = [];
+        for (const p of r.data?.posts ?? []) {
+          const pub = await postsApi.publish(p.id);
+          if (pub.error) failures.push(`${p.integration_name}: ${pub.error}`);
         }
+        if (failures.length) { error = failures.join('; '); return; }
         localStorage.removeItem(DRAFT_KEY);
         composer.close();
         toast('Post published', 'success');
@@ -669,7 +675,7 @@
         if (updateR.data?.state === 'queued' || updateR.data?.scheduled_at) {
           const unschedR = await postsApi.unschedule(currentEditingPostId);
           if (unschedR.error) {
-            // Non-fatal — the content was updated; just warn.
+            // Non-fatal - the content was updated; just warn.
             console.warn('Failed to unschedule:', unschedR.error);
           }
         }
@@ -696,7 +702,7 @@
       composer.close();
       return;
     }
-    // Backdrop/escape close — confirm if dirty.
+    // Backdrop/escape close - confirm if dirty.
     if (content.trim() || title.trim() || selectedIntegrations.length > 0) {
       const ok = await modals.areYouSure({
         title: 'Discard this post?',
@@ -717,7 +723,7 @@
 
   // Phase v21: the post id to send update/publish/reschedule calls to.
   // Falls back to composer.editingPostId when the user hasn't switched
-  // tabs (or when there's no group — single-post edit).
+  // tabs (or when there's no group - single-post edit).
   let currentEditingPostId = $derived(editingGroupPostId || composer.editingPostId);
 
   // Phase 3: compute which integrations have diverged from global.
@@ -765,7 +771,7 @@
     <!-- v25 F5: `flex-wrap` + `min-w-0` on the left group. In the steady state
          this row measures ~235px inside the 328px the composer gets at a 360px
          viewport, but the `saving` branch adds a spinner plus a label and
-         pushes it to ~333px — so the header overflowed during every autosave.
+         pushes it to ~333px - so the header overflowed during every autosave.
          Wrapping is the right fix rather than shortening the label: all three
          states are load-bearing, and the steady state is unaffected. -->
     <div class="flex items-center gap-3 flex-wrap min-w-0">
@@ -823,7 +829,7 @@
             <ul class="mt-1.5 space-y-0.5">
               {#each blockers as b (`${b.provider}-${b.message}`)}
                 <li class="text-xs text-content-secondary">
-                  <span class="text-muted">{b.label}</span> — {b.message}
+                  <span class="text-muted">{b.label}</span> - {b.message}
                 </li>
               {/each}
             </ul>
@@ -858,7 +864,7 @@
         <div>
           <label for="composer-title" class="text-sm text-muted block mb-1">
             Title{#if titleRequiredChannels.length > 0}
-              <span class="text-faint">— required for {titleRequiredChannels.join(', ')}</span>
+              <span class="text-faint">- required for {titleRequiredChannels.join(', ')}</span>
             {/if}
           </label>
           <input id="composer-title" type="text" bind:value={title} placeholder="Post title..."
@@ -1033,7 +1039,7 @@
           </div>
         {/if}
 
-        <!-- v26-4: Thread Builder (generic — works for any provider, not just X).
+        <!-- v26-4: Thread Builder (generic - works for any provider, not just X).
              Shows when at least 1 integration is selected. Per-row delay
              (delay_minutes) is passed to the backend createThread API. -->
         {#if selectedIntegrations.length > 0}

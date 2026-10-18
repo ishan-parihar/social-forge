@@ -22,7 +22,7 @@
   let dayEvents = $derived(events.filter(e => e.date === key));
   let hours = $derived(getDayHours());
 
-  // Phase 2: ghost slots — per-channel posting time presets that have
+  // Phase 2: ghost slots - per-channel posting time presets that have
   // no real post at that time. These show as dashed-border empty drop
   // targets so the user sees when their channel "usually" posts.
   // Each ghost slot is { hour: string, integrationName: string }.
@@ -56,7 +56,7 @@
     return map;
   });
 
-  // State summary for the day — shows at a glance how many posts are
+  // State summary for the day - shows at a glance how many posts are
   // scheduled vs published vs failed vs draft on this day.
   let stateSummary = $derived.by(() => {
     const s = { draft: 0, queued: 0, published: 0, error: 0 };
@@ -120,7 +120,7 @@
   });
 </script>
 
-<div class="bg-surface border border-line rounded-xl overflow-hidden" ontouchstart={touchDrag.onTouchStart} ontouchmove={touchDrag.onTouchMove} ontouchend={touchDrag.onTouchEnd}>
+<div role="group" class="bg-surface border border-line rounded-xl overflow-hidden" ontouchstart={touchDrag.onTouchStart} ontouchmove={touchDrag.onTouchMove} ontouchend={touchDrag.onTouchEnd}>
   <div class="py-3 border-b border-line px-4">
     <div class="text-lg font-semibold text-center">
       {date.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
@@ -159,6 +159,7 @@
           class="flex-1 px-2 py-1 space-y-0.5 cursor-pointer hover:bg-surface-hover transition-colors
             {isDragOver ? 'ring-2 ring-accent ring-inset bg-accent-fill/5' : ''}"
           onclick={() => onDateClick?.(key)}
+          onkeydown={(e) => { if (e.key === 'Enter' && e.target === e.currentTarget) onDateClick?.(key); }}
           ondragover={(e) => { e.preventDefault(); dragOverHour = hourStr; }}
           ondragleave={() => { if (dragOverHour === hourStr) dragOverHour = null; }}
           ondrop={(e) => handleDrop(e, key, hourStr)}
@@ -187,15 +188,15 @@
               <CalendarEvent {event} {onDuplicate} {onStats} {onDelete} />
             </div>
           {/each}
-          <!-- Phase 2: ghost slots — per-channel posting time presets -->
+          <!-- Phase 2: ghost slots - per-channel posting time presets -->
           {#each (ghostsByHour.get(hourStr) || []) as ghost}
-            <div
+            <button
               class="flex items-center gap-1 border border-dashed border-line rounded px-1 py-0.5 opacity-50 hover:opacity-100 transition-opacity cursor-pointer"
               onclick={() => onDateClick?.(key)}
-              title="{ghost.integrationName} usually posts at this time — click to create"
+              title="{ghost.integrationName} usually posts at this time - click to create"
             >
               <span class="text-[10px] text-muted truncate">⏰ {ghost.integrationName}</span>
-            </div>
+            </button>
           {/each}
         </div>
       </div>

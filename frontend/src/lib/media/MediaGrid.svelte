@@ -1,5 +1,5 @@
 <script lang="ts">
-  // v25 F4 — media grid keyboard + a11y pass.
+  // v25 F4 - media grid keyboard + a11y pass.
   //
   // What was wrong before:
   //  - File-type placeholders were emoji. Emoji render at different sizes per

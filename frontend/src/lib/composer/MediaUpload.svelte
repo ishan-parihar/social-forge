@@ -1,5 +1,5 @@
 <script lang="ts">
-  // MediaUpload — upgraded media uploader (Phase 6, v19).
+  // MediaUpload - upgraded media uploader (Phase 6, v19).
   //
   // Upgrades from v18's basic uploader:
   //   - Drag-to-reorder: native HTML5 DnD on the thumbnail strip
@@ -7,7 +7,7 @@
   //   - Clipboard paste: onpaste handler on the drop zone
   //   - Per-file upload progress
   //
-  // No Uppy dependency (YAGNI — Uppy is 10+ packages, too heavy for a
+  // No Uppy dependency (YAGNI - Uppy is 10+ packages, too heavy for a
   // solo-founder tool). The native File API + our existing mediaApi
   // covers all the needed functionality.
 
@@ -49,7 +49,7 @@
       try {
         // Phase v21: use real XHR upload progress instead of the fake
         // setInterval that polled a fake progress value (+20 every 200ms,
-        // capped at 90%). The fake progress was misleading — it showed
+        // capped at 90%). The fake progress was misleading - it showed
         // "90%" indefinitely on slow uploads and jumped to 100% only when
         // the response came back. XHR's upload.onprogress gives real
         // byte-level progress, which is what users expect especially for
@@ -145,7 +145,7 @@
     if (editingAlt) {
       // v22 Phase 7: write alt text to item.alt (was item.original_name,
       // which conflated filename + alt and caused ComposerModal.buildPayload
-      // to read a non-existent m.alt field — silently dropping the text).
+      // to read a non-existent m.alt field - silently dropping the text).
       const item = items.find(i => i.id === editingAlt);
       if (item) {
         item.alt = altTextDraft;
@@ -167,14 +167,16 @@
 />
 
 <div
+  role="group"
   ondragover={(e) => e.preventDefault()}
   ondrop={handleDrop}
   class="border-2 border-dashed border-line rounded-lg p-4 text-center hover:border-accent/50 transition-colors"
 >
   {#if items.length > 0}
-    <div class="grid grid-cols-4 gap-2 mb-3">
+    <div role="list" class="grid grid-cols-4 gap-2 mb-3">
       {#each items as item (item.id)}
         <div
+          role="listitem"
           class="relative group cursor-grab active:cursor-grabbing {dragOverId === item.id ? 'ring-2 ring-accent' : ''}"
           draggable={true}
           ondragstart={(e) => handleReorderDragStart(e, item.id)}

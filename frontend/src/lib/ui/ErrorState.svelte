@@ -1,16 +1,16 @@
 <script lang="ts">
-  // v25 F1: error primitive — the third leg of the route-state triplet
+  // v25 F1: error primitive - the third leg of the route-state triplet
   // (Skeleton / EmptyState / ErrorState).
   //
   // Before this existed, 25 route pages each rendered their own failure
   // surface: 9 as bare red text, 5 as a `bg-error/10` banner, the rest as a
   // toast that disappears before it can be read. The problem is not the colour
-  // — it is that a failed load and an empty result look almost identical, so
+  // - it is that a failed load and an empty result look almost identical, so
   // the user cannot tell "nothing here yet" from "this did not load".
   //
   // ErrorState makes the distinction structural: a border, an alert icon, the
   // message, and a retry affordance. `onretry` is what separates it from
-  // EmptyState at the call site — pass it when the data is refetchable.
+  // EmptyState at the call site - pass it when the data is refetchable.
   import Icon from "./Icon.svelte";
 
   let {
@@ -20,7 +20,7 @@
     onaction,
   }: {
     title?: string;
-    /** The server/transport message. Shown verbatim — it is diagnostic text,
+    /** The server/transport message. Shown verbatim - it is diagnostic text,
      *  and hiding it behind a generic string is what makes errors unreportable. */
     message?: string | null;
     actionLabel?: string;

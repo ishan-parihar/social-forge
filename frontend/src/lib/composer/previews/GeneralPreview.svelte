@@ -1,5 +1,5 @@
 <script lang="ts">
-  // GeneralPreview — default Twitter/X-like preview card (Phase 4).
+  // GeneralPreview - default Twitter/X-like preview card (Phase 4).
   //
   // This is the fallback preview used when no platform-specific preview
   // exists, and also the preview shown when the user is in 'global'
@@ -111,7 +111,7 @@
   <div class="px-4 pb-3">
     <p class="text-sm text-content whitespace-pre-wrap break-words leading-relaxed">{@html highlightedHtml}</p>
     {#if isOverLimit}
-      <p class="text-[10px] text-red-400 mt-1">{plainText.length}/{charLimit} — text beyond {charLimit} will be cropped</p>
+      <p class="text-[10px] text-red-400 mt-1">{plainText.length}/{charLimit} - text beyond {charLimit} will be cropped</p>
     {/if}
   </div>
 

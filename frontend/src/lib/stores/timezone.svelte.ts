@@ -1,4 +1,4 @@
-// Timezone store — stores the user's preferred display timezone in localStorage.
+// Timezone store - stores the user's preferred display timezone in localStorage.
 // All dates from the backend are UTC; the frontend renders them in this timezone.
 // Falls back to the browser's system timezone if not set.
 

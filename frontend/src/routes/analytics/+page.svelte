@@ -1,5 +1,5 @@
 <script lang="ts">
-  // v25 F4 — analytics, rebuilt engagement-first.
+  // v25 F4 - analytics, rebuilt engagement-first.
   //
   // The v22 version answered "how many posts" and buried the numbers that
   // actually matter (likes, comments, shares, impressions) in a conditional

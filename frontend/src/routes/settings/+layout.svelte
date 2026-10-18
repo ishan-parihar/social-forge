@@ -7,7 +7,7 @@
   //
   // v25 F1: this is the ONE settings sidebar. The main app sidebar carries a
   // single "Settings" entry that routes here, and this layout owns the
-  // sub-route tabs — no second list of the same 8 destinations exists
+  // sub-route tabs - no second list of the same 8 destinations exists
   // anywhere else. That duplication was the worst UX defect in v22.
   //
   // Width: F1 dropped the `max-w-6xl mx-auto` this wrapper carried. The root
@@ -16,14 +16,14 @@
   // than every other page and shifted its left edge out of alignment.
   //
   // Inspired by postiz-app's settings.component.tsx (2-column tab layout).
-  // Adapted for Social Forge's single-user model — no Teams, no Approved Apps.
+  // Adapted for Social Forge's single-user model - no Teams, no Approved Apps.
 
   import { page } from '$app/stores';
   import Icon from '$lib/ui/Icon.svelte';
 
   let { children, data } = $props();
 
-  // Settings tabs — filtered for single-user (no Teams, no Approved Apps).
+  // Settings tabs - filtered for single-user (no Teams, no Approved Apps).
   const tabs = [
     { href: '/settings', label: 'General', icon: 'settings', exact: true },
     { href: '/settings/profile', label: 'Brand Profile', icon: 'profile' },

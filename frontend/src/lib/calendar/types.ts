@@ -21,7 +21,7 @@ export interface CalendarEvent {
   // Phase 8: campaign awareness for calendar.
   campaignId?: string | null;
   campaignColor?: string | null;
-  // Engagement metrics (optional — populated from analytics_cache)
+  // Engagement metrics (optional - populated from analytics_cache)
   likes?: number | null;
   comments?: number | null;
   shares?: number | null;

@@ -98,7 +98,7 @@
       if (selectedId) loadMessages(selectedId);
       load();
     }));
-    // Server-side "you missed events" signal — same refetch as dm_received.
+    // Server-side "you missed events" signal - same refetch as dm_received.
     dmsUnsubscribers.push(realtime.on('lagged', () => {
       if (selectedId) loadMessages(selectedId);
       load();
@@ -112,7 +112,7 @@
 
 <div class="page-enter space-y-6">
   <div class="flex items-center justify-between">
-    <h2 class="text-xl font-semibold">Direct Messages</h2>
+    <h1 class="text-xl font-semibold">Direct Messages</h1>
     <div class="flex gap-2 items-center">
       {#if integrations.length > 0}
         <select
@@ -203,7 +203,7 @@
               <button
                 onclick={sendMessage}
                 disabled={sending || !newMessage.trim()}
-                class="px-4 py-2 bg-accent-fill hover:bg-accent-fill-hover rounded-lg text-sm disabled:opacity-50 transition-colors"
+                class="px-4 py-2 bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg text-sm disabled:opacity-50 transition-colors"
               >
                 {sending ? "..." : "Send"}
               </button>

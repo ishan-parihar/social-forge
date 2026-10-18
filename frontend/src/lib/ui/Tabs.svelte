@@ -1,5 +1,5 @@
 <script lang="ts">
-  // v22 Phase 3: Tabs primitive — segmented control with active state.
+  // v22 Phase 3: Tabs primitive - segmented control with active state.
   // Replaces ad-hoc tab strips in settings/posts/analytics.
   //
   // v25 F5: `aria-label` is now a prop rather than a fixed string. Four call
@@ -17,7 +17,7 @@
   } = $props();
 
   // F5: the ARIA tabs pattern requires arrow-key movement, not Tab-through.
-  // Without it the strip is operable but hostile — N tabs means N stops, and
+  // Without it the strip is operable but hostile - N tabs means N stops, and
   // the convention every other tablist on the platform breaks is Left/Right.
   function onKeydown(e: KeyboardEvent, index: number) {
     const last = tabs.length - 1;

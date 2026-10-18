@@ -3,7 +3,7 @@
   //
   // Light chrome on purpose: the preview shows the DESTINATION platform's card,
   // not this app's theme. Retinting it to the app's tokens would make the
-  // preview a lie — the point is "this is what lands on X". That is why
+  // preview a lie - the point is "this is what lands on X". That is why
   // previews/* is exempt from the check-hex-tokens gate.
   //
   // F2 corrected the prop contract: this used to take `integrationName` while
@@ -55,7 +55,7 @@
         {text.slice(0, limit)}<span class="bg-red-100 text-red-600 rounded-sm">{text.slice(limit)}</span>
       </p>
       {#if isOver}
-        <p class="text-[10px] text-red-600 mt-1">{count}/{limit} — will be rejected, trim {count - limit} more</p>
+        <p class="text-[10px] text-red-600 mt-1">{count}/{limit} - will be rejected, trim {count - limit} more</p>
       {/if}
 
       {#if video}

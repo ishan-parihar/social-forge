@@ -5,7 +5,7 @@
   //
   // A pin is a 2:3 portrait tile with a required title and a required board.
   // Both are real API requirements, so both are surfaced as live placeholders
-  // here rather than as an error toast after the user thinks they are done —
+  // here rather than as an error toast after the user thinks they are done -
   // the board chip is the one place the TargetPicker's board selection is
   // actually visible in a preview.
   import { charLimitFor, countFor, plainText } from '../platforms';
@@ -56,14 +56,14 @@
       {#if title}
         {title}
       {:else}
-        <span class="text-red-500 italic">Untitled — a pin requires a title</span>
+        <span class="text-red-500 italic">Untitled - a pin requires a title</span>
       {/if}
     </h3>
     <p class="text-[11px] text-gray-700 mt-1 whitespace-pre-wrap break-words">
       {folded}{#if text.length > 100}<span class="text-gray-500"> ...more</span>{/if}
     </p>
     {#if isOver}
-      <p class="text-[10px] text-red-600 mt-1">{count}/{limit} — will be rejected, trim {count - limit} more</p>
+      <p class="text-[10px] text-red-600 mt-1">{count}/{limit} - will be rejected, trim {count - limit} more</p>
     {/if}
     <div class="flex items-center gap-1.5 mt-2 pt-2 border-t border-gray-100">
       <div class="w-5 h-5 rounded-full bg-gray-700 flex items-center justify-center text-white text-[9px] font-bold">

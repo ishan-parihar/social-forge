@@ -2,7 +2,7 @@
   // v22 Phase 4: Command palette (Cmd+K / Ctrl+K).
   //
   // Lightweight fuzzy-search command launcher. No external deps (cmdk,
-  // fuse.js) — uses a simple case-insensitive substring match with
+  // fuse.js) - uses a simple case-insensitive substring match with
   // section grouping and keyboard navigation.
   //
   // Commands are built from the nav structure + a few action commands.
@@ -155,7 +155,7 @@
 <!-- svelte-ignore a11y_click_events_have_key_events
      The backdrop closes on click; its keyboard equivalent is Escape, handled by
      the window listener in onMount. A backdrop div is never focusable, so a
-     keydown here would be dead code — the focus trap below is what makes the
+     keydown here would be dead code - the focus trap below is what makes the
      palette keyboard-exitable. -->
 <div
   class="fixed inset-0 bg-overlay z-50 flex items-start justify-center pt-[15vh] px-4"

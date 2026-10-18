@@ -1,5 +1,5 @@
 <script lang="ts">
-  // ListView — calendar list view with date grouping, state filter, and
+  // ListView - calendar list view with date grouping, state filter, and
   // pagination (Phase 4, v19).
   //
   // Upgraded from the v18 basic list to match postiz-app's list view:
@@ -168,7 +168,7 @@
               {#if event.time}
                 <span class="text-accent font-mono">{event.time}</span>
               {:else if dateStr !== '__no_date__'}
-                <span class="text-faint">—</span>
+                <span class="text-faint">-</span>
               {/if}
             </div>
             <div class="flex-1 min-w-0">
@@ -189,7 +189,7 @@
           </button>
           <!-- v25 F5: `sm:visible` alongside the hover/focus reveal. `group-hover` and
                `group-focus-within` both leave the row invisible on a touch
-               device — no hover, and nothing focused yet — so on a phone the
+               device - no hover, and nothing focused yet - so on a phone the
                Duplicate / Stats / Delete actions simply did not exist. Below
                `sm` they are always shown: three small buttons in exchange for
                the entire action set. -->

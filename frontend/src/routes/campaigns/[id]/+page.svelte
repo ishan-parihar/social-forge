@@ -139,11 +139,11 @@
     completed: 'info',
   };
 
-  const tabs = [
+  const tabs = $derived([
     { id: 'overview', label: 'Overview' },
     { id: 'posts', label: `Posts (${posts.length})` },
     { id: 'settings', label: 'Settings' },
-  ];
+  ]);
 </script>
 
 <div class="page-enter space-y-6">
@@ -173,7 +173,7 @@
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <!-- Progress card -->
         <div class="bg-surface border border-line rounded-lg p-5">
-          <h3 class="font-medium text-sm mb-4">Progress</h3>
+          <h2 class="font-medium text-sm mb-4">Progress</h2>
           {#if campaign.progress_target}
             <div class="mb-4">
               <div class="flex justify-between text-sm mb-2">
@@ -191,11 +191,11 @@
           <div class="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-line">
             <div>
               <div class="text-[10px] text-faint uppercase tracking-wider">Start</div>
-              <div class="text-sm">{campaign.start_date ? new Date(campaign.start_date).toLocaleDateString() : '—'}</div>
+              <div class="text-sm">{campaign.start_date ? new Date(campaign.start_date).toLocaleDateString() : '-'}</div>
             </div>
             <div>
               <div class="text-[10px] text-faint uppercase tracking-wider">End</div>
-              <div class="text-sm">{campaign.end_date ? new Date(campaign.end_date).toLocaleDateString() : '—'}</div>
+              <div class="text-sm">{campaign.end_date ? new Date(campaign.end_date).toLocaleDateString() : '-'}</div>
             </div>
           </div>
 
@@ -209,7 +209,7 @@
 
         <!-- Post counts by state -->
         <div class="bg-surface border border-line rounded-lg p-5">
-          <h3 class="font-medium text-sm mb-4">Posts by State</h3>
+          <h2 class="font-medium text-sm mb-4">Posts by State</h2>
           <div class="space-y-3">
             <div class="flex items-center justify-between">
               <span class="text-sm text-muted">💡 Ideas</span>
@@ -259,24 +259,24 @@
       <!-- Settings tab -->
       <div class="bg-surface border border-line rounded-lg p-5 space-y-4 max-w-2xl">
         <div>
-          <label class="block text-sm text-muted mb-1">Name</label>
-          <input type="text" bind:value={formName} class="w-full px-3 py-2 bg-background-input border border-line rounded text-sm focus:border-accent outline-none" />
+          <label for="campaign-name" class="block text-sm text-muted mb-1">Name</label>
+          <input id="campaign-name" type="text" bind:value={formName} class="w-full px-3 py-2 bg-background-input border border-line rounded text-sm focus:border-accent outline-none" />
         </div>
         <div>
-          <label class="block text-sm text-muted mb-1">Description</label>
-          <textarea bind:value={formDescription} rows="2" class="w-full px-3 py-2 bg-background-input border border-line rounded text-sm focus:border-accent outline-none"></textarea>
+          <label for="campaign-description" class="block text-sm text-muted mb-1">Description</label>
+          <textarea id="campaign-description" bind:value={formDescription} rows="2" class="w-full px-3 py-2 bg-background-input border border-line rounded text-sm focus:border-accent outline-none"></textarea>
         </div>
         <div class="grid grid-cols-2 gap-4">
           <div>
-            <label class="block text-sm text-muted mb-1">Color</label>
+            <label for="campaign-color" class="block text-sm text-muted mb-1">Color</label>
             <div class="flex items-center gap-2">
-              <input type="color" bind:value={formColor} class="w-10 h-9 rounded cursor-pointer bg-transparent border border-line" />
+              <input id="campaign-color" type="color" bind:value={formColor} class="w-10 h-9 rounded cursor-pointer bg-transparent border border-line" />
               <input type="text" bind:value={formColor} class="flex-1 px-3 py-2 bg-background-input border border-line rounded text-sm focus:border-accent outline-none" />
             </div>
           </div>
           <div>
-            <label class="block text-sm text-muted mb-1">Status</label>
-            <select bind:value={formStatus} class="w-full px-3 py-2 bg-background-input border border-line rounded text-sm focus:border-accent outline-none">
+            <label for="campaign-status" class="block text-sm text-muted mb-1">Status</label>
+            <select id="campaign-status" bind:value={formStatus} class="w-full px-3 py-2 bg-background-input border border-line rounded text-sm focus:border-accent outline-none">
               <option value="active">Active</option>
               <option value="paused">Paused</option>
               <option value="archived">Archived</option>
@@ -286,22 +286,22 @@
         </div>
         <div class="grid grid-cols-2 gap-4">
           <div>
-            <label class="block text-sm text-muted mb-1">Start Date</label>
-            <input type="date" bind:value={formStartDate} class="w-full px-3 py-2 bg-background-input border border-line rounded text-sm focus:border-accent outline-none" />
+            <label for="campaign-start" class="block text-sm text-muted mb-1">Start Date</label>
+            <input id="campaign-start" type="date" bind:value={formStartDate} class="w-full px-3 py-2 bg-background-input border border-line rounded text-sm focus:border-accent outline-none" />
           </div>
           <div>
-            <label class="block text-sm text-muted mb-1">End Date</label>
-            <input type="date" bind:value={formEndDate} class="w-full px-3 py-2 bg-background-input border border-line rounded text-sm focus:border-accent outline-none" />
+            <label for="campaign-end" class="block text-sm text-muted mb-1">End Date</label>
+            <input id="campaign-end" type="date" bind:value={formEndDate} class="w-full px-3 py-2 bg-background-input border border-line rounded text-sm focus:border-accent outline-none" />
           </div>
         </div>
         <div>
-          <label class="block text-sm text-muted mb-1">Goal (free text)</label>
-          <input type="text" bind:value={formGoal} placeholder="e.g. 1000 new followers" class="w-full px-3 py-2 bg-background-input border border-line rounded text-sm focus:border-accent outline-none" />
+          <label for="campaign-goal" class="block text-sm text-muted mb-1">Goal (free text)</label>
+          <input id="campaign-goal" type="text" bind:value={formGoal} placeholder="e.g. 1000 new followers" class="w-full px-3 py-2 bg-background-input border border-line rounded text-sm focus:border-accent outline-none" />
         </div>
         <div class="grid grid-cols-2 gap-4">
           <div>
-            <label class="block text-sm text-muted mb-1">Progress Metric</label>
-            <select bind:value={formProgressMetric} class="w-full px-3 py-2 bg-background-input border border-line rounded text-sm focus:border-accent outline-none">
+            <label for="campaign-metric" class="block text-sm text-muted mb-1">Progress Metric</label>
+            <select id="campaign-metric" bind:value={formProgressMetric} class="w-full px-3 py-2 bg-background-input border border-line rounded text-sm focus:border-accent outline-none">
               <option value="">None</option>
               <option value="posts">Posts</option>
               <option value="engagement">Engagement</option>
@@ -311,15 +311,15 @@
             </select>
           </div>
           <div>
-            <label class="block text-sm text-muted mb-1">Progress Target</label>
-            <input type="number" bind:value={formProgressTarget} placeholder="e.g. 20" class="w-full px-3 py-2 bg-background-input border border-line rounded text-sm focus:border-accent outline-none" />
+            <label for="campaign-target" class="block text-sm text-muted mb-1">Progress Target</label>
+            <input id="campaign-target" type="number" bind:value={formProgressTarget} placeholder="e.g. 20" class="w-full px-3 py-2 bg-background-input border border-line rounded text-sm focus:border-accent outline-none" />
           </div>
         </div>
         <div class="flex items-center justify-between pt-4 border-t border-line">
           <button onclick={deleteCampaign} class="text-sm text-error hover:text-error/80 transition-colors">
             Archive Campaign
           </button>
-          <button onclick={saveSettings} disabled={saving || !formName.trim()} class="px-4 py-2 text-sm bg-accent-fill hover:bg-accent-fill-hover disabled:opacity-50 rounded transition-colors">
+          <button onclick={saveSettings} disabled={saving || !formName.trim()} class="px-4 py-2 text-sm bg-accent-fill hover:bg-accent-fill-hover text-accent-fg disabled:opacity-50 rounded transition-colors">
             {saving ? 'Saving...' : 'Save Changes'}
           </button>
         </div>

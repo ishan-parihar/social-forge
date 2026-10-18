@@ -1,10 +1,10 @@
 <script lang="ts">
-  // PerPlatformCharCount — the composer's per-channel character rings (v25 F2).
+  // PerPlatformCharCount - the composer's per-channel character rings (v25 F2).
   //
   // F2 replaced the flat text badges with a ring per platform. A badge that
   // says "248/280" is a number the user has to mentally compare; a ring is the
   // comparison already drawn. It also removes the "am I nearly done?" question
-  // for the platforms with a very different budget (X 280, Facebook 63206) —
+  // for the platforms with a very different budget (X 280, Facebook 63206) -
   // the ring is 98% full for X and 0.4% full for Facebook at the same moment,
   // and that difference is the entire point of a multi-platform composer.
   //
@@ -107,7 +107,7 @@
             </div>
             <div class="text-[10px] font-mono {r.isOver ? 'text-error' : r.isWarning ? 'text-warning' : 'text-muted'}">
               {#if r.isOver}
-                {r.left === 0 ? `${r.count} — over by ${r.count - r.limit}` : `${r.count}/${r.limit}`}
+                {r.left === 0 ? `${r.count} - over by ${r.count - r.limit}` : `${r.count}/${r.limit}`}
               {:else}
                 {r.count}/{r.limit}
               {/if}
@@ -119,7 +119,7 @@
 
     {#if overCount > 0}
       <p class="text-[11px] text-error">
-        {overCount} channel{overCount > 1 ? 's' : ''} over limit — trim the body or drop {overCount > 1 ? 'those channels' : 'that channel'} to publish.
+        {overCount} channel{overCount > 1 ? 's' : ''} over limit - trim the body or drop {overCount > 1 ? 'those channels' : 'that channel'} to publish.
       </p>
     {/if}
   </div>

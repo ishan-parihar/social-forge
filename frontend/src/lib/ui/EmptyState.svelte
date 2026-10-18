@@ -1,5 +1,5 @@
 <script lang="ts">
-  // v22 Phase 3: EmptyState primitive — icon + title + description +
+  // v22 Phase 3: EmptyState primitive - icon + title + description +
   // optional action button. Replaces ad-hoc "No X yet" divs.
   import Icon from "./Icon.svelte";
 
@@ -22,7 +22,7 @@
   <div class="inline-flex items-center justify-center w-12 h-12 rounded-full bg-surface-hover mb-3">
     <Icon name={icon} class="w-5 h-5 text-muted" />
   </div>
-  <h3 class="text-sm font-medium text-content mb-1">{title}</h3>
+  <h2 class="text-sm font-medium text-content mb-1">{title}</h2>
   {#if description}
     <p class="text-xs text-muted max-w-sm mx-auto">{description}</p>
   {/if}

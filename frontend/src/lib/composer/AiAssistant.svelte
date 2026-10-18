@@ -1,5 +1,5 @@
 <script lang="ts">
-  // AiAssistant — in-composer AI writing (v25 F2: explicit request states).
+  // AiAssistant - in-composer AI writing (v25 F2: explicit request states).
   //
   // F2's change here is honesty about what the user is waiting for. The old
   // panel had two booleans (`aiLoading` / `aiResult`), so a failed request and
@@ -15,7 +15,7 @@
   // arriving. They are labelled as such here because the next person to read
   // this file will otherwise assume there is a stream behind them. If the
   // backend ever grows an NDJSON or SSE response, `runTask` is the only place
-  // that needs to change — the states already exist.
+  // that needs to change - the states already exist.
   import { ai } from "$lib/api/ai";
   import { profileApi, type BrandProfile } from "$lib/api/profile";
   import { onMount, onDestroy } from "svelte";
@@ -129,7 +129,7 @@
   async function handleGenerate() {
     if (status === "working") return;
     const ctx = brandContext();
-    // Guard before we claim to be working — a missing input is an idle state
+    // Guard before we claim to be working - a missing input is an idle state
     // with a message, not a failed request.
     if (selectedTask === "generate" && !topic.trim()) { aiError = "Please enter a topic"; return; }
     if (selectedTask !== "generate" && !content.trim()) { aiError = "Please write some content first"; return; }
@@ -161,7 +161,7 @@
       aiResult = result;
       status = "done";
     } catch (e: unknown) {
-      // An abort is a user action, not a failure — say which it was.
+      // An abort is a user action, not a failure - say which it was.
       if (e instanceof Error && e.name === "AbortError") {
         status = "idle";
         aiError = "Cancelled";
@@ -283,7 +283,7 @@
         </span>
         <span class="text-faint font-mono">{elapsedLabel()}</span>
       </div>
-      <!-- Progress bar. Width is the stage count, not real completion — the
+      <!-- Progress bar. Width is the stage count, not real completion - the
            label above says which step it is on, and the elapsed clock says how
            long it has been waiting. -->
       <div class="h-1 rounded-full bg-line overflow-hidden" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={stagePct} aria-label="AI request progress">
@@ -313,7 +313,7 @@
           : 'bg-error/10 border border-error/30 text-error'}"
       role={aiError === 'Cancelled' ? 'status' : 'alert'}
     >
-      {aiError === 'Cancelled' ? 'Cancelled — nothing was sent to the model.' : aiError}
+      {aiError === 'Cancelled' ? 'Cancelled - nothing was sent to the model.' : aiError}
     </div>
   {/if}
 

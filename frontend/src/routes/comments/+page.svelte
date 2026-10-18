@@ -77,7 +77,7 @@
     const integRes = await integrationsApi.list();
     if (integRes.data) connectedIntegrations = integRes.data.integrations;
     load();
-    // Refresh when a new comment arrives (realtime SSE event) — this is the
+    // Refresh when a new comment arrives (realtime SSE event) - this is the
     // event the backend actually broadcasts. The previous subscription to
     // `post_published`/`post_created` never fired for comment activity.
     for (const evt of ['comment_received', 'post_published', 'lagged']) {
@@ -92,7 +92,7 @@
 
 <div class="page-enter space-y-6">
   <div class="flex items-center justify-between">
-    <h2 class="text-xl font-semibold">Comments</h2>
+    <h1 class="text-xl font-semibold">Comments</h1>
     <button onclick={load} class="px-3 py-1.5 text-sm text-muted hover:text-content border border-line rounded-lg transition-colors">Refresh</button>
   </div>
 
@@ -129,7 +129,7 @@
     <EmptyState
       icon="comment"
       title="No comments found"
-      description="Comments come from connected platforms that expose a comments API — Instagram, Facebook, LinkedIn."
+      description="Comments come from connected platforms that expose a comments API - Instagram, Facebook, LinkedIn."
     />
   {:else}
     <div class="bg-surface border border-line rounded-xl overflow-hidden">
@@ -162,7 +162,7 @@
 {#if replyModal}
   <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50" role="dialog">
     <div class="bg-background-input border border-line rounded-xl p-6 w-full max-w-md">
-      <h3 class="text-lg font-semibold mb-2">Reply to {replyModal.comment.author || 'Unknown'}</h3>
+      <h2 class="text-lg font-semibold mb-2">Reply to {replyModal.comment.author || 'Unknown'}</h2>
       <p class="text-sm text-muted mb-4 truncate">{replyModal.comment.content}</p>
       <textarea
         bind:value={replyModal.text}
@@ -172,7 +172,7 @@
       ></textarea>
       <div class="flex gap-3 justify-end">
         <button onclick={() => replyModal = null} class="px-4 py-2 text-sm text-muted hover:text-content">Cancel</button>
-        <button onclick={sendReply} disabled={sending || !replyModal.text.trim()} class="px-4 py-2 text-sm bg-accent-fill hover:bg-accent-fill-hover rounded disabled:opacity-50">
+        <button onclick={sendReply} disabled={sending || !replyModal.text.trim()} class="px-4 py-2 text-sm bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded disabled:opacity-50">
           {sending ? "Sending..." : "Reply"}
         </button>
       </div>

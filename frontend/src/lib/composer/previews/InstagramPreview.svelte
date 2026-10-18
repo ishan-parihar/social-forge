@@ -1,5 +1,5 @@
 <script lang="ts">
-  // InstagramPreview — IG-style preview card (Phase 4).
+  // InstagramPreview - IG-style preview card (Phase 4).
   //
   // Distinctive IG chrome:
   //   - Avatar + name + "•••" menu in header
@@ -78,7 +78,7 @@
     </div>
   {:else}
     <div class="aspect-square bg-gray-100 flex items-center justify-center text-gray-400 text-sm border border-gray-200">
-      No image — IG posts require media
+      No image - IG posts require media
     </div>
   {/if}
 
@@ -95,7 +95,7 @@
     <span class="font-semibold">{authorHandle || authorName.toLowerCase().replace(/\s/g, '')}</span>
     <span class="ml-1">{@html highlightedCaption}</span>
     {#if isOverLimit}
-      <p class="text-[10px] text-red-500 mt-1">{plainText.length}/{charLimit} — text beyond {charLimit} will be cropped</p>
+      <p class="text-[10px] text-red-500 mt-1">{plainText.length}/{charLimit} - text beyond {charLimit} will be cropped</p>
     {/if}
   </div>
 </div>

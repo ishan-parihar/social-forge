@@ -1,4 +1,4 @@
-// AI API — calls the backend's /api/ai/* endpoints which proxy to the
+// AI API - calls the backend's /api/ai/* endpoints which proxy to the
 // configured LLM_ENDPOINT + LLM_MODEL. This keeps the API key server-side
 // and enables MCP/CLI parity (the same LLM logic runs for all interfaces).
 

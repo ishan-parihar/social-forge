@@ -1,10 +1,10 @@
 <script lang="ts">
-  // OnboardingModal — 2-step post-signup onboarding (Phase 3, v19).
+  // OnboardingModal - 2-step post-signup onboarding (Phase 3, v19).
   //
-  // Step 1: Connect Channels — shows already-connected channels + a grid
+  // Step 1: Connect Channels - shows already-connected channels + a grid
   //         of available providers to connect. "Continue" proceeds to
   //         step 2 even if no channels are connected.
-  // Step 2: Quick Tour — a static "how to" guide showing the 4 key flows
+  // Step 2: Quick Tour - a static "how to" guide showing the 4 key flows
   //         (composer modal, calendar drag-drop, posts list, analytics).
   //         "Get Started" closes the modal and routes to /calendar.
   //
@@ -24,7 +24,7 @@
   const ONBOARDING_KEY = 'social-forge-onboarded';
 
   // Available providers to show in the connect grid (Step 1).
-  // Subset of the full provider list — the most popular ones.
+  // Subset of the full provider list - the most popular ones.
   const AVAILABLE_PROVIDERS = [
     'x', 'reddit', 'linkedin', 'facebook', 'instagram',
     'threads', 'bluesky', 'mastodon', 'youtube', 'tiktok',
@@ -50,7 +50,7 @@
     onClose();
   }
 
-  // Tour steps for Step 2 — the 4 key flows.
+  // Tour steps for Step 2 - the 4 key flows.
   const tourSteps = [
     {
       icon: '✨',
@@ -60,7 +60,7 @@
     {
       icon: '📅',
       title: 'Drag to reschedule',
-      description: 'Grab any post on the calendar and drag it to a new time. Published posts get a safety modal — no accidental re-publishes.',
+      description: 'Grab any post on the calendar and drag it to a new time. Published posts get a safety modal - no accidental re-publishes.',
     },
     {
       icon: '🌐',
@@ -109,7 +109,7 @@
         <div>
           <p class="text-sm text-muted mb-4">
             Social Forge is your solo-founder social media command center.
-            Connect your channels to get started — you can add more later.
+            Connect your channels to get started - you can add more later.
           </p>
 
           {#if loading}

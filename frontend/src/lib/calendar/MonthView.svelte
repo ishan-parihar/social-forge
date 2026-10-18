@@ -60,7 +60,7 @@
   }
 
   // ---------------------------------------------------------------------
-  // v25 F5 — keyboard reachability + the 360px pass.
+  // v25 F5 - keyboard reachability + the 360px pass.
   //
   // Before this the grid was reachable by NOBODY on the keyboard: every cell
   // carried tabindex="-1" and nothing ever called .focus() on one, so the
@@ -75,8 +75,8 @@
   //      instead of the previous flat gridcell list (invalid structure that
   //      screen readers silently flatten).
   //   2. Alt+Arrow on a focused event chip reschedules it. Drag-and-drop had
-  //      no keyboard equivalent at all, so rescheduling — the calendar's main
-  //      verb — was mouse-only. It routes through the SAME onDrop prop the
+  //      no keyboard equivalent at all, so rescheduling - the calendar's main
+  //      verb - was mouse-only. It routes through the SAME onDrop prop the
   //      drag path uses, so there is one code path to the parent and no second
   //      "just update vs reschedule" decision to get wrong.
   //   3. A horizontal scroller with a width floor, replacing the root's

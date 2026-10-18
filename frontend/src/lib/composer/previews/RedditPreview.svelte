@@ -46,14 +46,14 @@
         {#if title}
           {title}
         {:else}
-          <span class="text-red-500 italic">Untitled — Reddit requires a title</span>
+          <span class="text-red-500 italic">Untitled - Reddit requires a title</span>
         {/if}
       </h3>
       <p class="text-sm text-gray-700 whitespace-pre-wrap break-words">
         {text.slice(0, limit)}<span class="bg-red-100 text-red-600 rounded-sm">{text.slice(limit)}</span>
       </p>
       {#if isOver}
-        <p class="text-[10px] text-red-600 mt-1">{count}/{limit} — will be rejected, trim {count - limit} more</p>
+        <p class="text-[10px] text-red-600 mt-1">{count}/{limit} - will be rejected, trim {count - limit} more</p>
       {/if}
       {#if images.length > 0}
         <img src={images[0].url} alt="" class="mt-2 w-full max-h-80 object-cover rounded border border-gray-200" />

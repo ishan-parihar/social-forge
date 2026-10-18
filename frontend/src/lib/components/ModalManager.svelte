@@ -1,5 +1,5 @@
 <script lang="ts">
-  // ModalManager — renders the global modal stack (Phase 0).
+  // ModalManager - renders the global modal stack (Phase 0).
   //
   // Mount this once at the +layout.svelte level (authenticated branch).
   // It reads from the `modals` store and renders each modal in the stack
@@ -45,7 +45,7 @@
   onMount(() => {
     window.addEventListener('keydown', handleKeydown);
   });
-  // `onDestroy` also runs during SSR, where `window` does not exist — the bare
+  // `onDestroy` also runs during SSR, where `window` does not exist - the bare
   // `window.removeEventListener` here used to throw `window is not defined`
   // and 500 every server-rendered route in dev. The listener is only ever
   // added from onMount (client-only), so skipping the removal on the server is
@@ -61,7 +61,7 @@
     if (!size) return 'max-w-lg';
     // If it's a Tailwind max-w-* class, use it directly.
     if (size.startsWith('max-w-')) return size;
-    // If it ends with %, px, rem, em — use as inline style value.
+    // If it ends with %, px, rem, em - use as inline style value.
     if (/(\d+(\.\d+)?)(%|px|rem|em|vw|vh)$/.test(size)) return size;
     // Default: treat as a Tailwind class.
     return size;
@@ -103,7 +103,7 @@
       ></div>
     {:else}
       <!-- Lower modals: dim the backdrop more so the top modal stands out.
-           F5: bg-overlay/60 rather than a second raw black step — the scrim
+           F5: bg-overlay/60 rather than a second raw black step - the scrim
            tint comes from the theme, so this stays theme-aware. -->
       <div class="absolute inset-0 bg-overlay/60 pointer-events-none" aria-hidden="true"></div>
     {/if}

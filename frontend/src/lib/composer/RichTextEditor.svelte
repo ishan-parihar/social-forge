@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import { createEditor, EditorContent } from 'svelte-tiptap';
   import type { Editor } from 'svelte-tiptap';
   import StarterKit from '@tiptap/starter-kit';
@@ -14,7 +14,7 @@
   let { content = "", placeholder = "Write your post...", onUpdate, integrationId }: {
     content?: string; placeholder?: string;
     onUpdate?: (html: string) => void;
-    /** v26-5: integration ID for @mention suggestions. Optional — if omitted,
+    /** v26-5: integration ID for @mention suggestions. Optional - if omitted,
      *  the MentionPicker won't activate. */
     integrationId?: string;
   } = $props();
@@ -27,10 +27,10 @@
   let imageUrl = $state('');
   let syncing = false;
 
-  // Note: Placeholder config is captured once at init — TipTap doesn't support reactive placeholder updates
+  // Note: Placeholder config is captured once at init - TipTap doesn't support reactive placeholder updates
   const extensions = [
     StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
-    Placeholder.configure({ placeholder }),
+    Placeholder.configure({ placeholder: untrack(() => placeholder) }),
     Link.configure({
       openOnClick: false,
       HTMLAttributes: {
@@ -61,7 +61,7 @@
     }
   }
 
-  // Guarded by {#if ... && editor} in the template — editor is always available when UI is visible
+  // Guarded by {#if ... && editor} in the template - editor is always available when UI is visible
   function insertImage() {
     if (!editor || !imageUrl.trim()) return;
     editor.chain().focus().setImage({ src: imageUrl.trim() }).run();
@@ -69,7 +69,7 @@
     showImageInput = false;
   }
 
-  // Guarded by {#if ... && editor} in the template — editor is always available when UI is visible
+  // Guarded by {#if ... && editor} in the template - editor is always available when UI is visible
   function insertEmoji(emoji: string) {
     if (!editor) return;
     editor.chain().focus().insertContent(emoji).run();
@@ -223,7 +223,7 @@
     padding: 0.875rem;
     /* v25 F5: was a bare `width: 24rem` (384px). The popover is absolutely
        positioned and centred, and nothing between it and the composer's
-       `fixed` overlay clips — so on a 360px phone this was the single widest
+       `fixed` overlay clips - so on a 360px phone this was the single widest
        element in the app and the one thing that could scroll the whole page
        sideways. `min()` keeps the desktop size and yields to the viewport. */
     width: min(24rem, calc(100vw - 2rem));
@@ -236,7 +236,7 @@
   }
 
   /* v25 F1: the editor body was carrying `prose prose-invert`, but
-     @tailwindcss/typography is not installed — both classes compile to nothing.
+     @tailwindcss/typography is not installed - both classes compile to nothing.
      The content was therefore rendering with browser-default styling: black text
      on the dark `--bg-input` surface, i.e. unreadable in dark mode. These rules
      replace the missing plugin with a scoped, token-driven equivalent: the post
@@ -304,4 +304,10 @@
     pointer-events: none;
   }
   .editor-body :global(.tiptap-focused) { outline: none; }
+  /* The editor surface drops its outline, so show the ring from the keyboard
+     focus state of the editable inside it. */
+  :global(.editor-body:has(:focus-visible)) {
+    box-shadow: 0 0 0 var(--focus-ring-width) var(--focus-ring);
+    border-radius: 0.5rem;
+  }
 </style>

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import Skeleton from '$lib/ui/Skeleton.svelte';
+  import { inkFor } from '$lib/ui/ink';
   import EmptyState from '$lib/ui/EmptyState.svelte';
   import { postsApi, type PostSummary } from '$lib/api/posts';
   import { analyticsApi, type AnalyticsSummary, type EngagementResponse, type AdherenceResponse, type CadenceResponse, type EventLogEntry } from '$lib/api/analytics';
@@ -22,7 +23,7 @@
   let recentPublished = $state<PostSummary[]>([]);
   let todayPosts = $state<PostSummary[]>([]);
   let allTodayPosts = $state<PostSummary[]>([]);
-  // Drafts the user is composing — surfaced in the "Needs Attention"
+  // Drafts the user is composing - surfaced in the "Needs Attention"
   // inbox (U-2) so they don't get forgotten.
   let draftPosts = $state<PostSummary[]>([]);
   let stats = $state({ draft: 0, queued: 0, published: 0, error: 0 });
@@ -173,11 +174,11 @@
   <!-- Header -->
   <div class="flex items-center justify-between">
     <div>
-      <h2 class="text-xl font-semibold">Dashboard</h2>
+      <h1 class="text-xl font-semibold">Dashboard</h1>
       <p class="text-sm text-muted mt-1">Your social media command center</p>
     </div>
     <div class="flex gap-2">
-      <button onclick={() => composer.openCreate()} class="px-4 py-2 bg-accent-fill hover:bg-accent-fill-hover rounded-lg text-sm font-medium transition-colors">
+      <button onclick={() => composer.openCreate()} class="px-4 py-2 bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg text-sm font-medium transition-colors">
         + New Post
       </button>
       <button onclick={() => goto('/analytics')} class="px-4 py-2 bg-surface-hover hover:bg-line-hover border border-line rounded-lg text-sm transition-colors">
@@ -197,7 +198,7 @@
          onboarding progress. Dismissable; auto-hides when all items complete. -->
     <GettingStarted />
 
-    <!-- Post Stats Row — v22 Phase 5: uses StatCard primitive + semantic tokens -->
+    <!-- Post Stats Row - v22 Phase 5: uses StatCard primitive + semantic tokens -->
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
       <StatCard label="Drafts" value={stats.draft} color="info" />
       <StatCard label="Queued" value={stats.queued} color="warning" />
@@ -258,7 +259,7 @@
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {#if adherenceData}
           <div class="bg-surface border border-line rounded-xl p-5">
-            <h3 class="font-medium text-sm mb-3">Scheduled vs Actual (7d)</h3>
+            <h2 class="font-medium text-sm mb-3">Scheduled vs Actual (7d)</h2>
             <div class="grid grid-cols-3 gap-3 mb-3">
               <div class="text-center">
                 <div class="text-2xl font-bold text-warning">{adherenceData.scheduled}</div>
@@ -284,7 +285,7 @@
         {/if}
         {#if cadenceData}
           <div class="bg-surface border border-line rounded-xl p-5">
-            <h3 class="font-medium text-sm mb-3">Posting Cadence (30d)</h3>
+            <h2 class="font-medium text-sm mb-3">Posting Cadence (30d)</h2>
             <div class="grid grid-cols-3 gap-3 mb-3">
               <div class="text-center">
                 <div class="text-2xl font-bold text-accent">{cadenceData.actual_per_day.toFixed(1)}</div>
@@ -321,10 +322,10 @@
 
     <!-- Two-column: Channel Performance + Alerts -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-      <!-- Channel Performance — v22 Phase 5: uses provider brand colors -->
+      <!-- Channel Performance - v22 Phase 5: uses provider brand colors -->
       <div class="lg:col-span-2 bg-surface border border-line rounded-xl p-5">
         <div class="flex items-center justify-between mb-4">
-          <h3 class="font-medium text-sm">Channel Performance (30d)</h3>
+          <h2 class="font-medium text-sm">Channel Performance (30d)</h2>
           <span class="text-xs text-muted">{integrations.length} connected</span>
         </div>
         {#if analyticsSummary && analyticsSummary.posts_by_provider.length > 0}
@@ -337,7 +338,7 @@
                     class="h-full rounded-full transition-all duration-500 flex items-center justify-end px-2"
                     style="width: {(prov.count / maxProviderCount) * 100}%; background-color: {providerColor(prov.provider)};"
                   >
-                    <span class="text-[10px] font-medium text-white">{prov.count}</span>
+                    <span class="text-[10px] font-medium" style="color: {inkFor(providerColor(prov.provider))};">{prov.count}</span>
                   </div>
                 </div>
               </div>
@@ -350,11 +351,11 @@
 
       <!-- Alerts -->
       <div class="bg-surface border border-line rounded-xl p-5">
-        <h3 class="font-medium text-sm mb-3">Alerts</h3>
+        <h2 class="font-medium text-sm mb-3">Alerts</h2>
         {#if alertCount === 0 && stats.draft === 0}
           <div class="text-center py-6">
             <span class="text-2xl">✅</span>
-            <p class="text-xs text-muted mt-2">All clear — no issues detected</p>
+            <p class="text-xs text-muted mt-2">All clear - no issues detected</p>
           </div>
         {:else}
           <div class="space-y-2">
@@ -391,13 +392,13 @@
          drafts waiting to be scheduled, and channels needing reconnect. -->
     <div class="bg-surface border border-line rounded-xl p-5">
       <div class="flex items-center justify-between mb-3">
-        <h3 class="font-medium text-sm">Needs Attention</h3>
+        <h2 class="font-medium text-sm">Needs Attention</h2>
         <span class="text-xs text-muted">{draftPosts.length + stats.error + integrations.filter(i => i.refresh_needed).length} item{(draftPosts.length + stats.error + integrations.filter(i => i.refresh_needed).length) !== 1 ? 's' : ''}</span>
       </div>
       {#if draftPosts.length === 0 && stats.error === 0 && integrations.filter(i => i.refresh_needed).length === 0}
         <div class="text-center py-4">
           <span class="text-xl">✅</span>
-          <p class="text-xs text-muted mt-1">All clear — nothing needs your attention</p>
+          <p class="text-xs text-muted mt-1">All clear - nothing needs your attention</p>
         </div>
       {:else}
         <div class="space-y-1.5">
@@ -430,7 +431,7 @@
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <!-- Today's Schedule -->
       <div class="bg-surface border border-line rounded-xl p-5">
-        <h3 class="font-medium text-sm mb-3">Today's Schedule <span class="text-[10px] text-faint">({timezone.value})</span></h3>
+        <h2 class="font-medium text-sm mb-3">Today's Schedule <span class="text-[10px] text-faint">({timezone.value})</span></h2>
         {#if todayPosts.length === 0}
           <EmptyState icon="calendar" title="Nothing scheduled for today" description="Pick a slot on the calendar to line up today's posts." />
         {:else}
@@ -451,9 +452,9 @@
         {/if}
       </div>
 
-      <!-- Recent Activity — v22 Phase 5: fixed providerIcon/providerColor bug -->
+      <!-- Recent Activity - v22 Phase 5: fixed providerIcon/providerColor bug -->
       <div class="bg-surface border border-line rounded-xl p-5">
-        <h3 class="font-medium text-sm mb-3">Recent Activity</h3>
+        <h2 class="font-medium text-sm mb-3">Recent Activity</h2>
         {#if recentPublished.length === 0}
           <EmptyState icon="post" title="Nothing published yet" description="Recently published posts will show up here." />
         {:else}
@@ -483,7 +484,7 @@
     <!-- v24-3: Recent Events widget (from events_log via v23-1 endpoint) -->
     {#if recentEvents.length > 0}
       <div class="bg-surface border border-line rounded-xl p-5">
-        <h3 class="font-medium text-sm mb-3">Recent Events</h3>
+        <h2 class="font-medium text-sm mb-3">Recent Events</h2>
         <div class="space-y-1">
           {#each recentEvents as evt (evt.id)}
             <div class="flex items-center gap-3 py-1.5 border-b border-line last:border-0">
@@ -514,7 +515,7 @@
 
     <!-- Quick Actions -->
     <div class="flex gap-3 flex-wrap">
-      <button onclick={() => composer.openCreate()} class="px-4 py-2 bg-accent-fill hover:bg-accent-fill-hover rounded-lg text-sm font-medium transition-colors">
+      <button onclick={() => composer.openCreate()} class="px-4 py-2 bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg text-sm font-medium transition-colors">
         <Icon name="post" class="w-4 h-4 inline" /> Compose Post
       </button>
       <button onclick={() => goto('/feed')} class="px-4 py-2 bg-surface-hover hover:bg-line-hover border border-line rounded-lg text-sm transition-colors">

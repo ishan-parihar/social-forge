@@ -81,7 +81,7 @@ export function makeTouchDragHandler(config: TouchDragConfig) {
     const touch = e.touches[0];
 
     if (!isDragging && longPressTimer) {
-      // Check if moved > threshold — cancel long-press (treat as scroll).
+      // Check if moved > threshold - cancel long-press (treat as scroll).
       const dx = touch.clientX - startX;
       const dy = touch.clientY - startY;
       if (Math.abs(dx) > MOVE_CANCEL_THRESHOLD_PX || Math.abs(dy) > MOVE_CANCEL_THRESHOLD_PX) {

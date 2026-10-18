@@ -21,7 +21,7 @@
   // Without this, a tab left open overnight wouldn't flip yesterday's
   // cells to greyscale until a manual refresh.
   let isPast = $derived.by(() => {
-    void calendarState.state.nowTick; // dependency — recomputes when tick changes
+    void calendarState.state.nowTick; // dependency - recomputes when tick changes
     return event.date ? event.date < todayStr() : false;
   });
   function todayStr() {
@@ -68,7 +68,7 @@
           {/each}
         {:else}
           <!-- v25 F3: readable tag-color chips. The old 3px dot was a color
-               nobody could name — two tags in a week cell looked identical
+               nobody could name - two tags in a week cell looked identical
                unless you already knew what you tagged them. A chip with the
                name in it is self-describing; the color still does the fast
                visual grouping job. -->

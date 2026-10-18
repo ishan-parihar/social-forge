@@ -67,7 +67,7 @@
 
 <div class="relative">
   <!-- v25 F5: the trigger never said a listbox was behind it, and the listbox
-       itself had no keydown handler — no Escape, no arrows, and focus never
+       itself had no keydown handler - no Escape, no arrows, and focus never
        left the trigger, so the panel was only reachable by blind Tabbing. -->
   <button
     onclick={toggle}
@@ -107,7 +107,7 @@
         <div class="text-sm text-error p-3">{error}</div>
       {:else if signatures.length === 0}
         <div class="text-sm text-muted p-4 text-center">
-          No signatures yet — <a href="/settings/signatures" class="text-accent hover:underline" onclick={() => (open = false)}>create one</a> in Settings
+          No signatures yet - <a href="/settings/signatures" class="text-accent hover:underline" onclick={() => (open = false)}>create one</a> in Settings
         </div>
       {:else}
         <!-- Global signatures -->

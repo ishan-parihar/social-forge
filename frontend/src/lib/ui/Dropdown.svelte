@@ -77,13 +77,13 @@
   });
 </script>
 
-<!-- role="presentation": the wrapper is not itself interactive — it only
+<!-- role="presentation": the wrapper is not itself interactive - it only
      delegates the keydown so the trigger and the menu share one handler. -->
 <div class="relative inline-block" bind:this={menuEl} role="presentation" onkeydown={onKeydown}>
   <!-- v25 F5: the trigger declared `role="menu"` was never paired with
        aria-haspopup/aria-expanded, so assistive tech had no way to know a menu
        was behind this button. The component also did not guarantee an
-       accessible name — the one call site supplied one in its snippet. -->
+       accessible name - the one call site supplied one in its snippet. -->
   <button
     bind:this={triggerEl}
     onclick={toggle}

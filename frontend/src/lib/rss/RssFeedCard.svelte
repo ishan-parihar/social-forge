@@ -97,7 +97,7 @@
       <h4 class="text-sm font-semibold truncate">{feed.title || 'Untitled Feed'}</h4>
       <!-- R-6: Use an explicit Enabled/Disabled pill instead of reusing the
            post-state Badge component (which would show "Published"/"Draft"
-           — semantically wrong for an RSS feed that has no publication state). -->
+           - semantically wrong for an RSS feed that has no publication state). -->
       <span class="px-2 py-0.5 rounded text-[10px] font-medium border {feed.enabled
         ? 'bg-success/10 border-success/30 text-success'
         : 'bg-hue-neutral/10 border-hue-neutral/30 text-faint'}">

@@ -109,7 +109,7 @@
   onMount(() => {
     loadTags();
     tagsUnsubscribers.push(realtime.on('post_created', () => loadTags()));
-    // Server-side "you missed events" signal — refetch stale tag counts.
+    // Server-side "you missed events" signal - refetch stale tag counts.
     tagsUnsubscribers.push(realtime.on('lagged', () => loadTags()));
   });
 
@@ -119,7 +119,7 @@
 </script>
 
 <div class="page-enter max-w-2xl mx-auto space-y-6">
-  <h2 class="text-xl font-semibold">Manage Tags</h2>
+  <h1 class="text-xl font-semibold">Manage Tags</h1>
 
   {#if error}
     <div class="bg-error/10 border border-error/30 text-error text-sm rounded-lg p-3 flex items-center justify-between">
@@ -130,11 +130,12 @@
 
   <!-- Create Tag -->
   <div class="bg-surface border border-line rounded-xl p-4">
-    <h3 class="text-sm font-semibold mb-3">Create Tag</h3>
+    <h2 class="text-sm font-semibold mb-3">Create Tag</h2>
     <div class="flex items-end gap-3">
       <div class="flex-1">
-        <label class="text-xs text-muted block mb-1">Name</label>
+        <label for="new-tag-name" class="text-xs text-muted block mb-1">Name</label>
         <input
+          id="new-tag-name"
           type="text"
           bind:value={newName}
           placeholder="e.g. urgent, client, idea"
@@ -143,9 +144,10 @@
         />
       </div>
       <div>
-        <label class="text-xs text-muted block mb-1">Color</label>
+        <label for="new-tag-color" class="text-xs text-muted block mb-1">Color</label>
         <div class="flex items-center gap-1">
           <input
+            id="new-tag-color"
             type="color"
             bind:value={newColor}
             class="w-9 h-9 rounded cursor-pointer bg-transparent border-0"
@@ -166,7 +168,7 @@
       <button
         onclick={createTag}
         disabled={creating || !newName.trim()}
-        class="px-4 py-2 bg-accent-fill hover:bg-accent-fill-hover disabled:opacity-50 rounded-lg text-sm transition-colors"
+        class="px-4 py-2 bg-accent-fill hover:bg-accent-fill-hover text-accent-fg disabled:opacity-50 rounded-lg text-sm transition-colors"
       >
         {creating ? '...' : 'Add'}
       </button>
@@ -175,7 +177,7 @@
 
   <!-- Tags List -->
   <div class="bg-surface border border-line rounded-xl p-4">
-    <h3 class="text-sm font-semibold mb-3">Your Tags</h3>
+    <h2 class="text-sm font-semibold mb-3">Your Tags</h2>
 
     {#if loading}
       <Skeleton variant="row" rows={4} />

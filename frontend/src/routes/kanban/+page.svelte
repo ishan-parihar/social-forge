@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Kanban board — content pipeline view (Phase 7, v20).
+  // Kanban board - content pipeline view (Phase 7, v20).
   //
   // Shows posts grouped by state (Ideas → Drafts → Scheduled → Published)
   // with drag-and-drop between columns. Optionally filter by campaign.
@@ -53,10 +53,10 @@
   let createCampaignModalOpen = $state(false);
   let newCampaignName = $state('');
 
-  // Kanban columns — map post_state to display config.
+  // Kanban columns - map post_state to display config.
   //
   // v25 F3: `color` used to be raw Tailwind palette steps (`border-t-purple-500`,
-  // `border-t-brand-500`). Those are tuned for neither theme — in light mode
+  // `border-t-brand-500`). Those are tuned for neither theme - in light mode
   // `purple-500` and `brand-500` are the SAME indigo, so two columns looked
   // identical, and neither rethemed. Now every lane reads an F1 semantic token.
   // `wip` is the work-in-progress limit: a soft ceiling that shows where a
@@ -75,14 +75,14 @@
     return 'text-error';
   }
   /** Lane count. A function (not an `{@const}`) because the header is not an
-   *  immediate child of a block — `{@const}` is illegal there. */
+   *  immediate child of a block - `{@const}` is illegal there. */
   function colCount(state: string): number {
     return postsByState[state]?.length || 0;
   }
 
   let unsubscribers: (() => void)[] = [];
 
-  // v25 F1: this load previously discarded every response error — a failed
+  // v25 F1: this load previously discarded every response error - a failed
   // board load rendered as an empty pipeline with no way to tell that apart
   // from "you have no posts", and no way to retry. It now surfaces the first
   // error so the board can show an ErrorState with a retry.
@@ -129,7 +129,7 @@
   // Now PostSummary has campaign_id as a proper optional field, so the
   // filter works correctly. The old `p.group_id === selectedCampaign`
   // fallback (which matched on thread/group ID, not campaign ID) is
-  // removed — it was a bug that caused false positives.
+  // removed - it was a bug that caused false positives.
   //
   // v25-5: also applies priority + substate filters from the filter bar.
   let filteredPosts = $derived(
@@ -236,7 +236,7 @@
   }
 
   // When dragging over the column background (not a card), clear the
-  // drop target — the post will go to the end of the column.
+  // drop target - the post will go to the end of the column.
   function onDragOverColumn(e: DragEvent) {
     e.preventDefault();
     if (dropTargetId !== null) dropTargetId = null;
@@ -276,7 +276,7 @@
       colPosts.forEach((p, i) => { p.kanban_sort_order = i; });
       posts = [...posts];
 
-      // Persist the new order. No success toast — reordering is a
+      // Persist the new order. No success toast - reordering is a
       // quiet operation (the card visibly moved, that's the feedback).
       const r = await postsApi.reorderKanban(newState, colPosts.map(p => p.id));
       if (r.error) {
@@ -294,7 +294,7 @@
         toast(`Failed to move: ${r.error}`, 'error');
         load(); // revert
       } else {
-        // v25 F3: WIP is advisory — the move succeeds, but say so plainly when
+        // v25 F3: WIP is advisory - the move succeeds, but say so plainly when
         // the lane is now over its ceiling. Silently ignoring the limit would
         // make the WIP number a lie the moment the user ignores it.
         const nowCount = (postsByState[newState] || []).length;
@@ -342,6 +342,22 @@
     }
   }
 
+  // Escape and backdrop clicks land here. A typed name is kept unless the user
+  // confirms the discard. Escape from the name input bubbles to the overlay,
+  // so the input has no handler of its own.
+  async function dismissCreateCampaign() {
+    if (newCampaignName.trim()) {
+      const ok = await modals.areYouSure({
+        title: 'Discard this campaign?',
+        message: 'The name you typed will be lost.',
+        confirmLabel: 'Discard',
+        danger: true,
+      });
+      if (!ok) return;
+    }
+    createCampaignModalOpen = false;
+  }
+
   // Delete a campaign.
   // Phase v21: replaced native confirm() with modals.areYouSure.
   async function deleteCampaign(id: string) {
@@ -374,7 +390,7 @@
   // substate / tags on each card using semantic tokens so they retheme
   // correctly in dark + light mode.
 
-  // Resolve the provider_identifier for a post — needed because
+  // Resolve the provider_identifier for a post - needed because
   // providerColor/providerIcon key on the provider id (e.g. "x"), not the
   // user-set account name. The dashboard had this same bug (fixed in v22
   // Phase 5); the kanban had it too. Now both use the same lookup pattern.
@@ -397,7 +413,7 @@
       urgent: 'text-error bg-error/20 font-bold',
     } as Record<string, string>)[p] || 'text-muted bg-line/40';
   }
-  // Left-border accent for the card itself — draws the eye to high/urgent.
+  // Left-border accent for the card itself - draws the eye to high/urgent.
   function priorityBorderClass(p: string): string {
     return ({
       low: 'border-l-2 border-l-info/40',
@@ -441,7 +457,7 @@
   }
 
   // v25 F3: cover image for a card. The list endpoint returns `media`, so
-  // this costs no extra request. Only the first IMAGE is used — a card wants
+  // this costs no extra request. Only the first IMAGE is used - a card wants
   // one thumbnail, and a video's first frame is not fetchable from a URL.
   function coverImage(post: PostSummary): string | null {
     const m = post.media?.find((x) => x?.mime_type?.startsWith('image/') && x.url);
@@ -504,13 +520,13 @@
     posts = [...posts];
     // For null (clearing), we need to send an empty string to the backend
     // (which interprets None as "unchanged"). But the backend's COALESCE
-    // means we can't actually clear via update_stage — only set. To clear,
+    // means we can't actually clear via update_stage - only set. To clear,
     // we'd need a dedicated endpoint. For now, only allow SETTING a substate.
     if (!kanban_substate) {
       // Can't clear via update_stage; revert + inform.
       post.kanban_substate = prev;
       posts = [...posts];
-      toast('Clearing substate is not yet supported — set a different one instead.', 'info');
+      toast('Clearing substate is not yet supported - set a different one instead.', 'info');
       return;
     }
     const r = await campaignsApi.updateStage(post.id, post.state, post.campaign_id || undefined, { kanban_substate });
@@ -557,7 +573,7 @@
   <!-- Header -->
   <div class="flex items-center justify-between">
     <div>
-      <h2 class="text-xl font-semibold">Content Pipeline</h2>
+      <h1 class="text-xl font-semibold">Content Pipeline</h1>
       <p class="text-sm text-muted mt-1">Drag posts between columns to move them through your content pipeline.</p>
     </div>
     <div class="flex gap-2">
@@ -595,7 +611,7 @@
     </div>
   {/if}
 
-  <!-- v25-5: filter bar — priority + substate filters. Shown when there
+  <!-- v25-5: filter bar - priority + substate filters. Shown when there
        are posts to filter. Compact pill-style selectors. -->
   {#if !loading && posts.length > 0}
     <div class="flex items-center gap-3 flex-wrap text-xs">
@@ -642,7 +658,7 @@
           role="region"
           aria-label="{col.label} column"
         >
-          <!-- Column header. v25 F3: the count is now a WIP gauge — a bare
+          <!-- Column header. v25 F3: the count is now a WIP gauge - a bare
                number gave no signal about whether the lane is healthy. -->
           <div class="px-4 py-3 border-b border-line flex items-center justify-between gap-2">
             <span class="text-sm font-semibold truncate">{col.label}</span>
@@ -668,7 +684,7 @@
               {#if dropTargetId === post.id && dropPosition === 'before' && draggingId !== post.id}
                 <div class="h-0.5 bg-accent-fill rounded-full -mx-2" aria-hidden="true"></div>
               {/if}
-              <article
+              <div
                 class="group bg-background-input border border-line rounded-lg cursor-grab active:cursor-grabbing hover:border-accent/50 transition-colors overflow-hidden {draggingId === post.id ? 'opacity-50' : ''} {priorityBorderClass(post.priority || 'medium')} {dropTargetId === post.id ? 'ring-1 ring-accent/50' : ''}"
                 draggable={true}
                 ondragstart={(e) => onDragStart(e, post.id)}
@@ -845,7 +861,7 @@
                     <div class="mt-1 text-[10px] text-error truncate" title={post.error_message}><span aria-hidden="true">⚠</span> {post.error_message}</div>
                   {/if}
                 </div>
-              </article>
+              </div>
               <!-- v25-4: drop indicator line rendered AFTER this card
                    when the cursor is in its bottom half. -->
               {#if dropTargetId === post.id && dropPosition === 'after' && draggingId !== post.id}
@@ -904,11 +920,12 @@
   {/if}
 </div>
 
-<!-- Phase v21: campaign-create modal — replaces native prompt(). -->
+<!-- Phase v21: campaign-create modal - replaces native prompt(). -->
 {#if createCampaignModalOpen}
   <div
     class="fixed inset-0 z-[200] flex items-center justify-center bg-overlay backdrop-blur-sm p-4"
-    onclick={() => (createCampaignModalOpen = false)}
+    onclick={(e) => e.target === e.currentTarget && dismissCreateCampaign()}
+    onkeydown={(e) => e.key === 'Escape' && dismissCreateCampaign()}
     role="dialog"
     aria-modal="true"
     aria-labelledby="create-campaign-title"
@@ -917,18 +934,17 @@
   >
     <div
       class="bg-surface border border-line rounded-xl shadow-lg w-full max-w-md p-5"
-      onclick={(e) => e.stopPropagation()}
     >
-      <h3 id="create-campaign-title" class="text-lg font-semibold mb-1">New campaign</h3>
+      <h2 id="create-campaign-title" class="text-lg font-semibold mb-1">New campaign</h2>
       <p class="text-xs text-muted mb-4">Campaigns group related posts together on the calendar.</p>
-      <label class="text-sm text-muted block mb-1.5">Name</label>
+      <label for="campaign-name" class="text-sm text-muted block mb-1.5">Name</label>
       <input
+        id="campaign-name"
         type="text"
         bind:value={newCampaignName}
         placeholder="e.g. Product launch Q3"
-        autofocus
         class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none mb-4"
-        onkeydown={(e) => { if (e.key === 'Enter') confirmCreateCampaign(); if (e.key === 'Escape') createCampaignModalOpen = false; }}
+        onkeydown={(e) => { if (e.key === 'Enter') confirmCreateCampaign(); }}
       />
       <div class="flex items-center justify-end gap-2">
         <button

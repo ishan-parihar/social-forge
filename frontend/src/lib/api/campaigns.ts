@@ -1,4 +1,4 @@
-// Campaigns API — CRUD for campaign entities + post stage management.
+// Campaigns API - CRUD for campaign entities + post stage management.
 // Phase 7, v20. v22 Phase 6: expanded with status, progress_metric,
 // audience_persona, content_pillars, budget_cents, kpi_targets.
 

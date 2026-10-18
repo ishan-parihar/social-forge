@@ -46,6 +46,12 @@
   let bulkRescheduleDate = $state("");
   let bulkRescheduleTime = $state("09:00");
   let bulkRescheduleSpread = $state("30");
+  let bulkRescheduleDefaultDate = $state("");
+  const bulkRescheduleDirty = $derived(
+    bulkRescheduleDate !== bulkRescheduleDefaultDate ||
+      bulkRescheduleTime !== "09:00" ||
+      bulkRescheduleSpread !== "30"
+  );
   // Per-post duplication in-flight flag (R-14 / U-5): prevents double-clicks
   // from spawning two duplicates of the same post.
   let duplicatingId = $state<string | null>(null);
@@ -89,7 +95,7 @@
       posts = r.data.posts;
       totalItems = r.data.total;
       totalPages = Math.ceil(r.data.total / limit);
-      // Clear selection whenever the page/filter reloads — the IDs in
+      // Clear selection whenever the page/filter reloads - the IDs in
       // the selection set may no longer be on the visible page.
       selectedIds = new Set();
     } else {
@@ -223,10 +229,26 @@
     // Pre-fill date with today + 1 day, time with 09:00.
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
-    bulkRescheduleDate = tomorrow.toISOString().slice(0, 10);
+    bulkRescheduleDefaultDate = tomorrow.toISOString().slice(0, 10);
+    bulkRescheduleDate = bulkRescheduleDefaultDate;
     bulkRescheduleTime = "09:00";
     bulkRescheduleSpread = "30";
     bulkRescheduleModalOpen = true;
+  }
+
+  // Escape and backdrop clicks land here. Changed values are kept unless the
+  // user confirms the discard.
+  async function dismissBulkReschedule() {
+    if (bulkRescheduleDirty) {
+      const ok = await modals.areYouSure({
+        title: "Discard this reschedule?",
+        message: "The date, time and spread you changed will be lost.",
+        confirmLabel: "Discard",
+        danger: true,
+      });
+      if (!ok) return;
+    }
+    bulkRescheduleModalOpen = false;
   }
 
   async function confirmBulkReschedule() {
@@ -270,7 +292,7 @@
     load();
   }
 
-  // Phase 5: bulk duplicate — opens the composer with the first post's
+  // Phase 5: bulk duplicate - opens the composer with the first post's
   // content prefilled. (One at a time; bulk duplicate via composer is
   // more useful than blind batch creation.)
   async function handleBulkDuplicate() {
@@ -306,7 +328,7 @@
 
 <div class="page-enter space-y-6">
   <div class="flex items-center justify-between">
-    <h2 class="text-xl font-semibold">Posts</h2>
+    <h1 class="text-xl font-semibold">Posts</h1>
     <div class="flex gap-2 items-center">
       <button
         onclick={() => groupByCampaign = !groupByCampaign}
@@ -315,7 +337,7 @@
         <Icon name="analytics" class="w-3.5 h-3.5" />
         {groupByCampaign ? 'Grouped' : 'Group by Campaign'}
       </button>
-      <button onclick={() => composer.openCreate()} class="px-3 py-1.5 bg-accent-fill hover:bg-accent-fill-hover rounded-lg text-sm transition-colors">+ New Post</button>
+      <button onclick={() => composer.openCreate()} class="px-3 py-1.5 bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg text-sm transition-colors">+ New Post</button>
     </div>
   </div>
 
@@ -345,7 +367,7 @@
     </select>
   </div>
 
-  <!-- Channel filter (Phase 5) — only show if integrations exist -->
+  <!-- Channel filter (Phase 5) - only show if integrations exist -->
   {#if allIntegrations.length > 0}
     <div class="flex gap-1 flex-wrap items-center">
       <span class="text-xs text-muted mr-1">Channels:</span>
@@ -513,7 +535,7 @@
     {#if totalPages > 1}
       <div class="flex items-center justify-between px-4 py-3 bg-surface border border-line rounded-xl">
         <span class="text-sm text-muted">
-          Showing {(currentPage - 1) * limit + 1}–{Math.min(currentPage * limit, totalItems)} of {totalItems}
+          Showing {(currentPage - 1) * limit + 1}-{Math.min(currentPage * limit, totalItems)} of {totalItems}
         </span>
         <div class="flex gap-2">
           <button
@@ -532,12 +554,13 @@
   {/if}
 </div>
 
-<!-- Phase v21: Bulk reschedule modal — replaces two sequential native
+<!-- Phase v21: Bulk reschedule modal - replaces two sequential native
      prompt() calls with a proper modal that has date + time + spread inputs. -->
 {#if bulkRescheduleModalOpen}
   <div
     class="fixed inset-0 z-[200] flex items-center justify-center bg-overlay backdrop-blur-sm p-4"
-    onclick={() => (bulkRescheduleModalOpen = false)}
+    onclick={(e) => e.target === e.currentTarget && dismissBulkReschedule()}
+    onkeydown={(e) => e.key === 'Escape' && dismissBulkReschedule()}
     role="dialog"
     aria-modal="true"
     aria-labelledby="bulk-reschedule-title"
@@ -546,34 +569,36 @@
   >
     <div
       class="bg-surface border border-line rounded-xl shadow-lg w-full max-w-md p-5"
-      onclick={(e) => e.stopPropagation()}
     >
-      <h3 id="bulk-reschedule-title" class="text-lg font-semibold mb-1">
+      <h2 id="bulk-reschedule-title" class="text-lg font-semibold mb-1">
         Reschedule {selectedIds.size} post{selectedIds.size > 1 ? 's' : ''}
-      </h3>
+      </h2>
       <p class="text-xs text-muted mb-4">
         The first post goes out at the date/time below. Each subsequent post is offset by the spread minutes.
       </p>
       <div class="space-y-3 mb-4">
         <div>
-          <label class="text-sm text-muted block mb-1.5">Base date</label>
+          <label for="bulk-date" class="text-sm text-muted block mb-1.5">Base date</label>
           <input
+            id="bulk-date"
             type="date"
             bind:value={bulkRescheduleDate}
             class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none"
           />
         </div>
         <div>
-          <label class="text-sm text-muted block mb-1.5">Base time (UTC)</label>
+          <label for="bulk-time" class="text-sm text-muted block mb-1.5">Base time (UTC)</label>
           <input
+            id="bulk-time"
             type="time"
             bind:value={bulkRescheduleTime}
             class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none"
           />
         </div>
         <div>
-          <label class="text-sm text-muted block mb-1.5">Spread (minutes between posts)</label>
+          <label for="bulk-spread" class="text-sm text-muted block mb-1.5">Spread (minutes between posts)</label>
           <input
+            id="bulk-spread"
             type="number"
             min="0"
             step="5"

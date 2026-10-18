@@ -41,7 +41,7 @@
   // We need integrations list for the Repurpose target picker.
   let allIntegrations = $state<Array<{ id: string; provider_name: string; provider_identifier: string; disabled: boolean }>>([]);
 
-  // Filter state — accounts (channels) grouped by provider
+  // Filter state - accounts (channels) grouped by provider
   let showFilter = $state(false);
   let allAccounts = $state<FeedAccount[]>([]);
   let selectedAccountHandle = $state<string | null>(null);
@@ -63,10 +63,10 @@
     return groups;
   });
 
-  // Derived: filtered posts — server-side filtered when author_handle is active, else client-side
+  // Derived: filtered posts - server-side filtered when author_handle is active, else client-side
   let filteredPosts = $derived.by(() => {
     if (selectedAccountHandle) {
-      // Server-side filtered by author_handle — show all returned posts
+      // Server-side filtered by author_handle - show all returned posts
       return posts;
     }
     if (selectedProvider) {
@@ -113,7 +113,7 @@
     try {
       await feedApi.import();
     } catch {
-      // API call failed silently — load() will show any feed errors
+      // API call failed silently - load() will show any feed errors
     }
     importing = false;
     attemptedImport = true;
@@ -196,7 +196,7 @@
   }
 
   // Provider metadata now comes from the central $lib/providers module
-  // (R-8) — no more 18-entry local map. The local providerMeta() wrapper
+  // (R-8) - no more 18-entry local map. The local providerMeta() wrapper
   // adapts the central shape ({label, color, icon, charLimit}) to the
   // {label, color, dot} shape this file's template expects (dot == color).
   function providerMeta(provider: string): { label: string; color: string; dot: string } {
@@ -266,7 +266,7 @@
         toast(`Repurpose failed: ${r.error}`, "error");
         return;
       }
-      toast("Post created as draft — open the composer to schedule it", "success");
+      toast("Post created as draft - open the composer to schedule it", "success");
       repurposeModalOpen = false;
       repurposePost = null;
       // Optionally open the composer to edit the new draft
@@ -283,6 +283,21 @@
     editText = post.text;
     editSubmitting = false;
     editModalOpen = true;
+  }
+
+  // Escape and backdrop clicks land here. Edited text is kept unless the user
+  // confirms the discard.
+  async function dismissEditModal() {
+    if (editText !== editPost?.text) {
+      const ok = await modals.areYouSure({
+        title: "Discard your edits?",
+        message: "The changes to this post will be lost.",
+        confirmLabel: "Discard",
+        danger: true,
+      });
+      if (!ok) return;
+    }
+    editModalOpen = false;
   }
 
   async function submitEdit() {
@@ -341,14 +356,14 @@
       try {
         await feedApi.import();
       } catch {
-        // API call failed silently — load() will show any feed errors
+        // API call failed silently - load() will show any feed errors
       }
       importing = false;
       attemptedImport = true;
       await load();
     }
     // Auto-refresh on realtime events. `feed:new_posts` / `feed:engagement`
-    // come from the background feed refresher (src/feed/mod.rs) — the feed
+    // come from the background feed refresher (src/feed/mod.rs) - the feed
     // view is derived from that cache, so these are the events it actually
     // needs; `post_published`/`post_created` cover our own publishes.
     const events = ['post_published', 'post_created', 'feed:new_posts', 'feed:engagement', 'lagged'];
@@ -366,7 +381,7 @@
   <!-- Header -->
   <div class="flex items-center justify-between">
     <div class="flex items-center gap-3">
-      <h2 class="text-xl font-bold text-content tracking-tight">Feed</h2>
+      <h1 class="text-xl font-bold text-content tracking-tight">Feed</h1>
       {#if !loading && posts.length > 0}
         <span class="text-xs text-muted font-mono bg-surface-hover px-2 py-0.5 rounded-full border border-line">
           {filteredPosts.length}{#if filteredPosts.length !== posts.length} / {posts.length}{/if}
@@ -403,10 +418,10 @@
         <span class="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-medium rounded-lg
           bg-accent-fill/15 text-accent-strong border border-accent/25">
           {#if chipMeta}
-            <span class="w-1.5 h-1.5 rounded-full" style="background: {chipMeta.dot}" />
+            <span class="w-1.5 h-1.5 rounded-full" style="background: {chipMeta.dot}"></span>
           {/if}
           {activeFilterLabel}
-          <button onclick={clearFilter} class="ml-0.5 hover:text-accent-strong transition-colors">
+          <button onclick={clearFilter} aria-label="Clear filter" class="ml-0.5 hover:text-accent-strong transition-colors">
             <svg class="w-3 h-3" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M3 3l6 6M9 3l-6 6" stroke-linecap="round" />
             </svg>
@@ -456,7 +471,7 @@
                 </svg>
                 <span class="text-sm font-medium">All channels</span>
                 {#if !selectedAccountHandle && !selectedProvider}
-                  <span class="ml-auto w-1.5 h-1.5 rounded-full bg-accent-fill" />
+                  <span class="ml-auto w-1.5 h-1.5 rounded-full bg-accent-fill"></span>
                 {/if}
               </button>
 
@@ -466,7 +481,7 @@
                   {@const pmeta = providerMeta(provider)}
                   <!-- Provider header -->
                   <div class="px-4 py-1.5 flex items-center gap-2">
-                    <span class="w-1.5 h-1.5 rounded-full flex-shrink-0" style="background: {pmeta.dot}" />
+                    <span class="w-1.5 h-1.5 rounded-full flex-shrink-0" style="background: {pmeta.dot}"></span>
                     <span class="text-[10px] font-semibold uppercase tracking-wider text-muted">{pmeta.label}</span>
                   </div>
 
@@ -499,7 +514,7 @@
                         {/if}
                       </div>
                       {#if selectedAccountHandle === acct.author_handle}
-                        <span class="ml-auto w-1.5 h-1.5 rounded-full bg-accent-fill flex-shrink-0" />
+                        <span class="ml-auto w-1.5 h-1.5 rounded-full bg-accent-fill flex-shrink-0"></span>
                       {/if}
                     </button>
                   {/each}
@@ -543,7 +558,7 @@
       <p class="text-sm font-medium text-content">Importing your posts…</p>
       <p class="text-xs text-muted mt-1">Fetching recent posts from all your connected providers</p>
       <div class="mt-6 w-48 h-1 mx-auto bg-line rounded-full overflow-hidden">
-        <div class="h-full bg-accent-fill/50 rounded-full animate-pulse" style="width: 60%" />
+        <div class="h-full bg-accent-fill/50 rounded-full animate-pulse" style="width: 60%"></div>
       </div>
     </div>
 
@@ -578,13 +593,13 @@
         >
           <!-- Subtle top accent line -->
           <div class="absolute top-0 left-6 right-6 h-px opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-            style="background: linear-gradient(90deg, transparent, {meta.color}22, transparent)" />
+            style="background: linear-gradient(90deg, transparent, {meta.color}22, transparent)"></div>
 
           <div class="p-5">
             <!-- Header: provider badge + author + time -->
             <div class="flex items-center gap-2.5 mb-3">
               <!-- Provider dot -->
-              <span class="w-2 h-2 rounded-full flex-shrink-0" style="background: {meta.dot}" />
+              <span class="w-2 h-2 rounded-full flex-shrink-0" style="background: {meta.dot}"></span>
 
               <!-- Provider badge -->
               <span class="text-[11px] font-semibold uppercase tracking-wider"
@@ -656,6 +671,8 @@
                       </div>
                     {:else if isVideo(item.mime_type, item.url)}
                       <div class="relative group/video">
+                        <!-- Imported videos carry no caption files to attach. -->
+                        <!-- svelte-ignore a11y_media_has_caption -->
                         <video
                           src={proxyMediaUrl(item.url)}
                           controls
@@ -748,7 +765,7 @@
                     </svg>
                   </a>
                 {/if}
-                <!-- v23-6: "Manage on platform" link — lets the user
+                <!-- v23-6: "Manage on platform" link - lets the user
                      edit/delete the post on the platform's own UI.
                      Constructed from provider + platform_post_id. -->
                 {#if platformPostUrl(post.provider, post.platform_post_id) && platformPostUrl(post.provider, post.platform_post_id) !== post.url}
@@ -767,7 +784,7 @@
                 {/if}
               </div>
               <div class="flex items-center gap-3">
-                <!-- Phase v21: Repurpose — now calls the real backend
+                <!-- Phase v21: Repurpose - now calls the real backend
                      endpoint POST /api/feed/{id}/repurpose which creates
                      a Social Forge post row with source_external_post_id
                      set for provenance. Previously this was a frontend-only
@@ -780,7 +797,7 @@
                 >
                   ✏️ Repurpose
                 </button>
-                <!-- Phase v21: Edit — calls PUT /api/feed/{id} to update the
+                <!-- Phase v21: Edit - calls PUT /api/feed/{id} to update the
                      cached text/media/metadata. Useful for fixing import
                      errors without re-importing. -->
                 <button
@@ -824,7 +841,7 @@
       {#if hasMore}
         {#if loadingMore}
           <div class="flex items-center justify-center gap-2.5 py-4">
-            <div class="w-5 h-5 rounded-full border-2 border-accent/30 border-t-brand-400 animate-spin" />
+            <div class="w-5 h-5 rounded-full border-2 border-accent/30 border-t-brand-400 animate-spin"></div>
             <span class="text-xs text-muted font-mono">Loading more…</span>
           </div>
         {:else if nearBottom}
@@ -852,20 +869,21 @@
         {/if}
       {:else if posts.length > 0}
         <div class="flex flex-col items-center gap-2 py-8">
-          <div class="w-12 h-px bg-gradient-to-r from-transparent via-line to-transparent" />
+          <div class="w-12 h-px bg-gradient-to-r from-transparent via-line to-transparent"></div>
           <span class="text-[10px] text-faint font-mono tracking-wider">You're all caught up</span>
-          <div class="w-12 h-px bg-gradient-to-r from-transparent via-line to-transparent" />
+          <div class="w-12 h-px bg-gradient-to-r from-transparent via-line to-transparent"></div>
         </div>
       {/if}
     </div>
   {/if}
 </div>
 
-<!-- Phase v21: Repurpose modal — pick a target channel + call the backend -->
+<!-- Phase v21: Repurpose modal - pick a target channel + call the backend -->
 {#if repurposeModalOpen && repurposePost}
   <div
     class="fixed inset-0 z-[200] flex items-center justify-center bg-overlay backdrop-blur-sm p-4"
-    onclick={() => !repurposeSubmitting && (repurposeModalOpen = false)}
+    onclick={(e) => e.target === e.currentTarget && !repurposeSubmitting && (repurposeModalOpen = false)}
+    onkeydown={(e) => e.key === 'Escape' && !repurposeSubmitting && (repurposeModalOpen = false)}
     role="dialog"
     aria-modal="true"
     aria-labelledby="repurpose-title"
@@ -874,17 +892,17 @@
   >
     <div
       class="bg-surface border border-line rounded-xl shadow-lg w-full max-w-md p-5"
-      onclick={(e) => e.stopPropagation()}
     >
-      <h3 id="repurpose-title" class="text-lg font-semibold mb-1">Repurpose post</h3>
+      <h2 id="repurpose-title" class="text-lg font-semibold mb-1">Repurpose post</h2>
       <p class="text-xs text-muted mb-4">
         Create a new Social Forge draft from this imported post. You can edit and schedule it after.
       </p>
       <div class="bg-background-input border border-line rounded-lg p-3 mb-4 max-h-32 overflow-y-auto">
         <p class="text-xs text-content-secondary whitespace-pre-wrap line-clamp-4">{repurposePost.text}</p>
       </div>
-      <label class="text-sm text-muted block mb-1.5">Post to channel</label>
+      <label for="repurpose-channel" class="text-sm text-muted block mb-1.5">Post to channel</label>
       <select
+        id="repurpose-channel"
         bind:value={repurposeTargetIntegration}
         disabled={repurposeSubmitting}
         class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none mb-4"
@@ -917,11 +935,12 @@
   </div>
 {/if}
 
-<!-- Phase v21: Edit modal — update the cached feed post's text -->
+<!-- Phase v21: Edit modal - update the cached feed post's text -->
 {#if editModalOpen && editPost}
   <div
     class="fixed inset-0 z-[200] flex items-center justify-center bg-overlay backdrop-blur-sm p-4"
-    onclick={() => !editSubmitting && (editModalOpen = false)}
+    onclick={(e) => e.target === e.currentTarget && !editSubmitting && dismissEditModal()}
+    onkeydown={(e) => e.key === 'Escape' && !editSubmitting && dismissEditModal()}
     role="dialog"
     aria-modal="true"
     aria-labelledby="edit-title"
@@ -930,14 +949,14 @@
   >
     <div
       class="bg-surface border border-line rounded-xl shadow-lg w-full max-w-lg p-5"
-      onclick={(e) => e.stopPropagation()}
     >
-      <h3 id="edit-title" class="text-lg font-semibold mb-1">Edit cached post</h3>
+      <h2 id="edit-title" class="text-lg font-semibold mb-1">Edit cached post</h2>
       <p class="text-xs text-muted mb-4">
-        Update the cached copy of this imported post. This does NOT change the original on the platform — only what you see in this feed.
+        Update the cached copy of this imported post. This does NOT change the original on the platform - only what you see in this feed.
       </p>
-      <label class="text-sm text-muted block mb-1.5">Text</label>
+      <label for="edit-text" class="text-sm text-muted block mb-1.5">Text</label>
       <textarea
+        id="edit-text"
         bind:value={editText}
         disabled={editSubmitting}
         rows="6"

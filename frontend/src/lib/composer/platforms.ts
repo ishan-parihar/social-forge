@@ -1,4 +1,4 @@
-// Platform posting rules — v25 F2.
+// Platform posting rules - v25 F2.
 //
 // ONE table that answers "what does this platform actually accept?", consumed by
 // three callers that previously each carried their own partial copy of the
@@ -15,7 +15,7 @@
 // counting mode.
 //
 // Media limits track the 2026 public API docs for each platform's
-// Content Publishing surface. They are a UX gate, not a security boundary —
+// Content Publishing surface. They are a UX gate, not a security boundary -
 // `POST /api/posts/validate` re-checks server-side and ComposerModal still
 // calls it on submit. A stale number here shows a warning too early or too
 // late; it can never let an illegal post through.
@@ -56,7 +56,7 @@ export interface PlatformSpec {
  *
  * Tier-2 platforms are deliberately absent: they are publish-maintained and
  * get the GeneralPreview, which is the correct level of fidelity for a
- * platform we do not claim depth on. Tier-3 (farcaster) is absent entirely —
+ * platform we do not claim depth on. Tier-3 (farcaster) is absent entirely -
  * it is not in the default registry, so it can never be selected.
  */
 export const TIER1: readonly string[] = [
@@ -213,7 +213,7 @@ export interface PlatformBlocker {
 }
 
 /**
- * Everything that stops this content going out on `provider` — as a list, so
+ * Everything that stops this content going out on `provider` - as a list, so
  * the banner can show all of them at once instead of making the user fix one,
  * re-submit, and discover the next.
  *
@@ -241,7 +241,7 @@ export function blockersFor(
     out.push({
       provider,
       label: spec.label,
-      message: `${spec.counting === 'weighted' ? 'Weighted count' : 'Character count'} is ${count}/${limit} — ${over} over`,
+      message: `${spec.counting === 'weighted' ? 'Weighted count' : 'Character count'} is ${count}/${limit} - ${over} over`,
     });
   }
   if (spec.titleRequired && !(opts.title || '').trim()) {
@@ -264,13 +264,13 @@ export function blockersFor(
   if (images > spec.maxImages) {
     out.push({
       provider, label: spec.label,
-      message: `${images} images — ${spec.label} accepts at most ${spec.maxImages}`,
+      message: `${images} images - ${spec.label} accepts at most ${spec.maxImages}`,
     });
   }
   if (videos > spec.maxVideos) {
     out.push({
       provider, label: spec.label,
-      message: `${videos} videos — ${spec.label} accepts at most ${spec.maxVideos}`,
+      message: `${videos} videos - ${spec.label} accepts at most ${spec.maxVideos}`,
     });
   }
   if (spec.exclusiveMedia && images > 0 && videos > 0) {

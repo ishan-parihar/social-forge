@@ -1,4 +1,4 @@
-// v25 F5 — one focus trap, shared by every dialog surface.
+// v25 F5 - one focus trap, shared by every dialog surface.
 //
 // Why a shared primitive: before F5, each modal hand-rolled its own partial
 // version. `lib/ui/Modal.svelte` moved focus in and out but let Tab walk out
@@ -97,7 +97,7 @@ export function focusTrap(node: HTMLElement, params: FocusTrapParams | boolean =
     // Capture phase: a dialog that stops propagation (the media carousel
     // carousel does, for arrow keys) must not be able to swallow Tab.
     document.addEventListener('keydown', onKeydown, true);
-    // One frame of delay so the dialog's children have layout boxes —
+    // One frame of delay so the dialog's children have layout boxes -
     // focusableWithin() filters on getClientRects().
     requestAnimationFrame(() => {
       if (!active) return;

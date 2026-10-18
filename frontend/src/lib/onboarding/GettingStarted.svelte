@@ -11,7 +11,7 @@
   //   3. Schedule it        → ≥1 post in 'queued' state
   //   4. View your analytics → user has visited /analytics (tracked in localStorage)
   //
-  // The widget is dismissable — once dismissed, it stays hidden even if
+  // The widget is dismissable - once dismissed, it stays hidden even if
   // not all items are complete. The user can re-show it from the
   // settings page (future enhancement).
 
@@ -70,7 +70,7 @@
     }
     if (postsRes.data) {
       hasPosts = postsRes.data.total > 0;
-      // Check for any queued post — need a larger sample to be reliable
+      // Check for any queued post - need a larger sample to be reliable
       if (postsRes.data.total > 0) {
         const allPosts = await postsApi.list({ limit: 100 });
         if (allPosts.data) {
@@ -104,7 +104,7 @@
   <div class="bg-gradient-to-br from-accent/10 to-hue-violet/10 border border-accent/30 rounded-xl p-5">
     <div class="flex items-start justify-between mb-3">
       <div>
-        <h3 class="text-sm font-semibold text-accent-strong">Getting Started</h3>
+        <h2 class="text-sm font-semibold text-accent-strong">Getting Started</h2>
         <p class="text-xs text-muted mt-0.5">{completedCount} of {checklist.length} complete</p>
       </div>
       <button

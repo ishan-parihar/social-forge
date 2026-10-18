@@ -1,5 +1,5 @@
 <script lang="ts">
-  // v22 Phase 3: PageHeader primitive — title + optional subtitle +
+  // v22 Phase 3: PageHeader primitive - title + optional subtitle +
   // actions slot. Standardizes route headers.
   let {
     title,

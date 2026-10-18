@@ -9,7 +9,7 @@ export interface Toast {
 //
 // Before this fix, `toast()` broadcast to `_listeners` immediately. If
 // `toast()` was called before `Toast.svelte` mounted its listener (which
-// happens during initial page load — e.g., a `+page.svelte` `onMount`
+// happens during initial page load - e.g., a `+page.svelte` `onMount`
 // that fires before `+layout.svelte`'s `Toast.svelte` `onMount`), the
 // toast was silently lost.
 //
@@ -36,7 +36,7 @@ export function toast(message: string, type: ToastType = "info") {
 	const t: Toast = { id: ++_id, message, type };
 
 	if (_listeners.length === 0) {
-		// No listener yet — buffer the toast. It'll be flushed when the
+		// No listener yet - buffer the toast. It'll be flushed when the
 		// first listener subscribes. Schedule the dismissal now so the
 		// buffered toast doesn't live forever if no listener ever shows up.
 		_pending.push(t);
@@ -44,7 +44,7 @@ export function toast(message: string, type: ToastType = "info") {
 		return;
 	}
 
-	// Listeners exist — broadcast immediately.
+	// Listeners exist - broadcast immediately.
 	_listeners.forEach((fn) => fn(t));
 	scheduleDismissal(t);
 }

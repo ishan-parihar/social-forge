@@ -6,7 +6,7 @@
   import { profileApi, type BrandProfile } from '$lib/api/profile';
 
   // v24-4: brand profile is now synced to the backend (PUT /api/profile).
-  // Previously it was localStorage-only — not synced across devices and
+  // Previously it was localStorage-only - not synced across devices and
   // not read by the AiAssistant. Now the AiAssistant can use it as
   // context for generate/improve/tone, and the cadence widget can read
   // posts_per_day_goal.
@@ -60,20 +60,20 @@
       brandDescription = p.description ?? "";
       toneOfVoice = p.tone_of_voice ?? "professional";
       targetAudience = p.audience ?? "";
-      // content_pillars is JSONB [{title, description}] — join to newline string.
+      // content_pillars is JSONB [{title, description}] - join to newline string.
       if (Array.isArray(p.content_pillars)) {
         contentPillars = p.content_pillars.map((cp: { title?: string; description?: string }) => cp.title).join('\n');
       }
       postingFrequency = p.posting_frequency ?? "daily";
-      // hashtag_sets is JSONB [{name, tags}] — join to newline string.
+      // hashtag_sets is JSONB [{name, tags}] - join to newline string.
       if (Array.isArray(p.hashtag_sets)) {
         hashtagSets = p.hashtag_sets.map((hs: { name?: string; tags?: string[] }) => (hs.tags || []).join(' ')).join('\n');
       }
-      // keywords is JSONB ["k1", "k2"] — join to comma string.
+      // keywords is JSONB ["k1", "k2"] - join to comma string.
       if (Array.isArray(p.keywords)) {
         brandKeywords = p.keywords.join(', ');
       }
-      // avoid_topics is JSONB ["t1", "t2"] — join to comma string.
+      // avoid_topics is JSONB ["t1", "t2"] - join to comma string.
       if (Array.isArray(p.avoid_topics)) {
         avoidTopics = p.avoid_topics.join(', ');
       }
@@ -180,10 +180,10 @@
 <div class="page-enter space-y-6">
   <div class="flex items-center justify-between">
     <div>
-      <h2 class="text-xl font-semibold">Brand Profile</h2>
+      <h1 class="text-xl font-semibold">Brand Profile</h1>
       <p class="text-sm text-muted mt-1">Define your brand voice, audience, and content strategy for AI-assisted posting</p>
     </div>
-    <button onclick={saveProfile} disabled={saving || loading} class="px-4 py-2 bg-accent-fill hover:bg-accent-fill-hover rounded-lg text-sm font-medium transition-colors disabled:opacity-50">
+    <button onclick={saveProfile} disabled={saving || loading} class="px-4 py-2 bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg text-sm font-medium transition-colors disabled:opacity-50">
       {saving ? "Saving..." : "Save Profile"}
     </button>
   </div>
@@ -193,27 +193,27 @@
   {:else}
     <!-- Brand Identity -->
     <div class="bg-surface border border-line rounded-xl p-5 space-y-4">
-      <h3 class="text-sm font-medium text-content">Brand Identity</h3>
+      <h2 class="text-sm font-medium text-content">Brand Identity</h2>
       <div>
-        <label class="text-xs text-muted mb-1 block">Brand Name</label>
-        <input bind:value={brandName} placeholder="e.g. Acme Corp" class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm" />
+        <label for="brand-name" class="text-xs text-muted mb-1 block">Brand Name</label>
+        <input id="brand-name" bind:value={brandName} placeholder="e.g. Your company name" class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm" />
       </div>
       <div>
-        <label class="text-xs text-muted mb-1 block">Brand Description</label>
-        <textarea bind:value={brandDescription} placeholder="What does your brand do? What's your mission?" rows="3" class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm resize-none"></textarea>
+        <label for="brand-description" class="text-xs text-muted mb-1 block">Brand Description</label>
+        <textarea id="brand-description" bind:value={brandDescription} placeholder="What does your brand do? What's your mission?" rows="3" class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm resize-none"></textarea>
       </div>
       <div class="grid grid-cols-2 gap-4">
         <div>
-          <label class="text-xs text-muted mb-1 block">Tone of Voice</label>
-          <select bind:value={toneOfVoice} class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm">
+          <label for="brand-tone" class="text-xs text-muted mb-1 block">Tone of Voice</label>
+          <select id="brand-tone" bind:value={toneOfVoice} class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm">
             {#each toneOptions as opt}
               <option value={opt.value}>{opt.label}</option>
             {/each}
           </select>
         </div>
         <div>
-          <label class="text-xs text-muted mb-1 block">Posting Frequency Goal</label>
-          <select bind:value={postingFrequency} class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm">
+          <label for="brand-frequency" class="text-xs text-muted mb-1 block">Posting Frequency Goal</label>
+          <select id="brand-frequency" bind:value={postingFrequency} class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm">
             {#each frequencyOptions as opt}
               <option value={opt.value}>{opt.label}</option>
             {/each}
@@ -224,34 +224,34 @@
 
     <!-- Target Audience -->
     <div class="bg-surface border border-line rounded-xl p-5 space-y-4">
-      <h3 class="text-sm font-medium text-content">Target Audience</h3>
+      <h2 class="text-sm font-medium text-content">Target Audience</h2>
       <div>
-        <label class="text-xs text-muted mb-1 block">Audience Description</label>
-        <textarea bind:value={targetAudience} placeholder="Who are you trying to reach? e.g. 'Startup founders aged 25-40 interested in SaaS and productivity tools'" rows="3" class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm resize-none"></textarea>
+        <label for="audience-description" class="text-xs text-muted mb-1 block">Audience Description</label>
+        <textarea id="audience-description" bind:value={targetAudience} placeholder="Who are you trying to reach? e.g. 'Startup founders aged 25-40 interested in SaaS and productivity tools'" rows="3" class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm resize-none"></textarea>
       </div>
     </div>
 
     <!-- Content Strategy -->
     <div class="bg-surface border border-line rounded-xl p-5 space-y-4">
-      <h3 class="text-sm font-medium text-content">Content Strategy</h3>
+      <h2 class="text-sm font-medium text-content">Content Strategy</h2>
       <div>
-        <label class="text-xs text-muted mb-1 block">Content Pillars (one per line)</label>
-        <textarea bind:value={contentPillars} placeholder={"Product updates\nIndustry insights\nCustomer stories\nEducational tutorials"} rows="5" class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm resize-none font-mono"></textarea>
+        <label for="content-pillars" class="text-xs text-muted mb-1 block">Content Pillars (one per line)</label>
+        <textarea id="content-pillars" bind:value={contentPillars} placeholder={"Product updates\nIndustry insights\nCustomer stories\nEducational tutorials"} rows="5" class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm resize-none font-mono"></textarea>
         <p class="text-[10px] text-faint mt-1">Topics you regularly post about. AI will use these to suggest content.</p>
       </div>
       <div>
-        <label class="text-xs text-muted mb-1 block">Brand Keywords</label>
-        <input bind:value={brandKeywords} placeholder="e.g. productivity, automation, SaaS, workflow" class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm" />
+        <label for="brand-keywords" class="text-xs text-muted mb-1 block">Brand Keywords</label>
+        <input id="brand-keywords" bind:value={brandKeywords} placeholder="e.g. productivity, automation, SaaS, workflow" class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm" />
         <p class="text-[10px] text-faint mt-1">Comma-separated keywords that should appear in your content.</p>
       </div>
       <div>
-        <label class="text-xs text-muted mb-1 block">Hashtag Sets (one set per line, space-separated)</label>
-        <textarea bind:value={hashtagSets} placeholder={"#SaaS #Productivity #Startup\n#Automation #Workflow #Tech\n#Marketing #Growth #Business"} rows="4" class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm resize-none font-mono"></textarea>
+        <label for="hashtag-sets" class="text-xs text-muted mb-1 block">Hashtag Sets (one set per line, space-separated)</label>
+        <textarea id="hashtag-sets" bind:value={hashtagSets} placeholder={"#SaaS #Productivity #Startup\n#Automation #Workflow #Tech\n#Marketing #Growth #Business"} rows="4" class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm resize-none font-mono"></textarea>
         <p class="text-[10px] text-faint mt-1">Pre-defined hashtag groups for different content types.</p>
       </div>
       <div>
-        <label class="text-xs text-muted mb-1 block">Topics to Avoid</label>
-        <input bind:value={avoidTopics} placeholder="e.g. politics, controversial topics, competitor names" class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm" />
+        <label for="avoid-topics" class="text-xs text-muted mb-1 block">Topics to Avoid</label>
+        <input id="avoid-topics" bind:value={avoidTopics} placeholder="e.g. politics, controversial topics, competitor names" class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm" />
         <p class="text-[10px] text-faint mt-1">AI will avoid these topics when generating content.</p>
       </div>
     </div>
@@ -261,7 +261,7 @@
       <button onclick={clearProfile} class="px-4 py-2 text-sm text-error hover:text-error/80 transition-colors">
         Clear All
       </button>
-      <button onclick={saveProfile} disabled={saving} class="px-4 py-2 bg-accent-fill hover:bg-accent-fill-hover rounded-lg text-sm font-medium transition-colors disabled:opacity-50">
+      <button onclick={saveProfile} disabled={saving} class="px-4 py-2 bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg text-sm font-medium transition-colors disabled:opacity-50">
         {saving ? "Saving..." : "Save Profile"}
       </button>
     </div>

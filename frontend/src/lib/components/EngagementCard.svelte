@@ -10,7 +10,7 @@
     return String(n);
   }
 
-  // Always show all relevant metrics — display 0 values instead of hiding them
+  // Always show all relevant metrics - display 0 values instead of hiding them
   // Uses platform-aware slots to avoid redundant metrics:
   //   - Positive feedback: likes/upvotes/reactions unified in one slot
   //   - Shares: shares/reposts/quotes unified in one slot
@@ -61,7 +61,7 @@
     return items;
   });
 
-  // Reaction breakdown (Facebook) — always show if reactions object exists
+  // Reaction breakdown (Facebook) - always show if reactions object exists
   const reactions = $derived.by(() => {
     if (!engagement.reactions) return null;
     const r = engagement.reactions as Record<string, number>;

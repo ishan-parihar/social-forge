@@ -12,7 +12,7 @@
         streak = data.streak_days || 0;
       }
     } catch {
-      // silent fail — streak is non-critical
+      // silent fail - streak is non-critical
     }
     loading = false;
   }

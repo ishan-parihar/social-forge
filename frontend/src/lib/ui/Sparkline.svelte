@@ -1,10 +1,10 @@
 <script lang="ts" module>
-  // v25-2: Sparkline — a tiny inline-SVG trend chart for dashboard widgets.
+  // v25-2: Sparkline - a tiny inline-SVG trend chart for dashboard widgets.
   //
   // Design goals:
   //   - Pure SVG, no Chart.js / D3 / visx dependency (per AGENTS.md §0.5.3
   //     "no new third-party frontend libs").
-  //   - Theme-aware via `currentColor` — set `text-accent`, `text-success`,
+  //   - Theme-aware via `currentColor` - set `text-accent`, `text-success`,
   //     etc. on the parent and the sparkline inherits it. Works in dark + light.
   //   - Accessible: role="img" + aria-label + <title> for hover tooltip.
   //   - Edge-case safe: handles empty array (renders nothing), single point
@@ -128,7 +128,7 @@
 {/if}
 
 <style>
-  /* No hardcoded colors here — the sparkline uses `currentColor` for both
+  /* No hardcoded colors here - the sparkline uses `currentColor` for both
      stroke and fill, so it inherits the parent's text-* color and rethemes
      correctly in dark/light mode. */
   .sparkline {

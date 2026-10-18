@@ -13,7 +13,7 @@ export interface PostSummary {
   first_comment?: string | null;
   sequence?: number;
   // v25 F3: the list endpoint already returns `media` (PostWithIntegrationName
-  // in src/api/posts.rs carries it) — it was just never declared here, so the
+  // in src/api/posts.rs carries it) - it was just never declared here, so the
   // kanban had no way to show a card's cover image. Declared, not fetched.
   media?: { url: string; mime_type: string; alt?: string }[] | null;
   // v22 Phase 6: campaign_id for kanban filtering. Previously the
@@ -25,10 +25,10 @@ export interface PostSummary {
   priority?: string;
   due_date?: string | null;
   // v25-3: kanban_sort_order is now surfaced by the backend (was DB-only).
-  // Used by the drag-to-reorder feature (v25-4) — included here for type
+  // Used by the drag-to-reorder feature (v25-4) - included here for type
   // completeness so future iterations don't need to touch this interface.
   kanban_sort_order?: number;
-  // Engagement metrics (optional — populated when analytics_cache available)
+  // Engagement metrics (optional - populated when analytics_cache available)
   likes?: number | null;
   comments?: number | null;
   shares?: number | null;
@@ -87,7 +87,7 @@ export const postsApi = {
   update: (id: string, d: { content: string; title?: string; media?: { id: string; url: string; mime_type: string; alt?: string }[]; settings?: Record<string, unknown>; tag_ids?: string[]; first_comment?: string }) =>
     api.put<PostDetail>(`/api/posts/${id}`, d),
   schedule: (id: string, at: string) => api.post<PostDetail>(`/api/posts/${id}/schedule`, { scheduled_at: at }),
-  // v24-1: unschedule — transitions a post back to draft state.
+  // v24-1: unschedule - transitions a post back to draft state.
   unschedule: (id: string) => api.post<PostDetail>(`/api/posts/${id}/unschedule`, {}),
   reschedule: (id: string, scheduledAt: string, moveGroup?: boolean, action?: 'schedule' | 'update') =>
     api.put<{ rescheduled: boolean; post?: PostDetail; group_id?: string; count?: number; action?: string }>(
@@ -100,7 +100,7 @@ export const postsApi = {
     ),
   delete: (id: string) => api.del<{ deleted: boolean }>(`/api/posts/${id}`),
   setTags: (id: string, tagIds: string[]) =>
-    api.put<{ success: boolean }>(`/api/posts/${id}/tags`, { tag_ids: tagIds }),
+    api.put<PostDetail>(`/api/posts/${id}/tags`, { tag_ids: tagIds }),
   findSlot: (integrationId?: string) => {
     const q = integrationId ? `?integration_id=${integrationId}` : "";
     return api.get<{ date: string }>(`/api/posts/find-slot${q}`);

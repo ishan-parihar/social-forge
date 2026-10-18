@@ -161,7 +161,7 @@
 
 <div class="page-enter space-y-6">
   <div>
-    <h2 class="text-xl font-semibold">Signatures</h2>
+    <h1 class="text-xl font-semibold">Signatures</h1>
     <p class="text-sm text-muted mt-1">Create reusable signature blocks that you can insert into posts.</p>
   </div>
 
@@ -206,7 +206,7 @@
         ></textarea>
       </div>
       <div>
-        <label for="sig-provider" class="text-xs text-muted block mb-1">Provider (optional — leave empty for global)</label>
+        <label for="sig-provider" class="text-xs text-muted block mb-1">Provider (optional - leave empty for global)</label>
         <input
           id="sig-provider"
           type="text"
@@ -279,7 +279,7 @@
             <div class="flex items-start justify-between gap-3">
               <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-2 flex-wrap">
-                  <h4 class="text-sm font-medium">{sig.name}</h4>
+                  <h3 class="text-sm font-medium">{sig.name}</h3>
                   {#if sig.provider}
                     <span class="text-xs px-2 py-0.5 rounded-full bg-accent-fill/10 text-accent border border-accent/20">{sig.provider}</span>
                   {:else}
@@ -295,7 +295,7 @@
               </div>
               <div class="flex gap-1 flex-shrink-0">
                 {#if !sig.is_default}
-                  <Button size="sm" variant="ghost" onclick={() => handleSetDefault(sig.id)} aria-label="Set as default signature — auto-append this signature to new posts">
+                  <Button size="sm" variant="ghost" onclick={() => handleSetDefault(sig.id)} aria-label="Set as default signature - auto-append this signature to new posts">
                     Set default
                   </Button>
                 {/if}

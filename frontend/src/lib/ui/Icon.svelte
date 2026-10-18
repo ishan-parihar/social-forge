@@ -1,5 +1,5 @@
 <script lang="ts">
-  // SVG icon system — replaces all emoji icons with consistent Lucide-style icons.
+  // SVG icon system - replaces all emoji icons with consistent Lucide-style icons.
   // Usage: <Icon name="calendar" class="w-4 h-4" />
   // All icons use currentColor for fill/stroke so they inherit text color.
 

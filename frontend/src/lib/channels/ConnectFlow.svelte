@@ -1,5 +1,5 @@
 <script lang="ts">
-  // v25 F4 — the single entry point for connecting a channel.
+  // v25 F4 - the single entry point for connecting a channel.
   //
   // Before F4 there were four separate implementations of "connect a channel"
   // across two files: an inline OAuth popup branch, a hand-rolled

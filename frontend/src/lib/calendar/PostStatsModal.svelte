@@ -1,5 +1,5 @@
 <script lang="ts">
-  // PostStatsModal — per-post analytics with charts (Phase 1, v19).
+  // PostStatsModal - per-post analytics with charts (Phase 1, v19).
   //
   // Upgraded from a right-side slide-in panel to a centered ModalManager
   // modal. Shows:
@@ -9,7 +9,7 @@
   //   - Per-metric bar charts with date labels
   //
   // Inspired by postiz-app's StatisticsModal, but uses inline bar charts
-  // (no Chart.js dependency — YAGNI for 4 small charts).
+  // (no Chart.js dependency - YAGNI for 4 small charts).
 
   import { analyticsApi } from "$lib/api/analytics";
   import { engagementIcon, engagementLabel, formatMetricCount } from "./engagement";
@@ -61,7 +61,7 @@
   let maxShares = $derived(Math.max(...chartData.map(d => d.shares), 1));
   let maxComments = $derived(Math.max(...chartData.map(d => d.comments), 1));
 
-  // v25 F1: chart series colors were literal hex tuned for the dark surface —
+  // v25 F1: chart series colors were literal hex tuned for the dark surface -
   // on a light modal the bars washed out. They now point at the shared `viz-*`
   // tokens so a metric keeps one color app-wide (dashboard, feed, analytics)
   // and retheme with the rest of the surface.

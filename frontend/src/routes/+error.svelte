@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Route error boundary — the last line before a crash becomes a naked page.
+  // Route error boundary - the last line before a crash becomes a naked page.
   //
   // Before this existed, any render throw (a module that blew up on import, a
   // bad date, a null deref) fell through to SvelteKit's built-in fallback: a
@@ -10,11 +10,11 @@
   // This boundary does three things the default one does not:
   //   - renders in the app's own tokens, so a failure still looks like the app
   //   - shows the status code AND the message verbatim (diagnostic text, not
-  //     decoration — the same reasoning as ErrorState)
+  //     decoration - the same reasoning as ErrorState)
   //   - always offers a way forward: Retry, and a link home.
   //
   // It renders inside the root layout when the failure is below the root, and
-  // standalone when the root layout itself is what failed — so it deliberately
+  // standalone when the root layout itself is what failed - so it deliberately
   // does not import the shell or any store.
   import { page } from '$app/stores';
 
@@ -26,7 +26,7 @@
   <title>{code} · Social Forge</title>
 </svelte:head>
 
-<div class="min-h-screen bg-background text-content flex items-center justify-center p-6">
+<div class="min-h-dvh bg-background text-content flex items-center justify-center p-6">
   <div class="w-full max-w-md text-center">
     <div
       class="w-12 h-12 rounded-full bg-error/10 border border-error/30 flex items-center justify-center mx-auto mb-4"

@@ -19,7 +19,7 @@ class ApiClient {
       method,
       headers,
       body: reqBody,
-      // Always send the sf_session cookie — the backend validates it
+      // Always send the sf_session cookie - the backend validates it
       // via auth_middleware. Without this, fetch() omits cookies on
       // cross-origin requests and we'd get 401 on every call.
       credentials: "include",
@@ -34,7 +34,7 @@ class ApiClient {
 
       // 401 → bounce to /login. The session either never existed,
       // expired, or the cookie was cleared. Don't try to parse the
-      // body — just redirect.
+      // body - just redirect.
       if (res.status === 401 && !path.startsWith("/api/auth/")) {
         if (typeof window !== "undefined") {
           window.location.href = "/login";

@@ -24,17 +24,17 @@ export interface ProviderMeta {
   color: string;
   /** Short 1-3 character icon glyph (used when no SVG is available) */
   icon: string;
-  /** Max content length in characters — kept in sync with backend
+  /** Max content length in characters - kept in sync with backend
    *  `Provider::max_content_length()` impls in src/social/ */
   charLimit: number;
 }
 
 // The master map. New providers must be added here AND in the backend
-// ProviderRegistry — adding to only one will cause drift.
+// ProviderRegistry - adding to only one will cause drift.
 //
 // Tier-1 (12) = depth platforms; Tier-2 (14) = publish-maintained.
 // kick/vk/whop/lemmy were removed in v25 §1. farcaster is Tier-3 (archive)
-// and therefore absent here — it renders with the fallback glyph, which is
+// and therefore absent here - it renders with the fallback glyph, which is
 // correct, because it is not registered unless ENABLE_ARCHIVE_PROVIDERS is set.
 // Source of truth for membership: src/social/tier.rs (backend), which
 // `/api/providers` reports as a `tier` field.
@@ -75,7 +75,7 @@ const FALLBACK_ICON = '•';
  * v25 F1: providers that must NOT appear in a human-facing list.
  *
  * The backend registry still resolves these (so an existing integration or a
- * historic post keeps rendering — silently breaking those would lose data), but
+ * historic post keeps rendering - silently breaking those would lose data), but
  * they are out of the supported set: a solo founder should not be offered a
  * connect button for a platform the product no longer ships support for. This
  * is the single place that decision is written down, so every UI list agrees.

@@ -4,7 +4,7 @@
   // Light chrome = destination-platform simulation (see previews/index.ts).
   //
   // TikTok is a 9:16 full-bleed frame with the caption burned into the bottom
-  // left and the music chip bottom right — the most distinctive of the 12
+  // left and the music chip bottom right - the most distinctive of the 12
   // layouts, so it gets a real 9:16 frame rather than a card. The music chip
   // is wired to the composer's MusicPicker: if a track is attached, the chip
   // is here, because TikTok rejects an upload whose sound does not match the
@@ -72,7 +72,7 @@
         {text.slice(0, limit)}<span class="bg-red-500/40 rounded-sm">{text.slice(limit)}</span>
       </p>
       {#if isOver}
-        <p class="text-[9px] text-red-300 mt-0.5">{count}/{limit} — will be rejected, trim {count - limit} more</p>
+        <p class="text-[9px] text-red-300 mt-0.5">{count}/{limit} - will be rejected, trim {count - limit} more</p>
       {/if}
       <!-- Music chip: rotating-note + marquee, exactly where TikTok puts it. -->
       <div class="flex items-center gap-1 mt-1.5 text-[10px] text-white/90 overflow-hidden">

@@ -64,7 +64,7 @@
   });
 </script>
 
-<!-- v25 F5: this dialog had NO keydown handler at all — Escape did not close
+<!-- v25 F5: this dialog had NO keydown handler at all - Escape did not close
      it, so a keyboard user was trapped in the modal with no way out short of
      Tab-ing to the ✕. `role="dialog"` also sat on the full-screen overlay
      rather than the panel, and there was no aria-modal, so the dialog had no

@@ -169,7 +169,7 @@
 {#if !data.authenticated}
   {@render children()}
 {:else}
-  <div class="flex h-screen overflow-hidden bg-background">
+  <div class="flex h-dvh overflow-hidden bg-background">
     <!-- Mobile sidebar overlay: clicking outside the sidebar closes it -->
     {#if sidebarOpen}
       <!-- F1: `bg-overlay` instead of `bg-black/60`. A pure-black scrim on a
@@ -185,7 +185,7 @@
         {sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}"
     >
       <!-- F1: the sidebar header carries the brand mark only. Streak + notifications
-           moved to the single top bar (below) — previously they were mounted here AND
+           moved to the single top bar (below) - previously they were mounted here AND
            in a duplicate lg:hidden bar, so the two instances could disagree. -->
       <div class="h-14 flex items-center justify-between px-{sidebarCollapsed ? '2' : '5'} border-b border-line sticky top-0 bg-background z-10">
         {#if sidebarCollapsed}
@@ -224,8 +224,9 @@
       {#if !sidebarCollapsed}
         <div class="px-3 py-3 border-t border-line space-y-2">
           <div>
-            <label class="text-[10px] font-semibold uppercase tracking-wider text-faint block mb-1">Timezone</label>
+            <label for="sidebar-timezone" class="text-[10px] font-semibold uppercase tracking-wider text-faint block mb-1">Timezone</label>
             <select
+              id="sidebar-timezone"
               value={timezone.value}
               onchange={(e) => timezone.set(e.currentTarget.value)}
               class="w-full px-2 py-1.5 bg-background-input border border-line rounded-lg text-xs text-content focus:outline-none focus:border-accent"
@@ -279,14 +280,14 @@
     </aside>
     <main class="flex-1 overflow-auto flex flex-col min-w-0">
       <!-- F1: ONE top bar for every breakpoint. It sits above the page content
-           on desktop too, which is where an unread notification belongs — in the
+           on desktop too, which is where an unread notification belongs - in the
            sidebar it was off in the corner and easy to miss. The hamburger is
            passed in only on mobile; on desktop the persistent sidebar is the nav. -->
       <div class="sticky top-0 z-20">
         <TopBar ontogglenav={sidebarOpen ? () => sidebarOpen = false : () => sidebarOpen = !sidebarOpen} />
       </div>
       <!-- v25 F5: `p-6` unconditionally cost 48px of horizontal room, leaving
-           312px of usable content at a 360px viewport — the budget every
+           312px of usable content at a 360px viewport - the budget every
            composer/calendar/channels row has to fit inside. `p-4 sm:p-6`
            returns 32px on the narrowest phones and changes nothing above
            `sm`. This is the one global lever for the 360px pass: most of the

@@ -67,7 +67,7 @@
 
 <div class="page-enter space-y-6">
   <div>
-    <h2 class="text-xl font-semibold text-content">Notification Settings</h2>
+    <h1 class="text-xl font-semibold text-content">Notification Settings</h1>
     <p class="text-sm text-muted mt-1">Configure how and when you receive notifications.</p>
   </div>
 
@@ -88,7 +88,7 @@
     </div>
   {:else}
     <div class="bg-surface border border-line rounded-xl p-5 space-y-4">
-      <h3 class="text-sm font-medium text-content">Notification Types</h3>
+      <h2 class="text-sm font-medium text-content">Notification Types</h2>
       <div class="page-enter space-y-3">
         {#each notificationTypes as nt (nt.key)}
           <div class="flex items-center justify-between py-2">
@@ -111,7 +111,7 @@
 
     <div class="bg-surface border border-line rounded-xl p-5 space-y-4">
       <div class="flex items-center justify-between">
-        <h3 class="text-sm font-medium text-content">Quiet Hours</h3>
+        <h2 class="text-sm font-medium text-content">Quiet Hours</h2>
         <label class="relative inline-flex items-center cursor-pointer">
           <input type="checkbox" bind:checked={quietHoursEnabled} class="sr-only peer" />
           <div class="w-9 h-5 bg-line rounded-full peer peer-checked:bg-accent-fill peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all"></div>

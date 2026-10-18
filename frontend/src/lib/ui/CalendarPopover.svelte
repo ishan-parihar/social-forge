@@ -1,7 +1,7 @@
 <script lang="ts">
   import { tick } from 'svelte';
 
-  // v26-3: CalendarPopover — a Mantine-style date picker popover.
+  // v26-3: CalendarPopover - a Mantine-style date picker popover.
   //
   // Pure Svelte, no new deps. Shows a month grid with weekday headers,
   // prev/next month nav, today highlight, selected-date highlight, and
@@ -12,7 +12,7 @@
   //   <CalendarPopover bind:value={dateStr} placeholder="Select date" />
   //
   // `value` is a YYYY-MM-DD string (matching native <input type="date">).
-  // This keeps the integration with SchedulePicker simple — the rest of
+  // This keeps the integration with SchedulePicker simple - the rest of
   // the composer works with ISO date strings.
 
   let {
@@ -38,7 +38,7 @@
   let triggerEl: HTMLButtonElement | undefined = $state();
   let panelEl: HTMLDivElement | undefined = $state();
 
-  // v25 F5 — keyboard. The trigger already declared aria-haspopup/aria-expanded,
+  // v25 F5 - keyboard. The trigger already declared aria-haspopup/aria-expanded,
   // but the popover had no keydown handler at all: Escape did not close it, the
   // 42 day buttons were reachable only by Tab (43 stops), and focus was never
   // moved in on open nor returned to the trigger on close. Added:
@@ -243,7 +243,7 @@
       </div>
 
       <!-- Calendar grid. F5: role=grid/row/gridcell so the roving tabindex has a
-           valid structure to live in — a bare button list announces as 42
+           valid structure to live in - a bare button list announces as 42
            unrelated buttons. -->
       <div class="grid grid-cols-7 gap-0.5" role="grid" aria-label="{MONTHS[viewMonth]} {viewYear}">
         {#each grid as cell (cell.dateStr)}

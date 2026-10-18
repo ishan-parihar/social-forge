@@ -7,7 +7,7 @@ export function getMonthDays(year: number, month: number): Date[] {
   // v22 Phase 7: Monday-start grid (matches getWeekDays + postiz).
   // Previously this was Sunday-start, which meant switching from week
   // view (Monday-start) to month view (Sunday-start) shifted the grid
-  // by one column — confusing.
+  // by one column - confusing.
   // getDay() returns 0=Sun..6=Sat. Convert to 0=Mon..6=Sun:
   //   Mon=0, Tue=1, Wed=2, Thu=3, Fri=4, Sat=5, Sun=6
   const firstDayMon = (first.getDay() + 6) % 7;
@@ -57,7 +57,7 @@ export function isCurrentMonth(d: Date, y: number, m: number): boolean {
  * cells and disable drop targets (postiz-style UX cue: you can't
  * schedule in the past).
  *
- * Compares calendar days only — time-of-day is ignored. A cell for
+ * Compares calendar days only - time-of-day is ignored. A cell for
  * "today" returns false even if the current time is 23:59.
  */
 export function isPast(d: Date): boolean {

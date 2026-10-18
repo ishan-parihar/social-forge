@@ -1,5 +1,5 @@
 <script lang="ts">
-  // LinkedInPreview — LinkedIn-style preview card (Phase 4).
+  // LinkedInPreview - LinkedIn-style preview card (Phase 4).
   //
   // Distinctive LinkedIn chrome:
   //   - Avatar + name + headline + "•••" menu
@@ -64,7 +64,7 @@
   <div class="px-3 pb-3">
     <p class="text-sm text-gray-800 whitespace-pre-wrap break-words leading-relaxed">{@html highlightedHtml}</p>
     {#if isOverLimit}
-      <p class="text-[10px] text-red-500 mt-1">{plainText.length}/{charLimit} — text beyond {charLimit} will be cropped</p>
+      <p class="text-[10px] text-red-500 mt-1">{plainText.length}/{charLimit} - text beyond {charLimit} will be cropped</p>
     {/if}
   </div>
 

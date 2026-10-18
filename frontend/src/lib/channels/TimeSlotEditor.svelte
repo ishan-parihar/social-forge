@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { untrack } from "svelte";
     import { integrationsApi, type TimeslotEntry } from "$lib/api/integrations";
     import Modal from "$lib/ui/Modal.svelte";
     import Spinner from "$lib/ui/Spinner.svelte";
@@ -15,7 +16,7 @@
         onclose?: () => void;
     } = $props();
 
-    let timeslots = $state<TimeslotEntry[]>(initialTimeslots.map(t => ({ ...t })));
+    let timeslots = $state<TimeslotEntry[]>(untrack(() => initialTimeslots.map(t => ({ ...t }))));
     let saving = $state(false);
     let error = $state<string | null>(null);
     let success = $state(false);

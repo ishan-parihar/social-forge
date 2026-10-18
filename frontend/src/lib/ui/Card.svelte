@@ -1,5 +1,5 @@
 <script lang="ts">
-  // v22 Phase 3: Card primitive — surface bg, border, padding, optional
+  // v22 Phase 3: Card primitive - surface bg, border, padding, optional
   // header/footer snippets. Replaces ad-hoc `<div class="bg-surface
   // border border-line rounded-xl p-5">` patterns scattered across routes.
   let {

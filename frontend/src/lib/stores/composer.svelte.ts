@@ -1,9 +1,9 @@
-// Composer store (Phase 2 — keystone for the modal-based composer).
+// Composer store (Phase 2 - keystone for the modal-based composer).
 //
 // This store drives the ComposerModal: open/close, mode (create vs edit),
 // preset date/integrations, and the editing post id. The actual composer
 // form state (content, media, tags, etc.) lives inside ComposerModal.svelte
-// as local component state — only the open/close + entry-point state is
+// as local component state - only the open/close + entry-point state is
 // global, because that's what other components need to trigger.
 //
 // Inspired by postiz-app's useLaunchStore + useExistingData pattern, but
@@ -45,7 +45,7 @@ class ComposerStore {
 
   /**
    * Phase v21/5.7: optional prefilled media items (from repurpose flow).
-   * Each item has {url, mime_type, original_name} — the composer wraps
+   * Each item has {url, mime_type, original_name} - the composer wraps
    * them with a generated id + file_size=0 when loading. The media is
    * already uploaded (these are URLs to existing media), so no upload
    * progress is needed.

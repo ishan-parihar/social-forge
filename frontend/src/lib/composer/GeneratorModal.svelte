@@ -1,5 +1,5 @@
 <script lang="ts">
-  // GeneratorModal — AI bulk post generator (Phase 9, v19).
+  // GeneratorModal - AI bulk post generator (Phase 9, v19).
   //
   // Lets the user enter a topic + format + tone, generates multiple posts
   // via the backend LLM, and pipes each result into the ComposerModal for
@@ -62,7 +62,7 @@
     if (results.posts.length > 0) {
       const firstDate = results.suggested_dates[0]?.split('T')[0];
       composer.openCreate(firstDate, undefined, results.posts[0]);
-      toast(`${results.posts.length} posts generated. First one loaded into composer — schedule the rest from the calendar.`, 'success');
+      toast(`${results.posts.length} posts generated. First one loaded into composer - schedule the rest from the calendar.`, 'success');
     }
     close();
   }
@@ -84,8 +84,9 @@
     <!-- Prompt form -->
     <div class="space-y-4">
       <div>
-        <label class="text-sm text-muted block mb-1">Topic</label>
+        <label for="generator-topic" class="text-sm text-muted block mb-1">Topic</label>
         <textarea
+          id="generator-topic"
           bind:value={topic}
           placeholder="e.g., 'Tips for indie hackers launching their first product' or 'The future of AI in content creation'"
           class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none resize-none"
@@ -95,8 +96,8 @@
 
       <div class="grid grid-cols-2 gap-3">
         <div>
-          <label class="text-xs text-muted block mb-1">Format</label>
-          <select bind:value={format} class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none">
+          <label for="generator-format" class="text-xs text-muted block mb-1">Format</label>
+          <select id="generator-format" bind:value={format} class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none">
             <option value="one_short">Single short post</option>
             <option value="one_long">Single long post</option>
             <option value="thread_short">Short thread (3 tweets)</option>
@@ -104,8 +105,8 @@
           </select>
         </div>
         <div>
-          <label class="text-xs text-muted block mb-1">Tone</label>
-          <select bind:value={tone} class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none">
+          <label for="generator-tone" class="text-xs text-muted block mb-1">Tone</label>
+          <select id="generator-tone" bind:value={tone} class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none">
             <option value="personal">Personal</option>
             <option value="company">Company</option>
           </select>
@@ -113,8 +114,8 @@
       </div>
 
       <div>
-        <label class="text-xs text-muted block mb-1">Number of posts: {count}</label>
-        <input type="range" min="1" max="5" bind:value={count} class="w-full" />
+        <label for="generator-count" class="text-xs text-muted block mb-1">Number of posts: {count}</label>
+        <input id="generator-count" type="range" min="1" max="5" bind:value={count} class="w-full" />
       </div>
 
       {#if error}

@@ -87,7 +87,7 @@
     lastSentQuery = q || "";
     const r = await feedApi.list(undefined, undefined, undefined, 100, q);
     if (r.data) {
-      // Ignore stale responses — only apply if the user hasn't typed more.
+      // Ignore stale responses - only apply if the user hasn't typed more.
       if (lastSentQuery !== (q || "")) {
         loading = false;
         return;
@@ -101,7 +101,7 @@
     loading = false;
   }
 
-  // Debounced search trigger — fires 350ms after the user stops typing.
+  // Debounced search trigger - fires 350ms after the user stops typing.
   // Coalesces rapid keystrokes so we don't spam the backend on every char.
   function scheduleSearch() {
     if (searchTimer) clearTimeout(searchTimer);
@@ -149,7 +149,7 @@
   }
 
   // Provider icon/color now come from the central $lib/providers module
-  // (R-8) — no more local duplicates.
+  // (R-8) - no more local duplicates.
 
   function formatTime(iso: string): string {
     // Render in the user's selected timezone (F-7) instead of the
@@ -185,7 +185,7 @@
       loadAccounts();
       load();
     }));
-    // Server-side "you missed events" signal — refetch the stale results.
+    // Server-side "you missed events" signal - refetch the stale results.
     unsubscribers.push(realtime.on('lagged', () => {
       loadAccounts();
       load();
@@ -202,7 +202,7 @@
   <!-- Header -->
   <div class="flex items-center justify-between">
     <div>
-      <h2 class="text-xl font-semibold">Search & Discovery</h2>
+      <h1 class="text-xl font-semibold">Search & Discovery</h1>
       <p class="text-sm text-muted mt-1">Search across your connected social media feeds</p>
     </div>
     <button
@@ -295,7 +295,7 @@
         {/if}
       </p>
       {#if posts.length === 0}
-        <button onclick={importFeed} disabled={importing} class="mt-3 px-4 py-2 bg-accent-fill hover:bg-accent-fill-hover rounded-lg text-sm transition-colors disabled:opacity-50">
+        <button onclick={importFeed} disabled={importing} class="mt-3 px-4 py-2 bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg text-sm transition-colors disabled:opacity-50">
           {importing ? "Importing..." : "Import Feed"}
         </button>
       {/if}
@@ -367,11 +367,11 @@
 {#if showSaveDialog}
   <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50" role="dialog">
     <div class="bg-background-input border border-line rounded-xl p-6 w-full max-w-sm">
-      <h3 class="text-lg font-semibold mb-2">Save Search</h3>
+      <h2 class="text-lg font-semibold mb-2">Save Search</h2>
       <p class="text-sm text-muted mb-4">Save "{searchQuery}" for quick access later</p>
       <div class="flex gap-3 justify-end">
         <button onclick={() => showSaveDialog = false} class="px-4 py-2 text-sm text-muted hover:text-content">Cancel</button>
-        <button onclick={saveSearch} class="px-4 py-2 text-sm bg-accent-fill hover:bg-accent-fill-hover rounded-lg">Save</button>
+        <button onclick={saveSearch} class="px-4 py-2 text-sm bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg">Save</button>
       </div>
     </div>
   </div>

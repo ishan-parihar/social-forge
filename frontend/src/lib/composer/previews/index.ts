@@ -5,7 +5,7 @@
 // to render for each selected channel.
 //
 // v25 F2 completed the Tier-1 set: all 12 depth platforms now have a
-// frame-accurate preview. Previously only 8 of them did — YouTube, TikTok
+// frame-accurate preview. Previously only 8 of them did - YouTube, TikTok
 // and Pinterest fell through to GeneralPreview, an X-shaped card, which is
 // exactly wrong for a 9:16 vertical-video platform. See docs/planning/
 // PLAN_PARITY_DEPTH_SINGLEUSER_v25.md §4/F2.
@@ -16,7 +16,7 @@
 //
 // Platforms not in the registry fall back to GeneralPreview (the
 // Twitter/X-like default card). That fallback is the right level of fidelity
-// for Tier-2 — we do not claim depth there, so we do not simulate its chrome.
+// for Tier-2 - we do not claim depth there, so we do not simulate its chrome.
 //
 // CHROME CONTRACT: every preview here renders the DESTINATION platform's own
 // light card, not this app's theme. That is why previews/** is exempt from the
@@ -34,7 +34,7 @@ import XPreview from './XPreview.svelte';
 import RedditPreview from './RedditPreview.svelte';
 import ThreadsPreview from './ThreadsPreview.svelte';
 import BlueskyPreview from './BlueskyPreview.svelte';
-// v25 F2: the three that were missing — the vertical-video tier.
+// v25 F2: the three that were missing - the vertical-video tier.
 import YouTubePreview from './YouTubePreview.svelte';
 import TikTokPreview from './TikTokPreview.svelte';
 import PinterestPreview from './PinterestPreview.svelte';
@@ -43,7 +43,7 @@ import PinterestPreview from './PinterestPreview.svelte';
  * The prop shape every preview speaks (F2).
  *
  * F2 found that the four v24-8 previews took `integrationName` while
- * PlatformPreviewPane passed `authorName`/`authorHandle` — so those four
+ * PlatformPreviewPane passed `authorName`/`authorHandle` - so those four
  * silently rendered a hardcoded default account and the user could not tell
  * which of their channels a card belonged to. Declaring the contract once
  * here is what makes that class of bug impossible to reintroduce.
@@ -85,7 +85,7 @@ export const PREVIEW_REGISTRY: Record<string, Component<any, any, any>> = {
   threads: ThreadsPreview,
   bluesky: BlueskyPreview,
   // v25 F2: completed the Tier-1 set. Before this, YouTube / TikTok /
-  // Pinterest fell through to GeneralPreview — an X-shaped card, which is
+  // Pinterest fell through to GeneralPreview - an X-shaped card, which is
   // badly wrong for a 9:16 vertical-video platform.
   youtube: YouTubePreview,
   tiktok: TikTokPreview,

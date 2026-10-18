@@ -29,7 +29,7 @@ export function getAuthType(provider: string): AuthType {
 }
 
 /**
- * v25 F4 — the connect methods a provider offers, in the order they should be
+ * v25 F4 - the connect methods a provider offers, in the order they should be
  * presented. Before F4 the method list was computed ad-hoc in three places (the
  * channels page branching on MULTI_AUTH_PROVIDERS, ConnectFlow branching on
  * getAuthType, and a bespoke `credDialog`), which is why the same provider

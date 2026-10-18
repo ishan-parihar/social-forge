@@ -6,7 +6,7 @@ class RealtimeClient {
         private connected = false;
         private listeners = new Map<string, Set<(data: unknown) => void>>();
         private errorCount = 0;
-        private readonly MAX_ERRORS = 5;
+        private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
         get isConnected() {
                 return this.connected;
@@ -25,23 +25,15 @@ class RealtimeClient {
                                 this.es?.close();
                                 this.es = null;
                                 this.errorCount++;
-                                // After repeated failures, stop retrying and
-                                // bounce to /login — session likely expired.
-                                // (v22 Phase 1: SSE is now auth-gated, so a 401
-                                // here means the session cookie is gone.)
-                                if (this.errorCount >= this.MAX_ERRORS) {
-                                        if (typeof window !== "undefined") {
-                                                window.location.href = "/login";
-                                        }
-                                        return;
-                                }
-                                setTimeout(() => this.connect(), 5000);
+                                this.scheduleReconnect();
                         };
                         [
                                 "post_created",
                                 "post_scheduled",
                                 "post_published",
                                 "post_failed",
+                                // Post published, but its first comment failed.
+                                "first_comment_failed",
                                 "post_deleted",
                                 // Post edited after creation (content, media,
                                 // schedule edits via the services layer).
@@ -58,7 +50,7 @@ class RealtimeClient {
                                 "notification_new",
                                 "comment_received",
                                 "dm_received",
-                                // v22 Phase 6: campaign CRUD — the campaigns pages
+                                // v22 Phase 6: campaign CRUD - the campaigns pages
                                 // and the kanban campaign filter were already
                                 // subscribing to these; they only went dead because
                                 // the names were never registered here.
@@ -89,6 +81,33 @@ class RealtimeClient {
                 this.es = null;
                 this.connected = false;
                 this.errorCount = 0;
+                if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+                this.reconnectTimer = null;
+        }
+
+        // A dropped stream is not a logout: a backend restart can outlast any
+        // fixed retry budget. Only an explicit 401 from /api/auth/me sends the
+        // user to /login. Every other failure retries with capped backoff.
+        private scheduleReconnect() {
+                if (this.reconnectTimer) return;
+                const delay = Math.min(30_000, 2_000 * 2 ** Math.min(this.errorCount - 1, 4));
+                this.reconnectTimer = setTimeout(async () => {
+                        this.reconnectTimer = null;
+                        if (await this.sessionExpired()) {
+                                if (typeof window !== "undefined") window.location.href = "/login";
+                                return;
+                        }
+                        this.connect();
+                }, delay);
+        }
+
+        private async sessionExpired(): Promise<boolean> {
+                try {
+                        const res = await fetch(`${API_BASE}/api/auth/me`, { credentials: "same-origin" });
+                        return res.status === 401;
+                } catch {
+                        return false;
+                }
         }
 
         on(event: string, cb: (data: unknown) => void) {

@@ -5,6 +5,10 @@
   let password = $state('');
   let error = $state('');
   let loading = $state(false);
+  let passwordInput = $state<HTMLInputElement>();
+  $effect(() => {
+    passwordInput?.focus();
+  });
 
   async function handleLogin(e: SubmitEvent) {
     e.preventDefault();
@@ -23,10 +27,10 @@
 </script>
 
 <svelte:head>
-  <title>Social Forge — Login</title>
+  <title>Social Forge - Login</title>
 </svelte:head>
 
-<div class="page-enter min-h-screen flex items-center justify-center bg-background px-4">
+<div class="page-enter min-h-dvh flex items-center justify-center bg-background px-4">
   <div class="w-full max-w-sm">
     <div class="text-center mb-8">
       <div class="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-accent-fill/10 border border-accent/30 mb-4">
@@ -44,7 +48,7 @@
           type="password"
           bind:value={password}
           autocomplete="current-password"
-          autofocus
+          bind:this={passwordInput}
           class="w-full px-3.5 py-2.5 bg-surface-hover border border-line rounded-lg text-content text-sm
             focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent
             placeholder:text-faint"
@@ -61,7 +65,7 @@
       <button
         type="submit"
         disabled={loading || !password}
-        class="w-full py-2.5 px-4 bg-accent-fill hover:bg-accent-fill-hover disabled:bg-surface-hover disabled:text-faint
+        class="w-full py-2.5 px-4 bg-accent-fill hover:bg-accent-fill-hover text-accent-fg disabled:bg-surface-hover disabled:text-faint
           text-white font-medium text-sm rounded-lg transition-colors
           focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-background"
       >

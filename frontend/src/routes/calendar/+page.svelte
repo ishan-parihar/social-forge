@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, onDestroy } from "svelte";
+  import { onMount, onDestroy, untrack } from "svelte";
   import Skeleton from '$lib/ui/Skeleton.svelte';
   import { calendarApi } from "$lib/api/calendar";
   import { postsApi } from "$lib/api/posts";
@@ -22,7 +22,7 @@
   import DayView from "$lib/calendar/DayView.svelte";
   import ListView from "$lib/calendar/ListView.svelte";
   import PostDetail from "$lib/calendar/PostDetail.svelte";
-  import { goto, replaceState } from "$app/navigation";
+  import { goto } from "$app/navigation";
 
   let events = $state<CalendarEvent[]>([]);
   let allTags = $state<Tag[]>([]);
@@ -111,7 +111,7 @@
     if (r.data) {
       events = r.data.days.flatMap(d => d.posts.map(toCalendarEvent));
     } else {
-      // Phase v21: improved error UX — show a full-card error state with a
+      // Phase v21: improved error UX - show a full-card error state with a
       // Retry button + emit a toast so the user notices even if they've
       // scrolled past the calendar. Previously this was a tiny red <div>
       // with no retry, easy to miss.
@@ -284,7 +284,7 @@
         return;
       }
 
-      // Preserve media, tags, and first_comment when duplicating —
+      // Preserve media, tags, and first_comment when duplicating -
       // the previous version only copied content + title + scheduled_at,
       // losing all the rich context the user had attached to the original.
       await postsApi.create({
@@ -352,8 +352,10 @@
     const _listState = calendarState.state.listState;
     const _listPage = calendarState.state.listPage;
     const _view = calendarState.state.view;
+    // untrack: refresh() reads and writes `refreshing`; tracking that here
+    // made the effect re-run on its own write, refetching in a loop.
     if (_view === 'list') {
-      refresh();
+      untrack(() => refresh());
     }
   });
 
@@ -395,12 +397,12 @@
     selectedCampaignId;
     // Only re-fetch if we've already loaded once (avoid double-fetch on mount).
     if (allIntegrations.length > 0 || allCampaigns.length > 0) {
-      refresh();
+      untrack(() => refresh());
     }
   });
 
   // Phase v21: sync view + date to URL via replaceState (no history
-  // pollution — back button doesn't get a stack entry per week nav).
+  // pollution - back button doesn't get a stack entry per week nav).
   // Postiz-app uses the same pattern: window.history.replaceState.
   $effect(() => {
     // Read these so the effect re-runs when they change.
@@ -410,7 +412,10 @@
     const url = new URL(window.location.href);
     url.searchParams.set('display', view);
     url.searchParams.set('date', formatDateKey(currentDate));
-    replaceState(url.pathname + url.search + url.hash, '');
+    // Native history call: SvelteKit's replaceState throws if this effect
+    // runs before the app root mounts (`$set` of undefined on first load).
+    // Keep the router's own history.state so back/forward still resolve.
+    history.replaceState(history.state, '', url.pathname + url.search + url.hash);
   });
 
   onDestroy(() => {
@@ -422,14 +427,14 @@
   <!-- v25 F5: `flex-wrap` + responsive gap. The h2 (~165px) plus two buttons
        measured ~350px against the ~312px available at a 360px viewport. -->
   <div class="flex items-center justify-between flex-wrap gap-2">
-    <h2 class="text-xl font-semibold">Content Calendar</h2>
+    <h1 class="text-xl font-semibold">Content Calendar</h1>
     <div class="flex gap-2">
       <button
         onclick={() => modals.open(GeneratorModal, {}, { title: 'AI Post Generator', size: 'max-w-lg' })}
         class="px-3 py-1.5 text-sm border border-line rounded-lg text-muted hover:text-content hover:bg-surface-hover transition-colors"
         title="Generate multiple posts from a topic using AI"
       >✨ Generate Posts</button>
-      <button onclick={() => composer.openCreate()} class="px-3 py-1.5 bg-accent-fill hover:bg-accent-fill-hover rounded-lg text-sm transition-colors">
+      <button onclick={() => composer.openCreate()} class="px-3 py-1.5 bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg text-sm transition-colors">
         + New Post
       </button>
     </div>
@@ -456,7 +461,7 @@
   {#if selected.size > 0}
     <div class="flex items-center gap-3 bg-accent-fill/10 border border-accent/30 rounded-lg px-4 py-2 flex-wrap">
       <span class="text-sm text-accent-strong">{selected.size} selected</span>
-      <button onclick={() => showBulkSchedule = !showBulkSchedule} disabled={bulkProcessing} class="px-3 py-1 text-xs bg-accent-fill hover:bg-accent-fill-hover rounded disabled:opacity-50">Reschedule</button>
+      <button onclick={() => showBulkSchedule = !showBulkSchedule} disabled={bulkProcessing} class="px-3 py-1 text-xs bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded disabled:opacity-50">Reschedule</button>
       <button onclick={bulkDelete} disabled={bulkProcessing} class="px-3 py-1 text-xs bg-error hover:bg-error/90 rounded disabled:opacity-50">Delete</button>
       <button onclick={() => selected = new Set()} class="sm:ml-auto text-xs text-muted hover:text-content">Clear</button>
     </div>
@@ -464,7 +469,7 @@
       <div class="flex items-center gap-2 bg-background-input border border-line rounded-lg p-3 flex-wrap">
         <input type="date" aria-label="Bulk reschedule date" bind:value={bulkScheduleDate} class="px-2 py-1 bg-surface border border-line rounded text-sm text-content-secondary" />
         <input type="time" aria-label="Bulk reschedule time" bind:value={bulkScheduleTime} class="px-2 py-1 bg-surface border border-line rounded text-sm text-content-secondary" />
-        <button onclick={bulkReschedule} disabled={bulkProcessing || !bulkScheduleDate} class="px-3 py-1 bg-accent-fill hover:bg-accent-fill-hover rounded text-xs disabled:opacity-50">Apply</button>
+        <button onclick={bulkReschedule} disabled={bulkProcessing || !bulkScheduleDate} class="px-3 py-1 bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded text-xs disabled:opacity-50">Apply</button>
       </div>
     {/if}
   {/if}

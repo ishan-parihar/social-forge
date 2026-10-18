@@ -115,7 +115,7 @@
     >Hide</button>
   </div>
 
-  <!-- Loading. F1: Skeleton primitive instead of a lone spinner — the thread
+  <!-- Loading. F1: Skeleton primitive instead of a lone spinner - the thread
        has a known shape (header + body + counts), so reserving the space stops
        the panel from jumping when comments land. -->
   {#if loading}

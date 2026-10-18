@@ -99,7 +99,7 @@
 <div class="page-enter space-y-6">
   <div class="flex items-center justify-between">
     <div>
-      <h2 class="text-xl font-semibold">RSS Autopost</h2>
+      <h1 class="text-xl font-semibold">RSS Autopost</h1>
       <p class="text-sm text-muted mb-6">Automatically fetch and publish content from RSS feeds to your connected channels.</p>
     </div>
     <Button onclick={() => (showForm = !showForm)}>

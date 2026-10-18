@@ -1,4 +1,4 @@
-// v25 F4 — ChannelCard status clarity.
+// v25 F4 - ChannelCard status clarity.
 //
 // v21 shipped a 2px colored dot with a `title` attribute as the only signal
 // for "is this channel healthy?". A `title` is invisible until hover, is
@@ -8,7 +8,7 @@
 //
 // This module is the single source of truth for that signal. It is a pure
 // function so the card, the context menu, and any future status filter all
-// agree on what "expiring" means — the bug class where two components each
+// agree on what "expiring" means - the bug class where two components each
 // re-derive a status slightly differently is what made this unreadable.
 //
 // Precedence is deliberate and total: a disabled channel that also has a

@@ -134,7 +134,7 @@
     width: min(20rem, calc(100vw - 2rem));
     max-height: 18rem;
     overflow-y: auto;
-    /* v25 F5: was a raw `rgba(0,0,0,0.4)` — a pure-black shadow that reads as a
+    /* v25 F5: was a raw `rgba(0,0,0,0.4)` - a pure-black shadow that reads as a
        smear on a white page. --shadow-lg is the F1 token and tints with the
        surface. Same reasoning as the .link-editor-backdrop swap. */
     box-shadow: var(--shadow-lg);
@@ -160,7 +160,7 @@
   }
 
   .emoji-backdrop {
-    /* v25 F5: was a raw `rgba(0,0,0,0.3)` modal scrim — a pure-black wash that
+    /* v25 F5: was a raw `rgba(0,0,0,0.3)` modal scrim - a pure-black wash that
        reads as a dead grey rectangle over a light composer. --overlay is the F1
        token and tints with the theme. Same fix as .link-editor-backdrop. */
     background: var(--overlay);

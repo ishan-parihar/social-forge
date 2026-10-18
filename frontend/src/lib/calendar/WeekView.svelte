@@ -22,7 +22,7 @@
   let hours = $derived(getDayHours());
 
   // Show the user's selected timezone abbreviation in the corner instead
-  // of a hard-coded "GMT" — matches what the column times actually render in.
+  // of a hard-coded "GMT" - matches what the column times actually render in.
   // Intl can resolve the abbreviation (e.g. "EST", "PST", "IST") for the
   // current timezone, falling back to the IANA name on edge cases.
   let tzLabel = $derived.by(() => {
@@ -42,8 +42,10 @@
     const map = new Map<string, CEvent[]>();
     for (const wd of weekDays) {
       for (const e of wd.events) {
+        // Row keys are the full "HH:00" from getDayHours(); bucket by that,
+        // or no chip ever matches its cell (cellKey uses the full hour).
         const hour = (e.time || "00:00").slice(0, 2);
-        const key = `${wd.dateStr}-${hour}`;
+        const key = `${wd.dateStr}-${hour}:00`;
         const list = map.get(key) || [];
         list.push(e);
         map.set(key, list);
@@ -63,11 +65,11 @@
     e.dataTransfer!.effectAllowed = "move";
   }
 
-  // v25 F5: this used to be a stub — it preventDefault'd Enter/Space and then
+  // v25 F5: this used to be a stub - it preventDefault'd Enter/Space and then
   // did nothing, and because every cell was tabindex="-1" nothing ever reached
   // it anyway, so the whole week grid was keyboard-dead. It now moves focus
   // between cells. Layout is 8 columns (tz gutter + 7 days) and row-major, so
-  // horizontal arrows move a day and vertical arrows move an hour — which is
+  // horizontal arrows move a day and vertical arrows move an hour - which is
   // what the grid looks like, so the mapping needs no explanation in the UI.
   let gridEl: HTMLDivElement | undefined = $state();
   let activeCell = $state<string>("");
@@ -201,7 +203,7 @@
      at a 360px viewport and every chip was clipped into a sliver, with no way to
      scroll to the rest. The vertical scroller stays on the body, so the header
      and body scroll together horizontally. -->
-<div class="week-calendar bg-surface border border-line rounded-xl overflow-x-auto" ontouchstart={touchDrag.onTouchStart} ontouchmove={touchDrag.onTouchMove} ontouchend={touchDrag.onTouchEnd}>
+<div role="group" class="week-calendar bg-surface border border-line rounded-xl overflow-x-auto" ontouchstart={touchDrag.onTouchStart} ontouchmove={touchDrag.onTouchMove} ontouchend={touchDrag.onTouchEnd}>
   <div class="grid grid-cols-8 min-w-[640px] text-center border-b border-line" role="row">
     <div class="py-2 px-2 text-xs text-muted border-r border-line min-w-0 truncate" title={timezone.value}>{tzLabel}</div>
     {#each weekDays as wd (wd.dateStr)}
@@ -235,7 +237,7 @@
               {isDragOver ? 'ring-2 ring-accent ring-inset bg-accent-fill/5' : ''}
               {wd.isToday ? 'bg-accent-fill/5' : ''}
               {past ? 'opacity-40 cursor-not-allowed' : ''}"
-            title={past ? 'Past — cannot schedule here' : `Drop to move to ${wd.date.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })} at ${hour}`}
+            title={past ? 'Past - cannot schedule here' : `Drop to move to ${wd.date.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })} at ${hour}`}
             ondragover={(e) => { if (!past) { e.preventDefault(); handleDragEnter(wd.dateStr, hour); } }}
             ondragleave={() => handleDragLeave(wd.dateStr, hour)}
             ondrop={(e) => { if (!past) handleDrop(e, wd.dateStr, hour); }}

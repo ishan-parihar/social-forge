@@ -91,7 +91,7 @@
   async function handleRegenerateKey(id: string) {
     if (!(await modals.areYouSure({
       title: 'Regenerate this API key?',
-      message: 'The old key will stop working immediately. Copy the new key — you won\'t be able to see it again after closing this page.',
+      message: 'The old key will stop working immediately. Copy the new key - you won\'t be able to see it again after closing this page.',
       confirmLabel: 'Regenerate',
       cancelLabel: 'Cancel',
       danger: true,
@@ -136,14 +136,14 @@
 
 
   function formatDate(d: string | null): string {
-    if (!d) return '—';
+    if (!d) return '-';
     return new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   }
 </script>
 
 <div class="page-enter space-y-6">
   <div>
-    <h2 class="text-xl font-semibold">Developer Portal</h2>
+    <h1 class="text-xl font-semibold">Developer Portal</h1>
     <p class="text-sm text-muted mt-1">Manage API keys for programmatic access and configure outgoing webhooks.</p>
   </div>
 
@@ -180,7 +180,7 @@
           <div class="flex items-start justify-between">
             <div>
               <p class="text-sm font-medium text-accent">API Key Created</p>
-              <p class="text-xs text-muted mt-1">Copy this key now — you won't be able to see it again.</p>
+              <p class="text-xs text-muted mt-1">Copy this key now - you won't be able to see it again.</p>
             </div>
             <button onclick={dismissKeyAlert} aria-label="Dismiss" class="text-muted hover:text-content text-sm">&times;</button>
           </div>
@@ -218,7 +218,7 @@
             />
           </div>
           <div>
-            <label for="key-expiry" class="text-xs text-muted block mb-1">Expiry (optional — RFC 3339 format)</label>
+            <label for="key-expiry" class="text-xs text-muted block mb-1">Expiry (optional - RFC 3339 format)</label>
             <input
               id="key-expiry"
               type="text"

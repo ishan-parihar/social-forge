@@ -2,7 +2,7 @@ export type CalendarView = "month" | "week" | "day" | "list";
 
 // Phase 1: persist the user's preferred view + last-viewed date to
 // localStorage so the calendar remembers its state across reloads.
-// Default view is now 'week' (was 'month') — matches postiz-app and
+// Default view is now 'week' (was 'month') - matches postiz-app and
 // gives an hourly time grid that's far better for scheduling decisions.
 const VIEW_KEY = 'social-forge-calendar-view';
 const DATE_KEY = 'social-forge-calendar-date';
@@ -33,7 +33,7 @@ let _state = $state({
   currentDate: getInitialDate(),
   selectedDate: null as string | null,  // YYYY-MM-DD
   selectedPostId: null as string | null,
-  // Phase 4: list-view state — state filter + pagination.
+  // Phase 4: list-view state - state filter + pagination.
   listState: 'all' as 'all' | 'scheduled' | 'draft' | 'published',
   listPage: 1,
   listTotalPages: 1,
@@ -49,7 +49,7 @@ let _state = $state({
 // v23-8: start a 2-minute interval that increments nowTick. This
 // triggers re-evaluation of isPast-derived state in calendar views.
 // The interval is cleaned up automatically when the module is unloaded
-// (browser tab close) — no explicit cleanup needed for a singleton.
+// (browser tab close) - no explicit cleanup needed for a singleton.
 if (typeof window !== 'undefined') {
   setInterval(() => { _state.nowTick++; }, 120_000);
 }
@@ -57,7 +57,7 @@ if (typeof window !== 'undefined') {
 // Persist view + date changes to localStorage.
 //
 // `$effect` at module top level throws `effect_orphan` (it needs an active
-// effect/component context, and a bare module has neither) — which killed the
+// effect/component context, and a bare module has neither) - which killed the
 // whole /calendar route at import time, before a single event was fetched.
 // `$effect.root` supplies the missing root; the returned disposer is
 // intentionally dropped because this singleton outlives every component.

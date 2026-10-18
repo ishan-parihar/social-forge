@@ -1,5 +1,5 @@
 <script lang="ts">
-  // v25 F4 — OAuth path of the unified connect flow.
+  // v25 F4 - OAuth path of the unified connect flow.
   //
   // The old inline implementation in routes/channels/+page.svelte ran a
   // `setInterval(..., 1000)` to notice the popup closing. That was polling a
@@ -8,7 +8,7 @@
   // another window. v25 plan §4 keeps SSE as the only realtime transport, so
   // this component waits for the two things that actually mean "done":
   //   1. the popup's `oauth-connected` postMessage, and
-  //   2. nothing else — the page's `integration_connected` SSE subscription
+  //   2. nothing else - the page's `integration_connected` SSE subscription
   //      already refreshes the list, so a closed popup needs no timer.
   import { integrationsApi } from "$lib/api/integrations";
   import Modal from "$lib/ui/Modal.svelte";

@@ -1,4 +1,4 @@
-// Theme store — dark/light mode toggle.
+// Theme store - dark/light mode toggle.
 // Stores preference in localStorage, defaults to dark.
 // Applies by toggling .dark / .light class on documentElement.
 

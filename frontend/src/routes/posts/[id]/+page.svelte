@@ -86,7 +86,7 @@
       <div class="flex gap-2">
         <button
           onclick={() => composer.openEdit(post.id)}
-          class="px-3 py-1.5 text-sm bg-accent-fill hover:bg-accent-fill-hover rounded-lg transition-colors"
+          class="px-3 py-1.5 text-sm bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg transition-colors"
         >✏️ Edit</button>
         <button
           onclick={handleDelete}

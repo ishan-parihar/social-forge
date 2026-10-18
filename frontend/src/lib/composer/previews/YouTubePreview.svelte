@@ -5,7 +5,7 @@
   //
   // A YouTube post is a VIDEO UPLOAD, not a text post: the Content Posting API
   // takes a title (required), a description (the body), and the media file.
-  // So the frame is a channel-row video card — 16:9 thumbnail, title above the
+  // So the frame is a channel-row video card - 16:9 thumbnail, title above the
   // fold, description folded under "show more" exactly as YouTube renders it.
   // The "Title is required" placeholder is deliberate: an untitled YouTube
   // upload cannot publish, and the preview is where that should become obvious.
@@ -71,14 +71,14 @@
       {#if title}
         {title}
       {:else}
-        <span class="text-red-500 italic">Untitled — YouTube requires a title</span>
+        <span class="text-red-500 italic">Untitled - YouTube requires a title</span>
       {/if}
     </h3>
     <p class="text-xs text-gray-600 whitespace-pre-wrap break-words">
       {folded}{#if text.length > 160}<span class="text-gray-500"> ...more</span>{/if}
     </p>
     {#if isOver}
-      <p class="text-[10px] text-red-600 mt-1">{count}/{limit} — will be rejected, trim {count - limit} more</p>
+      <p class="text-[10px] text-red-600 mt-1">{count}/{limit} - will be rejected, trim {count - limit} more</p>
     {/if}
   </div>
 

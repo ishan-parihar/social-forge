@@ -1,9 +1,9 @@
 <script lang="ts">
-  // TimeTableModal — per-channel posting time preset editor (Phase 2, v19).
+  // TimeTableModal - per-channel posting time preset editor (Phase 2, v19).
   //
   // Lets the user add/remove preferred posting times for a channel.
-  // These times show as "ghost slots" in DayView — empty drop targets
-  // at the preset times — so the user sees when their channel "usually"
+  // These times show as "ghost slots" in DayView - empty drop targets
+  // at the preset times - so the user sees when their channel "usually"
   // posts. The find-slot endpoint returns the next future preset time.
   //
   // Inspired by postiz-app's time.table.tsx.

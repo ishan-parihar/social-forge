@@ -5,7 +5,7 @@ export interface MediaItem {
   mime_type: string; file_size: number; width?: number; height?: number;
   // v22 Phase 7: alt text for accessibility. Previously MediaUpload
   // saved alt text to original_name (conflating filename + alt), and
-  // ComposerModal.buildPayload read m.alt (which never existed) — so
+  // ComposerModal.buildPayload read m.alt (which never existed) - so
   // alt text was silently dropped on submit. Now it's a proper field.
   alt?: string;
   created_at?: string;
@@ -27,7 +27,7 @@ export const mediaApi = {
    * Phase v21: upload with real progress via XMLHttpRequest.
    *
    * The default `upload()` goes through the shared ApiClient which uses
-   * `fetch()` — and `fetch()` has no way to observe upload progress
+   * `fetch()` - and `fetch()` has no way to observe upload progress
    * (the body is consumed as a stream, but there's no `onprogress` for
    * the upload phase). XHR's `upload.onprogress` gives us real byte-level
    * progress, which is what users expect for video uploads especially.

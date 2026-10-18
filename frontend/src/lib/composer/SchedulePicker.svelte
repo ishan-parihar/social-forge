@@ -1,9 +1,9 @@
 <script lang="ts">
-  // SchedulePicker — when a post goes out (v25 F2).
+  // SchedulePicker - when a post goes out (v25 F2).
   //
   // F2's substantive change is the timezone. The picker had carried a
   // three-paragraph comment explaining that it could not honour the user's
-  // selected zone and deferred the fix to v23 — the inputs are wall-clock
+  // selected zone and deferred the fix to v23 - the inputs are wall-clock
   // ("09:00") but were converted with the browser's own offset, so a user in
   // Berlin scheduling 09:00 got 09:00 UTC and the post fired four hours off
   // from what they asked for. That is now done properly, with Intl and no
@@ -13,6 +13,7 @@
   // instant is echoed back under them, because "did it understand my zone?" is
   // the one question a scheduler has to answer. The timezone store is global and
   // persisted, so setting it here fixes every other date in the app too.
+  import { untrack } from "svelte";
   import { postsApi } from "$lib/api/posts";
   import { toast } from "$lib/stores/toast";
   import { timezone } from "$lib/stores/timezone.svelte";
@@ -26,13 +27,13 @@
     integrationId?: string;
   } = $props();
 
-  let scheduled = $state(!!scheduledAt);
-  let dateStr = $state(scheduledAt ? scheduledAt.split("T")[0] : "");
-  let timeStr = $state(scheduledAt ? scheduledAt.split("T")[1]?.slice(0, 5) : "");
+  let scheduled = $state(untrack(() => !!scheduledAt));
+  let dateStr = $state(untrack(() => scheduledAt ? scheduledAt.split("T")[0] : ""));
+  let timeStr = $state(untrack(() => scheduledAt ? scheduledAt.split("T")[1]?.slice(0, 5) : ""));
 
-  let repeatEnabled = $state(!!recurring);
-  let intervalDays = $state(recurring?.intervalDays ?? 7);
-  let endDateStr = $state(recurring?.endDate?.split("T")[0] ?? "");
+  let repeatEnabled = $state(untrack(() => !!recurring));
+  let intervalDays = $state(untrack(() => recurring?.intervalDays ?? 7));
+  let endDateStr = $state(untrack(() => recurring?.endDate?.split("T")[0] ?? ""));
 
   let autoScheduling = $state(false);
 
@@ -93,7 +94,7 @@
     }
   }
 
-  // The instant the current inputs resolve to, and how it reads back — shown
+  // The instant the current inputs resolve to, and how it reads back - shown
   // to the user so a zone mistake is visible before they commit.
   let resolved = $derived(
     dateStr && timeStr ? wallClockToUtc(dateStr, timeStr, timezone.value) : null,
@@ -159,7 +160,7 @@
         return;
       }
       // The backend returns a UTC instant. Read it back as wall clock in the
-      // zone the user is looking at — v25 F2: this used to slice the UTC
+      // zone the user is looking at - v25 F2: this used to slice the UTC
       // string and hand UTC wall-clock to a converter that then shifted it a
       // second time, so auto-schedule landed hours off in any non-UTC zone.
       const slot = new Date(r.data.date.endsWith('Z') ? r.data.date : r.data.date + 'Z');
@@ -192,11 +193,11 @@
 
   {#if scheduled}
     <!-- v26-3: replaced native <input type="date"> with CalendarPopover.
-         The time input stays native — it's compact and consistent enough. -->
+         The time input stays native - it's compact and consistent enough. -->
     <div class="flex gap-2">
       <CalendarPopover bind:value={dateStr} placeholder="Select date" onchange={update} class="flex-1" />
-      <!-- v25 F5: the time input had no label at all — no id/for, no
-           aria-label — so it announced as an unlabelled field. -->
+      <!-- v25 F5: the time input had no label at all - no id/for, no
+           aria-label - so it announced as an unlabelled field. -->
       <input type="time" bind:value={timeStr} onchange={update} aria-label="Time"
         class="px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-content-secondary" />
     </div>
@@ -231,7 +232,7 @@
       </p>
     {:else if resolved}
       <p class="text-[11px] text-warning" role="alert">
-        {dateStr} {timeStr} does not round-trip in {zoneLabel} — the clocks change at that moment. Pick another time.
+        {dateStr} {timeStr} does not round-trip in {zoneLabel} - the clocks change at that moment. Pick another time.
       </p>
     {/if}
 
