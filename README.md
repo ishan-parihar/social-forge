@@ -26,7 +26,7 @@ Social Forge is a single Rust binary that manages **26 social platforms** (12 Ti
 
 1. **CLI** — 100+ commands for AI agents and terminal power users
 2. **REST API** — SvelteKit dashboard for human operators
-3. **MCP Server** — 327 tools across 41 modules for Claude/Cursor-style AI integrations
+3. **MCP Server** — 389 tools across 44 modules for Claude/Cursor-style AI integrations
 
 ---
 
@@ -54,7 +54,7 @@ social-forge post "Morning post" --platforms linkedin --schedule "2026-10-01T09:
 social-forge mcp
 ```
 
-**327 MCP tools** across 41 modules, all defined in `src/mcp/mod.rs` and dispatched to per-provider handler modules in `src/mcp/tools_*.rs`. Names are namespaced by platform:
+**389 MCP tools** across 44 modules, all defined in `src/mcp/mod.rs` and dispatched to per-provider handler modules in `src/mcp/tools_*.rs`. Names are namespaced by platform:
 
 | Namespace | Tools | Namespace | Tools |
 |-----------|------:|-----------|------:|
@@ -73,7 +73,7 @@ social-forge mcp
 
 The remaining 68 are cross-platform: `posts_*`, `analytics_*`, `feed_*`, `integrations_*`, `media_*`, `tag_*`, `notif_*`, `wh_*` (webhooks), `calendar_get`, `auth_status`, `setup_*`, and the automation rule tools.
 
-`social-forge mcp` enumerates the live set; 327 is the number of `#[tool(…)]` definitions in `src/mcp/mod.rs`.
+`social-forge mcp` enumerates the live set; 389 is the number of `#[tool(…)]` definitions in `src/mcp/`.
 
 ---
 
@@ -87,7 +87,7 @@ The remaining 68 are cross-platform: `posts_*`, `analytics_*`, `feed_*`, `integr
 | **Media** | Images, videos, GIFs, carousels |
 | **Analytics** | Engagement, reach, follower growth |
 | **Rate limiting** | Per-platform, auto-backoff, concurrency limit + circuit breaker |
-| **MCP** | 327 tools across 41 modules for agent orchestration |
+| **MCP** | 389 tools across 44 modules for agent orchestration |
 
 ---
 
@@ -112,7 +112,7 @@ TOKEN_ENCRYPTION_KEY=<64 hex chars>     # AES-256-GCM for tokens at rest
 |---------|-------------|
 | `social-forge post "text" --platforms x,bluesky` | Create (or schedule via `--schedule`) post |
 | `social-forge posts schedule <id> <at>` | Schedule an existing draft |
-| `social-forge analytics get` | Get analytics |
+| `social-forge analytics get <PROVIDER>` | Get analytics |
 | `social-forge mcp` | Start MCP server (stdio) |
 | `social-forge config set KEY VALUE` | Manage config |
 | `social-forge audit` | Disabled integrations, `--platforms` prefix collisions, writer-lock posture |
@@ -174,7 +174,7 @@ Full detail: [`docs/planning/TARGETING_AND_WRITER_DISCIPLINE.md`](docs/planning/
 │                        Social Forge Binary                        │
 ├──────────────┬──────────────────┬───────────────────────────────┤
 │   CLI Mode   │   REST API Mode  │        MCP Stdio Mode         │
-│   (clap)      │  (axum :6543)    │   (rmcp, 327 tools)           │
+│   (clap)      │  (axum :6543)    │   (rmcp, 389 tools)           │
 ├──────────────┴──────────────────┴───────────────────────────────┤
 │                    Shared Business Logic                          │
 │  ┌──────────────────────────────────────────────────────────┐   │
@@ -238,7 +238,7 @@ Providers are tiered: **Tier-1** gets full depth (analytics, engagement, comment
 
 *Mastodon custom instances use `MASTODON_INSTANCE_URL` — no separate provider. TikTok business accounts publish through the same Content Posting API as creator accounts — no separate provider.*
 
-*Google My Business has no MCP tools of its own — it is reachable through the REST API and the channels UI. Per-platform tool counts are the `#[tool(…)]` names in `src/mcp/mod.rs`; the 26 per-platform namespaces plus 68 cross-platform tools total 327.*
+*Google My Business has no MCP tools of its own — it is reachable through the REST API and the channels UI. Per-platform tool counts are the `#[tool(…)]` names in `src/mcp/`; the total is the `#[tool(` count across that directory.*
 
 *Platform list verified against `src/social/tier.rs` + `src/social/registry.rs` (26 default + 1 archived) and the `src/mcp/tools_*.rs` handler modules (42 modules).*
 
@@ -313,7 +313,7 @@ For AI agents that speak MCP (Claude Desktop, Cursor, etc.):
 }
 ```
 
-This exposes 327 tools with full JSON Schema descriptions.
+This exposes 389 tools with full JSON Schema descriptions.
 
 ---
 
@@ -345,8 +345,8 @@ Every variable has a sensible default, so none is required:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `DATABASE_URL` | `sqlite://data/social-forge.db` | SQLite file path. SQLite-only: a `postgres://` (or any other) scheme is rejected at startup. |
-| `APP_URL` | `https://localhost:6543` | Public URL of your instance. Used for OAuth redirect URIs. |
-| `FRONTEND_URL` | Same as `APP_URL` | CORS allowed origin. Set separately only if frontend is on a different domain. |
+| `APP_URL` | `https://localhost:6543` | Public URL of your instance. Used for OAuth redirect URIs. Its port must be the port `serve` listens on (`--port`). |
+| `FRONTEND_URL` | Same as `APP_URL` | CORS allowed origin and CSRF origin. Must match the origin the browser sends, port included. A `serve --port` that differs from the `APP_URL` port makes `POST /api/feed/import` return 403 `csrf_origin_mismatch`. Set separately only if frontend is on a different domain. |
 | `JWT_SECRET` | Auto-generated | Secret for signing auth tokens. Set a strong value in production. |
 | `TOKEN_ENCRYPTION_KEY` | *(optional)* | 64 hex chars. Encrypts OAuth tokens at rest (AES-GCM). |
 | `FRONTEND_DIR` | `./frontend/build` | Path to the SvelteKit static build directory. |
@@ -441,7 +441,7 @@ For example:
 - **Language**: Rust (Edition 2021)
 - **Web Framework**: Axum 0.8
 - **Database**: SQLite via sqlx (compile-time checked queries)
-- **MCP**: rmcp 1.6 with 327 tools (41 modules)
+- **MCP**: rmcp 1.6 with 389 tools (44 modules)
 - **CLI**: clap 4 with derive macros
 - **TLS Fingerprinting**: wreq (Chrome 131 emulation for X/Twitter)
 - **Scheduler**: Custom tokio::spawn loop with exponential-backoff retry
@@ -462,7 +462,7 @@ For example:
 social-forge/
 ├── src/
 │   ├── main.rs              # Entry point, CLI dispatch
-│   ├── cli/                 # CLI subcommands (clap, 51 commands)
+│   ├── cli/                 # CLI subcommands (clap, 56 commands)
 │   │   ├── mod.rs           # Command definitions
 │   │   ├── run.rs           # Cross-platform handler implementations
 │   │   └── platforms/       # 31 thin shims (call shared MCP handlers)
@@ -470,7 +470,7 @@ social-forge/
 │   │   ├── mod.rs           # Router + AppState
 │   │   ├── onboard.rs       # OAuth flows + cookie forms
 │   │   └── integrations.rs  # CRUD for connected accounts
-│   ├── mcp/                 # MCP server (327 tools, 41 modules)
+│   ├── mcp/                 # MCP server (389 tools, 44 modules)
 │   │   ├── mod.rs           # Tool registry
 │   │   ├── tools_x.rs       # X/Twitter tools
 │   │   ├── tools_reddit.rs  # Reddit tools

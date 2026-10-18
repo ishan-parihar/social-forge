@@ -105,6 +105,8 @@ INSTALL_DIR="${INSTALL_DIR:-${HOME}/social-forge}"
 BIN_DIR="${BIN_DIR:-/usr/local/bin}"
 SKIP_SERVICE="${SKIP_SERVICE:-false}"
 SKIP_SKILL="${SKIP_SKILL:-false}"
+SKIP_CTA="${SKIP_CTA:-false}"
+case "${1:-}" in --no-cta) SKIP_CTA=true ;; esac
 SKIP_ONBOARD="${SKIP_ONBOARD:-false}"
 SERVE_FRONTEND="${SERVE_FRONTEND:-true}"
 VERSION="${VERSION:-latest}"
@@ -190,6 +192,20 @@ log "Downloaded ${ARTIFACT} ($(du -sh "${TMP_BIN}" | cut -f1))"
 # ── Install binary ────────────────────────────────────────────────────────────
 $SUDO mkdir -p "${BIN_DIR}"
 $SUDO install -m 755 "${TMP_BIN}" "${BIN_DIR}/${APP_NAME}"
+
+# PATH membership check — system dirs get a note, never a user-rc edit
+case ":$PATH:" in
+  *":${BIN_DIR}:"*)
+    info "${BIN_DIR} already on PATH"
+    ;;
+  "$HOME"/*)
+    : # user dir; PATH note only
+    ;;
+  *)
+    warn "${BIN_DIR} is not on PATH. Add it to your shell profile:"
+    warn "  export PATH=\"${BIN_DIR}:\$PATH\""
+    ;;
+esac
 log "Installed: ${BIN_DIR}/${APP_NAME}"
 
 # Quick sanity check

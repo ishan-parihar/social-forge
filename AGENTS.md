@@ -47,7 +47,7 @@ These are the core design decisions that define social-forge's identity. They we
 
 ### 4. Triple interface: CLI + REST API + MCP server
 - All three interfaces must have feature parity for core operations. If a feature is added to REST, it should be exposed via MCP (for AI agents) and CLI (for shell users).
-- The MCP server is the primary interface for AI agents (Claude, Cursor). It must be comprehensive — 367 tools is the target, not a limitation.
+- The MCP server is the primary interface for AI agents (Claude, Cursor). It must be comprehensive — 389 tools is the target, not a limitation.
 - The CLI mirrors the MCP tools for shell-based automation.
 
 ### 5. Security-first design
@@ -97,7 +97,8 @@ When implementing features inspired by postiz-app or other competitors, apply th
 | `docs/planning/AUDIT_2026-10-14.md` | End-to-end audit: P0 bugs, cookie/API matrix, fragmentation, phased plan — executed through the 2026-10-15/16 cycles; **history** | For audit context on the P0 fixes and the cookie/API matrix |
 | `docs/planning/GAPS_2026-10-15.md` | What the 13 landed audit commits did NOT close at the time — superseded by the OUTLINE succession; **history** | For what was still open after the 13 landed commits, and how it was tracked before the register |
 | `docs/planning/VENDOR_PINS.md` | Pinned transitive deps enforced by `vendor-pull.sh --check` (CI gate) | Before touching `Cargo.toml` |
-| `docs/planning/OUTLINE-2026-10-17.md` | The live working queue: Wave A live-verification, Wave B consolidation, Wave C reliability + standing notes and recommended order | Before starting ANY implementation work |
+| `docs/planning/OUTLINE-2026-10-19-v2.md` | The live working queue (audit-revised 2026-10-19): P0 gate, B-token-efficiency, C3 eval loop, E credential-blocked live passes | Before starting ANY implementation work |
+| `docs/planning/OUTLINE-2026-10-17.md` | Superseded by the 2026-10-19 v2 outline — history, not queue. Its Wave A–C items are tracked in `TODO.md` | For provenance of the 2026-10-17 cycle |
 | `docs/planning/OUTLINE-2026-10-16.md` | Executed + red-team-audited predecessor outline (execution `d5b9bbd..7873f84`, audit `ca63a9e`) — history, not queue | For provenance of what landed 2026-10-16/17 |
 | `TODO.md` | The register: live status per work item (`scripts/kb status` is the supervised transition), seeded from the 2026-10-17 outline | To see or claim what's open |
 | `worklog.md` | The multi-agent worklog — this protocol, §8 | Before starting work; after finishing |
@@ -105,7 +106,7 @@ When implementing features inspired by postiz-app or other competitors, apply th
 | `SESSION_HOOKS.md` | Session-start ambient-context setup (AXI) | When wiring agent hooks |
 | `skills/social-forge-agent/SKILL.md` | Installed agent skill (via `make install-skill`) | When editing the skill |
 | `skills/social-forge-agent/references/providers.md` | Per-platform provider reference | When editing provider docs |
-| `skills/social-forge-agent/references/quick-reference.md` | 601-line command cheat-sheet (NOT auto-installed) | Reference only; install manually if needed |
+| `skills/social-forge-agent/references/quick-reference.md` | Routing rules, ID-discovery chains, error recovery and the v11 MCP contracts (NOT auto-installed); per-platform listings live in `providers.md` and `--help` | Reference only; install manually if needed |
 
 Superseded docs move to `docs/archive/` with a tombstone at the original path — nothing is deleted. (2026-09-30 saw the last deletion of 14 stale docs; that practice is retired.) If a doc isn't in this table and has no tombstone, it doesn't exist — don't go looking for it.
 
@@ -118,7 +119,7 @@ Social Forge is a **single-user, self-hosted social media management platform** 
 **Architecture in one paragraph:** A single Rust binary (`social-forge`) runs an axum HTTP server (REST API + embedded SvelteKit frontend), an rmcp MCP server (stdio, for AI agents like Claude/Cursor), an in-process scheduler (polls for due posts every 30s), an SSE broadcaster (realtime updates to the frontend), and background tasks (RSS poller, feed refresher, analytics cache refresher). All state lives in a local SQLite file. OAuth tokens are AES-256-GCM encrypted at rest when `TOKEN_ENCRYPTION_KEY` is set.
 
 **Key numbers (as of v11):**
-- 367 MCP tools across 41 files in `src/mcp/`
+- 389 MCP tools across 44 files in `src/mcp/`
 - 26 providers registered by default in `src/social/registry.rs` — 12 Tier-1 (depth) + 14 Tier-2 (publish-maintained), plus 1 Tier-3 (Farcaster) registered only when `ENABLE_ARCHIVE_PROVIDERS` is set. Tier membership lives in `src/social/tier.rs` (plan §1); `kick`/`vk`/`whop`/`lemmy` were removed outright.
 - 2 SQL migrations in `migrations/`
 - ~85,700 LOC of Rust + ~25,700 LOC of Svelte/TS frontend
@@ -136,7 +137,7 @@ social-forge/
 │   ├── error.rs             # AppError type
 │   ├── lib.rs               # Module declarations
 │   ├── api/                 # axum HTTP router + route handlers
-│   │   ├── mod.rs           # Router builder, AppState struct, /health, /ready, /api/metrics, CSRF middleware
+│   │   ├── mod.rs           # Router builder, AppState struct, /health, /ready, CSRF middleware
 │   │   ├── auth.rs          # POST /api/auth/login (password gate + session cookie)
 │   │   ├── posts.rs         # CRUD for posts
 │   │   ├── media.rs         # Upload/list/delete/serve media (MIME allowlist + magic-byte sniff)
@@ -150,14 +151,14 @@ social-forge/
 │   ├── cli/                 # CLI commands (mirrors MCP tools)
 │   │   ├── run.rs           # Main CLI dispatcher (~3729 LOC)
 │   │   └── platforms/       # 32 platform shims (thin wrappers around unified commands)
-│   ├── mcp/                 # MCP server (367 tools)
+│   ├── mcp/                 # MCP server (389 tools)
 │   │   ├── mod.rs           # SocialForgeMcpServer impl + #[tool] method registration (~3492 LOC)
 │   │   ├── tools_posts.rs   # Post CRUD MCP tools
 │   │   ├── tools_admin.rs   # v9 parity wrappers (posts_repeat, posts_set_tags, media_delete, etc.)
 │   │   ├── tools_x.rs       # X-specific tools (create_tweet, reply, like, retweet, search, timeline)
 │   │   ├── tools_{platform}.rs  # Per-platform tool modules
 │   │   └── auth.rs          # MCP auth (stdio = trusted local)
-│   ├── social/              # Provider trait + 31 provider implementations
+│   ├── social/              # Provider trait + 31 provider implementation files
 │   │   ├── mod.rs           # SocialProvider trait, ProviderError enum, PostContent, MediaAttachment
 │   │   ├── registry.rs      # ProviderRegistry (provider lookup + per-provider Semaphore)
 │   │   ├── x.rs             # X/Twitter (wreq + GraphQL cookie auth, ~3413 LOC)
@@ -440,7 +441,7 @@ If you add a 7th refresh path, call `update_integration_token` with plaintext �
 
 ### 6.4 Auth gate
 
-All endpoints except `/health`, `/ready`, `/api/metrics`, `/api/auth/login`, `/api/auth/callback`, `/api/media/{id}` (serve), `/api/proxy-media`, and `/api/billing/webhook` require the `sf_session` cookie (validated by `auth_middleware`). Note `/api/events` (SSE) is intentionally auth-gated (BUG #19 — prevents event leakage on networked deployments).
+All endpoints except `/health`, `/ready`, `/api/auth/login`, `/api/auth/callback`, `/api/media/{id}` (serve), `/api/proxy-media`, and `/api/billing/webhook` require the `sf_session` cookie (validated by `auth_middleware`). Note `/api/events` (SSE) is intentionally auth-gated (BUG #19 — prevents event leakage on networked deployments).
 
 The `/setup` page and `/api/public/connect/*` routes accept EITHER the `sf_session` cookie OR a `?token=<jwt>` query param (via `resolve_authed_user()` in `onboard.rs`). They do NOT mint fresh JWTs for anonymous visitors — that was a security hole closed in v7.
 
@@ -478,7 +479,7 @@ draft → queued → publishing → published
 4. Spawn the publish task on a **tracked `JoinSet`** (not detached `tokio::spawn`).
 5. After each publish, call `circuit_breaker.record_success()` or `record_failure()` to update the breaker state.
 6. Wait for all tasks to complete (with 5min timeout per `join_next`) before returning.
-7. On startup, `reclaim_stuck_publishing()` marks posts stuck in `publishing` > 5min as `error`.
+7. On startup, `reclaim_stuck_publishing()` marks posts stuck in `publishing` > 15min (`RECLAIM_AFTER_SECS` = 900 in `src/scheduler/mod.rs`) as `error`.
 
 ### 7.3 Circuit breaker (v10)
 
@@ -577,8 +578,8 @@ Use semantic Tailwind classes (`bg-surface`, `text-muted`, `border-line`, `bg-br
 
 ### 9.8 Frontend realtime events
 
-The SSE client (`frontend/src/lib/stores/realtime.ts`) subscribes to these events:
-`post_created`, `post_scheduled`, `post_published`, `post_failed`, `post_deleted`, `integration_connected`, `integration_disconnected`, `notification_new`.
+The SSE client (`frontend/src/lib/stores/realtime.ts`) subscribes to these 19 events:
+`post_created`, `post_scheduled`, `post_published`, `post_failed`, `first_comment_failed`, `post_deleted`, `post_updated`, `post_stage_changed`, `lagged`, `integration_connected`, `integration_disconnected`, `notification_new`, `comment_received`, `dm_received`, `campaign_created`, `campaign_updated`, `campaign_deleted`, `feed:new_posts`, `feed:engagement`.
 
 If you add a new broadcast event in the backend (`broadcaster.send(...)`), add it to the `realtime.ts` subscription list AND wire up listeners in the relevant routes.
 
@@ -594,7 +595,7 @@ See `.env.example` for the full list. Critical ones:
 | `APP_PASSWORD` | No | auto-generated | Single-user password gate (persisted to `~/.social-forge/.env`) |
 | `APP_URL` | No | `https://localhost:6543` | Public URL (used for OAuth redirect URIs + TLS decision) |
 | `BIND_HOST` | No | `127.0.0.1` | Network interface to bind (`0.0.0.0` for LAN) |
-| `FRONTEND_URL` | No | = `APP_URL` | CORS allow-list + CSRF origin |
+| `FRONTEND_URL` | No | = `APP_URL` | CORS allow-list + CSRF origin. Must match the browser origin including port; a `--port` other than the `APP_URL` port fails `csrf_origin_mismatch` on state-changing routes |
 | `JWT_SECRET` | No | derived from `APP_PASSWORD` | HMAC key for session cookies |
 | `TOKEN_ENCRYPTION_KEY` | No | — | 64 hex chars (32 bytes) for AES-256-GCM token encryption at rest |
 | `DB_MAX_CONNECTIONS` | No | `1` | SqlitePool max connections (kept at 1 — the pool serializes writers) |
@@ -631,7 +632,26 @@ social-forge automation list
 }
 ```
 
-### Key MCP tool categories (340 total)
+### Toolset filtering (per-session tool budget)
+
+Boot default is `core` — the cross-platform lifecycle tools
+(posts/stage/media/tags/notifications/analytics/setup/integrations/feed)
+plus the two meta tools. A session that only touches X does not pay
+389-schema context tax.
+
+- `SOCIAL_FORGE_TOOLSETS=x,reddit` (comma-separated, or `all`) — boot-time
+  selection; `tools_enable` adds sets at runtime.
+- `tools_search` searches ALL tools including disabled ones — use it
+  before `tools_enable` to discover the set names (provider prefixes:
+  `x`, `reddit`, `facebook`, `instagram`, `linkedin`, `telegram`,
+  `discord`, `whatsapp`, `youtube`, `google`, `github`, `bluesky`,
+  `mastodon`, `skool`, `slack`, `threads`, `tiktok`, `pinterest`,
+  `wordpress`, `medium`, `devto`, `hashnode`, `webhooks`, …).
+- Shell sizing a session before enabling:
+  `social-forge mcp-tools --toolset x --pretty` (same membership rule
+  as the in-session filter; plain output lists names only).
+
+### Key MCP tool categories (389 total)
 | Category | Sample tools |
 |---|---|
 | Posts | `posts_create`, `posts_list`, `posts_publish`, `posts_repeat`, `posts_set_tags`, `posts_stage` |

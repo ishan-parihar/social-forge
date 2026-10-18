@@ -49,29 +49,14 @@ All commands output JSON to stdout. Errors are JSON on stderr with exit code 1.
 |---------|----------------|
 | **Integration UUID** | `social-forge providers --pretty` → `internal_id` field |
 | **LinkedIn Page ID** | `social-forge linkedin-page list --pretty` → `page_id` field |
-| **Instagram Account ID** | `social-forge instagram accounts --pretty` → `account_id` field |
+| **Instagram Account ID** | `social-forge providers --pretty` → `internal_id` for provider `instagram` |
 | **Reddit Subreddit** | Use the name directly (e.g., `rust`, `javascript`) |
 | **Facebook Page ID** | `social-forge providers --pretty` → `internal_id` for provider `facebook` |
 | **Post ID** | `social-forge posts list --limit 5 --pretty` → `id` field |
 
----
-
-## Chaining Commands
-
-When a command needs an ID from a previous command, chain them:
+Chain a discovered ID into the next command, for example with `jq`:
 
 ```bash
-# Get integration UUID, then use it
-social-forge providers --pretty
-# → find the provider you want, note its internal_id
-
-social-forge posts create "Hello" --integrations <INTERNAL_ID> --pretty
-```
-
-For shell scripting with `jq`:
-
-```bash
-# Extract UUID automatically
 UUID=$(social-forge providers --pretty | jq -r '.providers[] | select(.provider=="linkedin-page") | .internal_id')
 social-forge posts create "Update" --integrations "$UUID" --pretty
 ```
@@ -107,7 +92,7 @@ Does `social-forge <provider> <action>` exist in the recipes below?
 - Threads → `social-forge threads post <ACCOUNT_ID> "text"`
 - Discord → `social-forge discord send <CHANNEL_ID> "text"`
 - Slack → `social-forge slack send <CHANNEL_ID> "text"`
-- Telegram Bot → `social-forge telegram-bot send --chat-id <ID> "text"`
+- Telegram Bot → `social-forge telegram-bot send <CHAT_ID> "text"`
 - Telegram User → `social-forge telegram-user send <PEER> "text"`
 - WhatsApp → `social-forge whatsapp send <PHONE> "text"`
 - WordPress → `social-forge wordpress post "title" "content"`
@@ -185,6 +170,12 @@ Content is auto-split to fit each platform's character limit. Threads are auto-n
 
 **Verify**: `social-forge posts list --limit 3 --pretty` — check all platform posts appear.
 
+### Post a carousel (multiple images)
+
+```bash
+social-forge carousel "5 Tips for Devs" --integration <UUID> --media https://example.com/tip1.jpg,https://example.com/tip2.jpg --pretty
+```
+
 ### Schedule a post
 
 ```bash
@@ -202,6 +193,14 @@ social-forge posts delete <POST_ID> --pretty
 ```
 
 **Verify**: `social-forge posts get <POST_ID> --pretty` — check `state: "queued"` and `scheduled_at` matches.
+
+### Read a feed
+
+```bash
+social-forge x timeline --count 5 --pretty    # X home timeline (flag is --count, not --limit)
+```
+
+Other platforms' feed and read commands are in `references/recipes-extended.md`.
 
 ## Error Recovery
 

@@ -22,9 +22,9 @@ Before many commands, you need integration IDs. Here's how to find them:
 ```bash
 social-forge providers --pretty                    # All integration UUIDs + names
 social-forge linkedin-page list --pretty           # LinkedIn page IDs
-social-forge instagram media <IG_ID> --limit 1     # Verify Instagram account
+social-forge instagram posts <IG_ID>                # Verify Instagram account
 social-forge reddit browse <sub> --limit 1         # Verify Reddit connection
-social-forge facebook pages --pretty               # Facebook page IDs
+social-forge providers --pretty                     # Facebook page IDs (internal_id)
 # YouTube: no list command — pass a known channel ID to `youtube stats <CHANNEL_ID>`
 ```
 
@@ -81,3 +81,28 @@ social-forge <cmd> --help              # Fix wrong flags
 - **Lifecycle**: one campaign `group_id` works with `posts_reschedule` (`move_group: true` shifts the whole campaign), `posts_unschedule`, `posts_publish`, `posts_delete`, `posts_group`.
 - **Repeat**: `posts_repeat` requires `scheduled_at` + `end_date` (RFC3339) and returns the copies (`group_id`, `post_ids`, `scheduled_dates`).
 - **UTM**: put `"utm_campaign": "…"` in a post's settings — every plain URL in its content gets `utm_source=<platform>&utm_medium=social&utm_campaign=<campaign>` at publish time.
+
+### Tool catalogue (names only — parameters via `tools_search` or `--help`)
+
+Tools that the contracts above do not name. Each is a real MCP tool; call it by this name.
+
+- **AI writing**: `ai_change_tone`, `ai_generate_bulk`, `ai_generate_post`, `ai_improve_writing`, `ai_suggest_hashtags`, `ai_summarize`
+- **Automation rules**: `create_automation_rule`, `delete_automation_rule`, `get_automation_logs`, `list_automation_rules`, `update_automation_rule`
+- **Campaigns**: `campaign_create`, `campaign_delete`, `campaign_list`, `campaign_update`
+- **Cross-platform comments and DMs**: `comment_resolve`, `get_comments`, `get_dm_messages`, `list_dm_conversations`, `reply_to_comment`, `send_dm`
+- **Discord webhooks**: `di_webhook_info`, `di_webhook_post`
+- **`ias_*` family**: `ias_create_container`, `ias_get_comments`, `ias_get_media`, `ias_get_media_detail`, `ias_poll_container`, `ias_publish_container`, `ias_reply_to_comment`
+- **Instagram messages**: `ig_get_messages`, `ig_list_conversations`, `ig_send_dm`
+- **Unified inbox**: `inbox_list`, `inbox_reply`
+- **Integrations**: `integrations_connect_complete`
+- **LinkedIn messages and comments**: `li_get_messages`, `li_list_conversations`, `li_reply_comment`, `li_send_dm`
+- **Bluesky and Mastodon replies**: `bs_reply`, `ms_reply`
+- **Posts**: `posts_best_times`
+- **RSS feeds**: `rss_feed_create`, `rss_feed_delete`, `rss_feed_items`, `rss_feed_list`, `rss_feed_poll`, `rss_feed_toggle`
+- **Sets (templates)**: `set_create`, `set_delete`, `set_list`
+- **Setup**: `setup_config_get`, `setup_config_list`
+- **Signatures**: `signatures_create`, `signatures_delete`, `signatures_list`, `signatures_update`
+- **Streak**: `streak_get`
+- **Telegram**: `tb_list_chats`
+- **Webhook delivery log**: `webhook_deliveries`
+- **X messages and replies**: `x_get_dm_conversation`, `x_list_dms`, `x_reply_tweet`, `x_send_dm`

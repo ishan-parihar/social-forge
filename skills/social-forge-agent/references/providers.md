@@ -41,7 +41,7 @@ Complete CLI commands and MCP tools for every supported provider. Grouped by tas
 | **Instagram posts** | `social-forge instagram posts <ACCOUNT_ID>` | Recent media |
 | **LinkedIn personal** | `social-forge linkedin posts` | Your recent posts |
 | **LinkedIn profile** | `social-forge linkedin profile` | Your profile |
-| **LinkedIn page** | `social-forge linkedin-page posts <PAGE_ID>` | Page posts |
+| **LinkedIn page** | `social-forge linkedin-page feed <PAGE_ID>` | Page posts |
 | **Facebook page** | `social-forge facebook posts <PAGE_ID>` | Page feed |
 | **Import + feed** | `social-forge import x --count 20` then `social-forge feed` | Unified local feed |
 
@@ -83,7 +83,7 @@ Complete CLI commands and MCP tools for every supported provider. Grouped by tas
 
 | Command | Description |
 |---------|-------------|
-| `social-forge carousel create "<title>" --images <img1> <img2> ... --platforms x,linkedin` | Multi-image carousel |
+| `social-forge carousel "<text>" --integration <UUID> --media <url1>,<url2>` | Multi-image carousel |
 
 ---
 
@@ -93,7 +93,6 @@ Complete CLI commands and MCP tools for every supported provider. Grouped by tas
 |---------|-------------|
 | `social-forge comment get <INTEGRATION_ID> <POST_ID>` | Get comments on a post |
 | `social-forge comment reply <INTEGRATION_ID> <COMMENT_ID> "<text>"` | Reply to a comment |
-| `social-forge comment delete <INTEGRATION_ID> <COMMENT_ID>` | Delete a comment |
 
 **Platform-specific comments via CLI**:
 | Platform | CLI Command |
@@ -198,7 +197,7 @@ social-forge mcp-call ig_publish_container --args '{"ig_id":"<IG_ACCOUNT_ID>","c
 
 | Command | Description |
 |---------|-------------|
-| `social-forge automation create <INTEGRATION_ID> "<name>" --trigger <type> --response "<text>"` | Create rule |
+| `social-forge automation create <INTEGRATION_ID> "<name>" <TRIGGER_TYPE> "<response>" <RESPONSE_TYPE>` | Create rule (trigger: comment, dm, mention, follow; response: fixed, template, ai_generated) |
 | `social-forge automation list` | List all rules |
 | `social-forge automation update <RULE_ID> --name "<name>" --active true` | Update rule |
 | `social-forge automation delete <RULE_ID>` | Delete rule |
@@ -241,7 +240,7 @@ social-forge mcp-call ig_publish_container --args '{"ig_id":"<IG_ACCOUNT_ID>","c
 When CLI doesn't have a command for what you need, use `mcp-call`:
 
 ```bash
-social-forge mcp-tools --pretty                    # List all 367 tools (bridge-accessible)
+social-forge mcp-tools --pretty                    # List all 389 tools (bridge-accessible)
 social-forge mcp-tools --toolset x --pretty         # Only the X toolset (session-sizing; mirrors SOCIAL_FORGE_TOOLSETS filtering)
 social-forge mcp-call <tool_name> --args '{"key":"value"}' # Call any tool
 ```

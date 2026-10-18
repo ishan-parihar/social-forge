@@ -25,7 +25,7 @@ social-forge slack users --pretty
 
 # Telegram Bot
 social-forge telegram-bot updates --pretty
-social-forge telegram-bot chat --chat-id <ID> --pretty
+social-forge telegram-bot chat <CHAT_ID> --pretty
 
 # Telegram User
 social-forge telegram-user dialogs --limit 10 --pretty
@@ -53,7 +53,7 @@ social-forge github search "query" --pretty
 
 # WordPress
 social-forge wordpress list --limit 10 --pretty
-social-forge wordpress get <POST_ID> --pretty
+social-forge wordpress get 1 --pretty
 social-forge wordpress categories --pretty
 
 # Hashnode
@@ -86,7 +86,7 @@ social-forge gdrive folders --pretty
 # Google Calendar
 social-forge gcal calendars --pretty
 social-forge gcal events --limit 10 --pretty
-social-forge gcal event --event-id <ID> --pretty
+social-forge gcal event <EVENT_ID> --pretty
 
 # Gmail
 social-forge gmail-ops messages --limit 10 --pretty
@@ -145,7 +145,7 @@ social-forge slack send <CHANNEL_ID> "reply text"
 social-forge whatsapp send <PHONE> "reply text"
 
 # Telegram
-social-forge telegram-bot send --chat-id <ID> "reply text"
+social-forge telegram-bot send <CHAT_ID> "reply text"
 social-forge telegram-user send <PEER> "reply text"
 
 # GitHub
@@ -169,11 +169,11 @@ social-forge skool post <GROUP_ID> "title" "content"
 social-forge skool comment <POST_ID> <GROUP_ID> "reply text"
 
 # Google Calendar
-social-forge gcal create --title "Meeting" --start "2026-07-02T09:00:00Z" --end "2026-07-02T10:00:00Z"
-social-forge gcal delete --event-id <ID>
+social-forge gcal create "Meeting" "2026-07-02T09:00:00Z" "2026-07-02T10:00:00Z"
+social-forge gcal delete <EVENT_ID>
 
 # Gmail
-social-forge gmail-ops send --to "user@example.com" --subject "Hi" --body "Hello!"
+social-forge gmail-ops send "user@example.com" "Hi" "Hello!"
 
 # Webhooks
 social-forge webhooks create "https://example.com/hook" --name "my-hook"

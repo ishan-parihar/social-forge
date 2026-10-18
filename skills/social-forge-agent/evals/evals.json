@@ -3,9 +3,9 @@
   "evals": [
     {
       "id": 1,
-      "prompt": "Post a tweet saying 'Just shipped the new social media CLI tool! Check it out at social-forge.dev \ud83d\ude80' and then check my X timeline to see what's happening",
+      "prompt": "Post a tweet saying 'Just shipped the new social media CLI tool! Check it out at social-forge.dev 🚀' and then check my X timeline to see what's happening",
       "expected_commands": [
-        "social-forge x post 'Just shipped the new social media CLI tool! Check it out at social-forge.dev \ud83d\ude80' --json",
+        "social-forge x post 'Just shipped the new social media CLI tool! Check it out at social-forge.dev 🚀' --json",
         "social-forge x timeline --count 5 --json"
       ],
       "expected_output": "First command returns {\"status\":\"published\",\"post_id\":\"...\"}. Second returns {\"tweets\":[...]}",
@@ -34,7 +34,7 @@
     },
     {
       "id": 4,
-      "prompt": "Get the Instagram insights for my designaesthetics.co.in account \u2014 I want to see reach and follower count for the last week, and also get the LinkedIn page analytics for Design Aesthetics",
+      "prompt": "Get the Instagram insights for my designaesthetics.co.in account — I want to see reach and follower count for the last week, and also get the LinkedIn page analytics for Design Aesthetics",
       "expected_commands": [
         "social-forge providers --pretty",
         "social-forge mcp-call ig_get_insights '{\"ig_id\":\"<IG_ID>\",\"metrics\":[\"reach\",\"follower_count\"],\"period\":\"day\",\"since\":\"...\",\"until\":\"...\"}'",
@@ -423,16 +423,16 @@
         "social-forge mcp-tools --toolset x --pretty",
         "social-forge mcp-call x_home_timeline --args '{\"count\":5}'"
       ],
-      "expected_output": "Sizes the x toolset before enabling it and does not load the full 367-tool surface; timeline returns up to 5 tweets.",
+      "expected_output": "Sizes the x toolset before enabling it and does not load the full 389-tool surface; timeline returns up to 5 tweets. If the CLI is used for the read instead, the flag is `--count 5` (not `--limit`).",
       "files": []
     },
     {
       "id": 43,
       "prompt": "Can social-forge publish a carousel to LinkedIn and X? Answer yes or no and show the command.",
       "expected_commands": [
-        "social-forge carousel create \"<TITLE>\" --images <IMG1> <IMG2> --platforms x,linkedin --pretty"
+        "social-forge carousel \"<TITLE>\" --integration <UUID> --media <URL1>,<URL2> --pretty"
       ],
-      "expected_output": "Answers yes from the skill's carousel command shape without opening any references/ file.",
+      "expected_output": "Answers yes from the skill's carousel command shape without opening any references/ file. One call per target integration (the command takes one --integration).",
       "files": []
     }
   ]

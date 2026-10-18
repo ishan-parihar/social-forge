@@ -18,7 +18,7 @@ social-forge reddit search "async rust" --pretty
 social-forge instagram posts <ACCOUNT_ID> --pretty
 
 # LinkedIn company posts
-social-forge linkedin-page posts <PAGE_ID> --pretty
+social-forge linkedin-page feed <PAGE_ID> --pretty
 
 # Facebook page feed
 social-forge facebook posts <PAGE_ID> --pretty
@@ -67,7 +67,7 @@ social-forge media upload-batch ./img1.jpg ./img2.jpg ./img3.jpg --pretty
 ### Create a carousel
 
 ```bash
-social-forge carousel create "5 Tips for Devs" --images tip1.jpg tip2.jpg tip3.jpg --platforms x,linkedin --pretty
+social-forge carousel "5 Tips for Devs" --integration <UUID> --media https://example.com/tip1.jpg,https://example.com/tip2.jpg --pretty
 ```
 
 ### Comment and reply
@@ -78,9 +78,6 @@ social-forge comment get <INTEGRATION_ID> <POST_ID> --limit 20 --pretty
 
 # Reply to a comment
 social-forge comment reply <INTEGRATION_ID> <COMMENT_ID> "Thanks for feedback!" --pretty
-
-# Delete a comment
-social-forge comment delete <INTEGRATION_ID> <COMMENT_ID> --pretty
 ```
 
 ### Send a DM
@@ -110,7 +107,7 @@ social-forge stage "Preview mode" --platforms x,linkedin --preview --pretty
 
 ```bash
 # Auto-reply to comments
-social-forge automation create <INTEGRATION_ID> "Auto-thanks" --trigger comment --response "Thanks for commenting!" --type fixed --pretty
+social-forge automation create <INTEGRATION_ID> "Auto-thanks" comment "Thanks for commenting!" fixed --pretty
 
 # List rules
 social-forge automation list --pretty
