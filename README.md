@@ -498,6 +498,8 @@ social-forge/
 └── Cargo.toml               # Rust dependencies
 ```
 
+Planning, audit, and decision records are indexed in [`docs/planning/README.md`](docs/planning/README.md).
+
 ---
 
 ## Requirements
