@@ -62,7 +62,7 @@ pin; the `<!-- vendor-pull:begin/end -->` block in §6 is the only part the scri
 | `wreq` | registry | `=6.0.0-rc.23` | `6.0.0-rc.23` | `b7cd527a3265faac3ac44097ccccc76d901230b9bd2866e62d1c18dc348d7aa8` | https://github.com/0x676e67/wreq | - |
 | `wreq-util` | registry | `=3.0.0-rc.10` | `3.0.0-rc.10` | `6c6bbe24d28beb9ceb58b514bd6a613c759d3b706f768b9d2950d5d35b543c04` | https://github.com/0x676e67/wreq-util | - |
 | `toon-format` | registry | `0.4` | `0.4.6` | `af1dae994fe9adfb44bdc74fc17546651604a59af32136256515bc1218850832` | https://github.com/toon-format/toon-rust | - |
-| `glass_pumpkin` | registry | `^1.6` | `1.10.0` | `f09b0eef9941bda7cc263c23c3977d437a9aa19abb6a58ed0234d145d9c024bc` | https://github.com/mikelodder7/glass_pumpkin | - |
+| `glass_pumpkin` | registry | `^1.6` | `1.9.1` | `1a36979d857bcca97269ce131d225ed43289c6613a86067831b34b3171765913` | https://github.com/mikelodder7/glass_pumpkin | - |
 | `grammers-crypto` | registry | `0.7` | `0.7.0` | `17c75ce8d715d407a5767a94b5fd7b210106ec5c29c7be8ff4dfdca58de4dcf6` | https://codeberg.org/Lonami/grammers | - |
 | `core2` | vendor | `patch.crates-io` | `0.4.0` | `047d324a14bf6e1b84770b8f9d4d69990d75ae7af9b2b28b83f702e5718c6b31` | https://github.com/bbqsrc/core2 | - |
 | `gog-google-port` | port | `n/a` | `unpinned` | `n/a` | `UNRESOLVED` | `src/social/google.rs;src/social/calendar.rs;src/social/drive.rs;src/social/google_my_business.rs` |
@@ -158,9 +158,9 @@ of a feature phase (plan §9).
 Written by `scripts/vendor-pull.sh --update`.
 
 <!-- vendor-pull:begin -->
-lock_digest: 0b8088c4e77f0c253b255ca99ffc969e76c3caa78bbea03baf5431d25d9b2caa
+lock_digest: 75d9d1881e68d643750aa4488f324f17684167fae824f13645a141ca1dd99ad3
 core2_state: stub.idle
-last_checked: 2026-09-30T07:19:09Z
+last_checked: 2026-10-18T12:05:22Z
 <!-- vendor-pull:end -->
 
 ## 7. Follow-ups
