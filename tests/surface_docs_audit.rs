@@ -104,6 +104,30 @@ fn d1_documented_tool_counts_match_registry() {
         providers.contains(&format!("{count} tools")),
         "providers.md must state the true tool count ({count} tools)"
     );
+    let readme = std::fs::read_to_string(repo_path("README.md")).unwrap();
+    assert!(
+        readme.contains(&format!("{count} MCP tools")),
+        "README.md must state the true MCP tool count ({count} MCP tools)"
+    );
+    assert!(
+        !readme.contains("327 tools") && !readme.contains("327 MCP"),
+        "README.md still states the stale 327-tool count"
+    );
+}
+
+#[test]
+fn d1_documented_cli_command_count_matches_clap() {
+    use clap::CommandFactory;
+    let commands = social_forge::cli::Cli::command()
+        .get_subcommands()
+        .filter(|c| c.get_name() != "help")
+        .count();
+    assert!(commands > 0, "no CLI commands parsed");
+    let readme = std::fs::read_to_string(repo_path("README.md")).unwrap();
+    assert!(
+        readme.contains(&format!("clap, {commands} commands")),
+        "README.md must state the true CLI command count ({commands} commands)"
+    );
 }
 
 #[test]

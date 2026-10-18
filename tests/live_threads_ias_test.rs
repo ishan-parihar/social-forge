@@ -77,7 +77,7 @@ async fn test_ias_social_provider_meta() {
 // ── Helpers ──────────────────────────────────────────────────
 
 fn get_config() -> Config {
-    dotenvy::dotenv().ok();
+    social_forge::config::load_dotenv_for_live_tests();
     Config::from_env().expect("Failed to load config")
 }
 

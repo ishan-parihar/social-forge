@@ -2,7 +2,7 @@ use social_forge::config::Config;
 use social_forge::social::x::XProvider;
 
 fn get_config() -> Config {
-    dotenvy::dotenv().ok();
+    social_forge::config::load_dotenv_for_live_tests();
     Config::from_env().expect("Failed to load config")
 }
 

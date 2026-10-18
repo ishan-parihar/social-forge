@@ -27,7 +27,7 @@ use social_forge::social::youtube::YoutubeProvider;
 use social_forge::social::SocialProvider;
 
 fn get_config() -> Config {
-    dotenvy::dotenv().ok();
+    social_forge::config::load_dotenv_for_tests();
     Config::from_env().expect("Failed to load config from .env")
 }
 

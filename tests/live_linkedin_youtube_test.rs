@@ -26,7 +26,7 @@ static CONFIG: OnceLock<Config> = OnceLock::new();
 
 fn get_config() -> &'static Config {
     CONFIG.get_or_init(|| {
-        dotenvy::dotenv().ok();
+        social_forge::config::load_dotenv_for_live_tests();
         Config::from_env().expect("Failed to load config from env")
     })
 }

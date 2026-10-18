@@ -5,7 +5,7 @@ const BEARER: &str = "AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puT
 const UA: &str = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 
 fn get_cookies() -> (String, String) {
-    dotenvy::dotenv().ok();
+    social_forge::config::load_dotenv_for_tests();
     let at = std::env::var("X_AUTH_TOKEN").expect("X_AUTH_TOKEN not set");
     let ct0 = std::env::var("X_CT0").expect("X_CT0 not set");
     (at, ct0)

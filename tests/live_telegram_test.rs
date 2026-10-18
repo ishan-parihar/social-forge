@@ -14,7 +14,7 @@ use social_forge::config::Config;
 use social_forge::services::telegram_client::TelegramClientManager;
 
 async fn manager() -> Option<Arc<TelegramClientManager>> {
-    dotenvy::dotenv().ok();
+    social_forge::config::load_dotenv_for_live_tests();
     let config = Config::from_env().expect("Failed to load config");
     let (api_id, api_hash) = (config.telegram_api_id.clone(), config.telegram_api_hash.clone());
     let Some(api_id) = api_id.and_then(|v| v.parse::<i32>().ok()).filter(|v| *v != 0) else {
@@ -48,7 +48,7 @@ fn test_peer() -> Option<String> {
     match std::env::var("TELEGRAM_TEST_PEER") {
         Ok(p) if !p.is_empty() => Some(p),
         _ => {
-            eprintln!("⏭ skipped: TELEGRAM_TEST_PEER not set (a @username the session can message)");
+            eprintln!("⏭ skipped: TELEGRAM_TEST_PEER not set (a @username the session can message, or `me`)");
             None
         }
     }

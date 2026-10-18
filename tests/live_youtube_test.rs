@@ -34,7 +34,7 @@ fn resolve_token(token: &str, key: Option<&[u8; 32]>) -> String {
 
 #[tokio::test]
 async fn test_live_youtube_all_tools() {
-    dotenvy::dotenv().ok();
+    social_forge::config::load_dotenv_for_live_tests();
     let config = Config::from_env().expect("Config");
 
     let token_key = config
