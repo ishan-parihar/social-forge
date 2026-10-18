@@ -9,9 +9,9 @@ authority on which document answers which question; this page only lists them.
 | [`TARGETING_AND_WRITER_DISCIPLINE.md`](TARGETING_AND_WRITER_DISCIPLINE.md) | live | Targeting, collisions, and the single-writer rule (G-08). Why one long-lived process owns the database. |
 | [`VENDOR_PINS.md`](VENDOR_PINS.md) | live (CI gate) | Pinned transitive dependencies, enforced by `scripts/vendor-pull.sh --check`. |
 | [`OUTLINE-2026-10-19-v2.md`](OUTLINE-2026-10-19-v2.md) | live queue per AGENTS §0.6 | P0 gate, token efficiency, eval loop, credential-blocked live passes. |
-| [`OUTLINE-2026-10-19-v3.md`](OUTLINE-2026-10-19-v3.md) | unresolved | Second outline for the same question as v2. `kb lint` flags the overlap (W006). Owner to decide which one is live. |
-| [`OUTLINE-2026-10-19.md`](OUTLINE-2026-10-19.md) | unresolved | Earlier 2026-10-19 outline. `kb lint` flags it against v2 and v3 (W006). |
-| [`OUTLINE-2026-10-17.md`](OUTLINE-2026-10-17.md) | superseded | Replaced by the 2026-10-19 v2 outline. Its Wave A–C items live in `TODO.md`. |
+| [`OUTLINE-2026-10-19-v3.md`](OUTLINE-2026-10-19-v3.md) | archived | Superseded by v2 (the live queue per AGENTS §0.6). Archived at `docs/archive/OUTLINE-2026-10-19-v3.md`. |
+| [`OUTLINE-2026-10-19.md`](OUTLINE-2026-10-19.md) | archived | Earlier 2026-10-19 outline, superseded by v2. Archived at `docs/archive/OUTLINE-2026-10-19.md`. |
+| [`OUTLINE-2026-10-17.md`](OUTLINE-2026-10-17.md) | archived | Replaced by the 2026-10-19 v2 outline. Its Wave A–C items live in `TODO.md`. Archived at `docs/archive/OUTLINE-2026-10-17.md`. |
 | [`OUTLINE-2026-10-16.md`](OUTLINE-2026-10-16.md) | history | Executed predecessor outline (`d5b9bbd..7873f84`). |
 | [`DECISIONS_2026-10-19.md`](DECISIONS_2026-10-19.md) | open decisions | Decision points with recommendations. Nothing in it is applied until the user approves it. |
 | [`EXECUTION_2026-10-19.md`](EXECUTION_2026-10-19.md) | record | Cycle 3 execution log: what landed, gate results, decisions for the user, and what did not land. |

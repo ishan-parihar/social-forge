@@ -1,6 +1,6 @@
 # Decisions — 2026-10-19 (open decision points and recommendations)
 
-Companion to `OUTLINE-2026-10-19-v3.md` (§ "Decisions needed") and
+Companion to `OUTLINE-2026-10-19-v3.md` (archived; see docs/archive) (§ "Decisions needed") and
 `EXECUTION_2026-10-19.md` (what landed). Written so the open decisions survive
 a context compaction. Nothing in this file has been applied; each decision
 below needs the user's explicit go-ahead before action.
@@ -121,7 +121,7 @@ Once decisions are made, the work order is:
 
 ## Key files and state
 
-- Outline (queue): `docs/planning/OUTLINE-2026-10-19-v3.md`
+- Outline (queue): `docs/archive/OUTLINE-2026-10-19-v3.md`
 - What landed: `docs/planning/EXECUTION_2026-10-19.md`
 - C3 paired evals (3 of 43): `skills/social-forge-agent/evals/c3-paired-run.json`
 - Smoke harness and logs: session scratchpad (`smoke.cjs`, `diag.cjs`,

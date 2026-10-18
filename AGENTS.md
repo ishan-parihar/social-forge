@@ -98,7 +98,7 @@ When implementing features inspired by postiz-app or other competitors, apply th
 | `docs/planning/GAPS_2026-10-15.md` | What the 13 landed audit commits did NOT close at the time — superseded by the OUTLINE succession; **history** | For what was still open after the 13 landed commits, and how it was tracked before the register |
 | `docs/planning/VENDOR_PINS.md` | Pinned transitive deps enforced by `vendor-pull.sh --check` (CI gate) | Before touching `Cargo.toml` |
 | `docs/planning/OUTLINE-2026-10-19-v2.md` | The live working queue (audit-revised 2026-10-19): P0 gate, B-token-efficiency, C3 eval loop, E credential-blocked live passes | Before starting ANY implementation work |
-| `docs/planning/OUTLINE-2026-10-17.md` | Superseded by the 2026-10-19 v2 outline — history, not queue. Its Wave A–C items are tracked in `TODO.md` | For provenance of the 2026-10-17 cycle |
+| `docs/archive/OUTLINE-2026-10-17.md` | Superseded by the 2026-10-19 v2 outline — history, not queue. Its Wave A–C items are tracked in `TODO.md` | For provenance of the 2026-10-17 cycle |
 | `docs/planning/OUTLINE-2026-10-16.md` | Executed + red-team-audited predecessor outline (execution `d5b9bbd..7873f84`, audit `ca63a9e`) — history, not queue | For provenance of what landed 2026-10-16/17 |
 | `TODO.md` | The register: live status per work item (`scripts/kb status` is the supervised transition), seeded from the 2026-10-17 outline | To see or claim what's open |
 | `worklog.md` | The multi-agent worklog — this protocol, §8 | Before starting work; after finishing |
@@ -106,7 +106,7 @@ When implementing features inspired by postiz-app or other competitors, apply th
 | `SESSION_HOOKS.md` | Session-start ambient-context setup (AXI) | When wiring agent hooks |
 | `skills/social-forge-agent/SKILL.md` | Installed agent skill (via `make install-skill`) | When editing the skill |
 | `skills/social-forge-agent/references/providers.md` | Per-platform provider reference | When editing provider docs |
-| `skills/social-forge-agent/references/quick-reference.md` | Routing rules, ID-discovery chains, error recovery and the v11 MCP contracts (NOT auto-installed); per-platform listings live in `providers.md` and `--help` | Reference only; install manually if needed |
+| `skills/social-forge-agent/references/quick-reference.md` | Routing rules, ID-discovery chains, error recovery and the v11 MCP contracts (NOT auto-installed); per-platform listings live in `skills/social-forge-agent/references/providers.md` and `--help` | Reference only; install manually if needed |
 
 Superseded docs move to `docs/archive/` with a tombstone at the original path — nothing is deleted. (2026-09-30 saw the last deletion of 14 stale docs; that practice is retired.) If a doc isn't in this table and has no tombstone, it doesn't exist — don't go looking for it.
 
