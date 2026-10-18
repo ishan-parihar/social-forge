@@ -7,7 +7,6 @@ pub mod content_splitter;
 pub mod integrations;
 pub mod media_transform;
 pub mod notifications;
-pub mod plugs;
 pub mod posts;
 pub mod short_link;
 pub mod staging;
