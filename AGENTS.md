@@ -441,7 +441,7 @@ If you add a 7th refresh path, call `update_integration_token` with plaintext �
 
 ### 6.4 Auth gate
 
-All endpoints except `/health`, `/ready`, `/api/auth/login`, `/api/auth/callback`, `/api/media/{id}` (serve), `/api/proxy-media`, and `/api/billing/webhook` require the `sf_session` cookie (validated by `auth_middleware`). Note `/api/events` (SSE) is intentionally auth-gated (BUG #19 — prevents event leakage on networked deployments).
+All endpoints except `/health`, `/ready`, `/api/auth/login`, `/api/auth/callback`, `/api/media/{id}` (serve), and `/api/billing/webhook` require the `sf_session` cookie (validated by `auth_middleware`). `/api/proxy-media` is gated too: it fetches upstream CDN URLs for the caller, and the frontend's `feed.ts` sends the cookie on same-origin requests. Note `/api/events` (SSE) is intentionally auth-gated (BUG #19 — prevents event leakage on networked deployments).
 
 The `/setup` page and `/api/public/connect/*` routes accept EITHER the `sf_session` cookie OR a `?token=<jwt>` query param (via `resolve_authed_user()` in `onboard.rs`). They do NOT mint fresh JWTs for anonymous visitors — that was a security hole closed in v7.
 

@@ -148,6 +148,12 @@ Landed after the first pass (AUD-6, AUD-7, AUD-9, AUD-10, AUD-11):
 - **Gate (after the API key and plug fixes):** `cargo clippy --all-targets --locked -- -D warnings`: exit 0. `cargo test --no-fail-fast --locked`: 698 passed, 0 failed.
 - **Behaviour changes to review:** failed manual publish now ends in `error` (was `queued`). Group reschedule with `action=schedule` skips published members. Network errors after the request was sent are no longer retried. Repeat copies are `queued` unless the source is a draft. RSS entries are deduplicated by guid. Webhooks retry 429, 5xx and network errors, and store at most 4 KiB of response.
 
+## Cycle 4 (public-route security pass)
+
+- **AUD-23 (done):** `/api/proxy-media` moved from `public_routes` into `protected_routes` (`src/api/mod.rs`). An anonymous request reached the upstream fetch: 500 before the fix, 401 after. `tests/proxy_media_auth_test.rs` fails on the old route table and passes on the new one. AGENTS §6.4 and the auth list at line 444 now name the route as gated. The frontend's only caller (`frontend/src/lib/api/feed.ts:72`) is same-origin and carries the cookie.
+- **AUD-24 (open):** the redirect target is not checked against the host allowlist. Not changed here: the shared media clients also serve `src/mcp/tools_discord.rs` (Discord attachments), so a host allowlist on them would break those fetches. The fix needs a dedicated proxy client.
+- **Gate:** clippy `--all-targets --all-features --locked -D warnings` exit 0; `cargo test --all-targets` 699 passed, 0 failed (698 before this cycle plus the new test).
+
 ## Decisions for the user
 
 Defaults applied in this pass. Each can be reversed without a schema change.

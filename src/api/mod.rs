@@ -154,7 +154,6 @@ pub fn build_router(state: AppState) -> Router {
             axum::routing::get(integrations::oauth_callback),
         )
         .route("/api/media/{id}", axum::routing::get(media::serve_media))
-        .route("/api/proxy-media", axum::routing::get(media::proxy_media))
         // Public onboarding — browser-accessible OAuth flow (no JWT header needed)
         .route("/setup", axum::routing::get(onboard::onboard_page))
         .route(
@@ -209,6 +208,9 @@ pub fn build_router(state: AppState) -> Router {
     // Protected routes — auth required
     let protected_routes = Router::new()
         .route("/api/auth/me", axum::routing::get(auth::me))
+        // Fetches arbitrary (allowlisted) CDN URLs on the caller's behalf, so it
+        // needs the session. The browser sends sf_session on same-origin media requests.
+        .route("/api/proxy-media", axum::routing::get(media::proxy_media))
         // Post counts and streak are account data, so they need the session.
         .route(
             "/api/metrics",
