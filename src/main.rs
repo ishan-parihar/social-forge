@@ -403,7 +403,9 @@ async fn main() -> anyhow::Result<()> {
             .await
             .context("Failed to load TLS config")?;
 
-        let addr: std::net::SocketAddr = http_addr.parse().unwrap();
+        let addr: std::net::SocketAddr = http_addr
+            .parse()
+            .with_context(|| format!("invalid HTTP bind address {http_addr:?}"))?;
         let notify = shutdown_rx_signal.clone();
         let handle = axum_server::Handle::new();
         let handle_for_shutdown = handle.clone();

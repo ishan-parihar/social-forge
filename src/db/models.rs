@@ -92,9 +92,21 @@ impl From<Integration> for IntegrationPublic {
             disabled: i.disabled,
             refresh_needed: i.refresh_needed,
             root_internal_id: i.root_internal_id,
-            posting_times: i.posting_times,
+            posting_times: decode_posting_times(i.posting_times),
             auth_method: i.auth_method,
         }
+    }
+}
+
+/// `posting_times` is stored as TEXT JSON. sqlx decodes a `serde_json::Value`
+/// column as that raw text, so the value arrives as a JSON string rather than
+/// an array. Every reader goes through here to get the array back.
+pub fn decode_posting_times(raw: serde_json::Value) -> serde_json::Value {
+    match raw {
+        serde_json::Value::String(text) => {
+            serde_json::from_str(&text).unwrap_or_else(|_| serde_json::json!([]))
+        }
+        other => other,
     }
 }
 
@@ -301,6 +313,7 @@ pub struct MediaEntry {
     pub file_size: i64,
     pub width: Option<i32>,
     pub height: Option<i32>,
+    pub alt_text: Option<String>,
     pub created_at: DateTime<Utc>,
 }
 
@@ -525,3 +538,19 @@ pub struct Signature {
 }
 
 use schemars::JsonSchema;
+
+#[cfg(test)]
+mod tests {
+    use super::decode_posting_times;
+    use serde_json::json;
+
+    // Regression: TEXT JSON came back as a string, so the channels page
+    // called `.map` on it and the slot finder silently ignored the times.
+    #[test]
+    fn stored_posting_times_text_decodes_to_an_array() {
+        let stored = json!("[{\"time\":120},{\"time\":400}]");
+        assert_eq!(decode_posting_times(stored), json!([{"time": 120}, {"time": 400}]));
+        assert_eq!(decode_posting_times(json!("not json")), json!([]));
+        assert_eq!(decode_posting_times(json!([{"time": 60}])), json!([{"time": 60}]));
+    }
+}

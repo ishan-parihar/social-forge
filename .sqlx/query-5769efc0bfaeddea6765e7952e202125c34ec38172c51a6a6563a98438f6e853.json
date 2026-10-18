@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id as \"id!: Uuid\", user_id as \"user_id!: Uuid\",\n                        original_name, storage_path, mime_type, file_size,\n                        width as \"width?: i32\", height as \"height?: i32\",\n                        created_at as \"created_at!: DateTime<Utc>\"\n                 FROM media WHERE user_id = ? AND original_name LIKE ? ESCAPE '\\'\n                 ORDER BY created_at DESC\n                 LIMIT ? OFFSET ?",
+  "query": "SELECT id as \"id!: Uuid\", user_id as \"user_id!: Uuid\",\n                original_name, storage_path, mime_type, file_size,\n                width as \"width?: i32\", height as \"height?: i32\", alt_text,\n                created_at as \"created_at!: DateTime<Utc>\"\n         FROM media WHERE id = ?",
   "describe": {
     "columns": [
       {
@@ -44,13 +44,18 @@
         "type_info": "Integer"
       },
       {
-        "name": "created_at!: DateTime<Utc>",
+        "name": "alt_text",
         "ordinal": 8,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_at!: DateTime<Utc>",
+        "ordinal": 9,
         "type_info": "Integer"
       }
     ],
     "parameters": {
-      "Right": 4
+      "Right": 1
     },
     "nullable": [
       true,
@@ -61,8 +66,9 @@
       false,
       true,
       true,
+      true,
       false
     ]
   },
-  "hash": "52d5fd586324c4902f731c70efbd555970f8c7be9c94bf61d60355310f7d2e98"
+  "hash": "5769efc0bfaeddea6765e7952e202125c34ec38172c51a6a6563a98438f6e853"
 }

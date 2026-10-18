@@ -352,7 +352,7 @@ impl SocialProvider for MastodonProvider {
             .to_string();
 
         // Store for exchange_code step
-        *self.app_credentials.lock().unwrap() = Some((client_id.clone(), client_secret.clone()));
+        *self.app_credentials.lock().expect("app credentials lock not poisoned") = Some((client_id.clone(), client_secret.clone()));
 
         // Step 2: Build the authorize URL
         let scope = self.scopes().join(" ");
@@ -383,7 +383,7 @@ impl SocialProvider for MastodonProvider {
         let (client_id, client_secret) =
             self.app_credentials
                 .lock()
-                .unwrap()
+                .expect("app credentials lock not poisoned")
                 .clone()
                 .ok_or_else(|| {
                     ProviderError::Auth(

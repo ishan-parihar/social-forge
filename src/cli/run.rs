@@ -14,7 +14,8 @@ use crate::realtime::Broadcaster;
 use crate::social::registry::ProviderRegistry;
 
 use super::{
-    AutomationAction, Cli, Command, CommentAction, ConfigAction, DmAction, MediaAction, PostsAction,
+    AutomationAction, Cli, Command, CommentAction, ConfigAction, DmAction, IntegrationsAction,
+    MediaAction, PostsAction,
 };
 use crate::db::models::Integration;
 use crate::social::TargetInfo;
@@ -398,9 +399,20 @@ fn systemctl(args: &[&str]) -> anyhow::Result<()> {
 /// documents (`social-forge mcp-tools --pretty`) and that did not exist
 /// until now. Plain output lists names (one per line, scriptable);
 /// --pretty aligns "name — description" and prints the count.
-async fn handle_mcp_tools_with_state(state: &AppState, pretty: bool) -> anyhow::Result<()> {
+async fn handle_mcp_tools_with_state(
+    state: &AppState,
+    pretty: bool,
+    toolset: Option<&str>,
+) -> anyhow::Result<()> {
     let _ = state; // the tool router is static — no DB needed.
     let mut tools = crate::mcp::SocialForgeMcpServer::router().list_all();
+    // B3: same set-membership rule as the per-session MCP filter
+    // (§5.5) so shell discovery matches what a session would advertise.
+    if let Some(set) = toolset.map(|s| s.trim().to_ascii_lowercase()) {
+        tools.retain(|t| {
+            crate::mcp::SocialForgeMcpServer::toolset_of(t.name.as_ref()) == set
+        });
+    }
     tools.sort_by(|a, b| a.name.cmp(&b.name));
     if pretty {
         let width = tools.iter().map(|t| t.name.len()).max().unwrap_or(0);
@@ -2932,10 +2944,11 @@ async fn handle_stage_with_state(
     if preview_only {
         let previews: Vec<serde_json::Value> = integration_ids.iter().filter_map(|iid| {
             let integration = all_integrations.iter().find(|i| i.id == *iid)?;
-            let segments = crate::services::content_splitter::split_content(text, &integration.provider_identifier, 4);
+            let limit = state.providers.get(&integration.provider_identifier).map_or(0, |p| p.max_content_length());
+            let segments = crate::services::content_splitter::split_content(text, &integration.provider_identifier, limit);
             Some(serde_json::json!({
                 "provider": integration.provider_identifier,
-                "limit": crate::services::content_splitter::platform_limit(&integration.provider_identifier),
+                "limit": limit,
                 "segments": segments.len(),
                 "posts": segments.iter().map(|s| serde_json::json!({"sequence": s.sequence, "total": s.total, "content": s.content, "char_count": s.content.len()})).collect::<Vec<_>>(),
             }))
@@ -3142,21 +3155,7 @@ async fn handle_posts_create_helper(
         None => None,
     };
 
-    let media_json: serde_json::Value = match media {
-        Some(m) => {
-            if m.trim_start().starts_with('[') {
-                serde_json::from_str(m).unwrap_or_else(|_| serde_json::json!([]))
-            } else {
-                let urls: Vec<String> = m
-                    .split(',')
-                    .map(|s| s.trim().to_string())
-                    .filter(|s| !s.is_empty())
-                    .collect();
-                serde_json::json!(urls)
-            }
-        }
-        None => serde_json::json!([]),
-    };
+    let media_json = media.map(parse_media_arg).unwrap_or_else(|| serde_json::json!([]));
 
     let settings_json: serde_json::Value = match settings {
         Some(s) => serde_json::from_str::<serde_json::Value>(s)
@@ -3251,6 +3250,176 @@ async fn handle_posts_create_helper(
         "count": created.len(),
         "posts": created,
     }))
+}
+
+/// `--media` takes a JSON array or a comma-separated list of URLs.
+fn parse_media_arg(m: &str) -> serde_json::Value {
+    if m.trim_start().starts_with('[') {
+        serde_json::from_str(m).unwrap_or_else(|_| serde_json::json!([]))
+    } else {
+        let urls: Vec<String> = m
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+        serde_json::json!(urls)
+    }
+}
+
+fn parse_settings_arg(s: &str) -> anyhow::Result<serde_json::Value> {
+    serde_json::from_str(s).map_err(|e| anyhow::anyhow!("Invalid settings JSON: {e}"))
+}
+
+async fn handle_posts_update_helper(
+    state: &crate::api::AppState,
+    user_id: uuid::Uuid,
+    id: &str,
+    content: Option<String>,
+    title: Option<String>,
+    media: Option<&str>,
+    settings: Option<&str>,
+) -> anyhow::Result<serde_json::Value> {
+    let post_id: uuid::Uuid = id
+        .parse()
+        .map_err(|_| anyhow::anyhow!("Invalid post ID: {id}"))?;
+    let post = crate::services::posts::PostService::update(
+        &state.db,
+        &state.broadcast,
+        user_id,
+        post_id,
+        crate::services::posts::UpdatePostInput {
+            content,
+            title,
+            media: media.map(parse_media_arg),
+            settings: settings.map(parse_settings_arg).transpose()?,
+        },
+    )
+    .await
+    .map_err(|e| anyhow::anyhow!("Update failed: {e}"))?;
+    Ok(serde_json::json!({
+        "ok": true,
+        "id": post.id.to_string(),
+        "state": post.state.to_string(),
+        "content": post.content,
+        "title": post.title,
+        "scheduled_at": post.scheduled_at.map(|d| d.to_rfc3339()),
+        "updated_at": post.updated_at.to_rfc3339(),
+    }))
+}
+
+async fn handle_posts_tags_helper(
+    state: &crate::api::AppState,
+    user_id: uuid::Uuid,
+    id: &str,
+    tag_ids: &[String],
+) -> anyhow::Result<serde_json::Value> {
+    let post_id: uuid::Uuid = id
+        .parse()
+        .map_err(|_| anyhow::anyhow!("Invalid post ID: {id}"))?;
+    crate::db::queries::get_post(&state.db, post_id, user_id)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("Post {id} not found"))?;
+    let tags: Vec<uuid::Uuid> = tag_ids
+        .iter()
+        .map(|t| {
+            t.parse()
+                .map_err(|_| anyhow::anyhow!("Invalid tag ID: {t}"))
+        })
+        .collect::<anyhow::Result<_>>()?;
+    crate::api::verify_tag_ownership(&state.db, &tags, user_id)
+        .await
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
+    crate::db::queries::set_post_tags(&state.db, post_id, &tags).await?;
+    Ok(serde_json::json!({
+        "ok": true,
+        "id": post_id.to_string(),
+        "tag_ids": tags.iter().map(|t| t.to_string()).collect::<Vec<_>>(),
+    }))
+}
+
+async fn handle_posts_validate_helper(
+    state: &crate::api::AppState,
+    user_id: uuid::Uuid,
+    integrations: &str,
+    content: &str,
+    title: Option<&str>,
+    media: Option<&str>,
+    settings: Option<&str>,
+) -> anyhow::Result<serde_json::Value> {
+    let integration_ids: Vec<uuid::Uuid> = integrations
+        .split(',')
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .map(|s| {
+            s.parse()
+                .map_err(|_| anyhow::anyhow!("Invalid integration UUID: {s}"))
+        })
+        .collect::<anyhow::Result<_>>()?;
+    if integration_ids.is_empty() {
+        return Err(anyhow::anyhow!("At least one integration UUID required"));
+    }
+    let mut rows = Vec::with_capacity(integration_ids.len());
+    for id in &integration_ids {
+        let integ = crate::db::queries::get_integration(&state.db, *id, user_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Integration {id} not found"))?;
+        rows.push(integ);
+    }
+    let media_json = media.map(parse_media_arg);
+    let attachments: Vec<crate::social::MediaAttachment> = serde_json::from_value(
+        media_json.clone().unwrap_or(serde_json::json!([])),
+    )
+    .unwrap_or_default();
+    let body = crate::api::CreatePostRequest {
+        integration_ids,
+        content: content.to_string(),
+        title: title.map(String::from),
+        media: media_json,
+        settings: settings.map(parse_settings_arg).transpose()?,
+        scheduled_at: None,
+        tag_ids: None,
+        first_comment: None,
+        sequence: None,
+        overrides: None,
+    };
+    let errors = crate::api::validate_posts_for_integrations(state, &body, &rows, &attachments);
+    Ok(serde_json::json!({
+        "valid": errors.is_empty(),
+        "errors": errors,
+    }))
+}
+
+async fn handle_integrations_with_state(
+    state: &AppState,
+    action: IntegrationsAction,
+) -> anyhow::Result<()> {
+    let user_id = resolve_user(state).await?;
+    let (id, disabled) = match action {
+        IntegrationsAction::Disable { id } => (id, true),
+        IntegrationsAction::Enable { id } => (id, false),
+    };
+    let result = match id.parse::<uuid::Uuid>() {
+        Ok(integration_id) => {
+            match crate::db::queries::set_integration_disabled(
+                &state.db,
+                user_id,
+                integration_id,
+                disabled,
+            )
+            .await
+            {
+                Ok(true) => Ok(serde_json::json!({"ok": true, "id": id, "disabled": disabled})),
+                Ok(false) => Err(anyhow::anyhow!("Integration {id} not found")),
+                Err(e) => Err(anyhow::anyhow!("DB error: {e}")),
+            }
+        }
+        Err(_) => Err(anyhow::anyhow!("Invalid integration ID: {id}")),
+    };
+    match result {
+        Ok(v) => output_json(&v),
+        Err(e) => return output_error(&e.to_string()),
+    }
+    Ok(())
 }
 
 async fn handle_posts_with_state(state: &AppState, action: PostsAction) -> anyhow::Result<()> {
@@ -3441,6 +3610,45 @@ async fn handle_posts_with_state(state: &AppState, action: PostsAction) -> anyho
                 })
                 .map_err(|e| anyhow::anyhow!("Find-slot failed: {e}"))
         }
+        PostsAction::Update {
+            id,
+            content,
+            title,
+            media,
+            settings,
+        } => {
+            handle_posts_update_helper(
+                state,
+                user_id,
+                &id,
+                content,
+                title,
+                media.as_deref(),
+                settings.as_deref(),
+            )
+            .await
+        }
+        PostsAction::Tags { id, tag_ids } => {
+            handle_posts_tags_helper(state, user_id, &id, &tag_ids).await
+        }
+        PostsAction::Validate {
+            content,
+            integrations,
+            title,
+            media,
+            settings,
+        } => {
+            handle_posts_validate_helper(
+                state,
+                user_id,
+                &integrations,
+                &content,
+                title.as_deref(),
+                media.as_deref(),
+                settings.as_deref(),
+            )
+            .await
+        }
     };
 
     match result {
@@ -3452,6 +3660,8 @@ async fn handle_posts_with_state(state: &AppState, action: PostsAction) -> anyho
 
 // Split Preview Handler
 fn handle_split_preview(text: &str, platforms: Option<&str>) -> anyhow::Result<()> {
+    crate::config::load_dotenv();
+    let providers = ProviderRegistry::new(&Config::from_env()?, None, None);
     let provider_list: Vec<&str> = match platforms {
         Some(p) => p
             .split(',')
@@ -3470,9 +3680,9 @@ fn handle_split_preview(text: &str, platforms: Option<&str>) -> anyhow::Result<(
         ],
     };
     let preview: Vec<serde_json::Value> = provider_list.iter().map(|&provider| {
-        let segments = crate::services::content_splitter::split_content(text, provider, 4);
-        let limit = crate::services::content_splitter::platform_limit(provider);
-        let needs_split = crate::services::content_splitter::needs_splitting(text, provider);
+        let limit = providers.get(provider).map_or(0, |p| p.max_content_length());
+        let segments = crate::services::content_splitter::split_content(text, provider, limit);
+        let needs_split = crate::services::content_splitter::needs_splitting(text, limit);
         serde_json::json!({
             "provider": provider, "char_limit": limit, "content_length": text.len(), "needs_splitting": needs_split, "segments": segments.len(),
             "posts": segments.iter().map(|s| serde_json::json!({"sequence": s.sequence, "total": s.total, "content": s.content, "char_count": s.content.len()})).collect::<Vec<_>>(),
@@ -3522,7 +3732,9 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
 
         Command::Providers => handle_providers_with_state(&state).await,
         Command::McpCall { tool, args } => handle_mcp_call_with_state(&state, &tool, &args).await,
-        Command::McpTools { pretty } => handle_mcp_tools_with_state(&state, pretty).await,
+        Command::McpTools { pretty, toolset } => {
+            handle_mcp_tools_with_state(&state, pretty, toolset.as_deref()).await
+        }
         Command::Audit => handle_audit_with_state(&state).await,
         Command::Connect { provider } => handle_connect_with_state(&state, &provider).await,
         Command::Doctor => handle_doctor_with_state(&state).await,
@@ -3561,6 +3773,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
         Command::Dm { action } => handle_dm_with_state(&state, action).await,
         Command::Automation { action } => handle_automation_with_state(&state, action).await,
         Command::Posts { action } => handle_posts_with_state(&state, action).await,
+        Command::Integrations { action } => handle_integrations_with_state(&state, action).await,
         Command::Post {
             text,
             platforms,

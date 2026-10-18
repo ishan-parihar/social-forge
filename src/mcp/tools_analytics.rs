@@ -98,3 +98,17 @@ pub async fn handle_analytics_get_post(
 
     Ok(Json(serde_json::json!({ "data": analytics })))
 }
+
+// ── Streak ───────────────────────────────────────────────────
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct StreakGetInput {}
+
+/// Current posting streak: consecutive days with a published post.
+pub async fn handle_streak_get(
+    state: &AppState,
+    _input: &StreakGetInput,
+) -> Result<Json<serde_json::Value>, String> {
+    let axum::Json(body) = crate::api::streak_check(state.db.clone()).await;
+    Ok(Json(body))
+}

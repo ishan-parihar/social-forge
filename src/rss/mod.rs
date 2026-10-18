@@ -40,11 +40,15 @@ async fn poll_all_feeds(
     config: &Config,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let feeds = crate::db::queries::get_feeds_due_for_polling(db).await?;
+    // One stalled feed host must not hang the whole poll.
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()?;
 
     for feed in feeds {
         tracing::info!("Polling RSS feed: {} ({})", feed.title, feed.feed_url);
 
-        let response = match reqwest::get(&feed.feed_url).await {
+        let response = match client.get(&feed.feed_url).send().await {
             Ok(r) => r,
             Err(e) => {
                 tracing::warn!("Failed to fetch RSS feed {}: {e}", feed.feed_url);
@@ -88,14 +92,9 @@ async fn poll_all_feeds(
             hasher.update(content.as_bytes());
             let content_hash = format!("{:x}", hasher.finalize());
 
-            let exists = crate::db::queries::check_rss_post_exists(db, feed.id, &content_hash)
-                .await
-                .unwrap_or(false);
-            if exists {
-                continue;
-            }
-
-            if let Err(e) = crate::db::queries::insert_rss_post(
+            // Claim the entry by guid before creating its post. A guid already
+            // imported is skipped, even if its body changed since.
+            let rss_row = match crate::db::queries::insert_rss_post(
                 db,
                 feed.id,
                 &guid,
@@ -106,9 +105,13 @@ async fn poll_all_feeds(
             )
             .await
             {
-                tracing::warn!("Failed to insert RSS post for feed {}: {e}", feed.id);
-                continue;
-            }
+                Ok(Some(id)) => id,
+                Ok(None) => continue,
+                Err(e) => {
+                    tracing::warn!("Failed to insert RSS post for feed {}: {e}", feed.id);
+                    continue;
+                }
+            };
 
             // ── Build post content ──────────────────────────────
             // If use_ai_summary is enabled AND LLM_ENDPOINT is configured,
@@ -150,15 +153,10 @@ async fn poll_all_feeds(
             .await
             {
                 Ok(post) => {
-                    // Link the rss_post to the created post
-                    if let Ok(Some(rp)) =
-                        crate::db::queries::get_rss_post_by_hash(db, feed.id, &content_hash).await
+                    if let Err(e) =
+                        crate::db::queries::update_rss_post_post_id(db, rss_row, post.id).await
                     {
-                        if let Err(e) =
-                            crate::db::queries::update_rss_post_post_id(db, rp.id, post.id).await
-                        {
-                            tracing::warn!("Failed to update RSS post post_id: {e}");
-                        }
+                        tracing::warn!("Failed to update RSS post post_id: {e}");
                     }
                     tracing::info!(
                         "RSS autopost: created draft post {} for feed {} (ai_summary={})",
@@ -172,6 +170,10 @@ async fn poll_all_feeds(
                         "RSS autopost: failed to create post for feed {}: {e}",
                         feed.id
                     );
+                    // Release the claim so the next poll retries this entry.
+                    if let Err(del) = crate::db::queries::delete_rss_post(db, rss_row).await {
+                        tracing::warn!("Failed to release RSS claim {rss_row}: {del}");
+                    }
                 }
             }
         }

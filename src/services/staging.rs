@@ -182,6 +182,14 @@ pub async fn stage_post(
             .ok_or_else(|| format!("Integration {} not found", integration_id))?;
         let provider = integration.provider_identifier.clone();
 
+        // Publish refuses a disabled integration (services/posts.rs). Staging
+        // must too; `force` does not override it.
+        if integration.disabled {
+            errors.push(format!("{provider} — rejected: integration is disabled. Reconnect the social account"));
+            rejected.push(provider);
+            continue;
+        }
+
         let ov = request
             .overrides
             .get(&provider)
@@ -217,13 +225,14 @@ pub async fn stage_post(
         };
         let whole_readiness = publish_readiness(&provider, &preflight, registry);
 
-        let segments = content_splitter::split_content(&eff_content, &provider, 4);
+        let limit = registry.get(&provider).map_or(0, |p| p.max_content_length());
+        let segments = content_splitter::split_content(&eff_content, &provider, limit);
         if segments.len() > 1 {
             warnings.push(format!(
                 "Content split into {} posts for {} (limit: {} chars) — linked as a thread via group {group_id}",
                 segments.len(),
                 provider,
-                content_splitter::platform_limit(&provider)
+                limit
             ));
         }
 
@@ -348,19 +357,27 @@ pub async fn stage_post(
     };
     let state_label = if queued { "queued" } else { "draft" };
 
+    // E4: next-slot mode — each integration lands on ITS next free slot.
+    // Resolved before the transaction opens: the pool holds one connection, so
+    // a query made while `tx` is alive waits on the connection `tx` holds.
+    let mut next_slots = std::collections::HashMap::new();
+    if request.next_slot {
+        for plan in &accepted {
+            let slot = queries::find_next_free_slot(pool, user_id, Some(plan.integration_id))
+                .await
+                .map_err(|e| format!("Could not find a free slot for {}: {e}", plan.provider))?
+                .unwrap_or_else(chrono::Utc::now);
+            next_slots.insert(plan.integration_id, slot);
+        }
+    }
+
     let mut tx = pool.begin().await.map_err(|e| format!("Begin failed: {e}"))?;
     let mut staged = Vec::new();
     for plan in accepted {
-        // E4: next-slot mode — each integration lands on ITS next free slot;
-        // explicit scheduled_at — one shared time; draft — none.
+        // next-slot: the slot resolved above; explicit scheduled_at: one shared
+        // time; draft: none.
         let plan_scheduled_at = if request.next_slot {
-            Some(
-                queries::find_next_free_slot(pool, user_id, Some(plan.integration_id))
-                    .await
-                    .ok()
-                    .flatten()
-                    .unwrap_or_else(chrono::Utc::now),
-            )
+            next_slots.get(&plan.integration_id).copied()
         } else {
             request.scheduled_at
         };
@@ -460,8 +477,8 @@ mod tests {
         assert!(err.contains("keyed by provider"), "got: {err}");
     }
 
-    /// A provider mirroring Bluesky's splitter profile (platform_limit("bluesky")
-    /// = 300, thread-capable) so the real splitter produces multi-segment splits.
+    /// A provider mirroring Bluesky's splitter profile (max_content_length() = 300,
+    /// thread-capable) so the real splitter produces multi-segment splits.
     struct SplitFake;
 
     #[async_trait::async_trait]
@@ -602,6 +619,55 @@ mod tests {
             assert_eq!(gid, group);
             assert!(seq >= 1);
         }
+    }
+
+    /// D2: a disabled integration is rejected even with force, matching publish.
+    #[tokio::test]
+    async fn stage_rejects_disabled_integration_even_when_forced() {
+        let pool = test_pool().await;
+        let user = queries::create_user(&pool, "disabled@test.local", "hash", "Disabled")
+            .await
+            .expect("user");
+        let integration = queries::create_integration(
+            &pool, user.id, "bluesky", "Bluesky", "acct-d", "access-token", None, None, None, None, None, None, None,
+        )
+        .await
+        .expect("integration");
+        sqlx::query("UPDATE integrations SET disabled = 1 WHERE id = ?")
+            .bind(integration.id)
+            .execute(&pool)
+            .await
+            .expect("disable");
+        let registry = ProviderRegistry::with_providers(vec![("bluesky", Arc::new(SplitFake) as Arc<dyn SocialProvider>)]);
+
+        let err = stage_post(
+            &pool,
+            &registry,
+            user.id,
+            StagingRequest {
+                content: "hello".into(),
+                media: serde_json::json!([]),
+                integration_ids: vec![integration.id],
+                settings: serde_json::json!({}),
+                scheduled_at: Some(chrono::Utc::now()),
+                first_comment: None,
+                overrides: serde_json::Value::Null,
+                dry_run: false,
+                force: true,
+                next_slot: false,
+                group_id: None,
+            },
+        )
+        .await
+        .expect_err("a disabled integration must not stage, even with force");
+
+        assert!(err.contains("integration is disabled"), "got: {err}");
+        let rows: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM posts WHERE user_id = ?")
+            .bind(user.id)
+            .fetch_one(&pool)
+            .await
+            .expect("count");
+        assert_eq!(rows, 0, "no post row is written for a disabled integration");
     }
 
     /// E4: schedule="next-slot" queues each integration at ITS own next

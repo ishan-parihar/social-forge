@@ -203,7 +203,7 @@ async fn enrich_post_tags(
 }
 
 /// Verify that all tag_ids belong to the given user.
-async fn verify_tag_ownership(
+pub(crate) async fn verify_tag_ownership(
     db: &crate::db::SqlitePool,
     tag_ids: &[Uuid],
     user_id: Uuid,
@@ -237,7 +237,7 @@ pub async fn list(
     auth: AuthenticatedUser,
     Query(query): Query<ListPostsQuery>,
 ) -> Result<Json<PostsListResponse>, crate::error::AppError> {
-    let limit = query.limit.unwrap_or(50).min(200);
+    let limit = query.limit.unwrap_or(50).clamp(1, 200);
     let offset = query.offset.unwrap_or(0);
 
     // Phase 5: parse the new search/filter/sort params.
@@ -645,10 +645,22 @@ pub async fn update(
     Path(id): Path<Uuid>,
     Json(body): Json<UpdatePostRequest>,
 ) -> Result<Json<PostPublic>, crate::error::AppError> {
-    let content = body.content.unwrap_or_default();
-    let media = body.media.unwrap_or(serde_json::json!([]));
-    let settings = body.settings.unwrap_or(serde_json::json!({}));
-    let first_comment = body.first_comment.as_deref();
+    // PUT is a partial update: a field the body omits keeps its stored value.
+    // Defaulting omitted fields to "" / [] / {} wiped the body, media and
+    // settings of a post when a caller only sent tag_ids.
+    let existing = queries::get_post(&state.db, id, auth.user_id)
+        .await?
+        .ok_or_else(|| crate::error::AppError::NotFound("Post not found".into()))?;
+    if existing.state == crate::db::models::PostState::Publishing {
+        return Err(crate::error::AppError::Conflict(
+            "Post is being published; edit it after the attempt finishes".into(),
+        ));
+    }
+    let content = body.content.unwrap_or(existing.content);
+    let title = body.title.or(existing.title);
+    let media = body.media.unwrap_or(existing.media);
+    let settings = body.settings.unwrap_or(existing.settings);
+    let first_comment = body.first_comment.or(existing.first_comment);
 
     // v23-5: use update_post_full so first_comment is persisted (was
     // silently dropped by update_post_content).
@@ -657,10 +669,10 @@ pub async fn update(
         id,
         auth.user_id,
         &content,
-        body.title.as_deref(),
+        title.as_deref(),
         &media,
         &settings,
-        first_comment,
+        first_comment.as_deref(),
     )
     .await?
     .ok_or_else(|| crate::error::AppError::NotFound("Post not found".into()))?;
@@ -684,9 +696,12 @@ pub async fn schedule(
         .map_err(|_| crate::error::AppError::BadRequest("Invalid date format, use ISO8601".into()))?
         .with_timezone(&Utc);
 
+    // None means not found OR not schedulable (published, publishing, deleted).
     let post = queries::schedule_post(&state.db, id, auth.user_id, scheduled_at)
         .await?
-        .ok_or_else(|| crate::error::AppError::NotFound("Post not found".into()))?;
+        .ok_or_else(|| {
+            crate::error::AppError::NotFound("Post not found or not schedulable in its current state".into())
+        })?;
 
     let public = PostPublic::from(post.clone());
     state.broadcast.send("post_scheduled", &public);

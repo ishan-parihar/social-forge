@@ -15,6 +15,11 @@ use crate::api::AppState;
 
 pub(crate) mod auth;
 pub mod tools_admin;
+pub mod tools_ai;
+pub mod tools_campaigns;
+pub mod tools_rss;
+pub mod tools_sets;
+pub(crate) mod rest_bridge;
 pub mod tools_analytics;
 pub mod tools_automation;
 pub mod tools_bluesky;
@@ -161,7 +166,7 @@ impl SocialForgeMcpServer {
 
     /// §5.5: which set a tool belongs to. Providers map to their platform
     /// name; cross-platform lifecycle tools map to `core`.
-    fn toolset_of(name: &str) -> String {
+    pub(crate) fn toolset_of(name: &str) -> String {
         match name {
             "get_comments" | "reply_to_comment" | "send_dm" | "get_dm_messages"
             | "list_dm_conversations" => "core".into(),
@@ -3243,6 +3248,228 @@ impl SocialForgeMcpServer {
         _params: Parameters<()>,
     ) -> Result<Json<tools_feed::FeedImportOutput>, String> {
         tools_feed::handle_feed_import(&self.state).await
+    }
+
+    // ── Agent-surface parity (REST-only resources) ─────────────────────
+
+    #[tool(description = "List campaigns, including archived ones")]
+    pub async fn campaign_list(
+        &self,
+        params: Parameters<tools_campaigns::CampaignListInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_campaigns::handle_campaign_list(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Create a campaign with name, dates, goal, status and KPIs")]
+    pub async fn campaign_create(
+        &self,
+        params: Parameters<tools_campaigns::CampaignCreateInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_campaigns::handle_campaign_create(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Update a campaign; omitted fields keep their value")]
+    pub async fn campaign_update(
+        &self,
+        params: Parameters<tools_campaigns::CampaignUpdateInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_campaigns::handle_campaign_update(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Archive and soft-delete a campaign")]
+    pub async fn campaign_delete(
+        &self,
+        params: Parameters<tools_campaigns::CampaignDeleteInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_campaigns::handle_campaign_delete(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "List post sets (reusable templates bound to channels)")]
+    pub async fn set_list(
+        &self,
+        params: Parameters<tools_sets::SetListInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_sets::handle_set_list(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Create a post set bound to one or more channels")]
+    pub async fn set_create(
+        &self,
+        params: Parameters<tools_sets::SetCreateInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_sets::handle_set_create(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Delete a post set")]
+    pub async fn set_delete(
+        &self,
+        params: Parameters<tools_sets::SetDeleteInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_sets::handle_set_delete(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "List RSS autopost feeds")]
+    pub async fn rss_feed_list(
+        &self,
+        params: Parameters<tools_rss::RssFeedListInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_rss::handle_rss_feed_list(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Add an RSS feed that autoposts to a channel")]
+    pub async fn rss_feed_create(
+        &self,
+        params: Parameters<tools_rss::RssFeedCreateInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_rss::handle_rss_feed_create(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Delete an RSS feed")]
+    pub async fn rss_feed_delete(
+        &self,
+        params: Parameters<tools_rss::RssFeedIdInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_rss::handle_rss_feed_delete(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Pause or resume an RSS feed")]
+    pub async fn rss_feed_toggle(
+        &self,
+        params: Parameters<tools_rss::RssFeedIdInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_rss::handle_rss_feed_toggle(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Poll an RSS feed now for new items")]
+    pub async fn rss_feed_poll(
+        &self,
+        params: Parameters<tools_rss::RssFeedIdInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_rss::handle_rss_feed_poll(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "List the items an RSS feed produced and their import state")]
+    pub async fn rss_feed_items(
+        &self,
+        params: Parameters<tools_rss::RssFeedIdInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_rss::handle_rss_feed_items(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Draft a post with AI from a topic, tone and length")]
+    pub async fn ai_generate_post(
+        &self,
+        params: Parameters<tools_ai::AiGeneratePostInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_ai::handle_ai_generate_post(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Improve the wording of post text with AI")]
+    pub async fn ai_improve_writing(
+        &self,
+        params: Parameters<tools_ai::AiContentInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_ai::handle_ai_improve_writing(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Suggest hashtags for post text with AI")]
+    pub async fn ai_suggest_hashtags(
+        &self,
+        params: Parameters<tools_ai::AiContentInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_ai::handle_ai_suggest_hashtags(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Rewrite post text in another tone with AI")]
+    pub async fn ai_change_tone(
+        &self,
+        params: Parameters<tools_ai::AiChangeToneInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_ai::handle_ai_change_tone(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Summarise text with AI")]
+    pub async fn ai_summarize(
+        &self,
+        params: Parameters<tools_ai::AiContentInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_ai::handle_ai_summarize(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Generate several posts on one topic with AI")]
+    pub async fn ai_generate_bulk(
+        &self,
+        params: Parameters<tools_ai::AiGenerateBulkInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_ai::handle_ai_generate_bulk(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Mark a comment resolved in the local inbox (platform untouched)")]
+    pub async fn comment_resolve(
+        &self,
+        params: Parameters<tools_comments::CommentResolveInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_comments::handle_comment_resolve(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "List recent delivery attempts for a webhook")]
+    pub async fn webhook_deliveries(
+        &self,
+        params: Parameters<tools_webhooks::WhDeliveriesInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_webhooks::handle_wh_deliveries(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
+    }
+
+    #[tool(description = "Current posting streak, in consecutive days")]
+    pub async fn streak_get(
+        &self,
+        params: Parameters<tools_analytics::StreakGetInput>,
+    ) -> Result<Json<McpJsonValue>, String> {
+        tools_analytics::handle_streak_get(&self.state, &params.0)
+            .await
+            .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
     // ── Tags Tools ──────────────────────────────────────────────────

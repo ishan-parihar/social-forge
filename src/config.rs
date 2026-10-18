@@ -179,6 +179,28 @@ pub struct Config {
     pub strip_links_from_x: bool,
 }
 
+/// Scratch database for test processes. Under `target/`, so `cargo test` never
+/// migrates or writes the operator's `data/social-forge.db`.
+pub const TEST_DATABASE_URL: &str = "sqlite://target/test-data/social-forge-test.db";
+
+/// Load `.env` for an integration or live test, then point `DATABASE_URL` at
+/// [`TEST_DATABASE_URL`]. The repo `.env` names the real database, which the
+/// suite otherwise migrated and wrote. Overrides any exported `DATABASE_URL`.
+/// ponytail: one shared scratch file per target dir; tests already share state.
+pub fn load_dotenv_for_tests() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        load_dotenv();
+        std::env::set_var("DATABASE_URL", TEST_DATABASE_URL);
+    });
+}
+
+/// For live tests that read tokens already stored in the operator's database
+/// (see `get_google_token`). They keep the `.env` `DATABASE_URL` on purpose.
+pub fn load_dotenv_for_live_tests() {
+    load_dotenv();
+}
+
 impl Config {
     pub fn from_env() -> anyhow::Result<Self> {
         let app_url = opt("APP_URL").unwrap_or_else(|| "https://localhost:6543".into());

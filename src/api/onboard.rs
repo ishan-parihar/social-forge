@@ -1538,7 +1538,8 @@ pub async fn telegram_bot_token_submit(
         Err(e) => {
             return Ok(axum::response::Html(format!(
                 "<p>Error: Failed to reach Telegram API: {e}</p>",
-                e = html_escape(&e.to_string())
+                // without_url(): the request URL carries the bot token.
+                e = html_escape(&e.without_url().to_string())
             ))
             .into_response())
         }

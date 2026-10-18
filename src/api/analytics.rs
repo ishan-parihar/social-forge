@@ -35,7 +35,7 @@ pub async fn get(
     auth: AuthenticatedUser,
     Query(query): Query<AnalyticsQuery>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    let days = query.days.unwrap_or(7).max(1) as u32;
+    let days = query.days.unwrap_or(7).clamp(1, 3650) as u32;
 
     // Check cache first
     let now = chrono::Utc::now();
@@ -209,7 +209,7 @@ pub async fn get_summary(
     auth: AuthenticatedUser,
     Query(query): Query<AnalyticsSummaryQuery>,
 ) -> Result<Json<AnalyticsSummaryResponse>, AppError> {
-    let days = query.days.unwrap_or(30).max(1);
+    let days = query.days.unwrap_or(30).clamp(1, 3650);
     let cutoff = (chrono::Utc::now() - chrono::Duration::days(days as i64)).timestamp();
 
     let state_rows: Vec<(String, i64)> = sqlx::query_as(
@@ -398,7 +398,7 @@ pub async fn get_engagement(
     auth: AuthenticatedUser,
     Query(query): Query<AnalyticsDaysQuery>,
 ) -> Result<Json<EngagementResponse>, AppError> {
-    let days = query.days.unwrap_or(7).max(1) as i64;
+    let days = query.days.unwrap_or(7).clamp(1, 3650) as i64;
     let now = chrono::Utc::now();
     let cutoff = (now - chrono::Duration::days(days)).timestamp();
     let prev_cutoff = cutoff - days * 86400;
@@ -495,7 +495,7 @@ pub async fn get_adherence(
     auth: AuthenticatedUser,
     Query(query): Query<AnalyticsDaysQuery>,
 ) -> Result<Json<AdherenceResponse>, AppError> {
-    let days = query.days.unwrap_or(7).max(1) as i64;
+    let days = query.days.unwrap_or(7).clamp(1, 3650) as i64;
     let cutoff = (chrono::Utc::now() - chrono::Duration::days(days)).timestamp();
 
     let row: (i64, i64, i64) = sqlx::query_as(
@@ -545,7 +545,7 @@ pub async fn get_cadence(
     auth: AuthenticatedUser,
     Query(query): Query<AnalyticsDaysQuery>,
 ) -> Result<Json<CadenceResponse>, AppError> {
-    let days = query.days.unwrap_or(30).max(1) as i64;
+    let days = query.days.unwrap_or(30).clamp(1, 3650) as i64;
     let cutoff = (chrono::Utc::now() - chrono::Duration::days(days)).timestamp();
 
     let day_rows: Vec<(String, i64)> = sqlx::query_as(

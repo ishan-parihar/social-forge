@@ -12,6 +12,7 @@ use sqlx::FromRow;
 use uuid::Uuid;
 
 use crate::auth::middleware::{hash_api_key, AuthenticatedUser, API_KEY_PREFIX};
+use crate::db::types::EpochUtc;
 use crate::error::AppError;
 
 use super::AppState;
@@ -135,7 +136,9 @@ pub async fn create(
     .bind(&name)
     .bind(&prefix)
     .bind(&hash)
-    .bind(expires_at)
+    // Epoch INTEGER column: a bare DateTime binds as TEXT, which SQLite orders
+    // after every INTEGER, so `expires_at > unixepoch()` never expired the key.
+    .bind(expires_at.map(EpochUtc::from))
     .fetch_one(&state.db)
     .await?;
 

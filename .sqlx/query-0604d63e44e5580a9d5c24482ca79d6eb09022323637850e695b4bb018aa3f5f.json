@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "DELETE FROM media WHERE id = ? AND user_id = ?\n         RETURNING id as \"id!: Uuid\", user_id as \"user_id!: Uuid\",\n           original_name, storage_path, mime_type, file_size,\n           width as \"width?: i32\", height as \"height?: i32\",\n           created_at as \"created_at!: DateTime<Utc>\"",
+  "query": "DELETE FROM media WHERE id = ? AND user_id = ?\n         RETURNING id as \"id!: Uuid\", user_id as \"user_id!: Uuid\",\n           original_name, storage_path, mime_type, file_size,\n           width as \"width?: i32\", height as \"height?: i32\", alt_text,\n           created_at as \"created_at!: DateTime<Utc>\"",
   "describe": {
     "columns": [
       {
@@ -44,8 +44,13 @@
         "type_info": "Integer"
       },
       {
-        "name": "created_at!: DateTime<Utc>",
+        "name": "alt_text",
         "ordinal": 8,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_at!: DateTime<Utc>",
+        "ordinal": 9,
         "type_info": "Integer"
       }
     ],
@@ -61,8 +66,9 @@
       false,
       true,
       true,
+      true,
       false
     ]
   },
-  "hash": "3b4d0f89829162ba0adb23aa0cf20fff663d5e1cef02ef372ff5ecf3614556ba"
+  "hash": "0604d63e44e5580a9d5c24482ca79d6eb09022323637850e695b4bb018aa3f5f"
 }

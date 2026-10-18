@@ -31,14 +31,14 @@ use crate::social::registry::ProviderRegistry;
 use crate::wa::OptionalWhaClient;
 use sqlx::SqlitePool;
 
-mod ai;
+pub(crate) mod ai;
 mod analytics;
 mod auth;
 mod automation;
 mod billing; // only stripe_webhook (public, signature-verified) is used
 mod calendar;
-mod campaigns;
-mod comments;
+pub(crate) mod campaigns;
+pub(crate) mod comments;
 mod developer;
 mod dms;
 mod feed;
@@ -50,15 +50,16 @@ mod onboard;
 mod posts;
 pub(crate) use posts::validate_posts_for_integrations;
 pub(crate) use posts::CreatePostRequest;
+pub(crate) use posts::verify_tag_ownership;
 mod profile;
 mod rate_limit;
-mod rss;
-mod sets;
+pub(crate) mod rss;
+pub(crate) mod sets;
 mod signatures;
 mod sse;
 mod tags;
 mod v1;
-mod webhooks;
+pub(crate) mod webhooks;
 pub mod whatsapp_webhook;
 
 /// Shared application state available to all handlers
@@ -139,20 +140,6 @@ pub fn build_router(state: AppState) -> Router {
                 move || ready_check(db_for_ready)
             }),
         )
-        .route(
-            "/api/metrics",
-            axum::routing::get({
-                let db_for_metrics = state.db.clone();
-                move || metrics_check(db_for_metrics)
-            }),
-        )
-        .route(
-            "/api/streak",
-            axum::routing::get({
-                let db_for_streak = state.db.clone();
-                move || streak_check(db_for_streak)
-            }),
-        )
         .route("/api/auth/login", axum::routing::post(auth::login))
         .route(
             "/api/auth/callback",
@@ -206,11 +193,37 @@ pub fn build_router(state: AppState) -> Router {
         .route(
             "/api/webhooks/whatsapp",
             axum::routing::get(whatsapp_webhook::verify).post(whatsapp_webhook::receive),
-        );
+        )
+        // The POST routes above are browser forms (login, cookie and token
+        // submits) reachable without a session, so they get the same Origin
+        // check as protected routes. Without it, SameSite=None on HTTPS lets
+        // a cross-site auto-submit overwrite a connected account. The two
+        // server-to-server webhooks are exempted by path inside the check.
+        .layer(middleware::from_fn_with_state(
+            CsrfState {
+                allowed_origin: state.config.frontend_url.clone(),
+            },
+            csrf_origin_check,
+        ));
 
     // Protected routes — auth required
     let protected_routes = Router::new()
         .route("/api/auth/me", axum::routing::get(auth::me))
+        // Post counts and streak are account data, so they need the session.
+        .route(
+            "/api/metrics",
+            axum::routing::get({
+                let db_for_metrics = state.db.clone();
+                move || metrics_check(db_for_metrics)
+            }),
+        )
+        .route(
+            "/api/streak",
+            axum::routing::get({
+                let db_for_streak = state.db.clone();
+                move || streak_check(db_for_streak)
+            }),
+        )
         .route("/api/auth/logout", axum::routing::post(auth::logout))
         // SSE realtime stream — auth-gated to prevent event leakage on
         // networked deployments (BUG #19). The auth_middleware validates
@@ -779,7 +792,7 @@ fn not_found() -> Response<Body> {
     Response::builder()
         .status(StatusCode::NOT_FOUND)
         .body(Body::from("Not found"))
-        .unwrap()
+        .expect("static 404 response is valid")
 }
 
 /// Health check endpoint — liveness probe (no DB call, returns 200 if
@@ -962,7 +975,7 @@ async fn metrics_check(db: SqlitePool) -> axum::Json<serde_json::Value> {
 
 /// Streak endpoint — returns the user's current posting streak.
 /// Used by the frontend flame icon in the top bar.
-async fn streak_check(db: SqlitePool) -> axum::Json<serde_json::Value> {
+pub(crate) async fn streak_check(db: SqlitePool) -> axum::Json<serde_json::Value> {
     use sqlx::Row;
     let user_id = crate::auth::middleware::DEFAULT_USER_ID;
     let row = sqlx::query("SELECT streak_days, streak_since FROM users WHERE id = ?")
@@ -1028,7 +1041,24 @@ async fn csrf_origin_check(
     // every legitimate one. Its cookie-CSRF class is already covered by
     // SameSite=Lax (which blocks cross-site POST cookie sends), and the
     // auth middleware still gates it — Bearer API key or session cookie.
-    if req.uri().path() == "/mcp" {
+    // Server-to-server webhooks send no Origin either: Stripe and Meta sign
+    // their payloads instead (billing.rs, whatsapp_webhook.rs).
+    if matches!(
+        req.uri().path(),
+        "/mcp" | "/api/billing/webhook" | "/api/webhooks/whatsapp"
+    ) {
+        return next.run(req).await;
+    }
+
+    // A Bearer key is never sent by a browser on its own (no ambient
+    // credential), so a cross-site page cannot forge one. Non-browser clients
+    // send no Origin, and the auth middleware still validates the key.
+    if req
+        .headers()
+        .get(header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|v| v.starts_with("Bearer "))
+    {
         return next.run(req).await;
     }
 
@@ -1094,7 +1124,7 @@ async fn csrf_origin_check(
                 })
                 .to_string(),
             ))
-            .unwrap();
+            .expect("static 403 response is valid");
     }
 
     next.run(req).await

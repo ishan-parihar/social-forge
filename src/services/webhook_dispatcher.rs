@@ -77,12 +77,35 @@ pub async fn send_webhook(
         .map_err(|e| format!("HTTP request failed: {e}"))?;
 
     let status_code = response.status().as_u16();
-    let response_body = response
-        .text()
-        .await
-        .unwrap_or_else(|_| "Unable to read response body".into());
+    let response_body = read_capped_body(response).await;
 
     Ok((status_code, response_body))
+}
+
+/// Keep at most this much of a receiver's response. It is stored in the
+/// delivery log, so an unbounded body would bloat the database.
+const MAX_RESPONSE_BYTES: usize = 4096;
+
+/// Attempts per webhook before a delivery is recorded as failed.
+const WEBHOOK_ATTEMPTS: u32 = 3;
+
+async fn read_capped_body(mut response: reqwest::Response) -> String {
+    let mut buf = Vec::new();
+    loop {
+        match response.chunk().await {
+            Ok(Some(chunk)) => {
+                let room = MAX_RESPONSE_BYTES.saturating_sub(buf.len());
+                buf.extend_from_slice(&chunk[..chunk.len().min(room)]);
+                if buf.len() >= MAX_RESPONSE_BYTES {
+                    break;
+                }
+            }
+            Ok(None) => break,
+            Err(_) if buf.is_empty() => return "Unable to read response body".into(),
+            Err(_) => break,
+        }
+    }
+    String::from_utf8_lossy(&buf).into_owned()
 }
 
 /// Dispatch an event to all active webhooks matching the event type for a user.
@@ -123,11 +146,25 @@ pub async fn dispatch_event(state: &AppState, event_type: &str, payload: &Value,
         let secret = wh.secret.clone();
         let webhook_id = wh.id;
 
-        let result = send_webhook(&url, secret.as_deref(), event_type, &payload_json).await;
+        // Retry only failures that may pass: a network error, 429 or 5xx.
+        // Other 4xx mean the receiver rejected the event, so retrying cannot help.
+        let mut attempt = 0;
+        let result = loop {
+            attempt += 1;
+            let result = send_webhook(&url, secret.as_deref(), event_type, &payload_json).await;
+            let retryable = match &result {
+                Ok((code, _)) => *code == 429 || *code >= 500,
+                Err(_) => true,
+            };
+            if !retryable || attempt >= WEBHOOK_ATTEMPTS {
+                break result;
+            }
+            tokio::time::sleep(std::time::Duration::from_secs(1 << (attempt - 1))).await;
+        };
 
         let (status, status_code, response_body) = match &result {
             Ok((code, body)) => {
-                if *code == 200 || *code == 201 {
+                if (200..300).contains(code) {
                     ("delivered", Some(*code as i32), Some(body.clone()))
                 } else {
                     ("failed", Some(*code as i32), Some(body.clone()))
@@ -180,4 +217,35 @@ struct WebhookDispatchRow {
     id: Uuid,
     url: String,
     secret: Option<String>,
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    #[tokio::test]
+    async fn response_body_is_capped_at_the_stored_limit() {
+        // A receiver that answers 200 with a body far larger than the cap.
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            let (mut sock, _) = listener.accept().await.unwrap();
+            let mut req = [0u8; 4096];
+            let _ = sock.read(&mut req).await;
+            let body = "x".repeat(10_000);
+            let resp = format!(
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            );
+            let _ = sock.write_all(resp.as_bytes()).await;
+        });
+
+        let (code, body) = send_webhook(&format!("http://{addr}/hook"), None, "post_published", &serde_json::json!({}))
+            .await
+            .unwrap();
+        assert_eq!(code, 200);
+        assert_eq!(body.len(), MAX_RESPONSE_BYTES, "stored body must be capped");
+    }
 }

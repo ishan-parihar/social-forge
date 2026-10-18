@@ -13,6 +13,7 @@ use chrono::Utc;
 use std::sync::Arc;
 use uuid::Uuid;
 
+use crate::db::types::EpochUtc;
 use crate::db::SqlitePool;
 use crate::poll::{spawn_poll, FirstTick};
 use crate::social::registry::ProviderRegistry;
@@ -118,8 +119,10 @@ async fn process_due_plugs(
                      completed = ?, updated_at = unixepoch() WHERE id = ?",
                 )
                 .bind(new_runs)
-                .bind(next_run)
-                .bind(if fired { Some(Utc::now()) } else { None })
+                // Epoch INTEGER columns: a bare DateTime binds as TEXT, which
+                // `next_run_at <= unixepoch()` never matches, so the plug never fires again.
+                .bind(EpochUtc::from(next_run))
+                .bind(if fired { Some(EpochUtc::from(Utc::now())) } else { None })
                 .bind(completed)
                 .bind(plug_id)
                 .execute(db)
@@ -137,7 +140,7 @@ async fn process_due_plugs(
                 let _ = sqlx::query(
                     "UPDATE post_plugs SET next_run_at = ?, updated_at = unixepoch() WHERE id = ?",
                 )
-                .bind(next_run)
+                .bind(EpochUtc::from(next_run))
                 .bind(plug_id)
                 .execute(db)
                 .await;

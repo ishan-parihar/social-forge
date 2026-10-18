@@ -252,38 +252,46 @@ impl PostService {
                 let old_scheduled_at = post.scheduled_at.unwrap_or_else(Utc::now);
                 let delta = new_scheduled_at - old_scheduled_at;
 
+                // Counts only members that changed. A failed write is reported,
+                // not silently counted as rescheduled.
                 let mut updated_count = 0usize;
+                let mut skipped_published = 0usize;
+                let mut failed: Vec<String> = Vec::new();
                 for group_post in &group_posts {
-                    if let Some(old_at) = group_post.scheduled_at {
-                        let new_at = old_at + delta;
-                        if group_post.state == crate::db::models::PostState::Published
-                            && action == "schedule"
-                        {
-                            let _ = queries::reset_post_for_republish(
-                                db,
-                                group_post.id,
-                                user_id,
-                                new_at,
-                            )
-                            .await;
-                        } else if group_post.state == crate::db::models::PostState::Published
-                            && action == "update"
-                        {
-                            let _ =
-                                queries::update_post_date_only(db, group_post.id, user_id, new_at)
-                                    .await;
-                        } else {
-                            let _ =
-                                queries::schedule_post(db, group_post.id, user_id, new_at).await;
-                        }
-                        updated_count += 1;
+                    let Some(old_at) = group_post.scheduled_at else { continue };
+                    let new_at = old_at + delta;
+                    let is_published = group_post.state == crate::db::models::PostState::Published;
+                    let result = if is_published && action == "schedule" {
+                        // Re-publishing a part that already went out would post it
+                        // twice. Date-only changes for published parts are `update`.
+                        skipped_published += 1;
+                        continue;
+                    } else if is_published && action == "update" {
+                        queries::update_post_date_only(db, group_post.id, user_id, new_at).await
+                    } else {
+                        queries::schedule_post(db, group_post.id, user_id, new_at).await
+                    };
+                    match result {
+                        Ok(Some(_)) => updated_count += 1,
+                        Ok(None) => {}
+                        Err(e) => failed.push(format!("{}: {e}", group_post.id)),
                     }
+                }
+
+                if !failed.is_empty() {
+                    return Err(format!(
+                        "Group reschedule partly failed ({} of {} updated): {}",
+                        updated_count,
+                        group_posts.len(),
+                        failed.join("; ")
+                    ));
                 }
 
                 return Ok(serde_json::json!({
                     "rescheduled": true,
                     "group_id": group_id.to_string(),
                     "count": updated_count,
+                    "skipped_published": skipped_published,
                     "action": action,
                     "new_scheduled_at": new_scheduled_at.to_rfc3339(),
                 }));
@@ -380,11 +388,17 @@ impl PostService {
             .map_err(|e| format!("Database error: {e}"))?
             .ok_or_else(|| "Post not found".to_string())?;
 
-        // Only allow publishing queued or errored posts
+        // Only queued or errored posts publish. Anything else (idea, draft,
+        // publishing, published) is refused by name.
         match post.state {
-            PostState::Draft => return Err("Draft posts must be scheduled first".into()),
+            PostState::Queued | PostState::Error => {}
+            PostState::Draft | PostState::Idea => {
+                return Err("Draft posts must be scheduled first".into())
+            }
             PostState::Published => return Err("Post already published".into()),
-            _ => {} // queued or error is OK
+            PostState::Publishing => {
+                return Err("Post is already being published".into())
+            }
         }
 
         if post.integration_disabled {
@@ -403,6 +417,15 @@ impl PostService {
         // no post_pending polling, no retries, and every fix had to land
         // twice (G-01's empty-id guard, B3's integration-scoped thread
         // link, B8's encryption) — and drifted when it didn't.
+        // Claim the post first (same transition the scheduler uses), so a
+        // scheduler tick cannot publish it at the same time.
+        let claimed = queries::claim_post_for_publish(db, post_id, user_id)
+            .await
+            .map_err(|e| format!("Database error: {e}"))?;
+        if !claimed {
+            return Err("Post changed state while publishing; reload and try again".into());
+        }
+
         let opts = crate::scheduler::PublishOpts { manual: true };
         let outcome = crate::scheduler::publish_post(
             db,
@@ -419,31 +442,27 @@ impl PostService {
             Ok(crate::scheduler::PublishOutcome::Published { platform_post_url }) => {
                 Ok(platform_post_url.unwrap_or_default())
             }
-            Ok(crate::scheduler::PublishOutcome::Skipped) => Err(
+            Ok(crate::scheduler::PublishOutcome::Skipped) => {
+                // Nothing was sent: give the claim back so the post is not
+                // stranded in `publishing`.
+                if let Err(write_err) =
+                    queries::update_post_state(db, post_id, post.state.clone(), None, None, None).await
+                {
+                    tracing::error!("Failed to release claim for post {post_id}: {write_err}");
+                }
+                Err(
                 "Thread predecessor is not published yet — publish the earlier part first"
                     .to_string(),
-            ),
+                )
+            }
             Err(e) => {
                 let err = e.to_string();
                 // The engine already recorded the failed attempt audit row
-                // and fired post.failed. Manual-path state policy: keep the
-                // row's incoming state (queued/error) and attach the
-                // reason — the post was never published, and the operator
-                // still has to retry it.
-                if let Err(write_err) = queries::update_post_state(
-                    db,
-                    post_id,
-                    post.state.clone(),
-                    None,
-                    None,
-                    Some(&err),
-                )
-                .await
-                {
-                    tracing::error!(
-                        "Failed to record publish error for post {post_id}: {write_err}"
-                    );
-                }
+                // and fired post.failed. Fail the claim as `error`, the same
+                // state the scheduler uses. Restoring the pre-claim state
+                // would put the post back in `queued`, and the scheduler would
+                // retry it on its own without the operator seeing the failure.
+                crate::scheduler::mark_post_error(db, post_id, &err).await;
                 Err(err)
             }
         }
@@ -634,8 +653,9 @@ mod tests {
             "platform_post_id must stay empty, got {:?}",
             post.platform_post_id
         );
-        // Row keeps its retryable incoming state, with the reason attached.
-        assert_eq!(post.state, PostState::Queued);
+        // A failed publish ends in `error` with the reason attached. From there
+        // the post can be rescheduled (`PostState::Error` is editable above).
+        assert_eq!(post.state, PostState::Error);
         assert!(
             post.error_message
                 .as_deref()

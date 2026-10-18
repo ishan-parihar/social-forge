@@ -6,8 +6,10 @@ use regex::Regex;
 use std::sync::LazyLock;
 
 static URL_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    // Match http(s):// URLs that are not already shortened
-    Regex::new(r#"https?://[^\s<>"']+"#).unwrap()
+    // Match http(s):// URLs. The last character may not be sentence
+    // punctuation, so "see https://x.com/post." keeps its full stop outside
+    // the URL and the UTM tag is not appended after it.
+    Regex::new(r#"https?://[^\s<>"']*[^\s<>"'.,;:!?)\]]"#).expect("static URL regex is valid")
 });
 
 fn url_regex() -> &'static Regex {
@@ -61,7 +63,7 @@ pub async fn shorten_urls(text: &str, api_key: &str, workspace: Option<&str>) ->
     }
 
     let client = crate::social::shared_http();
-    let mut result = text.to_string();
+    let mut shorts: std::collections::HashMap<&str, String> = std::collections::HashMap::new();
 
     for url in urls {
         // Skip URLs that are already short (e.g. dub.sh links)
@@ -71,7 +73,7 @@ pub async fn shorten_urls(text: &str, api_key: &str, workspace: Option<&str>) ->
 
         match shorten_single_url(&client, url, api_key, workspace).await {
             Ok(short) => {
-                result = result.replace(url, &short);
+                shorts.insert(url, short);
             }
             Err(e) => {
                 tracing::warn!("Failed to shorten URL {url}: {e}");
@@ -80,7 +82,16 @@ pub async fn shorten_urls(text: &str, api_key: &str, workspace: Option<&str>) ->
         }
     }
 
-    result
+    // One pass over whole URL tokens. A plain substring replace would also
+    // rewrite the front of a longer URL (".../a" inside ".../a/b").
+    url_regex()
+        .replace_all(text, |caps: &regex::Captures| {
+            shorts
+                .get(&caps[0])
+                .cloned()
+                .unwrap_or_else(|| caps[0].to_string())
+        })
+        .into_owned()
 }
 
 async fn shorten_single_url(
@@ -164,5 +175,31 @@ mod tests {
             out.contains("utm_campaign=spring%20launch"),
             "campaign must be URL-encoded: {out}"
         );
+    }
+}
+
+#[cfg(test)]
+mod punctuation_and_rewrite_tests {
+    use super::*;
+
+
+    #[test]
+    fn url_match_excludes_trailing_sentence_punctuation() {
+        let m = url_regex().find("read https://example.com/post.").expect("match");
+        assert_eq!(m.as_str(), "https://example.com/post");
+    }
+
+    #[test]
+    fn utm_tag_lands_before_the_full_stop() {
+        let out = tag_urls_with_utm("see https://example.com/post.", "x", "launch");
+        assert_eq!(
+            out,
+            "see https://example.com/post?utm_source=x&utm_medium=social&utm_campaign=launch."
+        );
+    }
+
+    #[test]
+    fn strip_links_keeps_text_around_a_trailing_url() {
+        assert_eq!(strip_links("news: https://example.com/a."), "news: .");
     }
 }

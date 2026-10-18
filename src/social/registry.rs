@@ -200,6 +200,15 @@ impl CircuitBreaker {
         }
     }
 
+    /// Give back a half-open admission whose request never reached the
+    /// platform (for example a thread part whose predecessor is unpublished).
+    /// Without this the breaker stays open for another full cooldown although
+    /// nothing was learned about the platform.
+    pub fn release_probe(&self) {
+        use std::sync::atomic::Ordering;
+        let _ = self.state.compare_exchange(1, 2, Ordering::SeqCst, Ordering::SeqCst);
+    }
+
     /// Record a failed request. Increments failure count; if it
     /// reaches the threshold, opens the circuit.
     pub fn record_failure(&self) {

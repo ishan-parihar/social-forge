@@ -160,14 +160,8 @@ pub async fn poll_feed(
         hasher.update(content.as_bytes());
         let content_hash = format!("{:x}", hasher.finalize());
 
-        let exists = queries::check_rss_post_exists(&state.db, feed.id, &content_hash)
-            .await
-            .unwrap_or(false);
-        if exists {
-            continue;
-        }
-
-        queries::insert_rss_post(
+        // Only entries newly claimed by guid count as new items.
+        let claimed = queries::insert_rss_post(
             &state.db,
             feed.id,
             &guid,
@@ -177,7 +171,9 @@ pub async fn poll_feed(
             &content_hash,
         )
         .await?;
-        new_count += 1;
+        if claimed.is_some() {
+            new_count += 1;
+        }
     }
 
     queries::update_feed_last_polled(&state.db, feed.id).await?;

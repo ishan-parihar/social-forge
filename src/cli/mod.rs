@@ -25,7 +25,8 @@ pub struct Cli {
 pub enum Command {
     /// Start the HTTP REST server
     Serve {
-        /// Port to listen on
+        /// Port to listen on. `APP_URL` and `FRONTEND_URL` must use this port,
+        /// or state-changing requests fail the CSRF origin check (403).
         #[arg(long, default_value_t = 6543)]
         port: u16,
     },
@@ -50,6 +51,12 @@ pub enum Command {
         /// Aligned "name — description" table plus a count (plain lists names only)
         #[arg(long)]
         pretty: bool,
+
+        /// Narrow to one toolset (e.g. `x`, `reddit`, `core`). Mirrors
+        /// SOCIAL_FORGE_TOOLSETS filtering so an agent can size a session
+        /// before enabling it. Omit for the full catalog.
+        #[arg(long)]
+        toolset: Option<String>,
     },
 
     /// Initialize ~/.social-forge/ config directory with default .env template
@@ -57,6 +64,12 @@ pub enum Command {
 
     /// List connected social providers
     Providers,
+
+    /// Enable or disable a connected integration without deleting it
+    Integrations {
+        #[command(subcommand)]
+        action: IntegrationsAction,
+    },
 
     /// Connect a provider (auto-imports browser cookies for X/Reddit, shows OAuth URL for others)
     Connect {
@@ -539,6 +552,45 @@ pub enum PostsAction {
         #[arg(long)]
         integration: Option<String>,
     },
+    /// Update a post's content, title, media, or settings (omitted fields are kept)
+    Update {
+        id: String,
+        #[arg(long)]
+        content: Option<String>,
+        #[arg(long)]
+        title: Option<String>,
+        /// Media as a JSON array, or comma-separated URLs
+        #[arg(long)]
+        media: Option<String>,
+        /// Settings as a JSON object
+        #[arg(long)]
+        settings: Option<String>,
+    },
+    /// Replace a post's tags with these tag UUIDs (no IDs clears them)
+    Tags { id: String, tag_ids: Vec<String> },
+    /// Validate content against integrations without creating a post
+    Validate {
+        content: String,
+        /// Comma-separated integration UUIDs
+        #[arg(long)]
+        integrations: String,
+        #[arg(long)]
+        title: Option<String>,
+        /// Media as a JSON array, or comma-separated URLs
+        #[arg(long)]
+        media: Option<String>,
+        /// Settings as a JSON object
+        #[arg(long)]
+        settings: Option<String>,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum IntegrationsAction {
+    /// Stop publishing through an integration (keeps its tokens and posts)
+    Disable { id: String },
+    /// Resume publishing through a disabled integration
+    Enable { id: String },
 }
 
 // ─── Media Actions ──────────────────────────────────────────────────────

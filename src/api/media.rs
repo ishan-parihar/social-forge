@@ -616,6 +616,7 @@ pub async fn upload(
         size as i64,
         width,
         height,
+        None,
     )
     .await?;
 
@@ -702,9 +703,6 @@ fn resolve_mime(declared: &str, head: &[u8]) -> Result<String, AppError> {
             }
             Ok(sniffed)
         }
-        // Sniffer didn't recognise the bytes — fall back to declared
-        // only if it's in the allowlist (still rejects text/html etc.).
-        (declared, None) if ALLOWED_MIMES.contains(&declared) => Ok(declared.to_string()),
         // Either sniffer said "not allowed" or declared is not in allowlist.
         (_, Some(sniffed)) => Err(AppError::BadRequest(format!(
             "Unsupported file type: `{sniffed}`. Allowed: PNG, JPEG, WebP, GIF, MP4, QuickTime."
@@ -721,7 +719,7 @@ pub async fn list(
     auth: AuthenticatedUser,
     axum::extract::Query(query): axum::extract::Query<ListMediaQuery>,
 ) -> Result<Json<Vec<MediaPublic>>, AppError> {
-    let limit = query.limit.unwrap_or(50).min(200);
+    let limit = query.limit.unwrap_or(50).clamp(1, 200);
     let offset = query.offset.unwrap_or(0).max(0);
     let search = query.search.as_deref();
     let entries = queries::list_media(&state.db, auth.user_id, limit, offset, search).await?;
@@ -804,7 +802,7 @@ pub async fn serve_media(
         .header("X-Content-Type-Options", "nosniff")
         .header("Content-Disposition", disposition)
         .body(body)
-        .unwrap())
+        .expect("static headers and body are valid"))
 }
 
 /// GET /api/proxy-media?url=... — proxy external media to bypass CORS/CDN restrictions
@@ -923,14 +921,24 @@ pub async fn proxy_media(
         (status, ct, cl, cr, bytes)
     };
 
+    // Only image and video types are served inline. Anything else (an HTML
+    // page uploaded to an allowlisted host, say) is returned as an opaque
+    // download, so it cannot run on the app origin. Same rule as serve_media.
+    let inline_media = content_type.starts_with("image/") || content_type.starts_with("video/");
+    let served_type = if inline_media { content_type.as_str() } else { "application/octet-stream" };
+
     // Build response headers — forward status (200 or 206 for Range)
     let mut builder = Response::builder()
         .status(upstream_status.as_u16())
-        .header(header::CONTENT_TYPE, &content_type)
+        .header(header::CONTENT_TYPE, served_type)
+        .header(header::X_CONTENT_TYPE_OPTIONS, "nosniff")
         .header(header::CACHE_CONTROL, "public, max-age=86400")
         .header(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
         .header(header::ACCESS_CONTROL_ALLOW_HEADERS, "Range")
         .header(header::ACCEPT_RANGES, "bytes");
+    if !inline_media {
+        builder = builder.header(header::CONTENT_DISPOSITION, "attachment");
+    }
 
     // Forward content-length and content-range from upstream
     if let Some(cl) = content_length {
@@ -1325,10 +1333,12 @@ mod tests {
             resolve_mime("video/mp4", &png),
             Err(AppError::BadRequest(m)) if m.contains("MIME mismatch")
         ));
-        // Unrecognised bytes under an allowlisted declaration: unchanged
-        // fallback — still stored as the declared type, still nosniffed at
-        // serve time.
-        assert_eq!(resolve_mime("image/png", &[]).unwrap(), "image/png");
+        // Unrecognised bytes under an allowlisted declaration: rejected. The
+        // declared type is never trusted on its own (AGENTS §6.2).
+        assert!(matches!(
+            resolve_mime("image/png", &[]),
+            Err(AppError::BadRequest(m)) if m.contains("Unrecognised file type")
+        ));
         // Sniffed type with no usable declaration: the sniff decides.
         assert_eq!(
             resolve_mime("application/octet-stream", &png).unwrap(),

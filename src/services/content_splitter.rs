@@ -2,42 +2,6 @@
 // Splits post content based on platform character limits.
 // Handles thread creation for X/Twitter, Bluesky, etc.
 
-/// Character limits per platform.
-///
-/// Deliberately NOT `SocialProvider::max_content_length()` — the values
-/// diverge on purpose (discord 2000 here vs the 1980 headroom impl,
-/// medium 100000 vs the 15000 essay hint). This table is the SPLITTING
-/// policy (where to cut a post into a thread); the provider impl is the
-/// hard API limit. Preview/staging callers only have an identifier
-/// string, not a provider instance, so the table stands on its own.
-pub fn platform_limit(provider: &str) -> usize {
-    match provider {
-        "x" => 4000,
-        "linkedin" | "linkedin_page" => 3000,
-        "bluesky" => 300,
-        "threads" => 500,
-        "mastodon" => 500,
-        "instagram" | "instagram_standalone" => 2200,
-        "reddit" => 10000,
-        "facebook" => 63206,
-        "youtube" => 5000,
-        "tiktok" => 2200,
-        "pinterest" => 500,
-        "discord" => 2000,
-        "slack" => 40000,
-        "telegram_bot" | "telegram_user" => 4096,
-        "whatsapp" => 65536,
-        "github" => 65536,
-        "medium" => 100000,
-        "devto" => 100000,
-        "hashnode" => 100000,
-        "wordpress" => 100000,
-        "farcaster" => 1024,
-        "skool" => 100000,
-        _ => 10000, // safe default
-    }
-}
-
 /// Whether this platform supports threads (multi-part posts)
 pub fn supports_threads(provider: &str) -> bool {
     matches!(provider, "x" | "bluesky" | "mastodon" | "threads")
@@ -51,17 +15,15 @@ pub struct SplitSegment {
     pub total: usize,
 }
 
-/// Split content for a specific platform, respecting character limits.
+/// Split content for a platform whose hard limit is `limit` bytes — pass the
+/// provider's `max_content_length()`, the same value `validate_post_rules`
+/// enforces, so a split can never leave a segment the validator rejects.
 /// Returns one or more segments. For thread-capable platforms, adds numbering.
-pub fn split_content(
-    content: &str,
-    provider: &str,
-    _max_media_per_post: usize,
-) -> Vec<SplitSegment> {
-    let limit = platform_limit(provider);
-
-    // If content fits, return as-is
-    if content.len() <= limit {
+/// A `limit` of 0 means the platform has no post surface: content comes back
+/// whole and the validator rejects it.
+pub fn split_content(content: &str, provider: &str, limit: usize) -> Vec<SplitSegment> {
+    // If content fits (or there is no limit to split against), return as-is
+    if limit == 0 || content.len() <= limit {
         return vec![SplitSegment {
             content: content.to_string(),
             sequence: 1,
@@ -127,7 +89,13 @@ fn smart_split(content: &str, max_len: usize) -> Vec<String> {
 /// Find the best place to split text within max_len.
 /// Priority: paragraph > sentence > comma > word > hard cut
 fn find_break_point(text: &str, max_len: usize) -> usize {
-    let search_zone = &text[..max_len];
+    // Snap the byte limit back to a char boundary. A limit can land inside a
+    // multibyte character (emoji, CJK), and slicing there panics.
+    let mut end = max_len.min(text.len());
+    while !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    let search_zone = &text[..end];
 
     // Try paragraph break
     if let Some(pos) = search_zone.rfind("\n\n") {
@@ -155,24 +123,17 @@ fn find_break_point(text: &str, max_len: usize) -> usize {
         return pos + 1;
     }
 
-    // Hard cut at limit
-    max_len
+    // Hard cut at limit. Never return 0: smart_split would then loop forever.
+    // That happens when the limit is smaller than the next character.
+    if end == 0 {
+        return text.chars().next().map_or(1, char::len_utf8);
+    }
+    end
 }
 
-/// Check if content needs splitting for a platform
-pub fn needs_splitting(content: &str, provider: &str) -> bool {
-    content.len() > platform_limit(provider)
-}
-
-/// Get a summary of how content will be split across platforms
-pub fn preview_split(content: &str, providers: &[&str]) -> Vec<(String, usize, usize)> {
-    providers
-        .iter()
-        .map(|&p| {
-            let segments = split_content(content, p, 4);
-            (p.to_string(), segments.len(), platform_limit(p))
-        })
-        .collect()
+/// Check if content needs splitting against a platform's hard limit
+pub fn needs_splitting(content: &str, limit: usize) -> bool {
+    limit > 0 && content.len() > limit
 }
 
 #[cfg(test)]
@@ -182,7 +143,7 @@ mod tests {
     #[test]
     fn test_no_split_needed() {
         let content = "Short post";
-        let segments = split_content(content, "x", 4);
+        let segments = split_content(content, "x", 4000);
         assert_eq!(segments.len(), 1);
         assert_eq!(segments[0].content, "Short post");
     }
@@ -190,7 +151,7 @@ mod tests {
     #[test]
     fn test_split_long_content() {
         let content = "a".repeat(5000);
-        let segments = split_content(&content, "x", 4);
+        let segments = split_content(&content, "x", 4000);
         assert!(segments.len() > 1);
         for seg in &segments {
             assert!(seg.content.len() <= 4000);
@@ -200,16 +161,58 @@ mod tests {
     #[test]
     fn test_bluesky_thread() {
         let content = "a".repeat(500);
-        let segments = split_content(&content, "bluesky", 4);
+        let segments = split_content(&content, "bluesky", 300);
         assert!(segments.len() > 1);
         assert!(segments[0].content.starts_with("(1/"));
     }
 
+    /// WhatsApp's validator limit is 4096. A splitter that used a looser
+    /// number let 5000-char messages through unsplit and then failed publish.
     #[test]
-    fn test_platform_limits() {
-        assert_eq!(platform_limit("x"), 4000);
-        assert_eq!(platform_limit("linkedin"), 3000);
-        assert_eq!(platform_limit("bluesky"), 300);
-        assert_eq!(platform_limit("threads"), 500);
+    fn segments_never_exceed_the_provider_limit() {
+        let content = "word ".repeat(1200);
+        let segments = split_content(&content, "whatsapp", 4096);
+        assert!(segments.len() > 1);
+        for seg in &segments {
+            assert!(seg.content.len() <= 4096, "segment {} bytes", seg.content.len());
+        }
+    }
+
+    #[test]
+    fn split_never_slices_inside_a_multibyte_character() {
+        // Each emoji is 4 bytes, so byte 10 falls inside one of them.
+        // linkedin has no thread numbering, so the limit is used as-is.
+        let text = "🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀";
+        let segments = split_content(text, "linkedin", 10);
+        assert!(segments.len() > 1, "expected a split");
+        for seg in &segments {
+            assert!(seg.content.len() <= 10, "segment over limit: {}", seg.content.len());
+        }
+        let rejoined: String = segments.iter().map(|s| s.content.as_str()).collect();
+        assert_eq!(rejoined, text, "no character may be lost or cut");
+    }
+
+    #[test]
+    fn split_terminates_when_limit_is_below_one_character() {
+        // A 2-byte limit cannot hold a 4-byte emoji. The splitter must still
+        // advance one whole character at a time instead of looping.
+        let text = "🚀🚀🚀";
+        let segments = split_content(text, "linkedin", 2);
+        let rejoined: String = segments.iter().map(|s| s.content.as_str()).collect();
+        assert_eq!(rejoined, text);
+    }
+
+    #[test]
+    fn thread_platform_with_tiny_limit_terminates() {
+        // limit 10 minus the 10-byte numbering overhead leaves 0 for content.
+        let segments = split_content("abc def ghi", "x", 10);
+        assert!(!segments.is_empty());
+    }
+
+    #[test]
+    fn zero_limit_returns_content_whole() {
+        let segments = split_content("anything", "dead", 0);
+        assert_eq!(segments.len(), 1);
+        assert!(!needs_splitting("anything", 0));
     }
 }

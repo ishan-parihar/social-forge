@@ -131,3 +131,27 @@ pub async fn reply_to_comment(
 }
 
 use super::auth::resolve_first_user;
+
+// ── Resolve ──────────────────────────────────────────────────
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct CommentResolveInput {
+    /// Comment ID, as returned by the comment list tools
+    pub comment_id: String,
+}
+
+/// Mark a comment as resolved in the local inbox (does not touch the platform).
+pub async fn handle_comment_resolve(
+    state: &AppState,
+    input: &CommentResolveInput,
+) -> Result<Json<serde_json::Value>, String> {
+    let user_id = super::auth::resolve_first_user(state).await?;
+    super::rest_bridge::rest_result(
+        crate::api::comments::resolve(
+            axum::extract::State(state.clone()),
+            crate::auth::middleware::AuthenticatedUser { user_id },
+            axum::extract::Path(input.comment_id.clone()),
+        )
+        .await,
+    )
+}

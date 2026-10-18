@@ -39,6 +39,20 @@ impl From<String> for PublishError {
     }
 }
 
+/// Only platform-side failures count against the circuit breaker: a network
+/// fault, a rate limit, or an API error. Local rejections (validation, bad
+/// token, database) say nothing about the platform's health.
+fn is_platform_outage(e: &PublishError) -> bool {
+    matches!(
+        e,
+        PublishError::Provider(
+            crate::social::ProviderError::Network(_)
+                | crate::social::ProviderError::RateLimited(_)
+                | crate::social::ProviderError::Api(_)
+        )
+    )
+}
+
 /// How often to poll for due posts (upper bound — a `Notify` wake-up or a
 /// nearer next_scheduled_at shortens the sleep, §6.2).
 const POLL_INTERVAL_SECS: u64 = 30;
@@ -395,6 +409,11 @@ impl SchedulerEngine {
                 Ok(None) | Err(_) => break,
             }
         }
+        // ponytail: abort cuts a publish mid-request. The platform may already
+        // have accepted the post, and the boot-time reclaim then marks it `error`
+        // while it is live. Ceiling: no idempotency check before a retry. Upgrade
+        // path: send a provider idempotency key, or look the post up on the
+        // platform before re-publishing a reclaimed post.
         self.join_set.abort_all();
         tracing::info!("Scheduler drain complete");
     }
@@ -642,10 +661,14 @@ async fn process_due_posts(
         let provider = match providers.get(&post.provider_identifier) {
             Some(p) => p,
             None => {
-                tracing::warn!(
-                    "No provider found for {} on post {}",
-                    post.provider_identifier,
-                    post.id
+                // The claim already moved this post to `publishing`. Leaving it
+                // there parks it until the 15-minute reclaim, so fail it now.
+                let msg = format!("No provider registered for `{}`", post.provider_identifier);
+                tracing::warn!("{msg} (post {})", post.id);
+                mark_post_error(db, post.id, &msg).await;
+                broadcaster.send(
+                    "post_failed",
+                    &serde_json::json!({ "id": post.id.to_string(), "error": msg }),
                 );
                 continue;
             }
@@ -689,27 +712,65 @@ async fn process_due_posts(
                 None => None,
             };
 
-            match publish_post(
-                &db_clone,
-                provider_clone.as_ref(),
-                &post_clone,
-                &bcast,
-                tk,
-                &cfg,
-                PublishOpts::default(),
-            )
-            .await
-            {
-                Ok(_) => {
-                    // Publish succeeded (or the part was left queued for a
-                    // later tick) — record success in circuit breaker
+            // Run the publish in its own task. A panic then comes back as a
+            // JoinError here, instead of ending this task with the post still
+            // in `publishing`.
+            let publish = {
+                let db_inner = db_clone.clone();
+                let post_inner = post_clone.clone();
+                let bcast_inner = bcast.clone();
+                let provider_inner = provider_clone.clone();
+                tokio::spawn(async move {
+                    publish_post(
+                        &db_inner,
+                        provider_inner.as_ref(),
+                        &post_inner,
+                        &bcast_inner,
+                        tk,
+                        &cfg,
+                        PublishOpts::default(),
+                    )
+                    .await
+                })
+            };
+            let result = match publish.await {
+                Ok(result) => result,
+                Err(join_err) => {
+                    tracing::error!("Publish task for post {} panicked: {join_err}", post_clone.id);
+                    let msg = format!(
+                        "Publish task panicked. Check {} before retrying: it may already have accepted the post",
+                        post_clone.provider_identifier
+                    );
+                    mark_post_error(&db_clone, post_clone.id, &msg).await;
+                    bcast.send(
+                        "post_failed",
+                        &serde_json::json!({ "id": post_clone.id.to_string(), "error": msg }),
+                    );
+                    return post_clone.id;
+                }
+            };
+            match result {
+                Ok(PublishOutcome::Published { .. }) => {
                     if let Some(ref breaker) = cb {
                         breaker.record_success();
+                    }
+                }
+                Ok(PublishOutcome::Skipped) => {
+                    // Nothing reached the platform, so this says nothing about
+                    // its health. Return a half-open probe to the breaker.
+                    if let Some(ref breaker) = cb {
+                        breaker.release_probe();
                     }
                 }
                 Err(e) => {
                     tracing::error!("Failed to publish post {}: {e}", post_clone.id);
                     let err_str = e.to_string();
+                    // Only platform-side failures count against the breaker.
+                    // A post rejected locally (validation, bad token) says
+                    // nothing about the platform's health.
+                    if let (Some(ref breaker), true) = (&cb, is_platform_outage(&e)) {
+                        breaker.record_failure();
+                    }
                     mark_post_error(&db_clone, post_clone.id, &err_str).await;
 
                     // §6.6: a terminally failed thread part must not let
@@ -748,12 +809,6 @@ async fn process_due_posts(
                     let _ = bcast
                         .send_and_log(&db_clone, post_clone.user_id, "post_failed", &fail_payload)
                         .await;
-                    // Publish failed — record failure in circuit breaker.
-                    // After N consecutive failures, the circuit opens and
-                    // subsequent posts for this provider are skipped.
-                    if let Some(ref breaker) = cb {
-                        breaker.record_failure();
-                    }
                 }
             }
             post_clone.id
@@ -1099,6 +1154,17 @@ pub(crate) async fn publish_post(
                             seq - 1
                         )
                         .into());
+                    }
+                    // A predecessor that ended in `error` never publishes. Requeuing
+                    // would park this part forever, so fail it with the same reason.
+                    match queries::find_failed_thread_predecessor(db, group_id, post.integration_id, seq - 1).await {
+                        Ok(Some(reason)) => {
+                            return Err(format!("predecessor failed: {reason}").into());
+                        }
+                        Ok(None) => {}
+                        Err(e) => {
+                            tracing::warn!("Thread link: predecessor state lookup failed for post {}: {e}", post.id);
+                        }
                     }
                     tracing::info!(
                         "Thread link: post {} (seq {}) predecessor not published yet — leaving queued",
@@ -1541,27 +1607,41 @@ pub(crate) async fn publish_post(
                     wait
                 );
                 last_error = Some(msg.clone());
-                tokio::time::sleep(Duration::from_secs(wait)).await;
+                if attempt < MAX_RETRIES {
+                    tokio::time::sleep(Duration::from_secs(wait)).await;
+                }
                 continue;
             }
-            Err(ProviderError::Network(ref e)) => {
-                // Transient network errors are now retried with the same
-                // exponential backoff as rate limits. Previously a single
-                // reqwest::Error permanently marked the post as `Error`.
+            // Connection refused or DNS failure: the request never reached the
+            // platform, so a retry cannot publish twice.
+            Err(ProviderError::Network(ref e)) if e.is_connect() => {
                 let base = 5u64 * (1u64 << (attempt - 1));
                 let jitter = (base as f64 * 0.25 * rand::random::<f64>()) as u64;
                 let wait = base + jitter;
                 let err_str = e.to_string();
                 tracing::warn!(
-                    "Network error for post {} (attempt {}): {}. Retrying in {}s",
+                    "Connect error for post {} (attempt {}): {}. Retrying in {}s",
                     post.id,
                     attempt,
                     err_str,
                     wait
                 );
                 last_error = Some(err_str);
-                tokio::time::sleep(Duration::from_secs(wait)).await;
+                if attempt < MAX_RETRIES {
+                    tokio::time::sleep(Duration::from_secs(wait)).await;
+                }
                 continue;
+            }
+            // Timeout or reset after the request was sent: the platform may
+            // already have accepted the post. Retrying could publish it twice,
+            // so fail it and let the operator check the platform.
+            Err(ProviderError::Network(ref e)) => {
+                tracing::error!("Network error after send for post {}: {e}", post.id);
+                last_error = Some(format!(
+                    "Network error after the request may have reached {}; not retried to avoid a duplicate. Check the platform before retrying: {e}",
+                    post.provider_identifier
+                ));
+                break;
             }
             Err(e) => {
                 tracing::error!("Publish error for post {}: {e}", post.id);
@@ -1649,7 +1729,7 @@ fn dispatch_webhook_background(
 
             let (status, status_code, response_body) = match &result {
                 Ok((code, body)) => {
-                    if *code == 200 || *code == 201 {
+                    if (200..300).contains(code) {
                         ("delivered", Some(*code as i32), Some(body.clone()))
                     } else {
                         ("failed", Some(*code as i32), Some(body.clone()))
@@ -1740,7 +1820,9 @@ async fn resolve_token(
 /// platform id, so an operator retry created duplicates on the platform.
 /// Gating on `state = 'publishing'` makes the late error write a no-op for
 /// any post that already reached a terminal state.
-async fn mark_post_error(db: &SqlitePool, post_id: uuid::Uuid, error: &str) {
+/// Fail a claimed post. Guarded on `publishing` so a row another writer has
+/// already moved is left alone.
+pub(crate) async fn mark_post_error(db: &SqlitePool, post_id: uuid::Uuid, error: &str) {
     let result = sqlx::query(
         r#"UPDATE posts SET state = 'error', error_message = ?, updated_at = unixepoch()
          WHERE id = ? AND state = 'publishing'"#,
@@ -2370,5 +2452,40 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(other_state, "queued", "other integrations stay queued (B3 scoping)");
+    }
+
+    #[tokio::test]
+    async fn failed_predecessor_reason_is_visible_to_the_gate() {
+        // A predecessor that ended in `error` (e.g. reclaimed, or failed on a
+        // manual publish) must be visible to the B3 gate, so the part is failed
+        // instead of requeued forever.
+        let (pool, seed_post_id) = pool_with_post("error", None).await;
+        let (_user_id, integration_id): (uuid::Uuid, uuid::Uuid) = sqlx::query_as(
+            "SELECT user_id, integration_id FROM posts WHERE id = ?",
+        )
+        .bind(seed_post_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        let group = uuid::Uuid::new_v4();
+        sqlx::query(
+            "UPDATE posts SET group_id = ?, sequence = 1, error_message = 'rate limit gone' WHERE id = ?",
+        )
+        .bind(group)
+        .bind(seed_post_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let reason = queries::find_failed_thread_predecessor(&pool, group, integration_id, 1)
+            .await
+            .unwrap();
+        assert_eq!(reason.as_deref(), Some("rate limit gone"));
+
+        // No predecessor in error for a sequence that does not exist.
+        let none = queries::find_failed_thread_predecessor(&pool, group, integration_id, 2)
+            .await
+            .unwrap();
+        assert!(none.is_none());
     }
 }

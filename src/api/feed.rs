@@ -274,7 +274,7 @@ pub async fn analytics(
     // Phase 2: compute the cutoff date if days is provided.
     let cutoff: Option<chrono::DateTime<chrono::Utc>> = query
         .days
-        .map(|d| chrono::Utc::now() - chrono::Duration::days(d as i64));
+        .map(|d| chrono::Utc::now() - chrono::Duration::days(d.clamp(1, 3650) as i64));
     let summary =
         queries::get_engagement_summary(&state.db, auth.user_id, query.provider.as_deref(), cutoff)
             .await?;

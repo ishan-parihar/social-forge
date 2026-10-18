@@ -9,7 +9,6 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::auth::jwt;
 use crate::auth::middleware::AuthenticatedUser;
 use crate::crypto;
 use crate::db::models::IntegrationPublic;
@@ -257,12 +256,13 @@ pub async fn oauth_callback(
 
             // Multi-step providers (isBetweenSteps) redirect to page-picker
             if let Some(provider_obj) = state.providers.get(&integration.provider_identifier) {
+                // The page picker authenticates with the session cookie, so the
+                // redirect carries no credential. A token in the URL would land in
+                // browser history and access logs.
                 if provider_obj.is_between_steps() {
-                    let token = jwt::create_token(integration.user_id, &state.config.jwt_secret)
-                        .map_err(|e| AppError::Internal(format!("JWT creation: {e}")))?;
                     return Ok(Redirect::to(&format!(
-                        "{}/auth/callback?pending={}&integration_id={}&token={}",
-                        app_url, integration.provider_identifier, integration.id, token,
+                        "{}/auth/callback?pending={}&integration_id={}",
+                        app_url, integration.provider_identifier, integration.id,
                     )));
                 }
             }
@@ -407,7 +407,7 @@ pub async fn update_timeslots(
         .map_err(|_| AppError::Internal("Failed to serialize timeslots".into()))?;
 
     sqlx::query(
-        "UPDATE integrations SET posting_times = $1, updated_at = NOW() WHERE id = $2 AND user_id = $3",
+        "UPDATE integrations SET posting_times = $1, updated_at = unixepoch() WHERE id = $2 AND user_id = $3",
     )
     .bind(&timeslots_json)
     .bind(id)
@@ -437,14 +437,7 @@ pub async fn toggle_disable(
         .await?
         .ok_or_else(|| AppError::NotFound("Integration not found".into()))?;
 
-    sqlx::query(
-        "UPDATE integrations SET disabled = $1, updated_at = NOW() WHERE id = $2 AND user_id = $3",
-    )
-    .bind(body.disabled)
-    .bind(id)
-    .bind(auth.user_id)
-    .execute(&state.db)
-    .await?;
+    queries::set_integration_disabled(&state.db, auth.user_id, id, body.disabled).await?;
 
     Ok(Json(
         serde_json::json!({"success": true, "disabled": body.disabled}),
@@ -627,7 +620,8 @@ pub async fn connect_telegram_bot_token(
         .get(format!("https://api.telegram.org/bot{token}/getMe"))
         .send()
         .await
-        .map_err(|e| AppError::Provider(format!("Failed to reach Telegram: {e}")))?;
+        // without_url(): the request URL carries the bot token.
+        .map_err(|e| AppError::Provider(format!("Failed to reach Telegram: {}", e.without_url())))?;
 
     let json: serde_json::Value = resp
         .json()
@@ -1411,7 +1405,12 @@ pub async fn connect_page(
         AppError::BadRequest("Page not found or not accessible with this token".into())
     })?;
 
-    let page_token = page.access_token.unwrap_or_default();
+    // An empty token would be stored as a working-looking integration whose
+    // every publish then fails. Refuse it here, where the user can act on it.
+    let page_token = page
+        .access_token
+        .filter(|t| !t.is_empty())
+        .ok_or_else(|| AppError::BadRequest("This page did not return an access token; reconnect with a token that manages it".into()))?;
 
     let existing = sqlx::query_scalar::<_, i64>(
         "SELECT COUNT(*) FROM integrations WHERE user_id = $1 AND provider_identifier = $2 AND internal_id = $3",

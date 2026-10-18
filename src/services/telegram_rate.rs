@@ -217,8 +217,10 @@ where
     while bucket.front().is_some_and(|t| *t < cutoff) {
         bucket.pop_front();
     }
-    if bucket.len() >= spec.max_calls as usize {
-        return *bucket.front().expect("non-empty") + spec.window - now;
+    // A full bucket has a front to wait on. Matching on the front itself means a
+    // zero `max_calls` cannot reach an empty `front()` and panic.
+    if let Some(&oldest) = bucket.front().filter(|_| bucket.len() >= spec.max_calls as usize) {
+        return oldest + spec.window - now;
     }
     bucket.push_back(now);
     Duration::ZERO
@@ -235,9 +237,25 @@ pub struct SendJob {
     pub text: String,
 }
 
+/// Transient send failures the head job gets before it is dropped.
+const MAX_HEAD_RETRIES: u32 = 3;
+
+/// Errors that say nothing about the message itself: the connection dropped
+/// or the server had a fault. Anything else (CHAT_WRITE_FORBIDDEN, bad peer)
+/// is permanent and drops the job.
+pub fn is_transient_send_error(err: &str) -> bool {
+    let e = err.to_ascii_lowercase();
+    ["timeout", "timed out", "connection", "reset", "broken pipe", "network",
+     "unavailable", "internal", "rpc_call_fail", "rpc error 5", "dns", "eof"]
+        .iter()
+        .any(|k| e.contains(k))
+}
+
 #[derive(Debug, Default)]
 pub struct WriteQueue {
     jobs: VecDeque<SendJob>,
+    /// Transient failures of the current head job.
+    head_failures: u32,
 }
 
 impl WriteQueue {
@@ -279,17 +297,29 @@ impl WriteQueue {
                 Ok(()) => {
                     guard.record_success(account, Category::Send);
                     self.jobs.pop_front();
+                    self.head_failures = 0;
                     sent += 1;
                 }
                 Err(e) => {
                     if let Some(secs) = parse_flood_wait(&e) {
                         guard.record_flood(account, Category::Send, Duration::from_secs(secs));
+                    } else if is_transient_send_error(&e) && self.head_failures < MAX_HEAD_RETRIES {
+                        // Keep the head and try again on a later drain. A dropped
+                        // connection must not lose the message.
+                        self.head_failures += 1;
+                        tracing::warn!(
+                            "telegram queue: transient send failure to {} (retry {}/{MAX_HEAD_RETRIES}): {e}",
+                            job.peer,
+                            self.head_failures
+                        );
                     } else {
-                        // Permanent failure: drop the job (a stuck head would
-                        // starve every send behind it) and surface in logs.
+                        // Permanent failure, or transient retries used up: drop
+                        // the job (a stuck head would starve every send behind
+                        // it) and surface in logs.
                         tracing::error!("telegram queue: send to {} failed: {e}", job.peer);
                         guard.record_success(account, Category::Send);
                         self.jobs.pop_front();
+                        self.head_failures = 0;
                     }
                     return (sent, self.jobs.len());
                 }
@@ -335,6 +365,16 @@ mod tests {
         assert_eq!(parse_flood_wait("rpc error FLOOD_WAIT_42 (see ..)"), Some(42));
         assert_eq!(parse_flood_wait("FLOOD_WAIT_300"), Some(300));
         assert_eq!(parse_flood_wait("OTHER_ERROR"), None);
+    }
+
+    #[test]
+    fn zero_max_calls_defers_without_panicking() {
+        // A zero cap admits nothing. The empty bucket must not reach `front()`
+        // unchecked, which panicked before the bucket check was tied to it.
+        let mut store = std::collections::HashMap::new();
+        let spec = RateSpec { max_calls: 0, window: Duration::from_secs(60) };
+        let wait = try_acquire(&mut store, &"peer", spec, Instant::now());
+        assert!(wait.is_zero(), "an empty bucket with cap 0 must not block or panic");
     }
 
     #[test]
@@ -419,6 +459,42 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(5100)).await;
         let (ok3, _) = q.drain_with(&g, "acc", sender).await;
         assert_eq!(ok3, 1, "one peer send per 5s window");
+    }
+
+    #[test]
+    fn transient_send_errors_are_classified() {
+        assert!(is_transient_send_error("connection reset by peer"));
+        assert!(is_transient_send_error("RPC error 500 INTERNAL"));
+        assert!(!is_transient_send_error("CHAT_WRITE_FORBIDDEN"));
+        assert!(!is_transient_send_error("PEER_ID_INVALID"));
+    }
+
+    #[tokio::test]
+    async fn transient_head_failure_is_retried_not_dropped() {
+        let g = TelegramRateGuard::new();
+        let mut q = WriteQueue::default();
+        // A username peer has no per-peer pacing key, so only the account gate
+        // applies and the retry is not deferred by the 5s peer window.
+        q.push(SendJob { peer: "@alice".into(), text: "hello".into() });
+        let attempts = std::cell::Cell::new(0u32);
+        let sender = |_job: &SendJob| {
+            attempts.set(attempts.get() + 1);
+            let n = attempts.get();
+            async move {
+                if n == 1 {
+                    Err::<(), String>("connection reset by peer".into())
+                } else {
+                    Ok(())
+                }
+            }
+        };
+        // First drain hits the transient error: the message stays queued.
+        let (ok, _) = q.drain_with(&g, "acc", &sender).await;
+        assert_eq!((ok, q.len()), (0, 1), "a transient failure must keep the job");
+        // The next drain sends it.
+        let (ok2, _) = q.drain_with(&g, "acc", &sender).await;
+        assert_eq!(ok2, 1, "the retried job is sent");
+        assert_eq!(q.len(), 0);
     }
 
     #[tokio::test]

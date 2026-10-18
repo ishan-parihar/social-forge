@@ -207,6 +207,25 @@ pub async fn upsert_x_query_id(
     Ok(())
 }
 
+/// Enable or disable one integration. Returns `false` when no row matched.
+pub async fn set_integration_disabled(
+    pool: &SqlitePool,
+    user_id: Uuid,
+    id: Uuid,
+    disabled: bool,
+) -> Result<bool, sqlx::Error> {
+    let affected = sqlx::query(
+        "UPDATE integrations SET disabled = ?, updated_at = unixepoch() WHERE id = ? AND user_id = ?",
+    )
+    .bind(disabled)
+    .bind(id)
+    .bind(user_id)
+    .execute(pool)
+    .await?
+    .rows_affected();
+    Ok(affected > 0)
+}
+
 pub async fn list_integrations(
     pool: &SqlitePool,
     user_id: Uuid,
@@ -318,6 +337,29 @@ pub async fn find_thread_predecessor(
     .fetch_optional(pool)
     .await?;
     Ok(row.and_then(|(pid,)| pid))
+}
+
+/// The error message of a thread predecessor that ended in `error`, if any.
+/// A part whose predecessor failed can never be published, so the scheduler
+/// fails it instead of requeuing it forever.
+pub async fn find_failed_thread_predecessor(
+    pool: &SqlitePool,
+    group_id: Uuid,
+    integration_id: Uuid,
+    sequence: i32,
+) -> Result<Option<String>, sqlx::Error> {
+    let row: Option<(Option<String>,)> = sqlx::query_as(
+        r#"SELECT error_message FROM posts
+           WHERE group_id = ? AND integration_id = ? AND sequence = ?
+             AND state = 'error' AND deleted_at IS NULL
+           LIMIT 1"#,
+    )
+    .bind(group_id)
+    .bind(integration_id)
+    .bind(sequence)
+    .fetch_optional(pool)
+    .await?;
+    Ok(row.map(|(msg,)| msg.unwrap_or_else(|| "unknown error".into())))
 }
 
 /// Persist a (possibly rotated) OAuth token pair for an integration.
@@ -1120,6 +1162,8 @@ pub async fn schedule_post(
         r#"UPDATE posts SET scheduled_at = ?, state = 'queued',
             updated_at = unixepoch()
             WHERE id = ? AND user_id = ?
+              AND state IN ('idea', 'draft', 'queued', 'error')
+              AND deleted_at IS NULL
             RETURNING id, user_id, integration_id, state,
                content, title, media, settings, scheduled_at, published_at,
                platform_post_id, platform_post_url, error_message,
@@ -1254,6 +1298,25 @@ pub async fn update_post_date_only(
     .bind(user_id)
     .fetch_optional(pool)
     .await
+}
+
+/// Atomically move a post into `publishing` before a manual publish. The
+/// scheduler claims due posts the same way, so the two cannot both publish
+/// one post. Returns false when the post is no longer publishable.
+pub async fn claim_post_for_publish(
+    pool: &SqlitePool,
+    id: Uuid,
+    user_id: Uuid,
+) -> Result<bool, sqlx::Error> {
+    let res = sqlx::query(
+        "UPDATE posts SET state = 'publishing', updated_at = unixepoch()
+         WHERE id = ? AND user_id = ? AND state IN ('queued', 'error') AND deleted_at IS NULL",
+    )
+    .bind(id)
+    .bind(user_id)
+    .execute(pool)
+    .await?;
+    Ok(res.rows_affected() == 1)
 }
 
 pub async fn update_post_state(
@@ -1478,6 +1541,7 @@ pub async fn get_due_posts(
            FROM posts p
            JOIN integrations i ON p.integration_id = i.id
            WHERE p.state = 'queued'
+             AND p.deleted_at IS NULL
              AND {SCHEDULED_AT_EPOCH} <= unixepoch()
              AND i.disabled = false
            ORDER BY {SCHEDULED_AT_EPOCH} ASC, p.sequence ASC
@@ -1643,7 +1707,7 @@ pub async fn record_publish_attempt(
     .bind(attempt_number)
     .bind(status)
     .bind(error_message)
-    .bind(started_at)
+    .bind(EpochUtc::from(started_at))
     .execute(pool)
     .await?;
     Ok(())
@@ -1732,8 +1796,8 @@ pub async fn get_posts_by_date_range(
            ORDER BY scheduled_at ASC"#,
     )
     .bind(user_id)
-    .bind(start)
-    .bind(end)
+    .bind(EpochUtc::from(start))
+    .bind(EpochUtc::from(end))
     .fetch_all(pool)
     .await
 }
@@ -1758,8 +1822,10 @@ pub async fn get_calendar_posts_with_metrics(
     let mut where_clauses: Vec<String> = vec![
         "p.user_id = ?".into(),
         "p.deleted_at IS NULL".into(),
-        "(p.state != 'published' AND p.scheduled_at >= ? AND p.scheduled_at <= ?) \
-         OR (p.state = 'published' AND p.published_at >= ? AND p.published_at <= ?)"
+        // The OR is parenthesised: AND-joining it bare let the second branch
+        // escape the user_id / deleted_at filters above.
+        "((p.state != 'published' AND p.scheduled_at >= ? AND p.scheduled_at <= ?) \
+         OR (p.state = 'published' AND p.published_at >= ? AND p.published_at <= ?))"
             .into(),
     ];
     // SQLite has no array type: the integration_id list is bound as JSON
@@ -1801,12 +1867,15 @@ pub async fn get_calendar_posts_with_metrics(
            CASE WHEN p.state = 'published' THEN p.published_at ELSE p.scheduled_at END ASC"#,
     );
 
+    // Epoch INTEGER columns: a bare DateTime binds as TEXT, which SQLite
+    // orders after every INTEGER, so no range comparison could ever match.
+    let (start_epoch, end_epoch) = (EpochUtc::from(start_date), EpochUtc::from(end_date));
     let mut q = sqlx::query_as::<_, CalendarPostWithMetrics>(&sql)
         .bind(user_id)
-        .bind(start_date)
-        .bind(end_date)
-        .bind(start_date)
-        .bind(end_date);
+        .bind(start_epoch)
+        .bind(end_epoch)
+        .bind(start_epoch)
+        .bind(end_epoch);
 
     if has_ids {
         q = q.bind(ids_json(integration_ids));
@@ -1837,7 +1906,7 @@ pub async fn find_next_free_slot(
         .await?;
 
         integration
-            .and_then(|v| v.as_array().cloned())
+            .and_then(|v| crate::db::models::decode_posting_times(v).as_array().cloned())
             .map(|arr| {
                 arr.iter()
                     .filter_map(|obj| obj.get("time").and_then(|t| t.as_i64()))
@@ -1872,7 +1941,10 @@ pub async fn find_next_free_slot(
             .flatten()
             .map(|e| e.0)
         };
-        return Ok(Some(last.unwrap_or(now) + chrono::Duration::hours(2)));
+        // Never before `now`: a last post from days ago would otherwise yield a
+        // slot in the past that the scheduler publishes immediately.
+        let base = last.map_or(now, |l| l.max(now));
+        return Ok(Some(base + chrono::Duration::hours(2)));
     }
 
     // Get scheduled posts for the next 14 days
@@ -1975,15 +2047,16 @@ pub async fn create_media(
     file_size: i64,
     width: Option<i32>,
     height: Option<i32>,
+    alt_text: Option<&str>,
 ) -> Result<MediaEntry, sqlx::Error> {
     let id = Uuid::new_v4();
     sqlx::query_as!(
         MediaEntry,
-        r#"INSERT INTO media (id, user_id, original_name, storage_path, mime_type, file_size, width, height)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        r#"INSERT INTO media (id, user_id, original_name, storage_path, mime_type, file_size, width, height, alt_text)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
          RETURNING id as "id!: Uuid", user_id as "user_id!: Uuid",
            original_name, storage_path, mime_type, file_size,
-           width as "width?: i32", height as "height?: i32",
+           width as "width?: i32", height as "height?: i32", alt_text,
            created_at as "created_at!: DateTime<Utc>""#,
         id,
         user_id,
@@ -1993,6 +2066,7 @@ pub async fn create_media(
         file_size,
         width,
         height,
+        alt_text,
     )
     .fetch_one(pool)
     .await
@@ -2023,7 +2097,7 @@ pub async fn list_media(
                 MediaEntry,
                 r#"SELECT id as "id!: Uuid", user_id as "user_id!: Uuid",
                         original_name, storage_path, mime_type, file_size,
-                        width as "width?: i32", height as "height?: i32",
+                        width as "width?: i32", height as "height?: i32", alt_text,
                         created_at as "created_at!: DateTime<Utc>"
                  FROM media WHERE user_id = ? AND original_name LIKE ? ESCAPE '\'
                  ORDER BY created_at DESC
@@ -2041,7 +2115,7 @@ pub async fn list_media(
                 MediaEntry,
                 r#"SELECT id as "id!: Uuid", user_id as "user_id!: Uuid",
                         original_name, storage_path, mime_type, file_size,
-                        width as "width?: i32", height as "height?: i32",
+                        width as "width?: i32", height as "height?: i32", alt_text,
                         created_at as "created_at!: DateTime<Utc>"
                  FROM media WHERE user_id = ?
                  ORDER BY created_at DESC
@@ -2066,7 +2140,7 @@ pub async fn delete_media(
         r#"DELETE FROM media WHERE id = ? AND user_id = ?
          RETURNING id as "id!: Uuid", user_id as "user_id!: Uuid",
            original_name, storage_path, mime_type, file_size,
-           width as "width?: i32", height as "height?: i32",
+           width as "width?: i32", height as "height?: i32", alt_text,
            created_at as "created_at!: DateTime<Utc>""#,
         id,
         user_id,
@@ -2080,7 +2154,7 @@ pub async fn get_media(pool: &SqlitePool, id: Uuid) -> Result<Option<MediaEntry>
         MediaEntry,
         r#"SELECT id as "id!: Uuid", user_id as "user_id!: Uuid",
                 original_name, storage_path, mime_type, file_size,
-                width as "width?: i32", height as "height?: i32",
+                width as "width?: i32", height as "height?: i32", alt_text,
                 created_at as "created_at!: DateTime<Utc>"
          FROM media WHERE id = ?"#,
         id,
@@ -2098,7 +2172,7 @@ pub async fn get_media_user(
         MediaEntry,
         r#"SELECT id as "id!: Uuid", user_id as "user_id!: Uuid",
                 original_name, storage_path, mime_type, file_size,
-                width as "width?: i32", height as "height?: i32",
+                width as "width?: i32", height as "height?: i32", alt_text,
                 created_at as "created_at!: DateTime<Utc>"
          FROM media WHERE id = ? AND user_id = ?"#,
         id,
@@ -2258,6 +2332,10 @@ pub async fn mark_all_notifications_read(
 // RECURRING POSTS
 // ══════════════════════════════════════════════════════════════
 
+// Copies of a draft stay drafts. Any other source yields a `queued` copy, so a
+// copy never inherits `published`, `publishing` or `error` (a source can move
+// between the handler's state check and this insert). Such a copy would never
+// publish on its date.
 pub async fn create_repeated_post(
     pool: &SqlitePool,
     user_id: Uuid,
@@ -2267,7 +2345,7 @@ pub async fn create_repeated_post(
 ) -> Result<Post, sqlx::Error> {
     sqlx::query_as::<_, Post>(
         r#"INSERT INTO posts (id, user_id, integration_id, title, content, media, settings, scheduled_at, state, repeat_interval_days, repeat_end_date, group_id, idempotency_key)
-           SELECT ?, p.user_id, p.integration_id, p.title, p.content, p.media, p.settings, ?, p.state, NULL, NULL, ?, ?
+           SELECT ?, p.user_id, p.integration_id, p.title, p.content, p.media, p.settings, ?, CASE WHEN p.state = 'draft' THEN 'draft' ELSE 'queued' END, NULL, NULL, ?, ?
            FROM posts p WHERE p.id = ? AND p.user_id = ?
            RETURNING id, user_id, integration_id, state,
              content, title, media, settings, scheduled_at, published_at,
@@ -2308,7 +2386,7 @@ pub async fn set_post_recurring(
               campaign_id, kanban_substate, due_date"#,
     )
     .bind(interval_days)
-    .bind(end_date)
+    .bind(EpochUtc::from(*end_date))
     .bind(group_id)
     .bind(id)
     .bind(user_id)
@@ -2340,7 +2418,7 @@ pub async fn set_post_recurring_with_copies(
               campaign_id, kanban_substate, due_date"#,
     )
     .bind(interval_days)
-    .bind(end_date)
+    .bind(EpochUtc::from(*end_date))
     .bind(group_id)
     .bind(id)
     .bind(user_id)
@@ -2356,7 +2434,7 @@ pub async fn set_post_recurring_with_copies(
         // Runtime query (Phase v22 — idempotency_key column added).
         let copy = sqlx::query_as::<_, Post>(
             r#"INSERT INTO posts (id, user_id, integration_id, title, content, media, settings, scheduled_at, state, repeat_interval_days, repeat_end_date, group_id, idempotency_key)
-               SELECT ?, p.user_id, p.integration_id, p.title, p.content, p.media, p.settings, ?, p.state, NULL, NULL, ?, ?
+               SELECT ?, p.user_id, p.integration_id, p.title, p.content, p.media, p.settings, ?, CASE WHEN p.state = 'draft' THEN 'draft' ELSE 'queued' END, NULL, NULL, ?, ?
                FROM posts p WHERE p.id = ? AND p.user_id = ?
                RETURNING id, user_id, integration_id, state,
                  content, title, media, settings, scheduled_at, published_at,
@@ -2509,13 +2587,15 @@ pub async fn insert_rss_post(
     url: &str,
     published_at: Option<DateTime<Utc>>,
     content_hash: &str,
-) -> Result<(), sqlx::Error> {
-    sqlx::query(
+) -> Result<Option<Uuid>, sqlx::Error> {
+    // Claim by (feed_id, guid). `None` means this entry was already imported.
+    let id = Uuid::new_v4();
+    let r = sqlx::query(
         r#"INSERT INTO rss_posts (id, feed_id, guid, title, url, published_at, content_hash)
            VALUES (?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT (feed_id, guid) DO NOTHING"#,
     )
-    .bind(Uuid::new_v4())
+    .bind(id)
     .bind(feed_id)
     .bind(guid)
     .bind(title)
@@ -2524,21 +2604,17 @@ pub async fn insert_rss_post(
     .bind(content_hash)
     .execute(pool)
     .await?;
-    Ok(())
+    Ok((r.rows_affected() == 1).then_some(id))
 }
 
-pub async fn check_rss_post_exists(
-    pool: &SqlitePool,
-    feed_id: Uuid,
-    content_hash: &str,
-) -> Result<bool, sqlx::Error> {
-    let count: Option<i64> =
-        sqlx::query_scalar("SELECT COUNT(*) FROM rss_posts WHERE feed_id = ? AND content_hash = ?")
-            .bind(feed_id)
-            .bind(content_hash)
-            .fetch_one(pool)
-            .await?;
-    Ok(count.unwrap_or(0) > 0)
+/// Undo a claim from `insert_rss_post` when the post for it was not created,
+/// so the next poll retries the entry.
+pub async fn delete_rss_post(pool: &SqlitePool, rss_post_id: Uuid) -> Result<u64, sqlx::Error> {
+    let r = sqlx::query("DELETE FROM rss_posts WHERE id = ?")
+        .bind(rss_post_id)
+        .execute(pool)
+        .await?;
+    Ok(r.rows_affected())
 }
 
 pub async fn list_rss_feed_items(
@@ -2576,21 +2652,6 @@ pub async fn update_rss_post_post_id(
         .execute(pool)
         .await?;
     Ok(r.rows_affected())
-}
-
-pub async fn get_rss_post_by_hash(
-    pool: &SqlitePool,
-    feed_id: Uuid,
-    content_hash: &str,
-) -> Result<Option<RssPost>, sqlx::Error> {
-    sqlx::query_as::<_, RssPost>(
-        r#"SELECT id, feed_id, post_id, guid, title, url, published_at, content_hash, is_imported, created_at
-           FROM rss_posts WHERE feed_id = ? AND content_hash = ?"#,
-    )
-    .bind(feed_id)
-    .bind(content_hash)
-    .fetch_optional(pool)
-    .await
 }
 
 pub async fn delete_notification(
@@ -3144,7 +3205,7 @@ pub async fn get_cached_analytics(
     )
     .bind(user_id)
     .bind(provider)
-    .bind(now)
+    .bind(EpochUtc::from(now))
     .fetch_all(pool)
     .await
 }
@@ -3732,6 +3793,66 @@ mod g02_tests {
             .await
             .unwrap();
         assert_eq!(stored.scheduled_at.unwrap().timestamp(), at.timestamp());
+    }
+
+    #[tokio::test]
+    async fn rss_entry_is_claimed_once_by_guid_even_if_its_body_changes() {
+        let (pool, user_id) = fixture().await;
+        let integration_id: Uuid = sqlx::query_scalar("SELECT id FROM integrations")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        let feed = create_rss_feed(&pool, user_id, "https://example.com/feed.xml", integration_id, "F", false, true)
+            .await
+            .unwrap();
+
+        let first = insert_rss_post(&pool, feed.id, "guid-1", "T", "u", None, "hash-a")
+            .await
+            .unwrap();
+        assert!(first.is_some(), "a new guid is claimed");
+
+        // Same guid with an edited body: not imported again.
+        let edited = insert_rss_post(&pool, feed.id, "guid-1", "T", "u", None, "hash-b")
+            .await
+            .unwrap();
+        assert!(edited.is_none(), "an edited entry must not be re-imported");
+
+        // Releasing the claim lets a later poll claim it again.
+        delete_rss_post(&pool, first.unwrap()).await.unwrap();
+        let retried = insert_rss_post(&pool, feed.id, "guid-1", "T", "u", None, "hash-b")
+            .await
+            .unwrap();
+        assert!(retried.is_some(), "a released claim is retried");
+    }
+
+    #[tokio::test]
+    async fn media_alt_text_round_trips() {
+        let (pool, user_id) = fixture().await;
+        let stored = create_media(&pool, user_id, "bike.png", "bike.png", "image/png", 10, None, None, Some("a red bike"))
+            .await
+            .unwrap();
+        assert_eq!(stored.alt_text.as_deref(), Some("a red bike"));
+
+        let read = get_media(&pool, stored.id).await.unwrap().expect("media row");
+        assert_eq!(read.alt_text.as_deref(), Some("a red bike"));
+    }
+
+    #[tokio::test]
+    async fn next_free_slot_fallback_is_never_in_the_past() {
+        // No posting_times: the fallback used to return last + 2h, so a last post
+        // from three days ago gave a slot three days in the past.
+        let (pool, user_id) = fixture().await;
+        let integration_id: Uuid = sqlx::query_scalar("SELECT id FROM integrations")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        insert(&pool, Some(Utc::now() - chrono::Duration::days(3))).await;
+
+        let slot = find_next_free_slot(&pool, user_id, Some(integration_id))
+            .await
+            .unwrap()
+            .expect("fallback always yields a slot");
+        assert!(slot > Utc::now(), "slot {slot} is in the past");
     }
 
     #[tokio::test]

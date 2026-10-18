@@ -25,7 +25,7 @@ pub async fn list(
     auth: AuthenticatedUser,
     Query(params): Query<ListParams>,
 ) -> Result<Json<Value>, AppError> {
-    let limit = params.limit.unwrap_or(50).min(200);
+    let limit = params.limit.unwrap_or(50).clamp(1, 200);
     let offset = params.offset.unwrap_or(0);
     let notifs = queries::list_notifications(&state.db, auth.user_id, limit, offset).await?;
     let data: Vec<NotificationPublic> = notifs.into_iter().map(NotificationPublic::from).collect();

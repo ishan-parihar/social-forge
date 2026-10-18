@@ -425,3 +425,28 @@ pub async fn handle_wh_test(
         }
     })))
 }
+
+// ── Deliveries ───────────────────────────────────────────────
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct WhDeliveriesInput {
+    /// Webhook ID (UUID)
+    pub webhook_id: String,
+}
+
+/// List the recent delivery attempts for a webhook, with status and response.
+pub async fn handle_wh_deliveries(
+    state: &AppState,
+    input: &WhDeliveriesInput,
+) -> Result<Json<serde_json::Value>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let id = super::rest_bridge::parse_id("webhook_id", &input.webhook_id)?;
+    super::rest_bridge::rest_result(
+        crate::api::webhooks::deliveries(
+            axum::extract::State(state.clone()),
+            crate::auth::middleware::AuthenticatedUser { user_id },
+            axum::extract::Path(id),
+        )
+        .await,
+    )
+}

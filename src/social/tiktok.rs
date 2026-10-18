@@ -292,7 +292,9 @@ impl SocialProvider for TikTokProvider {
     }
 
     fn max_content_length(&self) -> usize {
-        220200960 // 210 MB max video size
+        // Caption limit. The 210 MB video cap is a media limit, not a text one;
+        // using it here disabled caption validation entirely.
+        2200
     }
 
     fn uses_oauth(&self) -> bool {
@@ -898,6 +900,23 @@ mod tests {
             TikTokProvider::publish_status_to_state("PUBLISH_COMPLETE"),
             "published"
         );
+    }
+
+    /// `max_content_length` once held the 210 MB video cap, so every caption
+    /// passed validation. A 2201-char caption must be refused now.
+    #[test]
+    fn caption_over_2200_chars_should_be_rejected() {
+        let provider = TikTokProvider::new(&crate::social::test_config());
+        let post = PostContent {
+            content: "a".repeat(2201),
+            ..Default::default()
+        };
+        assert!(provider.validate_post(&post).is_err());
+        let ok = PostContent {
+            content: "a".repeat(2200),
+            ..Default::default()
+        };
+        assert!(provider.validate_post(&ok).is_ok());
     }
 
     #[test]

@@ -273,12 +273,16 @@ pub async fn delete(
     auth: AuthenticatedUser,
     Path(id): Path<Uuid>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    sqlx::query("UPDATE campaigns SET deleted_at = unixepoch(), status = 'archived', updated_at = unixepoch() WHERE id = ? AND user_id = ? AND deleted_at IS NULL")
+    let affected = sqlx::query("UPDATE campaigns SET deleted_at = unixepoch(), status = 'archived', updated_at = unixepoch() WHERE id = ? AND user_id = ? AND deleted_at IS NULL")
         .bind(id)
         .bind(auth.user_id)
         .execute(&state.db)
         .await
-        .map_err(|e| AppError::Internal(format!("Failed to delete campaign: {e}")))?;
+        .map_err(|e| AppError::Internal(format!("Failed to delete campaign: {e}")))?
+        .rows_affected();
+    if affected == 0 {
+        return Err(AppError::NotFound("Campaign not found".into()));
+    }
 
     // v22 Phase 6: broadcast campaign_deleted.
     state.broadcast.send(
@@ -377,12 +381,12 @@ pub async fn update_stage(
                       updated_at = unixepoch()
                     WHERE id = ? AND user_id = ?"#,
             )
-            .bind(id)
-            .bind(auth.user_id)
             .bind(body.campaign_id)
             .bind(&body.kanban_substate)
             .bind(&body.priority)
             .bind(due_date_dt)
+            .bind(id)
+            .bind(auth.user_id)
             .execute(&state.db)
             .await
             .map_err(|e| AppError::Internal(format!("Failed to update post: {e}")))?;
@@ -396,11 +400,11 @@ pub async fn update_stage(
                      updated_at = unixepoch()
                    WHERE id = ? AND user_id = ?"#,
             )
-            .bind(id)
-            .bind(auth.user_id)
             .bind(body.campaign_id)
             .bind(&body.kanban_substate)
             .bind(&body.priority)
+            .bind(id)
+            .bind(auth.user_id)
             .execute(&state.db)
             .await
             .map_err(|e| AppError::Internal(format!("Failed to update post: {e}")))?;
@@ -468,13 +472,13 @@ pub async fn update_stage(
                   updated_at = unixepoch()
                 WHERE id = ? AND user_id = ?"#,
         )
-        .bind(id)
-        .bind(auth.user_id)
         .bind(&body.state)
         .bind(body.campaign_id)
         .bind(&body.kanban_substate)
         .bind(&body.priority)
         .bind(due_date_dt)
+        .bind(id)
+        .bind(auth.user_id)
         .execute(&state.db)
         .await
         .map_err(|e| AppError::Internal(format!("Failed to update post stage: {e}")))?;
@@ -488,12 +492,12 @@ pub async fn update_stage(
                  updated_at = unixepoch()
                WHERE id = ? AND user_id = ?"#,
         )
-        .bind(id)
-        .bind(auth.user_id)
         .bind(&body.state)
         .bind(body.campaign_id)
         .bind(&body.kanban_substate)
         .bind(&body.priority)
+        .bind(id)
+        .bind(auth.user_id)
         .execute(&state.db)
         .await
         .map_err(|e| AppError::Internal(format!("Failed to update post stage: {e}")))?;

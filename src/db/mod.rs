@@ -72,12 +72,38 @@ pub async fn create_pool(database_url: &str) -> anyhow::Result<SqlitePool> {
         }
     }
 
+    // Concurrent openers of one file (test binaries, a CLI run beside `serve`)
+    // race twice: the first WAL switch on a new file can return SQLITE_BUSY, and
+    // two migrators both see the same pending migration. sqlx has no
+    // cross-process migration lock on SQLite, so the loser's ALTER fails with
+    // "duplicate column". Serialize pool creation and migration on a sidecar
+    // lock file. ponytail: whole-file lock, held only while opening; fine for one user.
+    let filename = options.get_filename().to_path_buf();
+    let _open_lock = if filename.as_os_str().is_empty() {
+        None
+    } else {
+        let lock = File::create(filename.with_extension("migrate.lock"))?;
+        // Poll rather than block: a blocking flock on a runtime thread would
+        // stall any other open that shares that thread.
+        loop {
+            match lock.try_lock() {
+                Ok(()) => break,
+                Err(std::fs::TryLockError::WouldBlock) => {
+                    tokio::time::sleep(std::time::Duration::from_millis(20)).await
+                }
+                Err(std::fs::TryLockError::Error(e)) => return Err(e.into()),
+            }
+        }
+        Some(lock)
+    };
+
     let pool = sqlx::sqlite::SqlitePoolOptions::new()
         .max_connections(1)
         .connect_with(options)
         .await?;
 
     sqlx::migrate!("./migrations").run(&pool).await?;
+    drop(_open_lock);
     tracing::info!(
         "Database connected — sqlite pool: max_connections=1, WAL, busy_timeout={}s. Migrations applied.",
         BUSY_TIMEOUT.as_secs()

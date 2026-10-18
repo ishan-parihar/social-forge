@@ -86,6 +86,7 @@ pub async fn upload_media(
         data.len() as i64,
         None,
         None,
+        None,
     )
     .await
     .map_err(|e| format!("DB error: {e}"))?;
@@ -159,16 +160,6 @@ pub async fn upload_from_path_with_alt(
         .await
         .map_err(|e| format!("Failed to copy file: {e}"))?;
 
-    // Alt text is accepted for API compatibility but the media table
-    // doesn't have an alt_text column yet. Log at debug so the field
-    // isn't silently swallowed — callers can check logs to understand
-    // why alt text isn't being stored.
-    if let Some(alt) = alt {
-        tracing::debug!(
-            "Media alt text provided but not stored (DB column not yet migrated): {alt}"
-        );
-    }
-
     let entry = crate::db::queries::create_media(
         &state.db,
         user_id,
@@ -178,6 +169,7 @@ pub async fn upload_from_path_with_alt(
         file_size as i64,
         None,
         None,
+        alt,
     )
     .await
     .map_err(|e| format!("DB error: {e}"))?;
@@ -518,6 +510,7 @@ pub async fn upload_from_url(
         &stored_name,
         &content_type,
         bytes.len() as i64,
+        None,
         None,
         None,
     )

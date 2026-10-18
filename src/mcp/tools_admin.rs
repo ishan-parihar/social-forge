@@ -369,7 +369,7 @@ pub async fn handle_signatures_update(
          SET name = COALESCE($2, name),
              content = COALESCE($3, content),
              provider = COALESCE($4, provider),
-             updated_at = NOW()
+             updated_at = unixepoch()
          WHERE id = $1 AND user_id = $5
          RETURNING id, name, content, provider, created_at, updated_at",
     )
@@ -445,7 +445,7 @@ pub async fn handle_analytics_summary(
             COUNT(*) FILTER (WHERE state = 'queued') as queued
            FROM posts
            WHERE user_id = $1
-             AND created_at > NOW() - make_interval(secs => $2::double precision * 86400.0)",
+             AND created_at > unixepoch() - $2 * 86400",
     )
     .bind(user_id)
     .bind(days as f64)
@@ -497,7 +497,7 @@ pub async fn handle_feed_analytics(
             COALESCE(SUM(shares), 0) as total_shares,
             COALESCE(SUM(impressions), 0) as total_impressions
            FROM post_engagement
-           WHERE updated_at > NOW() - make_interval(secs => $1::double precision * 86400.0)",
+           WHERE updated_at > unixepoch() - $1 * 86400",
     )
     .bind(days as f64)
     .fetch_one(&state.db)

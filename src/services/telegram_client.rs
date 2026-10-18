@@ -63,7 +63,7 @@ impl TelegramClientManager {
         let mut guard = self.inner.lock().await;
         Self::ensure_client(&mut guard, self.api_id, &self.api_hash, &self.session_path).await?;
 
-        let client = guard.client.as_ref().unwrap();
+        let client = guard.client.as_ref().ok_or("Telegram client not initialised")?;
         match client.request_login_code(phone).await {
             Ok(token) => {
                 guard.pending_token = Some(token);
@@ -84,7 +84,7 @@ impl TelegramClientManager {
                         &self.session_path,
                     )
                     .await?;
-                    let client = guard.client.as_ref().unwrap();
+                    let client = guard.client.as_ref().ok_or("Telegram client not initialised")?;
                     let token = client.request_login_code(phone).await.map_err(|e| {
                         format!("Request login code failed after session reset: {e}")
                     })?;
@@ -105,7 +105,7 @@ impl TelegramClientManager {
             .pending_token
             .take()
             .ok_or_else(|| "No pending login token. Call request_login_code first.".to_string())?;
-        let client = guard.client.as_ref().unwrap();
+        let client = guard.client.as_ref().ok_or("Telegram client not initialised")?;
 
         match client.sign_in(&token, code).await {
             Ok(user) => {
@@ -298,15 +298,23 @@ impl TelegramClientManager {
         Ok(())
     }
 
-    /// Resolve a peer string to a chat. Grammers 0.7 resolves usernames
-    /// only — there is no raw-id → chat path — so "user:<id>" strings are
-    /// the gate's peer keys, not resolvable targets (clear error, not a
-    /// silent wrong chat).
+    /// Resolve a peer string to a chat. `me` is the session's own account
+    /// (Saved Messages), so a live roundtrip needs no public @username.
+    /// Grammers 0.7 otherwise resolves usernames only — there is no raw-id
+    /// → chat path — so "user:<id>" strings are the gate's peer keys, not
+    /// resolvable targets (clear error, not a silent wrong chat).
     async fn resolve_chat(
         &self,
         client: &Client,
         peer: &str,
     ) -> Result<grammers_client::types::Chat, String> {
+        if peer.eq_ignore_ascii_case("me") {
+            let me = client
+                .get_me()
+                .await
+                .map_err(|e| format!("get_me failed: {e}"))?;
+            return Ok(grammers_client::types::Chat::User(me));
+        }
         client
             .resolve_username(peer.trim_start_matches('@'))
             .await
@@ -539,12 +547,11 @@ impl TelegramClientManager {
             return Ok(());
         }
 
-        tokio::fs::create_dir_all(
-            session_path
-                .parent()
-                .expect("session_path must have parent"),
-        )
-        .await
+        let parent = session_path
+            .parent()
+            .ok_or_else(|| format!("Telegram session path has no parent directory: {}", session_path.display()))?;
+        tokio::fs::create_dir_all(parent)
+            .await
         .map_err(|e| format!("Failed to create session dir: {e}"))?;
 
         let session = Session::load_file_or_create(session_path)

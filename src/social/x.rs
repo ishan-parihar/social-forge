@@ -87,7 +87,8 @@ fn x_http() -> wreq::Client {
         // Authorization header MUST include "Bearer " prefix
         headers.insert(
             header::AUTHORIZATION,
-            HeaderValue::from_str(&format!("Bearer {}", TWITTER_BEARER_TOKEN)).unwrap(),
+            HeaderValue::from_str(&format!("Bearer {}", TWITTER_BEARER_TOKEN))
+                .expect("bearer token constant is a valid header value"),
         );
         wreq::Client::builder()
             .default_headers(headers)
