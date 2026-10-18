@@ -158,7 +158,7 @@ Landed after the first pass (AUD-6, AUD-7, AUD-9, AUD-10, AUD-11):
 ## Cycle 5 (F1, W006, lint)
 
 - **F1 (rejected as written):** the outline's fix routes all 46 non-test `Provider::new(` sites through `state.providers`. The cookie-session providers cannot share one instance: `XProvider::prepare_from_token(&mut self)` writes the account's credentials into `self` (`src/social/x.rs:155-163`), so concurrent calls for two accounts would race on one credential slot. Per-call construction stays. The cost the outline cited is already gone: the shared pools (`shared_http`, `shared_wreq`, `x_http`) carry the TLS setup.
-- **W006 (done for the live-queue pair):** AGENTS §0.6 names `OUTLINE-2026-10-19-v2.md` as the live queue. `OUTLINE-2026-10-19.md`, `OUTLINE-2026-10-19-v3.md` and `OUTLINE-2026-10-17.md` were archived with `kb archive` (tombstones left at the original paths; rows in `docs/archive/INDEX.md`). Routing and link references now point at `docs/archive/`. Five history-pair warnings remain (AUDIT_2026-10-14, GAPS_2026-10-15, OUTLINE-2026-10-16) and need an owner call.
+- **W006 (done):** AGENTS §0.6 names `OUTLINE-2026-10-19-v2.md` as the live queue. `OUTLINE-2026-10-19.md`, `OUTLINE-2026-10-19-v3.md` and `OUTLINE-2026-10-17.md` were archived with `kb archive` (tombstones at the original paths, rows in `docs/archive/INDEX.md`). The two superseded history files `GAPS_2026-10-15.md` and `OUTLINE-2026-10-16.md` were archived the same way. `AUDIT_2026-10-14.md` moved to `docs/audit/` (the AGENTS routing table's home for audits). Routing and link references point at the new paths.
 - **Lint:** `kb lint` reports 0 errors. The `providers.md` E001 was a bare filename in a description cell; the full path is now written there.
 
 ## Decisions for the user

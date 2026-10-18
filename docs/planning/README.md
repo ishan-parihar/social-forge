@@ -12,10 +12,10 @@ authority on which document answers which question; this page only lists them.
 | [`OUTLINE-2026-10-19-v3.md`](OUTLINE-2026-10-19-v3.md) | archived | Superseded by v2 (the live queue per AGENTS §0.6). Archived at `docs/archive/OUTLINE-2026-10-19-v3.md`. |
 | [`OUTLINE-2026-10-19.md`](OUTLINE-2026-10-19.md) | archived | Earlier 2026-10-19 outline, superseded by v2. Archived at `docs/archive/OUTLINE-2026-10-19.md`. |
 | [`OUTLINE-2026-10-17.md`](OUTLINE-2026-10-17.md) | archived | Replaced by the 2026-10-19 v2 outline. Its Wave A–C items live in `TODO.md`. Archived at `docs/archive/OUTLINE-2026-10-17.md`. |
-| [`OUTLINE-2026-10-16.md`](OUTLINE-2026-10-16.md) | history | Executed predecessor outline (`d5b9bbd..7873f84`). |
+| [`OUTLINE-2026-10-16.md`](OUTLINE-2026-10-16.md) | archived (superseded). Archived at `docs/archive/OUTLINE-2026-10-16.md` | Executed predecessor outline (`d5b9bbd..7873f84`). |
 | [`DECISIONS_2026-10-19.md`](DECISIONS_2026-10-19.md) | open decisions | Decision points with recommendations. Nothing in it is applied until the user approves it. |
 | [`EXECUTION_2026-10-19.md`](EXECUTION_2026-10-19.md) | record | Cycle 3 execution log: what landed, gate results, decisions for the user, and what did not land. |
-| [`AUDIT_2026-10-14.md`](AUDIT_2026-10-14.md) | history | End-to-end audit: P0 bugs, cookie and API matrix, phased plan. |
-| [`GAPS_2026-10-15.md`](GAPS_2026-10-15.md) | history | What the 13 audit commits did not close, before the register existed. |
+| [`AUDIT_2026-10-14.md`](../audit/AUDIT_2026-10-14.md) | history (moved to `docs/audit/`) | End-to-end audit: P0 bugs, cookie and API matrix, phased plan. |
+| [`GAPS_2026-10-15.md`](GAPS_2026-10-15.md) | archived (superseded). Archived at `docs/archive/GAPS_2026-10-15.md` | What the 13 audit commits did not close, before the register existed. |
 
 The live work register is `TODO.md` at the repository root.

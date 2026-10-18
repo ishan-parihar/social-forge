@@ -94,12 +94,12 @@ When implementing features inspired by postiz-app or other competitors, apply th
 | `AGENTS.md` (this file) | Build/test/git/security protocol | Always, first |
 | `README.md` | User-facing overview, platform tiers, CLI/MCP reference | For product context |
 | `docs/planning/PLAN_PARITY_DEPTH_SINGLEUSER_v25.md` | Live master plan: tier rationale (§1), parity phases | Before parity/feature work |
-| `docs/planning/AUDIT_2026-10-14.md` | End-to-end audit: P0 bugs, cookie/API matrix, fragmentation, phased plan — executed through the 2026-10-15/16 cycles; **history** | For audit context on the P0 fixes and the cookie/API matrix |
-| `docs/planning/GAPS_2026-10-15.md` | What the 13 landed audit commits did NOT close at the time — superseded by the OUTLINE succession; **history** | For what was still open after the 13 landed commits, and how it was tracked before the register |
+| `docs/audit/AUDIT_2026-10-14.md` | End-to-end audit: P0 bugs, cookie/API matrix, fragmentation, phased plan — executed through the 2026-10-15/16 cycles; **history** | For audit context on the P0 fixes and the cookie/API matrix |
+| `docs/archive/GAPS_2026-10-15.md` | What the 13 landed audit commits did NOT close at the time — superseded by the OUTLINE succession; **history** | For what was still open after the 13 landed commits, and how it was tracked before the register |
 | `docs/planning/VENDOR_PINS.md` | Pinned transitive deps enforced by `vendor-pull.sh --check` (CI gate) | Before touching `Cargo.toml` |
 | `docs/planning/OUTLINE-2026-10-19-v2.md` | The live working queue (audit-revised 2026-10-19): P0 gate, B-token-efficiency, C3 eval loop, E credential-blocked live passes | Before starting ANY implementation work |
 | `docs/archive/OUTLINE-2026-10-17.md` | Superseded by the 2026-10-19 v2 outline — history, not queue. Its Wave A–C items are tracked in `TODO.md` | For provenance of the 2026-10-17 cycle |
-| `docs/planning/OUTLINE-2026-10-16.md` | Executed + red-team-audited predecessor outline (execution `d5b9bbd..7873f84`, audit `ca63a9e`) — history, not queue | For provenance of what landed 2026-10-16/17 |
+| `docs/archive/OUTLINE-2026-10-16.md` | Executed + red-team-audited predecessor outline (execution `d5b9bbd..7873f84`, audit `ca63a9e`) — history, not queue | For provenance of what landed 2026-10-16/17 |
 | `TODO.md` | The register: live status per work item (`scripts/kb status` is the supervised transition), seeded from the 2026-10-17 outline | To see or claim what's open |
 | `worklog.md` | The multi-agent worklog — this protocol, §8 | Before starting work; after finishing |
 | `docs/decisions/` | AD-NNN decision records, immutable once numbered (`scripts/kb ad` mints them) | When a direction change is ratified |

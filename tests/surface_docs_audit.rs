@@ -123,10 +123,11 @@ fn d1_documented_cli_command_count_matches_clap() {
         .filter(|c| c.get_name() != "help")
         .count();
     assert!(commands > 0, "no CLI commands parsed");
-    let readme = std::fs::read_to_string(repo_path("README.md")).unwrap();
+    // The repository layout (which states this count) lives in docs/platforms-and-cli.md.
+    let layout = std::fs::read_to_string(repo_path("docs/platforms-and-cli.md")).unwrap();
     assert!(
-        readme.contains(&format!("clap, {commands} commands")),
-        "README.md must state the true CLI command count ({commands} commands)"
+        layout.contains(&format!("clap, {commands} commands")),
+        "docs/platforms-and-cli.md must state the true CLI command count ({commands} commands)"
     );
 }
 

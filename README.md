@@ -6,8 +6,6 @@
   <img src="./assets/readme/hero.svg" width="100%" alt="Social Forge: one Rust binary, 26 social platforms, three interfaces — CLI, REST, MCP">
 </p>
 
-
-
 **A high-performance social media orchestration engine with a triple-interface architecture: CLI, REST API, and MCP protocol.**
 
 [![Rust](https://img.shields.io/badge/rust-1.85%2B-dea584?logo=rust)](https://www.rust-lang.org/)
@@ -77,7 +75,6 @@ The remaining 68 are cross-platform: `posts_*`, `analytics_*`, `feed_*`, `integr
 
 ---
 
-
 ## Features
 
 | Feature | Details |
@@ -117,45 +114,7 @@ TOKEN_ENCRYPTION_KEY=<64 hex chars>     # AES-256-GCM for tokens at rest
 | `social-forge config set KEY VALUE` | Manage config |
 | `social-forge audit` | Disabled integrations, `--platforms` prefix collisions, writer-lock posture |
 
-### Targeting: `--platforms` collisions and `--integrations`
-
-Two registered providers are a strict prefix of another, so platform **names are
-matched exactly**:
-
-| `--platforms` value | Targets | Does NOT also target |
-|---|---|---|
-| `instagram` | `instagram` | `instagram-standalone` |
-| `linkedin` | `linkedin` | `linkedin-page` |
-
-```bash
-# Exact names only — no double drafts
-social-forge post "hello" --platforms instagram
-
-# Name a suffixed variant explicitly to include it
-social-forge post "hello" --platforms instagram,instagram-standalone
-
-# Or skip name resolution entirely and pick exact accounts
-social-forge providers                                   # get integration UUIDs
-social-forge stage "hello" --integrations 6f1c...-...     # mutually exclusive with --platforms
-```
-
-`telegram` still fans out to `telegram-bot` and `telegram-user`, because no
-integration is registered under the bare name `telegram`.
-
-### Single-writer rule
-
-SQLite admits one writer per file. `serve` and `mcp` both run the publish
-scheduler, so exactly one long-lived process may own a given `DATABASE_URL` —
-the second one fails at boot on an exclusive lock file rather than silently
-double-publishing. Short CLI reads (`providers`, `posts list`, `audit`) never
-take the lock. `social-forge audit` reports the live `journal_mode` /
-`busy_timeout` alongside the disabled-integration inventory.
-
-Full detail: [`docs/planning/TARGETING_AND_WRITER_DISCIPLINE.md`](docs/planning/TARGETING_AND_WRITER_DISCIPLINE.md).
-
----
-
-
+Targeting, the single-writer rule, platform tiers, and the repository layout are in [docs/platforms-and-cli.md](docs/platforms-and-cli.md). Planning, audit, and decision records are indexed in [`docs/planning/README.md`](docs/planning/README.md).
 
 ## Visual proof
 
@@ -187,62 +146,6 @@ Full detail: [`docs/planning/TARGETING_AND_WRITER_DISCIPLINE.md`](docs/planning/
 │                    SQLite (single .db file)                      │
 └─────────────────────────────────────────────────────────────────┘
 ```
-
-### Supported Platforms
-
-Providers are tiered: **Tier-1** gets full depth (analytics, engagement, comments, mentions, target discovery); **Tier-2** is publish-maintained. Tier membership is defined once in `src/social/tier.rs` and reported as a `tier` field by `/api/providers`. Full rationale: `docs/planning/PLAN_PARITY_DEPTH_SINGLEUSER_v25.md` §1.
-
-#### Tier-1 — depth (12)
-
-| Platform | OAuth | Cookie Auth | CLI | MCP Tools |
-|----------|:-----:|:-----------:|:---:|:---------:|
-| X / Twitter | ✅ | ✅ (GraphQL) | ✅ | 27 |
-| Reddit | ✅ | ✅ (www + modhash) | ✅ | 23 |
-| LinkedIn (Personal) | ✅ | — | ✅ | 15 |
-| LinkedIn (Page) | ✅ | — | ✅ | 11 |
-| Facebook | ✅ | — | ✅ | 15 |
-| Instagram | ✅ | — | ✅ | 21 |
-| Instagram (Standalone) | ✅ | — | — | 7 |
-| Threads | ✅ | — | — | 9 |
-| YouTube | ✅ | — | — | 2 |
-| TikTok | ✅ | — | — | 4 |
-| Pinterest | ✅ | — | — | 8 |
-| Bluesky | App Password | — | — | 7 |
-
-#### Tier-2 — publish-maintained (14)
-
-| Platform | OAuth | Cookie Auth | CLI | MCP Tools |
-|----------|:-----:|:-----------:|:---:|:---------:|
-| Discord | ✅ | — | — | 10 |
-| Slack | ✅ | — | — | 4 |
-| Telegram (Bot) | Token | — | — | 10 |
-| Telegram (User) | Session | — | — | 7 |
-| WhatsApp | QR | — | — | 9 |
-| Mastodon | ✅ | — | — | 6 |
-| WordPress | ✅ | — | — | 4 |
-| Medium | API Key | — | — | 3 |
-| Dev.to | API Key | — | — | 3 |
-| Hashnode | API Key | — | — | 3 |
-| GitHub | PAT | — | — | 18 |
-| Google (Gmail/Calendar/Drive) | ✅ | — | ✅ | 28 |
-| Google My Business | ✅ | — | — | 0 |
-| Skool | ✅ (Chrome ext) | — | — | 5 |
-
-**26 platforms by default.** `kick`, `vk`, `whop` and `lemmy` were removed outright (v25 §1).
-
-#### Tier-3 — archive (1)
-
-| Platform | Enabled by | Notes |
-|----------|-----------|-------|
-| Farcaster | `ENABLE_ARCHIVE_PROVIDERS=1` | Web3/Neynar. Code kept under `src/social/archive/`; absent from `/api/providers` and the MCP tool list by default. |
-
-*Mastodon custom instances use `MASTODON_INSTANCE_URL` — no separate provider. TikTok business accounts publish through the same Content Posting API as creator accounts — no separate provider.*
-
-*Google My Business has no MCP tools of its own — it is reachable through the REST API and the channels UI. Per-platform tool counts are the `#[tool(…)]` names in `src/mcp/`; the total is the `#[tool(` count across that directory.*
-
-*Platform list verified against `src/social/tier.rs` + `src/social/registry.rs` (26 default + 1 archived) and the `src/mcp/tools_*.rs` handler modules (42 modules).*
-
----
 
 ## How it compares
 
@@ -338,103 +241,7 @@ Priority resolution: `DB cookie tokens → Browser extraction → OAuth tokens �
 
 ## Self-Hosting & Onboarding
 
-### Environment Variables
-
-Every variable has a sensible default, so none is required:
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `DATABASE_URL` | `sqlite://data/social-forge.db` | SQLite file path. SQLite-only: a `postgres://` (or any other) scheme is rejected at startup. |
-| `APP_URL` | `https://localhost:6543` | Public URL of your instance. Used for OAuth redirect URIs. Its port must be the port `serve` listens on (`--port`). |
-| `FRONTEND_URL` | Same as `APP_URL` | CORS allowed origin and CSRF origin. Must match the origin the browser sends, port included. A `serve --port` that differs from the `APP_URL` port makes `POST /api/feed/import` return 403 `csrf_origin_mismatch`. Set separately only if frontend is on a different domain. |
-| `JWT_SECRET` | Auto-generated | Secret for signing auth tokens. Set a strong value in production. |
-| `TOKEN_ENCRYPTION_KEY` | *(optional)* | 64 hex chars. Encrypts OAuth tokens at rest (AES-GCM). |
-| `FRONTEND_DIR` | `./frontend/build` | Path to the SvelteKit static build directory. |
-
-All provider-specific variables are documented in `.env.example`.
-
-### Exposing via Tunnel (ngrok, Cloudflare, etc.)
-
-```bash
-# 1. Set APP_URL to your public tunnel URL
-export APP_URL=https://social-forge.yourdomain.com
-
-# 2. Start the server
-social-forge serve --port 6543
-
-# 3. Point your tunnel to localhost:6543
-ngrok http 6543
-# or: cloudflared tunnel --url https://localhost:6543
-```
-
-All OAuth redirect URIs automatically use `{APP_URL}/api/auth/callback`. Register this URL in each platform's developer console.
-
-### Reverse Proxy (Caddy / Nginx)
-
-**Caddy:**
-```
-social-forge.yourdomain.com {
-    reverse_proxy localhost:6543
-}
-```
-
-**Nginx:**
-```nginx
-server {
-    server_name social-forge.yourdomain.com;
-    location / {
-        proxy_pass https://localhost:6543;
-        proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-```
-
-### Onboarding Flow
-
-1. **Start the server**: `social-forge serve`
-2. **Open the dashboard**: `https://localhost:6543` (or your APP_URL)
-3. **Connect accounts**: Visit `https://localhost:6543/setup`
-   - For OAuth providers (LinkedIn, Facebook, etc.): Click "Connect" → complete OAuth flow
-   - For cookie auth (X, Reddit): Click "🍪 Enter Cookies" → paste browser cookies
-   - For API key providers (Bluesky, GitHub, etc.): Enter credentials directly
-4. **Create content**: Use the dashboard at `/posts/new` or the CLI
-5. **Schedule**: Set a date/time or use "Auto-schedule" to find optimal slots
-
-### OAuth Redirect URI Setup
-
-When registering your app with social platforms, use this redirect URI:
-
-```
-{APP_URL}/api/auth/callback
-```
-
-For example:
-- Local dev: `https://localhost:6543/api/auth/callback`
-- Production: `https://social-forge.yourdomain.com/api/auth/callback`
-
-> **⚠️ HTTPS is REQUIRED for Instagram and Threads (Meta platforms).**
-> Meta does NOT support `http://` redirect URIs, even for localhost.
-> Social Forge auto-generates a self-signed TLS certificate on first run.
-> Your browser will show a security warning — click "Advanced" → "Proceed" to accept it.
-> For a trusted cert, use [mkcert](https://github.com/FiloSottile/mkcert):
-> ```bash
-> mkcert -install && mkcert -cert-file data/tls/cert.pem -key-file data/tls/key.pem localhost 127.0.0.1
-> ```
-
-| Platform | Developer Console |
-|----------|-------------------|
-| X/Twitter | https://developer.twitter.com/en/portal/projects |
-| LinkedIn | https://www.linkedin.com/developers/apps |
-| Facebook/Instagram | https://developers.facebook.com/apps |
-| Reddit | https://www.reddit.com/prefs/apps |
-| YouTube | https://console.cloud.google.com/apis/credentials |
-| TikTok | https://developers.tiktok.com/apps |
-| Pinterest | https://developers.pinterest.com/apps |
-| Discord | https://discord.com/developers/applications |
-
----
+Environment variables, tunnel and reverse-proxy setup, onboarding, and OAuth redirect URIs are in [docs/deployment.md](docs/deployment.md).
 
 ## Technical Highlights
 
@@ -456,52 +263,6 @@ For example:
 
 ---
 
-## Project Structure
-
-```
-social-forge/
-├── src/
-│   ├── main.rs              # Entry point, CLI dispatch
-│   ├── cli/                 # CLI subcommands (clap, 56 commands)
-│   │   ├── mod.rs           # Command definitions
-│   │   ├── run.rs           # Cross-platform handler implementations
-│   │   └── platforms/       # 31 thin shims (call shared MCP handlers)
-│   ├── api/                 # REST API (axum routes)
-│   │   ├── mod.rs           # Router + AppState
-│   │   ├── onboard.rs       # OAuth flows + cookie forms
-│   │   └── integrations.rs  # CRUD for connected accounts
-│   ├── mcp/                 # MCP server (389 tools, 44 modules)
-│   │   ├── mod.rs           # Tool registry
-│   │   ├── tools_x.rs       # X/Twitter tools
-│   │   ├── tools_reddit.rs  # Reddit tools
-│   │   └── ...              # Per-provider tool modules
-│   ├── social/              # Provider implementations
-│   │   ├── mod.rs           # SocialProvider trait
-│   │   ├── x.rs             # X/Twitter (GraphQL + OAuth)
-│   │   ├── x_cookies.rs     # Browser cookie extraction
-│   │   ├── reddit.rs        # Reddit (dual-path)
-│   │   ├── reddit_cookies.rs
-│   │   ├── linkedin.rs
-│   │   ├── tier.rs           # Tier-1/2/3 membership (v25 §1)
-│   │   └── ...              # 26 providers (+ archive/ behind flag)
-│   ├── db/                  # Database (sqlx, migrations)
-│   ├── scheduler/           # Background post publisher
-│   └── config.rs            # Environment configuration
-├── frontend/                # SvelteKit dashboard
-│   ├── src/
-│   │   ├── routes/          # Pages (posts, setup, settings)
-│   │   ├── lib/             # Components, API client
-│   │   └── app.html         # HTML shell
-│   └── package.json
-├── Dockerfile               # Multi-stage: downloads pre-built binary
-├── .env.example             # All config variables documented
-└── Cargo.toml               # Rust dependencies
-```
-
-Planning, audit, and decision records are indexed in [`docs/planning/README.md`](docs/planning/README.md).
-
----
-
 ## Requirements
 
 - Rust 1.85+ (backend), Node 20+ with pnpm (frontend)
@@ -516,89 +277,7 @@ MIT — [Ishan Parihar](https://github.com/ishan-parihar)
 
 ---
 
-## Agent Integration (AXI §7)
-
-Social Forge ships an installable AI agent skill that provides ambient context at session start — showing connected platforms, provider status, and contextual help hints.
-
-### Install the Skill
-
-```bash
-# Via npx (recommended)
-npx skills add ishan-parihar/social-forge --skill social-forge
-
-# Or download manually (installed automatically by install.sh unless SKIP_SKILL=true)
-curl -fsSL https://raw.githubusercontent.com/ishan-parihar/social-forge/master/SKILL.md \
-  -o ~/.agents/skills/social-forge/SKILL.md
-```
-
-### Session Hook (Claude Code)
-
-Add to `~/.claude/settings.json` or project `.claude/settings.json`:
-
-```json
-{
-  "hooks": {
-    "SessionStart": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "social-forge"
-          }
-        ]
-      }
-    ]
-  }
-}
-```
-
-At session start, Social Forge prints a compact dashboard:
-
-```
-bin: /usr/local/bin/social-forge
-description: Post to 26 social platforms from a single CLI
-
-providers[3]{name,status,platforms}:
-  x,connected,X/Twitter
-  reddit,connected,Reddit
-  bluesky,connected,Bluesky
-  ...
-
-platforms_total: 26
-
-help[4]:
-  Run `social-forge providers` to see all connected accounts
-  Run `social-forge post "Hello" --platforms x,bluesky` to post
-  Run `social-forge stage "Long content" --platforms x,linkedin` to stage
-  Run `social-forge doctor` to check system health
-```
-
-### Session Hook (Codex)
-
-Add to `~/.codex/hooks.json` or project `.codex/hooks.json`:
-
-```json
-{
-  "SessionStart": "social-forge"
-}
-```
-
-### Session Hook (OpenCode)
-
-Create `~/.config/opencode/plugins/social-forge.ts`:
-
-```typescript
-export default {
-  name: "social-forge",
-  onSessionStart: async () => {
-    const { execSync } = require("child_process");
-    return execSync("social-forge").toString();
-  },
-};
-```
-
----
+Skill install and the Claude Code, Codex and OpenCode session hooks are in [docs/agent-integration.md](docs/agent-integration.md).
 
 ## ☕ Support & Sponsorship
 
