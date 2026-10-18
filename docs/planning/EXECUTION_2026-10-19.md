@@ -168,6 +168,15 @@ Landed after the first pass (AUD-6, AUD-7, AUD-9, AUD-10, AUD-11):
 - **Live test flake:** `live_x_test::test_x_get_me` failed once in a full run with a transport error to x.com and passed 3 of 3 alone. Tracked as LIVE-X-FLAKE; not decided.
 - **Credentials (blocked):** D-3, E2 and E3 still need `TELEGRAM_TEST_PEER` and a session, the Discord bot token and test guild, and the WhatsApp Cloud sandbox creds.
 
+## Cycle 7 (final state, items deferred by the user)
+
+The user deferred all open items on 2026-10-18 and asked for the project to be finalized for now.
+
+- **Gates on HEAD `e0a4826`:** `cargo clippy --all-targets --all-features --locked -D warnings` exits 0. `cargo test --all-targets --no-fail-fast`: 701 passed, 1 failed. The failure is `live_x_test::test_x_get_me` with the x.com transport error (`client error (SendRequest)`), the known intermittent flake.
+- **Pushed:** 12 commits, `c152207..4dfa224`, to `github/master`. `e0a4826` is local only, not pushed.
+- **Deferred, still open in the register:** V1b (Telegram), V1c (Discord), V1d (WhatsApp Cloud) need credentials. C3 needs a decision on the 40 paired evals. LIVE-X-FLAKE needs a retry policy. None of these ran against real services.
+- **Not claimed:** production-grade with everything fixed. The project is finalized for now with the items above open.
+
 ## Decisions for the user
 
 Defaults applied in this pass. Each can be reversed without a schema change.
