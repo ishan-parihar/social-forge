@@ -46,7 +46,15 @@
     "with_skill_fail": 1
   },
   "follow_up": [
-    "Eval 42: SKILL.md should name the X timeline command next to the toolset block, so an agent that reads only SKILL.md gets --count without opening a reference.",
-    "Run the remaining 40 evals paired before claiming the eval loop complete."
-  ]
+    "DONE: eval 42 follow-up. SKILL.md line 200 now names `social-forge x timeline --count 5` next to the toolset block (verified 2026-10-18 at 4dfa224).",
+    "NOT RUN, by decision (2026-10-18): the paired run for the remaining 40 evals was declined. Only the configuration check below was done; no subagent runs were made."
+  ],
+  "config_check": {
+    "date": "2026-10-18",
+    "method": "Each social-forge command in evals.json expected_commands was checked against the debug binary built at HEAD 4dfa224 (leading subcommand words run with --help). Each mcp-call tool name was checked against `social-forge mcp-tools` (389 names). No eval content was changed.",
+    "expected_commands_checked": 90,
+    "unparseable": 0,
+    "mcp_calls_checked": 7,
+    "unresolved_mcp_tools": 0
+  }
 }

@@ -161,6 +161,13 @@ Landed after the first pass (AUD-6, AUD-7, AUD-9, AUD-10, AUD-11):
 - **W006 (done):** AGENTS §0.6 names `OUTLINE-2026-10-19-v2.md` as the live queue. `OUTLINE-2026-10-19.md`, `OUTLINE-2026-10-19-v3.md` and `OUTLINE-2026-10-17.md` were archived with `kb archive` (tombstones at the original paths, rows in `docs/archive/INDEX.md`). The two superseded history files `GAPS_2026-10-15.md` and `OUTLINE-2026-10-16.md` were archived the same way. `AUDIT_2026-10-14.md` moved to `docs/audit/` (the AGENTS routing table's home for audits). Routing and link references point at the new paths.
 - **Lint:** `kb lint` reports 0 errors. The `providers.md` E001 was a bare filename in a description cell; the full path is now written there.
 
+## Cycle 6 (push, C3 configuration check, live-test flake)
+
+- **Push (done):** the 12 commits were pushed to `github/master` (`c152207..4dfa224`). The clone has no remote named `origin`; `master` tracks `github`, and that is the destination the confirmation named.
+- **C3 (partly done):** the user chose "only update them based on latest configuration" over a paired run. The `skill-evals` skill named in that answer is not installed; the closest is `skill-creator`. What was done: all 90 `social-forge` commands in `evals.json` `expected_commands` parse with the current binary, and all 7 `mcp-call` names resolve in the 389-tool registry. Nothing was stale, so no eval content changed. The check is recorded under `config_check` in `skills/social-forge-agent/evals/c3-paired-run.json`. The eval-42 follow-up is closed: `SKILL.md` line 200 names `--count`. The 40 paired runs are not run.
+- **Live test flake:** `live_x_test::test_x_get_me` failed once in a full run with a transport error to x.com and passed 3 of 3 alone. Tracked as LIVE-X-FLAKE; not decided.
+- **Credentials (blocked):** D-3, E2 and E3 still need `TELEGRAM_TEST_PEER` and a session, the Discord bot token and test guild, and the WhatsApp Cloud sandbox creds.
+
 ## Decisions for the user
 
 Defaults applied in this pass. Each can be reversed without a schema change.
