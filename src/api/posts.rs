@@ -314,7 +314,7 @@ pub async fn list(
         {
             integ.provider_name
         } else {
-            "Unknown".into()
+            "Removed channel".into()
         };
         let tags = enrich_post_tags(&state.db, p.id, auth.user_id).await;
         enriched.push(PostWithIntegrationName {

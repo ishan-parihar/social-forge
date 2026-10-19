@@ -326,6 +326,7 @@ pub struct MediaPublic {
     pub file_size: i64,
     pub width: Option<i32>,
     pub height: Option<i32>,
+    pub created_at: DateTime<Utc>,
 }
 
 impl From<MediaEntry> for MediaPublic {
@@ -338,6 +339,7 @@ impl From<MediaEntry> for MediaPublic {
             file_size: m.file_size,
             width: m.width,
             height: m.height,
+            created_at: m.created_at,
         }
     }
 }

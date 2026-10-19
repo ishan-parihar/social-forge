@@ -172,16 +172,16 @@
 
 <div class="page-enter space-y-6">
   <!-- Header -->
-  <div class="flex items-center justify-between">
+  <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
     <div>
       <h1 class="text-xl font-semibold">Dashboard</h1>
       <p class="text-sm text-muted mt-1">Your social media command center</p>
     </div>
     <div class="flex gap-2">
-      <button onclick={() => composer.openCreate()} class="px-4 py-2 bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg text-sm font-medium transition-colors">
+      <button onclick={() => composer.openCreate()} class="px-4 py-2 whitespace-nowrap bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg text-sm font-medium transition-colors">
         + New Post
       </button>
-      <button onclick={() => goto('/analytics')} class="px-4 py-2 bg-surface-hover hover:bg-line-hover border border-line rounded-lg text-sm transition-colors">
+      <button onclick={() => goto('/analytics')} class="px-4 py-2 whitespace-nowrap bg-surface-hover hover:bg-line-hover border border-line rounded-lg text-sm transition-colors">
         <Icon name="analytics" class="w-4 h-4 inline" /> Analytics
       </button>
     </div>
@@ -276,9 +276,9 @@
             </div>
             <div class="flex items-center gap-2">
               <div class="flex-1 bg-background-input rounded-full h-2 overflow-hidden">
-                <div class="h-full bg-success rounded-full transition-all duration-500" style="width: {adherenceData.adherence_rate}%"></div>
+                <div class="h-full bg-success rounded-full transition-all duration-500" style="width: {adherenceData.scheduled > 0 ? adherenceData.adherence_rate : 0}%"></div>
               </div>
-              <span class="text-sm font-medium text-success">{Math.round(adherenceData.adherence_rate)}%</span>
+              <span class="text-sm font-medium {adherenceData.scheduled > 0 ? 'text-success' : 'text-muted'}">{adherenceData.scheduled > 0 ? `${Math.round(adherenceData.adherence_rate)}%` : 'Not yet'}</span>
             </div>
             <p class="text-[10px] text-faint mt-2">Adherence rate: published / scheduled × 100</p>
           </div>
@@ -515,7 +515,7 @@
 
     <!-- Quick Actions -->
     <div class="flex gap-3 flex-wrap">
-      <button onclick={() => composer.openCreate()} class="px-4 py-2 bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg text-sm font-medium transition-colors">
+      <button onclick={() => composer.openCreate()} class="px-4 py-2 whitespace-nowrap bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg text-sm font-medium transition-colors">
         <Icon name="post" class="w-4 h-4 inline" /> Compose Post
       </button>
       <button onclick={() => goto('/feed')} class="px-4 py-2 bg-surface-hover hover:bg-line-hover border border-line rounded-lg text-sm transition-colors">
@@ -524,7 +524,7 @@
       <button onclick={() => goto('/channels')} class="px-4 py-2 bg-surface-hover hover:bg-line-hover border border-line rounded-lg text-sm transition-colors">
         <Icon name="channel" class="w-4 h-4 inline" /> Manage Channels
       </button>
-      <button onclick={() => goto('/analytics')} class="px-4 py-2 bg-surface-hover hover:bg-line-hover border border-line rounded-lg text-sm transition-colors">
+      <button onclick={() => goto('/analytics')} class="px-4 py-2 whitespace-nowrap bg-surface-hover hover:bg-line-hover border border-line rounded-lg text-sm transition-colors">
         <Icon name="analytics" class="w-4 h-4 inline" /> View Analytics
       </button>
     </div>

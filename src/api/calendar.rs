@@ -114,7 +114,7 @@ pub async fn get(
         }
         .unwrap_or_else(|| "unscheduled".into());
 
-        let integration_name = p.integration_name.unwrap_or_else(|| "Unknown".into());
+        let integration_name = p.integration_name.unwrap_or_else(|| "Removed channel".into());
 
         let tags = queries::get_tags_for_post(&state.db, p.id, auth.user_id)
             .await

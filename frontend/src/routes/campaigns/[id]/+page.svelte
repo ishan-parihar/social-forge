@@ -270,7 +270,7 @@
           <div>
             <label for="campaign-color" class="block text-sm text-muted mb-1">Color</label>
             <div class="flex items-center gap-2">
-              <input id="campaign-color" type="color" bind:value={formColor} class="w-10 h-9 rounded cursor-pointer bg-transparent border border-line" />
+              <input id="campaign-color" type="color" bind:value={formColor} class="w-10 h-9 p-0 rounded cursor-pointer bg-transparent border border-line" />
               <input type="text" bind:value={formColor} class="flex-1 px-3 py-2 bg-background-input border border-line rounded text-sm focus:border-accent outline-none" />
             </div>
           </div>

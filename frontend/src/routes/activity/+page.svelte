@@ -121,7 +121,7 @@
   <title>Activity — Social Forge</title>
 </svelte:head>
 
-<div class="p-6 max-w-4xl">
+<div class="max-w-4xl">
   <div class="flex items-start justify-between gap-4 mb-5">
     <div>
       <h1 class="text-xl font-bold text-content">Activity</h1>

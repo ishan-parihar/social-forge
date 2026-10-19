@@ -160,7 +160,7 @@
 
 <!-- Reply Modal -->
 {#if replyModal}
-  <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50" role="dialog">
+  <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" role="dialog">
     <div class="bg-background-input border border-line rounded-xl p-6 w-full max-w-md">
       <h2 class="text-lg font-semibold mb-2">Reply to {replyModal.comment.author || 'Unknown'}</h2>
       <p class="text-sm text-muted mb-4 truncate">{replyModal.comment.content}</p>

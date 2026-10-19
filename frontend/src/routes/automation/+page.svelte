@@ -236,7 +236,7 @@
 
 <!-- Create/Edit Modal -->
 {#if showModal}
-  <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50" role="dialog">
+  <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" role="dialog">
     <div class="bg-background-input border border-line rounded-xl p-6 w-full max-w-md">
       <h2 class="text-lg font-semibold mb-4">{editingRule ? "Edit" : "Create"} Automation Rule</h2>
       
@@ -294,7 +294,7 @@
 
 <!-- Logs Modal -->
 {#if showLogs}
-  <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50" role="dialog">
+  <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" role="dialog">
     <div class="bg-background-input border border-line rounded-xl p-6 w-full max-w-lg max-h-[80vh] overflow-hidden flex flex-col">
       <div class="flex items-center justify-between mb-4">
         <h2 class="text-lg font-semibold">Execution Logs</h2>

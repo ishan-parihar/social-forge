@@ -94,7 +94,7 @@
     <div class="bg-surface border border-line rounded-xl p-5">
       <div class="flex items-center justify-between mb-4">
         <h2 class="text-sm font-medium text-content">Your top posts</h2>
-        <a href="/analytics" class="text-xs text-accent hover:text-accent-strong">Full analytics</a>
+        <a href="/analytics" class="text-xs whitespace-nowrap text-accent hover:text-accent-strong">Full analytics</a>
       </div>
       {#if data.top_own_posts.length === 0}
         <EmptyState
@@ -128,7 +128,7 @@
     <div class="bg-surface border border-line rounded-xl p-5">
       <div class="flex items-center justify-between mb-4">
         <h2 class="text-sm font-medium text-content">Competitor posts, ranked by engagement</h2>
-        <a href="/feed" class="text-xs text-accent hover:text-accent-strong">Open feed</a>
+        <a href="/feed" class="text-xs whitespace-nowrap text-accent hover:text-accent-strong">Open feed</a>
       </div>
       {#if data.top_external_posts.length === 0}
         <EmptyState

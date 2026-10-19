@@ -117,7 +117,7 @@
 
 <div class="page-enter space-y-6">
   <PageHeader title="Campaigns" subtitle="Strategic content campaigns with goals and progress tracking">
-    <button onclick={openCreateModal} class="px-4 py-2 bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg text-sm font-medium transition-colors">
+    <button onclick={openCreateModal} class="px-4 py-2 whitespace-nowrap bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg text-sm font-medium transition-colors">
       + New Campaign
     </button>
   </PageHeader>
@@ -212,7 +212,7 @@
 
 <!-- Create campaign modal -->
 {#if showCreateModal}
-  <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50" role="dialog">
+  <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" role="dialog">
     <div class="bg-background-input border border-line rounded-xl p-6 w-full max-w-md">
       <h2 class="text-lg font-semibold mb-4">Create Campaign</h2>
       <input

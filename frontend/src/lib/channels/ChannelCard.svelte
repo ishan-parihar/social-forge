@@ -75,6 +75,11 @@
   function handleDelete() {
     onDisconnect?.(integration.id);
   }
+
+  // X and similar providers key accounts by numeric user id; "@123" reads as a handle.
+  function idLabel(id: string): string {
+    return /^\d+$/.test(id) ? `ID ${id}` : `@${id}`;
+  }
 </script>
 
 <!--
@@ -107,7 +112,7 @@
       {#if integration.profile_url}
         {integration.profile_url}
       {:else if integration.internal_id}
-        @{integration.internal_id}
+        {idLabel(integration.internal_id)}
       {:else}
         {integration.provider_name}
       {/if}

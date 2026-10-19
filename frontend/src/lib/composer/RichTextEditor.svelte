@@ -29,7 +29,8 @@
 
   // Note: Placeholder config is captured once at init - TipTap doesn't support reactive placeholder updates
   const extensions = [
-    StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
+    // StarterKit already bundles Link; disabled here so the explicit configure below is the only one.
+    StarterKit.configure({ heading: { levels: [1, 2, 3] }, link: false }),
     Placeholder.configure({ placeholder: untrack(() => placeholder) }),
     Link.configure({
       openOnClick: false,

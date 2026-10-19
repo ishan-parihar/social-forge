@@ -207,8 +207,7 @@
             tabindex={activeKey === key ? 0 : -1}
             onfocus={() => (activeKey = key)}
             onkeydown={(e) => cellKeydown(e, key, rowIdx * 7)}
-            class="min-h-24 p-1.5 border-b border-r border-line transition-colors hover:bg-surface-hover cursor-pointer relative {past ? 'opacity-40' : ''} {dragOverDate === key ? 'ring-2 ring-accent ring-inset bg-accent-fill/5' : ''}"
-            class:opacity-30={!isCurrentMonth(date, year, month)}
+            class="min-h-24 p-1.5 border-b border-r border-line transition-colors hover:bg-surface-hover cursor-pointer relative {dragOverDate === key ? 'ring-2 ring-accent ring-inset bg-accent-fill/5' : ''}"
             class:cursor-not-allowed={past}
           >
             <!-- v25 F3: today gets a left accent rail on the cell itself, so the
@@ -217,7 +216,12 @@
             {#if isToday(date)}
               <span class="absolute inset-y-0 left-0 w-0.5 bg-accent-fill" aria-hidden="true"></span>
             {/if}
-            <span class="text-xs w-6 h-6 flex items-center justify-center rounded-full mb-0.5 {isToday(date) ? 'bg-accent-fill text-accent-fg' : 'text-muted'}"
+            <!-- Dim the number, not the cell: opacity multiplies down the tree, so a
+                 past cell at 0.4 holding a published chip at 0.5 left the chip at 0.2. -->
+            <span
+              class="text-xs w-6 h-6 flex items-center justify-center rounded-full mb-0.5 {isToday(date) ? 'bg-accent-fill text-accent-fg' : 'text-muted'}"
+              class:opacity-40={past}
+              class:opacity-30={!isCurrentMonth(date, year, month)}
             >{date.getDate()}</span>
             <div class="space-y-0.5">
               {#each dayEvents.slice(0, 3) as event (event.id)}

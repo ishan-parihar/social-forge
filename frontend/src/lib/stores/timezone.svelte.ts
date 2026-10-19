@@ -63,7 +63,7 @@ class TimezoneStore {
 
   // Get the list of common timezones for the picker
   get commonTimezones(): string[] {
-    return [
+    const zones = [
       'UTC',
       'America/New_York',
       'America/Chicago',
@@ -97,6 +97,9 @@ class TimezoneStore {
       'Australia/Melbourne',
       'Pacific/Auckland',
     ];
+    // Browsers can report an IANA alias (Asia/Calcutta) missing from the list;
+    // keep the active zone selectable so the picker never renders blank.
+    return zones.includes(this.value) ? zones : [this.value, ...zones];
   }
 }
 

@@ -737,8 +737,8 @@ pub async fn import_cookies(
                                      None,
                                      None,
                                      Some(&name),
-                                     None,
                                      avatar,
+                                     None,
                                      None,
                                      Some("cookie"), // §6: explicit auth_mode
                                  )
@@ -840,8 +840,8 @@ pub async fn import_cookies(
                                      None,
                                      None,
                                      Some(&name),
-                                     None,
                                      icon.as_deref(),
+                                     None,
                                      None,
                                      Some("cookie"), // §6: explicit auth_mode
                                  )

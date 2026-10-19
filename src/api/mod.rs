@@ -724,7 +724,7 @@ pub fn build_router(state: AppState) -> Router {
         if frontend_path.join("index.html").exists() {
             let index = frontend_path.join("index.html");
             return app.fallback_service(
-                ServeDir::new(frontend_path).not_found_service(ServeFile::new(index)),
+                ServeDir::new(frontend_path).fallback(ServeFile::new(index)),
             );
         }
         tracing::warn!("FRONTEND_DIR={dir} has no index.html — falling back to embedded assets");

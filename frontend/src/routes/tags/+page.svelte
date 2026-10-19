@@ -131,8 +131,8 @@
   <!-- Create Tag -->
   <div class="bg-surface border border-line rounded-xl p-4">
     <h2 class="text-sm font-semibold mb-3">Create Tag</h2>
-    <div class="flex items-end gap-3">
-      <div class="flex-1">
+    <div class="flex flex-wrap items-end gap-3">
+      <div class="flex-1 min-w-[12rem]">
         <label for="new-tag-name" class="text-xs text-muted block mb-1">Name</label>
         <input
           id="new-tag-name"
@@ -143,16 +143,16 @@
           class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none"
         />
       </div>
-      <div>
+      <div class="max-w-full">
         <label for="new-tag-color" class="text-xs text-muted block mb-1">Color</label>
         <div class="flex items-center gap-1">
           <input
             id="new-tag-color"
             type="color"
             bind:value={newColor}
-            class="w-9 h-9 rounded cursor-pointer bg-transparent border-0"
+            class="shrink-0 w-9 h-9 p-0 rounded cursor-pointer bg-transparent border-0"
           />
-          <div class="flex gap-0.5">
+          <div class="flex flex-wrap gap-0.5">
             {#each presetColors as c}
               <button
                 onclick={() => newColor = c}
@@ -199,7 +199,7 @@
                 class="flex-1 px-2 py-1 bg-background-input border border-line rounded text-sm focus:border-accent outline-none"
               />
               <div class="flex items-center gap-1">
-                <input type="color" bind:value={editColor} class="w-7 h-7 rounded cursor-pointer bg-transparent border-0" />
+                <input type="color" bind:value={editColor} class="w-7 h-7 p-0 rounded cursor-pointer bg-transparent border-0" />
                 {#each presetColors as c}
                   <button
                     onclick={() => editColor = c}

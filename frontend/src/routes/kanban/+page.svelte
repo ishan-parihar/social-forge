@@ -383,7 +383,9 @@
   function formatDate(iso?: string): string {
     if (!iso) return '';
     const d = new Date(iso);
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    // Show the year only when it isn't this year, so "Jan 1, 2030" can't pass for "Jan 1".
+    const otherYear = d.getFullYear() !== new Date().getFullYear();
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: otherYear ? 'numeric' : undefined });
   }
 
   // v25-3: kanban card metadata helpers. These render priority / due date /
@@ -577,7 +579,7 @@
       <p class="text-sm text-muted mt-1">Drag posts between columns to move them through your content pipeline.</p>
     </div>
     <div class="flex gap-2">
-      <button onclick={openCreateCampaignModal} class="px-3 py-1.5 text-sm border border-line rounded-lg text-muted hover:text-content hover:bg-surface-hover transition-colors">
+      <button onclick={openCreateCampaignModal} class="px-3 py-1.5 text-sm whitespace-nowrap border border-line rounded-lg text-muted hover:text-content hover:bg-surface-hover transition-colors">
         + Campaign
       </button>
     </div>
@@ -625,7 +627,7 @@
           >{opt.label}</button>
         {/each}
       </div>
-      <span class="text-faint">·</span>
+      <span class="hidden sm:inline text-faint">·</span>
       <!-- Substate filter -->
       <div class="flex items-center gap-1">
         {#each [{ v: null, label: 'All' }, { v: 'ready_to_publish', label: 'Ready' }, { v: 'in_review', label: 'Review' }, { v: 'blocked', label: 'Blocked' }, { v: 'none', label: 'No substate' }] as opt}
@@ -849,7 +851,7 @@
                       >⠿</span>
                       {#if post.integration_name}
                         <span style="color: {providerInk(providerIdFor(post))}" class="shrink-0">{providerIcon(providerIdFor(post))}</span>
-                        <span class="truncate max-w-[80px]">{post.integration_name}</span>
+                        <span class="truncate max-w-[120px]">{post.integration_name}</span>
                       {/if}
                     </span>
                     {#if post.scheduled_at}

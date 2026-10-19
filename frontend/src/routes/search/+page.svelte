@@ -208,7 +208,7 @@
     <button
       onclick={importFeed}
       disabled={importing}
-      class="px-3 py-1.5 text-sm bg-surface-hover hover:bg-line border border-line rounded-lg transition-colors disabled:opacity-50"
+      class="px-3 py-1.5 text-sm whitespace-nowrap bg-surface-hover hover:bg-line border border-line rounded-lg transition-colors disabled:opacity-50"
     >
       {importing ? "Importing..." : "Import Feed"}
     </button>
@@ -260,7 +260,7 @@
         class="px-3 py-1.5 text-xs rounded-md transition-colors whitespace-nowrap flex items-center gap-1.5
           {selectedProvider === p.value ? 'bg-accent-fill text-accent-fg' : 'text-muted hover:bg-surface-hover'}"
       >
-        <span>{p.icon}</span>
+        {#if p.icon.toLowerCase() !== p.label.toLowerCase()}<span>{p.icon}</span>{/if}
         {p.label}
       </button>
     {/each}
@@ -322,7 +322,7 @@
                   <span class="text-xs text-muted">@{post.author_handle}</span>
                 {/if}
                 <span class="text-xs" style="color: {providerInk(post.provider)}">{providerIcon(post.provider)}</span>
-                <span class="text-xs text-faint ml-auto">{formatTime(post.created_at)}</span>
+                <span class="text-xs text-faint ml-auto whitespace-nowrap">{formatTime(post.created_at)}</span>
               </div>
 
               <!-- Text -->
