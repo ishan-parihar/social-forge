@@ -156,7 +156,7 @@
             {#each presetColors as c}
               <button
                 onclick={() => newColor = c}
-                class="w-5 h-5 rounded-full border border-line {newColor === c ? 'ring-2 ring-accent' : ''}"
+                class="w-5 h-5 rounded-full border border-line {newColor === c ? 'ring-2 ring-accent' : ''} min-h-11 min-w-11 p-2.5 bg-clip-content"
                 style="background: {c}"
                 title={c}
                 aria-label="Select color {c}"
@@ -215,13 +215,13 @@
               <!-- Display -->
               <span class="w-3 h-3 rounded-full flex-shrink-0" style="background: {tag.color}"></span>
               <span class="flex-1 text-sm">{tag.name}</span>
-              <button onclick={() => startEdit(tag)} class="text-xs text-muted hover:text-accent px-1" title="Edit" aria-label="Edit tag">&#9998;</button>
+              <button onclick={() => startEdit(tag)} class="text-xs text-muted hover:text-accent px-1 min-h-11 min-w-11 inline-flex items-center justify-center" title="Edit" aria-label="Edit tag">&#9998;</button>
               {#if deletingId === tag.id}
                 <span class="text-xs text-muted">Delete?</span>
-                <button onclick={() => confirmDelete(tag.id)} class="text-xs text-error hover:underline px-1">Yes</button>
+                <button onclick={() => confirmDelete(tag.id)} class="text-xs text-error hover:underline px-1 min-h-11">Yes</button>
                 <button onclick={() => deletingId = null} class="text-xs text-muted hover:underline px-1">No</button>
               {:else}
-                <button onclick={() => deletingId = tag.id} class="text-xs text-muted hover:text-error px-1" title="Delete" aria-label="Delete tag">&#128465;</button>
+                <button onclick={() => deletingId = tag.id} class="text-xs text-muted hover:text-error px-1 min-h-11 min-w-11 inline-flex items-center justify-center" title="Delete" aria-label="Delete tag">&#128465;</button>
               {/if}
             {/if}
           </div>

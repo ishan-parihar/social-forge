@@ -317,7 +317,7 @@
       <select
         id="provider-filter"
         bind:value={selectedProvider}
-        class="px-3 py-1.5 text-sm bg-surface border border-line rounded-lg text-content"
+        class="px-3 py-1.5 text-sm bg-surface border border-line rounded-lg text-content min-h-11"
       >
         {#each providers as p}
           <option value={p.value}>{p.label}</option>
@@ -330,7 +330,7 @@
   {#if error}
     <div class="bg-error/10 border border-error/30 rounded-lg p-4" role="alert">
       <p class="text-error text-sm">{error}</p>
-      <button onclick={() => fetchData()} class="mt-2 text-sm text-accent hover:text-accent-strong">Retry</button>
+      <button onclick={() => fetchData()} class="mt-2 text-sm text-accent hover:text-accent-strong min-h-11">Retry</button>
     </div>
   {:else if loading && !hasAnything}
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -571,14 +571,18 @@
                     rendered white-on-that at roughly 2.2:1. app.css already
                     documents --brand-fg (white) on a full --brand fill as
                     4.7:1 in BOTH themes, and a data mark reads better solid.
+
+                    The count sits OUTSIDE the bar. Inside it, a bar that
+                    reached the full width clipped the number at the
+                    rounded end - the value was unreadable exactly when
+                    the bar was widest.
                   -->
                   <div
-                    class="h-full bg-accent-fill rounded-full transition-all duration-500 flex items-center justify-end px-2"
-                    style="width: {Math.max((prov.count / maxProviderCount) * 100, 6)}%"
-                  >
-                    <span class="text-[10px] font-medium text-accent-fg">{prov.count}</span>
-                  </div>
+                    class="h-full bg-accent-fill rounded-full transition-all duration-500"
+                    style="width: {Math.max((prov.count / maxProviderCount) * 100, 2)}%"
+                  ></div>
                 </div>
+                <span class="text-[10px] font-medium tabular-nums text-content-secondary w-8 text-right shrink-0">{prov.count}</span>
               </li>
             {/each}
           </ul>

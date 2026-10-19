@@ -7,7 +7,7 @@
   // - Settings: edit form for all campaign fields.
   import { onMount, onDestroy } from 'svelte';
   import { page } from '$app/stores';
-  import { campaignsApi, type Campaign } from '$lib/api/campaigns';
+  import { campaignsApi, formatDateOnly, type Campaign } from '$lib/api/campaigns';
   import { postsApi, type PostSummary } from '$lib/api/posts';
   import { goto } from '$app/navigation';
   import { realtime } from '$lib/stores/realtime';
@@ -120,9 +120,31 @@
     }
   }
 
+  // The bar measures `progress_metric` - the metric the founder chose.
+  // It used to always measure the POST count, so a campaign with
+  // `progress_metric = "engagement"` showed its post count against an
+  // engagement target: "engagement: 4 / 1000" on a bar at 0%.
+  function progressValue(): { current: number | null; unit: string } {
+    const metric = campaign?.progress_metric ?? 'posts';
+    switch (metric) {
+      case 'engagement':
+        return { current: campaign?.engagement_total ?? null, unit: 'engagement' };
+      case 'reach':
+      case 'followers':
+      case 'custom':
+        // Not measured yet. The post count under these labels would be a
+        // different number wearing the metric's name.
+        return { current: null, unit: metric };
+      case 'posts':
+      default:
+        return { current: campaign?.post_count ?? 0, unit: 'posts' };
+    }
+  }
+
   function progressPct(): number {
     if (!campaign?.progress_target || campaign.progress_target === 0) return 0;
-    const current = campaign.post_count ?? 0;
+    const { current } = progressValue();
+    if (current === null) return 0;
     return Math.min(100, (current / campaign.progress_target) * 100);
   }
 
@@ -179,7 +201,13 @@
           {#if campaign.progress_target}
             <div class="mb-4">
               <div class="flex justify-between text-sm mb-2">
-                <span class="text-muted">{campaign.progress_metric || 'posts'}: {campaign.post_count ?? 0} / {campaign.progress_target}</span>
+                <span class="text-muted">
+                  {#if progressValue().current === null}
+                    {campaign.progress_target} {progressValue().unit} goal
+                  {:else}
+                    {progressValue().current} / {campaign.progress_target} {progressValue().unit}
+                  {/if}
+                </span>
                 <span class="font-medium">{Math.round(progressPct())}%</span>
               </div>
               <div class="bg-background-input rounded-full h-3 overflow-hidden">
@@ -193,11 +221,11 @@
           <div class="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-line">
             <div>
               <div class="text-[10px] text-faint uppercase tracking-wider">Start</div>
-              <div class="text-sm">{campaign.start_date ? new Date(campaign.start_date).toLocaleDateString() : '-'}</div>
+              <div class="text-sm">{campaign.start_date ? formatDateOnly(campaign.start_date) : '-'}</div>
             </div>
             <div>
               <div class="text-[10px] text-faint uppercase tracking-wider">End</div>
-              <div class="text-sm">{campaign.end_date ? new Date(campaign.end_date).toLocaleDateString() : '-'}</div>
+              <div class="text-sm">{campaign.end_date ? formatDateOnly(campaign.end_date) : '-'}</div>
             </div>
           </div>
 

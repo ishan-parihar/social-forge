@@ -43,6 +43,18 @@ pub struct Campaign {
     pub updated_at: chrono::DateTime<chrono::Utc>,
     /// Number of posts in this campaign (joined).
     pub post_count: Option<i64>,
+    /// Total engagement (likes + comments + shares) across this
+    /// campaign's published posts, from `analytics_cache`.
+    ///
+    /// The progress bar measures `progress_metric`, which can be
+    /// "engagement" - so it needs the engagement number, not the post
+    /// count. `None` when the campaign has no measured posts: "not
+    /// measured" is not "zero".
+    ///
+    /// Not a column: it is computed in a second query and set on the
+    /// row afterwards, so `FromRow` must not look for it.
+    #[sqlx(skip)]
+    pub engagement_total: Option<i64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -145,6 +157,50 @@ pub async fn list(
     .fetch_all(&state.db)
     .await
     .map_err(|e| AppError::Internal(format!("Failed to fetch campaigns: {e}")))?;
+
+    // The engagement total for each campaign, from `analytics_cache`.
+    //
+    // `progress_metric` can be "posts", "engagement", "reach",
+    // "followers" or "custom", but the list only carried `post_count` -
+    // so a campaign with `progress_metric = "engagement"` and a target
+    // of 1000 measured its POST count against it and showed "0 / 1000
+    // engagement" with an empty bar. The metric the founder chose was
+    // not the number being measured.
+    //
+    // Own-post engagement lives in `analytics_cache`, keyed by
+    // (user_id, platform_post_id) - NOT in `post_engagement`, whose
+    // `post_id` FK targets `external_posts`.
+    let engagement_by_campaign: std::collections::HashMap<Uuid, i64> = {
+        let rows: Vec<(Uuid, i64)> = sqlx::query_as(
+            r#"SELECT p.campaign_id,
+                      COALESCE(SUM(json_extract(point.value, '$.total')), 0) AS engagement
+               FROM posts p
+               JOIN analytics_cache ac ON ac.user_id = p.user_id
+                                     AND ac.platform_post_id = p.platform_post_id
+               CROSS JOIN json_each(ac.data) AS series
+               CROSS JOIN json_each(json_extract(series.value, '$.data')) AS point
+               WHERE p.user_id = ?
+                 AND p.campaign_id IS NOT NULL
+                 AND p.deleted_at IS NULL
+                 AND lower(json_extract(series.value, '$.label'))
+                     IN ('likes', 'comments', 'shares', 'like', 'comment', 'share',
+                         'retweets', 'reposts', 'replies', 'reply', 'repost')
+               GROUP BY p.campaign_id"#,
+        )
+        .bind(auth.user_id)
+        .fetch_all(&state.db)
+        .await
+        .unwrap_or_default();
+        rows.into_iter().collect()
+    };
+
+    let campaigns: Vec<Campaign> = campaigns
+        .into_iter()
+        .map(|mut c| {
+            c.engagement_total = engagement_by_campaign.get(&c.id).copied();
+            c
+        })
+        .collect();
 
     Ok(Json(campaigns))
 }

@@ -335,12 +335,17 @@
                 <span class="text-xs text-muted w-24 truncate">{prov.provider}</span>
                 <div class="flex-1 bg-background-input rounded-full h-6 overflow-hidden">
                   <div
-                    class="h-full rounded-full transition-all duration-500 flex items-center justify-end px-2"
-                    style="width: {(prov.count / maxProviderCount) * 100}%; background-color: {providerColor(prov.provider)};"
-                  >
-                    <span class="text-[10px] font-medium" style="color: {inkFor(providerColor(prov.provider))};">{prov.count}</span>
-                  </div>
+                    class="h-full rounded-full transition-all duration-500"
+                    style="width: {Math.max((prov.count / maxProviderCount) * 100, 2)}%; background-color: {providerColor(prov.provider)};"
+                  ></div>
                 </div>
+                <!--
+                  The count sits OUTSIDE the bar. Inside it, a bar that
+                  reaches the full width clipped the number at the
+                  rounded end - the value was unreadable exactly when the
+                  bar was widest.
+                -->
+                <span class="text-[10px] font-medium tabular-nums text-content-secondary w-8 text-right shrink-0">{prov.count}</span>
               </div>
             {/each}
           </div>

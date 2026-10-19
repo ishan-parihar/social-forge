@@ -26,6 +26,13 @@ export interface Campaign {
   created_at: string;
   updated_at: string;
   post_count: number | null;
+  /**
+   * Total engagement across the campaign's published posts, from
+   * `analytics_cache`. The progress bar measures `progress_metric`,
+   * which can be "engagement" - so it needs this number, not the post
+   * count. Absent when the campaign has no measured posts.
+   */
+  engagement_total?: number | null;
 }
 
 export interface CreateCampaignInput {
@@ -60,6 +67,31 @@ export interface UpdateCampaignInput {
   content_pillars?: Array<{ title: string; description?: string; tags?: string[] }>;
   budget_cents?: number;
   kpi_targets?: Record<string, unknown>;
+}
+
+/**
+ * Format a `YYYY-MM-DD` date for display.
+ *
+ * A bare `YYYY-MM-DD` is a CALENDAR DATE, not an instant. `new
+ * Date("2026-11-15")` parses it as UTC midnight, and rendering that in
+ * a negative-offset zone gives the PREVIOUS day: a campaign ending
+ * 15 November read as "11/14/2026". The string is split and formatted
+ * directly, so the date the founder typed is the date they see.
+ */
+export function formatDateOnly(date: string | null | undefined, locale = 'en-US'): string {
+  if (!date) return '';
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(date);
+  if (!m) return date;
+  const [, y, mo, d] = m;
+  // Construct in UTC so the formatter does not shift it, then read the
+  // UTC parts back.
+  const dt = new Date(Date.UTC(Number(y), Number(mo) - 1, Number(d)));
+  return dt.toLocaleDateString(locale, {
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    timeZone: 'UTC',
+  });
 }
 
 export const campaignsApi = {

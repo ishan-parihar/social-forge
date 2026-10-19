@@ -222,7 +222,13 @@
       id: crypto.randomUUID(),
       url: m.url,
       mime_type: m.mime_type,
-      original_name: m.alt || 'media',
+      // The alt text lives in `alt`. It used to be stuffed into
+      // `original_name`, so the edit payload carried `alt: undefined`
+      // and every save DROPPED the alt text the founder had written -
+      // and the alt-text indicator in the media strip, which compares
+      // `original_name` against the file name, never showed.
+      alt: m.alt || '',
+      original_name: 'media',
       file_size: 0,
     }));
     editingGroupPostId = post.id;

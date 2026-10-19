@@ -6,7 +6,7 @@
   // page. This is the entry point for campaign management - previously
   // campaigns were only accessible via the kanban filter.
   import { onMount, onDestroy } from 'svelte';
-  import { campaignsApi, type Campaign } from '$lib/api/campaigns';
+  import { campaignsApi, formatDateOnly, type Campaign } from '$lib/api/campaigns';
   import { goto } from '$app/navigation';
   import { realtime } from '$lib/stores/realtime';
   import { modals } from '$lib/stores/modals.svelte';
@@ -94,19 +94,57 @@
   }
 
   // Progress percentage for the progress bar.
+  //
+  // The bar measures `progress_metric` - the metric the founder chose.
+  // It used to always measure the POST count, so a campaign with
+  // `progress_metric = "engagement"` and a target of 1000 measured 4
+  // posts against it: "4 / 1000 posts" on a bar that read 0%, and the
+  // detail page labelled the same numbers "engagement".
+  //
+  // A metric with no measured value (reach, followers, custom) has no
+  // number to show, so the bar reports nothing rather than a wrong
+  // number.
+  function progressValue(c: Campaign): { current: number | null; unit: string } {
+    switch (c.progress_metric) {
+      case 'engagement':
+        return { current: c.engagement_total ?? null, unit: 'engagement' };
+      case 'reach':
+      case 'followers':
+      case 'custom':
+        // Not measured yet. Showing the post count under these labels
+        // would be a different number wearing the metric's name.
+        return { current: null, unit: c.progress_metric };
+      case 'posts':
+      default:
+        return { current: c.post_count ?? 0, unit: 'posts' };
+    }
+  }
+
   function progressPct(c: Campaign): number {
     if (!c.progress_target || c.progress_target === 0) return 0;
-    const current = c.post_count ?? 0;
+    const { current } = progressValue(c);
+    if (current === null) return 0;
     return Math.min(100, (current / c.progress_target) * 100);
   }
 
   // Days remaining until end_date.
+  //
+  // `end_date` is a CALENDAR DATE ("2026-09-30"). `new Date("2026-09-30")`
+  // parses it as UTC midnight, so in a negative-offset zone the
+  // difference was a day short - and the final day read as "-1 days
+  // left". Both dates are read as calendar days (UTC midnight) and the
+  // result is floored at zero.
   function daysRemaining(c: Campaign): number | null {
     if (!c.end_date) return null;
-    const end = new Date(c.end_date);
+    const end = Date.parse(`${c.end_date}T00:00:00Z`);
+    if (Number.isNaN(end)) return null;
     const now = new Date();
-    const diff = Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-    return diff;
+    const today = Date.UTC(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+    );
+    return Math.max(0, Math.round((end - today) / (1000 * 60 * 60 * 24)));
   }
 
   const statusVariant: Record<string, 'default' | 'success' | 'warning' | 'error' | 'info'> = {
@@ -173,7 +211,13 @@
           {#if c.progress_target}
             <div class="mb-3">
               <div class="flex justify-between text-xs text-muted mb-1">
-                <span>{c.post_count ?? 0} / {c.progress_target} posts</span>
+                <span>
+                  {#if progressValue(c).current === null}
+                    {c.progress_target} {progressValue(c).unit} goal
+                  {:else}
+                    {progressValue(c).current} / {c.progress_target} {progressValue(c).unit}
+                  {/if}
+                </span>
                 <span>{Math.round(progressPct(c))}%</span>
               </div>
               <div class="bg-background-input rounded-full h-1.5 overflow-hidden">
@@ -188,9 +232,9 @@
           <div class="flex items-center justify-between text-[10px] text-faint">
             <span>
               {#if c.start_date && c.end_date}
-                {new Date(c.start_date).toLocaleDateString()} → {new Date(c.end_date).toLocaleDateString()}
+                {formatDateOnly(c.start_date)} → {formatDateOnly(c.end_date)}
               {:else if c.start_date}
-                From {new Date(c.start_date).toLocaleDateString()}
+                From {formatDateOnly(c.start_date)}
               {:else if daysRemaining(c) !== null}
                 {daysRemaining(c)} days left
               {/if}
