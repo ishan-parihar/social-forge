@@ -76,3 +76,17 @@ Stage Summary:
 - Artifacts: 6 more commits on master, pushed to github/master (3121a25). New: tests/counting_rule_test.rs (4 tests). Migrations: none beyond 0007. Frontend: lib/api/{campaigns,media,posts}.ts, lib/composer/{ComposerModal,MediaUpload,platforms}.svelte, lib/calendar/{MonthView,WeekView,DayView,ListView}.svelte, lib/{ui/Modal,media/MediaPopover,composer/MusicPicker,onboarding/GettingStarted}.svelte, routes/{+layout,+page,posts,posts/new,calendar,campaigns,campaigns/[id],analytics,research,activity,feed,kanban,tags,settings/developer,settings/notifications}. Backend: api/{posts,campaigns,activity,notifications,feed,integrations}.rs, db/{queries,models,types}.rs, social/{mod,x}.rs, scheduler/mod.rs, mcp/tools_campaigns.rs.
 - Verification: 481 lib tests + 38 integration tests pass; `cargo clippy --lib --bins --all-features -- -D warnings` 0 errors; `svelte-check` 0 errors / 0 warnings; `pnpm build` clean; the probe over 13 routes x 3 widths x 2 themes reports 0 FAIL, 0 console errors, 0 404s.
 - Known follow-ups: the remaining tap-target advisories are the calendar's hour-grid chips (21px, structural - the grid IS the design) and a few text buttons whose WIDTH is under 44. The `live_*` test binaries hit the real provider APIs and fail intermittently on rate limits; that is environmental.
+
+---
+Task ID: red-team-web-dashboard-2026-10-19-final
+Agent: omp (same session, final verification)
+Task: The last tap-target pass and the final gate.
+
+Work Log:
+- The last named controls carry a 44px target: the dashboard's header buttons, its alert links and its "Needs Attention" rows; the activity log's "View post" link and "Load more"; the posts list's search field and row buttons; the Getting Started checklist's rows; and every calendar view's select checkbox (the label carries the target, the box stays 16px).
+- The advisory count is now 398, from 4056 at the start. What remains is the calendar's hour-grid chips (21px, and the grid IS the design), the tag pills (their width is their text), and a few inputs in narrow cells.
+- One finding was NOT a defect: the "Update existing login" overlay in the 375px light-mode screenshot is the BROWSER's password-manager UI. The live DOM has no such element and no dialog role. Confirmed rather than assumed.
+
+Stage Summary:
+- Verification: 481 lib tests + 38 integration tests pass (519 total, 0 failed); `cargo clippy --lib --bins --all-features -- -D warnings` 0 errors; `svelte-check` 0 errors / 0 warnings; `pnpm build` clean; `scripts/genome doctor` healthy; the probe over 13 routes x 3 widths x 2 themes reports 0 FAIL, 0 console errors, 0 404s, and 398 advisories.
+- Artifacts: 21 commits on master, all pushed to github/master (43d16c3).
