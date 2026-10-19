@@ -100,9 +100,9 @@ When implementing features inspired by postiz-app or other competitors, apply th
 | `docs/planning/OUTLINE-2026-10-19-v2.md` | The live working queue (audit-revised 2026-10-19): P0 gate, B-token-efficiency, C3 eval loop, E credential-blocked live passes | Before starting ANY implementation work |
 | `docs/archive/OUTLINE-2026-10-17.md` | Superseded by the 2026-10-19 v2 outline — history, not queue. Its Wave A–C items are tracked in `TODO.md` | For provenance of the 2026-10-17 cycle |
 | `docs/archive/OUTLINE-2026-10-16.md` | Executed + red-team-audited predecessor outline (execution `d5b9bbd..7873f84`, audit `ca63a9e`) — history, not queue | For provenance of what landed 2026-10-16/17 |
-| `TODO.md` | The register: live status per work item (`scripts/kb status` is the supervised transition), seeded from the 2026-10-17 outline | To see or claim what's open |
+| `TODO.md` | The register: live status per work item (`scripts/genome status` is the supervised transition), seeded from the 2026-10-17 outline | To see or claim what's open |
 | `worklog.md` | The multi-agent worklog — this protocol, §8 | Before starting work; after finishing |
-| `docs/decisions/` | AD-NNN decision records, immutable once numbered (`scripts/kb ad` mints them) | When a direction change is ratified |
+| `docs/decisions/` | AD-NNN decision records, immutable once numbered (`scripts/genome rec new ad` mints them) | When a direction change is ratified |
 | `SESSION_HOOKS.md` | Session-start ambient-context setup (AXI) | When wiring agent hooks |
 | `skills/social-forge-agent/SKILL.md` | Installed agent skill (via `make install-skill`) | When editing the skill |
 | `skills/social-forge-agent/references/providers.md` | Per-platform provider reference | When editing provider docs |

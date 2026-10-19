@@ -4,7 +4,8 @@ Immutable once numbered. A decision record holds a law an agent can apply
 without asking: context, decision, consequences. Correcting a decision means
 minting a new AD that supersedes the old one by name — never an edit.
 
-`scripts/kb ad "<title>"` mints the next one from the template.
+`scripts/genome rec new ad "<title>"` mints the next one from the template
+(`scripts/genome rec recon "<keywords>"` first, for the recon token it needs).
 
 Nothing is migrated retroactively: the non-negotiable design preferences live
 in AGENTS.md §0.5 where they are enforced; the evidence-backed rejections

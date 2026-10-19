@@ -1,8 +1,8 @@
 # TODO — the register
 
 One row per work item; rows update in place, verdicts append — never delete.
-`scripts/kb status <id> <state> --evidence <path>` is the supervised transition
-(terminal states demand evidence; `scripts/kb claim-register` is the
+`scripts/genome status <id> <state> --evidence <path>` is the supervised transition
+(terminal states demand evidence; `scripts/genome claim-register` is the
 flock-guarded claim, appended to the notes cell).
 
 Seeded 2026-10-17 from `docs/archive/OUTLINE-2026-10-17.md` — the frozen
