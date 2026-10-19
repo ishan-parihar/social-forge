@@ -52,6 +52,12 @@
     // v24-3: fetch the new analytics endpoints in parallel with the existing ones.
     const [postsRes, summaryRes, integRes, feedRes, engagementRes, adherenceRes, cadenceRes, eventsRes] = await Promise.all([
       postsApi.list({ limit: 100 }),
+      // The summary is fetched with a 7-day window, and the card that
+      // renders it is labelled "Channel Performance (30d)". The label
+      // said 30; the data was 7 - so a channel that published only
+      // last week showed nothing, and a channel that published 20 days
+      // ago was counted as if it had not published at all. The label
+      // now names the window the data actually covers.
       analyticsApi.getSummary(7),
       integrationsApi.list(),
       feedApi.analytics(7),
@@ -325,7 +331,7 @@
       <!-- Channel Performance - v22 Phase 5: uses provider brand colors -->
       <div class="lg:col-span-2 bg-surface border border-line rounded-xl p-5">
         <div class="flex items-center justify-between mb-4">
-          <h2 class="font-medium text-sm">Channel Performance (30d)</h2>
+          <h2 class="font-medium text-sm">Channel Performance (7d)</h2>
           <span class="text-xs text-muted">{integrations.length} connected</span>
         </div>
         {#if analyticsSummary && analyticsSummary.posts_by_provider.length > 0}
