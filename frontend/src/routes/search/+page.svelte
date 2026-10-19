@@ -7,7 +7,7 @@
   import { toast } from "$lib/stores/toast";
   import { realtime } from "$lib/stores/realtime";
   import { timezone } from "$lib/stores/timezone.svelte";
-  import { providerIcon, providerColor, providerLabel } from "$lib/providers";
+  import { providerIcon, providerColor, providerInk, providerLabel } from "$lib/providers";
   import EngagementCard from "$lib/components/EngagementCard.svelte";
   import MediaCarousel from "$lib/media/MediaCarousel.svelte";
 
@@ -310,7 +310,7 @@
               <img src={proxyMediaUrl(post.author_avatar)} alt="" class="w-10 h-10 rounded-full flex-shrink-0 object-cover" />
             {:else}
               <div class="w-10 h-10 rounded-full bg-line flex items-center justify-center flex-shrink-0">
-                <span class="text-sm" style="color: {providerColor(post.provider)}">{providerIcon(post.provider)}</span>
+                <span class="text-sm" style="color: {providerInk(post.provider)}">{providerIcon(post.provider)}</span>
               </div>
             {/if}
 
@@ -321,7 +321,7 @@
                 {#if post.author_handle}
                   <span class="text-xs text-muted">@{post.author_handle}</span>
                 {/if}
-                <span class="text-xs" style="color: {providerColor(post.provider)}">{providerIcon(post.provider)}</span>
+                <span class="text-xs" style="color: {providerInk(post.provider)}">{providerIcon(post.provider)}</span>
                 <span class="text-xs text-faint ml-auto">{formatTime(post.created_at)}</span>
               </div>
 

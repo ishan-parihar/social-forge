@@ -1,3 +1,5 @@
+import { theme } from '$lib/stores/theme.svelte';
+
 // Central provider metadata (R-8): single source of truth for provider
 // labels, colors, icons, and char limits.
 //
@@ -118,6 +120,109 @@ export function providerLabel(provider: string): string {
 /** Just the hex color. */
 export function providerColor(provider: string): string {
   return providerMeta(provider).color;
+}
+
+/**
+ * WCAG-AA-safe TEXT colour for a provider's brand hue.
+ *
+ * The brand hexes in `PROVIDERS` are tuned for a solid FILL — several of them
+ * (x `#9ca3af`, reddit `#fb923c`, slack `#e01e5a`) sit near the luminance of
+ * the page surface, so as TEXT on `--bg`/`--bg-card` they measure as low as
+ * 1.32:1.
+ *
+ * THE POINT the first attempt missed: no single static hex clears 4.5:1 on
+ * both `#ffffff` and `#131720`. The two surfaces are 1.0 and 0.007 in
+ * relative luminance, and every mid-tone hue fails one of them no matter how
+ * its lightness is walked. So the ink is chosen against the theme that is
+ * actually on screen: darken on the light card, lighten on the dark card.
+ * Hue and saturation are preserved so the glyph still reads as its channel;
+ * lightness is the only channel that moves.
+ *
+ * Only for text. Fills keep `providerColor`: the contrast of text over a
+ * fill is the `inkFor` caller's business.
+ */
+export function providerInk(provider: string): string {
+  const brand = providerColor(provider);
+  return theme.value === 'light'
+    ? inkForSurface(brand, '#ffffff')
+    : inkForSurface(brand, '#131720');
+}
+
+/// Pick a hex clearing 4.5:1 on `surface`, moving lightness in whichever
+/// direction the comparison favours, and give up to black only if the hue
+/// cannot be carried there at all.
+function inkForSurface(hex: string, surface: string): string {
+  const need = 4.5;
+  const surfaceL = hexLuminance(surface);
+  // WCAG's ratio is symmetric: (lighter + 0.05) / (darker + 0.05). Writing it
+  // the asymmetric way (surface over ink) makes the score fall as the ink
+  // lightens against a dark surface, which silently inverts the search.
+  const against = (c: string) => {
+    const inkL = hexLuminance(c);
+    const hi = Math.max(surfaceL, inkL);
+    const lo = Math.min(surfaceL, inkL);
+    return (hi + 0.05) / (lo + 0.05);
+  };
+  if (against(hex) >= need) return hex;
+  // Darker surface -> lighten; lighter surface -> darken.
+  const step = surfaceL < 0.1 ? 0.03 : -0.03;
+  for (let i = 1; i <= 30; i++) {
+    const c = shiftLightness(hex, step * i);
+    if (against(c) >= need) return c;
+  }
+  return surfaceL < 0.1 ? '#ffffff' : '#000000';
+}
+
+/// WCAG relative luminance of an `#rrggbb` hex.
+function hexLuminance(hex: string): number {
+  const lin = (i: number) => {
+    const v = parseInt(hex.slice(i, i + 2), 16) / 255;
+    return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * lin(1) + 0.7152 * lin(3) + 0.0722 * lin(5);
+}
+
+/// Scale an `#rrggbb` hex's HSL lightness by `delta`, keeping hue+saturation.
+function shiftLightness(hex: string, delta: number): string {
+  const hsl = hexToHsl(hex);
+  const l = Math.max(0, Math.min(1, hsl.l + delta));
+  return hslToHex(hsl.h, hsl.s, l);
+}
+
+function hexToHsl(hex: string): { h: number; s: number; l: number } {
+  const r = parseInt(hex.slice(1, 3), 16) / 255;
+  const g = parseInt(hex.slice(3, 5), 16) / 255;
+  const b = parseInt(hex.slice(5, 7), 16) / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  if (max === min) return { h: 0, s: 0, l };
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h: number;
+  if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+  else if (max === g) h = ((b - r) / d + 2) / 6;
+  else h = ((r - g) / d + 4) / 6;
+  return { h, s, l };
+}
+
+function hslToHex(h: number, s: number, l: number): string {
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p = 2 * l - q;
+  const f = (t: number) => {
+    let tt = t;
+    if (tt < 0) tt += 1;
+    if (tt > 1) tt -= 1;
+    if (tt < 1 / 6) return p + (q - p) * 6 * tt;
+    if (tt < 1 / 2) return q;
+    if (tt < 2 / 3) return p + (q - p) * (2 / 3 - tt) * 6;
+    return p;
+  };
+  const to = (v: number) =>
+    Math.round(v * 255)
+      .toString(16)
+      .padStart(2, '0');
+  return `#${to(f(h + 1 / 3))}${to(f(h))}${to(f(h - 1 / 3))}`;
 }
 
 /** Just the short icon glyph. */

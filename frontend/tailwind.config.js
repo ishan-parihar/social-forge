@@ -67,6 +67,10 @@ export default {
         // `text-error`, `border-warning`, etc. The CSS variables are
         // defined per-theme in app.css.
         success: "rgb(var(--success-rgb) / <alpha-value>)",
+        // Text placed ON a success background. Dark theme: dark text on the
+        // fairly-light green-500 (no light text clears 4.5:1 on it). Light
+        // theme: light text on the darker light-mode green.
+        "success-fg": "rgb(var(--success-fg-rgb) / <alpha-value>)",
         warning: "rgb(var(--warning-rgb) / <alpha-value>)",
         error: "rgb(var(--error-rgb) / <alpha-value>)",
         info: "rgb(var(--info-rgb) / <alpha-value>)",

@@ -1,0 +1,21 @@
+routes: 13 · widths: 1440, 768, 375 · themes: dark, light
+visits: 78
+
+FAIL: 0
+
+console errors: 6
+  ! Failed to load resource: the server responded with a status of 404 (Not Found)
+  ! Failed to load resource: the server responded with a status of 404 (Not Found)
+  ! Failed to load resource: the server responded with a status of 404 (Not Found)
+  ! Failed to load resource: the server responded with a status of 404 (Not Found)
+  ! Failed to load resource: the server responded with a status of 404 (Not Found)
+  ! Failed to load resource: the server responded with a status of 404 (Not Found)
+
+WARN: 3100
+  · tap-target: 3100
+      / @1440px — 24x24 < 44x44 — "Collapse sidebar"
+      / @1440px — 207x36 < 44x44 — "Dashboard"
+      / @1440px — 207x36 < 44x44 — "Calendar"
+      / @1440px — 207x36 < 44x44 — "Pipeline"
+      / @1440px — 207x36 < 44x44 — "Posts"
+      / @1440px — 207x36 < 44x44 — "Media"

@@ -1019,6 +1019,9 @@ pub async fn handle_posts_best_times(
         &state.db,
         user_id,
         provider_filter.as_deref(),
+        // No window: a best-time estimate built from all the history the
+        // user has is the more useful answer for this tool.
+        None,
     )
     .await
     .map_err(|e| format!("DB error: {e}"))?;

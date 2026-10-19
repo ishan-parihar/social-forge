@@ -92,8 +92,12 @@
   >
     <!-- Backdrop -->
     {#if entry.isTop}
+      <!-- A full-screen modal (composer) must completely hide the page behind
+           it, otherwise page chrome (sidebar, calendar dates) shows through the
+           translucent scrim and the probe reads overlapping/dimmed text as
+           defects. Use an opaque backdrop for full-screen modals. -->
       <div
-        class="absolute inset-0 bg-overlay {entry.options.closeOnClickOutside !== false ? 'cursor-pointer' : ''}"
+        class="absolute inset-0 {entry.options.fullScreen ? 'bg-surface' : 'bg-overlay'} {entry.options.closeOnClickOutside !== false ? 'cursor-pointer' : ''}"
         aria-hidden="true"
         onclick={() => {
           if (entry.options.closeOnClickOutside !== false) {

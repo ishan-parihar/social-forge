@@ -249,7 +249,7 @@
         <input type="file" multiple accept="image/*,video/*" onchange={handleUpload} class="hidden" />
         {items.length > 0 ? "Add more media" : "Drop, paste, or click to upload"}
       </label>
-      <span class="text-surface-hover">|</span>
+      <span class="text-surface-hover" aria-hidden="true">|</span>
       <button
         onclick={() => mediaPopoverOpen = true}
         class="text-sm text-accent hover:text-accent-strong cursor-pointer"

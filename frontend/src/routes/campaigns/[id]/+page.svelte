@@ -13,7 +13,7 @@
   import { realtime } from '$lib/stores/realtime';
   import { modals } from '$lib/stores/modals.svelte';
   import { toast } from '$lib/stores/toast';
-  import { providerIcon, providerColor } from '$lib/providers';
+  import { providerIcon, providerColor, providerInk } from '$lib/providers';
   import Badge from '$lib/ui/Badge.svelte';
   import EmptyState from '$lib/ui/EmptyState.svelte';
   import PageHeader from '$lib/ui/PageHeader.svelte';
@@ -245,7 +245,7 @@
         <div class="bg-surface border border-line rounded-lg overflow-hidden">
           {#each posts as post (post.id)}
             <a href="/posts/{post.id}" class="flex items-center gap-3 px-4 py-3 border-b border-line last:border-0 hover:bg-surface-hover transition-colors">
-              <span class="text-xs" style="color: {providerColor(post.integration_name?.toLowerCase()?.split(/\s+/)[0] || '')}">
+              <span class="text-xs" style="color: {providerInk(post.integration_name?.toLowerCase()?.split(/\s+/)[0] || '')}">
                 {providerIcon(post.integration_name?.toLowerCase()?.split(/\s+/)[0] || '')}
               </span>
               <span class="flex-1 text-sm truncate text-content-secondary">{post.content || post.title || '(no content)'}</span>

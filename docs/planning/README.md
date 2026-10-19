@@ -16,6 +16,8 @@ authority on which document answers which question; this page only lists them.
 | [`DECISIONS_2026-10-19.md`](DECISIONS_2026-10-19.md) | open decisions | Decision points with recommendations. Nothing in it is applied until the user approves it. |
 | [`EXECUTION_2026-10-19.md`](EXECUTION_2026-10-19.md) | record | Cycle 3 execution log: what landed, gate results, decisions for the user, and what did not land. |
 | [`AUDIT_2026-10-14.md`](../audit/AUDIT_2026-10-14.md) | history (moved to `docs/audit/`) | End-to-end audit: P0 bugs, cookie and API matrix, phased plan. |
+| [`SESSION_2026-10-19.md`](../kb/SESSION_2026-10-19.md) | post-mortem | Session self-reflection: what worked, every failure with its evidence, and the carry-forward checklist. Read before a delegated or browser-driven session — it records the harness mistakes that produced 48 false-positive probe failures. |
+| [`PHASES_P0-P9.md`](PHASES_P0-P9.md) | live | The P0–P9 phase plan the objective names, with each phase's acceptance criteria and the register-row mapping. The register in `TODO.md` carries live status; this file owns the plan (AGENTS rule 1). |
 | [`GAPS_2026-10-15.md`](GAPS_2026-10-15.md) | archived (superseded). Archived at `docs/archive/GAPS_2026-10-15.md` | What the 13 audit commits did not close, before the register existed. |
 
 The live work register is `TODO.md` at the repository root.

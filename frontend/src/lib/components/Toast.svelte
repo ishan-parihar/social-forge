@@ -19,7 +19,7 @@
 
 {#each toasts as t (t.id)}
   <div class="fixed bottom-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg text-sm max-w-sm animate-slide-up
-    {t.type === 'success' ? 'bg-success text-success' : ''}
+    {t.type === 'success' ? 'bg-success text-success-fg' : ''}
     {t.type === 'error' ? 'bg-error text-error' : ''}
     {t.type === 'warning' ? 'bg-warning text-warning' : ''}
     {t.type === 'info' ? 'bg-hue-neutral/90 text-hue-neutral' : ''}"

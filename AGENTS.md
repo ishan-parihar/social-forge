@@ -106,6 +106,8 @@ When implementing features inspired by postiz-app or other competitors, apply th
 | `SESSION_HOOKS.md` | Session-start ambient-context setup (AXI) | When wiring agent hooks |
 | `skills/social-forge-agent/SKILL.md` | Installed agent skill (via `make install-skill`) | When editing the skill |
 | `skills/social-forge-agent/references/providers.md` | Per-platform provider reference | When editing provider docs |
+| `docs/planning/PHASES_P0-P9.md` | The P0–P9 phase plan the objective names: each phase's acceptance criteria and its register-row mapping | Before parity or phase work; when claiming a phase is done |
+| `docs/kb/SESSION_2026-10-19.md` | Session self-reflection: what worked, every failure with its evidence, and the carry-forward checklist | Before a delegated or browser-driven session |
 | `skills/social-forge-agent/references/quick-reference.md` | Routing rules, ID-discovery chains, error recovery and the v11 MCP contracts (NOT auto-installed); per-platform listings live in `skills/social-forge-agent/references/providers.md` and `--help` | Reference only; install manually if needed |
 
 Superseded docs move to `docs/archive/` with a tombstone at the original path — nothing is deleted. (2026-09-30 saw the last deletion of 14 stale docs; that practice is retired.) If a doc isn't in this table and has no tombstone, it doesn't exist — don't go looking for it.
@@ -143,7 +145,7 @@ social-forge/
 │   │   ├── media.rs         # Upload/list/delete/serve media (MIME allowlist + magic-byte sniff)
 │   │   ├── onboard.rs       # /setup page + OAuth/cookie connect flows (html_escape + js_escape helpers)
 │   │   ├── integrations.rs  # List/connect/disconnect/refresh integrations
-│   │   └── ...              # calendar, feed, comments, dms, automation, tags, signatures, webhooks, rss, analytics, developer, notifications, billing
+│   │   └── ...              # calendar, feed, comments, dms, automation, tags, signatures, webhooks, rss, analytics, developer, notifications
 │   ├── auth/
 │   │   ├── mod.rs           # JWT create/validate
 │   │   ├── middleware.rs    # auth_middleware (validates sf_session cookie), AuthenticatedUser extractor, DEFAULT_USER_ID
@@ -441,7 +443,7 @@ If you add a 7th refresh path, call `update_integration_token` with plaintext �
 
 ### 6.4 Auth gate
 
-All endpoints except `/health`, `/ready`, `/api/auth/login`, `/api/auth/callback`, `/api/media/{id}` (serve), and `/api/billing/webhook` require the `sf_session` cookie (validated by `auth_middleware`). `/api/proxy-media` is gated too: it fetches upstream CDN URLs for the caller, and the frontend's `feed.ts` sends the cookie on same-origin requests. Note `/api/events` (SSE) is intentionally auth-gated (BUG #19 — prevents event leakage on networked deployments).
+All endpoints except `/health`, `/ready`, `/api/auth/login`, `/api/auth/callback`, `/api/media/{id}` (serve), and `/api/webhooks/whatsapp` require the `sf_session` cookie (validated by `auth_middleware`). `/api/proxy-media` is gated too: it fetches upstream CDN URLs for the caller, and the frontend's `feed.ts` sends the cookie on same-origin requests. Note `/api/events` (SSE) is intentionally auth-gated (BUG #19 — prevents event leakage on networked deployments).
 
 The `/setup` page and `/api/public/connect/*` routes accept EITHER the `sf_session` cookie OR a `?token=<jwt>` query param (via `resolve_authed_user()` in `onboard.rs`). They do NOT mint fresh JWTs for anonymous visitors — that was a security hole closed in v7.
 
@@ -551,7 +553,7 @@ There's a local stub at `vendor/core2/` that re-exports `std::error`, with a `[p
 
 ### 9.3 `rmcp` API
 
-`ServerHandler::call_tool` needs `RequestContext`. The CLI `mcp_bridge.rs` is stubbed to redirect users to `social-forge mcp` (the stdio server). Don't try to call MCP tools from the CLI directly — use the shared `services/` layer.
+`ServerHandler::call_tool` needs `RequestContext`. The CLI `mcp` command bridges to the stdio server (`src/cli/run.rs`). Don't try to call MCP tools from the CLI directly — use the shared `services/` layer.
 
 ### 9.4 BoringSSL build requires cmake + libclang
 

@@ -399,7 +399,7 @@
       <!-- Cadence against goal -->
       <div class="bg-surface border border-line rounded-xl p-5 lg:col-span-2">
         <div class="flex items-center justify-between mb-1">
-          <h3 class="text-sm font-medium text-content">Cadence against goal</h3>
+          <h2 class="text-sm font-medium text-content">Cadence against goal</h2>
           {#if cadence && cadence.streak_days > 0}
             <span class="text-xs text-success">{cadence.streak_days}-day streak</span>
           {/if}
@@ -464,7 +464,7 @@
 
       <!-- Engagement rate + adherence -->
       <div class="bg-surface border border-line rounded-xl p-5">
-        <h3 class="text-sm font-medium text-content mb-4">Efficiency</h3>
+        <h2 class="text-sm font-medium text-content mb-4">Efficiency</h2>
         <dl class="space-y-4">
           <div>
             <dt class="text-xs text-muted">Interactions per post</dt>
@@ -506,7 +506,7 @@
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <div class="bg-surface border border-line rounded-xl p-5">
         <div class="flex items-center justify-between mb-4">
-          <h3 class="text-sm font-medium text-content">Scheduled today</h3>
+          <h2 class="text-sm font-medium text-content">Scheduled today</h2>
           <a href="/calendar" class="text-xs text-accent hover:text-accent-strong">Open calendar</a>
         </div>
         {#if todayPosts.length === 0}
@@ -531,7 +531,7 @@
       </div>
 
       <div class="bg-surface border border-line rounded-xl p-5">
-        <h3 class="text-sm font-medium text-content mb-4">Recent activity</h3>
+        <h2 class="text-sm font-medium text-content mb-4">Recent activity</h2>
         {#if recentEvents.length === 0}
           <p class="text-sm text-muted py-6 text-center">No events logged yet.</p>
         {:else}
@@ -554,7 +554,7 @@
     <!-- 4. Channel mix + top posts -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <div class="bg-surface border border-line rounded-xl p-5">
-        <h3 class="text-sm font-medium text-content mb-4">Posts by channel</h3>
+        <h2 class="text-sm font-medium text-content mb-4">Posts by channel</h2>
         {#if filteredProviders.length === 0}
           <p class="text-sm text-muted py-4 text-center">No posts in this window</p>
         {:else}
@@ -584,7 +584,7 @@
       </div>
 
       <div class="bg-surface border border-line rounded-xl p-5">
-        <h3 class="text-sm font-medium text-content mb-4">Top posts by engagement</h3>
+        <h2 class="text-sm font-medium text-content mb-4">Top posts by engagement</h2>
         {#if topPosts.length === 0}
           <p class="text-sm text-muted py-4 text-center">No published posts with engagement data yet</p>
         {:else}
@@ -616,7 +616,7 @@
 
     <!-- 5. Volume over time -->
     <div class="bg-surface border border-line rounded-xl p-5">
-      <h3 class="text-sm font-medium text-content mb-4">Posting volume</h3>
+      <h2 class="text-sm font-medium text-content mb-4">Posting volume</h2>
       {#if !data || data.posts_by_day.length === 0}
         <p class="text-content-secondary text-sm py-8 text-center">No data for this period</p>
       {:else}
@@ -644,9 +644,9 @@
     <!-- Per-provider metric breakdown, only when a single platform is picked -->
     {#if providerAnalytics && providerAnalytics.data && providerAnalytics.data.length > 0}
       <div class="bg-surface border border-line rounded-xl p-5">
-        <h3 class="text-sm font-medium text-content mb-4">
+        <h2 class="text-sm font-medium text-content mb-4">
           {providers.find(p => p.value === selectedProvider)?.label || selectedProvider} metrics
-        </h3>
+        </h2>
         <div class="space-y-3">
           {#each providerAnalytics.data as metric (metric.label)}
             {@const values = metric.data.map(d => parseFloat(d.total) || 0)}

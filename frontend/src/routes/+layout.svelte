@@ -63,6 +63,8 @@
     {
       title: 'Insights',
       items: [
+        { href: '/activity', label: 'Activity', icon: 'activity' },
+        { href: '/research', label: 'Research', icon: 'research' },
         { href: '/search', label: 'Search', icon: 'search' },
         { href: '/analytics', label: 'Analytics', icon: 'analytics' },
       ],

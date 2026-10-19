@@ -12,7 +12,7 @@
   import { goto } from '$app/navigation';
   import { realtime } from '$lib/stores/realtime';
   import { timezone } from '$lib/stores/timezone.svelte';
-  import { providerIcon, providerColor } from '$lib/providers';
+  import { providerIcon, providerColor, providerInk } from '$lib/providers';
   import Icon from '$lib/ui/Icon.svelte';
   import StatCard from '$lib/ui/StatCard.svelte';
   import Sparkline from '$lib/ui/Sparkline.svelte';
@@ -461,7 +461,7 @@
           <div class="space-y-1">
             {#each recentPublished as post}
               <div class="flex items-center gap-3 py-2 border-b border-line last:border-0">
-                <span class="text-xs" style="color: {providerColor(providerIdFor(post))}">{providerIcon(providerIdFor(post))}</span>
+                <span class="text-xs" style="color: {providerInk(providerIdFor(post))}">{providerIcon(providerIdFor(post))}</span>
                 <span class="flex-1 text-sm truncate text-content-secondary">{post.content || post.title || '(no content)'}</span>
                 <div class="flex gap-2 text-[10px] text-muted">
                   {#if post.likes != null && post.likes > 0}

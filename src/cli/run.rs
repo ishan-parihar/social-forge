@@ -1186,15 +1186,6 @@ APP_URL=https://localhost:6543
 # STRIP_LINKS_FROM_X=false
 # FEED_REFRESH_INTERVAL_SECONDS=900
 # EVENTS_LOG_RETENTION_DAYS=30
-
-# ── Stripe (optional billing) ─────────────────────────────────
-# STRIPE_SECRET_KEY=
-# STRIPE_WEBHOOK_SECRET=
-# STRIPE_PRICE_FREE=
-# STRIPE_PRICE_PRO_MONTHLY=
-# STRIPE_PRICE_PRO_ANNUAL=
-# STRIPE_PRICE_BUSINESS_MONTHLY=
-# STRIPE_PRICE_BUSINESS_ANNUAL=
 "#;
         std::fs::write(&env_path, template)?;
         output_json(&serde_json::json!({

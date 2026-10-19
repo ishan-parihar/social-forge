@@ -31,11 +31,11 @@ use crate::social::registry::ProviderRegistry;
 use crate::wa::OptionalWhaClient;
 use sqlx::SqlitePool;
 
+pub mod activity; // pub: tests/activity_feed_test.rs calls the handler directly
 pub(crate) mod ai;
 mod analytics;
 mod auth;
 mod automation;
-mod billing; // only stripe_webhook (public, signature-verified) is used
 mod calendar;
 pub(crate) mod campaigns;
 pub(crate) mod comments;
@@ -53,6 +53,7 @@ pub(crate) use posts::CreatePostRequest;
 pub(crate) use posts::verify_tag_ownership;
 mod profile;
 mod rate_limit;
+mod research;
 pub(crate) mod rss;
 pub(crate) mod sets;
 mod signatures;
@@ -181,11 +182,6 @@ pub fn build_router(state: AppState) -> Router {
             "/api/public/connect/{provider}",
             axum::routing::get(onboard::public_connect),
         )
-        // Stripe webhook — no auth (signature verification in handler)
-        .route(
-            "/api/billing/webhook",
-            axum::routing::post(billing::stripe_webhook),
-        )
         // WhatsApp Cloud webhook (E6) — no auth: GET echoes Meta's
         // hub.challenge against WHATSAPP_CLOUD_VERIFY_TOKEN, POST verifies
         // the X-Hub-Signature-256 HMAC when WHATSAPP_CLOUD_APP_SECRET is set.
@@ -231,6 +227,10 @@ pub fn build_router(state: AppState) -> Router {
         // networked deployments (BUG #19). The auth_middleware validates
         // the sf_session cookie; the SSE handler then subscribes.
         .route("/api/events", axum::routing::get(sse::sse_handler))
+        // Read-only merged agent-activity feed (events_log + automation_logs
+        // + publish_attempts). GET only — the surface has no write shape, and
+        // adding one here would need its own CSRF and audit story first.
+        .route("/api/activity", axum::routing::get(activity::list))
         .route(
             "/api/posts",
             axum::routing::get(posts::list).post(posts::create),
@@ -404,6 +404,10 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/feed/import", axum::routing::post(feed::import))
         .route("/api/feed/accounts", axum::routing::get(feed::accounts))
         .route("/api/feed/analytics", axum::routing::get(feed::analytics))
+        // Read-only "what should I post next" aggregation, built only from
+        // data the app already stores (own post performance, imported
+        // competitor posts, connected feeds). No writes, no network calls.
+        .route("/api/research", axum::routing::get(research::get))
         .route(
             "/api/feed/{post_id}/comments",
             axum::routing::get(feed::get_comments),
@@ -1043,12 +1047,9 @@ async fn csrf_origin_check(
     // every legitimate one. Its cookie-CSRF class is already covered by
     // SameSite=Lax (which blocks cross-site POST cookie sends), and the
     // auth middleware still gates it — Bearer API key or session cookie.
-    // Server-to-server webhooks send no Origin either: Stripe and Meta sign
-    // their payloads instead (billing.rs, whatsapp_webhook.rs).
-    if matches!(
-        req.uri().path(),
-        "/mcp" | "/api/billing/webhook" | "/api/webhooks/whatsapp"
-    ) {
+    // Server-to-server webhooks send no Origin either: Meta signs its
+    // payloads instead (whatsapp_webhook.rs).
+    if matches!(req.uri().path(), "/mcp" | "/api/webhooks/whatsapp") {
         return next.run(req).await;
     }
 

@@ -12,7 +12,7 @@
   import { realtime } from "$lib/stores/realtime";
   import { composer } from "$lib/stores/composer.svelte";
   import { modals } from "$lib/stores/modals.svelte";
-  import { providerMeta as centralProviderMeta, platformPostUrl } from "$lib/providers";
+  import { providerMeta as centralProviderMeta, providerInk, platformPostUrl } from "$lib/providers";
 
   let posts = $state<FeedPost[]>([]);
   let loading = $state(false);
@@ -199,9 +199,9 @@
   // (R-8) - no more 18-entry local map. The local providerMeta() wrapper
   // adapts the central shape ({label, color, icon, charLimit}) to the
   // {label, color, dot} shape this file's template expects (dot == color).
-  function providerMeta(provider: string): { label: string; color: string; dot: string } {
+  function providerMeta(provider: string): { label: string; color: string; dot: string; ink: string } {
     const m = centralProviderMeta(provider);
-    return { label: m.label, color: m.color, dot: m.color };
+    return { label: m.label, color: m.color, dot: m.color, ink: providerInk(provider) };
   }
 
   // Click outside to close filter
@@ -601,9 +601,9 @@
               <!-- Provider dot -->
               <span class="w-2 h-2 rounded-full flex-shrink-0" style="background: {meta.dot}"></span>
 
-              <!-- Provider badge -->
+              <!-- Provider badge: ink clears 4.5:1 on the light surface in both themes -->
               <span class="text-[11px] font-semibold uppercase tracking-wider"
-                style="color: {meta.color}">
+                style="color: {meta.ink}">
                 {meta.label}
               </span>
 
@@ -971,7 +971,7 @@
         <button
           onclick={submitEdit}
           disabled={editSubmitting || !editText.trim()}
-          class="px-3 py-1.5 text-sm bg-success hover:bg-success disabled:opacity-50 text-white rounded-lg transition-colors flex items-center gap-2"
+          class="px-3 py-1.5 text-sm bg-success hover:bg-success disabled:opacity-50 text-success-fg rounded-lg transition-colors flex items-center gap-2"
         >
           {#if editSubmitting}
             <div class="w-3 h-3 rounded-full border-2 border-white/30 border-t-white animate-spin"></div>

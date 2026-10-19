@@ -2748,6 +2748,9 @@ pub async fn engagement_histogram_by_slot(
     pool: &SqlitePool,
     user_id: Uuid,
     provider: Option<&str>,
+    // Optional window floor. `None` keeps the pre-cutoff behaviour the
+    // MCP `posts_best_times` tool relies on (all history).
+    cutoff: Option<DateTime<Utc>>,
 ) -> Result<Vec<(String, i32, i32, i64, i64)>, sqlx::Error> {
     sqlx::query_as(
         r#"SELECT ep.provider,
@@ -2760,12 +2763,15 @@ pub async fn engagement_histogram_by_slot(
          WHERE ep.user_id = ?
            AND ep.hidden_at IS NULL
            AND (? IS NULL OR ep.provider = ?)
+           AND (? IS NULL OR ep.created_at >= ?)
            AND (COALESCE(pe.likes, 0) + COALESCE(pe.comments, 0) + COALESCE(pe.shares, 0)) > 0
          GROUP BY 1, 2, 3"#,
     )
     .bind(user_id)
     .bind(provider)
     .bind(provider)
+    .bind(cutoff.map(EpochUtc::from))
+    .bind(cutoff.map(EpochUtc::from))
     .fetch_all(pool)
     .await
 }
@@ -4313,7 +4319,7 @@ mod b03_b08_tests {
         .await
         .unwrap();
 
-        let rows = engagement_histogram_by_slot(&pool, user_id, None)
+        let rows = engagement_histogram_by_slot(&pool, user_id, None, None)
             .await
             .unwrap();
         assert_eq!(rows.len(), 1, "only the engaged post buckets: {rows:?}");
@@ -4324,9 +4330,147 @@ mod b03_b08_tests {
         assert_eq!(*engagement, 15, "likes+comments+shares summed");
 
         // The provider filter narrows correctly.
-        let filtered = engagement_histogram_by_slot(&pool, user_id, Some("reddit"))
+        let filtered = engagement_histogram_by_slot(&pool, user_id, Some("reddit"), None)
             .await
             .unwrap();
         assert!(filtered.is_empty(), "filter must exclude other providers");
     }
+}
+
+/// Research: the user's own published posts ranked by engagement.
+///
+/// Engagement for the user's own posts lives in `analytics_cache`, keyed by
+/// `(user_id, platform_post_id)`: the cache-first `/api/analytics/post/{id}`
+/// endpoint writes it there after a live provider fetch. `post_engagement`
+/// is not consulted — its `post_id` FK targets `external_posts`, so it can
+/// never hold a row for a `posts` row.
+///
+/// The payload is provider-shaped JSON: a list of {label, data:[{total}]}
+/// series with per-provider metric labels ("Likes", "Comments", "Shares").
+/// Rather than map every provider's labels, match the three metric names
+/// case-insensitively and sum the points of each matching series. Labels that
+/// match nothing ("Impressions", "Views") are deliberately excluded: reach
+/// is not engagement, and counting it here would rank reach-heavy posts above
+/// posts people actually interacted with.
+pub async fn top_own_posts_by_engagement(
+    pool: &SqlitePool,
+    user_id: Uuid,
+    cutoff: DateTime<Utc>,
+    limit: i64,
+) -> Result<Vec<OwnPostEngagement>, sqlx::Error> {
+    // The analytics_cache payload is provider-shaped JSON: a list of
+    // {label, data:[{total}]} series with per-provider metric labels
+    // ("Likes", "Comments", "Shares"). Rather than map every provider's
+    // labels, match the three metric names case-insensitively and read the
+    // last point of each series (the same "latest total" shape X, YouTube
+    // and TikTok all emit). Series that match nothing contribute 0.
+    // The subquery exists so `engagement > 0` can filter the computed
+    // column: SQLite has no HAVING without GROUP BY, and a "top posts"
+    // ranking must not list a post whose engagement was never measured —
+    // an unmeasured post is unknown, not zero, and ranking it last would
+    // pass it off as evidence of poor performance.
+    sqlx::query_as::<_, OwnPostEngagement>(
+        r#"SELECT post_id, content, provider, published_at, engagement
+          FROM (SELECT p.id AS post_id,
+                       p.content,
+                       i.provider_identifier AS provider,
+                       p.published_at,
+                       COALESCE((SELECT SUM(json_extract(point.value, '$.total'))
+                                   FROM analytics_cache ac, json_each(ac.data) AS series,
+                                        json_each(json_extract(series.value, '$.data')) AS point
+                                  WHERE ac.user_id = p.user_id
+                                    AND ac.platform_post_id = p.platform_post_id
+                                    AND lower(json_extract(series.value, '$.label'))
+                                        IN ('likes', 'comments', 'shares')), 0) AS engagement
+                  FROM posts p
+                  JOIN integrations i ON p.integration_id = i.id
+                 WHERE p.user_id = ?
+                   AND p.deleted_at IS NULL
+                   AND p.state = 'published'
+                   AND p.published_at >= ?)
+         WHERE engagement > 0
+         ORDER BY engagement DESC, published_at DESC
+         LIMIT ?"#,
+    )
+    .bind(user_id)
+    .bind(EpochUtc::from(cutoff))
+    .bind(limit)
+    .fetch_all(pool)
+    .await
+}
+
+/// Research: recent imported external posts ranked by engagement.
+///
+/// "Recent" is the platform post's own timestamp, and hidden posts are
+/// excluded so a soft-hidden competitor post stops influencing the ranking.
+pub async fn top_external_posts_by_engagement(
+    pool: &SqlitePool,
+    user_id: Uuid,
+    cutoff: DateTime<Utc>,
+    limit: i64,
+) -> Result<Vec<ExternalPostEngagement>, sqlx::Error> {
+    sqlx::query_as::<_, ExternalPostEngagement>(
+        r#"SELECT ep.id AS post_id,
+               ep.provider,
+               ep.text,
+               ep.author_name,
+               ep.author_handle,
+               ep.url,
+               ep.created_at,
+               COALESCE(SUM(COALESCE(pe.likes, 0) + COALESCE(pe.comments, 0)
+                            + COALESCE(pe.shares, 0) + COALESCE(pe.replies, 0)
+                            + COALESCE(pe.reposts, 0) + COALESCE(pe.quotes, 0)
+                            + COALESCE(pe.saves, 0) + COALESCE(pe.upvotes, 0)), 0) AS engagement
+          FROM external_posts ep
+          JOIN post_engagement pe ON pe.post_id = ep.id
+         WHERE ep.user_id = ?
+           AND ep.hidden_at IS NULL
+           AND ep.created_at >= ?
+         GROUP BY ep.id
+        HAVING engagement > 0
+         ORDER BY engagement DESC, ep.created_at DESC
+         LIMIT ?"#,
+    )
+    .bind(user_id)
+    .bind(EpochUtc::from(cutoff))
+    .bind(limit)
+    .fetch_all(pool)
+    .await
+}
+// ── Research aggregation result types ──────────────────────────
+
+/// One of the user's own posts with its engagement total, for the
+/// research surface's "top performing posts" section.
+#[derive(Debug, Clone, sqlx::FromRow, Serialize)]
+pub struct OwnPostEngagement {
+    pub post_id: Uuid,
+    pub content: String,
+    /// Provider the post published through (from its integration), since
+    /// `posts` has no provider column of its own.
+    pub provider: String,
+    pub published_at: Option<DateTime<Utc>>,
+    pub engagement: i64,
+}
+
+/// One imported external post with its engagement total, for the research
+/// surface's "recent competitor posts" section.
+#[derive(Debug, Clone, sqlx::FromRow, Serialize)]
+pub struct ExternalPostEngagement {
+    pub post_id: Uuid,
+    pub provider: String,
+    pub text: String,
+    pub author_name: Option<String>,
+    pub author_handle: Option<String>,
+    pub url: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub engagement: i64,
+}
+
+/// A word that appears in external/competitor posts but not in any of the
+/// user's own posts. The count is how many external posts (in the window)
+/// used it, so the caller can rank and drop one-off noise.
+#[derive(Debug, Clone, sqlx::FromRow, Serialize)]
+pub struct ExternalWordGap {
+    pub word: String,
+    pub external_posts: i64,
 }

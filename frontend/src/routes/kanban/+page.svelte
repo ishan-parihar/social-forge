@@ -18,7 +18,7 @@
   import { modals } from '$lib/stores/modals.svelte';
   import { toast } from '$lib/stores/toast';
   import { realtime } from '$lib/stores/realtime';
-  import { providerIcon, providerColor } from '$lib/providers';
+  import { providerIcon, providerColor, providerInk } from '$lib/providers';
   import Badge from '$lib/ui/Badge.svelte';
   import { goto } from '$app/navigation';
 
@@ -848,7 +848,7 @@
                         aria-hidden="true"
                       >⠿</span>
                       {#if post.integration_name}
-                        <span style="color: {providerColor(providerIdFor(post))}" class="shrink-0">{providerIcon(providerIdFor(post))}</span>
+                        <span style="color: {providerInk(providerIdFor(post))}" class="shrink-0">{providerIcon(providerIdFor(post))}</span>
                         <span class="truncate max-w-[80px]">{post.integration_name}</span>
                       {/if}
                     </span>

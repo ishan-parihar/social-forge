@@ -1161,7 +1161,7 @@
           onclick={postNow}
           disabled={submitting || !canPublish}
           title={blockers.length > 0 ? blockers[0].message : ''}
-          class="px-3 py-1.5 bg-success hover:bg-success text-accent-fg disabled:opacity-50 rounded-lg text-sm font-medium transition-colors"
+          class="px-3 py-1.5 bg-success hover:bg-success text-success-fg disabled:opacity-50 rounded-lg text-sm font-medium transition-colors"
         >{submitting ? 'Posting...' : 'Post Now'}</button>
         <button
           onclick={submit}

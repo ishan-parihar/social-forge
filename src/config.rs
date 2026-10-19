@@ -156,15 +156,6 @@ pub struct Config {
     // Media storage
     pub media_dir: String,
 
-    // Stripe billing
-    pub stripe_secret_key: Option<String>,
-    pub stripe_webhook_secret: Option<String>,
-    pub stripe_price_free: Option<String>,
-    pub stripe_price_pro_monthly: Option<String>,
-    pub stripe_price_pro_annual: Option<String>,
-    pub stripe_price_business_monthly: Option<String>,
-    pub stripe_price_business_annual: Option<String>,
-
     // AI/LLM endpoint for automation (auto-reply, content generation).
     // If unset, AI automation features are disabled.
     pub llm_endpoint: Option<String>,
@@ -325,13 +316,6 @@ impl Config {
             token_encryption_key: opt("TOKEN_ENCRYPTION_KEY"),
             media_dir: opt("MEDIA_DIR").unwrap_or_else(|| "./uploads".into()),
 
-            stripe_secret_key: opt("STRIPE_SECRET_KEY"),
-            stripe_webhook_secret: opt("STRIPE_WEBHOOK_SECRET"),
-            stripe_price_free: opt("STRIPE_PRICE_FREE"),
-            stripe_price_pro_monthly: opt("STRIPE_PRICE_PRO_MONTHLY"),
-            stripe_price_pro_annual: opt("STRIPE_PRICE_PRO_ANNUAL"),
-            stripe_price_business_monthly: opt("STRIPE_PRICE_BUSINESS_MONTHLY"),
-            stripe_price_business_annual: opt("STRIPE_PRICE_BUSINESS_ANNUAL"),
             llm_endpoint: opt("LLM_ENDPOINT"),
             llm_model: opt("LLM_MODEL"),
             dub_co_api_key: opt("DUB_CO_API_KEY"),

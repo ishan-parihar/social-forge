@@ -94,6 +94,7 @@
            so Tailwind's `rgb(var(--success-rgb) / <alpha-value>)` syntax works
            for arbitrary opacity (bg-success/20, text-error, border-warning). */
         --success-rgb: 34 197 94;   /* green-500 - 7.20:1 */
+        --success-fg-rgb: 11 14 20;   /* --bg ink on green-500 → 8.5:1 */
         --warning-rgb: 234 179 8;  /* yellow-500 - 8.56:1 */
         --error-rgb: 240 75 75;    /* red - 4.54:1 (nudged off 500 for AA) */
         --info-rgb: 61 132 246;    /* blue - 4.56:1 (nudged off 500 for AA) */
@@ -199,6 +200,7 @@
            steps were 3.15:1 (green) and 2.81:1 (yellow), i.e. invisible as
            text. They are still saturated enough to read as green/yellow. */
         --success-rgb: 27 127 78;    /* 4.57:1 */
+        --success-fg-rgb: 255 255 255; /* white text on light-mode green */
         --warning-rgb: 149 102 3;    /* 4.59:1 */
         --error-rgb: 218 35 35;      /* 4.51:1 */
         --info-rgb: 37 99 235;       /* 4.72:1 */

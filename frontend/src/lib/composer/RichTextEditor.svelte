@@ -137,11 +137,11 @@
     <button aria-label="Heading 2" onmousedown={(e) => { e.preventDefault(); editor?.chain().focus().toggleHeading({ level: 2 }).run(); }} class="toolbar-btn" class:active={editor?.isActive("heading", { level: 2 })}>H2</button>
     <button aria-label="Bullet list" onmousedown={(e) => { e.preventDefault(); editor?.chain().focus().toggleBulletList().run(); }} class="toolbar-btn" class:active={editor?.isActive("bulletList")}>• List</button>
     <button aria-label="Ordered list" onmousedown={(e) => { e.preventDefault(); editor?.chain().focus().toggleOrderedList().run(); }} class="toolbar-btn" class:active={editor?.isActive("orderedList")}>1. List</button>
-    <span class="text-line-hover mx-1">|</span>
+    <span class="text-line-hover mx-1" aria-hidden="true">|</span>
     <button aria-label="Insert image" onmousedown={(e) => { e.preventDefault(); toggleImageInput(); }} class="toolbar-btn" class:active={showImageInput}>🖼️</button>
     <button aria-label="Insert or edit link" onmousedown={(e) => { e.preventDefault(); toggleLinkEditor(); }} class="toolbar-btn" class:active={showLinkEditor || editor?.isActive("link")}>🔗</button>
     <button aria-label="Insert emoji" onmousedown={(e) => { e.preventDefault(); toggleEmojiPicker(); }} class="toolbar-btn" class:active={showEmojiPicker}>😊</button>
-    <span class="text-line-hover mx-1">|</span>
+    <span class="text-line-hover mx-1" aria-hidden="true">|</span>
     <SignatureEditor onInsert={(content) => editor?.chain().focus().insertContent(content).run()} />
 
     <span class="text-xs text-muted ml-auto">{charCount} chars</span>

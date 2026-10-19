@@ -16,6 +16,8 @@
     feed: '<path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/>',
     comment: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
     dm: '<path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><path d="m22 6-10 7L2 6"/>',
+    // v25 F6: `activity` backs the Activity nav entry and its empty state.
+    activity: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
     automation: '<path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/>',
     search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>',
     analytics: '<path d="M3 3v18h18"/><path d="M18 17V9M13 17V5M8 17v-3"/>',
@@ -52,6 +54,8 @@
     // v25 F1: `inbox` is EmptyState's default icon. It was referenced but never
     // defined, so every default-icon EmptyState rendered an empty circle.
     inbox: '<path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
+    // Research — an open flask: what is working in the niche.
+    research: '<path d="M10 2v7.31"/><path d="M14 9.8V2"/><path d="M8.5 2h7"/><path d="M14 9.8a4 4 0 0 1-1.06 2.77l-4.2 4.9A3 3 0 0 0 8 19.3V21a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-1.7a3 3 0 0 0-.74-1.83l-4.2-4.9A4 4 0 0 1 10 9.8"/>',
   };
 
   let path = $derived(icons[name] || '');
