@@ -469,8 +469,26 @@ pub async fn create(
     let media_val: Vec<crate::social::MediaAttachment> =
         serde_json::from_value(body.media.clone().unwrap_or(serde_json::json!([])))
             .unwrap_or_default();
-    let validation_errors =
+    let mut validation_errors =
         validate_posts_for_integrations(&state, &body, &validated_integrations, &media_val);
+    // A DRAFT may carry a title and no body. The composer's "Save Draft"
+    // accepts a title-only draft (that is a legitimate thing to keep -
+    // a headline with the body to come), but the server's empty-content
+    // rule rejected it with "Content is empty for X" - the client gate
+    // and the server gate disagreed, and the save reported success on
+    // the client and failed on the server.
+    //
+    // Only for an UNSCHEDULED post: a queued post is going to publish,
+    // and an empty body would publish as an empty post.
+    let is_draft = body.scheduled_at.is_none();
+    let has_title = body
+        .title
+        .as_deref()
+        .map(|t| !t.trim().is_empty())
+        .unwrap_or(false);
+    if is_draft && has_title {
+        validation_errors.retain(|e| e.kind != "empty");
+    }
     if !validation_errors.is_empty() {
         return Err(crate::error::AppError::BadRequest(
             serde_json::to_string(&serde_json::json!({
