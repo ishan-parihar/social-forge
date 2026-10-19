@@ -46,6 +46,17 @@
     return n.toLocaleString();
   }
 
+  /**
+   * The best engagement per post across the slots, used to scale the
+   * bars. Without it every bar was drawn at 100% width, so the chart
+   * compared nothing.
+   */
+  let maxSlotEngagement = $derived(
+    data?.timing?.best_slots?.length
+      ? Math.max(...data.timing.best_slots.map((s) => s.engagement_per_post))
+      : 0,
+  );
+
   function formatDate(iso: string | null): string {
     if (!iso) return "—";
     try {
@@ -204,10 +215,17 @@
                   Solid fill, not /60, for the same contrast reason the
                   analytics channel-mix bars use: a 60%-alpha brand over a
                   light track composites too pale for the white count label.
+
+                  The width is PROPORTIONAL to the best slot. It used to be
+                  `100%` whenever the value was positive, so every bar was
+                  full and the chart compared nothing - three slots with
+                  8470, 5410 and 3720 drew three identical bars.
                 -->
                 <div
                   class="h-full bg-accent-fill rounded-full flex items-center justify-end px-2"
-                  style="width: {slot.engagement_per_post > 0 ? 100 : 6}%"
+                  style="width: {slot.engagement_per_post > 0
+                    ? Math.max(6, Math.round((slot.engagement_per_post / maxSlotEngagement) * 100))
+                    : 0}%"
                 >
                   <span class="text-[10px] font-medium text-accent-fg">{slot.engagement_per_post.toFixed(1)}</span>
                 </div>

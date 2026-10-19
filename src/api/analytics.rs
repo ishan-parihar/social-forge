@@ -279,10 +279,18 @@ pub async fn get_summary(
     .fetch_all(&state.db)
     .await?;
 
+    // "Posts by channel" counts PUBLISHED posts, by the day they were
+    // published. It used to count every post by its CREATION date, so a
+    // user who drafted 10 posts a month ago and published 2 this week
+    // saw a bar of 10 for last month and none for this week - while the
+    // rest of the page (published, cadence, engagement) counts by
+    // publish time. The two headline charts of the page described
+    // different events.
     let provider_rows: Vec<(String, i64)> = sqlx::query_as(
         "SELECT i.provider_identifier, COUNT(*) \
          FROM posts p JOIN integrations i ON p.integration_id = i.id \
-         WHERE p.user_id = ? AND p.created_at >= ? \
+         WHERE p.user_id = ? AND p.state = 'published' \
+           AND p.published_at >= ? AND p.published_at IS NOT NULL \
          GROUP BY i.provider_identifier \
          ORDER BY COUNT(*) DESC",
     )
@@ -291,11 +299,14 @@ pub async fn get_summary(
     .fetch_all(&state.db)
     .await?;
 
+    // "Posting volume" counts PUBLISHED posts, by the day they went
+    // out - for the same reason as the channel mix above.
     let day_rows: Vec<(String, i64)> = sqlx::query_as(
-        "SELECT date(p.created_at, 'unixepoch'), COUNT(*) \
-         FROM posts p WHERE p.user_id = ? AND p.created_at >= ? \
-         GROUP BY date(p.created_at, 'unixepoch') \
-         ORDER BY date(p.created_at, 'unixepoch') ASC",
+        "SELECT date(p.published_at, 'unixepoch'), COUNT(*) \
+         FROM posts p WHERE p.user_id = ? AND p.state = 'published' \
+           AND p.published_at >= ? AND p.published_at IS NOT NULL \
+         GROUP BY date(p.published_at, 'unixepoch') \
+         ORDER BY date(p.published_at, 'unixepoch') ASC",
     )
     .bind(auth.user_id)
     .bind(cutoff)
@@ -453,6 +464,53 @@ pub struct DayEngagement {
     pub impressions: i64,
 }
 
+/// Fill the gaps in a per-day engagement series.
+///
+/// The source query groups by publish date, so a day with nothing
+/// published has no row. A sparkline drawn from that series connects
+/// non-adjacent calendar dates as if they were evenly spaced, and a day
+/// with zero engagement is not plotted as zero - so the shape of the
+/// trend is wrong whenever publishing is not daily.
+///
+/// This inserts a zero row for every missing day between the window's
+/// start and its end, so the series is one point per calendar day.
+fn fill_missing_days(
+    rows: Vec<DayEngagement>,
+    cutoff_epoch: i64,
+    days: i64,
+) -> Vec<DayEngagement> {
+    // The window's last day is today (in UTC, which is what the day
+    // buckets use).
+    let today = chrono::Utc::now().date_naive();
+    let first = chrono::DateTime::from_timestamp(cutoff_epoch, 0)
+        .map(|dt| dt.date_naive())
+        .unwrap_or(today);
+
+    let mut by_date: std::collections::HashMap<chrono::NaiveDate, DayEngagement> =
+        std::collections::HashMap::new();
+    for r in rows {
+        if let Ok(d) = chrono::NaiveDate::parse_from_str(&r.date, "%Y-%m-%d") {
+            by_date.insert(d, r);
+        }
+    }
+
+    let mut out = Vec::with_capacity(days as usize + 1);
+    let mut d = first;
+    // Guard against a pathological `days`: the query clamps it to 3650.
+    let limit = first + chrono::Duration::days(days.min(3650));
+    while d <= limit && d <= today {
+        out.push(by_date.remove(&d).unwrap_or(DayEngagement {
+            date: d.format("%Y-%m-%d").to_string(),
+            likes: 0,
+            comments: 0,
+            shares: 0,
+            impressions: 0,
+        }));
+        d += chrono::Duration::days(1);
+    }
+    out
+}
+
 /// The percentage change from `previous` to `current`.
 ///
 /// Returns 0.0 when there is no previous period to compare against:
@@ -549,11 +607,25 @@ pub async fn get_engagement(
         impressions =
             crate::db::queries::metric_label_matches(crate::db::queries::METRIC_IMPRESSIONS),
     );
-    let by_day: Vec<DayEngagement> = sqlx::query_as(&by_day_sql)
+    let by_day_rows: Vec<DayEngagement> = sqlx::query_as(&by_day_sql)
         .bind(auth.user_id)
         .bind(crate::db::types::EpochUtc::from(cutoff))
         .fetch_all(&state.db)
         .await?;
+
+    // Fill in the days with no published post.
+    //
+    // The query groups by publish date, so a day with nothing published
+    // is ABSENT from the series. The frontend maps the series to a
+    // positional array and draws a sparkline, so the missing days were
+    // silently dropped: the chart connected non-adjacent calendar dates
+    // as if they were evenly spaced, and a day with zero engagement was
+    // not plotted as zero. The shape of the trend was wrong whenever
+    // publishing was not daily.
+    //
+    // Filling the gaps makes the x-axis "days in the window" - which is
+    // what the chart's label says it is.
+    let by_day = fill_missing_days(by_day_rows, cutoff.timestamp(), days);
 
     Ok(Json(EngagementResponse {
         total_likes: current.likes,
@@ -593,6 +665,12 @@ pub async fn get_adherence(
     let days = query.days.unwrap_or(7).clamp(1, 3650) as i64;
     let cutoff = (chrono::Utc::now() - chrono::Duration::days(days)).timestamp();
 
+    // The window is BOUNDED on both ends. It used to be only a floor
+    // (`scheduled_at >= cutoff`), so a post scheduled for NEXT MONTH
+    // counted towards the denominator of a 7-day window: the UI read
+    // "3 of 5 scheduled posts went out" for a window that had not
+    // happened yet, with a misleadingly low success rate.
+    let now = chrono::Utc::now().timestamp();
     let row: (i64, i64, i64) = sqlx::query_as(
         r#"SELECT
             COUNT(*) FILTER (WHERE state IN ('published', 'error', 'publishing')) as scheduled,
@@ -600,10 +678,11 @@ pub async fn get_adherence(
             COUNT(*) FILTER (WHERE state = 'error') as failed
            FROM posts
            WHERE user_id = ? AND deleted_at IS NULL
-             AND scheduled_at >= ?"#,
+             AND scheduled_at >= ? AND scheduled_at <= ?"#,
     )
     .bind(auth.user_id)
     .bind(cutoff)
+    .bind(now)
     .fetch_one(&state.db)
     .await?;
 

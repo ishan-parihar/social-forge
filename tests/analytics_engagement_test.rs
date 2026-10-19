@@ -190,6 +190,12 @@ async fn engagement_reports_the_users_own_published_posts() {
 
 /// The per-day breakdown carries the same numbers, keyed by the day the
 /// post was published - the sparkline reads it.
+///
+/// The series has one point per CALENDAR DAY in the window, including
+/// the days with no published post (a zero row). It used to carry only
+/// the days that had a publish, so a sparkline connected non-adjacent
+/// calendar dates as if they were evenly spaced and a day with zero
+/// engagement was not plotted as zero.
 #[tokio::test]
 async fn engagement_by_day_covers_the_published_post() {
     let state = state().await;
@@ -213,9 +219,34 @@ async fn engagement_by_day_covers_the_published_post() {
     assert_eq!(status, StatusCode::OK, "{body}");
     let v: serde_json::Value = serde_json::from_str(&body).expect("json");
     let by_day = v["by_day"].as_array().expect("by_day");
-    assert_eq!(by_day.len(), 1, "one published day: {body}");
-    assert_eq!(by_day[0]["likes"], 11, "{body}");
-    assert_eq!(by_day[0]["impressions"], 500, "{body}");
+
+    // One point per day of the 30-day window.
+    assert!(
+        by_day.len() >= 28,
+        "the series must have a point per calendar day: {body}"
+    );
+
+    // The published day carries the post's numbers.
+    let published_day = chrono::DateTime::from_timestamp(now - 3_600, 0)
+        .expect("ts")
+        .format("%Y-%m-%d")
+        .to_string();
+    let row = by_day
+        .iter()
+        .find(|r| r["date"] == published_day)
+        .expect("the published day must be in the series");
+    assert_eq!(row["likes"], 11, "{body}");
+    assert_eq!(row["comments"], 3, "{body}");
+    assert_eq!(row["shares"], 5, "{body}");
+    assert_eq!(row["impressions"], 500, "{body}");
+
+    // A day with no publish is a zero row, not a gap.
+    let empty_day = by_day
+        .iter()
+        .find(|r| r["date"] != published_day)
+        .expect("there must be days with no publish");
+    assert_eq!(empty_day["likes"], 0, "{body}");
+    assert_eq!(empty_day["impressions"], 0, "{body}");
 }
 
 /// A post published outside the window is not counted.
