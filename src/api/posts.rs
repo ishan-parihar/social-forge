@@ -1390,8 +1390,15 @@ pub(crate) fn validate_posts_for_integrations(
         let clean = clean.trim();
         let max_len = provider.max_content_length();
 
-        // Check empty content
-        if clean.is_empty() {
+        // Check empty content.
+        //
+        // An empty body is only an error when the post has no media.
+        // Instagram, TikTok, YouTube and Pinterest all accept a post
+        // that is a photo with no caption - the NORMAL case for a photo.
+        // The rule fired unconditionally, so a single image with no
+        // caption was rejected with "Content is empty for Instagram" and
+        // could not be composed at all.
+        if clean.is_empty() && media.is_empty() {
             errors.push(ValidationError {
                 integration_id: integ.id.to_string(),
                 provider: integ.provider_identifier.clone(),

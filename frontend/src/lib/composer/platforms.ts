@@ -238,7 +238,14 @@ export function blockersFor(
   const limit = charLimitFor(provider);
   const count = countFor(provider, text);
 
-  if (text.length === 0) {
+  // An empty body is only an error when there is no media to carry the
+  // post. Instagram, TikTok, YouTube and Pinterest all accept a post
+  // that is a photo with no caption - which is the NORMAL case for a
+  // photo. The rule used to fire before the media rules, so the
+  // composer blocked "Post body is empty" for a single image with no
+  // caption, and the server agreed ("Content is empty for Instagram").
+  const media = opts.mediaCount ?? 0;
+  if (text.length === 0 && media === 0) {
     out.push({ provider, label: spec.label, message: 'Post body is empty' });
   } else if (count > limit) {
     const over = count - limit;
@@ -251,7 +258,6 @@ export function blockersFor(
   if (spec.titleRequired && !(opts.title || '').trim()) {
     out.push({ provider, label: spec.label, message: 'Title is required' });
   }
-  const media = opts.mediaCount ?? 0;
   if (spec.mediaRequired && media === 0) {
     out.push({
       provider,
