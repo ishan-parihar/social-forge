@@ -460,6 +460,20 @@ async function main() {
         const url = `${BASE_URL}${route}`;
         try {
           await page.goto(url, { waitUntil: 'load', timeout: 30_000 });
+          // Wait for the APP to render, not for a fixed delay. The `load`
+          // event fires before SvelteKit's client boot has run the
+          // layout's auth probe, so a fixed `sleep(700)` measured the
+          // page mid-boot and reported a blank document as "no <h1> on
+          // the page" - on whichever route happened to be slow. The
+          // render time ranged from 115ms to 2200ms across the routes,
+          // so no fixed sleep is safe.
+          await page
+            .waitForSelector('h1', { state: 'attached', timeout: 10_000 })
+            .catch(() => {
+              // A route with genuinely no heading is a real finding, and
+              // the audit below reports it. Waiting for the timeout is
+              // the slow path but it keeps the report honest.
+            });
           await sleep(700); // let the first data fetch settle
           // The onboarding modal covers every route on an empty database;
           // measuring it would measure the modal, not the page.

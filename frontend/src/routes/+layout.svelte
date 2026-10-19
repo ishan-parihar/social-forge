@@ -140,7 +140,17 @@
       }
     };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      // Close the SSE stream when the layout unmounts. Without this the
+      // EventSource outlived the page: a full navigation created a new
+      // module instance with a new socket while the old one stayed open,
+      // and the sockets accumulated one per navigation. Chromium caps a
+      // host at 6 concurrent connections, so after enough navigations the
+      // new page's own requests blocked behind the stale streams and the
+      // page rendered blank.
+      realtime.disconnect();
+    };
   });
 
   onDestroy(() => {

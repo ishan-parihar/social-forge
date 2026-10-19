@@ -7,13 +7,21 @@ class RealtimeClient {
         private listeners = new Map<string, Set<(data: unknown) => void>>();
         private errorCount = 0;
         private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+        private lifecycleBound = false;
 
         get isConnected() {
                 return this.connected;
         }
 
         connect() {
-                if (this.es) return;
+                this.attachLifecycleHandlers();
+                // A stale socket counts as no socket. `this.es` can be
+                // non-null but already closed (the stream ended and the
+                // browser tore it down), and the old `if (this.es) return`
+                // guard then made `connect()` a no-op - the app would sit
+                // with no live updates and no way to recover.
+                if (this.es && this.es.readyState !== EventSource.CLOSED) return;
+                this.es = null;
                 try {
                         this.es = new EventSource(`${API_BASE}/api/events`);
                         this.es.onopen = () => {
@@ -81,6 +89,44 @@ class RealtimeClient {
                 this.es = null;
                 this.connected = false;
                 this.errorCount = 0;
+                if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+                this.reconnectTimer = null;
+                // The listeners are page-scoped: a route that subscribed
+                // is gone once the layout unmounts, and a callback into a
+                // destroyed component is a leak too. `on()` returns its
+                // own unsubscribe, so a subscriber that wants to survive
+                // a navigation re-subscribes in its own `onMount`.
+                this.listeners.clear();
+        }
+
+        /**
+         * Close the stream when the document goes away.
+         *
+         * `disconnect()` in the layout's `onMount` cleanup covers a
+         * client-side navigation (the layout is not unmounted, so the
+         * stream is deliberately kept). It does NOT cover a FULL page
+         * load: the document is replaced without the cleanup running, so
+         * the previous EventSource stayed open and each full navigation
+         * left another one behind. Chromium caps a host at 6 concurrent
+         * connections, so after enough reloads the new page's own
+         * requests queued behind the stale streams and the page rendered
+         * blank.
+         *
+         * `pagehide` fires on both a real unload and a bfcache entry, so
+         * the socket is closed in either case.
+         */
+        attachLifecycleHandlers() {
+                if (typeof window === "undefined") return;
+                if (this.lifecycleBound) return;
+                this.lifecycleBound = true;
+                window.addEventListener("pagehide", () => this.closeSocket());
+        }
+
+        /** Close the socket but keep the listener registry intact. */
+        private closeSocket() {
+                this.es?.close();
+                this.es = null;
+                this.connected = false;
                 if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
                 this.reconnectTimer = null;
         }
