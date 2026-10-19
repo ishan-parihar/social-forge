@@ -618,7 +618,17 @@ impl XProvider {
             .flatten()
             .filter_map(|instruction| instruction.get("entries").and_then(|e| e.as_array()))
             .flatten()
-            .filter_map(|entry| entry.pointer("/content/itemContent/tweet_results/result"))
+            .flat_map(|entry| {
+                // A reply sits directly on the entry, or one level down inside a conversation module.
+                let direct = entry.pointer("/content/itemContent/tweet_results/result");
+                let in_module = entry
+                    .pointer("/content/items")
+                    .and_then(|items| items.as_array())
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|item| item.pointer("/item/itemContent/tweet_results/result"));
+                direct.into_iter().chain(in_module)
+            })
             .filter_map(|tweet| {
                 let id = tweet
                     .pointer("/rest_id")
@@ -2038,10 +2048,18 @@ impl SocialProvider for XProvider {
         platform_post_id: &str,
     ) -> Result<Vec<CommentData>, ProviderError> {
         if Self::parse_cookie_token(access_token).is_some() {
+            // X rejects TweetDetail with HTTP 422 when any of these is missing; same set as tweet_detail.
             let vars = serde_json::json!({
                 "focalTweetId": platform_post_id,
                 "count": 40,
+                "referrer": "tweet",
+                "with_rux_injections": false,
+                "includePromotedContent": false,
                 "rankingMode": "Relevance",
+                "withCommunity": true,
+                "withQuickPromoteEligibilityTweetFields": true,
+                "withBirdwatchNotes": true,
+                "withVoice": true,
             });
             let qid = crate::social::x_queryids::lookup("TweetDetail")
                 .ok_or_else(|| ProviderError::Api("Missing TweetDetail queryId".into()))?;
@@ -3289,6 +3307,29 @@ mod tests {
         assert_eq!(comments[0].text, "a reply");
         assert_eq!(comments[0].author_name.as_deref(), Some("Bob"));
         assert_eq!(comments[0].like_count, 2);
+    }
+
+    #[test]
+    fn parse_should_read_replies_inside_conversation_modules() {
+        let fixture = serde_json::json!({
+            "data": { "threaded_conversation_with_injections_v2": { "instructions": [
+                { "entries": [
+                    { "entryId": "tweet-1", "content": { "itemContent": { "tweet_results": { "result": {
+                        "rest_id": "1", "legacy": { "full_text": "root" }
+                    } } } } },
+                    { "entryId": "conversationthread-2", "content": { "entryType": "TimelineTimelineModule", "items": [
+                        { "entryId": "conversationthread-2-tweet-2", "item": { "itemContent": { "tweet_results": { "result": {
+                            "rest_id": "2", "legacy": { "full_text": "a nested reply", "favorite_count": 1 },
+                            "core": { "user_results": { "result": { "core": { "name": "Bob" } } } }
+                        } } } } }
+                    ] } }
+                ]}
+            ]}}
+        });
+        let comments = XProvider::parse_graphql_comments(&fixture, "1");
+        assert_eq!(comments.len(), 1, "module reply must be read, focal tweet skipped");
+        assert_eq!(comments[0].id, "2");
+        assert_eq!(comments[0].text, "a nested reply");
     }
 
     #[test]
