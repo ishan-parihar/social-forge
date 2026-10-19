@@ -647,6 +647,60 @@ The SSE client (`frontend/src/lib/stores/realtime.ts`) subscribes to these 19 ev
 
 If you add a new broadcast event in the backend (`broadcaster.send(...)`), add it to the `realtime.ts` subscription list AND wire up listeners in the relevant routes.
 
+### 9.9 Own-post engagement lives in `analytics_cache`, NOT `post_engagement`
+
+`post_engagement.post_id` is a foreign key to **`external_posts(id)`**, not to `posts(id)`. It can therefore never hold a row for one of the founder's own published posts - it only holds engagement for IMPORTED competitor feed posts.
+
+The founder's own engagement is in `analytics_cache`, keyed by `(user_id, platform_post_id)`, written by `/api/analytics/post/{id}` after a live provider fetch. Its payload is provider-shaped JSON: a list of `{label, data:[{total,date}]}` series.
+
+Two consequences that have each broken a query:
+- A `LEFT JOIN post_engagement pe ON pe.post_id = p.id` matches NOTHING for own posts, so the join looks like it works and every row scores zero.
+- The provider's series LABELS are not a shared vocabulary. X reports "Retweets" and "Replies", Bluesky reports "Reposts" and "Replies", LinkedIn reports lowercase. Matching only `lower(label) IN ('likes','comments','shares')` reads 0 comments and 0 shares forever on X and Bluesky, and `WHERE engagement > 0` then EXCLUDES those posts from any ranking.
+
+The vocabulary is mapped in ONE place - `db::queries::metric_label_matches` - and every reader uses it. Do not write a second label list.
+
+### 9.10 A calendar range's `end` is an INCLUSIVE DATE
+
+`end=2026-10-31` means "through the end of the 31st", not "at 00:00:00 on the 31st". The calendar endpoint resolves a date-only `end` to the last instant of that day, because the range is filtered with `scheduled_at <= end` and midnight excluded every post on the last day of the range.
+
+The same shape appears in every "date range" parameter: a bare `YYYY-MM-DD` is a CALENDAR DATE. Rendering one with `new Date("2026-11-15")` parses it as UTC midnight and shows the PREVIOUS day in every negative-offset zone - the frontend's `formatDateOnly` in `lib/api/campaigns.ts` exists for this.
+
+### 9.11 Timestamps: the storage type and the reader must agree
+
+SQLite keeps TEXT in an INTEGER-affinity column, and orders every INTEGER before every TEXT. A column declared `INTEGER` that is written with a `DateTime<Utc>` (sqlx stores RFC 3339 TEXT) therefore compares WRONG against every INTEGER bound: `created_at >= ?` is always TRUE and the range filter is a no-op. `external_posts.created_at` was exactly this, which made the 90-day research window, the feed summary and the posting-time histogram let through posts of any age.
+
+Write epoch columns through the `EpochUtc` seam in `db::types` (bind `EpochUtc::from(dt)`, read `EpochUtc`), and read them back as `DateTime<Utc>` via `From`. Migration 0007 rewrote the existing rows.
+
+### 9.12 A partial update needs THREE states, not two
+
+`Option<T>` collapses "absent" and "null", so a partial-update endpoint cannot express "leave it alone" versus "clear it". The composer sends `undefined` for a field the user emptied - and `undefined` means "omitted" on the wire, so emptying the title box left the old title on the post.
+
+The three-state pattern is `Option<Option<T>>` with a `double_option` deserializer (see `api::campaigns::double_option`), and the SQL needs an explicit flag rather than `COALESCE` - `COALESCE(?, col)` cannot tell "keep" from "clear" either, so the write is gated: `CASE WHEN ? THEN ? ELSE col END`.
+
+The same pattern applies to `campaign_id` on the stage endpoint, where a plain `Option<Uuid>` meant that omitting it WROTE NULL and silently dropped a post out of its campaign on every kanban drag.
+
+### 9.13 The composer and the publish path must speak the same shape
+
+The providers read FLAT, PROVIDER-NAMED keys out of `settings`: Reddit wants `settings["subreddit"]` and `settings["title"]`, Pinterest wants `settings["board"]`. The composer used to send `{integrationId: {target_ids}}`, which no provider reads - so every Reddit post failed at publish with "Missing subreddit in settings".
+
+The `title` is also stored in `posts.title`, which NO publish path reads. A title for a platform that publishes one (Reddit, Pinterest) has to be in the settings.
+
+### 9.14 The character count has one rule per provider, in two languages
+
+The composer shows a count and the server enforces one. The plain rule is UTF-8 BYTES on both sides (the browser's `String.length` counts UTF-16 code units, so a 200-emoji post read "200/300" in the composer and was rejected as "800 chars"). X's rule is the WEIGHTED one (twitter-text v3: emoji and CJK cost 2), implemented on both sides in `social::weighted_length` and `composer/platforms.ts`.
+
+`tests/counting_rule_test.rs` pins the server's rule against the composer's.
+
+### 9.15 A date-only `end` is inclusive; a cursor must be EXCLUSIVE
+
+A pagination cursor that is the oldest row's own timestamp, with a `created_at <= cursor` filter, returns that row AGAIN on the next page. The Activity page appends into a keyed `{#each rows as row (row.id)}`, and Svelte throws `each_key_duplicate` on a repeated key - so the page CRASHED on "Load more". The cursor is now one second earlier, and the append is idempotent so a page can never take the feed down.
+
+### 9.16 The composer validates against the SERVER's limits, not a copy
+
+`Provider::max_content_length()` is the authority. The frontend used to keep its own table, and the two drifted: X showed 280 in the composer (blocking a 300-character post and disabling the Post button) while the server enforced 4000. `/api/providers` now publishes `char_limit` per provider and the composer reads it.
+
+The same applies to which providers can be offered at all: a provider whose limit is 0 (Gmail, Drive, GitHub) has no "publish a post" surface, and offering it in the composer's channel grid produced a 400 at submit time ("Content is 42 chars, max 0 for Gmail").
+
 ---
 
 ## 10. Environment Variables
