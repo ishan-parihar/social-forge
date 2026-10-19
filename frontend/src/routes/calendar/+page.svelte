@@ -8,6 +8,7 @@
   import { campaignsApi, type Campaign } from "$lib/api/campaigns";
   import { calendarState } from "$lib/stores/calendar.svelte";
   import { timezone } from "$lib/stores/timezone.svelte";
+  import { wallClockToUtc } from "$lib/composer/wall-clock";
   import { toast } from "$lib/stores/toast";
   import { realtime } from "$lib/stores/realtime";
   import { confirmModal } from "$lib/stores/modals.svelte";
@@ -88,11 +89,11 @@
   async function bulkReschedule() {
     if (!bulkScheduleDate) return;
     bulkProcessing = true;
-    // v22 Phase 7: timezone-aware construction (was always-UTC Z suffix).
-    // Construct as local datetime, convert to ISO. The user types "09:00"
-    // meaning their local time, not UTC.
-    const localDate = new Date(`${bulkScheduleDate}T${bulkScheduleTime}:00`);
-    const iso = isNaN(localDate.getTime()) ? `${bulkScheduleDate}T${bulkScheduleTime}:00.000Z` : localDate.toISOString();
+    // The wall clock the user typed, read in the APP's selected
+    // timezone - the same conversion a drag uses. `new Date(...)` parsed
+    // it in the browser's timezone, so a bulk reschedule meant a
+    // different instant than the same time entered in the composer.
+    const iso = wallClockToUtc(bulkScheduleDate, bulkScheduleTime, timezone.value);
     for (const id of selected) { await postsApi.schedule(id, iso); }
     selected = new Set();
     showBulkSchedule = false;
@@ -260,9 +261,20 @@
     // Phase 1: hour-precision. If a newHour was passed (from WeekView),
     // use it; otherwise fall back to the event's existing time.
     const time = newHour || event.time || "09:00";
-    // v22 Phase 7: timezone-aware construction (was always-UTC Z suffix).
-    const localDate = new Date(`${newDate}T${time}:00`);
-    const dateObj = isNaN(localDate.getTime()) ? new Date(`${newDate}T${time}:00.000Z`) : localDate;
+    // The wall clock the user dropped the post on, read in the APP's
+    // selected timezone.
+    //
+    // `new Date(`${newDate}T${time}:00`)` parsed it in the BROWSER's
+    // timezone, which is not the same thing: an app whose timezone is
+    // America/New_York, opened on a machine set to UTC, dropped a post
+    // on the 09:00 slot and the server received 09:00 UTC - 5am local.
+    // The read path (`toCalendarEvent`) already used the app's zone, so
+    // the post appeared in the WRONG slot until the next render.
+    //
+    // `wallClockToUtc` is the one conversion - it is the same helper the
+    // composer's SchedulePicker uses, so a time entered by dragging and
+    // a time entered by typing mean the same instant.
+    const iso = wallClockToUtc(newDate, time, timezone.value);
 
     let moveGroup = false;
     if (event.groupId) {
@@ -274,7 +286,7 @@
       });
     }
 
-    const r = await postsApi.reschedule(eventId, dateObj.toISOString(), moveGroup, action);
+    const r = await postsApi.reschedule(eventId, iso, moveGroup, action);
     if (r.error) {
       toast("Failed to reschedule: " + r.error, "error");
     } else {
