@@ -259,7 +259,7 @@
       <span class="text-surface-hover" aria-hidden="true">|</span>
       <button
         onclick={() => mediaPopoverOpen = true}
-        class="text-sm text-accent hover:text-accent-strong cursor-pointer"
+        class="text-sm text-accent hover:text-accent-strong cursor-pointer min-h-11 inline-flex items-center"
       >
         Choose from library
       </button>

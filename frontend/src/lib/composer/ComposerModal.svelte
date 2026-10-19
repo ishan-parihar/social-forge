@@ -1114,7 +1114,7 @@
             <select
               value={selectedCampaignId || ''}
               onchange={(e) => selectedCampaignId = e.currentTarget.value || null}
-              class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none"
+              class="w-full px-3 py-2 min-h-11 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none"
             >
               <option value="">No campaign</option>
               {#each allCampaigns as c (c.id)}
@@ -1333,13 +1333,13 @@
       <div class="flex items-center gap-2 shrink-0">
         <button
           onclick={() => showAi = !showAi}
-          class="px-3 py-1.5 text-sm border border-line rounded-lg transition-colors {showAi ? 'bg-accent-soft text-accent border-accent/40' : 'text-muted hover:text-content'}"
+          class="px-3 py-1.5 min-h-11 text-sm border border-line rounded-lg transition-colors {showAi ? 'bg-accent-soft text-accent border-accent/40' : 'text-muted hover:text-content'}"
         >AI</button>
         <!-- Preview toggle: on mobile the pane is a full-width stack below the
              editor, so this reveals it in place instead of side by side. -->
         <button
           onclick={() => showPreviewMobile = !showPreviewMobile}
-          class="lg:hidden px-3 py-1.5 text-sm border border-line rounded-lg transition-colors text-muted hover:text-content"
+          class="lg:hidden px-3 py-1.5 min-h-11 text-sm border border-line rounded-lg transition-colors text-muted hover:text-content"
           aria-expanded={showPreviewMobile}
         >{showPreviewMobile ? 'Hide preview' : 'Preview'}</button>
       </div>
@@ -1350,20 +1350,20 @@
           <button
             onclick={saveAsDraft}
             disabled={submitting}
-            class="px-3 py-1.5 text-sm text-muted hover:text-content border border-line rounded-lg disabled:opacity-50 transition-colors"
+            class="px-3 py-1.5 min-h-11 text-sm text-muted hover:text-content border border-line rounded-lg disabled:opacity-50 transition-colors"
           >Save Draft</button>
         {/if}
         <button
           onclick={postNow}
           disabled={submitting || !canPublish}
           title={blockers.length > 0 ? blockers[0].message : ''}
-          class="px-3 py-1.5 bg-success hover:bg-success text-success-fg disabled:opacity-50 rounded-lg text-sm font-medium transition-colors"
+          class="px-3 py-1.5 min-h-11 bg-success hover:bg-success text-success-fg disabled:opacity-50 rounded-lg text-sm font-medium transition-colors"
         >{submitting ? 'Posting...' : 'Post Now'}</button>
         <button
           onclick={submit}
           disabled={submitting || !canPublish}
           title={blockers.length > 0 ? blockers[0].message : ''}
-          class="px-3 py-1.5 bg-accent-fill hover:bg-accent-fill-hover text-accent-fg disabled:opacity-50 rounded-lg text-sm font-medium transition-colors"
+          class="px-3 py-1.5 min-h-11 bg-accent-fill hover:bg-accent-fill-hover text-accent-fg disabled:opacity-50 rounded-lg text-sm font-medium transition-colors"
         >{submitting ? 'Scheduling...' : 'Schedule'}</button>
       </div>
     </div>

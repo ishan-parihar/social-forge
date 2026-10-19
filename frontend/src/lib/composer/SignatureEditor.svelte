@@ -149,9 +149,14 @@
 
 <style>
   .toolbar-btn {
+    /* The same 44px target as the editor's own toolbar buttons. This
+       rule was a second copy of the one in RichTextEditor.svelte, and
+       it had drifted - the copy here kept the old 26x29 size. */
+    min-height: 44px; min-width: 44px;
     padding: 0.25rem 0.5rem; font-size: 0.8rem; background: transparent;
     border: 1px solid transparent; border-radius: 0.25rem; cursor: pointer;
     color: var(--text-muted); font-weight: 500;
+    display: inline-flex; align-items: center; justify-content: center;
   }
   .toolbar-btn:hover { background: var(--bg-hover); color: var(--text-secondary); }
   .toolbar-btn.active { background: var(--brand); color: white; border-color: var(--brand); }

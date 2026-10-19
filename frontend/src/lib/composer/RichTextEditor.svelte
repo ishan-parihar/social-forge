@@ -283,9 +283,15 @@
 <style>
   /* v24-6: use CSS variables so the editor rethemes in light mode. */
   .toolbar-btn {
+    /* A 44px-tall target. The button is 26x29 at the old padding, which
+       is under the WCAG 2.2 minimum. The extra height comes from the
+       padding, so the GLYPH stays the same size and the row does not
+       grow - the buttons simply have room to be hit. */
+    min-height: 44px; min-width: 44px;
     padding: 0.25rem 0.5rem; font-size: 0.8rem; background: transparent;
     border: 1px solid transparent; border-radius: 0.25rem; cursor: pointer;
     color: var(--text-muted); font-weight: 500;
+    display: inline-flex; align-items: center; justify-content: center;
   }
   .toolbar-btn:hover { background: var(--bg-hover); color: var(--text-secondary); }
   .toolbar-btn.active { background: var(--brand); color: white; border-color: var(--brand); }

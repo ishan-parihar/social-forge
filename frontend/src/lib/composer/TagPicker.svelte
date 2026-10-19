@@ -40,7 +40,7 @@
         {@const isSelected = selected.includes(tag.id)}
         <button
           onclick={() => onToggle?.(tag.id)}
-          class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs border transition-colors
+          class="inline-flex items-center gap-1.5 px-2.5 py-1 min-h-11 rounded-full text-xs border transition-colors
             {isSelected
               ? 'border-transparent'
               : 'border-line text-muted hover:text-content hover:bg-surface-hover'}"
