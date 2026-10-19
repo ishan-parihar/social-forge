@@ -148,149 +148,103 @@ fn an_unterminated_angle_bracket_is_text() {
 
 // ─── The composer and the server must agree ───────────────────
 //
-// The composer's `plainText` (frontend/src/lib/composer/platforms.ts)
-// and the server's `sanitize_content` are two implementations of one
-// rule, in two languages. The character count the composer shows is
-// the count of THIS string, so if the two disagree the number on
-// screen is the count of a different post than the one that gets
-// published.
+// The composer's `plainText` and the server's `sanitize_content` are
+// two implementations of one rule, in two languages. The character
+// count the composer shows is the count of THIS string, so if the two
+// disagree the number on screen is the count of a different post than
+// the one that gets published.
 //
-// They disagreed once: the browser stripped on any `<` followed by a
-// letter, while the server (behind `looks_like_html`) only converted
-// on EVIDENCE of markup. A post reading "Use <div> for layout"
-// measured 19 in the composer and was stored as 23.
+// They disagreed twice:
+//   - the browser stripped on any `<` followed by a letter, while the
+//     server (behind `looks_like_html`) only converted on EVIDENCE of
+//     markup. A post reading "Use <div> for layout" measured 19 in the
+//     composer and was stored as 23.
+//   - the browser did not decode entities and did not drop
+//     `<script>`/`<style>` bodies, so `&mdash;` was literal text in the
+//     composer and an em-dash in the published post.
 //
-// The browser's implementation is transcribed here and compared against
-// the server's.
+// **The test runs the REAL TypeScript.** The browser's implementation
+// lives in `frontend/src/lib/composer/post-text.ts` - a dependency-free
+// module precisely so this test can load it under node. A hand-written
+// transcription would be a SECOND COPY of the rule, and a second copy
+// is exactly how the drift survived this long: the test would have
+// compared two copies that agreed with each other and disagreed with
+// the code that ships.
+//
+// Run: cargo test --test html_to_text_test
 
-/// The composer's `plainText`, transcribed from
-/// frontend/src/lib/composer/platforms.ts.
-fn composer_plain_text(s: &str) -> String {
-    if !composer_looks_like_html(s) {
-        return s.trim().to_string();
-    }
-    let mut out = String::new();
-    let chars: Vec<char> = s.chars().collect();
-    let mut i = 0usize;
-    while i < chars.len() {
-        if chars[i] != '<' {
-            out.push(chars[i]);
-            i += 1;
-            continue;
-        }
-        let next = chars.get(i + 1).copied();
-        let is_tag = matches!(next, Some(c) if c.is_ascii_alphabetic() || c == '/' || c == '!' || c == '?');
-        if !is_tag {
-            out.push('<');
-            i += 1;
-            continue;
-        }
-        let rest: String = chars[i + 1..].iter().collect();
-        let lower = rest.to_ascii_lowercase();
-        let end = lower.find('>').map(|p| p + i + 1);
-        let Some(end) = end else {
-            out.push('<');
-            i += 1;
-            continue;
-        };
-        let tag: String = chars[i + 1..end].iter().collect::<String>().to_ascii_lowercase();
-        let name = tag
-            .trim_start_matches(['/', '!', '?'])
-            .split(|c: char| c.is_whitespace() || c == '/' || c == '>')
-            .next()
-            .unwrap_or("")
-            .to_string();
-        // `<br>` is a line break, and a BLOCK element ends the line -
-        // but a block only ends a line that has content, so the two
-        // cases differ in the guard, not in the action.
-        let is_line_break = name == "br";
-        let is_block_end = composer_is_block(&name) && !out.is_empty() && !out.ends_with('\n');
-        if is_line_break || is_block_end {
-            out.push('\n');
-        }
-        i = end + 1;
-    }
-    // Collapse the runs of blank lines.
-    let mut result = String::new();
-    let mut blank = 0usize;
-    for c in out.chars() {
-        if c == '\n' {
-            blank += 1;
-            if blank > 1 {
-                continue;
-            }
-        } else {
-            blank = 0;
-        }
-        result.push(c);
-    }
-    result.trim().to_string()
-}
+use std::process::Command;
 
-fn composer_is_block(name: &str) -> bool {
-    matches!(
-        name,
-        "p" | "div" | "li" | "ul" | "ol"
-            | "h1" | "h2" | "h3" | "h4" | "h5" | "h6"
-            | "blockquote" | "pre" | "section" | "article"
-            | "header" | "footer" | "tr" | "table"
-    )
-}
+/// The composer's `plainText`, run from the REAL module under node.
+fn composer_plain_text(input: &str) -> String {
+    let script = format!(
+        r#"
+import {{ plainText }} from '{module}';
+// With `node -e`, argv[0] is the node binary and argv[1] is the FIRST
+// user argument - there is no script path in between.
+const input = process.argv[1];
+process.stdout.write(plainText(input));
+"#,
+        module = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/frontend/src/lib/composer/post-text.ts"
+        )
+    );
 
-fn composer_looks_like_html(s: &str) -> bool {
-    const VOID_TAGS: &[&str] = &["br", "hr", "img", "input", "meta", "link", "wbr", "source"];
-    const KNOWN_TAGS: &[&str] = &[
-        "p", "div", "span", "br", "hr", "b", "i", "u", "strong", "em", "s", "strike", "a", "ul",
-        "ol", "li", "h1", "h2", "h3", "h4", "h5", "h6", "blockquote", "pre", "code", "section",
-        "article", "header", "footer", "main", "aside", "nav", "figure", "figcaption", "table",
-        "thead", "tbody", "tr", "td", "th", "img", "picture", "source", "video", "audio", "iframe",
-        "script", "style", "small", "sub", "sup", "mark", "del", "ins", "abbr", "cite", "q",
-        "kbd", "samp", "var", "wbr",
-    ];
-    let lower = s.to_ascii_lowercase();
-    let bytes: Vec<char> = lower.chars().collect();
-    let mut i = 0usize;
-    while i < bytes.len() {
-        if bytes[i] != '<' {
-            i += 1;
-            continue;
-        }
-        let next = bytes.get(i + 1).copied();
-        if matches!(next, Some('/') | Some('!') | Some('?')) {
-            return true;
-        }
-        let rest: String = bytes[i + 1..].iter().collect();
-        for tag in VOID_TAGS {
-            if let Some(after_tag) = rest.strip_prefix(tag) {
-                if matches!(after_tag.chars().next(), Some('>') | Some(' ') | Some('/')) {
-                    return true;
-                }
-            }
-        }
-        for tag in KNOWN_TAGS {
-            if let Some(after_tag) = rest.strip_prefix(tag) {
-                if matches!(after_tag.chars().next(), Some(' ') | Some('\t') | Some('\n')) {
-                    return true;
-                }
-            }
-        }
-        i += 1;
-    }
-    false
+    let out = Command::new("node")
+        .arg("--experimental-strip-types")
+        .arg("--input-type=module")
+        .arg("-e")
+        .arg(&script)
+        .arg(input)
+        .output()
+        .expect("node must be available to run the composer's real implementation");
+
+    assert!(
+        out.status.success(),
+        "node failed: {}\n{}",
+        String::from_utf8_lossy(&out.stderr),
+        script
+    );
+    String::from_utf8(out.stdout).expect("utf-8 output")
 }
 
 #[test]
 fn the_composer_and_the_server_produce_the_same_text() {
     let cases = [
+        // Plain text with no markup at all.
+        "Plain text with no markup at all",
+        // A bare tag in angle brackets: a word, not markup.
         "Use <div> for layout",
         "Ship it! 5 < 10 and 10 > 5",
+        "a < b > c",
+        // Real markup.
         "<p>Hello <b>world</b></p>",
         "<p>One</p><p>Two</p>",
         "One<br>Two",
-        "Plain text with no markup at all",
-        "a < b > c",
         "<p class=\"lead\">Hello</p>",
-        "Tom &amp; Jerry",
+        // Entities - the browser used to leave these alone.
+        //
+        // These carry MARKUP on purpose: entities are decoded only
+        // inside the strip path, on both sides. A bare "wait&hellip;"
+        // has no evidence of markup, so it is left alone - which is the
+        // right answer, and a case that would pass even with the
+        // decoding removed.
+        "<p>Tom &amp; Jerry</p>",
+        "<p>Tom &mdash; Jerry</p>",
+        "<p>Tom &ndash; Jerry</p>",
+        "<p>wait&hellip;</p>",
+        "<p>a&nbsp;b</p>",
+        "<p>&#65;</p>",
+        "<p>&#x2014;</p>",
+        "<p>&#99999999;</p>",
+        "<p>&unknownentity;</p>",
+        // A script body is code, not prose.
+        "<p>Keep</p><script>alert(1)</script>",
+        "<style>.a{color:red}</style><p>Keep</p>",
+        // An unterminated angle bracket.
+        "5 < 10",
+        "open <br",
         "",
     ];
     for case in cases {

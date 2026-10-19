@@ -3273,34 +3273,34 @@ async fn handle_posts_update_helper(
     let post_id: uuid::Uuid = id
         .parse()
         .map_err(|_| anyhow::anyhow!("Invalid post ID: {id}"))?;
-    let post = crate::services::posts::PostService::update(
-        &state.db,
-        &state.broadcast,
-        user_id,
-        post_id,
-        crate::services::posts::UpdatePostInput {
-            content,
-            // Three-state: the CLI's `--title` is only sent when the
-            // flag is present, so "not given" must mean "keep the
-            // stored title" rather than "clear it".
-            title: title.map(Some),
-            media: media.map(|m| Some(parse_media_arg(m))),
-            settings: match settings {
-                Some(s) => Some(Some(parse_settings_arg(s)?)),
-                None => None,
-            },
+    // The CLI is a CLIENT of the REST surface too (AGENTS.md §9.21), so
+    // it edits through the same function: the `Publishing` guard, the
+    // three-state fields and the provider validation all apply.
+    let body = crate::api::posts::UpdatePostRequest {
+        content: content.map(|c| c.to_string()),
+        // Three-state: the CLI's `--title` is only sent when the
+        // flag is present, so "not given" must mean "keep the
+        // stored title" rather than "clear it".
+        title: title.map(|t| Some(t.to_string())),
+        media: media.map(|m| Some(parse_media_arg(m))),
+        settings: match settings {
+            Some(s) => Some(Some(parse_settings_arg(s)?)),
+            None => None,
         },
-    )
-    .await
-    .map_err(|e| anyhow::anyhow!("Update failed: {e}"))?;
+        tag_ids: None,
+        first_comment: None,
+        overrides: None,
+    };
+    let post = crate::api::posts::update_post(state, user_id, post_id, body)
+        .await
+        .map_err(|e| anyhow::anyhow!("Update failed: {e}"))?;
     Ok(serde_json::json!({
         "ok": true,
         "id": post.id.to_string(),
-        "state": post.state.to_string(),
+        "state": post.state,
         "content": post.content,
         "title": post.title,
-        "scheduled_at": post.scheduled_at.map(|d| d.to_rfc3339()),
-        "updated_at": post.updated_at.to_rfc3339(),
+        "scheduled_at": post.scheduled_at,
     }))
 }
 

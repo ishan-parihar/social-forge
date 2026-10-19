@@ -1562,6 +1562,50 @@ pub async fn next_queued_epoch(pool: &SqlitePool) -> Result<Option<i64>, sqlx::E
     .map(|row| row.flatten())
 }
 
+/// Flip the given posts from `queued` to `publishing`, and return the
+/// ids THIS statement actually flipped.
+///
+/// This is the claim, and it is a compare-and-set: the UPDATE only
+/// touches rows that are STILL `queued`. Two claims that read the same
+/// id list both try to flip it; only the one that wins the write lock
+/// changes the row, and `RETURNING id` tells it exactly which rows
+/// those were.
+///
+/// `RETURNING id` is what makes the claim EXCLUSIVE. Reading the rows
+/// back by `state = 'publishing'` would not: a row another claim
+/// flipped is also 'publishing', and the loser would publish it too.
+/// A post published twice is unrecoverable on a real audience.
+///
+/// The SQLite transaction is a DEFERRED `BEGIN` - it takes the write
+/// lock at the first WRITE, not at BEGIN - so the SELECT of the due
+/// ids runs with no lock held and two claims CAN read the same list.
+/// This guard is what makes that safe.
+pub async fn claim_posts_for_publish<'e, E>(
+    executor: E,
+    ids: &[Uuid],
+) -> Result<Vec<Uuid>, sqlx::Error>
+where
+    E: sqlx::Executor<'e, Database = sqlx::Sqlite>,
+{
+    if ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    let holes = std::iter::repeat_n("?", ids.len())
+        .collect::<Vec<_>>()
+        .join(", ");
+    let sql = format!(
+        "UPDATE posts SET state = 'publishing', updated_at = unixepoch()
+         WHERE id IN ({holes}) AND state = 'queued'
+         RETURNING id"
+    );
+    let mut claim = sqlx::query_as::<_, (Uuid,)>(&sql);
+    for id in ids {
+        claim = claim.bind(id);
+    }
+    let claimed: Vec<(Uuid,)> = claim.fetch_all(executor).await?;
+    Ok(claimed.into_iter().map(|(id,)| id).collect())
+}
+
 pub async fn get_due_posts(
     pool: &SqlitePool,
     limit: i64,
@@ -1622,24 +1666,8 @@ pub async fn get_due_posts(
         return Ok(Vec::new());
     }
 
-    let holes = std::iter::repeat_n("?", ids.len())
-        .collect::<Vec<_>>()
-        .join(", ");
-
-    let claim_sql = format!(
-        "UPDATE posts SET state = 'publishing', updated_at = unixepoch()
-         WHERE id IN ({holes}) AND state = 'queued'
-         RETURNING id"
-    );
-    let mut claim = sqlx::query_as::<_, (Uuid,)>(&claim_sql);
-    for (id,) in &ids {
-        claim = claim.bind(id);
-    }
-    // `RETURNING id` is what makes the claim EXCLUSIVE: it returns
-    // exactly the rows THIS statement flipped. Reading them back by
-    // `state = 'publishing'` would not do - a row another claim flipped
-    // is also 'publishing', so the loser would publish it too.
-    let claimed: Vec<(Uuid,)> = claim.fetch_all(&mut *tx).await?;
+    let post_ids: Vec<Uuid> = ids.iter().map(|(id,)| *id).collect();
+    let claimed: Vec<Uuid> = claim_posts_for_publish(&mut *tx, &post_ids).await?;
 
     if claimed.is_empty() {
         // Another claim took every post this one selected. Publish
@@ -1669,7 +1697,7 @@ pub async fn get_due_posts(
       WHERE p.id IN ({claimed_holes})"#
     );
     let mut rows_query = sqlx::query_as::<_, PostWithIntegration>(&rows_sql);
-    for (id,) in &claimed {
+    for id in &claimed {
         rows_query = rows_query.bind(id);
     }
     let rows: Vec<PostWithIntegration> = rows_query.fetch_all(&mut *tx).await?;

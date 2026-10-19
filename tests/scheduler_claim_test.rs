@@ -2,9 +2,9 @@
 //
 // The scheduler claims due posts by flipping them `queued ->
 // publishing`. The claim UPDATE had no `state = 'queued'` guard, and
-// the transaction was a DEFERRED `BEGIN` (sqlx issues a plain BEGIN;
-// the pool never configured BEGIN IMMEDIATE), so the SELECT ran with no
-// lock held.
+// the transaction is a DEFERRED `BEGIN` (sqlx issues a plain BEGIN;
+// the pool never configured BEGIN IMMEDIATE), so the SELECT of the due
+// ids ran with NO lock held.
 //
 // Two claims that read the same id list could therefore both proceed:
 // the second UPDATE flipped rows the first had already moved to
@@ -13,31 +13,32 @@
 // audience is unrecoverable.
 //
 // The fix is the guard: the UPDATE only flips rows that are STILL
-// 'queued', and the read-back only returns rows that are 'publishing'
-// AND were in this claim's id list.
+// 'queued', and `RETURNING id` tells the claim exactly which rows IT
+// flipped.
+//
+// The test calls the production helper TWICE with the same post id.
+// The second call must return an empty set. That is deterministic -
+// no concurrency, no timing, no shared state.
 //
 // Run: cargo test --test scheduler_claim_test
-// Uses the isolated test DB from `load_dotenv_for_tests` (never data/social-forge.db).
+// Uses a DEDICATED database file per test (never the shared scratch DB,
+// and never data/social-forge.db).
 
 use social_forge::auth::middleware::DEFAULT_USER_ID;
 use social_forge::db;
-use social_forge::db::queries::get_due_posts;
+use social_forge::db::queries::{claim_posts_for_publish, get_due_posts};
 use social_forge::db::SqlitePool;
 use uuid::Uuid;
 
-async fn pool() -> SqlitePool {
-    // A DEDICATED database file, not the shared scratch DB.
-    //
-    // The shared file accumulates posts from every other integration
-    // test, and `get_due_posts` orders by `scheduled_at ASC` with a
-    // LIMIT - so a handful of leftovers that are due pushed this test's
-    // post out of the id list entirely, and the race never happened.
-    //
-    // A FILE (not `sqlite::memory:`) because the race needs two
-    // independent CONNECTIONS: `create_pool` sets `max_connections(1)`,
-    // so one in-memory pool cannot produce two.
-    let path = "target/test-data/scheduler_claim_test.db";
-    let _ = std::fs::remove_file(path);
+/// A pool over a database file this test owns.
+///
+/// The race needs two independent CONNECTIONS, so it must be a FILE:
+/// `sqlite::memory:` gives each connection its own database, and
+/// `create_pool` sets `max_connections(1)`, so one pool cannot produce
+/// two connections either.
+async fn pool_for(name: &str) -> SqlitePool {
+    let path = format!("target/test-data/scheduler_claim_{name}.db");
+    let _ = std::fs::remove_file(&path);
     let pool = db::create_pool(&format!("sqlite://{path}"))
         .await
         .expect("pool");
@@ -75,8 +76,8 @@ async fn seed_due_post(pool: &SqlitePool) -> (Uuid, Uuid) {
 }
 
 #[tokio::test]
-async fn a_due_post_is_claimed_exactly_once() {
-    let pool = pool().await;
+async fn a_claimed_post_is_never_claimed_again() {
+    let pool = pool_for("once").await;
     let (post_id, _) = seed_due_post(&pool).await;
 
     let first = get_due_posts(&pool, 10).await.expect("first claim");
@@ -85,12 +86,39 @@ async fn a_due_post_is_claimed_exactly_once() {
         "the first claim must take the post"
     );
 
-    // The SECOND claim must find nothing for this post. Before the fix
-    // it found the same post again - and the post was published twice.
+    // The SECOND claim must not find it. Before the fix it did - and
+    // the post was published twice.
     let second = get_due_posts(&pool, 10).await.expect("second claim");
     assert!(
         !second.iter().any(|p| p.id == post_id),
         "a post that is already publishing must not be claimed again"
+    );
+}
+
+#[tokio::test]
+async fn the_claim_helper_is_a_compare_and_set() {
+    let pool = pool_for("cas").await;
+    let (post_id, _) = seed_due_post(&pool).await;
+
+    // The PRODUCTION helper, called twice with the same id. The second
+    // call must return nothing - the row is no longer 'queued'.
+    //
+    // This is deterministic: it is the same statement, twice, in order.
+    let mut tx = pool.begin().await.expect("tx");
+    let first = claim_posts_for_publish(&mut *tx, &[post_id])
+        .await
+        .expect("first claim");
+    assert_eq!(first, vec![post_id], "the first claim must take the post");
+    tx.commit().await.expect("commit");
+
+    let mut tx2 = pool.begin().await.expect("tx2");
+    let second = claim_posts_for_publish(&mut *tx2, &[post_id])
+        .await
+        .expect("second claim");
+    tx2.commit().await.expect("commit 2");
+    assert!(
+        second.is_empty(),
+        "the second claim must get nothing: {second:?}"
     );
 
     let state: String = sqlx::query_scalar("SELECT state FROM posts WHERE id = ?")
@@ -103,7 +131,7 @@ async fn a_due_post_is_claimed_exactly_once() {
 
 #[tokio::test]
 async fn a_claimed_post_is_not_returned_by_a_later_claim() {
-    let pool = pool().await;
+    let pool = pool_for("later").await;
     let (post_id, _) = seed_due_post(&pool).await;
 
     let _ = get_due_posts(&pool, 10).await.expect("claim");

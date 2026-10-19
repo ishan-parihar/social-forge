@@ -22,6 +22,12 @@
 
 import { providerMeta, charLimitFor as backendCharLimitFor } from '$lib/providers';
 
+// The post-body conversion lives in its own module so the parity test can
+// run the REAL implementation under node. It is re-exported here because
+// this is where the composer imports it from.
+import { plainText } from './post-text';
+export { plainText };
+
 export interface PlatformSpec {
   /** Provider key as registered in $lib/providers. */
   provider: string;
@@ -180,122 +186,6 @@ export function weightedLength(text: string): number {
   return count;
 }
 
-/**
- * Strip the HTML down to what the platform will receive.
- *
- * The content is already plain text (the editor speaks plain text at
- * its boundary, the same contract the server and the providers use),
- * so this is mostly a safety net for content that arrived from
- * somewhere else.
- *
- * It must not eat a legitimate mention of a tag. The old version was
- * `html.replace(/<[^>]*>/g, '')`, which turned "Use <div> for layout"
- * into "Use  for layout" - and the count the composer shows is the
- * count of THIS string, so the preview and the number disagreed with
- * the post.
- *
- * The rule matches the server's `strip_html_tags`: a tag is a `<`
- * followed by a letter, `/`, `!` or `?`; anything else is literal text.
- */
-export function plainText(html: string): string {
-  // The server's rule, exactly: convert only when the string carries
-  // EVIDENCE of markup - a closing tag, an attribute, or a void tag.
-  // A bare `<div>` is a word in angle brackets, and a post about HTML is
-  // full of them.
-  //
-  // It used to strip on any `<` followed by a letter, so the count the
-  // composer showed was the count of a DIFFERENT string than the one
-  // the server stored: the composer measured "Use  for layout" (19)
-  // while the post said "Use <div> for layout" (23). The two sides of
-  // a rule must agree - see `tests/counting_rule_test.rs`.
-  if (!looksLikeHtml(html)) return html.trim();
-
-  let out = '';
-  let i = 0;
-  while (i < html.length) {
-    const ch = html[i];
-    if (ch !== '<') {
-      out += ch;
-      i += 1;
-      continue;
-    }
-    const next = html[i + 1];
-    const isTag =
-      next !== undefined &&
-      (/[A-Za-z/!?]/.test(next));
-    if (!isTag) {
-      out += '<';
-      i += 1;
-      continue;
-    }
-    const end = html.indexOf('>', i);
-    if (end === -1) {
-      out += '<';
-      i += 1;
-      continue;
-    }
-    const tag = html.slice(i + 1, end).toLowerCase();
-    const name = tag.replace(/^[!/]/, '').split(/[\s/>]/)[0];
-    if (name === 'br') out += '\n';
-    else if (isBlockElement(name)) {
-      if (out && !out.endsWith('\n')) out += '\n';
-    }
-    i = end + 1;
-  }
-  return out.replace(/\n{3,}/g, '\n\n').trim();
-}
-
-/**
- * Does this string carry evidence of markup?
- *
- * The mirror of the server's `social::common::looks_like_html`. A
- * closing tag, an attribute, or a void tag is evidence; a bare
- * `<word>` is not.
- */
-function looksLikeHtml(s: string): boolean {
-  const VOID_TAGS = ['br', 'hr', 'img', 'input', 'meta', 'link', 'wbr', 'source'];
-  const KNOWN_TAGS = [
-    'p', 'div', 'span', 'br', 'hr', 'b', 'i', 'u', 'strong', 'em', 's', 'strike', 'a', 'ul', 'ol',
-    'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'pre', 'code', 'section', 'article',
-    'header', 'footer', 'main', 'aside', 'nav', 'figure', 'figcaption', 'table', 'thead', 'tbody',
-    'tr', 'td', 'th', 'img', 'picture', 'source', 'video', 'audio', 'iframe', 'script', 'style',
-    'small', 'sub', 'sup', 'mark', 'del', 'ins', 'abbr', 'cite', 'q', 'kbd', 'samp', 'var', 'wbr',
-  ];
-  let i = 0;
-  while (i < s.length) {
-    if (s[i] !== '<') {
-      i += 1;
-      continue;
-    }
-    const next = s[i + 1];
-    if (next === '/' || next === '!' || next === '?') return true;
-    const rest = s.slice(i + 1).toLowerCase();
-    for (const tag of VOID_TAGS) {
-      if (rest.startsWith(tag)) {
-        const after = rest.charAt(tag.length);
-        if (after === '>' || after === ' ' || after === '/') return true;
-      }
-    }
-    for (const tag of KNOWN_TAGS) {
-      if (rest.startsWith(tag)) {
-        const after = rest.charAt(tag.length);
-        if (after === ' ' || after === '\t' || after === '\n') return true;
-      }
-    }
-    i += 1;
-  }
-  return false;
-}
-
-/** The elements that end a line when their tag is removed. */
-function isBlockElement(name: string): boolean {
-  return [
-    'p', 'div', 'li', 'ul', 'ol',
-    'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-    'blockquote', 'pre', 'section', 'article',
-    'header', 'footer', 'tr', 'table',
-  ].includes(name);
-}
 
 /**
  * The counting rule for a provider, with `twitter` mapped onto `x` because

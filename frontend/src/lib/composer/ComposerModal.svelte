@@ -501,7 +501,12 @@
     // "Autosave on".
     const _ = [content, title, selectedIntegrations, scheduledAt, firstComment, mediaItems, selectedTagIds];
     clearTimeout(draftTimer);
-    if (!content && !title) {
+    // A DRAFT may carry media and no words: a photo with no caption is
+    // legal, and the server's own emptiness rule is
+    // `clean.is_empty() && media.is_empty()`. The draft guard checked
+    // only the words, so a media-only draft was never autosaved and the
+    // image was gone on reload.
+    if (!content && !title && mediaItems.length === 0) {
       draftState = 'idle';
       return;
     }
@@ -521,7 +526,7 @@
 
   function saveDraftNow() {
     if (composer.mode !== 'create') return;
-    if (content || title) {
+    if (content || title || mediaItems.length > 0) {
       localStorage.setItem(DRAFT_KEY, JSON.stringify({
         content, title, selectedIntegrations, scheduledAt, firstComment,
         mediaItems, selectedTagIds,
@@ -912,7 +917,12 @@
 
   async function saveAsDraft() {
     if (submitting) return;
-    if (!content.trim() && !title.trim()) { error = 'Please write some content or title'; return; }
+    // Media counts: a photo with no caption is a legal draft, and the
+    // server's emptiness rule is `clean.is_empty() && media.is_empty()`.
+    if (!content.trim() && !title.trim() && mediaItems.length === 0) {
+      error = 'Please write some content, add a title, or attach a media item';
+      return;
+    }
     submitting = true;
     error = null;
     try {

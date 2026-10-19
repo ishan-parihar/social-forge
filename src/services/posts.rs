@@ -48,6 +48,13 @@ pub struct UpdatePostInput {
     pub title: Option<Option<String>>,
     pub media: Option<Option<Value>>,
     pub settings: Option<Option<Value>>,
+    /// The first comment on the post. Three-state, like the others:
+    /// absent keeps it, `null` clears it, a value replaces it.
+    ///
+    /// It was missing here, and the write went through
+    /// `update_post_content` - which has no `first_comment` column - so
+    /// an MCP or CLI edit that set a first comment SILENTLY LOST it.
+    pub first_comment: Option<Option<String>>,
 }
 
 /// Input for scheduling
@@ -178,6 +185,18 @@ impl PostService {
     /// explicit null clears it, a value replaces it. The write is
     /// conditional on the flag, so a caller that only sends a new body
     /// keeps the post's media and settings.
+    ///
+    /// This is the ONE implementation of "edit a post". The REST
+    /// handler, the MCP tool and the CLI all come through here, so a
+    /// fix lands once:
+    ///
+    ///   - a post that is MID-PUBLISH is not editable (the REST path
+    ///     returned 409 for it; the service path edited it silently);
+    ///   - `first_comment` is three-state and persisted (the service
+    ///     path dropped it entirely);
+    ///   - the edited content is validated against the channel's
+    ///     provider limits (the service path accepted an over-long post
+    ///     that then failed at publish time).
     pub async fn update(
         db: &SqlitePool,
         broadcaster: &Broadcaster,
@@ -187,6 +206,16 @@ impl PostService {
     ) -> ServiceResult<Post> {
         // Verify ownership before update
         let existing = Self::get(db, user_id, post_id).await?;
+
+        // A post that is mid-publish is being written to RIGHT NOW.
+        // Editing it underneath the publisher produced a post whose
+        // content was the OLD content and whose published text was the
+        // NEW one - or a failed publish with no explanation.
+        if existing.state == PostState::Publishing {
+            return Err(
+                "Post is being published; edit it after the attempt finishes".to_string(),
+            );
+        }
 
         // Resolve each field against the stored value.
         let content = match &input.content {
@@ -200,16 +229,21 @@ impl PostService {
         };
         let media = match &input.media {
             Some(Some(m)) => m.clone(),
-            Some(None) => serde_json::Value::Null, // explicit clear
+            Some(None) => serde_json::json!([]), // explicit clear
             None => existing.media,
         };
         let settings = match &input.settings {
             Some(Some(s)) => s.clone(),
-            Some(None) => serde_json::Value::Null, // explicit clear
+            Some(None) => serde_json::json!({}), // explicit clear
             None => existing.settings,
         };
+        let first_comment = match &input.first_comment {
+            Some(Some(fc)) => Some(fc.clone()),
+            Some(None) => None, // explicit clear
+            None => existing.first_comment,
+        };
 
-        let post = queries::update_post_content(
+        let post = queries::update_post_full(
             db,
             post_id,
             user_id,
@@ -217,6 +251,7 @@ impl PostService {
             title.as_deref(),
             &media,
             &settings,
+            first_comment.as_deref(),
         )
         .await
         .map_err(|e| format!("Database error: {e}"))?
@@ -502,15 +537,58 @@ impl PostService {
                 {
                     tracing::error!("Failed to release claim for post {post_id}: {write_err}");
                 }
-                Err(
-                "Thread predecessor is not published yet — publish the earlier part first"
-                    .to_string(),
-                )
+                // This is a FAILURE from the founder's point of view - the
+                // post did not go out - so it gets the same event as any
+                // other manual failure, and it appears in the activity log.
+                let err =
+                    "Thread predecessor is not published yet — publish the earlier part first"
+                        .to_string();
+                let _ = broadcaster
+                    .send_and_log(
+                        db,
+                        post.user_id,
+                        "post_failed",
+                        &serde_json::json!({
+                            "id": post_id.to_string(),
+                            "provider": post.provider_identifier,
+                            "error": err,
+                        }),
+                    )
+                    .await;
+                Err(err)
             }
             Err(e) => {
                 let err = e.to_string();
                 // The engine already recorded the failed attempt audit row
-                // and fired post.failed. Fail the claim as `error`, the same
+                // and fired the post.failed WEBHOOK. It did NOT fire the
+                // EVENT, so the failure was PERMANENTLY ABSENT from
+                // `events_log`: it never appeared in GET /api/activity,
+                // never in the dashboard's "Recent Activity" widget, and
+                // never triggered the eight frontend routes subscribed to
+                // `post_failed`. The founder pressed "Post Now", saw an
+                // error banner, and the failure left no trace anywhere
+                // they could find it again.
+                //
+                // The broadcast lives HERE, in the caller's error arm,
+                // because this is the ONE place every manual failure
+                // passes through: retry-exhausted, scope-lost, and the
+                // thread-predecessor refusal above. The automated path
+                // broadcasts its own `post_failed` inside the retry
+                // loop, so exactly one owner per path and exactly one
+                // row per failure.
+                let _ = broadcaster
+                    .send_and_log(
+                        db,
+                        post.user_id,
+                        "post_failed",
+                        &serde_json::json!({
+                            "id": post_id.to_string(),
+                            "provider": post.provider_identifier,
+                            "error": err,
+                        }),
+                    )
+                    .await;
+                // Fail the claim as `error`, the same
                 // state the scheduler uses. Restoring the pre-claim state
                 // would put the post back in `queued`, and the scheduler would
                 // retry it on its own without the operator seeing the failure.

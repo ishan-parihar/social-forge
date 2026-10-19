@@ -802,36 +802,52 @@ impl BlueskyProvider {
         access_token: &str,
         media: &[MediaAttachment],
     ) -> Result<serde_json::Value, ProviderError> {
-        // For MVP: return first image as an embed if it exists
+        // EVERY image, not just the first.
+        //
+        // The `return` was INSIDE the loop, so only the first image was
+        // ever embedded - with no error anywhere. The server ACCEPTS
+        // four images ("Bluesky allows max 4 images") and the composer
+        // offers four, so the founder attached three photos, every
+        // check passed, and the post went out with ONE photo.
+        //
+        // Bluesky's `app.bsky.embed.images` takes an `images` array of
+        // up to four, each with its own alt text.
+        let mut images: Vec<serde_json::Value> = Vec::new();
         for item in media {
-            if item.mime_type.starts_with("image/") {
-                // Download image and upload to Bluesky blob store
-                let img_resp = self.http.get(&item.url).send().await?;
-                let img_bytes = img_resp.bytes().await?;
-                let mime = &item.mime_type;
-
-                let blob_resp = self
-                    .http
-                    .post("https://bsky.social/xrpc/com.atproto.repo.uploadBlob")
-                    .header("Authorization", format!("Bearer {access_token}"))
-                    .header("Content-Type", mime)
-                    .body(img_bytes)
-                    .send()
-                    .await?;
-
-                let blob_json: serde_json::Value = blob_resp.json().await?;
-                let blob_ref = &blob_json["blob"];
-
-                return Ok(serde_json::json!({
-                    "$type": "app.bsky.embed.images",
-                    "images": [{
-                        "alt": item.alt.as_deref().unwrap_or(""),
-                        "image": blob_ref,
-                    }]
-                }));
+            if !item.mime_type.starts_with("image/") {
+                // Not an image: Bluesky's image embed cannot carry it.
+                continue;
             }
+            // Download image and upload to Bluesky blob store
+            let img_resp = self.http.get(&item.url).send().await?;
+            let img_bytes = img_resp.bytes().await?;
+            let mime = &item.mime_type;
+
+            let blob_resp = self
+                .http
+                .post("https://bsky.social/xrpc/com.atproto.repo.uploadBlob")
+                .header("Authorization", format!("Bearer {access_token}"))
+                .header("Content-Type", mime)
+                .body(img_bytes)
+                .send()
+                .await?;
+
+            let blob_json: serde_json::Value = blob_resp.json().await?;
+            let blob_ref = &blob_json["blob"];
+
+            images.push(serde_json::json!({
+                "alt": item.alt.as_deref().unwrap_or(""),
+                "image": blob_ref,
+            }));
         }
-        Ok(serde_json::Value::Null)
+
+        if images.is_empty() {
+            return Ok(serde_json::Value::Null);
+        }
+        Ok(serde_json::json!({
+            "$type": "app.bsky.embed.images",
+            "images": images,
+        }))
     }
 }
 

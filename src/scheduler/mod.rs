@@ -809,8 +809,11 @@ async fn process_due_posts(
                         // the founder has four channels.
                         "provider": post_clone.provider_identifier,
                     });
-                    bcast.send("post_failed", &fail_payload);
                     // v23: persist to events_log for the dashboard.
+                    // `send_and_log` broadcasts internally, so this is
+                    // the ONE push - the standalone `send()` that used
+                    // to precede it delivered the same event to every
+                    // SSE client twice.
                     let _ = bcast
                         .send_and_log(&db_clone, post_clone.user_id, "post_failed", &fail_payload)
                         .await;
@@ -1064,7 +1067,10 @@ pub(crate) enum PublishOutcome {
 /// scheduler's caller marks `publishing → error`; the manual path keeps
 /// the row's incoming state and writes `error_message`.
 ///
-/// caller broadcasts `post_failed` + fires webhooks.
+/// The failure EVENT is owned by the CALLER: the automated path
+/// broadcasts `post_failed` inside the retry loop, and the manual path
+/// broadcasts it in `PostService::publish`'s error arm. The webhook
+/// fires from here for BOTH paths.
 pub(crate) async fn publish_post(
     db: &SqlitePool,
     provider: &dyn SocialProvider,
@@ -1478,10 +1484,12 @@ pub(crate) async fn publish_post(
                     "provider": post.provider_identifier,
                 });
 
-                broadcaster.send("post_published", &event_payload);
                 // v23: persist to events_log so the dashboard's "Recent
                 // Activity" widget shows publishes even if no SSE client
-                // was connected at the time.
+                // was connected at the time. `send_and_log` broadcasts
+                // internally, so this is the ONE push - the standalone
+                // `send()` that used to precede it delivered the same
+                // event to every SSE client twice.
                 let _ = broadcaster
                     .send_and_log(db, post.user_id, "post_published", &event_payload)
                     .await;
@@ -1525,7 +1533,10 @@ pub(crate) async fn publish_post(
                                 "platform_post_id": result.platform_post_id,
                                 "error": e.to_string(),
                             });
-                            broadcaster.send("first_comment_failed", &payload);
+                            // `send_and_log` broadcasts internally, so this
+                            // is the ONE push - the standalone `send()`
+                            // that used to precede it delivered the same
+                            // event to every SSE client twice.
                             let _ = broadcaster
                                 .send_and_log(db, post.user_id, "first_comment_failed", &payload)
                                 .await;
@@ -1678,6 +1689,19 @@ pub(crate) async fn publish_post(
         "provider": post.provider_identifier,
         "error": last_error.clone().unwrap_or_default(),
     });
+
+    // The failure EVENT is owned by the CALLER, not by this function:
+    //
+    //   - the automated path broadcasts `post_failed` at the point of
+    //     failure, inside the retry loop;
+    //   - the manual path broadcasts it in `PostService::publish`'s
+    //     error arm, which is the ONE place every manual failure
+    //     passes through - retry-exhausted, scope-lost, and the
+    //     thread-predecessor exit, which returns before this function
+    //     is even reached.
+    //
+    // Broadcasting here would double-write on the automated path and
+    // still miss two of the manual path's exits.
     dispatch_webhook_background(db, post.user_id, "post.failed", &fail_payload);
 
     Err(last_error

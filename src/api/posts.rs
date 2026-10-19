@@ -771,10 +771,39 @@ pub async fn update(
     Path(id): Path<Uuid>,
     Json(body): Json<UpdatePostRequest>,
 ) -> Result<Json<PostPublic>, crate::error::AppError> {
+    let post = update_post(
+        &state,
+        auth.user_id,
+        id,
+        body,
+    )
+    .await?;
+    Ok(Json(post))
+}
+
+/// The core of "edit a post" - ONE implementation, called by the REST
+/// handler above AND by the MCP tool (`mcp::tools_posts::update_post`).
+///
+/// The MCP path used to call `PostService::update` directly, and that
+/// was a SECOND, LOOSER implementation of the same edit: it had no
+/// `Publishing` guard, it dropped `first_comment` entirely, and it did
+/// not validate the edited content against the channel's provider
+/// limits. So an agent could edit a post mid-publish, set a first
+/// comment and watch it vanish, or write an over-long post that was
+/// accepted and then failed at publish time.
+///
+/// The MCP layer is a CLIENT of the REST surface (AGENTS.md §9.21), so
+/// it calls the same function.
+pub(crate) async fn update_post(
+    state: &AppState,
+    user_id: uuid::Uuid,
+    id: uuid::Uuid,
+    body: UpdatePostRequest,
+) -> Result<PostPublic, crate::error::AppError> {
     // PUT is a partial update: a field the body omits keeps its stored value.
     // Defaulting omitted fields to "" / [] / {} wiped the body, media and
     // settings of a post when a caller only sent tag_ids.
-    let existing = queries::get_post(&state.db, id, auth.user_id)
+    let existing = queries::get_post(&state.db, id, user_id)
         .await?
         .ok_or_else(|| crate::error::AppError::NotFound("Post not found".into()))?;
     if existing.state == crate::db::models::PostState::Publishing {
@@ -847,7 +876,7 @@ pub async fn update(
     // from the scheduler's error log, hours after the edit. The composer
     // pre-validates, so the UI hid this - but the API is the contract.
     if let Ok(Some(integration)) =
-        queries::get_integration(&state.db, existing.integration_id, auth.user_id).await
+        queries::get_integration(&state.db, existing.integration_id, user_id).await
     {
         let media_val: Vec<crate::social::MediaAttachment> =
             serde_json::from_value(media.clone()).unwrap_or_default();
@@ -876,7 +905,7 @@ pub async fn update(
             }),
         };
         let errors = validate_posts_for_integrations(
-            &state,
+            state,
             &probe,
             std::slice::from_ref(&integration),
             &media_val,
@@ -896,7 +925,7 @@ pub async fn update(
     let post = queries::update_post_full(
         &state.db,
         id,
-        auth.user_id,
+        user_id,
         &content,
         title.as_deref(),
         &media,
@@ -911,7 +940,7 @@ pub async fn update(
         queries::set_post_tags(&state.db, id, tag_ids).await?;
     }
 
-    Ok(Json(PostPublic::from(post)))
+    Ok(PostPublic::from(post))
 }
 
 /// POST /api/posts/:id/schedule

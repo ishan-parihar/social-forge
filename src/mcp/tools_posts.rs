@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::api::AppState;
-use crate::services::posts::{PostService, UpdatePostInput as SvcUpdatePostInput};
+use crate::services::posts::PostService;
 
 // ── Shared publish-now pipeline (audit §4.2) ─────────────────
 
@@ -787,30 +787,33 @@ pub async fn update_post(
     let user_id = resolve_first_user(state).await?;
     let post_id = Uuid::parse_str(&input.id).map_err(|_| "Invalid post ID".to_string())?;
 
-    let post = PostService::update(
-        &state.db,
-        &state.broadcast,
-        user_id,
-        post_id,
-        SvcUpdatePostInput {
-            content: input.content.clone(),
-            // The three-state fields pass straight through: absent stays
-            // absent ("keep"), `null` stays `null` ("clear"), a value
-            // stays a value ("replace").
-            title: input.title.clone(),
-            media: input.media.clone(),
-            settings: input.settings.clone(),
-        },
-    )
-    .await?;
+    // The MCP layer is a CLIENT of the REST surface (AGENTS.md §9.21).
+    // The tool used to call `PostService::update` directly, and that
+    // was a SECOND, LOOSER implementation of the same edit: no
+    // `Publishing` guard, `first_comment` dropped, and no provider
+    // validation. Calling the REST handler means there is ONE
+    // implementation of "edit a post", and the agent gets the same
+    // answers the founder's composer does.
+    let body = crate::api::posts::UpdatePostRequest {
+        content: input.content.clone(),
+        title: input.title.clone(),
+        media: input.media.clone(),
+        settings: input.settings.clone(),
+        tag_ids: None,
+        first_comment: None,
+        overrides: None,
+    };
+    let post = crate::api::posts::update_post(state, user_id, post_id, body)
+        .await
+        .map_err(|e| e.to_string())?;
 
     Ok(Json(UpdatePostOutput {
         id: post.id.to_string(),
-        state: post.state.to_string(),
-        content: post.content,
-        title: post.title,
-        scheduled_at: post.scheduled_at.map(|d| d.to_rfc3339()),
-        updated_at: post.updated_at.to_rfc3339(),
+        state: post.state.clone(),
+        content: post.content.clone(),
+        title: post.title.clone(),
+        scheduled_at: post.scheduled_at.clone(),
+        updated_at: String::new(),
     }))
 }
 
