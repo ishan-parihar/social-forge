@@ -153,6 +153,30 @@ pub struct PostWithIntegrationName {
     // on it (v22 Phase 6 fix in the frontend), so we add it here for
     // completeness + to avoid a future round-trip.
     pub campaign_id: Option<Uuid>,
+    /// Engagement for this post, from `analytics_cache` (keyed by
+    /// user_id + platform_post_id).
+    ///
+    /// The frontend's `PostSummary` declared `likes`/`comments`/
+    /// `shares`/`impressions` and the dashboard's "recent published"
+    /// list renders them - but the list endpoint never sent them, so the
+    /// metric chips never appeared. `post_engagement` is not the source
+    /// here: its `post_id` FK targets `external_posts`, so it can never
+    /// hold a row for a `posts` row.
+    ///
+    /// `None` means "not measured", not zero: a post with no cached
+    /// analytics keeps the field absent rather than reporting a
+    /// fabricated zero.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub engagement: Option<PostEngagement>,
+}
+
+/// The engagement of one of the user's own posts.
+#[derive(Debug, Clone, Serialize)]
+pub struct PostEngagement {
+    pub likes: Option<i64>,
+    pub comments: Option<i64>,
+    pub shares: Option<i64>,
+    pub impressions: Option<i64>,
 }
 
 #[derive(Debug, Serialize)]
@@ -323,6 +347,37 @@ pub async fn list(
         (posts, total)
     };
 
+    // Engagement for the user's own posts, from `analytics_cache`. A
+    // post with no cached analytics gets NO entry - "not measured" is
+    // not "zero".
+    let engagement_by_post: std::collections::HashMap<Uuid, PostEngagement> = {
+        let ids: Vec<Uuid> = posts.iter().map(|p| p.id).collect();
+        queries::post_engagement_by_post(&state.db, auth.user_id, &ids)
+            .await
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|row| {
+                // A row with no measured metric at all is not engagement.
+                if row.likes.is_none()
+                    && row.comments.is_none()
+                    && row.shares.is_none()
+                    && row.impressions.is_none()
+                {
+                    return None;
+                }
+                Some((
+                    row.post_id,
+                    PostEngagement {
+                        likes: row.likes,
+                        comments: row.comments,
+                        shares: row.shares,
+                        impressions: row.impressions,
+                    },
+                ))
+            })
+            .collect()
+    };
+
     let mut enriched = Vec::with_capacity(posts.len());
     for p in posts {
         let integration_name = if let Ok(Some(integ)) =
@@ -357,6 +412,7 @@ pub async fn list(
             due_date: p.due_date.map(|d| d.to_rfc3339()),
             priority: p.priority.clone(),
             campaign_id: p.campaign_id,
+            engagement: engagement_by_post.get(&p.id).cloned(),
         });
     }
 

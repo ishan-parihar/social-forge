@@ -100,7 +100,13 @@
         ? published
         : published.filter(p => p.integration_name?.toLowerCase().includes(selectedProvider));
       topPosts = pool
-        .map(p => ({ ...p, _engagement: (p.likes || 0) + (p.comments || 0) + (p.shares || 0) }))
+        .map(p => ({
+          ...p,
+          _engagement:
+            (p.engagement?.likes || 0) +
+            (p.engagement?.comments || 0) +
+            (p.engagement?.shares || 0),
+        }))
         .sort((a, b) => (b._engagement || 0) - (a._engagement || 0))
         .slice(0, 8) as PostSummary[];
     }
@@ -582,14 +588,14 @@
                   <p class="text-sm text-content-secondary truncate">{post.content || post.title || '(no content)'}</p>
                   <div class="flex gap-3 mt-1 text-[10px] text-muted">
                     <span class="truncate">{post.integration_name}</span>
-                    {#if (post.likes ?? 0) > 0}
-                      <span class="flex items-center gap-0.5 text-viz-like"><Icon name="heart" class="w-3 h-3" /> {post.likes}</span>
+                    {#if post.engagement?.likes}
+                      <span class="flex items-center gap-0.5 text-viz-like"><Icon name="heart" class="w-3 h-3" /> {post.engagement.likes}</span>
                     {/if}
-                    {#if (post.comments ?? 0) > 0}
-                      <span class="flex items-center gap-0.5 text-viz-comment"><Icon name="comment-bubble" class="w-3 h-3" /> {post.comments}</span>
+                    {#if post.engagement?.comments}
+                      <span class="flex items-center gap-0.5 text-viz-comment"><Icon name="comment-bubble" class="w-3 h-3" /> {post.engagement.comments}</span>
                     {/if}
-                    {#if (post.shares ?? 0) > 0}
-                      <span class="flex items-center gap-0.5 text-viz-share"><Icon name="share" class="w-3 h-3" /> {post.shares}</span>
+                    {#if post.engagement?.shares}
+                      <span class="flex items-center gap-0.5 text-viz-share"><Icon name="share" class="w-3 h-3" /> {post.engagement.shares}</span>
                     {/if}
                   </div>
                 </div>

@@ -4481,6 +4481,80 @@ pub struct OwnPostEngagementTotals {
     pub impressions: i64,
 }
 
+/// The engagement of ONE of the user's own posts.
+#[derive(Debug, sqlx::FromRow)]
+pub struct PostEngagementRow {
+    pub post_id: Uuid,
+    pub likes: Option<i64>,
+    pub comments: Option<i64>,
+    pub shares: Option<i64>,
+    pub impressions: Option<i64>,
+}
+
+/// The engagement of each of the given posts, keyed by post id.
+///
+/// The same source as [`own_post_engagement_totals`]: `analytics_cache`,
+/// keyed by `(user_id, platform_post_id)`. A post with no cached
+/// analytics has NO row here - "not measured" is not "zero", and a list
+/// that renders a fabricated zero is worse than one that renders
+/// nothing.
+///
+/// Each metric is the LAST point of its series, which is the provider's
+/// running total - the current value.
+pub async fn post_engagement_by_post(
+    pool: &SqlitePool,
+    user_id: Uuid,
+    post_ids: &[Uuid],
+) -> Result<Vec<PostEngagementRow>, sqlx::Error> {
+    if post_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    let holes = std::iter::repeat_n("?", post_ids.len())
+        .collect::<Vec<_>>()
+        .join(", ");
+    let sql = format!(
+        r#"SELECT p.id AS post_id,
+                  (SELECT json_extract(point.value, '$.total')
+                     FROM analytics_cache ac, json_each(ac.data) AS series,
+                          json_each(json_extract(series.value, '$.data')) AS point
+                    WHERE ac.user_id = p.user_id
+                      AND ac.platform_post_id = p.platform_post_id
+                      AND lower(json_extract(series.value, '$.label')) = 'likes'
+                    ORDER BY point.key DESC LIMIT 1) AS likes,
+                  (SELECT json_extract(point.value, '$.total')
+                     FROM analytics_cache ac, json_each(ac.data) AS series,
+                          json_each(json_extract(series.value, '$.data')) AS point
+                    WHERE ac.user_id = p.user_id
+                      AND ac.platform_post_id = p.platform_post_id
+                      AND lower(json_extract(series.value, '$.label')) = 'comments'
+                    ORDER BY point.key DESC LIMIT 1) AS comments,
+                  (SELECT json_extract(point.value, '$.total')
+                     FROM analytics_cache ac, json_each(ac.data) AS series,
+                          json_each(json_extract(series.value, '$.data')) AS point
+                    WHERE ac.user_id = p.user_id
+                      AND ac.platform_post_id = p.platform_post_id
+                      AND lower(json_extract(series.value, '$.label')) = 'shares'
+                    ORDER BY point.key DESC LIMIT 1) AS shares,
+                  (SELECT json_extract(point.value, '$.total')
+                     FROM analytics_cache ac, json_each(ac.data) AS series,
+                          json_each(json_extract(series.value, '$.data')) AS point
+                    WHERE ac.user_id = p.user_id
+                      AND ac.platform_post_id = p.platform_post_id
+                      AND lower(json_extract(series.value, '$.label')) IN ('impressions', 'views')
+                    ORDER BY point.key DESC LIMIT 1) AS impressions
+             FROM posts p
+            WHERE p.user_id = ?
+              AND p.deleted_at IS NULL
+              AND p.id IN ({holes})"#
+    );
+    let mut q = sqlx::query_as::<_, PostEngagementRow>(&sql);
+    q = q.bind(user_id);
+    for id in post_ids {
+        q = q.bind(id);
+    }
+    q.fetch_all(pool).await
+}
+
 /// Research: the user's own published posts ranked by engagement.
 ///
 /// Engagement for the user's own posts lives in `analytics_cache`, keyed by

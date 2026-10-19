@@ -464,14 +464,14 @@
                 <span class="text-xs" style="color: {providerInk(providerIdFor(post))}">{providerIcon(providerIdFor(post))}</span>
                 <span class="flex-1 text-sm truncate text-content-secondary">{post.content || post.title || '(no content)'}</span>
                 <div class="flex gap-2 text-[10px] text-muted">
-                  {#if post.likes != null && post.likes > 0}
-                    <span class="flex items-center gap-0.5"><Icon name="heart" class="w-3 h-3 text-viz-like" /> {post.likes}</span>
+                  {#if post.engagement?.likes}
+                    <span class="flex items-center gap-0.5"><Icon name="heart" class="w-3 h-3 text-viz-like" /> {post.engagement.likes}</span>
                   {/if}
-                  {#if post.comments != null && post.comments > 0}
-                    <span class="flex items-center gap-0.5"><Icon name="comment-bubble" class="w-3 h-3 text-info" /> {post.comments}</span>
+                  {#if post.engagement?.comments}
+                    <span class="flex items-center gap-0.5"><Icon name="comment-bubble" class="w-3 h-3 text-info" /> {post.engagement.comments}</span>
                   {/if}
-                  {#if post.shares != null && post.shares > 0}
-                    <span class="flex items-center gap-0.5"><Icon name="share" class="w-3 h-3 text-success" /> {post.shares}</span>
+                  {#if post.engagement?.shares}
+                    <span class="flex items-center gap-0.5"><Icon name="share" class="w-3 h-3 text-success" /> {post.engagement.shares}</span>
                   {/if}
                 </div>
               </div>

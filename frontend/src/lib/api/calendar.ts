@@ -1,9 +1,41 @@
 import { api } from './client';
-import type { PostSummary } from './posts';
+import type { Tag } from './tags';
+
+export interface CalendarPost {
+  id: string;
+  integration_id: string;
+  integration_name: string;
+  state: string;
+  content: string;
+  title?: string | null;
+  media?: { url: string; mime_type: string; alt?: string }[] | null;
+  scheduled_at?: string | null;
+  published_at?: string | null;
+  platform_post_url?: string | null;
+  error_message?: string | null;
+  created_at: string;
+  tags?: Tag[];
+  group_id?: string | null;
+  first_comment?: string | null;
+  sequence?: number;
+  repeat_interval_days?: number | null;
+  repeat_end_date?: string | null;
+  campaign_id?: string | null;
+  /**
+   * The calendar endpoint returns engagement as FOUR FLAT fields, not
+   * the nested `engagement` object the posts list uses. This type
+   * mirrors the endpoint rather than borrowing `PostSummary`, which
+   * describes a different response.
+   */
+  likes?: number | null;
+  comments?: number | null;
+  shares?: number | null;
+  impressions?: number | null;
+}
 
 export interface CalendarDay {
   date: string;
-  posts: PostSummary[];
+  posts: CalendarPost[];
   post_count: number;
 }
 

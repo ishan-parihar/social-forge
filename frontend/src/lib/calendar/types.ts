@@ -1,4 +1,5 @@
 import type { PostSummary } from "$lib/api/posts";
+import type { CalendarPost } from "$lib/api/calendar";
 import type { Tag } from "$lib/api/tags";
 
 export type CalendarView = "month" | "week" | "day" | "list";
@@ -72,8 +73,24 @@ export function wallClock(iso: string | null | undefined, zone: string): { date:
   }
 }
 
+/**
+ * A post as the calendar or the posts list delivers it.
+ *
+ * The two endpoints differ: the posts list nests the engagement under
+ * `engagement`, the calendar endpoint returns it as four flat fields.
+ * The calendar view is fed by both (the grid from `/api/calendar`, the
+ * list view from `/api/posts`), so the mapper accepts either.
+ */
+export type CalendarPostLike = (PostSummary | CalendarPost) & {
+  engagement?: { likes?: number | null; comments?: number | null; shares?: number | null; impressions?: number | null };
+  likes?: number | null;
+  comments?: number | null;
+  shares?: number | null;
+  impressions?: number | null;
+};
+
 export function toCalendarEvent(
-  post: PostSummary,
+  post: CalendarPostLike,
   zone = "UTC",
   campaignColor?: string | null,
 ): CalendarEvent {
@@ -103,9 +120,9 @@ export function toCalendarEvent(
     // already holds.
     campaignId: post.campaign_id ?? null,
     campaignColor: post.campaign_id ? (campaignColor ?? null) : null,
-    likes: post.likes ?? null,
-    comments: post.comments ?? null,
-    shares: post.shares ?? null,
-    impressions: post.impressions ?? null,
+    likes: post.engagement?.likes ?? post.likes ?? null,
+    comments: post.engagement?.comments ?? post.comments ?? null,
+    shares: post.engagement?.shares ?? post.shares ?? null,
+    impressions: post.engagement?.impressions ?? post.impressions ?? null,
   };
 }

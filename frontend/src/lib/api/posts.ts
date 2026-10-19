@@ -28,11 +28,19 @@ export interface PostSummary {
   // Used by the drag-to-reorder feature (v25-4) - included here for type
   // completeness so future iterations don't need to touch this interface.
   kanban_sort_order?: number;
-  // Engagement metrics (optional - populated when analytics_cache available)
-  likes?: number | null;
-  comments?: number | null;
-  shares?: number | null;
-  impressions?: number | null;
+  // Engagement metrics for this post, from `analytics_cache`.
+  //
+  // They arrived as four FLAT optional fields on the type, but the
+  // endpoint never sent them - so the dashboard's metric chips read
+  // `undefined` and never rendered. The endpoint now sends one nested
+  // `engagement` object, and a post with no cached analytics has no
+  // `engagement` at all: "not measured" is not "zero".
+  engagement?: {
+    likes?: number | null;
+    comments?: number | null;
+    shares?: number | null;
+    impressions?: number | null;
+  };
 }
 export interface PostDetail {
   id: string; integration_id: string; integration_name: string; state: string;

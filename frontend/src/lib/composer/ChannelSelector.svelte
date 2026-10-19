@@ -10,11 +10,35 @@
   } = $props();
 
   let integrations = $state<Integration[]>([]);
+  let skippedCount = $state(0);
 
   onMount(async () => {
     try {
-      const r = await integrationsApi.list();
-      if (r.data) integrations = r.data.integrations.filter(i => !i.disabled);
+      const [r, provRes] = await Promise.all([
+        integrationsApi.list(),
+        integrationsApi.listProviders(),
+      ]);
+      if (!r.data) return;
+      const active = r.data.integrations.filter(i => !i.disabled);
+
+      // A channel that cannot take a post must not be offered here. The
+      // signal is the provider's own content limit: Gmail, Drive and
+      // GitHub report 0, because they have no "publish a post" surface
+      // at all. The composer used to list them, and a post to one came
+      // back as a nonsensical 400 ("Content is 42 chars, max 0 for
+      // Gmail") at submit time.
+      const limits = new Map<string, number>();
+      for (const p of provRes.data ?? []) limits.set(p.identifier, p.char_limit);
+
+      const publishable = active.filter((i) => {
+        const limit = limits.get(i.provider_identifier);
+        // A provider the server did not report is kept: the limit list
+        // is best-effort, and hiding a channel the user connected is
+        // worse than showing one that turns out to reject the post.
+        return limit === undefined || limit > 0;
+      });
+      skippedCount = active.length - publishable.length;
+      integrations = publishable;
     } catch (e) {
       toast(`Failed to load integrations: ${e instanceof Error ? e.message : "unknown"}`, "error");
       integrations = [];
@@ -28,6 +52,12 @@
       No active channels. <a href="/channels" class="text-accent hover:underline">Connect a channel</a> first.
     </div>
   {:else}
+    {#if skippedCount > 0}
+      <p class="text-[11px] text-muted mb-2">
+        {skippedCount} connected {skippedCount === 1 ? "channel is" : "channels are"} hidden:
+        they cannot publish posts.
+      </p>
+    {/if}
     <div class="grid grid-cols-2 sm:grid-cols-3 gap-2" role="group" aria-label="Channels">
       {#each integrations as int (int.id)}
         {@const isSelected = selected.includes(int.id)}
