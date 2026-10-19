@@ -169,7 +169,7 @@ When implementing features inspired by postiz-app or other competitors, apply th
 | `skills/social-forge-agent/SKILL.md` | Installed agent skill (via `make install-skill`) | When editing the skill |
 | `skills/social-forge-agent/references/providers.md` | Per-platform provider reference | When editing provider docs |
 | `docs/planning/PHASES_P0-P9.md` | The P0–P9 phase plan the objective names: each phase's acceptance criteria and its register-row mapping | Before parity or phase work; when claiming a phase is done |
-| `docs/kb/SESSION_2026-10-19.md` | Session self-reflection: what worked, every failure with its evidence, and the carry-forward checklist | Before a delegated or browser-driven session |
+| `docs/planning/SESSION_2026-10-19.md` | Session self-reflection: what worked, every failure with its evidence, and the carry-forward checklist | Before a delegated or browser-driven session |
 | `skills/social-forge-agent/references/quick-reference.md` | Routing rules, ID-discovery chains, error recovery and the v11 MCP contracts (NOT auto-installed); per-platform listings live in `skills/social-forge-agent/references/providers.md` and `--help` | Reference only; install manually if needed |
 
 Superseded docs move to `docs/archive/` with a tombstone at the original path — nothing is deleted. (2026-09-30 saw the last deletion of 14 stale docs; that practice is retired.) If a doc isn't in this table and has no tombstone, it doesn't exist — don't go looking for it.
