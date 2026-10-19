@@ -43,6 +43,26 @@ export interface PageInfo {
   picture?: string; username?: string;
 }
 
+/**
+ * One provider as the server reports it.
+ *
+ * `char_limit` is the provider's own content limit, read from the
+ * provider implementation - the same number the server validates against.
+ * The frontend used to hardcode these in a TypeScript table and the two
+ * drifted.
+ */
+export interface ProviderStatus {
+  identifier: string;
+  name: string;
+  configured: boolean;
+  oauth: boolean;
+  has_credentials: boolean;
+  editor_type: string;
+  redirect_uri: string;
+  tier: string;
+  char_limit: number;
+}
+
 export interface TargetInfo {
   id: string;
   name: string;
@@ -53,6 +73,8 @@ export interface TargetInfo {
 
 export const integrationsApi = {
   list: () => api.get<{ integrations: Integration[] }>("/api/integrations"),
+  /** Every registered provider, with the content limit the server enforces. */
+  listProviders: () => api.get<ProviderStatus[]>("/api/providers"),
   connect: (provider: string) => api.get<{ url: string; state: string }>(`/api/integrations/connect/${provider}`),
   connectApiKey: (body: ConnectApiKeyRequest) =>
     api.post<{ integration: Integration }>("/api/integrations/connect/api-key", body),

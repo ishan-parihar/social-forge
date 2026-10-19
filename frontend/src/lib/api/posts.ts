@@ -84,7 +84,19 @@ export const postsApi = {
     api.post<{ posts: PostSummary[]; group_id: string }>("/api/posts/thread", d),
   // v23-5: update now accepts tag_ids + first_comment (was silently
   // dropped on edit-mode save).
-  update: (id: string, d: { content: string; title?: string; media?: { id: string; url: string; mime_type: string; alt?: string }[]; settings?: Record<string, unknown>; tag_ids?: string[]; first_comment?: string }) =>
+  //
+  // `null` means "the user cleared this field"; omitting it means "not
+  // mentioned, keep the stored value". The backend reads the difference,
+  // so emptying the title box removes the title instead of silently
+  // keeping the old one.
+  update: (id: string, d: {
+    content: string;
+    title?: string | null;
+    media?: { id: string; url: string; mime_type: string; alt?: string }[] | null;
+    settings?: Record<string, unknown> | null;
+    tag_ids?: string[];
+    first_comment?: string | null;
+  }) =>
     api.put<PostDetail>(`/api/posts/${id}`, d),
   schedule: (id: string, at: string) => api.post<PostDetail>(`/api/posts/${id}/schedule`, { scheduled_at: at }),
   // v24-1: unschedule - transitions a post back to draft state.

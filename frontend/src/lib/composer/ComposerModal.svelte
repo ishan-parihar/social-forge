@@ -45,6 +45,7 @@
   import TargetPicker from '$lib/composer/TargetPicker.svelte';
   import type { TargetInfo } from '$lib/api/integrations';
   import { signaturesApi } from '$lib/api/signatures';
+  import { setProviderCharLimits } from '$lib/providers';
 
   // Props passed by ModalManager (it injects a `close` function).
   let { close } = $props<{ close: (confirmed?: boolean) => void }>();
@@ -58,6 +59,9 @@
   let integrationNames = $derived(new Map(allIntegrations.map(i => [i.id, i.provider_name])));
   let mediaItems = $state<MediaItem[]>([]);
   let scheduledAt = $state<string | null>(null);
+  // The schedule as it was when the post was loaded. A save compares
+  // against this to know whether the user actually changed the schedule.
+  let originalScheduledAt = $state<string | null>(null);
   let recurring = $state<{ intervalDays: number; endDate: string } | null>(null);
   let selectedTagIds = $state<string[]>([]);
   // Phase 8: campaign selector in composer.
@@ -206,6 +210,10 @@
     title = post.title || '';
     selectedIntegrations = [post.integration_id];
     scheduledAt = post.scheduled_at || null;
+    // The schedule as LOADED, so a save can tell "the user changed the
+    // schedule" from "the schedule is the same". Without this the
+    // reschedule step could not tell a new date from an unchanged one.
+    originalScheduledAt = post.scheduled_at || null;
     firstComment = post.first_comment || '';
     selectedTagIds = post.tags?.map(t => t.id) || [];
     mediaItems = (post.media || []).map(m => ({
@@ -220,6 +228,11 @@
     // Phase v21: if this post is part of a group (thread or first-comment
     // chain), fetch all sibling posts and populate the group tab strip.
     // The user can then switch between parts without leaving the composer.
+    //
+    // The integrations are loaded in edit mode too: they are what the
+    // per-platform validation, the character rings, the media rules and
+    // the preview pane read. Without them, edit mode silently skipped
+    // every one of those checks and the preview fell back to "x".
     if (post.group_id) {
       const groupRes = await postsApi.getGroup(post.group_id);
       if (groupRes.data && groupRes.data.length > 1) {
@@ -326,10 +339,31 @@
         // 404 or network error - no default signature set, silently skip.
       }
     }
+    // The character limits come from the server: the provider
+    // implementation owns the limit, and the frontend used to hardcode a
+    // second copy that had drifted (X showed 280 while the server
+    // enforced 4000, so a 300-character post was blocked and the Post
+    // button disabled).
+    try {
+      const provRes = await integrationsApi.listProviders();
+      if (provRes.data) {
+        const limits: Record<string, number> = {};
+        for (const p of provRes.data) limits[p.identifier] = p.char_limit;
+        setProviderCharLimits(limits);
+      }
+    } catch {
+      // The static table is the fallback; a failed fetch just means the
+      // composer uses it.
+    }
+
+    // The integrations are needed in BOTH modes: they carry the provider
+    // for each channel, which is what the per-platform validation, the
+    // character ring, the media rules and the preview pane all read. The
+    // `if/else` used to load one or the other, so edit mode had an empty
+    // integration list and every one of those checks was skipped.
+    await loadIntegrations();
     if (composer.mode === 'edit' && composer.editingPostId) {
       await loadEditingPost(composer.editingPostId);
-    } else {
-      await loadIntegrations();
     }
 
     // Phase 8: load campaigns for the campaign selector.
@@ -473,13 +507,20 @@
     return {
       integration_ids: selectedIntegrations,
       content,
-      title: title || undefined,
+      // `null` means "the user cleared this". `undefined` means "not
+      // mentioned, keep the stored value" - and the backend reads the
+      // difference, so emptying the title box actually removes the title
+      // instead of silently keeping the old one.
+      title: title || null,
       scheduled_at: scheduledAt || undefined,
       tag_ids: selectedTagIds,
-      first_comment: firstComment || undefined,
+      first_comment: firstComment || null,
       // v22 Phase 7: include alt text in the payload (was `alt: undefined`
       // - a no-op that silently dropped all alt text on submit).
-      media: mediaItems.length > 0 ? mediaItems.map(m => ({ id: m.id, url: m.url, mime_type: m.mime_type, alt: m.alt })) : undefined,
+      media:
+        mediaItems.length > 0
+          ? mediaItems.map((m) => ({ id: m.id, url: m.url, mime_type: m.mime_type, alt: m.alt }))
+          : null,
       overrides: Object.keys(overridesObj).length > 0 ? overridesObj : undefined,
       settings: {
         ...settings,
@@ -551,10 +592,26 @@
         });
         if (r.error) { error = r.error; return; }
 
-        // If a scheduled_at is set and differs from the original, reschedule.
-        // (The update endpoint doesn't touch scheduled_at.)
-        if (payload.scheduled_at && r.data?.scheduled_at && payload.scheduled_at !== r.data.scheduled_at) {
-          await postsApi.reschedule(currentEditingPostId, payload.scheduled_at, false);
+        // Reschedule when the SCHEDULE changed, not when the response
+        // happens to carry one. The old gate was
+        // `payload.scheduled_at && r.data?.scheduled_at && ...`, so:
+        //   - a post that had no schedule (r.data.scheduled_at is null)
+        //     never got one, even though the user just picked a date: the
+        //     schedule was silently discarded and the toast said
+        //     "Post updated";
+        //   - a post whose schedule was UNCHANGED still hit the
+        //     reschedule endpoint on every save.
+        // Compare against the schedule the composer LOADED, which is the
+        // user's intent.
+        if (payload.scheduled_at !== originalScheduledAt) {
+          if (payload.scheduled_at) {
+            const rs = await postsApi.reschedule(currentEditingPostId, payload.scheduled_at, false);
+            if (rs.error) { error = rs.error; return; }
+          } else if (originalScheduledAt) {
+            // The user cleared the schedule: put the post back to a draft.
+            const us = await postsApi.unschedule(currentEditingPostId);
+            if (us.error) { error = us.error; return; }
+          }
         }
 
         localStorage.removeItem(DRAFT_KEY);
@@ -562,6 +619,15 @@
         toast('Post updated', 'success');
       } else {
         // ── Create mode: create new post(s) ──
+        // "Schedule" without an instant would create a DRAFT, not a
+        // scheduled post - the composer would toast "Post scheduled" and
+        // the post would never publish. The SchedulePicker emits `null`
+        // when the toggle is on but no date/time is filled in, so this is
+        // reachable by clicking Schedule straight after ticking the box.
+        if (!payload.scheduled_at) {
+          error = 'Pick a date and time to schedule, or use "Post Now" to publish immediately';
+          return;
+        }
         const r = await postsApi.create(payload);
         if (r.error) { error = r.error; return; }
 
@@ -1179,5 +1245,17 @@
 {/if}
 
 {#if showPostSets}
-  <PostSetModal open={true} onclose={() => showPostSets = false} currentContent={content} onLoad={handlePostSetLoad} />
+  <!--
+    `currentChannelIds` was never passed, so a saved post set always
+    stored `channel_ids: []` and loading it back restored the text and
+    the schedule but not the channels. The prop existed; the call site
+    just did not supply it.
+  -->
+  <PostSetModal
+    open={true}
+    onclose={() => showPostSets = false}
+    currentContent={content}
+    currentChannelIds={selectedIntegrations}
+    onLoad={handlePostSetLoad}
+  />
 {/if}

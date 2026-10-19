@@ -908,9 +908,15 @@ fn sort_to_order_by(sort: &str) -> &'static str {
     match field {
         "created_date" => "created_at DESC NULLS LAST",
         "engagement" => {
-            // engagement sort: left-join post_engagement and order by
-            // (likes + comments + shares) DESC. Done in the query itself.
-            "engagement DESC NULLS LAST"
+            // The engagement sort is handled by its own query branch (it
+            // needs a subquery over `analytics_cache`). This arm is only
+            // reached if a caller reaches the plain branch with
+            // sort="engagement" - and the `posts` table has no column
+            // named `engagement`, so the ORDER BY used to fail with
+            // "no such column: engagement" and 500 the whole list. Fall
+            // back to the default order; the dedicated branch is the one
+            // that actually sorts by engagement.
+            "scheduled_at DESC NULLS LAST, created_at DESC"
         }
         _ => "scheduled_at DESC NULLS LAST, created_at DESC",
     }
@@ -948,7 +954,16 @@ pub async fn list_posts_search(
     });
 
     let sql: String = if sort == "engagement" {
-        // Engagement sort needs a LEFT JOIN to post_engagement.
+        // Engagement sort.
+        //
+        // The engagement of the user's OWN posts lives in `analytics_cache`,
+        // keyed by (user_id, platform_post_id) - the payload is a list of
+        // {label, data:[{total}]} series. The old query joined
+        // `post_engagement pe ON pe.post_id = p.id`, but that table's
+        // `post_id` FK targets `external_posts`, so the join matched
+        // NOTHING for the user's own posts and every row scored zero: the
+        // sort was a no-op that looked like it worked.
+        //
         // SQLite has no uuid[] arrays: the id lists are bound as JSON
         // text and expanded with json_each(...). `? IS NULL` is how the
         // optional filters are skipped, and ILIKE becomes LIKE with an
@@ -963,7 +978,6 @@ pub async fn list_posts_search(
                   p.campaign_id,
                   p.kanban_sort_order, p.kanban_substate, p.due_date, p.priority
            FROM posts p
-           LEFT JOIN post_engagement pe ON pe.post_id = p.id
            WHERE p.user_id = ?
              AND p.deleted_at IS NULL
              AND (? IS NULL OR p.state = ?)
@@ -972,7 +986,13 @@ pub async fn list_posts_search(
              AND (? IS NULL OR p.id IN (
                SELECT post_id FROM post_tags WHERE tag_id IN (SELECT unhex(replace(value, '-', '')) FROM json_each(?))
              ))
-           ORDER BY (COALESCE(pe.likes, 0) + COALESCE(pe.comments, 0) + COALESCE(pe.shares, 0)) DESC NULLS LAST
+           ORDER BY (SELECT COALESCE(SUM(json_extract(point.value, '$.total')), 0)
+                       FROM analytics_cache ac, json_each(ac.data) AS series,
+                            json_each(json_extract(series.value, '$.data')) AS point
+                      WHERE ac.user_id = p.user_id
+                        AND ac.platform_post_id = p.platform_post_id
+                        AND lower(json_extract(series.value, '$.label'))
+                            IN ('likes', 'comments', 'shares'))) DESC
            LIMIT ? OFFSET ?"#.to_string()
     } else {
         format!(
@@ -1307,6 +1327,11 @@ pub async fn update_post_date_only(
 /// Atomically move a post into `publishing` before a manual publish. The
 /// scheduler claims due posts the same way, so the two cannot both publish
 /// one post. Returns false when the post is no longer publishable.
+///
+/// `draft` is claimable because a manual publish accepts an unscheduled
+/// post: the composer's "Post Now" creates it without a schedule and then
+/// publishes it. The scheduler only ever claims `queued` posts, so this
+/// does not let the scheduler publish a draft.
 pub async fn claim_post_for_publish(
     pool: &SqlitePool,
     id: Uuid,
@@ -1314,7 +1339,7 @@ pub async fn claim_post_for_publish(
 ) -> Result<bool, sqlx::Error> {
     let res = sqlx::query(
         "UPDATE posts SET state = 'publishing', updated_at = unixepoch()
-         WHERE id = ? AND user_id = ? AND state IN ('queued', 'error') AND deleted_at IS NULL",
+         WHERE id = ? AND user_id = ? AND state IN ('queued', 'error', 'draft') AND deleted_at IS NULL",
     )
     .bind(id)
     .bind(user_id)
@@ -1864,10 +1889,40 @@ pub async fn get_calendar_posts_with_metrics(
            p.group_id, p.first_comment, p.sequence,
            p.campaign_id,
            i.provider_name as integration_name,
-           NULL as likes,
-           NULL as comments,
-           NULL as shares,
-           NULL as impressions
+           -- Engagement for the user's OWN posts lives in `analytics_cache`,
+           -- keyed by (user_id, platform_post_id) - NOT in `post_engagement`,
+           -- whose `post_id` FK targets `external_posts` and so can never
+           -- hold a row for a `posts` row. These four columns used to be
+           -- hard-coded NULL, which made every engagement badge on the
+           -- calendar permanently absent. The payload is a list of
+           -- {{label, data:[{{total}}]}} series; sum the points of the series
+           -- whose label matches, case-insensitively. A post with no cached
+           -- analytics keeps NULL (unknown), not 0.
+           (SELECT SUM(json_extract(point.value, '$.total'))
+              FROM analytics_cache ac, json_each(ac.data) AS series,
+                   json_each(json_extract(series.value, '$.data')) AS point
+             WHERE ac.user_id = p.user_id
+               AND ac.platform_post_id = p.platform_post_id
+               AND lower(json_extract(series.value, '$.label')) = 'likes') AS likes,
+           (SELECT SUM(json_extract(point.value, '$.total'))
+              FROM analytics_cache ac, json_each(ac.data) AS series,
+                   json_each(json_extract(series.value, '$.data')) AS point
+             WHERE ac.user_id = p.user_id
+               AND ac.platform_post_id = p.platform_post_id
+               AND lower(json_extract(series.value, '$.label')) = 'comments') AS comments,
+           (SELECT SUM(json_extract(point.value, '$.total'))
+              FROM analytics_cache ac, json_each(ac.data) AS series,
+                   json_each(json_extract(series.value, '$.data')) AS point
+             WHERE ac.user_id = p.user_id
+               AND ac.platform_post_id = p.platform_post_id
+               AND lower(json_extract(series.value, '$.label')) = 'shares') AS shares,
+           (SELECT SUM(json_extract(point.value, '$.total'))
+              FROM analytics_cache ac, json_each(ac.data) AS series,
+                   json_each(json_extract(series.value, '$.data')) AS point
+             WHERE ac.user_id = p.user_id
+               AND ac.platform_post_id = p.platform_post_id
+               AND lower(json_extract(series.value, '$.label'))
+                   IN ('impressions', 'views')) AS impressions
          FROM posts p
          LEFT JOIN integrations i ON p.integration_id = i.id
          WHERE {where_sql}

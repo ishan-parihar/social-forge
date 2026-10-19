@@ -388,13 +388,16 @@ impl PostService {
             .map_err(|e| format!("Database error: {e}"))?
             .ok_or_else(|| "Post not found".to_string())?;
 
-        // Only queued or errored posts publish. Anything else (idea, draft,
-        // publishing, published) is refused by name.
+        // A manual publish accepts a DRAFT: the composer's "Post Now" creates
+        // the post without a schedule (which is what a draft is) and then
+        // asks to publish it. Refusing drafts made that button 100% broken -
+        // there was no path from "written" to "published" that did not go
+        // through the scheduler.
+        //
+        // An IDEA is still refused: it is a captured thought, not a post.
         match post.state {
-            PostState::Queued | PostState::Error => {}
-            PostState::Draft | PostState::Idea => {
-                return Err("Draft posts must be scheduled first".into())
-            }
+            PostState::Queued | PostState::Error | PostState::Draft => {}
+            PostState::Idea => return Err("Idea posts must be moved to drafts first".into()),
             PostState::Published => return Err("Post already published".into()),
             PostState::Publishing => {
                 return Err("Post is already being published".into())

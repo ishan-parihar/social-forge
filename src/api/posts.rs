@@ -69,13 +69,24 @@ pub struct CreateThreadResponse {
 #[derive(Debug, Deserialize)]
 pub struct UpdatePostRequest {
     pub content: Option<String>,
-    pub title: Option<String>,
-    pub media: Option<serde_json::Value>,
-    pub settings: Option<serde_json::Value>,
+    /// Three-state: absent = keep, `null` = clear, a value = set.
+    ///
+    /// A plain `Option<String>` collapses "absent" and "null", so the
+    /// backend could not tell "the caller did not mention the title" from
+    /// "the caller cleared the title" - and the composer's `title || undefined`
+    /// meant clearing the title in the UI left the old title on the post.
+    /// Same for media, settings and first_comment.
+    #[serde(default, deserialize_with = "crate::api::campaigns::double_option")]
+    pub title: Option<Option<String>>,
+    #[serde(default, deserialize_with = "crate::api::campaigns::double_option")]
+    pub media: Option<Option<serde_json::Value>>,
+    #[serde(default, deserialize_with = "crate::api::campaigns::double_option")]
+    pub settings: Option<Option<serde_json::Value>>,
     // v23-5: tag_ids + first_comment now persistable on update.
     // Previously the composer's edit-mode silently dropped these fields.
     pub tag_ids: Option<Vec<Uuid>>,
-    pub first_comment: Option<String>,
+    #[serde(default, deserialize_with = "crate::api::campaigns::double_option")]
+    pub first_comment: Option<Option<String>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -412,6 +423,13 @@ pub async fn create(
         Some(crate::db::models::PostState::Draft)
     };
 
+    // The composer's rich-text editor produces TipTap HTML. The REST
+    // create path stored that markup verbatim, so a post with bold text
+    // shipped `<p>Hello <strong>world</strong></p>` to the platform as
+    // the tweet text. The service path sanitizes; this one did not.
+    // The same helper, the same boundary.
+    let body_content = crate::services::posts::PostService::sanitize_content(&body.content, 2000);
+
     // Verify tag ownership before creating the post (fail fast)
     if let Some(ref tag_ids) = body.tag_ids {
         if !tag_ids.is_empty() {
@@ -434,7 +452,7 @@ pub async fn create(
                 &state.db,
                 auth.user_id,
                 id,
-                post_content,
+                &crate::services::posts::PostService::sanitize_content(post_content, 2000),
                 body.title.as_deref(),
                 &media,
                 &post_settings,
@@ -452,7 +470,7 @@ pub async fn create(
             &state.db,
             auth.user_id,
             &body.integration_ids,
-            &body.content,
+            &body_content,
             body.title.as_deref(),
             &media,
             &settings,
@@ -661,11 +679,34 @@ pub async fn update(
             "Post is being published; edit it after the attempt finishes".into(),
         ));
     }
-    let content = body.content.unwrap_or(existing.content);
-    let title = body.title.or(existing.title);
-    let media = body.media.unwrap_or(existing.media);
-    let settings = body.settings.unwrap_or(existing.settings);
-    let first_comment = body.first_comment.or(existing.first_comment);
+    // Each field is three-state: absent keeps the stored value, an
+    // explicit null clears it, a value replaces it. The composer sends
+    // `null` for a field the user emptied, so an edit that removes the
+    // title (or the last image, or the first comment) actually removes it.
+    let content = match &body.content {
+        Some(c) => crate::services::posts::PostService::sanitize_content(c, 2000),
+        None => existing.content,
+    };
+    let title = match &body.title {
+        Some(Some(t)) => Some(t.clone()),
+        Some(None) => None, // explicit clear
+        None => existing.title,
+    };
+    let media = match &body.media {
+        Some(Some(m)) => m.clone(),
+        Some(None) => serde_json::json!([]), // explicit clear
+        None => existing.media,
+    };
+    let settings = match &body.settings {
+        Some(Some(s)) => s.clone(),
+        Some(None) => serde_json::json!({}), // explicit clear
+        None => existing.settings,
+    };
+    let first_comment = match &body.first_comment {
+        Some(Some(fc)) => Some(fc.clone()),
+        Some(None) => None, // explicit clear
+        None => existing.first_comment,
+    };
 
     // v23-5: use update_post_full so first_comment is persisted (was
     // silently dropped by update_post_content).

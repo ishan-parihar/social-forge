@@ -20,7 +20,7 @@
 // calls it on submit. A stale number here shows a warning too early or too
 // late; it can never let an illegal post through.
 
-import { providerMeta } from '$lib/providers';
+import { providerMeta, charLimitFor as backendCharLimitFor } from '$lib/providers';
 
 export interface PlatformSpec {
   /** Provider key as registered in $lib/providers. */
@@ -199,9 +199,13 @@ export function isTier1(provider: string): boolean {
   return specFor(provider) !== undefined;
 }
 
-/** The character limit, delegated to $lib/providers (the authority). */
+/** The character limit, delegated to $lib/providers (the authority).
+ *
+ *  $lib/providers prefers the limit the SERVER published
+ *  (`Provider::max_content_length()`) and falls back to its static table
+ *  before `/api/providers` has answered. */
 export function charLimitFor(provider: string): number {
-  return providerMeta(provider).charLimit;
+  return backendCharLimitFor(provider);
 }
 
 /** A single reason this post cannot be submitted to `provider` yet. */

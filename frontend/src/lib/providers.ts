@@ -99,11 +99,39 @@ export function visibleProviders(): string[] {
   return Object.keys(PROVIDERS).filter((p) => !HIDDEN_PROVIDERS.has(p));
 }
 
+/**
+ * The content limits the BACKEND enforces, keyed by provider id.
+ *
+ * The static `PROVIDERS` table above is the fallback for the moment before
+ * `/api/providers` has answered. The provider implementation on the
+ * server is the real owner of the limit: `Provider::max_content_length()`.
+ * The two used to disagree - X showed 280 in the composer (blocking a
+ * 300-character post and disabling the Post button) while the server
+ * enforced 4000 - so a whole class of legal posts was un-submittable.
+ *
+ * Populated by `loadProviderLimits()`; `charLimitFor` prefers it.
+ */
+let runtimeCharLimits: Record<string, number> = {};
+
+/** The backend's limit for a provider, or the static table's, or the default. */
+export function charLimitFor(provider: string): number {
+  const runtime = runtimeCharLimits[provider];
+  if (typeof runtime === 'number' && runtime > 0) return runtime;
+  const meta = PROVIDERS[provider];
+  if (meta) return meta.charLimit;
+  return 65536;
+}
+
+/** Record the limits the server reported. */
+export function setProviderCharLimits(limits: Record<string, number>): void {
+  runtimeCharLimits = { ...limits };
+}
+
 /** Full metadata for a provider. Falls back to a capitalized provider
  *  name and the default color/icon for unknown providers. */
 export function providerMeta(provider: string): ProviderMeta {
   const meta = PROVIDERS[provider];
-  if (meta) return meta;
+  if (meta) return { ...meta, charLimit: charLimitFor(provider) };
   return {
     label: provider.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
     color: FALLBACK_COLOR,

@@ -319,6 +319,16 @@ pub struct ProviderStatus {
     /// `tier-3` (archive — only present here when ENABLE_ARCHIVE_PROVIDERS
     /// is set). See `docs/planning/PLAN_PARITY_DEPTH_SINGLEUSER_v25.md` §1.
     pub tier: &'static str,
+    /// The provider's own content limit, straight from the provider
+    /// implementation.
+    ///
+    /// The frontend used to hardcode these in a TypeScript table, and the
+    /// two drifted: X showed 280 in the composer (so a 300-character post
+    /// was blocked and the Post button disabled) while the server enforced
+    /// 4000. Every surface that shows a limit was wrong for whichever
+    /// provider drifted. The provider implementation is the owner; this
+    /// publishes it.
+    pub char_limit: usize,
 }
 
 /// GET /api/providers — list all providers with config status
@@ -348,6 +358,7 @@ pub async fn list_providers(
                 "N/A (non-OAuth)".into()
             },
             tier: state.providers.tier(id).as_str(),
+            char_limit: provider.max_content_length(),
         });
     }
     statuses.sort_by(|a, b| a.identifier.cmp(&b.identifier));
