@@ -20,9 +20,7 @@ use chrono::{Duration, TimeZone, Utc};
 use social_forge::auth::middleware::DEFAULT_USER_ID;
 use social_forge::config::Config;
 use social_forge::db;
-use social_forge::db::queries::{
-    insert_external_post, list_all_external_posts, list_all_external_posts_with_engagement,
-};
+use social_forge::db::queries::{insert_external_post, top_external_posts_by_engagement};
 use social_forge::db::SqlitePool;
 use uuid::Uuid;
 
@@ -38,14 +36,16 @@ fn days_ago(n: i64) -> chrono::DateTime<Utc> {
     Utc.with_ymd_and_hms(2026, 10, 1, 12, 0, 0).unwrap() - Duration::days(n)
 }
 
-/// One imported feed post, written through the real writer.
-async fn seed(pool: &SqlitePool, platform_post_id: &str, created_at: chrono::DateTime<Utc>) {
-    insert_external_post(
+/// One imported feed post, written through the real writer, with the
+/// engagement row the ranking query joins.
+async fn seed(pool: &SqlitePool, marker: &str, created_at: chrono::DateTime<Utc>, likes: i64) {
+    let platform_post_id = format!("{marker}-{}", Uuid::new_v4());
+    let inserted = insert_external_post(
         pool,
         DEFAULT_USER_ID,
         "x",
-        platform_post_id,
-        "a competitor post",
+        &platform_post_id,
+        marker,
         Some("Someone"),
         Some("@someone"),
         None,
@@ -56,13 +56,40 @@ async fn seed(pool: &SqlitePool, platform_post_id: &str, created_at: chrono::Dat
     )
     .await
     .expect("seed post");
+    let external_post_id = inserted.expect("inserted").id;
+
+    sqlx::query(
+        "INSERT INTO post_engagement (id, post_id, likes, comments, shares)
+         VALUES (?, ?, ?, 0, 0)",
+    )
+    .bind(Uuid::new_v4())
+    .bind(external_post_id)
+    .bind(likes)
+    .execute(pool)
+    .await
+    .expect("seed engagement");
 }
 
 #[tokio::test]
 async fn created_at_is_stored_as_an_integer_epoch() {
     let pool = pool().await;
     let platform_post_id = format!("epoch-type-{}", Uuid::new_v4());
-    seed(&pool, &platform_post_id, days_ago(1)).await;
+    insert_external_post(
+        &pool,
+        DEFAULT_USER_ID,
+        "x",
+        &platform_post_id,
+        "a competitor post",
+        Some("Someone"),
+        Some("@someone"),
+        None,
+        days_ago(1),
+        Some("https://x.com/someone/status/1"),
+        &serde_json::json!([]),
+        &serde_json::json!({}),
+    )
+    .await
+    .expect("seed post");
 
     let stored: (String,) = sqlx::query_as(
         "SELECT typeof(created_at) FROM external_posts WHERE platform_post_id = ?",
@@ -81,54 +108,40 @@ async fn created_at_is_stored_as_an_integer_epoch() {
 #[tokio::test]
 async fn the_window_filter_excludes_older_posts() {
     let pool = pool().await;
-    let recent_id = format!("window-recent-{}", Uuid::new_v4());
-    let old_id = format!("window-old-{}", Uuid::new_v4());
-    seed(&pool, &recent_id, days_ago(2)).await;
-    seed(&pool, &old_id, days_ago(200)).await;
+    seed(&pool, "INSIDE-THE-WINDOW", days_ago(2), 40).await;
+    seed(&pool, "OUTSIDE-THE-WINDOW", days_ago(200), 30).await;
 
     // The cutoff the research page uses: 90 days back.
     let cutoff = days_ago(90);
-    let ids = list_all_external_posts_with_engagement(
-        &pool,
-        DEFAULT_USER_ID,
-        None,
-        Some(cutoff),
-        100,
-    )
-    .await
-    .expect("query");
+    let rows = top_external_posts_by_engagement(&pool, DEFAULT_USER_ID, cutoff, 100)
+        .await
+        .expect("query");
 
-    let platform_ids: Vec<String> = ids.iter().map(|p| p.platform_post_id.clone()).collect();
+    let texts: Vec<&str> = rows.iter().map(|r| r.text.as_str()).collect();
     assert!(
-        platform_ids.contains(&recent_id),
-        "a post inside the window must be returned"
+        texts.contains(&"INSIDE-THE-WINDOW"),
+        "a post inside the window must be returned; got {texts:?}"
     );
     assert!(
-        !platform_ids.contains(&old_id),
-        "a post outside the window must NOT be returned - the filter was a no-op"
+        !texts.contains(&"OUTSIDE-THE-WINDOW"),
+        "a post outside the window must NOT be returned - the filter was a no-op; got {texts:?}"
     );
 }
 
 #[tokio::test]
-async fn the_cursor_filter_excludes_newer_posts() {
+async fn a_post_outside_the_window_is_not_counted_at_all() {
     let pool = pool().await;
-    let older_id = format!("cursor-older-{}", Uuid::new_v4());
-    let newer_id = format!("cursor-newer-{}", Uuid::new_v4());
-    seed(&pool, &older_id, days_ago(10)).await;
-    seed(&pool, &newer_id, days_ago(1)).await;
+    seed(&pool, "RECENT-FOR-THE-COUNT", days_ago(2), 40).await;
+    seed(&pool, "ANCIENT-FOR-THE-COUNT", days_ago(400), 90).await;
 
-    let cutoff = days_ago(5);
-    let ids = list_all_external_posts(&pool, DEFAULT_USER_ID, None, Some(cutoff), 100)
+    let cutoff = days_ago(90);
+    let rows = top_external_posts_by_engagement(&pool, DEFAULT_USER_ID, cutoff, 100)
         .await
         .expect("query");
 
-    let platform_ids: Vec<String> = ids.iter().map(|p| p.platform_post_id.clone()).collect();
+    let texts: Vec<&str> = rows.iter().map(|r| r.text.as_str()).collect();
     assert!(
-        platform_ids.contains(&older_id),
-        "a post before the cursor must be returned"
-    );
-    assert!(
-        !platform_ids.contains(&newer_id),
-        "a post after the cursor must NOT be returned"
+        !texts.contains(&"ANCIENT-FOR-THE-COUNT"),
+        "an ancient post must not appear in a 90-day ranking; got {texts:?}"
     );
 }
