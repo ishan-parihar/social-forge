@@ -329,6 +329,13 @@
           if (d.selectedIntegrations) selectedIntegrations = d.selectedIntegrations;
           if (d.scheduledAt) scheduledAt = d.scheduledAt;
           if (d.firstComment) firstComment = d.firstComment;
+          // The media and the tags were saved but never restored, so a
+          // draft the founder came back to had the text and none of the
+          // image they had attached or any of the tags they had set.
+          if (Array.isArray(d.mediaItems) && d.mediaItems.length > 0) {
+            mediaItems = d.mediaItems;
+          }
+          if (Array.isArray(d.selectedTagIds)) selectedTagIds = d.selectedTagIds;
         } catch {}
       }
     }
@@ -444,7 +451,8 @@
     draftState = 'saving';
     const timer = setTimeout(() => {
       localStorage.setItem(DRAFT_KEY, JSON.stringify({
-        content, title, selectedIntegrations, scheduledAt, firstComment
+        content, title, selectedIntegrations, scheduledAt, firstComment,
+        mediaItems, selectedTagIds,
       }));
       draftState = 'saved';
       // Back to idle (autosave armed) so the indicator does not lie about a
@@ -458,7 +466,8 @@
     if (composer.mode !== 'create') return;
     if (content || title) {
       localStorage.setItem(DRAFT_KEY, JSON.stringify({
-        content, title, selectedIntegrations, scheduledAt, firstComment
+        content, title, selectedIntegrations, scheduledAt, firstComment,
+        mediaItems, selectedTagIds,
       }));
       draftState = 'saved';
       clearTimeout(draftTimer);
