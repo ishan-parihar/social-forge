@@ -112,8 +112,8 @@ pub fn looks_like_html(s: &str) -> bool {
         // attribute.
         let rest: String = bytes[i + 1..].iter().collect::<String>().to_ascii_lowercase();
         for tag in VOID_TAGS {
-            if rest.starts_with(tag) {
-                let after = rest[tag.len()..].chars().next();
+            if let Some(after_tag) = rest.strip_prefix(tag) {
+                let after = after_tag.chars().next();
                 if matches!(after, Some('>') | Some(' ') | Some('/')) {
                     return true;
                 }
@@ -121,8 +121,8 @@ pub fn looks_like_html(s: &str) -> bool {
         }
         // A tag with an attribute: `<p class="x">`.
         for tag in KNOWN_TAGS {
-            if rest.starts_with(tag) {
-                let after = rest[tag.len()..].chars().next();
+            if let Some(after_tag) = rest.strip_prefix(tag) {
+                let after = after_tag.chars().next();
                 if matches!(after, Some(' ') | Some('\t') | Some('\n')) {
                     return true;
                 }

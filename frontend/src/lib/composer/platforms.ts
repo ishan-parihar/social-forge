@@ -272,13 +272,13 @@ function looksLikeHtml(s: string): boolean {
     const rest = s.slice(i + 1).toLowerCase();
     for (const tag of VOID_TAGS) {
       if (rest.startsWith(tag)) {
-        const after = rest[tag.length];
+        const after = rest.charAt(tag.length);
         if (after === '>' || after === ' ' || after === '/') return true;
       }
     }
     for (const tag of KNOWN_TAGS) {
       if (rest.startsWith(tag)) {
-        const after = rest[tag.length];
+        const after = rest.charAt(tag.length);
         if (after === ' ' || after === '\t' || after === '\n') return true;
       }
     }
