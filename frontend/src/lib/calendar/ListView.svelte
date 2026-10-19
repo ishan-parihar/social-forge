@@ -165,7 +165,10 @@
       {#each dayEvents as event (event.id)}
         <div class="group relative w-full flex items-center gap-4 px-4 py-3 border-b border-line hover:bg-surface-hover transition-colors">
           {#if onToggleSelect}
-            <input type="checkbox" checked={selected.has(event.id)} onclick={(e) => onToggleSelect?.(event.id, e)} class="rounded shrink-0" />
+            <!-- The LABEL carries the 44px target; the box stays small. -->
+            <label class="flex items-center justify-center shrink-0 min-h-11 min-w-11 cursor-pointer">
+              <input type="checkbox" checked={selected.has(event.id)} onclick={(e) => onToggleSelect?.(event.id, e)} class="rounded w-4 h-4" />
+            </label>
           {/if}
           <button onclick={() => onEventClick?.(event.id)} class="flex-1 flex items-center gap-4 text-left min-w-0">
             <div class="text-xs text-muted w-20 shrink-0">

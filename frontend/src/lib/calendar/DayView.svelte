@@ -179,7 +179,10 @@
               title={event.state === 'published' ? 'Published posts cannot be dragged' : 'Drag to reschedule'}
             >
               {#if onToggleSelect}
-                <input type="checkbox" checked={selected.has(event.id)} onclick={(e) => onToggleSelect?.(event.id, e)} class="rounded shrink-0 w-3 h-3" />
+                <!-- The LABEL carries the 44px target; the box stays small. -->
+                <label class="flex items-center justify-center shrink-0 min-h-11 min-w-11 cursor-pointer">
+                  <input type="checkbox" checked={selected.has(event.id)} onclick={(e) => onToggleSelect?.(event.id, e)} class="rounded w-4 h-4" />
+                </label>
               {/if}
               <!-- v25 F3: drag affordance (hover-revealed grip). -->
               {#if event.state !== 'published'}
