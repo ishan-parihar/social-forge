@@ -695,7 +695,35 @@ The composer shows a count and the server enforces one. The plain rule is UTF-8 
 
 A pagination cursor that is the oldest row's own timestamp, with a `created_at <= cursor` filter, returns that row AGAIN on the next page. The Activity page appends into a keyed `{#each rows as row (row.id)}`, and Svelte throws `each_key_duplicate` on a repeated key - so the page CRASHED on "Load more". The cursor is now one second earlier, and the append is idempotent so a page can never take the feed down.
 
-### 9.16 The composer validates against the SERVER's limits, not a copy
+### 9.16 The post body is PLAIN TEXT, everywhere
+
+The editor speaks plain text at its boundary. The server stores plain text. The providers publish plain text. The rich text is an EDITING convenience; the body is text.
+
+The editor used to speak HTML (`getHTML()` out, `setContent()` in) while the server stored text. So the server stripped the editor's HTML on the way in, and every path that read the stored TEXT back - on duplicate, on edit, and from the autosaved draft - handed plain text to an editor that parses its input as HTML. TipTap took the text's `<` for a tag, and a body of `---` came back as `--`.
+
+The server is still a trust boundary, so HTML that arrives from the MCP tool, a webhook or an older API client is still converted. The discriminator is EVIDENCE of markup - a closing tag, an attribute, or a void tag - not a bare `<word>`, which is a word in angle brackets and exactly what a post about HTML is full of.
+
+The post detail page renders the body as TEXT, not `{@html}`. It used to render `{@html post.content}`, and the server's stripping was the only thing hiding the XSS hole. The server is not the right layer for that defence; the page is.
+
+### 9.17 A schedule is a WALL CLOCK in the app's timezone, not the browser's
+
+`wallClockToUtc` (frontend/src/lib/composer/wall-clock.ts) is the one conversion. The composer, the calendar's drag-to-reschedule, the calendar's bulk reschedule and the composer's preset all use it.
+
+The calendar's READ path used the app's selected timezone and its WRITE path used the browser's, so a post dropped on the 09:00 slot was stored as 09:00 UTC - five hours off in New York - and appeared in the wrong slot until the next render. `new Date(`${date}T${time}`)` parses in the browser's zone, which is not the same thing as the app's setting.
+
+### 9.18 One implementation per rule, on both sides of the wire
+
+A rule that both the browser and the server enforce needs ONE implementation on each side, and the two must be compared by a test.
+
+Iteration 1 found the character count implemented twice with different rules (UTF-16 units in the browser, UTF-8 bytes on the server; the weighted rule for X only in the browser). Iteration 2 found the HTML-to-text conversion implemented EIGHT times - three in Rust, five in TypeScript - with three different behaviours, and the copy that was actually used deleted the text between any two angle brackets.
+
+When a rule lives on both sides, `tests/counting_rule_test.rs` and `tests/html_to_text_test.rs` pin the two against each other. A new copy of a rule is a defect.
+
+### 9.19 The character count is the TEXT, not the markup
+
+`countFor` measures the plain text. The composer shows the number the provider will count, and the server enforces the number it will count. The preview shows the same text. A preview that strips the tags with its own regex can show a different string from the one the count was measured on - and a preview that strips too eagerly deletes a legitimate mention of a tag.
+
+### 9.20 The composer validates against the SERVER's limits, not a copy
 
 `Provider::max_content_length()` is the authority. The frontend used to keep its own table, and the two drifted: X showed 280 in the composer (blocking a 300-character post and disabling the Post button) while the server enforced 4000. `/api/providers` now publishes `char_limit` per provider and the composer reads it.
 

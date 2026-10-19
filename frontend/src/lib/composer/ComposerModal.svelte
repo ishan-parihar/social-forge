@@ -982,7 +982,7 @@
       </span>
       <button
         onclick={() => handleClose(true)}
-        class="text-muted hover:text-content text-2xl leading-none -mt-1"
+        class="text-muted hover:text-content text-2xl leading-none -mt-1 min-h-11 min-w-11 flex items-center justify-center"
         aria-label="Close composer"
       >&times;</button>
     </div>
@@ -994,10 +994,15 @@
     </div>
   {:else}
     <!-- Two-column body: editor left, preview right. On <lg the flex direction
-         is already column, so the sections stack in DOM order. -->
-    <div class="flex-1 flex flex-col lg:flex-row overflow-hidden">
+         is already column, so the sections stack in DOM order.
+         `min-h-0` is REQUIRED: a flex item's default `min-height: auto`
+         means it will not shrink below its content's height, so the
+         columns' `overflow-y-auto` never engaged - the body grew past
+         the panel and the action bar sat ON TOP of the content. At
+         375px the "Campaign" select was cut in half by the footer. -->
+    <div class="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden">
       <!-- Left column: editor (scrollable) -->
-      <div class="flex-1 min-w-0 overflow-y-auto p-4 sm:p-5 space-y-4">
+      <div class="flex-1 min-w-0 min-h-0 overflow-y-auto p-4 sm:p-5 space-y-4">
         {#if error}
           <div class="bg-error/10 border border-error/30 text-error text-sm rounded-lg p-3" role="alert">{error}</div>
         {/if}
@@ -1050,7 +1055,7 @@
             {/if}
           </label>
           <input id="composer-title" type="text" bind:value={title} placeholder="Post title..."
-            class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none" />
+            class="w-full px-3 py-2 min-h-11 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none" />
         </div>
 
         <!-- Channel Selection -->
@@ -1276,7 +1281,7 @@
            a full-width stack AFTER the editor (same order, no absolute
            positioning), toggled from the footer, so a phone user scrolls
            editor → preview instead of a 400px column squeezed into 375px. -->
-      <div class="lg:w-[420px] lg:shrink-0 lg:border-l lg:border-line lg:bg-background/50 overflow-y-auto p-4 sm:p-5 space-y-4
+      <div class="lg:w-[420px] lg:shrink-0 lg:min-h-0 lg:border-l lg:border-line lg:bg-background/50 overflow-y-auto p-4 sm:p-5 space-y-4
         {showPreviewMobile ? 'block' : 'hidden lg:block'}">
         <!-- Mobile: close preview button -->
         <div class="lg:hidden flex justify-end">

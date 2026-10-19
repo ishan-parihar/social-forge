@@ -71,7 +71,7 @@
         <button
           onclick={() => onAddHashtag?.(tag)}
           aria-label="Add {tag} hashtag"
-          class="px-2.5 py-1 bg-surface-hover hover:bg-accent-fill-hover/20 text-xs text-content-secondary rounded-full transition-colors cursor-pointer"
+          class="px-2.5 py-1 min-h-11 bg-surface-hover hover:bg-accent-fill-hover/20 text-xs text-content-secondary rounded-full transition-colors cursor-pointer"
         >
           #{tag}
         </button>
