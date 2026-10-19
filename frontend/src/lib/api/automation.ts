@@ -34,12 +34,10 @@ export interface ExecutionLog {
   created_at: string;
 }
 
-// Display-only fields the automation page references but the backend
-// doesn't return. Optional so the page compiles.
-export interface ExecutionLogDisplay extends ExecutionLog {
-  input_text?: string;
-  output_text?: string;
-}
+// The backend's `LogEntryResponse` carries `response` and
+// `error_message`, not `input_text`/`output_text`. The page used to
+// render the two names the backend never sent, so every log row showed
+// "Input: undefined" and "Output: undefined".
 
 // Create-rule payload - matches CreateRuleRequest in the backend.
 export interface CreateRulePayload {

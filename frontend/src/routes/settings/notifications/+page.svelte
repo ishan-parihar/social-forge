@@ -68,7 +68,9 @@
 <div class="page-enter space-y-6">
   <div>
     <h1 class="text-xl font-semibold text-content">Notification Settings</h1>
-    <p class="text-sm text-muted mt-1">Configure how and when you receive notifications.</p>
+    <p class="text-sm text-muted mt-1">
+      Configure which events reach your notification feed, and when to stay quiet.
+    </p>
   </div>
 
   {#if loading}
@@ -98,10 +100,19 @@
             </div>
             <select
               bind:value={prefs[nt.key]}
+              aria-label="{nt.label} delivery"
               class="shrink-0 bg-linetext-content-secondary border border-line rounded px-3 py-1.5 text-sm focus:outline-none focus:border-accent/50 transition-colors"
             >
-              <option value="push">Push</option>
-              <option value="email">Email</option>
+              <!--
+                Social Forge has exactly one delivery channel today: the
+                in-app notification feed. There is no push transport and
+                no email transport, so offering "Email" would be a
+                setting that silently does nothing. The preference values
+                ("push" / "email" / "none") are still what the API
+                stores, so the API contract does not change when a
+                transport lands.
+              -->
+              <option value="push">In-app</option>
               <option value="none">None</option>
             </select>
           </div>

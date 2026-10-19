@@ -122,6 +122,13 @@ pub fn build_router(state: AppState) -> Router {
                 axum::http::Method::GET,
                 axum::http::Method::POST,
                 axum::http::Method::PUT,
+                // PATCH is used by the kanban routes (`/api/posts/{id}/stage`
+                // and `/api/posts/kanban-reorder`). It was missing from this
+                // list, so in any deployment where the frontend is served
+                // from a different origin than the API, the browser
+                // rejected the preflight and the whole kanban board was
+                // dead - the card moved and then reverted.
+                axum::http::Method::PATCH,
                 axum::http::Method::DELETE,
                 axum::http::Method::OPTIONS,
             ])

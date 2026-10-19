@@ -311,17 +311,34 @@ pub async fn get_comments(
 
     if !cached.is_empty() {
         // Cache hit — return immediately.
+        //
+        // This MUST emit the same shape as the live-fetch branch below,
+        // which serializes `CommentData`: `id`, `like_count`, `replies`.
+        // The cached branch used to emit `comment_id` and omit the other
+        // two, so with a warm cache (the normal case - the background
+        // refresher writes it) every comment had `id === undefined`, and
+        // the client deduplicated the whole thread into one card that
+        // rendered "undefined". The `author_handle` and `fetched_at` the
+        // cache carries are kept as EXTRA keys: the client's type is
+        // structural, so an extra field is harmless and the handle is
+        // worth having.
         let json_comments: Vec<serde_json::Value> = cached
             .into_iter()
             .map(|c| {
                 serde_json::json!({
-                    "comment_id": c.comment_id,
+                    "id": c.comment_id,
                     "text": c.text,
                     "author_name": c.author_name,
                     "author_handle": c.author_handle,
                     "author_avatar": c.author_avatar,
                     "created_at": c.created_at.to_rfc3339(),
                     "fetched_at": c.fetched_at.to_rfc3339(),
+                    // The cache does not store these two. Zero and an
+                    // empty list are the honest values for a cached
+                    // comment: no like count was recorded, and replies
+                    // are not cached.
+                    "like_count": 0,
+                    "replies": Vec::<serde_json::Value>::new(),
                 })
             })
             .collect();

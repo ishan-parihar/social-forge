@@ -3,7 +3,7 @@
   import Skeleton from '$lib/ui/Skeleton.svelte';
   import ErrorState from '$lib/ui/ErrorState.svelte';
   import EmptyState from '$lib/ui/EmptyState.svelte';
-  import { automationApi, type AutomationRuleDisplay, type ExecutionLogDisplay, type CreateRulePayload } from "$lib/api/automation";
+  import { automationApi, type AutomationRuleDisplay, type ExecutionLog, type CreateRulePayload } from "$lib/api/automation";
   import { integrationsApi, type Integration } from "$lib/api/integrations";
   import { toast } from "$lib/stores/toast";
   import { realtime } from "$lib/stores/realtime";
@@ -15,7 +15,7 @@
   let showModal = $state(false);
   let editingRule = $state<AutomationRuleDisplay | null>(null);
   let showLogs = $state<string | null>(null);
-  let logs = $state<ExecutionLogDisplay[]>([]);
+  let logs = $state<ExecutionLog[]>([]);
   let loadingLogs = $state(false);
 
   // Form state
@@ -312,8 +312,11 @@
                 <span class="text-xs text-muted">{new Date(log.created_at).toLocaleString()}</span>
                 <span class="px-1.5 py-0.5 text-[10px] rounded {log.status === 'success' ? 'bg-success/20 text-success' : 'bg-error/20 text-error'}">{log.status}</span>
               </div>
-              <div class="text-xs text-muted mb-1">Input: {log.input_text}</div>
-              <div class="text-xs text-content-secondary">Output: {log.output_text}</div>
+              <div class="text-xs text-muted mb-1">Trigger: {log.trigger_type}</div>
+              {#if log.error_message}
+                <div class="text-xs text-error mb-1">Error: {log.error_message}</div>
+              {/if}
+              <div class="text-xs text-content-secondary">Response: {log.response ?? '—'}</div>
             </div>
           {/each}
         </div>

@@ -104,6 +104,7 @@ pub async fn get_post(
     State(state): State<AppState>,
     auth: AuthenticatedUser,
     Path(id): Path<Uuid>,
+    Query(query): Query<PostAnalyticsQuery>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     let post = crate::db::queries::get_post(&state.db, id, auth.user_id)
         .await?
@@ -129,7 +130,7 @@ pub async fn get_post(
 
     if let Some(entry) = cached {
         return Ok(Json(serde_json::json!({
-            "data": entry.data,
+            "data": filter_series_to_window(entry.data.clone(), query.days),
             "cached": true,
             "cached_at": entry.cached_at.to_rfc3339(),
         })));
@@ -170,6 +171,64 @@ pub async fn get_post(
     }
 
     Ok(Json(serde_json::json!({ "data": analytics })))
+}
+
+/// The `days` window for `GET /api/analytics/post/{id}`.
+#[derive(Debug, Deserialize)]
+pub struct PostAnalyticsQuery {
+    /// How many days of history to return. `None` means everything the
+    /// provider gave us.
+    pub days: Option<i64>,
+}
+
+/// Trim a provider-shaped series list to the last `days` days.
+///
+/// The provider's `post_analytics()` takes no window argument - it
+/// returns whatever window the provider chooses. The cached payload
+/// DOES carry a date per point, so the window can be applied to it here.
+/// The client sent `?days=` all along and the handler had no query
+/// extractor at all, so the range buttons in the Post Stats modal were
+/// inert: clicking 90d showed exactly what 7d showed.
+fn filter_series_to_window(data: serde_json::Value, days: Option<i64>) -> serde_json::Value {
+    let Some(days) = days.filter(|d| *d > 0) else {
+        return data;
+    };
+    let Some(series) = data.as_array() else {
+        return data;
+    };
+    let cutoff = chrono::Utc::now() - chrono::Duration::days(days);
+
+    let out: Vec<serde_json::Value> = series
+        .iter()
+        .map(|s| {
+            let Some(points) = s.get("data").and_then(|d| d.as_array()) else {
+                return s.clone();
+            };
+            let kept: Vec<serde_json::Value> = points
+                .iter()
+                .filter(|p| {
+                    let Some(date) = p.get("date").and_then(|d| d.as_str()) else {
+                        // A point with no date cannot be placed in the
+                        // window. Keep it: dropping data is worse than
+                        // showing a point that might be older.
+                        return true;
+                    };
+                    match chrono::DateTime::parse_from_rfc3339(date) {
+                        Ok(dt) => dt.with_timezone(&chrono::Utc) >= cutoff,
+                        // An unparseable date is kept for the same reason.
+                        Err(_) => true,
+                    }
+                })
+                .cloned()
+                .collect();
+            let mut s = s.clone();
+            if let Some(obj) = s.as_object_mut() {
+                obj.insert("data".to_string(), serde_json::Value::Array(kept));
+            }
+            s
+        })
+        .collect();
+    serde_json::Value::Array(out)
 }
 
 // ── Aggregated Summary ────────────────────────────────────────

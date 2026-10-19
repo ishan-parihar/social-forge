@@ -757,7 +757,7 @@
                     target="_blank"
                     rel="noopener noreferrer"
                     class="inline-flex items-center gap-1.5 text-xs font-medium transition-colors duration-150"
-                    style="color: {meta.color}"
+                    style="color: {meta.ink}"
                   >
                     View original
                     <svg class="w-3 h-3" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">

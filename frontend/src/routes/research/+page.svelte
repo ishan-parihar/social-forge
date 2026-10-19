@@ -166,7 +166,16 @@
     <!-- (c) Posting-time insight -->
     <div class="bg-surface border border-line rounded-xl p-5">
       <div class="flex items-center justify-between mb-1">
-        <h2 class="text-sm font-medium text-content">When your posts perform best</h2>
+        <!--
+          The timing data is computed from the IMPORTED FEED (the
+          competitor posts the feed refresher keeps in sync), not from the
+          founder's own posts. It used to be headed "When your posts
+          perform best", which told the founder these were their own
+          best slots - they were the niche's, and a founder acting on them
+          would be copying a schedule that was measured on someone else's
+          audience.
+        -->
+        <h2 class="text-sm font-medium text-content">When posts in this niche perform best</h2>
         {#if data.timing?.low_confidence}
           <span class="text-xs text-warning">Small sample</span>
         {/if}
@@ -175,12 +184,12 @@
         <EmptyState
           icon="clock"
           title="No posting-time signal yet"
-          description="Once your published posts have engagement metrics, their best weekday and hour show up here."
+          description="Once the imported feed has posts with engagement metrics, the niche's best weekday and hour show up here."
         />
       {:else}
         <p class="text-xs text-muted mb-4">
           Based on {data.timing.posts_analyzed}
-          {data.timing.posts_analyzed === 1 ? "post" : "posts"} with engagement
+          {data.timing.posts_analyzed === 1 ? "post" : "posts"} from your imported feed
           {#if data.timing.low_confidence}
             — too few to call a pattern, treat as a hint
           {/if}
