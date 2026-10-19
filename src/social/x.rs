@@ -1622,6 +1622,14 @@ impl SocialProvider for XProvider {
         4000
     }
 
+    /// X counts WEIGHTED characters (twitter-text v3): an emoji or a CJK
+    /// glyph costs 2. The composer already implements that rule, so the
+    /// server measuring bytes made the two disagree on any post with an
+    /// emoji in it.
+    fn counting_rule(&self) -> super::CountingRule {
+        super::CountingRule::Weighted
+    }
+
     fn validate_media(&self, post: &PostContent) -> Result<(), String> {
         super::validate_media_limits(self.identifier(), post)
     }

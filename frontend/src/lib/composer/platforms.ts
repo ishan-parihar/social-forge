@@ -181,9 +181,21 @@ export function countingMode(provider: string): 'weighted' | 'plain' {
   return specFor(provider)?.counting ?? 'plain';
 }
 
-/** Count `text` the way `provider` counts it. */
+/**
+ * Count `text` the way `provider` counts it.
+ *
+ * The plain rule is BYTES, not `String.length`. The server measures
+ * `clean.len()` - UTF-8 bytes - and the two have to agree, because the
+ * composer shows this number and the server enforces it. `String.length`
+ * counts UTF-16 code units, so a 200-emoji Bluesky post read
+ * "200/300" in the composer and was rejected by the server as
+ * "800 chars, max 300" - the user was told the post was 800
+ * characters when the composer had said 200.
+ */
 export function countFor(provider: string, text: string): number {
-  return countingMode(provider) === 'weighted' ? weightedLength(text) : text.length;
+  return countingMode(provider) === 'weighted'
+    ? weightedLength(text)
+    : new TextEncoder().encode(text).length;
 }
 
 /** The spec for a provider, or undefined when it is not a Tier-1 platform. */

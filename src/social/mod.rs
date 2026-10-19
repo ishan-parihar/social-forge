@@ -400,6 +400,53 @@ pub enum CustomFieldType {
 
 // ── Trait ───────────────────────────────────────────────────
 
+/// How a provider measures the length of a post.
+///
+/// The default is bytes, which is what `String::len()` gives and what
+/// a platform's character limit means for ordinary text. X's limit is
+/// 280 WEIGHTED characters (twitter-text v3), where an emoji or a CJK
+/// glyph costs 2 and everything else costs 1.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CountingRule {
+    /// UTF-8 byte length.
+    Bytes,
+    /// X's weighted length: emoji and CJK presentation ranges cost 2.
+    Weighted,
+}
+
+impl CountingRule {
+    /// The length of `text` under this rule.
+    pub fn measure(self, text: &str) -> usize {
+        match self {
+            CountingRule::Bytes => text.len(),
+            CountingRule::Weighted => weighted_length(text),
+        }
+    }
+}
+
+/// X's weighted character count (twitter-text v3 rules, as the v2 API
+/// applies them): characters in emoji and CJK presentation ranges cost
+/// 2, everything else costs 1.
+///
+/// The composer's `weightedLength` in `frontend/src/lib/composer/platforms.ts`
+/// is the same rule. The two MUST agree: the composer shows the number
+/// and the server enforces it.
+pub fn weighted_length(text: &str) -> usize {
+    let mut count = 0usize;
+    for ch in text.chars() {
+        let cp = ch as u32;
+        let heavy = (0x3040..=0x30ff).contains(&cp)   // Hiragana + Katakana
+            || (0x3400..=0x4dbf).contains(&cp)   // CJK Extension A
+            || (0x4e00..=0x9fff).contains(&cp)   // CJK Unified Ideographs
+            || (0xf900..=0xfaff).contains(&cp)   // CJK Compatibility Ideographs
+            || (0xac00..=0xd7af).contains(&cp)   // Hangul Syllables
+            || (0x1f300..=0x1f9ff).contains(&cp) // Emoji blocks
+            || (0x2600..=0x27bf).contains(&cp); // Misc Symbols + Dingbats
+        count += if heavy { 2 } else { 1 };
+    }
+    count
+}
+
 #[async_trait]
 pub trait SocialProvider: Send + Sync {
     /// Unique provider identifier (e.g., "x", "linkedin", "bluesky")
@@ -413,6 +460,23 @@ pub trait SocialProvider: Send + Sync {
 
     /// Max content length (characters)
     fn max_content_length(&self) -> usize;
+
+    /// How this provider measures a post's length.
+    ///
+    /// The default is BYTES, which is what `String::len()` gives and
+    /// what every platform's own limit is expressed in for a plain
+    /// character. X is the exception: its limit is 280 WEIGHTED
+    /// characters (twitter-text v3), where an emoji or a CJK glyph
+    /// costs 2.
+    ///
+    /// The composer already implements the weighted rule (it has to -
+    /// that is the number X counts), so the server measuring bytes
+    /// meant the two disagreed: a 200-emoji Bluesky post read "200/300"
+    /// in the composer and was rejected by the server as "800 chars,
+    /// max 300".
+    fn counting_rule(&self) -> CountingRule {
+        CountingRule::Bytes
+    }
 
     /// Tooltip shown in UI
     fn tooltip(&self) -> Option<&'static str> {

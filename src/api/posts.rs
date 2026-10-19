@@ -1389,6 +1389,14 @@ pub(crate) fn validate_posts_for_integrations(
             .1;
         let clean = clean.trim();
         let max_len = provider.max_content_length();
+        // The length the provider itself counts. For X that is the
+        // WEIGHTED length (an emoji costs 2), which is what the composer
+        // shows; for everything else it is the byte length. The old code
+        // always used `clean.len()` (bytes), so the two disagreed on any
+        // post with an emoji in it: a 200-emoji Bluesky post read
+        // "200/300" in the composer and was rejected by the server as
+        // "800 chars, max 300".
+        let length = provider.counting_rule().measure(clean);
 
         // Check empty content.
         //
@@ -1412,7 +1420,7 @@ pub(crate) fn validate_posts_for_integrations(
         }
 
         // Check content too long
-        if clean.len() > max_len {
+        if length > max_len {
             errors.push(ValidationError {
                 integration_id: integ.id.to_string(),
                 provider: integ.provider_identifier.clone(),
@@ -1420,12 +1428,12 @@ pub(crate) fn validate_posts_for_integrations(
                 kind: "too_long".into(),
                 message: format!(
                     "Content is {} chars, max {} for {}",
-                    clean.len(),
+                    length,
                     max_len,
                     integ.provider_name
                 ),
                 max_length: Some(max_len),
-                actual_length: Some(clean.len()),
+                actual_length: Some(length),
             });
         }
 
