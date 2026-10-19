@@ -1426,20 +1426,12 @@ pub(crate) fn validate_posts_for_integrations(
             .and_then(|o| o.content.as_deref())
             .unwrap_or(&body.content);
 
-        // Strip HTML for length check (same as PostService::sanitize_content)
-        let clean: String = content
-            .chars()
-            .fold((false, String::new()), |(in_tag, mut acc), ch| match ch {
-                '<' => (true, acc),
-                '>' => (false, acc),
-                _ if !in_tag => {
-                    acc.push(ch);
-                    (false, acc)
-                }
-                _ => (in_tag, acc),
-            })
-            .1;
-        let clean = clean.trim();
+        // The text the provider will actually receive, for the length
+        // check. This is the SAME conversion the content is stored
+        // through (`PostService::sanitize_content`), so the number
+        // checked here is the number the provider counts. It used to be
+        // a third copy of the character-level stripper.
+        let clean = crate::services::posts::PostService::sanitize_content(content, 2000);
         let max_len = provider.max_content_length();
         // The length the provider itself counts. For X that is the
         // WEIGHTED length (an emoji costs 2), which is what the composer
@@ -1448,7 +1440,7 @@ pub(crate) fn validate_posts_for_integrations(
         // post with an emoji in it: a 200-emoji Bluesky post read
         // "200/300" in the composer and was rejected by the server as
         // "800 chars, max 300".
-        let length = provider.counting_rule().measure(clean);
+        let length = provider.counting_rule().measure(&clean);
 
         // Check empty content.
         //

@@ -17,6 +17,7 @@
   // <span> tags with explicit colors.
 
   import { providerMeta } from '$lib/providers';
+  import { plainText as plainTextOf } from '$lib/composer/platforms';
   import type { MediaItem } from '$lib/api/media';
 
   let {
@@ -36,7 +37,12 @@
   } = $props();
 
   // Strip HTML tags to get plain text for the preview.
-  let plainText = $derived(content.replace(/<[^>]*>/g, ''));
+  // The content is already plain text (the editor speaks plain text
+  // at its boundary, the same contract the server and the providers use).
+  // The strip is kept as a safety net for content that arrived from
+  // somewhere else, and it is the SHARED helper - it used to be a
+  // per-file copy of the same regex.
+  let plainText = $derived(plainTextOf(content));
 
   // Get the char limit for this provider.
   let charLimit = $derived(providerMeta(provider).charLimit);

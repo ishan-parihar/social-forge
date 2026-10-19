@@ -12,10 +12,30 @@
   import SignatureEditor from './SignatureEditor.svelte';
 
   let { content = "", placeholder = "Write your post...", onUpdate, integrationId }: {
+    /**
+     * The post body, as PLAIN TEXT.
+     *
+     * The editor used to take and return HTML, while the server stores
+     * plain text (the providers publish plain text) and the server
+     * converts. So the two disagreed at every boundary:
+     *
+     *   - the composer sent HTML and the server stripped it;
+     *   - the composer read the stored PLAIN TEXT back - on duplicate,
+     *     on edit, and from the autosaved draft - and handed it to the
+     *     editor, which parses its input as HTML. TipTap then treated
+     *     the text's `<` as the start of a tag and the result was
+     *     corrupted: a post whose text was `---` came back as `--`,
+     *     and a mention of `<div>` was parsed as an element.
+     *
+     * The editor now speaks plain text at its boundary, the same
+     * contract the server and the providers use. The rich text is an
+     * EDITING convenience; the post body is text.
+     */
     content?: string; placeholder?: string;
-    onUpdate?: (html: string) => void;
+    /** Called with the new body, as plain text. */
+    onUpdate?: (text: string) => void;
     /** v26-5: integration ID for @mention suggestions. Optional - if omitted,
-     *  the MentionPicker won't activate. */
+     * the MentionPicker won't activate. */
     integrationId?: string;
   } = $props();
 
@@ -26,6 +46,63 @@
   let showImageInput = $state(false);
   let imageUrl = $state('');
   let syncing = false;
+  /**
+   * The plain text this editor last emitted.
+   *
+   * The sync effect compares the incoming `content` with the editor's
+   * current HTML. Once the contract is plain text, that comparison is
+   * between two different languages - so the guard is "is this the text
+   * I just emitted?". If it is, the editor already shows it and
+   * re-setting the content would reset the cursor to the start of the
+   * document on every keystroke.
+   */
+  let lastEmitted = $state<string | null>(null);
+
+  /**
+   * Plain text -> the HTML TipTap edits.
+   *
+   * The text is ESCAPED, so a `<` in the text stays a `<` in the
+   * document instead of opening an element. Blank lines become
+   * paragraphs, so the author's line breaks survive the round trip.
+   */
+  function textToHtml(text: string): string {
+    if (!text) return '';
+    const escape = (s: string) =>
+      s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return text
+      .split(/\n{2,}/)
+      .map((block) => `<p>${escape(block).replace(/\n/g, '<br>')}</p>`)
+      .join('');
+  }
+
+  /**
+   * The HTML TipTap produced -> plain text.
+   *
+   * The mirror of `textToHtml`: paragraphs become blank-line separated
+   * blocks, `<br>` becomes a newline, and the tags themselves are
+   * removed.
+   */
+  function htmlToText(html: string): string {
+    if (!html) return '';
+    // A block element ends a line. Do it on the HTML first, then strip
+    // the remaining tags, so the line breaks survive.
+    const withBreaks = html
+      .replace(/<\s*br\s*\/?\s*>/gi, '\n')
+      .replace(/<\s*\/\s*(p|div|li|h[1-6]|blockquote|pre)\s*>/gi, '\n')
+      .replace(/<\s*(p|div|li|h[1-6]|blockquote|pre)[^>]*>/gi, '\n');
+    // Strip the remaining tags.
+    const withoutTags = withBreaks.replace(/<[^>]*>/g, '');
+    // Decode the entities the editor produced.
+    const decoded = withoutTags
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/&apos;/g, "'")
+      .replace(/&amp;/g, '&');
+    return decoded.replace(/\n{3,}/g, '\n\n').trim();
+  }
 
   // Note: Placeholder config is captured once at init - TipTap doesn't support reactive placeholder updates
   const extensions = [
@@ -100,10 +177,12 @@
   onMount(() => {
     const store = createEditor({
       extensions,
-      content,
+      content: textToHtml(content),
       onUpdate: ({ editor: ed }) => {
         if (syncing) return;
-        onUpdate?.(ed.getHTML());
+        const text = htmlToText(ed.getHTML());
+        lastEmitted = text;
+        onUpdate?.(text);
         charCount = ed.getText().length;
       },
     });
@@ -121,9 +200,9 @@
 
   // Sync external content changes into the editor (guarded to avoid loops)
   $effect(() => {
-    if (editor && content && content !== editor.getHTML() && !syncing) {
+    if (editor && content && content !== lastEmitted && !syncing) {
       syncing = true;
-      editor.commands.setContent(content);
+      editor.commands.setContent(textToHtml(content));
       syncing = false;
     }
   });

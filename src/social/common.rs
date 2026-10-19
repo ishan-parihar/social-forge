@@ -69,22 +69,279 @@ pub fn parse_timestamp(s: &str) -> chrono::DateTime<chrono::Utc> {
         })
 }
 
-/// Strip HTML tags from content (basic implementation)
-pub fn strip_html_tags(s: &str) -> String {
-    let mut result = String::with_capacity(s.len());
-    let mut in_tag = false;
-    for ch in s.chars() {
-        match ch {
-            '<' => in_tag = true,
-            '>' => in_tag = false,
-            _ => {
-                if !in_tag {
-                    result.push(ch);
+/// Does this string contain HTML the stripper should remove?
+///
+/// The app sends PLAIN TEXT (the editor speaks plain text at its
+/// boundary, the same contract the server and the providers use), so
+/// the common case is a body that is text and must be left alone - a
+/// post reading "Use <div> for layout" keeps its `<div>`.
+///
+/// But the server is a trust boundary: HTML can arrive from the MCP
+/// tool, from a webhook, or from an API client that was written against
+/// an older contract. So the sanitizer must still remove markup when
+/// markup is really there.
+///
+/// The evidence of markup is a CLOSING tag, or a tag with an
+/// attribute, or a `<br>`:
+///   - `</p>` - a closing tag. A sentence never has one.
+///   - `<p class="x">` - an attribute. A sentence never has one.
+///   - `<br>` - a bare void tag.
+///
+/// A bare `<div>` is NOT evidence: it is a word in angle brackets, and
+/// a post about HTML is full of them. This is the line between "the
+/// founder typed `<div>`" and "this is markup", and it is the line
+/// that keeps a post's text intact.
+pub fn looks_like_html(s: &str) -> bool {
+    let bytes: Vec<char> = s.chars().collect();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] != '<' {
+            i += 1;
+            continue;
+        }
+        let next = bytes.get(i + 1).copied();
+        // A closing tag.
+        if next == Some('/') {
+            return true;
+        }
+        // A comment, a doctype or a processing instruction.
+        if next == Some('!') || next == Some('?') {
+            return true;
+        }
+        // `<br>`, `<hr>`, `<img ...>` - a void tag, or a tag with an
+        // attribute.
+        let rest: String = bytes[i + 1..].iter().collect::<String>().to_ascii_lowercase();
+        for tag in VOID_TAGS {
+            if rest.starts_with(tag) {
+                let after = rest[tag.len()..].chars().next();
+                if matches!(after, Some('>') | Some(' ') | Some('/')) {
+                    return true;
                 }
             }
         }
+        // A tag with an attribute: `<p class="x">`.
+        for tag in KNOWN_TAGS {
+            if rest.starts_with(tag) {
+                let after = rest[tag.len()..].chars().next();
+                if matches!(after, Some(' ') | Some('\t') | Some('\n')) {
+                    return true;
+                }
+            }
+        }
+        i += 1;
     }
-    result
+    false
+}
+
+/// The void tags - a tag that never has a closing form.
+const VOID_TAGS: &[&str] = &["br", "hr", "img", "input", "meta", "link", "wbr", "source"];
+
+/// The tag names the stripper recognises.
+const KNOWN_TAGS: &[&str] = &[
+    "p", "div", "span", "br", "hr", "b", "i", "u", "strong", "em", "s", "strike", "a", "ul", "ol",
+    "li", "h1", "h2", "h3", "h4", "h5", "h6", "blockquote", "pre", "code", "section", "article",
+    "header", "footer", "main", "aside", "nav", "figure", "figcaption", "table", "thead", "tbody",
+    "tr", "td", "th", "img", "picture", "source", "video", "audio", "iframe", "script", "style",
+    "small", "sub", "sup", "mark", "del", "ins", "abbr", "cite", "q", "kbd", "samp", "var", "wbr",
+];
+
+/// Convert HTML to the plain text a social provider expects.
+///
+/// The providers publish plain text, so the rich-text editor's HTML has
+/// to come back down to text on the way in.
+///
+/// The previous implementation was a character-level state machine: it
+/// set a flag on `<` and cleared it on `>`, and dropped everything in
+/// between. That silently DESTROYED content:
+///
+/// ```text
+/// "Ship it! 5 < 10 and 10 > 5"     -> "Ship it! 5  5"
+/// ```
+///
+/// A post that compares two numbers lost the words between the angle
+/// brackets, with no error and no way for the founder to know.
+///
+/// This is a real HTML-to-text conversion:
+///   - a tag is a `<` followed by a tag name, `/`, `!` or `?`, and it
+///     ends at the matching `>`. A `<` that is not the start of a tag
+///     is literal text.
+///   - a BLOCK element ends a line. A `<br>` ends a line.
+///   - `&amp;` and the other common entities are decoded.
+///   - `<script>` and `<style>` bodies are dropped entirely (their
+///     contents are code, not prose).
+pub fn strip_html_tags(s: &str) -> String {
+    let chars: Vec<char> = s.chars().collect();
+    let mut out = String::with_capacity(s.len());
+    let mut i = 0usize;
+    // The tag whose content is dropped entirely (script/style).
+    let mut skipping: Option<&'static str> = None;
+
+    while i < chars.len() {
+        let ch = chars[i];
+
+        if let Some(name) = skipping {
+            // Look for the closing tag.
+            let close = format!("</{}", name);
+            if chars[i..].len() >= close.len()
+                && chars[i..]
+                    .iter()
+                    .collect::<String>()
+                    .to_ascii_lowercase()
+                    .starts_with(&close)
+            {
+                skipping = None;
+                i += close.len();
+                // Skip to the '>' of the closing tag.
+                while i < chars.len() && chars[i] != '>' {
+                    i += 1;
+                }
+                i += 1;
+                continue;
+            }
+            i += 1;
+            continue;
+        }
+
+        if ch == '<' {
+            // Is this the start of a tag, or a literal '<'?
+            let next = chars.get(i + 1).copied();
+            let is_tag = matches!(next, Some(c) if c.is_ascii_alphabetic() || c == '/' || c == '!' || c == '?');
+            if !is_tag {
+                out.push('<');
+                i += 1;
+                continue;
+            }
+
+            // Find the end of the tag.
+            let mut j = i + 1;
+            while j < chars.len() && chars[j] != '>' {
+                j += 1;
+            }
+            if j >= chars.len() {
+                // An unterminated '<' is literal text.
+                out.push('<');
+                i += 1;
+                continue;
+            }
+            let tag: String = chars[i + 1..j].iter().collect();
+            let lower = tag.to_ascii_lowercase();
+            let name = lower
+                .trim_start_matches('/')
+                .trim_start_matches('!')
+                .trim_start_matches('?')
+                .split(|c: char| c.is_whitespace() || c == '/' || c == '>')
+                .next()
+                .unwrap_or("")
+                .to_string();
+
+            if name == "script" || name == "style" {
+                skipping = Some(if name == "script" { "script" } else { "style" });
+            } else if name == "br" {
+                out.push('\n');
+            } else if is_block_element(&name) {
+                // A block ends the line - but do not add a blank line if
+                // the text is already at one.
+                if !out.ends_with('\n') && !out.is_empty() {
+                    out.push('\n');
+                }
+            }
+            i = j + 1;
+            continue;
+        }
+
+        if ch == '&' {
+            if let Some((decoded, len)) = decode_entity(&chars, i) {
+                out.push_str(&decoded);
+                i += len;
+                continue;
+            }
+        }
+
+        out.push(ch);
+        i += 1;
+    }
+
+    // Collapse the runs of blank lines the block handling can leave.
+    let mut result = String::with_capacity(out.len());
+    let mut blank = 0usize;
+    for c in out.chars() {
+        if c == '\n' {
+            blank += 1;
+            if blank > 1 {
+                continue;
+            }
+        } else {
+            blank = 0;
+        }
+        result.push(c);
+    }
+    result.trim().to_string()
+}
+
+/// The elements that end a line when their tag is removed.
+fn is_block_element(name: &str) -> bool {
+    matches!(
+        name,
+        "p" | "div"
+            | "br"
+            | "li"
+            | "ul"
+            | "ol"
+            | "h1"
+            | "h2"
+            | "h3"
+            | "h4"
+            | "h5"
+            | "h6"
+            | "blockquote"
+            | "pre"
+            | "section"
+            | "article"
+            | "header"
+            | "footer"
+            | "tr"
+            | "table"
+    )
+}
+
+/// Decode the HTML entities a text editor can produce.
+fn decode_entity(chars: &[char], at: usize) -> Option<(String, usize)> {
+    // Find the ';' within a sane distance.
+    let mut j = at + 1;
+    while j < chars.len() && j - at <= 10 && chars[j] != ';' {
+        j += 1;
+    }
+    if j >= chars.len() || chars[j] != ';' {
+        return None;
+    }
+    let name: String = chars[at + 1..j].iter().collect();
+    // The named entities, and the numeric ones (&#123; / &#x1F600;).
+    let decoded: Option<String> = match name.as_str() {
+        "amp" => Some("&".to_string()),
+        "lt" => Some("<".to_string()),
+        "gt" => Some(">".to_string()),
+        "quot" => Some("\"".to_string()),
+        "apos" => Some("'".to_string()),
+        "nbsp" => Some(" ".to_string()),
+        "hellip" => Some("\u{2026}".to_string()),
+        "mdash" => Some("\u{2014}".to_string()),
+        "ndash" => Some("\u{2013}".to_string()),
+        _ => {
+            if let Some(rest) = name.strip_prefix("#x").or_else(|| name.strip_prefix("#X")) {
+                u32::from_str_radix(rest, 16)
+                    .ok()
+                    .and_then(char::from_u32)
+                    .map(|c| c.to_string())
+            } else {
+                name.strip_prefix('#')
+                    .and_then(|rest| rest.parse::<u32>().ok())
+                    .and_then(char::from_u32)
+                    .map(|c| c.to_string())
+            }
+        }
+    };
+    let decoded = decoded?;
+    Some((decoded, j - at + 1))
 }
 
 #[cfg(test)]

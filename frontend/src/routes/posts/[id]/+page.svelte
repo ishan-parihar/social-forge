@@ -117,8 +117,23 @@
         <h2 class="text-lg font-semibold">{post.title}</h2>
       {/if}
 
+      <!--
+        The post body is rendered as TEXT, not as HTML.
+
+        It used to be `{@html post.content}`, which is an XSS hole: the
+        content comes from a provider, from a webhook, or from anything
+        an API client posted, and rendering it as markup lets any of
+        them inject script into the founder's own dashboard. The
+        server stripped the tags on the way in, which is what hid the
+        hole - and that stripping is also why a post that mentioned a
+        tag lost the words between the angle brackets.
+
+        The content is plain text now (the editor speaks plain text at
+        its boundary, the same contract the server and the providers
+        use), so rendering it as text is both safe and correct.
+      -->
       <div class="text-sm text-content-secondary whitespace-pre-wrap break-words leading-relaxed">
-        {@html post.content}
+        {post.content}
       </div>
 
       {#if post.first_comment}

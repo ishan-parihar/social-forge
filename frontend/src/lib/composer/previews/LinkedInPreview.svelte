@@ -9,6 +9,7 @@
   // Inspired by postiz-app's providers/linkedin/linkedin.preview.tsx.
 
   import { providerMeta } from '$lib/providers';
+  import { plainText as plainTextOf } from '$lib/composer/platforms';
   import type { MediaItem } from '$lib/api/media';
 
   let {
@@ -25,7 +26,12 @@
     media?: MediaItem[];
   } = $props();
 
-  let plainText = $derived(content.replace(/<[^>]*>/g, ''));
+  // The content is already plain text (the editor speaks plain text
+  // at its boundary, the same contract the server and the providers use).
+  // The strip is kept as a safety net for content that arrived from
+  // somewhere else, and it is the SHARED helper - it used to be a
+  // per-file copy of the same regex.
+  let plainText = $derived(plainTextOf(content));
   let charLimit = $derived(providerMeta('linkedin').charLimit);
   let isOverLimit = $derived(plainText.length > charLimit);
 

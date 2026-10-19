@@ -46,19 +46,29 @@ pub struct SchedulePostInput {
 pub struct PostService;
 
 impl PostService {
-    /// Sanitize post content: strip HTML tags and limit length
+    /// Sanitize post content: store it as PLAIN TEXT, and limit the length.
+    ///
+    /// The app sends plain text (the editor speaks plain text at its
+    /// boundary, the same contract the server and the providers use), so
+    /// the common case is text that must be left ALONE. A post that
+    /// mentions a tag - "Use <div> for layout" - keeps its `<div>`.
+    ///
+    /// HTML that arrives from somewhere else (the MCP tool, a webhook,
+    /// an API client written against an older contract) is CONVERTED to
+    /// text, because the server is a trust boundary: the stored content
+    /// is published to a provider, and it is what a page renders.
+    ///
+    /// The conversion is `social::common::strip_html_tags` - the one
+    /// implementation, so the content the server stores is the same
+    /// text the providers publish. It used to be a character-level
+    /// stripper that deleted everything between a `<` and the next `>`,
+    /// so a post comparing two numbers lost the middle.
     pub fn sanitize_content(raw: &str, max_len: usize) -> String {
-        let mut clean = String::with_capacity(raw.len());
-        let mut in_tag = false;
-        for ch in raw.chars() {
-            match ch {
-                '<' => in_tag = true,
-                '>' if in_tag => in_tag = false,
-                _ if !in_tag => clean.push(ch),
-                _ => {}
-            }
-        }
-        let clean = clean.trim();
+        let clean = if crate::social::common::looks_like_html(raw) {
+            crate::social::common::strip_html_tags(raw)
+        } else {
+            raw.trim().to_string()
+        };
         if clean.chars().count() > max_len {
             // Use char-boundary-safe truncation to avoid panicking on
             // multi-byte UTF-8 sequences (e.g., emoji). `String::len()`
@@ -66,7 +76,7 @@ impl PostService {
             // panic if `max_len` falls inside a multi-byte sequence.
             clean.chars().take(max_len).collect()
         } else {
-            clean.to_string()
+            clean
         }
     }
 

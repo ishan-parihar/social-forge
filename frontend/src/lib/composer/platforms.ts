@@ -168,9 +168,67 @@ export function weightedLength(text: string): number {
   return count;
 }
 
-/** Strip the RichTextEditor's HTML down to what the platform will receive. */
+/**
+ * Strip the HTML down to what the platform will receive.
+ *
+ * The content is already plain text (the editor speaks plain text at
+ * its boundary, the same contract the server and the providers use),
+ * so this is mostly a safety net for content that arrived from
+ * somewhere else.
+ *
+ * It must not eat a legitimate mention of a tag. The old version was
+ * `html.replace(/<[^>]*>/g, '')`, which turned "Use <div> for layout"
+ * into "Use  for layout" - and the count the composer shows is the
+ * count of THIS string, so the preview and the number disagreed with
+ * the post.
+ *
+ * The rule matches the server's `strip_html_tags`: a tag is a `<`
+ * followed by a letter, `/`, `!` or `?`; anything else is literal text.
+ */
 export function plainText(html: string): string {
-  return html.replace(/<[^>]*>/g, '');
+  let out = '';
+  let i = 0;
+  while (i < html.length) {
+    const ch = html[i];
+    if (ch !== '<') {
+      out += ch;
+      i += 1;
+      continue;
+    }
+    const next = html[i + 1];
+    const isTag =
+      next !== undefined &&
+      (/[A-Za-z/!?]/.test(next));
+    if (!isTag) {
+      out += '<';
+      i += 1;
+      continue;
+    }
+    const end = html.indexOf('>', i);
+    if (end === -1) {
+      out += '<';
+      i += 1;
+      continue;
+    }
+    const tag = html.slice(i + 1, end).toLowerCase();
+    const name = tag.replace(/^[!/]/, '').split(/[\s/>]/)[0];
+    if (name === 'br') out += '\n';
+    else if (isBlockElement(name)) {
+      if (out && !out.endsWith('\n')) out += '\n';
+    }
+    i = end + 1;
+  }
+  return out.replace(/\n{3,}/g, '\n\n').trim();
+}
+
+/** The elements that end a line when their tag is removed. */
+function isBlockElement(name: string): boolean {
+  return [
+    'p', 'div', 'li', 'ul', 'ol',
+    'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+    'blockquote', 'pre', 'section', 'article',
+    'header', 'footer', 'tr', 'table',
+  ].includes(name);
 }
 
 /**

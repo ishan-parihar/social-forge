@@ -534,9 +534,9 @@
 
   function buildPayload() {
     const overridesObj: Record<string, { content?: string; settings?: Record<string, unknown> }> = {};
-    for (const [id, html] of providerOverride) {
-      if (html && html !== content) {
-        overridesObj[id] = { content: html };
+    for (const [id, text] of providerOverride) {
+      if (text && text !== content) {
+        overridesObj[id] = { content: text };
       }
     }
 
@@ -914,8 +914,8 @@
   // This drives the pink dot on the SelectCurrent pill strip.
   let divergedIntegrations = $derived.by(() => {
     const set = new Set<string>();
-    for (const [intId, html] of providerOverride) {
-      if (html && html !== content) {
+    for (const [intId, text] of providerOverride) {
+      if (text && text !== content) {
         set.add(intId);
       }
     }
@@ -1144,7 +1144,7 @@
             {/if}
           </h3>
           {#if editingMode === 'global'}
-            <RichTextEditor {content} onUpdate={(html) => content = html} integrationId={selectedIntegrations[0]} />
+            <RichTextEditor {content} onUpdate={(text) => content = text} integrationId={selectedIntegrations[0]} />
             {#if selectedIntegrations.length > 0}
               <div class="mt-3 pt-3 border-t border-line">
                 <PerPlatformCharCount
@@ -1158,9 +1158,9 @@
           {:else}
             <RichTextEditor
               content={providerOverride.get(editingMode.split(':')[1]) || content}
-              onUpdate={(html) => {
+              onUpdate={(text) => {
                 const intId = editingMode.split(':')[1];
-                providerOverride.set(intId, html);
+                providerOverride.set(intId, text);
                 providerOverride = new Map(providerOverride);
               }}
               integrationId={editingMode.split(':')[1]}

@@ -5,7 +5,13 @@
     selectedIntegrations?: string[];
     integrationProviders?: Map<string, string>;
   } = $props();
-  let plainText = $derived(content.replace(/<[^>]*>/g, "").slice(0, 120));
+  // The content is already PLAIN TEXT (the editor speaks plain text at
+  // its boundary, the same contract the server and the providers use).
+  //
+  // It used to be stripped with `content.replace(/<[^>]*>/g, "")`, which
+  // deleted a legitimate mention of a tag: a post reading
+  // "Use <div> for layout" previewed as "Use  for layout".
+  let plainText = $derived(content.slice(0, 120));
 </script>
 {#if selectedIntegrations.length > 0}
   <div class="bg-surface border border-line rounded-xl p-4">
