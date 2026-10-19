@@ -46,3 +46,10 @@ dated_pattern = "OUTLINE-|AUDIT_|GAPS_"
 # No generated records index: this repo's decisions live as AD-NNN files in
 # docs/decisions/ and are listed by `genome rec list`, not by a zone.
 zones = {}
+
+[card]
+# The `runbook` and `state` roles above are `native:` forms, so the card's
+# operate class would otherwise be empty. These point at the sections that
+# hold the answer; the `native:` roles stay the owner.
+architecture = "AGENTS.md#2. Repository Layout"
+operate = "AGENTS.md#3. Build & Test Workflow"
