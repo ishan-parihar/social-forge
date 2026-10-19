@@ -619,14 +619,14 @@
 
               <!-- Author -->
               {#if post.author_name}
-                <span class="text-sm font-medium text-content">{post.author_name}</span>
+                <span class="text-sm font-medium text-content truncate min-w-0">{post.author_name}</span>
               {/if}
               {#if post.author_handle}
-                <span class="text-xs text-muted">@{post.author_handle}</span>
+                <span class="text-xs text-muted truncate min-w-0">@{post.author_handle}</span>
               {/if}
 
               <!-- Time -->
-              <span class="ml-auto text-[11px] text-muted font-mono">{formatTime(post.created_at)}</span>
+              <span class="ml-auto text-[11px] text-muted font-mono whitespace-nowrap">{formatTime(post.created_at)}</span>
             </div>
 
             <!-- Content -->
@@ -749,7 +749,7 @@
             </div>
 
             <!-- Footer: link + repurpose + hide -->
-            <div class="mt-3 pt-3 border-t border-line flex items-center justify-between">
+            <div class="mt-3 pt-3 border-t border-line flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
               <div class="flex items-center gap-4">
                 {#if post.url}
                   <a
@@ -773,7 +773,7 @@
                     href={platformPostUrl(post.provider, post.platform_post_id)!}
                     target="_blank"
                     rel="noopener noreferrer"
-                    class="inline-flex items-center gap-1.5 text-xs font-medium text-muted hover:text-content transition-colors duration-150"
+                    class="inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-medium text-muted hover:text-content transition-colors duration-150"
                     title="Open this post on {meta.label} to edit or delete it"
                   >
                     Manage on {meta.label}
@@ -783,7 +783,7 @@
                   </a>
                 {/if}
               </div>
-              <div class="flex items-center gap-3">
+              <div class="flex items-center gap-3 whitespace-nowrap">
                 <!-- Phase v21: Repurpose - now calls the real backend
                      endpoint POST /api/feed/{id}/repurpose which creates
                      a Social Forge post row with source_external_post_id

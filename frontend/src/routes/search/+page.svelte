@@ -317,9 +317,9 @@
             <div class="flex-1 min-w-0">
               <!-- Author + time -->
               <div class="flex items-center gap-2 mb-1">
-                <span class="text-sm font-medium text-content">{post.author_name || 'Unknown'}</span>
+                <span class="text-sm font-medium text-content truncate min-w-0">{post.author_name || 'Unknown'}</span>
                 {#if post.author_handle}
-                  <span class="text-xs text-muted">@{post.author_handle}</span>
+                  <span class="text-xs text-muted truncate min-w-0">@{post.author_handle}</span>
                 {/if}
                 <span class="text-xs" style="color: {providerInk(post.provider)}">{providerIcon(post.provider)}</span>
                 <span class="text-xs text-faint ml-auto whitespace-nowrap">{formatTime(post.created_at)}</span>

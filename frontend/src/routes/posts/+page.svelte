@@ -327,17 +327,17 @@
 </script>
 
 <div class="page-enter space-y-6">
-  <div class="flex items-center justify-between">
+  <div class="flex flex-wrap items-center justify-between gap-3">
     <h1 class="text-xl font-semibold">Posts</h1>
     <div class="flex gap-2 items-center">
       <button
         onclick={() => groupByCampaign = !groupByCampaign}
-        class="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-line rounded-lg transition-colors {groupByCampaign ? 'bg-accent-fill text-accent-fg' : 'text-muted hover:bg-surface-hover'}"
+        class="flex items-center gap-1.5 px-3 py-1.5 whitespace-nowrap text-sm border border-line rounded-lg transition-colors {groupByCampaign ? 'bg-accent-fill text-accent-fg' : 'text-muted hover:bg-surface-hover'}"
       >
         <Icon name="analytics" class="w-3.5 h-3.5" />
         {groupByCampaign ? 'Grouped' : 'Group by Campaign'}
       </button>
-      <button onclick={() => composer.openCreate()} class="px-3 py-1.5 bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg text-sm transition-colors">+ New Post</button>
+      <button onclick={() => composer.openCreate()} class="px-3 py-1.5 whitespace-nowrap bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg text-sm transition-colors">+ New Post</button>
     </div>
   </div>
 
