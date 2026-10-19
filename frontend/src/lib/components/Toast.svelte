@@ -24,7 +24,7 @@
     {t.type === 'warning' ? 'bg-warning text-warning' : ''}
     {t.type === 'info' ? 'bg-hue-neutral/90 text-hue-neutral' : ''}"
   >
-    {t.type === 'success' && '✅ '}{t.type === 'error' && '❌ '}{t.type === 'warning' && '⚠️ '}{t.type === 'info' && 'ℹ️ '}
+    {t.type === 'success' ? '✅ ' : t.type === 'error' ? '❌ ' : t.type === 'warning' ? '⚠️ ' : t.type === 'info' ? 'ℹ️ ' : ''}
     {t.message}
   </div>
 {/each}
