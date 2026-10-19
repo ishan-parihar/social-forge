@@ -103,7 +103,7 @@
           bind:this={closeBtn}
           aria-label="Close"
           onclick={onClose}
-          class="w-7 h-7 rounded-lg flex items-center justify-center text-muted hover:text-content hover:bg-surface-hover transition-colors text-sm"
+          class="w-11 h-11 rounded-lg flex items-center justify-center text-muted hover:text-content hover:bg-surface-hover transition-colors text-sm"
         >
           &times;
         </button>

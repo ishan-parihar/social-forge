@@ -802,7 +802,7 @@
                      errors without re-importing. -->
                 <button
                   onclick={() => openEditModal(post)}
-                  class="text-xs text-muted hover:text-success transition-colors inline-flex items-center min-h-11 px-1"
+                  class="text-xs text-muted hover:text-success transition-colors inline-flex items-center justify-center min-h-11 min-w-11 px-1"
                   title="Edit the cached copy of this post"
                 >
                   Edit
@@ -824,7 +824,7 @@
                 </button>
                 <button
                   onclick={() => hidePost(post)}
-                  class="text-xs text-muted hover:text-error transition-colors inline-flex items-center min-h-11 px-1"
+                  class="text-xs text-muted hover:text-error transition-colors inline-flex items-center justify-center min-h-11 min-w-11 px-1"
                   title="Hide from feed (does not delete on platform)"
                 >
                   Hide

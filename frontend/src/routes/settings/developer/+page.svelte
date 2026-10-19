@@ -182,7 +182,7 @@
               <p class="text-sm font-medium text-accent">API Key Created</p>
               <p class="text-xs text-muted mt-1">Copy this key now - you won't be able to see it again.</p>
             </div>
-            <button onclick={dismissKeyAlert} aria-label="Dismiss" class="text-muted hover:text-content text-sm">&times;</button>
+            <button onclick={dismissKeyAlert} aria-label="Dismiss" class="text-muted hover:text-content text-sm min-h-11 min-w-11 flex items-center justify-center">&times;</button>
           </div>
           <div class="flex items-center gap-2">
             <code class="flex-1 px-3 py-2 bg-background-input border border-line rounded-lg text-sm font-mono text-accent-strong break-all">

@@ -190,9 +190,15 @@ pub fn event_summary(event_type: &str, payload: &serde_json::Value) -> String {
             (None, Some(p)) => format!("Published a post to {}", channel_label(p)),
             (None, None) => "Published a post".into(),
         },
-        "post_failed" => match str_at(payload, "error") {
-            Some(e) => format!("Publish failed: {e}"),
-            None => "Publish failed".into(),
+        "post_failed" => match (str_at(payload, "error"), provider) {
+            // Name the channel. The failure payload carries the provider
+            // now, so the log says WHICH channel failed instead of the
+            // "Failed on a channel" the frontend's own fallback
+            // produced.
+            (Some(e), Some(p)) => format!("Publish failed on {}: {e}", channel_label(p)),
+            (Some(e), None) => format!("Publish failed: {e}"),
+            (None, Some(p)) => format!("Publish failed on {}", channel_label(p)),
+            (None, None) => "Publish failed".into(),
         },
         "post_scheduled" => match (title, provider) {
             (Some(t), Some(p)) => format!("Scheduled “{t}” for {}", channel_label(p)),

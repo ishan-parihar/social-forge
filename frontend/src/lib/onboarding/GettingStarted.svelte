@@ -109,7 +109,7 @@
       </div>
       <button
         onclick={dismiss}
-        class="text-muted hover:text-content text-xs"
+        class="text-muted hover:text-content text-xs min-h-11 min-w-11 flex items-center justify-center"
         aria-label="Dismiss getting started checklist"
       >
         ✕

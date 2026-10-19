@@ -839,6 +839,58 @@ pub async fn update(
         None => (content, settings),
     };
 
+    // Validate the EDITED content against the channel's provider limits.
+    //
+    // The create path validates; the update path did not. So an edit
+    // that made a post too long (or broke a media rule) was ACCEPTED,
+    // stored, and failed later at publish time - the founder found out
+    // from the scheduler's error log, hours after the edit. The composer
+    // pre-validates, so the UI hid this - but the API is the contract.
+    if let Ok(Some(integration)) =
+        queries::get_integration(&state.db, existing.integration_id, auth.user_id).await
+    {
+        let media_val: Vec<crate::social::MediaAttachment> =
+            serde_json::from_value(media.clone()).unwrap_or_default();
+        let probe = CreatePostRequest {
+            integration_ids: vec![existing.integration_id],
+            content: content.clone(),
+            title: title.clone(),
+            media: Some(media.clone()),
+            settings: Some(settings.clone()),
+            scheduled_at: None,
+            tag_ids: None,
+            first_comment: None,
+            sequence: None,
+            overrides: body.overrides.as_ref().map(|m| {
+                m.iter()
+                    .map(|(k, v)| {
+                        (
+                            k.clone(),
+                            PostOverride {
+                                content: v.content.clone(),
+                                settings: v.settings.clone(),
+                            },
+                        )
+                    })
+                    .collect()
+            }),
+        };
+        let errors = validate_posts_for_integrations(
+            &state,
+            &probe,
+            std::slice::from_ref(&integration),
+            &media_val,
+        );
+        if !errors.is_empty() {
+            return Err(crate::error::AppError::BadRequest(
+                serde_json::to_string(&serde_json::json!({
+                    "validation_errors": errors,
+                }))
+                .unwrap_or_else(|_| "Content validation failed".into()),
+            ));
+        }
+    }
+
     // v23-5: use update_post_full so first_comment is persisted (was
     // silently dropped by update_post_content).
     let post = queries::update_post_full(

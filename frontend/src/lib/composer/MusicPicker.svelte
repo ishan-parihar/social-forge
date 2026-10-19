@@ -83,7 +83,7 @@
   >
     <div class="flex items-center justify-between px-4 py-3 border-b border-line shrink-0">
       <h3 id={titleId} class="text-sm font-semibold">🎵 Add Music</h3>
-      <button onclick={onclose} aria-label="Close music picker" class="text-muted hover:text-content text-xl">&times;</button>
+      <button onclick={onclose} aria-label="Close music picker" class="text-muted hover:text-content text-xl min-h-11 min-w-11 flex items-center justify-center">&times;</button>
     </div>
 
     <div class="p-4 space-y-3 overflow-y-auto">
