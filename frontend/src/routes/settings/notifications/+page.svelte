@@ -91,14 +91,14 @@
       <h2 class="text-sm font-medium text-content">Notification Types</h2>
       <div class="page-enter space-y-3">
         {#each notificationTypes as nt (nt.key)}
-          <div class="flex items-center justify-between py-2">
-            <div>
+          <div class="flex items-center justify-between gap-3 py-2">
+            <div class="min-w-0">
               <p class="text-sm text-content-secondary">{nt.label}</p>
               <p class="text-xs text-muted">{nt.description}</p>
             </div>
             <select
               bind:value={prefs[nt.key]}
-              class="bg-line text-content-secondary border border-line rounded px-3 py-1.5 text-sm focus:outline-none focus:border-accent/50 transition-colors"
+              class="shrink-0 bg-linetext-content-secondary border border-line rounded px-3 py-1.5 text-sm focus:outline-none focus:border-accent/50 transition-colors"
             >
               <option value="push">Push</option>
               <option value="email">Email</option>

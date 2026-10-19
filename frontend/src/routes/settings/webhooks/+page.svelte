@@ -186,7 +186,7 @@
 
 <!-- Create/Edit Modal -->
 {#if showModal}
-  <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50" role="dialog">
+  <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" role="dialog">
     <div class="bg-background-input border border-line rounded-xl p-6 w-full max-w-md">
       <h2 class="text-lg font-semibold mb-4">{editingWebhook ? "Edit Webhook" : "New Webhook"}</h2>
       <div class="page-enter space-y-6">
@@ -230,7 +230,7 @@
 
 <!-- Deliveries Modal -->
 {#if showDeliveries}
-  <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50" role="dialog">
+  <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" role="dialog">
     <div class="bg-background-input border border-line rounded-xl p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
       <div class="flex items-center justify-between mb-4">
         <h2 class="text-lg font-semibold">Delivery History</h2>

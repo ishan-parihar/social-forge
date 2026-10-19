@@ -178,13 +178,14 @@
 
 <!-- v25 F5: `overflow-x-auto` + a min-width floor on the grids, replacing the
      root's `overflow-hidden`. The floor is 560px = 80px/day, which keeps the
-     grid legible; on desktop the container is wider, so nothing scrolls. -->
+     grid legible from `sm` up. Below `sm` there is no floor: the chips become
+     dots (see below), so seven days fit a phone without scrolling. -->
 <div class="month-calendar bg-surface border border-line rounded-xl overflow-x-auto">
-  <div class="grid grid-cols-7 min-w-[560px] text-center text-xs text-muted py-2.5 border-b border-line" aria-hidden="true">
+  <div class="grid grid-cols-7 sm:min-w-[560px] text-center text-xs text-muted py-2.5 border-b border-line" aria-hidden="true">
     {#each days as d}<span>{d}</span>{/each}
   </div>
   <div
-    class="grid grid-cols-7 min-w-[560px]"
+    class="grid grid-cols-7 sm:min-w-[560px]"
     bind:this={gridEl}
     role="grid"
     aria-label="Calendar for {monthsFull[month]} {year}. Arrow keys move between days."
@@ -250,7 +251,21 @@
                   {#if event.state !== 'published' && !past}
                     <span class="hidden group-hover/chip:inline text-faint leading-none select-none" aria-hidden="true">⠿</span>
                   {/if}
-                  <CalendarEvent {event} compact {onDuplicate} {onStats} {onDelete} />
+                  <!-- Phones: a 48px day column cannot hold a title, so each chip is a
+                       state-colored dot. The chip keeps its aria-label and keyboard
+                       handling, so the dot loses nothing a screen reader or keyboard
+                       user relies on. -->
+                  <span
+                    class="sm:hidden w-1.5 h-1.5 rounded-full shrink-0"
+                    class:bg-info={event.state === 'draft'}
+                    class:bg-warning={event.state === 'queued'}
+                    class:bg-success={event.state === 'published'}
+                    class:bg-error={event.state === 'error'}
+                    aria-hidden="true"
+                  ></span>
+                  <span class="hidden sm:block min-w-0">
+                    <CalendarEvent {event} compact {onDuplicate} {onStats} {onDelete} />
+                  </span>
                 </div>
               {/each}
               {#if dayEvents.length > 3}

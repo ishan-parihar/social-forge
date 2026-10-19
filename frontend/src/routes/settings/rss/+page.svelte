@@ -97,7 +97,7 @@
 </script>
 
 <div class="page-enter space-y-6">
-  <div class="flex items-center justify-between">
+  <div class="flex flex-wrap items-center justify-between gap-3">
     <div>
       <h1 class="text-xl font-semibold">RSS Autopost</h1>
       <p class="text-sm text-muted mb-6">Automatically fetch and publish content from RSS feeds to your connected channels.</p>
