@@ -18,11 +18,12 @@
     const url = new URL(window.location.href);
     const date = url.searchParams.get('date') || undefined;
     composer.openCreate(date);
-    // Send the user back to the calendar (or wherever they came from
-    // via ?from= param). The modal opens on top of whatever page is
-    // rendered next.
+    // Send the user back where they came from (via ?from=), or to the
+    // Posts list. The route used to default to /calendar, so the Posts
+    // page's own "Create your first post" button teleported the user to
+    // the calendar with the composer floating over it.
     const from = url.searchParams.get('from');
-    goto(from || '/calendar', { replaceState: true });
+    goto(from || '/posts', { replaceState: true });
   });
 </script>
 

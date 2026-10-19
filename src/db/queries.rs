@@ -964,12 +964,17 @@ pub async fn list_posts_search(
         // NOTHING for the user's own posts and every row scored zero: the
         // sort was a no-op that looked like it worked.
         //
+        // The label set comes from `metric_label_matches` - the one place
+        // the provider vocabulary is mapped - so an X post's "Retweets"
+        // counts towards the sort.
+        //
         // SQLite has no uuid[] arrays: the id lists are bound as JSON
         // text and expanded with json_each(...). `? IS NULL` is how the
         // optional filters are skipped, and ILIKE becomes LIKE with an
         // explicit ESCAPE so the Rust-side backslash escaping still works
         // (SQLite LIKE is case-insensitive for ASCII by default).
-        r#"SELECT p.id, p.user_id, p.integration_id, p.state,
+        format!(
+            r#"SELECT p.id, p.user_id, p.integration_id, p.state,
                   p.content, p.title, p.media, p.settings, p.scheduled_at, p.published_at,
                   p.platform_post_id, p.platform_post_url, p.error_message,
                   p.created_at, p.updated_at,
@@ -991,9 +996,15 @@ pub async fn list_posts_search(
                             json_each(json_extract(series.value, '$.data')) AS point
                       WHERE ac.user_id = p.user_id
                         AND ac.platform_post_id = p.platform_post_id
-                        AND lower(json_extract(series.value, '$.label'))
-                            IN ('likes', 'comments', 'shares'))) DESC
-           LIMIT ? OFFSET ?"#.to_string()
+                        AND ({engagement_labels}))) DESC
+           LIMIT ? OFFSET ?"#,
+            engagement_labels = format!(
+                "{} OR {} OR {}",
+                metric_label_matches(METRIC_LIKES),
+                metric_label_matches(METRIC_COMMENTS),
+                metric_label_matches(METRIC_SHARES),
+            ),
+        )
     } else {
         format!(
             r#"SELECT id, user_id, integration_id, state,
@@ -1903,31 +1914,34 @@ pub async fn get_calendar_posts_with_metrics(
                    json_each(json_extract(series.value, '$.data')) AS point
              WHERE ac.user_id = p.user_id
                AND ac.platform_post_id = p.platform_post_id
-               AND lower(json_extract(series.value, '$.label')) = 'likes') AS likes,
+               AND {likes}) AS likes,
            (SELECT SUM(json_extract(point.value, '$.total'))
               FROM analytics_cache ac, json_each(ac.data) AS series,
                    json_each(json_extract(series.value, '$.data')) AS point
              WHERE ac.user_id = p.user_id
                AND ac.platform_post_id = p.platform_post_id
-               AND lower(json_extract(series.value, '$.label')) = 'comments') AS comments,
+               AND {comments}) AS comments,
            (SELECT SUM(json_extract(point.value, '$.total'))
               FROM analytics_cache ac, json_each(ac.data) AS series,
                    json_each(json_extract(series.value, '$.data')) AS point
              WHERE ac.user_id = p.user_id
                AND ac.platform_post_id = p.platform_post_id
-               AND lower(json_extract(series.value, '$.label')) = 'shares') AS shares,
+               AND {shares}) AS shares,
            (SELECT SUM(json_extract(point.value, '$.total'))
               FROM analytics_cache ac, json_each(ac.data) AS series,
                    json_each(json_extract(series.value, '$.data')) AS point
              WHERE ac.user_id = p.user_id
                AND ac.platform_post_id = p.platform_post_id
-               AND lower(json_extract(series.value, '$.label'))
-                   IN ('impressions', 'views')) AS impressions
+               AND {impressions}) AS impressions
          FROM posts p
          LEFT JOIN integrations i ON p.integration_id = i.id
          WHERE {where_sql}
          ORDER BY
            CASE WHEN p.state = 'published' THEN p.published_at ELSE p.scheduled_at END ASC"#,
+        likes = metric_label_matches(METRIC_LIKES),
+        comments = metric_label_matches(METRIC_COMMENTS),
+        shares = metric_label_matches(METRIC_SHARES),
+        impressions = metric_label_matches(METRIC_IMPRESSIONS),
     );
 
     // Epoch INTEGER columns: a bare DateTime binds as TEXT, which SQLite
@@ -3359,7 +3373,12 @@ pub async fn insert_external_post(
     .bind(author_name)
     .bind(author_handle)
     .bind(author_avatar)
-    .bind(created_at)
+    // The column is INTEGER epoch and every reader compares it against
+    // an INTEGER cutoff. Binding a `DateTime<Utc>` here wrote RFC 3339
+    // TEXT, and `created_at >= ?` was then ALWAYS TRUE - the 90-day
+    // research window, the feed summary and the posting-time histogram
+    // all let through posts of any age.
+    .bind(EpochUtc::from(created_at))
     .bind(url)
     .bind(media)
     .bind(metadata)
@@ -4424,7 +4443,13 @@ pub async fn own_post_engagement_totals(
     // of the series is read with `ORDER BY key DESC LIMIT 1` - the
     // provider's series is a running total, so its last point is the
     // current value.
-    sqlx::query_as::<_, OwnPostEngagementTotals>(
+    //
+    // The label set comes from `metric_label_matches`, the ONE place the
+    // provider vocabulary is mapped. It used to match only
+    // 'likes'/'comments'/'shares', which never matched X ("Retweets",
+    // "Replies") or Bluesky ("Reposts", "Replies") - so those users read
+    // 0 comments and 0 shares forever.
+    let sql = format!(
         r#"SELECT
              COALESCE(SUM(likes), 0)    AS likes,
              COALESCE(SUM(comments), 0) AS comments,
@@ -4437,39 +4462,104 @@ pub async fn own_post_engagement_totals(
                             json_each(json_extract(series.value, '$.data')) AS point
                       WHERE ac.user_id = p.user_id
                         AND ac.platform_post_id = p.platform_post_id
-                        AND lower(json_extract(series.value, '$.label')) = 'likes'
+                        AND {likes}
                       ORDER BY point.key DESC LIMIT 1) AS likes,
                     (SELECT json_extract(point.value, '$.total')
                        FROM analytics_cache ac, json_each(ac.data) AS series,
                             json_each(json_extract(series.value, '$.data')) AS point
                       WHERE ac.user_id = p.user_id
                         AND ac.platform_post_id = p.platform_post_id
-                        AND lower(json_extract(series.value, '$.label')) = 'comments'
+                        AND {comments}
                       ORDER BY point.key DESC LIMIT 1) AS comments,
                     (SELECT json_extract(point.value, '$.total')
                        FROM analytics_cache ac, json_each(ac.data) AS series,
                             json_each(json_extract(series.value, '$.data')) AS point
                       WHERE ac.user_id = p.user_id
                         AND ac.platform_post_id = p.platform_post_id
-                        AND lower(json_extract(series.value, '$.label')) = 'shares'
+                        AND {shares}
                       ORDER BY point.key DESC LIMIT 1) AS shares,
                     (SELECT json_extract(point.value, '$.total')
                        FROM analytics_cache ac, json_each(ac.data) AS series,
                             json_each(json_extract(series.value, '$.data')) AS point
                       WHERE ac.user_id = p.user_id
                         AND ac.platform_post_id = p.platform_post_id
-                        AND lower(json_extract(series.value, '$.label')) IN ('impressions', 'views')
+                        AND {impressions}
                       ORDER BY point.key DESC LIMIT 1) AS impressions
                FROM posts p
               WHERE p.user_id = ?
                 AND p.deleted_at IS NULL
                 AND p.state = 'published'
                 AND p.published_at >= ?)"#,
+        likes = metric_label_matches(METRIC_LIKES),
+        comments = metric_label_matches(METRIC_COMMENTS),
+        shares = metric_label_matches(METRIC_SHARES),
+        impressions = metric_label_matches(METRIC_IMPRESSIONS),
+    );
+    sqlx::query_as::<_, OwnPostEngagementTotals>(&sql)
+        .bind(user_id)
+        .bind(EpochUtc::from(cutoff))
+        .fetch_one(pool)
+        .await
+}
+
+/// The canonical metric each provider's series label belongs to.
+///
+/// The providers do NOT share a vocabulary: X reports "Retweets" and
+/// "Replies", Bluesky reports "Reposts" and "Replies", LinkedIn reports
+/// lowercase "likes"/"comments"/"shares", TikTok reports "Comments" and
+/// "Shares". The readers used to match `lower(label) IN ('likes',
+/// 'comments', 'shares')`, which only ever matched LinkedIn and TikTok -
+/// so for an X or Bluesky user the "Comments" and "Shares" headline
+/// cards read 0 forever, and an X post with 500 retweets scored ZERO
+/// engagement and was excluded from the ranking entirely by
+/// `WHERE engagement > 0`.
+///
+/// This is the ONE place the vocabulary is mapped. Every reader uses it.
+pub const METRIC_LIKES: &str = "likes";
+pub const METRIC_COMMENTS: &str = "comments";
+pub const METRIC_SHARES: &str = "shares";
+pub const METRIC_IMPRESSIONS: &str = "impressions";
+
+/// The SQL predicate matching a series label to a canonical metric.
+///
+/// `lower(label) = 'likes'` AND the synonyms for that metric.
+pub fn metric_label_matches(metric: &str) -> String {
+    match metric {
+        METRIC_LIKES => {
+            "lower(json_extract(series.value, '$.label')) IN ('likes', 'like', 'reactions', 'favorites')"
+                .to_string()
+        }
+        METRIC_COMMENTS => {
+            "lower(json_extract(series.value, '$.label')) IN ('comments', 'comment', 'replies', 'reply')"
+                .to_string()
+        }
+        METRIC_SHARES => {
+            "lower(json_extract(series.value, '$.label')) IN ('shares', 'share', 'retweets', 'reposts', 'repost', 'quotes')"
+                .to_string()
+        }
+        METRIC_IMPRESSIONS => {
+            "lower(json_extract(series.value, '$.label')) IN ('impressions', 'impression', 'views', 'view')"
+                .to_string()
+        }
+        _ => "lower(json_extract(series.value, '$.label')) = '".to_string() + metric + "'",
+    }
+}
+
+/// The SQL expression summing the points of the series that belong to
+/// `metric` for one post.
+///
+/// Shared by every own-post engagement query so they cannot disagree
+/// about which labels mean what.
+pub fn metric_sum_expr(metric: &str, post_alias: &str) -> String {
+    format!(
+        "(SELECT SUM(json_extract(point.value, '$.total'))
+           FROM analytics_cache ac, json_each(ac.data) AS series,
+                json_each(json_extract(series.value, '$.data')) AS point
+          WHERE ac.user_id = {post_alias}.user_id
+            AND ac.platform_post_id = {post_alias}.platform_post_id
+            AND {})",
+        metric_label_matches(metric)
     )
-    .bind(user_id)
-    .bind(EpochUtc::from(cutoff))
-    .fetch_one(pool)
-    .await
 }
 
 /// The per-metric totals of the user's own published posts.
@@ -4519,33 +4609,38 @@ pub async fn post_engagement_by_post(
                           json_each(json_extract(series.value, '$.data')) AS point
                     WHERE ac.user_id = p.user_id
                       AND ac.platform_post_id = p.platform_post_id
-                      AND lower(json_extract(series.value, '$.label')) = 'likes'
+                      AND {likes}
                     ORDER BY point.key DESC LIMIT 1) AS likes,
                   (SELECT json_extract(point.value, '$.total')
                      FROM analytics_cache ac, json_each(ac.data) AS series,
                           json_each(json_extract(series.value, '$.data')) AS point
                     WHERE ac.user_id = p.user_id
                       AND ac.platform_post_id = p.platform_post_id
-                      AND lower(json_extract(series.value, '$.label')) = 'comments'
+                      AND {comments}
                     ORDER BY point.key DESC LIMIT 1) AS comments,
                   (SELECT json_extract(point.value, '$.total')
                      FROM analytics_cache ac, json_each(ac.data) AS series,
                           json_each(json_extract(series.value, '$.data')) AS point
                     WHERE ac.user_id = p.user_id
                       AND ac.platform_post_id = p.platform_post_id
-                      AND lower(json_extract(series.value, '$.label')) = 'shares'
+                      AND {shares}
                     ORDER BY point.key DESC LIMIT 1) AS shares,
                   (SELECT json_extract(point.value, '$.total')
                      FROM analytics_cache ac, json_each(ac.data) AS series,
                           json_each(json_extract(series.value, '$.data')) AS point
                     WHERE ac.user_id = p.user_id
                       AND ac.platform_post_id = p.platform_post_id
-                      AND lower(json_extract(series.value, '$.label')) IN ('impressions', 'views')
+                      AND {impressions}
                     ORDER BY point.key DESC LIMIT 1) AS impressions
              FROM posts p
             WHERE p.user_id = ?
               AND p.deleted_at IS NULL
-              AND p.id IN ({holes})"#
+              AND p.id IN ({holes})"#,
+        holes = holes,
+        likes = metric_label_matches(METRIC_LIKES),
+        comments = metric_label_matches(METRIC_COMMENTS),
+        shares = metric_label_matches(METRIC_SHARES),
+        impressions = metric_label_matches(METRIC_IMPRESSIONS),
     );
     let mut q = sqlx::query_as::<_, PostEngagementRow>(&sql);
     q = q.bind(user_id);
@@ -4587,19 +4682,19 @@ pub async fn top_own_posts_by_engagement(
     // ranking must not list a post whose engagement was never measured —
     // an unmeasured post is unknown, not zero, and ranking it last would
     // pass it off as evidence of poor performance.
-    sqlx::query_as::<_, OwnPostEngagement>(
+    // The label set comes from `metric_label_matches` - the one place
+    // the provider vocabulary is mapped. Matching only
+    // 'likes'/'comments'/'shares' meant an X post with 500 retweets and
+    // 2 replies scored 2, and a Bluesky post with 300 reposts scored 0 -
+    // so `WHERE engagement > 0` EXCLUDED them from the ranking
+    // entirely.
+    let sql = format!(
         r#"SELECT post_id, content, provider, published_at, engagement
           FROM (SELECT p.id AS post_id,
                        p.content,
                        i.provider_identifier AS provider,
                        p.published_at,
-                       COALESCE((SELECT SUM(json_extract(point.value, '$.total'))
-                                   FROM analytics_cache ac, json_each(ac.data) AS series,
-                                        json_each(json_extract(series.value, '$.data')) AS point
-                                  WHERE ac.user_id = p.user_id
-                                    AND ac.platform_post_id = p.platform_post_id
-                                    AND lower(json_extract(series.value, '$.label'))
-                                        IN ('likes', 'comments', 'shares')), 0) AS engagement
+                       COALESCE({likes} + {comments} + {shares}, 0) AS engagement
                   FROM posts p
                   JOIN integrations i ON p.integration_id = i.id
                  WHERE p.user_id = ?
@@ -4609,12 +4704,16 @@ pub async fn top_own_posts_by_engagement(
          WHERE engagement > 0
          ORDER BY engagement DESC, published_at DESC
          LIMIT ?"#,
-    )
-    .bind(user_id)
-    .bind(EpochUtc::from(cutoff))
-    .bind(limit)
-    .fetch_all(pool)
-    .await
+        likes = metric_sum_expr(METRIC_LIKES, "p"),
+        comments = metric_sum_expr(METRIC_COMMENTS, "p"),
+        shares = metric_sum_expr(METRIC_SHARES, "p"),
+    );
+    sqlx::query_as::<_, OwnPostEngagement>(&sql)
+        .bind(user_id)
+        .bind(EpochUtc::from(cutoff))
+        .bind(limit)
+        .fetch_all(pool)
+        .await
 }
 
 /// Research: recent imported external posts ranked by engagement.

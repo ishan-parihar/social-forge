@@ -299,7 +299,15 @@ pub async fn list(
 
     // Upper bound for the cursor. Without a cursor it is positive infinity,
     // so every row is eligible and the range window alone decides.
-    let cursor = query.before.unwrap_or(i64::MAX);
+    //
+    // The cursor is EXCLUSIVE: the queries filter `created_at <= ?`, and
+    // `next_before` is the OLDEST row's second, so passing it straight
+    // back re-included that row on the next page. The frontend appends
+    // pages into a `{#each rows as row (row.id)}` keyed list, so the
+    // repeated id threw `each_key_duplicate` and the Activity page
+    // CRASHED on "Load more". The cursor is one second earlier, so the
+    // boundary row is never returned twice.
+    let cursor = query.before.unwrap_or(i64::MAX).saturating_sub(1);
     let floor = epoch_now() - query.window_secs();
 
     let mut rows: Vec<ActivityRow> = Vec::new();
@@ -434,7 +442,10 @@ pub async fn list(
 
     rows.truncate(PAGE_SIZE as usize);
 
-    let next_before = rows.last().map(|r| r.at);
+    // The cursor for the next page: one second before the oldest row
+    // returned, because the queries filter `created_at <= cursor`. The
+    // row AT `r.at` must not come back.
+    let next_before = rows.last().map(|r| r.at.saturating_sub(1));
 
     Ok(Json(ActivityResponse { rows, next_before }))
 }

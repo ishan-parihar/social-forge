@@ -9,6 +9,7 @@
   import { integrationsApi, type Integration } from "$lib/api/integrations";
   import { realtime } from "$lib/stores/realtime";
   import { timezone } from "$lib/stores/timezone.svelte";
+  import { wallClockToUtc, utcToWallClock } from "$lib/composer/wall-clock";
   import { composer } from "$lib/stores/composer.svelte";
   import { confirmModal, modals } from "$lib/stores/modals.svelte";
   import Badge from "$lib/ui/Badge.svelte";
@@ -226,10 +227,13 @@
   // runs in confirmBulkReschedule() below.
   async function handleBulkReschedule() {
     if (selectedIds.size === 0) return;
-    // Pre-fill date with today + 1 day, time with 09:00.
+    // Pre-fill date with today + 1 day, time with 09:00. The date is a
+    // calendar date in the app's timezone, so it is read from the wall
+    // clock in that zone - not from a UTC date, which is the previous day
+    // for anyone west of Greenwich in the evening.
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
-    bulkRescheduleDefaultDate = tomorrow.toISOString().slice(0, 10);
+    bulkRescheduleDefaultDate = utcToWallClock(tomorrow.toISOString(), timezone.value).date;
     bulkRescheduleDate = bulkRescheduleDefaultDate;
     bulkRescheduleTime = "09:00";
     bulkRescheduleSpread = "30";
@@ -261,15 +265,16 @@
       toast('Spread must be a non-negative number', 'error');
       return;
     }
-    // v22 Phase 7: timezone-aware construction (was always-UTC Z suffix).
-    // Construct as local datetime, convert to ISO. The user types "09:00"
-    // meaning their local time, not UTC.
-    const localBase = new Date(`${bulkRescheduleDate}T${bulkRescheduleTime}:00`);
-    if (isNaN(localBase.getTime())) {
+    // The typed time is a WALL CLOCK in the app's selected timezone - the
+    // same reading every other scheduling surface uses. The code built
+    // it with `new Date(\`${date}T${time}\`)`, which is the BROWSER's
+    // zone, while the label said "UTC": neither matched. The label now
+    // names the zone the field actually uses.
+    const baseIso = wallClockToUtc(bulkRescheduleDate, bulkRescheduleTime, timezone.value);
+    if (!baseIso || isNaN(Date.parse(baseIso))) {
       toast('Invalid date/time', 'error');
       return;
     }
-    const baseIso = localBase.toISOString();
     bulkRescheduleModalOpen = false;
     bulkActionLoading = true;
     let failures = 0;
@@ -595,7 +600,9 @@
           />
         </div>
         <div>
-          <label for="bulk-time" class="text-sm text-muted block mb-1.5">Base time (UTC)</label>
+          <label for="bulk-time" class="text-sm text-muted block mb-1.5">
+            Base time ({timezone.value.replace(/_/g, ' ')})
+          </label>
           <input
             id="bulk-time"
             type="time"

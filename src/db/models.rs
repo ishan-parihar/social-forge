@@ -455,11 +455,20 @@ pub struct ExternalPost {
     pub author_name: Option<String>,
     pub author_handle: Option<String>,
     pub author_avatar: Option<String>,
-    pub created_at: DateTime<Utc>,
+    /// The platform post's own timestamp, in INTEGER epoch seconds.
+    ///
+    /// The column is declared INTEGER, and every reader compares it
+    /// against an INTEGER epoch cutoff. The writer used to bind a
+    /// `DateTime<Utc>`, which sqlx stores as RFC 3339 TEXT - and SQLite
+    /// orders every INTEGER before every TEXT, so `created_at >= ?` was
+    /// ALWAYS TRUE and the 90-day window was a no-op. The `EpochUtc`
+    /// seam reads and writes the column as the epoch it is declared to
+    /// be.
+    pub created_at: crate::db::types::EpochUtc,
     pub url: Option<String>,
     pub media: serde_json::Value,
     pub metadata: serde_json::Value,
-    pub imported_at: DateTime<Utc>,
+    pub imported_at: crate::db::types::EpochUtc,
 }
 
 // ── Post Engagement Metrics ──────────────────────────────────

@@ -46,6 +46,8 @@
   import type { TargetInfo } from '$lib/api/integrations';
   import { signaturesApi } from '$lib/api/signatures';
   import { setProviderCharLimits } from '$lib/providers';
+  import { wallClockToUtc } from '$lib/composer/wall-clock';
+  import { timezone } from '$lib/stores/timezone.svelte';
 
   // Props passed by ModalManager (it injects a `close` function).
   let { close } = $props<{ close: (confirmed?: boolean) => void }>();
@@ -285,7 +287,12 @@
     loading = true;
     // Pre-fill from composer store entry-point state.
     if (composer.presetDate) {
-      scheduledAt = `${composer.presetDate}T09:00:00.000Z`;
+      // A calendar slot click means "09:00 on that day, in MY time".
+      // The old code hard-coded 09:00 UTC, so a user in Berlin got 11:00
+      // local - while every other scheduling surface in the app (the
+      // SchedulePicker) converted the wall clock through the selected
+      // zone. The conversion is shared, so all three entry points agree.
+      scheduledAt = wallClockToUtc(composer.presetDate, '09:00', timezone.value);
     } else if (composer.mode === 'create') {
       // Restore draft if present.
       const saved = localStorage.getItem(DRAFT_KEY);

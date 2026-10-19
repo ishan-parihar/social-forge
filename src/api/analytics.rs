@@ -429,11 +429,17 @@ pub struct EngagementResponse {
     pub total_comments: i64,
     pub total_shares: i64,
     pub total_impressions: i64,
-    // Deltas vs the previous period of the same length.
-    pub likes_delta: i64,
-    pub comments_delta: i64,
-    pub shares_delta: i64,
-    pub impressions_delta: i64,
+    // Percentage change vs the previous period of the same length.
+    //
+    // These were an ABSOLUTE difference (`current - previous`) while the
+    // UI rendered them with a `%` sign: a card reading 100 likes with a
+    // delta of 20 showed "Likes +20%", which reads as twenty percent
+    // and is actually twenty likes. The type is a float now and the
+    // value is the percentage the sign promises.
+    pub likes_delta: f64,
+    pub comments_delta: f64,
+    pub shares_delta: f64,
+    pub impressions_delta: f64,
     // Per-day breakdown for sparklines.
     pub by_day: Vec<DayEngagement>,
 }
@@ -445,6 +451,19 @@ pub struct DayEngagement {
     pub comments: i64,
     pub shares: i64,
     pub impressions: i64,
+}
+
+/// The percentage change from `previous` to `current`.
+///
+/// Returns 0.0 when there is no previous period to compare against:
+/// "0% vs nothing" is the honest reading, where dividing by zero would
+/// produce infinity or NaN.
+fn percent_change(current: i64, previous: i64) -> f64 {
+    if previous == 0 {
+        return 0.0;
+    }
+    let delta = current - previous;
+    (delta as f64 / previous as f64) * 100.0
 }
 
 /// GET /api/analytics/engagement?days=7
@@ -482,7 +501,12 @@ pub async fn get_engagement(
 
     // Per-day breakdown for the sparkline, keyed by the day each post
     // was published.
-    let by_day: Vec<DayEngagement> = sqlx::query_as(
+    //
+    // The label set comes from `queries::metric_label_matches` - the one
+    // place the provider vocabulary is mapped. Matching only
+    // 'likes'/'comments'/'shares' meant an X user's sparkline showed
+    // likes but no comments and no shares, forever.
+    let by_day_sql = format!(
         r#"SELECT
             date(p.published_at, 'unixepoch') as date,
             COALESCE(SUM((SELECT json_extract(point.value, '$.total')
@@ -490,50 +514,56 @@ pub async fn get_engagement(
                                  json_each(json_extract(series.value, '$.data')) AS point
                            WHERE ac.user_id = p.user_id
                              AND ac.platform_post_id = p.platform_post_id
-                             AND lower(json_extract(series.value, '$.label')) = 'likes'
+                             AND {likes}
                            ORDER BY point.key DESC LIMIT 1)), 0) as likes,
             COALESCE(SUM((SELECT json_extract(point.value, '$.total')
                             FROM analytics_cache ac, json_each(ac.data) AS series,
                                  json_each(json_extract(series.value, '$.data')) AS point
                            WHERE ac.user_id = p.user_id
                              AND ac.platform_post_id = p.platform_post_id
-                             AND lower(json_extract(series.value, '$.label')) = 'comments'
+                             AND {comments}
                            ORDER BY point.key DESC LIMIT 1)), 0) as comments,
             COALESCE(SUM((SELECT json_extract(point.value, '$.total')
                             FROM analytics_cache ac, json_each(ac.data) AS series,
                                  json_each(json_extract(series.value, '$.data')) AS point
                            WHERE ac.user_id = p.user_id
                              AND ac.platform_post_id = p.platform_post_id
-                             AND lower(json_extract(series.value, '$.label')) = 'shares'
+                             AND {shares}
                            ORDER BY point.key DESC LIMIT 1)), 0) as shares,
             COALESCE(SUM((SELECT json_extract(point.value, '$.total')
                             FROM analytics_cache ac, json_each(ac.data) AS series,
                                  json_each(json_extract(series.value, '$.data')) AS point
                            WHERE ac.user_id = p.user_id
                              AND ac.platform_post_id = p.platform_post_id
-                             AND lower(json_extract(series.value, '$.label')) IN ('impressions', 'views')
+                             AND {impressions}
                            ORDER BY point.key DESC LIMIT 1)), 0) as impressions
            FROM posts p
            WHERE p.user_id = ? AND p.deleted_at IS NULL
              AND p.state = 'published'
              AND p.published_at >= ?
-           GROUP BY date(p.published_at, 'unixepoch')
-           ORDER BY date(p.published_at, 'unixepoch') ASC"#,
-    )
-    .bind(auth.user_id)
-    .bind(crate::db::types::EpochUtc::from(cutoff))
-    .fetch_all(&state.db)
-    .await?;
+             GROUP BY date(p.published_at, 'unixepoch')
+            ORDER BY date(p.published_at, 'unixepoch') ASC"#,
+        likes = crate::db::queries::metric_label_matches(crate::db::queries::METRIC_LIKES),
+        comments = crate::db::queries::metric_label_matches(crate::db::queries::METRIC_COMMENTS),
+        shares = crate::db::queries::metric_label_matches(crate::db::queries::METRIC_SHARES),
+        impressions =
+            crate::db::queries::metric_label_matches(crate::db::queries::METRIC_IMPRESSIONS),
+    );
+    let by_day: Vec<DayEngagement> = sqlx::query_as(&by_day_sql)
+        .bind(auth.user_id)
+        .bind(crate::db::types::EpochUtc::from(cutoff))
+        .fetch_all(&state.db)
+        .await?;
 
     Ok(Json(EngagementResponse {
         total_likes: current.likes,
         total_comments: current.comments,
         total_shares: current.shares,
         total_impressions: current.impressions,
-        likes_delta: current.likes - prev.likes,
-        comments_delta: current.comments - prev.comments,
-        shares_delta: current.shares - prev.shares,
-        impressions_delta: current.impressions - prev.impressions,
+        likes_delta: percent_change(current.likes, prev.likes),
+        comments_delta: percent_change(current.comments, prev.comments),
+        shares_delta: percent_change(current.shares, prev.shares),
+        impressions_delta: percent_change(current.impressions, prev.impressions),
         by_day,
     }))
 }

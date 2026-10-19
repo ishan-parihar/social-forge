@@ -56,7 +56,18 @@
     // A page short of a full one means there is nothing further back, so the
     // "Load more" button stops instead of issuing a guaranteed-empty request.
     exhausted = nextBefore === null || fresh.length === 0;
-    rows = cursor == null ? fresh : [...rows, ...fresh];
+    if (cursor == null) {
+      rows = fresh;
+    } else {
+      // Append, but never a row that is already on screen. The list is
+      // rendered as a keyed `{#each rows as row (row.id)}`, and Svelte
+      // throws `each_key_duplicate` on a repeated key - which CRASHED
+      // this page. The backend's cursor is exclusive now, so this is a
+      // belt-and-braces guard: a page must never be able to take the
+      // feed down.
+      const seen = new Set(rows.map((r) => r.id));
+      rows = [...rows, ...fresh.filter((r) => !seen.has(r.id))];
+    }
     return true;
   }
 

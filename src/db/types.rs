@@ -54,6 +54,19 @@ impl fmt::Display for EpochUtc {
     }
 }
 
+// ── Serde ─────────────────────────────────────────────────────
+//
+// The wire format is the same RFC 3339 string a `DateTime<Utc>` would
+// produce, so switching a model's field to `EpochUtc` (because the
+// column really is an INTEGER epoch) does not change the JSON the API
+// returns.
+
+impl serde::Serialize for EpochUtc {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.0.serialize(serializer)
+    }
+}
+
 // ── UUID id-list filter ─────────────────────────────────────
 //
 // sqlx encodes a `Uuid` as a 16-byte BLOB, so every uuid column in the

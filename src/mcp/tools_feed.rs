@@ -68,10 +68,10 @@ fn format_feed_post(post: &crate::db::models::ExternalPost) -> FeedPostItem {
         author_name: post.author_name.clone(),
         author_handle: post.author_handle.clone(),
         author_avatar: post.author_avatar.clone(),
-        created_at: post.created_at.to_rfc3339(),
+        created_at: DateTime::<Utc>::from(post.created_at).to_rfc3339(),
         url: post.url.clone(),
         media: post.media.clone(),
-        imported_at: post.imported_at.to_rfc3339(),
+        imported_at: DateTime::<Utc>::from(post.imported_at).to_rfc3339(),
     }
 }
 
@@ -107,7 +107,7 @@ pub async fn handle_feed_list(
     let has_more = posts.len() as i64 > limit;
     let posts: Vec<_> = posts.into_iter().take(limit as usize).collect();
 
-    let next_cursor = posts.last().map(|p| p.created_at.to_rfc3339());
+    let next_cursor = posts.last().map(|p| DateTime::<Utc>::from(p.created_at).to_rfc3339());
 
     let feed_posts: Vec<FeedPostItem> = posts.iter().map(format_feed_post).collect();
 

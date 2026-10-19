@@ -96,9 +96,14 @@
     if (postsRes.data) {
       allPosts = postsRes.data.posts;
       const published = allPosts.filter(p => p.state === "published");
+      // The filter stores the provider IDENTIFIER ("linkedin-page"), and
+      // the list now carries it. It used to compare that identifier
+      // against the DISPLAY name ("LinkedIn Page"), so every provider
+      // whose two names differ matched nothing and the list silently
+      // emptied.
       const pool = selectedProvider === "all"
         ? published
-        : published.filter(p => p.integration_name?.toLowerCase().includes(selectedProvider));
+        : published.filter(p => p.provider_identifier === selectedProvider);
       topPosts = pool
         .map(p => ({
           ...p,
@@ -367,8 +372,13 @@
           <div class="flex items-baseline gap-2">
             <span class="text-2xl font-bold text-content">{totals[metric.key].toLocaleString()}</span>
             {#if totals.deltas[metric.key] !== 0}
+              <!--
+                The delta is a PERCENTAGE change (the backend used to send
+                an absolute count, which this rendered as "+20%" - twenty
+                percent when it meant twenty likes).
+              -->
               <span class="text-xs {totals.deltas[metric.key] > 0 ? 'text-success' : 'text-error'}">
-                {totals.deltas[metric.key] > 0 ? '+' : ''}{totals.deltas[metric.key]}%
+                {totals.deltas[metric.key] > 0 ? '+' : ''}{totals.deltas[metric.key].toFixed(0)}%
               </span>
             {/if}
           </div>

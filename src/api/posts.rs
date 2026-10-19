@@ -126,6 +126,16 @@ pub struct PostWithIntegrationName {
     pub id: Uuid,
     pub integration_id: Uuid,
     pub integration_name: String,
+    /// The provider's identifier ("x", "linkedin-page",
+    /// "instagram-standalone").
+    ///
+    /// `integration_name` is the provider's DISPLAY name ("Telegram Bot",
+    /// "LinkedIn Page"), which is not the same string. The analytics
+    /// page's channel filter stores the identifier and compared it
+    /// against the display name, so every provider whose two names
+    /// differ - telegram-bot, linkedin-page, instagram-standalone -
+    /// matched nothing and the filter silently emptied the list.
+    pub provider_identifier: String,
     pub state: String,
     pub content: String,
     pub title: Option<String>,
@@ -380,18 +390,19 @@ pub async fn list(
 
     let mut enriched = Vec::with_capacity(posts.len());
     for p in posts {
-        let integration_name = if let Ok(Some(integ)) =
+        let (integration_name, provider_identifier) = if let Ok(Some(integ)) =
             queries::get_integration(&state.db, p.integration_id, auth.user_id).await
         {
-            integ.provider_name
+            (integ.provider_name, integ.provider_identifier)
         } else {
-            "Removed channel".into()
+            ("Removed channel".into(), "unknown".into())
         };
         let tags = enrich_post_tags(&state.db, p.id, auth.user_id).await;
         enriched.push(PostWithIntegrationName {
             id: p.id,
             integration_id: p.integration_id,
             integration_name,
+            provider_identifier,
             state: p.state.to_string(),
             content: p.content,
             title: p.title,
