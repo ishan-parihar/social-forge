@@ -111,7 +111,7 @@
 </script>
 
 <div class="page-enter space-y-6">
-  <div class="flex items-center justify-between">
+  <div class="flex flex-wrap items-center justify-between gap-3">
     <h1 class="text-xl font-semibold">Direct Messages</h1>
     <div class="flex gap-2 items-center">
       {#if integrations.length > 0}

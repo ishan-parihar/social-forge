@@ -91,7 +91,7 @@
 </script>
 
 <div class="page-enter space-y-6">
-  <div class="flex items-center justify-between">
+  <div class="flex flex-wrap items-center justify-between gap-3">
     <h1 class="text-xl font-semibold">Comments</h1>
     <button onclick={load} class="px-3 py-1.5 text-sm text-muted hover:text-content border border-line rounded-lg transition-colors">Refresh</button>
   </div>

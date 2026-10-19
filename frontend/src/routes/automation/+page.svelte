@@ -183,7 +183,7 @@
 </script>
 
 <div class="page-enter space-y-6">
-  <div class="flex items-center justify-between">
+  <div class="flex flex-wrap items-center justify-between gap-3">
     <h1 class="text-xl font-semibold">Automation Rules</h1>
     <button onclick={openCreate} class="px-3 py-1.5 bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg text-sm transition-colors">+ New Rule</button>
   </div>

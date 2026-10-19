@@ -91,7 +91,7 @@
 </script>
 
 <div class="page-enter space-y-6">
-  <div class="flex items-center justify-between">
+  <div class="flex flex-wrap items-center justify-between gap-3">
     <h1 class="text-xl font-semibold text-content">Media Library</h1>
     <label class="px-3 py-1.5 bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg text-sm cursor-pointer transition-colors disabled:opacity-50" class:opacity-50={uploading}>
       {uploading ? "Uploading..." : "+ Upload"}
