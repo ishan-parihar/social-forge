@@ -1007,7 +1007,7 @@ pub async fn list_posts_search(
                             json_each(json_extract(series.value, '$.data')) AS point
                       WHERE ac.user_id = p.user_id
                         AND ac.platform_post_id = p.platform_post_id
-                        AND ({engagement_labels}))) DESC
+                        AND ({engagement_labels})) DESC
            LIMIT ? OFFSET ?"#,
             engagement_labels = engagement_labels,
         )
