@@ -153,17 +153,14 @@
   {:else}
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
       {#each filteredCampaigns as c (c.id)}
-        <div
-          class="bg-surface border border-line rounded-lg p-5 cursor-pointer hover:border-line-hover transition-colors group"
-          onclick={() => goto(`/campaigns/${c.id}`)}
-          role="button"
-          tabindex={0}
-          onkeydown={(e) => { if (e.key === 'Enter' && e.target === e.currentTarget) goto(`/campaigns/${c.id}`); }}
-        >
+        <div class="relative bg-surface border border-line rounded-lg p-5 hover:border-line-hover transition-colors group">
           <div class="flex items-start justify-between mb-3">
             <div class="flex items-center gap-2">
               <span class="w-3 h-3 rounded-full" style="background: {c.color}"></span>
-              <h2 class="font-medium text-content group-hover:text-accent transition-colors">{c.name}</h2>
+              <h2 class="font-medium">
+                <!-- Stretched link: the whole card is the link, and the ✕ sits above it (z-10). -->
+                <a href="/campaigns/{c.id}" class="text-content group-hover:text-accent transition-colors no-underline after:absolute after:inset-0 after:content-['']">{c.name}</a>
+              </h2>
             </div>
             <Badge variant={statusVariant[c.status] || 'default'}>{c.status}</Badge>
           </div>
@@ -200,7 +197,7 @@
             </span>
             <button
               onclick={(e) => { e.stopPropagation(); archiveCampaign(c.id, c.name); }}
-              class="text-muted hover:text-error transition-colors opacity-0 group-hover:opacity-100"
+              class="relative z-10 text-muted hover:text-error transition-colors opacity-0 group-hover:opacity-100"
               title="Archive campaign"
             >
               ✕
