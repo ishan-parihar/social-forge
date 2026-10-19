@@ -129,7 +129,7 @@
       {#each checklist as item, i (item.label)}
         <button
           onclick={() => handleClick(item.href)}
-          class="w-full flex items-center gap-3 p-2 -mx-2 rounded-lg hover:bg-surface-hover transition-colors text-left group"
+          class="w-full flex items-center gap-3 p-2 -mx-2 rounded-lg hover:bg-surface-hover transition-colors text-left group min-h-11"
         >
           <div class="w-5 h-5 rounded-full flex items-center justify-center text-xs shrink-0
             {item.done

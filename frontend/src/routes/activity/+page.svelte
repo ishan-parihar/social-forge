@@ -217,11 +217,13 @@
               {/if}
               {#if row.post_id}
                 <!-- A real anchor, so it is keyboard-reachable and
-                     middle-clickable without JS. -->
-                <a href="/posts/{row.post_id}" class="text-accent hover:underline">View post</a>
+                     middle-clickable without JS. The inline-flex +
+                     min-height gives it a 44px target without changing
+                     the line it sits on. -->
+                <a href="/posts/{row.post_id}" class="text-accent hover:underline inline-flex items-center min-h-11">View post</a>
               {/if}
               {#if row.rule_id}
-                <a href="/automation" class="text-accent hover:underline">View rule</a>
+                <a href="/automation" class="text-accent hover:underline inline-flex items-center min-h-11">View rule</a>
               {/if}
             </div>
           </div>
@@ -236,7 +238,7 @@
         <button
           onclick={() => load(false)}
           disabled={loadingMore}
-          class="px-4 py-2 bg-surface-hover hover:bg-line-hover border border-line rounded-lg text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          class="px-4 py-2 bg-surface-hover hover:bg-line-hover border border-line rounded-lg text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed min-h-11"
         >
           {loadingMore ? "Loading…" : "Load more"}
         </button>

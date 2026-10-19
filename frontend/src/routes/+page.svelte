@@ -184,10 +184,10 @@
       <p class="text-sm text-muted mt-1">Your social media command center</p>
     </div>
     <div class="flex gap-2">
-      <button onclick={() => composer.openCreate()} class="px-4 py-2 whitespace-nowrap bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg text-sm font-medium transition-colors">
+      <button onclick={() => composer.openCreate()} class="px-4 py-2 whitespace-nowrap bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg text-sm font-medium transition-colors min-h-11">
         + New Post
       </button>
-      <button onclick={() => goto('/analytics')} class="px-4 py-2 whitespace-nowrap bg-surface-hover hover:bg-line-hover border border-line rounded-lg text-sm transition-colors">
+      <button onclick={() => goto('/analytics')} class="px-4 py-2 whitespace-nowrap bg-surface-hover hover:bg-line-hover border border-line rounded-lg text-sm transition-colors min-h-11">
         <Icon name="analytics" class="w-4 h-4 inline" /> Analytics
       </button>
     </div>
@@ -371,25 +371,25 @@
         {:else}
           <div class="space-y-2">
             {#if stats.error > 0}
-              <a href="/posts?state=error" class="flex items-center gap-2 p-2 rounded-lg hover:bg-surface-hover transition-colors">
+              <a href="/posts?state=error" class="flex items-center gap-2 p-2 rounded-lg hover:bg-surface-hover transition-colors min-h-11">
                 <span class="w-2 h-2 rounded-full bg-error"></span>
                 <span class="text-xs text-error">{stats.error} failed post{stats.error > 1 ? 's' : ''}</span>
               </a>
             {/if}
             {#if stats.draft > 0}
-              <a href="/posts?state=draft" class="flex items-center gap-2 p-2 rounded-lg hover:bg-surface-hover transition-colors">
+              <a href="/posts?state=draft" class="flex items-center gap-2 p-2 rounded-lg hover:bg-surface-hover transition-colors min-h-11">
                 <span class="w-2 h-2 rounded-full bg-info"></span>
                 <span class="text-xs text-info">{stats.draft} draft{stats.draft > 1 ? 's' : ''} waiting</span>
               </a>
             {/if}
             {#if upcoming.length > 0}
-              <a href="/calendar" class="flex items-center gap-2 p-2 rounded-lg hover:bg-surface-hover transition-colors">
+              <a href="/calendar" class="flex items-center gap-2 p-2 rounded-lg hover:bg-surface-hover transition-colors min-h-11">
                 <span class="w-2 h-2 rounded-full bg-warning"></span>
                 <span class="text-xs text-warning">{upcoming.length} scheduled post{upcoming.length > 1 ? 's' : ''} upcoming</span>
               </a>
             {/if}
             {#if integrations.filter(i => i.refresh_needed).length > 0}
-              <a href="/channels" class="flex items-center gap-2 p-2 rounded-lg hover:bg-surface-hover transition-colors">
+              <a href="/channels" class="flex items-center gap-2 p-2 rounded-lg hover:bg-surface-hover transition-colors min-h-11">
                 <span class="w-2 h-2 rounded-full bg-warning"></span>
                 <span class="text-xs text-warning">{integrations.filter(i => i.refresh_needed).length} channel{integrations.filter(i => i.refresh_needed).length > 1 ? 's' : ''} need{integrations.filter(i => i.refresh_needed).length === 1 ? 's' : ''} reconnect</span>
               </a>
@@ -414,7 +414,7 @@
       {:else}
         <div class="space-y-1.5">
           {#each draftPosts.slice(0, 5) as post (post.id)}
-            <a href="/posts/{post.id}" class="flex items-center gap-2 py-1.5 px-2 -mx-2 rounded-lg hover:bg-surface-hover transition-colors group">
+            <a href="/posts/{post.id}" class="flex items-center gap-2 py-1.5 px-2 -mx-2 rounded-lg hover:bg-surface-hover transition-colors group min-h-11">
               <span class="w-1.5 h-1.5 rounded-full bg-info shrink-0"></span>
               <span class="flex-1 text-xs truncate text-content-secondary group-hover:text-content">{post.content || post.title || '(no content)'}</span>
               <span class="text-[10px] text-faint">draft</span>
@@ -535,7 +535,7 @@
       <button onclick={() => goto('/channels')} class="px-4 py-2 bg-surface-hover hover:bg-line-hover border border-line rounded-lg text-sm transition-colors">
         <Icon name="channel" class="w-4 h-4 inline" /> Manage Channels
       </button>
-      <button onclick={() => goto('/analytics')} class="px-4 py-2 whitespace-nowrap bg-surface-hover hover:bg-line-hover border border-line rounded-lg text-sm transition-colors">
+      <button onclick={() => goto('/analytics')} class="px-4 py-2 whitespace-nowrap bg-surface-hover hover:bg-line-hover border border-line rounded-lg text-sm transition-colors min-h-11">
         <Icon name="analytics" class="w-4 h-4 inline" /> View Analytics
       </button>
     </div>

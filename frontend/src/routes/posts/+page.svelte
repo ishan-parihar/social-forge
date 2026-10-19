@@ -354,7 +354,7 @@
         bind:value={searchQuery}
         oninput={onSearchInput}
         placeholder="Search posts by content or title..."
-        class="w-full px-3 py-2 pl-9 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none"
+        class="w-full px-3 py-2 pl-9 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none min-h-11"
       />
       <span class="absolute left-3 top-1/2 -translate-y-1/2 text-muted">
         <Icon name="search" class="w-4 h-4" />
@@ -518,7 +518,7 @@
           </label>
           <button
             onclick={() => composer.openEdit(post.id)}
-            class="flex-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-left min-w-0"
+            class="flex-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-left min-w-0 min-h-11"
           >
             <!-- The title takes the whole row on a phone. On one line it
                  shared the row with the date and the state badge, which
