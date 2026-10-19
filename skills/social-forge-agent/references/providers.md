@@ -1,5 +1,37 @@
 # Social Forge — Provider Reference
 
+## Contents
+
+- [Post to a platform](#post-to-a-platform)
+- [Read a feed or profile](#read-a-feed-or-profile)
+- [Schedule a post](#schedule-a-post)
+- [Manage media](#manage-media)
+- [Create a carousel](#create-a-carousel)
+- [Comment and reply](#comment-and-reply)
+- [Send a DM](#send-a-dm)
+- [Post to Instagram (3-step flow)](#post-to-instagram-3-step-flow)
+- [Check analytics](#check-analytics)
+- [Engage (like, retweet, vote, bookmark)](#engage-like-retweet-vote-bookmark)
+- [Manage automation rules](#manage-automation-rules)
+- [New Platform CLI Commands](#new-platform-cli-commands)
+- [Cross-cutting MCP tools](#cross-cutting-mcp-tools)
+- [Platform-specific MCP tools](#platform-specific-mcp-tools)
+  - [X / Twitter (20 tools)](#x-twitter-20-tools)
+  - [Facebook (15 tools)](#facebook-15-tools)
+  - [Instagram (15+ tools)](#instagram-15-tools)
+  - [LinkedIn Page (12 tools)](#linkedin-page-12-tools)
+  - [LinkedIn Personal (12 tools)](#linkedin-personal-12-tools)
+  - [Reddit (36 tools)](#reddit-36-tools)
+  - [Bluesky (5 tools)](#bluesky-5-tools)
+  - [Discord (13 tools)](#discord-13-tools)
+  - [Telegram Bot (9 tools)](#telegram-bot-9-tools)
+  - [Telegram User (13 tools)](#telegram-user-13-tools)
+  - [WhatsApp (13 tools)](#whatsapp-13-tools)
+  - [GitHub (18 tools)](#github-18-tools)
+  - [Google (28 tools)](#google-28-tools)
+  - [WordPress (4 tools)](#wordpress-4-tools)
+  - [Other platforms](#other-platforms)
+
 Complete CLI commands and MCP tools for every supported provider. Grouped by task.
 
 ---
