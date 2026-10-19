@@ -90,7 +90,7 @@
   // The currently-edited part's content/title/media is what gets saved
   // on submit. Switching tabs saves the current draft to a per-part
   // cache and loads the newly-selected part.
-  let groupPosts = $state<Array<{ id: string; sequence: number; content: string; title?: string }>>([]);
+  let groupPosts = $state<Array<{ id: string; sequence: number; content: string; title?: string; media?: { url: string; mime_type: string; alt?: string }[] }>>([]);
   let editingGroupPostId = $state<string | null>(null);
   // Per-part draft cache so switching tabs doesn't lose unsaved edits.
   let groupDraftCache = $state<Map<string, { content: string; title: string; mediaItems: MediaItem[] }>>(new Map());
@@ -245,8 +245,20 @@
       const groupRes = await postsApi.getGroup(post.group_id);
       if (groupRes.data && groupRes.data.length > 1) {
         // Sort by sequence so the tab strip shows parts in order.
+        //
+        // The part's MEDIA is carried too. It was dropped here, and
+        // `switchGroupPart` loads an uncached part with `mediaItems =
+        // []` - so switching to a part that had an image showed no
+        // image, and saving the part then published it without the
+        // image the founder had attached.
         groupPosts = groupRes.data
-          .map(p => ({ id: p.id, sequence: p.sequence ?? 0, content: p.content, title: p.title }))
+          .map(p => ({
+            id: p.id,
+            sequence: p.sequence ?? 0,
+            content: p.content,
+            title: p.title,
+            media: p.media ?? [],
+          }))
           .sort((a, b) => a.sequence - b.sequence);
       } else {
         groupPosts = [];
@@ -283,7 +295,14 @@
       if (part) {
         content = part.content || '';
         title = part.title || '';
-        mediaItems = [];
+        mediaItems = (part.media ?? []).map((m) => ({
+          id: crypto.randomUUID(),
+          url: m.url,
+          mime_type: m.mime_type,
+          alt: m.alt || '',
+          original_name: 'media',
+          file_size: 0,
+        }));
       }
     }
     editingGroupPostId = targetId;
@@ -505,17 +524,62 @@
   }
 
   function buildPayload() {
-    const overridesObj: Record<string, { content: string }> = {};
+    const overridesObj: Record<string, { content?: string; settings?: Record<string, unknown> }> = {};
     for (const [id, html] of providerOverride) {
       if (html && html !== content) {
         overridesObj[id] = { content: html };
       }
     }
-    const settings: Record<string, unknown> = {};
+
+    // Per-integration PROVIDER settings.
+    //
+    // The providers read FLAT, PROVIDER-NAMED keys out of the settings
+    // object: Reddit wants `settings["subreddit"]` and
+    // `settings["title"]`, Pinterest wants `settings["board"]`. The
+    // composer used to send `{integrationId: {target_ids: [...]}}`,
+    // which no provider reads - so every Reddit post failed at publish
+    // with "Missing subreddit in settings" and every Pinterest post
+    // with "Missing board in settings", and Pinterest published the pin
+    // with no title at all.
+    //
+    // The target the user picked (a subreddit, a board, a Facebook page)
+    // goes in under the key ITS provider reads, and the title goes in
+    // too - the title is stored in `posts.title`, which no publish path
+    // reads, so it has to be in the settings for the providers that
+    // publish a title.
+    const providerKeyForTarget: Record<string, string> = {
+      subreddit: 'subreddit',
+      board: 'board',
+      page: 'page_id',
+      facebook_page: 'page_id',
+      youtube_channel: 'channel_id',
+      channel: 'channel_id',
+    };
+
     for (const [intId, targets] of selectedTargets) {
-      if (targets.length > 0) {
-        settings[intId] = { target_ids: targets };
+      if (targets.length === 0) continue;
+      const target = integrationTargets.get(intId)?.find((t) => t.id === targets[0]);
+      if (!target) continue;
+      const key = providerKeyForTarget[target.target_type];
+      if (!key) continue;
+
+      const entry = overridesObj[intId] ?? {};
+      const perIntegration: Record<string, unknown> = { ...(entry.settings ?? {}) };
+      perIntegration[key] = target.id;
+      // Pinterest and Reddit both publish a title. It is not in
+      // `posts.title` on the publish path, so it has to be in the
+      // settings.
+      if ((target.target_type === 'subreddit' || target.target_type === 'board') && title.trim()) {
+        perIntegration.title = title.trim();
       }
+      entry.settings = perIntegration;
+      overridesObj[intId] = entry;
+    }
+
+    const settings: Record<string, unknown> = {};
+    if (selectedMusic) {
+      settings.audio_id = selectedMusic.id;
+      settings.audio_title = selectedMusic.title;
     }
     return {
       integration_ids: selectedIntegrations,
@@ -535,10 +599,7 @@
           ? mediaItems.map((m) => ({ id: m.id, url: m.url, mime_type: m.mime_type, alt: m.alt }))
           : null,
       overrides: Object.keys(overridesObj).length > 0 ? overridesObj : undefined,
-      settings: {
-        ...settings,
-        ...(selectedMusic ? { audio_id: selectedMusic.id, audio_title: selectedMusic.title } : {}),
-      },
+      settings,
       // Phase v21: wire recurring schedule into the payload so it actually
       // gets sent to the backend. Previously SchedulePicker wrote to
       // `recurring` state but buildPayload() never included it - the field
@@ -602,8 +663,41 @@
           settings: payload.settings,
           tag_ids: payload.tag_ids,
           first_comment: payload.first_comment,
+          // The per-channel body and the per-channel provider settings.
+          // The update path used to drop them, so a per-channel override
+          // or a Reddit subreddit set in the composer was silently lost
+          // on every edit.
+          overrides: payload.overrides,
         });
         if (r.error) { error = r.error; return; }
+
+        // Save the OTHER parts of a thread.
+        //
+        // The composer caches each part's unsaved edits when the user
+        // switches tabs, but only the CURRENT part was ever written -
+        // so editing part 1, switching to part 2, editing it, and
+        // saving kept part 1's original text. The on-screen hint
+        // claimed "Switching tabs preserves your unsaved edits per
+        // part".
+        if (groupDraftCache.size > 0) {
+          for (const [partId, draft] of groupDraftCache) {
+            if (partId === currentEditingPostId) continue;
+            const pr = await postsApi.update(partId, {
+              content: draft.content,
+              title: draft.title || null,
+              media: draft.mediaItems.length > 0
+                ? draft.mediaItems.map((m) => ({
+                    id: m.id,
+                    url: m.url,
+                    mime_type: m.mime_type,
+                    alt: m.alt,
+                  }))
+                : null,
+            });
+            if (pr.error) { error = pr.error; return; }
+          }
+          groupDraftCache = new Map();
+        }
 
         // Reschedule when the SCHEDULE changed, not when the response
         // happens to carry one. The old gate was
@@ -1120,8 +1214,17 @@
 
         <!-- v26-4: Thread Builder (generic - works for any provider, not just X).
              Shows when at least 1 integration is selected. Per-row delay
-             (delay_minutes) is passed to the backend createThread API. -->
-        {#if selectedIntegrations.length > 0}
+             (delay_minutes) is passed to the backend createThread API.
+
+             It is HIDDEN in edit mode. The builder's action is
+             `createThread`, which always INSERTs new posts with a fresh
+             group id - so opening an existing 3-part thread for editing
+             and clicking "Post Thread (3)" created THREE NEW POSTS and
+             left the original untouched: a duplicate thread published
+             from an edit screen. The thread path also drops media, title,
+             tags, first_comment and the per-channel overrides, because
+             `CreateThreadRequest` has no such fields. -->
+        {#if selectedIntegrations.length > 0 && composer.mode !== 'edit'}
           <ThreadBuilder
             {content}
             provider={primaryProvider}

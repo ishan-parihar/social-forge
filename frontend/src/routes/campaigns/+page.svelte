@@ -76,7 +76,7 @@
   async function archiveCampaign(id: string, name: string) {
     const ok = await modals.areYouSure({
       title: `Archive "${name}"?`,
-      message: 'The campaign will be archived. Posts in it will be unassigned but not deleted.',
+      message: 'The campaign will be archived. Its posts stay exactly as they are.',
       confirmLabel: 'Archive',
       cancelLabel: 'Cancel',
       danger: true,
@@ -167,7 +167,7 @@
     {#each ['all', 'active', 'paused', 'archived', 'completed'] as s (s)}
       <button
         onclick={() => statusFilter = s as typeof statusFilter}
-        class="px-3 py-1 text-xs rounded-md transition-colors {statusFilter === s ? 'bg-accent-fill text-accent-fg' : 'bg-surface-hover text-muted hover:text-content'}"
+        class="px-3 py-1 text-xs rounded-md transition-colors min-h-11 {statusFilter === s ? 'bg-accent-fill text-accent-fg' : 'bg-surface-hover text-muted hover:text-content'}"
       >
         {s.charAt(0).toUpperCase() + s.slice(1)}
       </button>
@@ -181,13 +181,29 @@
       {/each}
     </div>
   {:else if filteredCampaigns.length === 0}
-    <EmptyState
-      icon="analytics"
-      title="No campaigns yet"
-      description="Create a campaign to group posts around a goal, track progress, and organize your content strategy."
-      actionLabel="Create Campaign"
-      onaction={openCreateModal}
-    />
+    <!--
+      A filtered list that comes back empty is a DIFFERENT state from
+      having no campaigns at all. It used to say "No campaigns yet /
+      Create Campaign" for both, so filtering three active campaigns
+      down to "Paused" (none) told the user they had no campaigns.
+    -->
+    {#if campaigns.length > 0}
+      <EmptyState
+        icon="analytics"
+        title="No {statusFilter} campaigns"
+        description="None of your {campaigns.length} campaigns are {statusFilter}."
+        actionLabel="Show all"
+        onaction={() => (statusFilter = 'all')}
+      />
+    {:else}
+      <EmptyState
+        icon="analytics"
+        title="No campaigns yet"
+        description="Create a campaign to group posts around a goal, track progress, and organize your content strategy."
+        actionLabel="Create Campaign"
+        onaction={openCreateModal}
+      />
+    {/if}
   {:else}
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
       {#each filteredCampaigns as c (c.id)}

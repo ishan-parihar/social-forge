@@ -87,6 +87,16 @@ pub struct UpdatePostRequest {
     pub tag_ids: Option<Vec<Uuid>>,
     #[serde(default, deserialize_with = "crate::api::campaigns::double_option")]
     pub first_comment: Option<Option<String>>,
+    /// Per-integration overrides, keyed by integration id: `{"<uuid>":
+    /// {"content": "...", "settings": {...}}}`.
+    ///
+    /// The create path has always accepted them; the update path did
+    /// not, so a per-channel body or a Reddit subreddit set in the
+    /// composer was silently dropped on every edit - the channel
+    /// published the global body and the post failed with "Missing
+    /// subreddit in settings".
+    #[serde(default)]
+    pub overrides: Option<HashMap<String, PostOverride>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -799,6 +809,34 @@ pub async fn update(
         Some(Some(fc)) => Some(fc.clone()),
         Some(None) => None, // explicit clear
         None => existing.first_comment,
+    };
+
+    // Apply THIS post's override, if the caller sent one.
+    //
+    // The update path handles ONE post, so only the entry keyed by this
+    // post's integration applies. The composer sends the whole map; the
+    // other entries belong to the OTHER posts of a multi-channel create
+    // and are ignored here (they were written by the create).
+    //
+    // The override's `settings` REPLACE the post's settings, exactly as
+    // the create path does for a multi-integration create: the provider
+    // settings (a Reddit subreddit, a Pinterest board) and the global
+    // ones (an Instagram audio id) live in one object, and the
+    // per-integration map is the complete object for that channel.
+    let (content, settings) = match body
+        .overrides
+        .as_ref()
+        .and_then(|m| m.get(&existing.integration_id.to_string()))
+    {
+        Some(over) => {
+            let content = match over.content.as_deref() {
+                Some(c) => crate::services::posts::PostService::sanitize_content(c, 2000),
+                None => content,
+            };
+            let settings = over.settings.clone().unwrap_or(settings);
+            (content, settings)
+        }
+        None => (content, settings),
     };
 
     // v23-5: use update_post_full so first_comment is persisted (was

@@ -116,6 +116,12 @@ export const postsApi = {
     settings?: Record<string, unknown> | null;
     tag_ids?: string[];
     first_comment?: string | null;
+    /**
+     * Per-integration overrides, keyed by integration id. The update
+     * path used to drop these, so a per-channel body or a Reddit
+     * subreddit set in the composer was silently lost on every edit.
+     */
+    overrides?: Record<string, { content?: string; settings?: Record<string, unknown> }>;
   }) =>
     api.put<PostDetail>(`/api/posts/${id}`, d),
   schedule: (id: string, at: string) => api.post<PostDetail>(`/api/posts/${id}/schedule`, { scheduled_at: at }),

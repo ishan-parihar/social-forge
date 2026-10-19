@@ -103,7 +103,7 @@
     if (!campaign) return;
     const ok = await modals.areYouSure({
       title: `Archive "${campaign.name}"?`,
-      message: 'The campaign will be archived. Posts in it will be unassigned but not deleted.',
+      message: 'The campaign will be archived. Its posts stay exactly as they are.',
       confirmLabel: 'Archive',
       cancelLabel: 'Cancel',
       danger: true,
