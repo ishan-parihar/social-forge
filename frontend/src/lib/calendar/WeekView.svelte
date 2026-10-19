@@ -249,9 +249,14 @@
             onkeydown={(e) => handleKeyDown(e, wd.dateStr, hour)}
           >
             {#each (eventsByDayHour.get(cellKey) || []) as event (event.id)}
+              <!-- `flex-1 min-w-0` so the chip keeps the cell's width when
+                   the title collapses on hover. Without it the wrapper
+                   shrank to the width of its content, which pulled the
+                   hover toolbar left and made the cell jump sideways
+                   mid-hover. -->
               <div
                 data-event-id={event.id}
-                class="group/chip flex items-center gap-1 {event.state === 'published' || past ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'}"
+                class="group/chip flex items-center gap-1 flex-1 min-w-0 {event.state === 'published' || past ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'}"
                 draggable={event.state !== 'published' && !past}
                 ondragstart={(e) => handleDragStart(e, event.id)}
                 onclick={() => onEventClick?.(event.id)}

@@ -218,7 +218,7 @@
             <button
               aria-label="Remove media"
               onclick={() => onRemove?.(item.id)}
-              class="w-5 h-5 bg-error text-white rounded-full text-xs flex items-center justify-center hover:bg-error"
+              class="w-5 h-5 bg-error text-error-fg rounded-full text-xs flex items-center justify-center hover:bg-error"
             >&times;</button>
           </div>
           <!-- Alt text indicator -->

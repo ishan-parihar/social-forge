@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { tagsApi, type Tag } from '$lib/api/tags';
+  import { inkOnFill } from '$lib/chip-colors';
 
   let { selected = [], onToggle }: {
     selected?: string[];
@@ -41,15 +42,15 @@
           onclick={() => onToggle?.(tag.id)}
           class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs border transition-colors
             {isSelected
-              ? 'border-transparent text-white'
+              ? 'border-transparent'
               : 'border-line text-muted hover:text-content hover:bg-surface-hover'}"
-          style={isSelected ? `background: ${tag.color}; border-color: ${tag.color};` : ''}
+          style={isSelected ? `background: ${tag.color}; border-color: ${tag.color}; color: ${inkOnFill(tag.color)};` : ''}
           aria-label="{isSelected ? 'Remove' : 'Add'} tag {tag.name}"
           aria-pressed={isSelected}
         >
           <span
             class="w-2 h-2 rounded-full"
-            style="background: {isSelected ? 'white' : tag.color}"
+            style="background: {isSelected ? inkOnFill(tag.color) : tag.color}"
             aria-hidden="true"
           ></span>
           {tag.name}

@@ -392,7 +392,15 @@ pub struct DayEngagement {
 ///
 /// Returns total engagement (likes/comments/shares/impressions) for the
 /// last N days, with deltas vs the previous N days, and a per-day
-/// breakdown for sparklines. Reads from post_engagement joined to posts.
+/// breakdown for sparklines.
+///
+/// The source is `analytics_cache`, NOT `post_engagement`. Own-post
+/// engagement is written to `analytics_cache` by
+/// `/api/analytics/post/{id}` after a live provider fetch, and
+/// `post_engagement.post_id` is a foreign key to `external_posts` - so
+/// joining it to `posts` (as this handler used to) could never match a
+/// row, and the endpoint answered 0 for every metric no matter how much
+/// engagement the user's published posts had.
 pub async fn get_engagement(
     State(state): State<AppState>,
     auth: AuthenticatedUser,
@@ -400,63 +408,61 @@ pub async fn get_engagement(
 ) -> Result<Json<EngagementResponse>, AppError> {
     let days = query.days.unwrap_or(7).clamp(1, 3650) as i64;
     let now = chrono::Utc::now();
-    let cutoff = (now - chrono::Duration::days(days)).timestamp();
-    let prev_cutoff = cutoff - days * 86400;
+    let window = chrono::Duration::days(days);
+    let cutoff = now - window;
+    let prev_cutoff = cutoff - window;
 
     // Current period totals.
-    let current: DayEngagement = sqlx::query_as(
-        r#"SELECT
-            COALESCE(SUM(pe.likes), 0) as likes,
-            COALESCE(SUM(pe.comments), 0) as comments,
-            COALESCE(SUM(pe.shares), 0) as shares,
-            COALESCE(SUM(pe.impressions), 0) as impressions,
-            '' as date
-           FROM post_engagement pe
-           JOIN posts p ON pe.post_id = p.id
-           WHERE p.user_id = ? AND p.deleted_at IS NULL
-             AND pe.created_at >= ?"#,
-    )
-    .bind(auth.user_id)
-    .bind(cutoff)
-    .fetch_one(&state.db)
-    .await?;
+    let current =
+        crate::db::queries::own_post_engagement_totals(&state.db, auth.user_id, cutoff).await?;
 
     // Previous period totals (for delta calculation).
-    let prev: DayEngagement = sqlx::query_as(
-        r#"SELECT
-            COALESCE(SUM(pe.likes), 0) as likes,
-            COALESCE(SUM(pe.comments), 0) as comments,
-            COALESCE(SUM(pe.shares), 0) as shares,
-            COALESCE(SUM(pe.impressions), 0) as impressions,
-            '' as date
-           FROM post_engagement pe
-           JOIN posts p ON pe.post_id = p.id
-           WHERE p.user_id = ? AND p.deleted_at IS NULL
-             AND pe.created_at >= ? AND pe.created_at < ?"#,
-    )
-    .bind(auth.user_id)
-    .bind(prev_cutoff)
-    .bind(cutoff)
-    .fetch_one(&state.db)
-    .await?;
+    let prev =
+        crate::db::queries::own_post_engagement_totals(&state.db, auth.user_id, prev_cutoff)
+            .await?;
 
-    // Per-day breakdown for sparkline.
+    // Per-day breakdown for the sparkline, keyed by the day each post
+    // was published.
     let by_day: Vec<DayEngagement> = sqlx::query_as(
         r#"SELECT
-            date(pe.created_at, 'unixepoch') as date,
-            COALESCE(SUM(pe.likes), 0) as likes,
-            COALESCE(SUM(pe.comments), 0) as comments,
-            COALESCE(SUM(pe.shares), 0) as shares,
-            COALESCE(SUM(pe.impressions), 0) as impressions
-           FROM post_engagement pe
-           JOIN posts p ON pe.post_id = p.id
+            date(p.published_at, 'unixepoch') as date,
+            COALESCE(SUM((SELECT json_extract(point.value, '$.total')
+                            FROM analytics_cache ac, json_each(ac.data) AS series,
+                                 json_each(json_extract(series.value, '$.data')) AS point
+                           WHERE ac.user_id = p.user_id
+                             AND ac.platform_post_id = p.platform_post_id
+                             AND lower(json_extract(series.value, '$.label')) = 'likes'
+                           ORDER BY point.key DESC LIMIT 1)), 0) as likes,
+            COALESCE(SUM((SELECT json_extract(point.value, '$.total')
+                            FROM analytics_cache ac, json_each(ac.data) AS series,
+                                 json_each(json_extract(series.value, '$.data')) AS point
+                           WHERE ac.user_id = p.user_id
+                             AND ac.platform_post_id = p.platform_post_id
+                             AND lower(json_extract(series.value, '$.label')) = 'comments'
+                           ORDER BY point.key DESC LIMIT 1)), 0) as comments,
+            COALESCE(SUM((SELECT json_extract(point.value, '$.total')
+                            FROM analytics_cache ac, json_each(ac.data) AS series,
+                                 json_each(json_extract(series.value, '$.data')) AS point
+                           WHERE ac.user_id = p.user_id
+                             AND ac.platform_post_id = p.platform_post_id
+                             AND lower(json_extract(series.value, '$.label')) = 'shares'
+                           ORDER BY point.key DESC LIMIT 1)), 0) as shares,
+            COALESCE(SUM((SELECT json_extract(point.value, '$.total')
+                            FROM analytics_cache ac, json_each(ac.data) AS series,
+                                 json_each(json_extract(series.value, '$.data')) AS point
+                           WHERE ac.user_id = p.user_id
+                             AND ac.platform_post_id = p.platform_post_id
+                             AND lower(json_extract(series.value, '$.label')) IN ('impressions', 'views')
+                           ORDER BY point.key DESC LIMIT 1)), 0) as impressions
+           FROM posts p
            WHERE p.user_id = ? AND p.deleted_at IS NULL
-             AND pe.created_at >= ?
-           GROUP BY date(pe.created_at, 'unixepoch')
-           ORDER BY date(pe.created_at, 'unixepoch') ASC"#,
+             AND p.state = 'published'
+             AND p.published_at >= ?
+           GROUP BY date(p.published_at, 'unixepoch')
+           ORDER BY date(p.published_at, 'unixepoch') ASC"#,
     )
     .bind(auth.user_id)
-    .bind(cutoff)
+    .bind(crate::db::types::EpochUtc::from(cutoff))
     .fetch_all(&state.db)
     .await?;
 

@@ -210,12 +210,17 @@ pub(crate) async fn verify_tag_ownership(
 ) -> Result<(), crate::error::AppError> {
     // `id = ANY($1)` was Postgres-only. sqlite has no array type, so the id
     // list travels as a JSON array and `json_each` fans it back out.
+    //
+    // The expansion goes through `unhex`: `tags.id` holds a 16-byte BLOB
+    // (sqlx's uuid encoding), and SQLite never compares a BLOB to the TEXT
+    // that `json_each` yields — so the raw expansion matched no row and
+    // every tag assignment was rejected as "not found".
     let tag_ids_json = serde_json::to_value(tag_ids)
         .map_err(|e| crate::error::AppError::Internal(format!("Failed to encode tag_ids: {e}")))?;
     let count: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM tags
          WHERE user_id = ?
-           AND id IN (SELECT value FROM json_each(?))",
+           AND id IN (SELECT unhex(replace(value, '-', '')) FROM json_each(?))",
     )
     .bind(user_id)
     .bind(tag_ids_json)
@@ -936,6 +941,11 @@ pub async fn kanban_reorder(
     // and the zero-based `key` we turn into a 1-based ordinal — preserving
     // the original WITH ORDINALITY numbering.
     //
+    // The id is expanded through `unhex` because `posts.id` holds a
+    // 16-byte BLOB (sqlx's uuid encoding) while `json_each` yields TEXT;
+    // without the conversion the join never matches and the reorder
+    // reported success while changing nothing.
+    //
     // Security: the WHERE user_id = ? AND state = ? clause ensures the caller
     // can only reorder their OWN posts in the specified column — even if they
     // send a foreign user's post ID, it won't match.
@@ -943,7 +953,7 @@ pub async fn kanban_reorder(
         .map_err(|e| crate::error::AppError::Internal(format!("Failed to encode post ids: {e}")))?;
     let result = sqlx::query(
         r#"WITH ordered AS (
-             SELECT value AS id, key + 1 AS ord FROM json_each(?)
+             SELECT unhex(replace(value, '-', '')) AS id, key + 1 AS ord FROM json_each(?)
            )
            UPDATE posts
            SET kanban_sort_order = (

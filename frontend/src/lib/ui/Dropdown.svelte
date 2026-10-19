@@ -1,9 +1,13 @@
 <script lang="ts">
   import { tick } from "svelte";
 
-  let { items, align = "left", children }: {
+  let { items, align = "left", placement = "below", children }: {
     items: Array<{ label: string; onclick: () => void; variant?: "default" | "danger"; disabled?: boolean }>;
     align?: "left" | "right";
+    // `above` opens the menu upward. A trigger near the bottom of a
+    // scroll container needs it: a downward menu is clipped by the
+    // container's overflow.
+    placement?: "below" | "above";
     children?: import("svelte").Snippet;
   } = $props();
 
@@ -95,7 +99,7 @@
     {#if children}{@render children()}{/if}
   </button>
   {#if open}
-    <div id={menuId} class="dropdown-menu {align === 'right' ? 'right-0' : 'left-0'}" role="menu">
+    <div id={menuId} class="dropdown-menu {align === 'right' ? 'right-0' : 'left-0'} {placement === 'above' ? 'bottom-full mb-1 mt-0' : ''}" role="menu">
       {#each items as item, i (item.label)}
         <button
           role="menuitem"
@@ -119,6 +123,9 @@
     min-width: 10rem; max-width: calc(100vw - 2rem); background: var(--bg-card); border: 1px solid var(--border);
     border-radius: 0.5rem; box-shadow: var(--shadow-lg); padding: 0.25rem;
   }
+  /* `placement="above"` opens upward: the trigger sits near the bottom of
+     a scroll container, where a downward menu is clipped by the overflow. */
+  .dropdown-menu.bottom-full { top: auto; bottom: 100%; }
   .dropdown-item {
     display: block; width: 100%; text-align: left; padding: 0.5rem 0.75rem;
     font-size: 0.875rem; color: var(--text-secondary); background: none; border: none;

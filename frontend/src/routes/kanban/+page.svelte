@@ -19,6 +19,7 @@
   import { toast } from '$lib/stores/toast';
   import { realtime } from '$lib/stores/realtime';
   import { providerIcon, providerColor, providerInk } from '$lib/providers';
+  import { inkOnFill } from '$lib/chip-colors';
   import Badge from '$lib/ui/Badge.svelte';
   import { goto } from '$app/navigation';
 
@@ -731,9 +732,14 @@
                   {#if post.tags && post.tags.length > 0}
                     <div class="flex flex-wrap gap-1 mb-2">
                       {#each post.tags.slice(0, 3) as tag (tag.id)}
+                        <!-- A solid fill with the ink computed from it. The
+                             old wash-plus-coloured-text measured 4.01:1 for
+                             a mid-tone hue - under the WCAG AA floor for
+                             small text. Black or white on a solid fill
+                             always clears 4.5:1. -->
                         <span
                           class="px-1.5 py-0.5 rounded text-[10px] font-medium leading-none"
-                          style="background-color: {tag.color}22; color: {tag.color}"
+                          style="background-color: {tag.color}; color: {inkOnFill(tag.color)}"
                           title={tag.name}
                         >{tag.name}</span>
                       {/each}

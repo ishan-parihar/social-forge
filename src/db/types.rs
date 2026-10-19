@@ -54,6 +54,30 @@ impl fmt::Display for EpochUtc {
     }
 }
 
+// ── UUID id-list filter ─────────────────────────────────────
+//
+// sqlx encodes a `Uuid` as a 16-byte BLOB, so every uuid column in the
+// schema holds BLOB bytes. `json_each` however yields TEXT, and SQLite
+// never compares a BLOB to TEXT as equal — so the obvious
+//
+//     id IN (SELECT value FROM json_each(?))
+//
+// silently matches NOTHING. Every filter built that way returns an empty
+// list: filtering posts by tag, by channel, the calendar's channel
+// filter, the kanban reorder.
+//
+// The expansion that works is
+//
+//     id IN (SELECT unhex(replace(value, '-', '')) FROM json_each(?))
+//
+// which turns the hyphenated text back into the same 16 bytes sqlx
+// stores, so the comparison is byte-for-byte. `unhex` needs SQLite
+// 3.41+; the bundled libsqlite3-sys is 3.46.
+//
+// ponytail: SQLite 3.41+ is required for `unhex`. The bundled
+// libsqlite3-sys is 3.46, and the system library on the supported
+// platforms is newer, so no version gate is needed.
+
 // ── sqlx plumbing ───────────────────────────────────────────
 
 impl Type<Sqlite> for EpochUtc {

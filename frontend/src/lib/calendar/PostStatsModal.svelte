@@ -10,10 +10,16 @@
   //
   // Inspired by postiz-app's StatisticsModal, but uses inline bar charts
   // (no Chart.js dependency - YAGNI for 4 small charts).
+  //
+  // The API shape is the provider's: a list of series, one per metric,
+  // each `[{label, data: [{total, date}], percentage_change}]` - the same
+  // shape `/api/analytics?provider=` returns. The modal used to type it
+  // as a flat `AnalyticsDataPoint[]` with `impressions`/`likes` fields,
+  // which is NOT what the server sends: every metric read `undefined`,
+  // the sums came out NaN and the chart labels rendered "Invalid Date".
 
-  import { analyticsApi } from "$lib/api/analytics";
+  import { analyticsApi, type AnalyticsSeries } from "$lib/api/analytics";
   import { engagementIcon, engagementLabel, formatMetricCount } from "./engagement";
-  import type { AnalyticsDataPoint } from "$lib/api/analytics";
 
   let { postId, postTitle, onclose }: {
     postId: string;
@@ -22,58 +28,80 @@
   } = $props();
 
   let days = $state<7 | 30 | 90>(7);
-  let analyticsData = $state<AnalyticsDataPoint[] | null>(null);
+  let analyticsData = $state<AnalyticsSeries[] | null>(null);
   let loading = $state(false);
   let error = $state<string | null>(null);
   let abortController: AbortController | null = null;
 
-  let totalImpressions = $derived(analyticsData?.reduce((s, d) => s + d.impressions, 0) ?? 0);
-  let totalLikes = $derived(analyticsData?.reduce((s, d) => s + d.likes, 0) ?? 0);
-  let totalShares = $derived(analyticsData?.reduce((s, d) => s + d.shares, 0) ?? 0);
-  let totalComments = $derived(analyticsData?.reduce((s, d) => s + d.comments, 0) ?? 0);
+  /// The four metrics this modal charts, in display order. Each names the
+  /// series label the provider uses and the token that colours it.
+  const METRICS = [
+    { key: "impressions", label: "Impressions", icon: "👁️", color: "rgb(var(--viz-impression-rgb))" },
+    { key: "likes", label: "Likes", icon: "❤️", color: "rgb(var(--viz-like-rgb))" },
+    { key: "shares", label: "Shares", icon: "🔄", color: "rgb(var(--viz-share-rgb))" },
+    { key: "comments", label: "Comments", icon: "💬", color: "rgb(var(--hue-amber-rgb))" },
+  ] as const;
 
-  let chartData = $derived.by(() => {
-    if (!analyticsData || analyticsData.length === 0) return [];
-    let data: AnalyticsDataPoint[];
-    if (days === 7) {
-      data = analyticsData.slice(-7);
-    } else if (days === 30) {
-      data = sampleData(analyticsData, 10);
-    } else {
-      data = sampleData(analyticsData, 10);
-    }
-    return data;
-  });
+  type MetricKey = (typeof METRICS)[number]["key"];
 
-  function sampleData(data: AnalyticsDataPoint[], count: number): AnalyticsDataPoint[] {
-    if (data.length <= count) return data;
-    const step = (data.length - 1) / (count - 1);
-    const result: AnalyticsDataPoint[] = [];
-    for (let i = 0; i < count; i++) {
-      const idx = Math.round(i * step);
-      result.push(data[Math.min(idx, data.length - 1)]);
-    }
-    return result;
+  /// One series per metric, matched by label. A provider that does not
+  /// report a metric simply has no series for it.
+  function seriesFor(key: MetricKey): AnalyticsSeries | undefined {
+    return analyticsData?.find((s) => s.label.toLowerCase() === key);
   }
 
-  let maxImpressions = $derived(Math.max(...chartData.map(d => d.impressions), 1));
-  let maxLikes = $derived(Math.max(...chartData.map(d => d.likes), 1));
-  let maxShares = $derived(Math.max(...chartData.map(d => d.shares), 1));
-  let maxComments = $derived(Math.max(...chartData.map(d => d.comments), 1));
+  /// The points of a metric's series, newest last. `total` arrives as a
+  /// string from the provider, so it is parsed here - a string that
+  /// survives into arithmetic is what produced NaN totals.
+  function pointsFor(key: MetricKey): { total: number; date: string }[] {
+    const series = seriesFor(key);
+    if (!series) return [];
+    return series.data.map((p) => ({
+      total: Number(p.total) || 0,
+      date: p.date || "",
+    }));
+  }
 
-  // v25 F1: chart series colors were literal hex tuned for the dark surface -
-  // on a light modal the bars washed out. They now point at the shared `viz-*`
-  // tokens so a metric keeps one color app-wide (dashboard, feed, analytics)
-  // and retheme with the rest of the surface.
-  let metricCards = $derived<{ label: string; icon: string; value: number; color: string; key: keyof AnalyticsDataPoint }[]>([
-    { label: "Impressions", icon: '👁️', value: totalImpressions, color: "rgb(var(--viz-impression-rgb))", key: "impressions" },
-    { label: "Likes", icon: '❤️', value: totalLikes, color: "rgb(var(--viz-like-rgb))", key: "likes" },
-    { label: "Shares", icon: '🔄', value: totalShares, color: "rgb(var(--viz-share-rgb))", key: "shares" },
-    { label: "Comments", icon: '💬', value: totalComments, color: "rgb(var(--hue-amber-rgb))", key: "comments" },
-  ]);
+  function totalFor(key: MetricKey): number {
+    const points = pointsFor(key);
+    if (points.length === 0) return 0;
+    // The provider's `total` on the last point is the running total, so
+    // the LAST point is the total - summing them would double count.
+    return points[points.length - 1].total;
+  }
+
+  /// Change between the first and the last point of the series.
+  function deltaFor(key: MetricKey): number | null {
+    const points = pointsFor(key);
+    if (points.length < 2) return null;
+    return points[points.length - 1].total - points[0].total;
+  }
+
+  function chartPointsFor(key: MetricKey): { total: number; date: string }[] {
+    const points = pointsFor(key);
+    if (points.length === 0) return [];
+    if (points.length <= 10) return points;
+    // Sample down to 10 bars so a 90-day range stays readable.
+    const step = (points.length - 1) / 9;
+    const out: { total: number; date: string }[] = [];
+    for (let i = 0; i < 10; i++) {
+      out.push(points[Math.min(Math.round(i * step), points.length - 1)]);
+    }
+    return out;
+  }
+
+  function maxFor(key: MetricKey): number {
+    return Math.max(...chartPointsFor(key).map((p) => p.total), 1);
+  }
 
   function shortDate(dateStr: string): string {
-    const d = new Date(dateStr + "T00:00:00");
+    if (!dateStr) return "";
+    // The provider sends an ISO timestamp; `new Date` on a bare
+    // "YYYY-MM-DD" is parsed as UTC, which can land on the previous day
+    // in a western timezone. Pin it to noon so the day never shifts.
+    const iso = dateStr.length === 10 ? `${dateStr}T12:00:00` : dateStr;
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "";
     return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   }
 
@@ -124,24 +152,23 @@
     </div>
   {:else if error && !analyticsData}
     <div class="text-center py-8 text-sm text-error">{error}</div>
-  {:else if analyticsData && analyticsData.length === 0}
+  {:else if !analyticsData || analyticsData.length === 0}
     <div class="text-center py-8 text-sm text-muted">
       No analytics data available yet.
       <br>
       <span class="text-xs">The feed refresher pulls engagement data every 30 minutes.</span>
     </div>
-  {:else if analyticsData}
+  {:else}
     <!-- Metric cards grid -->
     <div class="grid grid-cols-2 gap-3">
-      {#each metricCards as card (card.label)}
+      {#each METRICS as metric (metric.key)}
+        {@const delta = deltaFor(metric.key)}
         <div class="bg-background-input border border-line rounded-lg p-3">
-          <div class="text-xs text-muted mb-1">{card.icon} {card.label}</div>
-          <div class="text-lg font-semibold text-white">{card.value.toLocaleString()}</div>
-          {#if analyticsData.length >= 2}
-            {@const first = analyticsData[0][card.key] as number}
-            {@const last = analyticsData[analyticsData.length - 1][card.key] as number}
-            <div class="text-xs mt-1 {last >= first ? 'text-success' : 'text-error'}">
-              {last >= first ? '↑' : '↓'} {Math.abs(last - first).toLocaleString()}
+          <div class="text-xs text-muted mb-1">{metric.icon} {metric.label}</div>
+          <div class="text-lg font-semibold text-content">{formatMetricCount(totalFor(metric.key))}</div>
+          {#if delta !== null}
+            <div class="text-xs mt-1 {delta >= 0 ? 'text-success' : 'text-error'}">
+              {delta >= 0 ? '↑' : '↓'} {formatMetricCount(Math.abs(delta))}
             </div>
           {/if}
         </div>
@@ -150,23 +177,27 @@
 
     <!-- Per-metric bar charts -->
     <div class="space-y-4">
-      {#each metricCards as card (card.label)}
-        <div>
-          <div class="text-xs text-muted mb-2">{card.icon} {card.label}</div>
-          <div class="flex items-end gap-1 h-20">
-            {#each chartData as point, i (i)}
-              <div class="flex-1 flex flex-col items-center justify-end h-full">
-                <div
-                  class="w-full rounded-t transition-all duration-300"
-                  style="height: {((point[card.key] as number) / (card.key === 'impressions' ? maxImpressions : card.key === 'likes' ? maxLikes : card.key === 'shares' ? maxShares : maxComments)) * 100}%; background: {card.color}; min-height: {(point[card.key] as number) > 0 ? '4px' : '0'}"
-                ></div>
-                {#if chartData.length <= 7 || (chartData.length <= 10 && i % 2 === 0) || i % 3 === 0}
-                  <span class="text-[8px] text-muted mt-1 truncate w-full text-center">{shortDate(point.date)}</span>
-                {/if}
-              </div>
-            {/each}
+      {#each METRICS as metric (metric.key)}
+        {@const points = chartPointsFor(metric.key)}
+        {#if points.length > 0}
+          <div>
+            <div class="text-xs text-muted mb-2">{metric.icon} {metric.label}</div>
+            <div class="flex items-end gap-1 h-20">
+              {#each points as point, i (i)}
+                <div class="flex-1 flex flex-col items-center justify-end h-full">
+                  <div
+                    class="w-full rounded-t transition-all duration-300"
+                    style="height: {(point.total / maxFor(metric.key)) * 100}%; background: {metric.color}; min-height: {point.total > 0 ? '4px' : '0'}"
+                    title="{metric.label}: {formatMetricCount(point.total)}"
+                  ></div>
+                  {#if points.length <= 7 || (points.length <= 10 && i % 2 === 0) || i % 3 === 0}
+                    <span class="text-[8px] text-muted mt-1 truncate w-full text-center">{shortDate(point.date)}</span>
+                  {/if}
+                </div>
+              {/each}
+            </div>
           </div>
-        </div>
+        {/if}
       {/each}
     </div>
   {/if}

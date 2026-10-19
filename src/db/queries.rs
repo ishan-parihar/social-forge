@@ -885,6 +885,10 @@ async fn list_posts_all(
 /// SQLite has no array type, so `IN (?, ?, ?)` id lists are bound as a
 /// JSON array of strings and expanded with `json_each(?)`. `None` binds
 /// SQL NULL, which the `? IS NULL` guard in the query short-circuits on.
+///
+/// The expansion must go through `unhex(replace(value, '-', ''))`, not the
+/// raw `json_each` value: uuid columns hold 16-byte BLOBs, and a TEXT
+/// value never equals one. See the note in `crate::db::types`.
 fn ids_json(ids: Option<&[Uuid]>) -> Option<String> {
     ids.map(|v| {
         serde_json::to_string(&v.iter().map(|u| u.to_string()).collect::<Vec<_>>())
@@ -964,9 +968,9 @@ pub async fn list_posts_search(
              AND p.deleted_at IS NULL
              AND (? IS NULL OR p.state = ?)
              AND (? IS NULL OR p.content LIKE ? ESCAPE '\' OR p.title LIKE ? ESCAPE '\')
-             AND (? IS NULL OR p.integration_id IN (SELECT value FROM json_each(?)))
+             AND (? IS NULL OR p.integration_id IN (SELECT unhex(replace(value, '-', '')) FROM json_each(?)))
              AND (? IS NULL OR p.id IN (
-               SELECT post_id FROM post_tags WHERE tag_id IN (SELECT value FROM json_each(?))
+               SELECT post_id FROM post_tags WHERE tag_id IN (SELECT unhex(replace(value, '-', '')) FROM json_each(?))
              ))
            ORDER BY (COALESCE(pe.likes, 0) + COALESCE(pe.comments, 0) + COALESCE(pe.shares, 0)) DESC NULLS LAST
            LIMIT ? OFFSET ?"#.to_string()
@@ -985,9 +989,9 @@ pub async fn list_posts_search(
              AND deleted_at IS NULL
              AND (? IS NULL OR state = ?)
              AND (? IS NULL OR content LIKE ? ESCAPE '\' OR title LIKE ? ESCAPE '\')
-             AND (? IS NULL OR integration_id IN (SELECT value FROM json_each(?)))
+             AND (? IS NULL OR integration_id IN (SELECT unhex(replace(value, '-', '')) FROM json_each(?)))
              AND (? IS NULL OR id IN (
-               SELECT post_id FROM post_tags WHERE tag_id IN (SELECT value FROM json_each(?))
+               SELECT post_id FROM post_tags WHERE tag_id IN (SELECT unhex(replace(value, '-', '')) FROM json_each(?))
              ))
            ORDER BY {} LIMIT ? OFFSET ?"#,
             order_by
@@ -1034,9 +1038,9 @@ pub async fn count_posts_search(
            WHERE user_id = ?
              AND (? IS NULL OR state = ?)
              AND (? IS NULL OR content LIKE ? ESCAPE '\' OR title LIKE ? ESCAPE '\')
-             AND (? IS NULL OR integration_id IN (SELECT value FROM json_each(?)))
+             AND (? IS NULL OR integration_id IN (SELECT unhex(replace(value, '-', '')) FROM json_each(?)))
              AND (? IS NULL OR id IN (
-               SELECT post_id FROM post_tags WHERE tag_id IN (SELECT value FROM json_each(?))
+               SELECT post_id FROM post_tags WHERE tag_id IN (SELECT unhex(replace(value, '-', '')) FROM json_each(?))
              ))"#,
     )
     .bind(user_id)
@@ -1830,10 +1834,14 @@ pub async fn get_calendar_posts_with_metrics(
     ];
     // SQLite has no array type: the integration_id list is bound as JSON
     // text and expanded by json_each (? IS NULL disables the filter).
+    // The expansion goes through `unhex` because uuid columns hold
+    // 16-byte BLOBs — a TEXT value never equals one.
     let mut has_ids = false;
     if let Some(ids) = &integration_ids {
         if !ids.is_empty() {
-            where_clauses.push("p.integration_id IN (SELECT value FROM json_each(?))".into());
+            where_clauses.push(
+                "p.integration_id IN (SELECT unhex(replace(value, '-', '')) FROM json_each(?))".into(),
+            );
             has_ids = true;
         }
     }
@@ -4335,6 +4343,87 @@ mod b03_b08_tests {
             .unwrap();
         assert!(filtered.is_empty(), "filter must exclude other providers");
     }
+}
+
+/// Engagement for the user's OWN published posts, over a window.
+///
+/// Own-post engagement lives in `analytics_cache`, keyed by
+/// `(user_id, platform_post_id)`: `/api/analytics/post/{id}` writes it
+/// there after a live provider fetch. `post_engagement` is NOT
+/// consulted - its `post_id` FK targets `external_posts`, so it can
+/// never hold a row for a `posts` row.
+///
+/// The payload is provider-shaped JSON: a list of {label, data:[{total}]}
+/// series with per-provider metric labels ("Likes", "Comments",
+/// "Shares", "Impressions"). Each metric is the LAST point of its
+/// series (the "latest total" shape X, YouTube and TikTok all emit).
+///
+/// Returns one row per metric, so the caller can total across metrics
+/// without re-parsing the JSON.
+pub async fn own_post_engagement_totals(
+    pool: &SqlitePool,
+    user_id: Uuid,
+    cutoff: DateTime<Utc>,
+) -> Result<OwnPostEngagementTotals, sqlx::Error> {
+    // The `json_each` label match is case-insensitive, and the last point
+    // of the series is read with `ORDER BY key DESC LIMIT 1` - the
+    // provider's series is a running total, so its last point is the
+    // current value.
+    sqlx::query_as::<_, OwnPostEngagementTotals>(
+        r#"SELECT
+             COALESCE(SUM(likes), 0)    AS likes,
+             COALESCE(SUM(comments), 0) AS comments,
+             COALESCE(SUM(shares), 0)   AS shares,
+             COALESCE(SUM(impressions), 0) AS impressions
+           FROM (
+             SELECT p.id AS post_id,
+                    (SELECT json_extract(point.value, '$.total')
+                       FROM analytics_cache ac, json_each(ac.data) AS series,
+                            json_each(json_extract(series.value, '$.data')) AS point
+                      WHERE ac.user_id = p.user_id
+                        AND ac.platform_post_id = p.platform_post_id
+                        AND lower(json_extract(series.value, '$.label')) = 'likes'
+                      ORDER BY point.key DESC LIMIT 1) AS likes,
+                    (SELECT json_extract(point.value, '$.total')
+                       FROM analytics_cache ac, json_each(ac.data) AS series,
+                            json_each(json_extract(series.value, '$.data')) AS point
+                      WHERE ac.user_id = p.user_id
+                        AND ac.platform_post_id = p.platform_post_id
+                        AND lower(json_extract(series.value, '$.label')) = 'comments'
+                      ORDER BY point.key DESC LIMIT 1) AS comments,
+                    (SELECT json_extract(point.value, '$.total')
+                       FROM analytics_cache ac, json_each(ac.data) AS series,
+                            json_each(json_extract(series.value, '$.data')) AS point
+                      WHERE ac.user_id = p.user_id
+                        AND ac.platform_post_id = p.platform_post_id
+                        AND lower(json_extract(series.value, '$.label')) = 'shares'
+                      ORDER BY point.key DESC LIMIT 1) AS shares,
+                    (SELECT json_extract(point.value, '$.total')
+                       FROM analytics_cache ac, json_each(ac.data) AS series,
+                            json_each(json_extract(series.value, '$.data')) AS point
+                      WHERE ac.user_id = p.user_id
+                        AND ac.platform_post_id = p.platform_post_id
+                        AND lower(json_extract(series.value, '$.label')) IN ('impressions', 'views')
+                      ORDER BY point.key DESC LIMIT 1) AS impressions
+               FROM posts p
+              WHERE p.user_id = ?
+                AND p.deleted_at IS NULL
+                AND p.state = 'published'
+                AND p.published_at >= ?)"#,
+    )
+    .bind(user_id)
+    .bind(EpochUtc::from(cutoff))
+    .fetch_one(pool)
+    .await
+}
+
+/// The per-metric totals of the user's own published posts.
+#[derive(Debug, sqlx::FromRow)]
+pub struct OwnPostEngagementTotals {
+    pub likes: i64,
+    pub comments: i64,
+    pub shares: i64,
+    pub impressions: i64,
 }
 
 /// Research: the user's own published posts ranked by engagement.

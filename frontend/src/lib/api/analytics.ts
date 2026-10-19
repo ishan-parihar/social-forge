@@ -8,8 +8,22 @@ export interface AnalyticsDataPoint {
   comments: number;
 }
 
+// The provider's own analytics shape: one series per metric, each with a
+// list of points whose `total` is a STRING (the provider formats it) and
+// an ISO date. `/api/analytics` and `/api/analytics/post/{id}` both
+// return this, and it is NOT the flat `AnalyticsDataPoint[]` shape - a
+// component that assumes the flat shape reads `undefined` for every
+// metric and renders NaN totals.
+export interface AnalyticsSeries {
+  label: string;
+  data: Array<{ total: string; date: string }>;
+  percentage_change: number;
+}
+
 export interface PostAnalytics {
-  data: AnalyticsDataPoint[];
+  data: AnalyticsSeries[];
+  cached?: boolean;
+  cached_at?: string;
 }
 
 export interface AnalyticsSummary {
@@ -24,11 +38,7 @@ export interface AnalyticsSummary {
 }
 
 export interface ProviderAnalytics {
-  data: Array<{
-    label: string;
-    data: Array<{ total: string; date: string }>;
-    percentage_change: number;
-  }>;
+  data: AnalyticsSeries[];
 }
 
 // v23: new dashboard analytics types.

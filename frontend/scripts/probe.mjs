@@ -281,7 +281,16 @@ const AUDIT = () => {
       );
     })
     .map((el) => ({ el, r: el.getBoundingClientRect() }))
-    .filter((b) => b.r.width > 0 && b.r.height > 0);
+    .filter((b) => b.r.width > 0 && b.r.height > 0)
+    // Only text the visitor can actually see. A box scrolled out of the
+    // viewport still has a rectangle, and it still overlaps the boxes that
+    // ARE on screen - which is how a modal opening over a long page
+    // reported the page's own content as overlapping the modal's text.
+    .filter((b) => {
+      const vh = window.innerHeight;
+      const vw = window.innerWidth;
+      return b.r.bottom > 0 && b.r.top < vh && b.r.right > 0 && b.r.left < vw;
+    });
 
   for (let i = 0; i < textBoxes.length; i++) {
     for (let j = i + 1; j < textBoxes.length; j++) {

@@ -73,6 +73,10 @@ export default {
         "success-fg": "rgb(var(--success-fg-rgb) / <alpha-value>)",
         warning: "rgb(var(--warning-rgb) / <alpha-value>)",
         error: "rgb(var(--error-rgb) / <alpha-value>)",
+        // Text placed ON an error background. Dark theme: the dark surface
+        // ink on red-500 (white would be 3.61:1, under the AA floor).
+        // Light theme: white on the darker light-mode red.
+        "error-fg": "rgb(var(--error-fg-rgb) / <alpha-value>)",
         info: "rgb(var(--info-rgb) / <alpha-value>)",
         // v25 F1: metric colors. Engagement numbers keep one meaning app-wide,
         // so the ramp is declared once instead of per call site.

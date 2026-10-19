@@ -169,7 +169,7 @@
           {#each (eventsByHour.get(hourStr) || []) as event (event.id)}
             <div
               data-event-id={event.id}
-              class="group/chip flex items-center gap-1 {event.state === 'published' ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'}"
+              class="group/chip flex items-center gap-1 flex-1 min-w-0 {event.state === 'published' ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'}"
               draggable={event.state !== 'published'}
               ondragstart={(e) => handleDragStart(e, event.id)}
               onclick={() => onEventClick?.(event.id)}

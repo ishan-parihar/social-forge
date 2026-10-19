@@ -18,6 +18,7 @@
   import { timezone } from '$lib/stores/timezone.svelte';
   import { composer } from '$lib/stores/composer.svelte';
   import { modals } from '$lib/stores/modals.svelte';
+  import { inkOnFill } from '$lib/chip-colors';
   import Badge from '$lib/ui/Badge.svelte';
   import Icon from '$lib/ui/Icon.svelte';
 
@@ -130,9 +131,12 @@
       {#if post.tags && post.tags.length > 0}
         <div class="flex gap-1 flex-wrap border-t border-line pt-3">
           {#each post.tags as tag (tag.id)}
-            <!-- F1: the no-color fallback is a token, not a literal. The `20`
-                 alpha suffix is only appended to a REAL stored tag color. -->
-            <span class="px-2 py-0.5 rounded-full text-xs" style="background: {tag.color ? tag.color + '20' : 'var(--brand-soft)'}; color: {tag.color || 'var(--accent)'}">#{tag.name}</span>
+            <!-- A solid fill with the ink computed from it. The old form
+                 painted the tag colour as TEXT on a 12%-alpha wash of
+                 itself, which measures 4.01:1 for a mid-tone hue - under
+                 the WCAG AA floor for small text. Black or white on a
+                 solid fill always clears 4.5:1. -->
+            <span class="px-2 py-0.5 rounded-full text-xs" style="background: {tag.color || 'var(--brand-soft)'}; color: {tag.color ? inkOnFill(tag.color) : 'var(--accent)'}">#{tag.name}</span>
           {/each}
         </div>
       {/if}

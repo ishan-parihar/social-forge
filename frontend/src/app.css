@@ -30,6 +30,14 @@
 /* Dark theme (default) */
 :root,
 :root.dark {
+        /* - absolute inks -
+           Pure black and pure white. These are NOT theme colours: they are
+           the two candidate inks for text painted on a USER-CHOSEN fill
+           (a tag colour, a campaign colour), where the fill is the same in
+           both themes. The ink is chosen by contrast against the fill, so
+           it must not move with the theme. */
+        --white-rgb: 255 255 255;
+        --black-rgb: 0 0 0;
         /* - background layers (darkest → raised) - */
         --bg: #0b0e14;
         --bg-rgb: 11 14 20;
@@ -97,6 +105,10 @@
         --success-fg-rgb: 11 14 20;   /* --bg ink on green-500 → 8.5:1 */
         --warning-rgb: 234 179 8;  /* yellow-500 - 8.56:1 */
         --error-rgb: 240 75 75;    /* red - 4.54:1 (nudged off 500 for AA) */
+        /* Ink placed ON an error fill. White on red-500 is 3.61:1 - under
+           the AA floor for small text - so the badge uses the dark
+           surface ink instead (5.81:1). Same shape as --success-fg. */
+        --error-fg-rgb: 11 14 20;   /* --bg ink on red-500 → 5.81:1 */
         --info-rgb: 61 132 246;    /* blue - 4.56:1 (nudged off 500 for AA) */
         /* - metric colors (F1). Data-viz hues, tuned for dark surfaces.
              These are semantic: engagement numbers mean the same thing
@@ -151,6 +163,10 @@
 
 /* Light theme */
 :root.light {
+        /* - absolute inks - (see the dark block: theme-independent, because
+           they are chosen against a user-chosen fill, not the page) - */
+        --white-rgb: 255 255 255;
+        --black-rgb: 0 0 0;
         /* - background layers - */
         --bg: #f8fafc;
         --bg-rgb: 248 250 252;
@@ -203,6 +219,8 @@
         --success-fg-rgb: 255 255 255; /* white text on light-mode green */
         --warning-rgb: 149 102 3;    /* 4.59:1 */
         --error-rgb: 218 35 35;      /* 4.51:1 */
+        /* White text on the light-mode red-600 fill: 4.83:1. */
+        --error-fg-rgb: 255 255 255;
         --info-rgb: 37 99 235;       /* 4.72:1 */
         /* - metric colors. Each walked down from the 600 step until it cleared
              4.5:1 on --bg AND --bg-card. Engagement numbers are read at a

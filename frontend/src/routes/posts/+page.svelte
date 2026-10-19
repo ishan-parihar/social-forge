@@ -419,7 +419,7 @@
         <button
           onclick={handleBulkDelete}
           disabled={bulkActionLoading}
-          class="px-3 py-1.5 text-xs bg-error hover:bg-error text-white rounded-lg disabled:opacity-50 transition-colors"
+          class="px-3 py-1.5 text-xs bg-error hover:bg-error text-error-fg rounded-lg disabled:opacity-50 transition-colors"
         >
           {bulkActionLoading ? 'Deleting...' : 'Delete'}
         </button>
@@ -455,9 +455,13 @@
           {#each groupPosts as post (post.id)}
             <button
               onclick={() => composer.openEdit(post.id)}
-              class="w-full flex items-center gap-3 px-4 py-3 border-b border-line last:border-0 hover:bg-surface-hover transition-colors text-left"
+              class="w-full flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 border-b border-line last:border-0 hover:bg-surface-hover transition-colors text-left"
             >
-              <div class="flex-1 min-w-0">
+              <!-- The title takes the whole row on a phone. On one line it
+                   shared the row with the date and the state badge, which
+                   left it about 60px wide - every title was cut to "A solo
+                   f..." mid-word. -->
+              <div class="w-full sm:flex-1 sm:w-auto min-w-0">
                 <div class="text-sm truncate">{post.content || '(no content)'}</div>
                 <div class="text-xs text-muted mt-0.5">{post.integration_name}</div>
               </div>
@@ -495,9 +499,13 @@
           />
           <button
             onclick={() => composer.openEdit(post.id)}
-            class="flex-1 flex items-center gap-4 text-left min-w-0"
+            class="flex-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-left min-w-0"
           >
-            <div class="flex-1 min-w-0">
+            <!-- The title takes the whole row on a phone. On one line it
+                 shared the row with the date and the state badge, which
+                 left it about 60px wide - every title was cut to "A solo
+                 f..." mid-word. -->
+            <div class="w-full sm:flex-1 sm:w-auto min-w-0">
               <div class="text-sm truncate">{post.content || '(no content)'}</div>
               <div class="text-xs text-muted mt-0.5 flex items-center gap-2">
                 {post.integration_name}
