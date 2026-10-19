@@ -3280,9 +3280,15 @@ async fn handle_posts_update_helper(
         post_id,
         crate::services::posts::UpdatePostInput {
             content,
-            title,
-            media: media.map(parse_media_arg),
-            settings: settings.map(parse_settings_arg).transpose()?,
+            // Three-state: the CLI's `--title` is only sent when the
+            // flag is present, so "not given" must mean "keep the
+            // stored title" rather than "clear it".
+            title: title.map(Some),
+            media: media.map(|m| Some(parse_media_arg(m))),
+            settings: match settings {
+                Some(s) => Some(Some(parse_settings_arg(s)?)),
+                None => None,
+            },
         },
     )
     .await

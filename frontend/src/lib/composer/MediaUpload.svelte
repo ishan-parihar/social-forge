@@ -13,6 +13,7 @@
 
   import { mediaApi, mimeForUrl, type MediaItem } from "$lib/api/media";
   import MediaPopover from "$lib/media/MediaPopover.svelte";
+  import { toast } from "$lib/stores/toast";
 
   let { items = [], onAdd, onRemove, onReorder }: {
     items?: MediaItem[];
@@ -93,7 +94,7 @@
   }
 
   // Library pick.
-  function handlePopoverSelect(url: string) {
+  function handlePopoverSelect(item: MediaItem) {
     // The mime type has to be RIGHT, not just "not an image". It used to
     // be `application/octet-stream` for anything that was not an image,
     // but the platform rules classify media by mime type
@@ -101,13 +102,29 @@
     // library was counted as neither, the composer's video count was
     // wrong, and X's "images and video cannot be mixed" rule fired on a
     // post that had only one video.
-    const mime = mimeForUrl(url);
+    //
+    // The mime type is the one the LIBRARY stores, not one derived from
+    // the URL: the library's URL is `/api/media/<uuid>`, which has no
+    // extension, so deriving it gave EVERY library item
+    // `application/octet-stream` - a PNG counted as a video.
+    const mime = item.mime_type || mimeForUrl(item.url);
     onAdd?.({
-      id: crypto.randomUUID(),
-      url,
+      // The LIBRARY ROW'S OWN ID.
+      //
+      // It used to be `crypto.randomUUID()`, which threw the id away
+      // and replaced it with a fresh one - so the composer had no way
+      // to refer to the stored media row. The alt-text PATCH then
+      // addressed a UUID that did not exist and 404'd, and the media
+      // delete addressed a UUID that did not exist either.
+      //
+      // The upload path already carried the server's id (`r.data.id`),
+      // so every composer media id is now a real server id.
+      id: item.id,
+      url: item.url,
       mime_type: mime,
-      original_name: url.split('/').pop() || 'library-media',
-      file_size: 0,
+      original_name: item.original_name || item.url.split('/').pop() || 'library-media',
+      file_size: item.file_size ?? 0,
+      alt: item.alt ?? '',
     });
     mediaPopoverOpen = false;
   }
@@ -132,7 +149,14 @@
     if (fromIdx === -1 || toIdx === -1) return;
     const newItems = [...items];
     const [moved] = newItems.splice(fromIdx, 1);
-    newItems.splice(toIdx, 0, moved);
+    // The insertion index has to be recomputed AFTER the removal: every
+    // index at or after `fromIdx` shifts down by one, so a downward
+    // drag landed one slot too far. With [A, B, C, D], dragging A onto
+    // C produced [B, C, A, D] instead of [B, A, C, D] - and the
+    // providers publish in ARRAY ORDER, so the images went out in the
+    // wrong order.
+    const insertAt = toIdx > fromIdx ? toIdx - 1 : toIdx;
+    newItems.splice(insertAt, 0, moved);
     onReorder?.(newItems);
     draggedId = null;
     dragOverId = null;
@@ -148,18 +172,30 @@
     // v22 Phase 7: load the existing alt text (not the filename).
     altTextDraft = item.alt || '';
   }
-  function saveAlt() {
-    if (editingAlt) {
-      // v22 Phase 7: write alt text to item.alt (was item.original_name,
-      // which conflated filename + alt and caused ComposerModal.buildPayload
-      // to read a non-existent m.alt field - silently dropping the text).
-      const item = items.find(i => i.id === editingAlt);
-      if (item) {
-        item.alt = altTextDraft;
-        // Trigger reactivity by creating a new array.
-        onReorder?.([...items]);
-      }
+  async function saveAlt() {
+    if (!editingAlt) return;
+    const item = items.find(i => i.id === editingAlt);
+    if (!item) return;
+
+    // PERSIST the alt text.
+    //
+    // It used to be written to a browser-side object only - there was
+    // no endpoint to write it to - so the alt text was lost on reload,
+    // and the first save of the post DESTROYED it: the composer wrote
+    // the (now empty) browser value back over the stored one.
+    //
+    // The media id is the LIBRARY id: the library path now keeps the
+    // row's own id and the upload path carries the server's id, so
+    // every composer media id is a real server id.
+    const r = await mediaApi.updateAlt(item.id, altTextDraft || null);
+    if (r.error) {
+      toast(`Could not save the alt text: ${r.error}`, "error");
+      return;
     }
+
+    item.alt = altTextDraft;
+    // Trigger reactivity by creating a new array.
+    onReorder?.([...items]);
     editingAlt = null;
     altTextDraft = '';
   }
@@ -228,10 +264,18 @@
               class="w-5 h-5 bg-error text-error-fg rounded-full text-xs flex items-center justify-center hover:bg-error"
             >&times;</button>
           </div>
-          <!-- Alt text indicator -->
-          {#if item.original_name && item.original_name !== item.url.split('/').pop()}
-            <div class="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[8px] px-1 py-0.5 truncate rounded-b-lg">
-              {item.original_name}
+          <!--
+            The indicator says "this item HAS alt text". It compared
+            `original_name` (the file name) against the URL's basename -
+            and the library URL is `/api/media/<uuid>`, so the two were
+            ALWAYS different and the strip showed the file name on every
+            item, forever. On an edit-load `original_name` is the
+            literal string "media", so every reloaded item showed a
+            black strip reading "media".
+          -->
+          {#if item.alt && item.alt.trim()}
+            <div class="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[8px] px-1 py-0.5 truncate rounded-b-lg" title={item.alt}>
+              {item.alt}
             </div>
           {/if}
         </div>

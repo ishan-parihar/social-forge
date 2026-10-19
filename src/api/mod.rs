@@ -43,11 +43,17 @@ mod developer;
 mod dms;
 mod feed;
 mod integrations;
-mod media;
+// pub(crate): the MCP `media_delete` tool deletes through the ACTIVE
+// STORAGE BACKEND, so an S3/R2 deployment does not leave the object in
+// the bucket.
+pub(crate) mod media;
 mod music;
 mod notifications;
 mod onboard;
-mod posts;
+// pub(crate): the MCP `posts_create` tool calls the REST handler
+// in-process, so the provider validation lives in ONE place (see
+// mcp::rest_bridge).
+pub(crate) mod posts;
 pub(crate) use posts::validate_posts_for_integrations;
 pub(crate) use posts::CreatePostRequest;
 pub(crate) use posts::verify_tag_ownership;
@@ -442,6 +448,10 @@ pub fn build_router(state: AppState) -> Router {
         )
         .route("/api/media", axum::routing::get(media::list))
         .route("/api/media/{id}", axum::routing::delete(media::delete))
+        .route(
+            "/api/media/{id}",
+            axum::routing::patch(media::update),
+        )
         .route("/api/analytics", axum::routing::get(analytics::get))
         .route(
             "/api/analytics/summary",

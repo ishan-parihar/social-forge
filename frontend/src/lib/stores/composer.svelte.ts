@@ -50,14 +50,14 @@ class ComposerStore {
    * already uploaded (these are URLs to existing media), so no upload
    * progress is needed.
    */
-  prefilledMedia = $state<Array<{ url: string; mime_type: string; original_name?: string }> | null>(null);
+  prefilledMedia = $state<Array<{ id?: string; url: string; mime_type: string; alt?: string; original_name?: string }> | null>(null);
 
   /** Open the composer in create mode. */
   openCreate(
     presetDate?: string | null,
     presetIntegrationIds?: string[],
     prefilledContent?: string,
-    prefilledMedia?: Array<{ url: string; mime_type: string; original_name?: string }>,
+    prefilledMedia?: Array<{ id?: string; url: string; mime_type: string; alt?: string; original_name?: string }>,
   ) {
     this.mode = 'create';
     this.presetDate = presetDate ?? null;

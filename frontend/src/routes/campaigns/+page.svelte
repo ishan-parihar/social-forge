@@ -157,7 +157,7 @@
 
 <div class="page-enter space-y-6">
   <PageHeader title="Campaigns" subtitle="Strategic content campaigns with goals and progress tracking">
-    <button onclick={openCreateModal} class="px-4 py-2 whitespace-nowrap bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg text-sm font-medium transition-colors">
+    <button onclick={openCreateModal} class="px-4 py-2 min-h-11 whitespace-nowrap bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg text-sm font-medium transition-colors">
       + New Campaign
     </button>
   </PageHeader>

@@ -207,10 +207,15 @@ pub async fn update_rule(
     state: &AppState,
     input: &UpdateRuleInput,
 ) -> Result<Json<crate::mcp::McpJsonValue>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
     let rule_id = Uuid::parse_str(&input.rule_id).map_err(|_| "Invalid rule_id format")?;
 
     let input_active_i64 = input.is_active.map(i64::from);
-    sqlx::query!(
+    // The `user_id` predicate is the ownership check. It was missing:
+    // the UPDATE was `WHERE id = ?`, so an agent that knew a rule id
+    // could edit ANOTHER user's automation rule. The REST endpoint
+    // verifies ownership first and 404s.
+    let result = sqlx::query!(
         r#"UPDATE automation_rules
            SET name = COALESCE(?, name),
                trigger_filter = COALESCE(?, trigger_filter),
@@ -221,8 +226,7 @@ pub async fn update_rule(
                cooldown_minutes = COALESCE(?, cooldown_minutes),
                max_responses_per_hour = COALESCE(?, max_responses_per_hour),
                updated_at = unixepoch()
-           WHERE id = ?"#,
-        rule_id,
+           WHERE id = ? AND user_id = ?"#,
         input.name,
         input.trigger_filter,
         input.response_template,
@@ -231,10 +235,16 @@ pub async fn update_rule(
         input_active_i64,
         input.cooldown_minutes,
         input.max_responses_per_hour,
+        rule_id,
+        user_id,
     )
     .execute(&state.db)
     .await
     .map_err(|e| format!("Failed to update rule: {e}"))?;
+
+    if result.rows_affected() == 0 {
+        return Err("Automation rule not found".to_string());
+    }
 
     Ok(Json(crate::mcp::McpJsonValue(
         serde_json::json!({"success": true, "message": "Rule updated",}),
@@ -245,12 +255,24 @@ pub async fn delete_rule(
     state: &AppState,
     input: &DeleteRuleInput,
 ) -> Result<Json<crate::mcp::McpJsonValue>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
     let rule_id = Uuid::parse_str(&input.rule_id).map_err(|_| "Invalid rule_id format")?;
 
-    sqlx::query!(r#"DELETE FROM automation_rules WHERE id = ?"#, rule_id,)
-        .execute(&state.db)
-        .await
-        .map_err(|e| format!("Failed to delete rule: {e}"))?;
+    // The `user_id` predicate is the ownership check - it was missing.
+    // The rowcount is checked too: the tool reported
+    // `{"success": true}` even when nothing was deleted.
+    let result = sqlx::query!(
+        r#"DELETE FROM automation_rules WHERE id = ? AND user_id = ?"#,
+        rule_id,
+        user_id,
+    )
+    .execute(&state.db)
+    .await
+    .map_err(|e| format!("Failed to delete rule: {e}"))?;
+
+    if result.rows_affected() == 0 {
+        return Err("Automation rule not found".to_string());
+    }
 
     Ok(Json(crate::mcp::McpJsonValue(
         serde_json::json!({"success": true, "message": "Rule deleted",}),
@@ -261,8 +283,26 @@ pub async fn get_logs(
     state: &AppState,
     input: &GetLogsInput,
 ) -> Result<Json<GetLogsOutput>, String> {
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
     let rule_id = Uuid::parse_str(&input.rule_id).map_err(|_| "Invalid rule_id format")?;
     let limit = input.limit.unwrap_or(50);
+
+    // The ownership check: the rule must belong to the user before its
+    // logs are read. It was missing - the query was `WHERE rule_id = ?`.
+    //
+    // A runtime query, not the `query!` macro: this is a NEW query and
+    // the macro needs a regenerated `.sqlx/` cache entry (AGENTS.md §5).
+    let owned: Option<String> = sqlx::query_scalar(
+        "SELECT id FROM automation_rules WHERE id = ? AND user_id = ?",
+    )
+    .bind(rule_id)
+    .bind(user_id)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|e| format!("Failed to check rule ownership: {e}"))?;
+    if owned.is_none() {
+        return Err("Automation rule not found".to_string());
+    }
 
     let logs = sqlx::query!(
         r#"SELECT id as "id!: String", trigger_id, trigger_type, response, status, error_message,

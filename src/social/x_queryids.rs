@@ -207,6 +207,11 @@ pub async fn refresh_if_stale(pool: &SqlitePool, http: &wreq::Client) {
 mod tests {
     use super::*;
 
+    /// Serialises the tests that share the PROCESS-WIDE discovery cache.
+    fn test_lock() -> &'static std::sync::Mutex<()> {
+        static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        &LOCK
+    }
     const CANNED_HTML: &str = r#"
         <html><head>
         <script src="https://abs.twimg.com/responsive-web/client-web/main.abc123.js"></script>
@@ -253,6 +258,11 @@ mod tests {
 
     #[test]
     fn lookup_falls_back_to_static_table() {
+        // The discovery cache is a PROCESS-WIDE global, and the tests
+        // that read and write it run in PARALLEL - so one test could
+        // read another's write and fail. The mutex serialises them.
+        let _guard = test_lock().lock().unwrap_or_else(|e| e.into_inner());
+
         // Discovery cache is empty in a fresh process.
         assert!(discovered_read().is_empty());
         assert_eq!(lookup("CreateTweet").as_deref(), Some("IID9x6WsdMnTlXnzXGq8ng"));
@@ -261,6 +271,8 @@ mod tests {
 
     #[test]
     fn discovered_ids_take_precedence_over_fallback() {
+        let _guard = test_lock().lock().unwrap_or_else(|e| e.into_inner());
+
         let mut fresh = HashMap::new();
         fresh.insert("CreateTweet".to_string(), "RotatedId999".to_string());
         set_discovered(fresh);

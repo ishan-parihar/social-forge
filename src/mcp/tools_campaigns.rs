@@ -43,19 +43,54 @@ pub struct CampaignUpdateInput {
     /// Campaign ID (UUID)
     pub campaign_id: String,
     pub name: Option<String>,
-    pub description: Option<String>,
+    /// Three-state: omitted = keep, `null` = clear, a value = replace.
+    #[serde(default, deserialize_with = "double_option")]
+    pub description: Option<Option<String>>,
     pub color: Option<String>,
-    pub start_date: Option<String>,
-    pub end_date: Option<String>,
-    pub goal: Option<String>,
+    /// Three-state: omitted = keep, `null` = clear, a value = replace.
+    #[serde(default, deserialize_with = "double_option")]
+    pub start_date: Option<Option<String>>,
+    /// Three-state: omitted = keep, `null` = clear, a value = replace.
+    #[serde(default, deserialize_with = "double_option")]
+    pub end_date: Option<Option<String>>,
+    /// Three-state: omitted = keep, `null` = clear, a value = replace.
+    #[serde(default, deserialize_with = "double_option")]
+    pub goal: Option<Option<String>>,
     /// active | paused | archived | completed
     pub status: Option<String>,
-    pub progress_metric: Option<String>,
-    pub progress_target: Option<i32>,
-    pub audience_persona: Option<serde_json::Value>,
-    pub content_pillars: Option<serde_json::Value>,
-    pub budget_cents: Option<i32>,
-    pub kpi_targets: Option<serde_json::Value>,
+    /// Three-state: omitted = keep, `null` = clear, a value = replace.
+    #[serde(default, deserialize_with = "double_option")]
+    pub progress_metric: Option<Option<String>>,
+    /// Three-state: omitted = keep, `null` = clear, a value = replace.
+    #[serde(default, deserialize_with = "double_option")]
+    pub progress_target: Option<Option<i32>>,
+    /// Three-state: omitted = keep, `null` = clear, a value = replace.
+    #[serde(default, deserialize_with = "double_option")]
+    pub audience_persona: Option<Option<serde_json::Value>>,
+    /// Three-state: omitted = keep, `null` = clear, a value = replace.
+    #[serde(default, deserialize_with = "double_option")]
+    pub content_pillars: Option<Option<serde_json::Value>>,
+    /// Three-state: omitted = keep, `null` = clear, a value = replace.
+    #[serde(default, deserialize_with = "double_option")]
+    pub budget_cents: Option<Option<i32>>,
+    /// Three-state: omitted = keep, `null` = clear, a value = replace.
+    #[serde(default, deserialize_with = "double_option")]
+    pub kpi_targets: Option<Option<serde_json::Value>>,
+}
+
+/// Deserialize a field into `Option<Option<T>>` so "absent", "null" and
+/// "a value" are three distinguishable states.
+///
+/// `Option<T>` collapses "absent" and "null" into the same `None`. The
+/// MCP input used that shape and then mapped it with `.map(Some)`,
+/// which turned "clear this field" into "leave this field alone" - so
+/// `campaign_update {goal: null}` kept the goal and reported success.
+fn double_option<'de, T, D>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
+where
+    T: serde::Deserialize<'de>,
+    D: serde::Deserializer<'de>,
+{
+    serde::Deserialize::deserialize(deserializer).map(Some)
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
@@ -115,21 +150,22 @@ pub async fn handle_campaign_update(
         name: input.name.clone(),
         color: input.color.clone(),
         status: input.status.clone(),
-        // The clearable fields are three-state on the API now
-        // (absent = keep, null = clear, a value = replace). The MCP
-        // input is two-state, so an omitted field stays omitted - which
-        // is "keep" - and a caller that wants to clear one passes
-        // `null` through the JSON.
-        description: input.description.clone().map(Some),
-        start_date: input.start_date.clone().map(Some),
-        end_date: input.end_date.clone().map(Some),
-        goal: input.goal.clone().map(Some),
-        progress_metric: input.progress_metric.clone().map(Some),
-        progress_target: input.progress_target.map(Some),
-        audience_persona: input.audience_persona.clone().map(Some),
-        content_pillars: input.content_pillars.clone().map(Some),
-        budget_cents: input.budget_cents.map(Some),
-        kpi_targets: input.kpi_targets.clone().map(Some),
+        // The clearable fields are three-state on the API (absent = keep,
+        // null = clear, a value = replace) and three-state here too, so
+        // they pass straight through. The MCP input used to be
+        // two-state and mapped with `.map(Some)`, which turned "clear
+        // this field" into "leave this field alone": `campaign_update
+        // {goal: null}` kept the goal and reported success.
+        description: input.description.clone(),
+        start_date: input.start_date.clone(),
+        end_date: input.end_date.clone(),
+        goal: input.goal.clone(),
+        progress_metric: input.progress_metric.clone(),
+        progress_target: input.progress_target,
+        audience_persona: input.audience_persona.clone(),
+        content_pillars: input.content_pillars.clone(),
+        budget_cents: input.budget_cents,
+        kpi_targets: input.kpi_targets.clone(),
     };
     rest_result(
         campaigns::update(

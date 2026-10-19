@@ -421,14 +421,14 @@
             </a>
           {/each}
           {#if stats.error > 0}
-            <a href="/posts?state=error" class="flex items-center gap-2 py-1.5 px-2 -mx-2 rounded-lg hover:bg-surface-hover transition-colors group">
+            <a href="/posts?state=error" class="flex items-center gap-2 py-1.5 px-2 -mx-2 rounded-lg hover:bg-surface-hover transition-colors group min-h-11">
               <span class="w-1.5 h-1.5 rounded-full bg-error shrink-0"></span>
               <span class="flex-1 text-xs text-error">{stats.error} failed post{stats.error > 1 ? 's' : ''} need{stats.error === 1 ? 's' : ''} retry</span>
               <span class="text-[10px] text-faint">→</span>
             </a>
           {/if}
           {#each integrations.filter(i => i.refresh_needed).slice(0, 3) as int (int.id)}
-            <a href="/channels" class="flex items-center gap-2 py-1.5 px-2 -mx-2 rounded-lg hover:bg-surface-hover transition-colors group">
+            <a href="/channels" class="flex items-center gap-2 py-1.5 px-2 -mx-2 rounded-lg hover:bg-surface-hover transition-colors group min-h-11">
               <span class="w-1.5 h-1.5 rounded-full bg-warning shrink-0"></span>
               <span class="flex-1 text-xs text-warning truncate">{int.provider_name} token expiring</span>
               <span class="text-[10px] text-faint">→</span>

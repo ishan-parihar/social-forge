@@ -802,8 +802,38 @@ pub trait SocialProvider: Send + Sync {
     /// Platforms like Instagram, Facebook, and Threads require publicly accessible URLs
     /// because they fetch media server-side. By default, returns the URL unchanged.
     /// Override in providers that need URL resolution (e.g., Meta Graph API providers).
-    fn resolve_media_url(&self, attachment: &MediaAttachment, _app_url: &str) -> MediaAttachment {
-        attachment.clone()
+    /// Turn a stored media URL into one the PLATFORM can fetch.
+    ///
+    /// The app stores media as a relative URL - `/api/media/<uuid>` -
+    /// because that is what the dashboard renders. A platform cannot
+    /// fetch a relative URL: it would try to read the literal path
+    /// `/api/media/<uuid>` from its own filesystem, or fail to parse it
+    /// as a URL at all.
+    ///
+    /// So the URL is made ABSOLUTE here, against the app's public base
+    /// URL. This is the DEFAULT because it is correct for every
+    /// provider: the alternative - a default that returns the
+    /// attachment unchanged, with each provider opting in - meant that
+    /// X, Bluesky, Mastodon, Pinterest, TikTok, YouTube and LinkedIn
+    /// published with a relative URL and failed, with the error
+    /// surfacing as an opaque network failure rather than a media
+    /// error. Four providers had their own copy of this override and
+    /// eight did not have it at all.
+    fn resolve_media_url(&self, attachment: &MediaAttachment, app_url: &str) -> MediaAttachment {
+        let url = attachment.url.trim();
+        if url.starts_with("http://") || url.starts_with("https://") {
+            // Already absolute - leave it alone.
+            return attachment.clone();
+        }
+        if !url.starts_with('/') {
+            // Not a path we recognise (a data: URL, a blob: URL, a
+            // provider CDN URL the user pasted). Leave it alone.
+            return attachment.clone();
+        }
+        MediaAttachment {
+            url: format!("{}{}", app_url.trim_end_matches('/'), url),
+            ..attachment.clone()
+        }
     }
 
     // ── DM Methods ───────────────────────────────────────────
@@ -961,15 +991,21 @@ pub fn validate_media_limits(identifier: &str, post: &PostContent) -> Result<(),
             }
         }
         "threads" => {
-            if images.len() > 10 {
+            // Threads accepts up to 20 images or one video - the
+            // provider's own rejection message says so (threads.rs:
+            // "Threads posts accept up to 20 images or one video"), and
+            // the composer's table said 20. The limit here said 10, so
+            // the composer let the founder attach 15 images with no
+            // banner and the server rejected the post on save.
+            if images.len() > 20 {
                 return Err(format!(
-                    "Threads allows max 10 images, got {}",
+                    "Threads allows max 20 images, got {}",
                     images.len()
                 ));
             }
-            if post.media.len() > 10 {
+            if post.media.len() > 20 {
                 return Err(format!(
-                    "Threads allows max 10 media items, got {}",
+                    "Threads allows max 20 media items, got {}",
                     post.media.len()
                 ));
             }

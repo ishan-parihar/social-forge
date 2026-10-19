@@ -118,42 +118,31 @@ pub async fn handle_posts_set_tags(
     let post_id =
         Uuid::parse_str(&input.post_id).map_err(|_| "Invalid post_id UUID".to_string())?;
 
-    // Verify ownership
-    let _post = queries::get_post(&state.db, post_id, user_id)
-        .await
-        .map_err(|e| format!("DB error: {e}"))?
-        .ok_or_else(|| "Post not found".to_string())?;
-
-    // Parse tag IDs
     let tag_uuids: Vec<Uuid> = input
         .tag_ids
         .iter()
         .map(|s| Uuid::parse_str(s).map_err(|e| format!("Invalid tag UUID '{s}': {e}")))
         .collect::<Result<_, _>>()?;
 
-    // Remove existing tags, then insert new ones
-    sqlx::query("DELETE FROM post_tags WHERE post_id = $1")
-        .bind(post_id)
-        .execute(&state.db)
-        .await
-        .map_err(|e| format!("Failed to clear existing tags: {e}"))?;
-
-    for tag_id in &tag_uuids {
-        sqlx::query(
-            "INSERT INTO post_tags (post_id, tag_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+    // The REST handler is the one implementation. It checks that every
+    // tag belongs to the user, and it writes the DELETE and the
+    // INSERTs in ONE TRANSACTION.
+    //
+    // The MCP tool re-implemented the SQL inline and left both halves
+    // out: a tag belonging to another account could be attached, and a
+    // failed INSERT left the post with NO tags at all - the REST path
+    // rolls back to the original set.
+    super::rest_bridge::rest_result(
+        crate::api::posts::set_post_tags(
+            axum::extract::State(state.clone()),
+            crate::auth::middleware::AuthenticatedUser { user_id },
+            axum::extract::Path(post_id),
+            axum::Json(crate::api::posts::SetPostTagsRequest {
+                tag_ids: tag_uuids,
+            }),
         )
-        .bind(post_id)
-        .bind(tag_id)
-        .execute(&state.db)
-        .await
-        .map_err(|e| format!("Failed to attach tag: {e}"))?;
-    }
-
-    Ok(Json(serde_json::json!({
-        "post_id": post_id.to_string(),
-        "tag_ids": input.tag_ids,
-        "attached": tag_uuids.len(),
-    })))
+        .await,
+    )
 }
 
 // ── Media Delete ──────────────────────────────────────────────
@@ -164,7 +153,8 @@ pub struct MediaDeleteInput {
     pub media_id: String,
 }
 
-/// Delete a media file. Removes the DB row AND the file on disk.
+/// Delete a media file. Removes the DB row AND the file from whichever
+/// storage backend is active.
 pub async fn handle_media_delete(
     state: &AppState,
     input: &MediaDeleteInput,
@@ -178,13 +168,14 @@ pub async fn handle_media_delete(
         .map_err(|e| format!("DB error: {e}"))?
         .ok_or_else(|| "Media not found".to_string())?;
 
-    // Delete the file from disk
-    let upload_dir = std::path::Path::new(&state.config.media_dir);
-    let filepath = upload_dir.join(&entry.storage_path);
-    if filepath.exists() {
-        if let Err(e) = tokio::fs::remove_file(&filepath).await {
-            tracing::warn!("Failed to delete media file {filepath:?}: {e}");
-        }
+    // Delete the file through the ACTIVE BACKEND. This used to join
+    // `state.config.media_dir` directly, so on a deployment with
+    // S3/R2 configured the row was removed and the OBJECT LEFT IN THE
+    // BUCKET - still publicly reachable at its CDN URL, and the bucket
+    // growing without bound.
+    let storage = crate::api::media::storage(state);
+    if let Err(e) = storage.delete(&entry.storage_path).await {
+        tracing::warn!("Failed to delete media file {:?}: {e}", entry.storage_path);
     }
 
     Ok(Json(serde_json::json!({

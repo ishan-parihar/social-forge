@@ -90,7 +90,7 @@
   // The currently-edited part's content/title/media is what gets saved
   // on submit. Switching tabs saves the current draft to a per-part
   // cache and loads the newly-selected part.
-  let groupPosts = $state<Array<{ id: string; sequence: number; content: string; title?: string; media?: { url: string; mime_type: string; alt?: string }[] }>>([]);
+  let groupPosts = $state<Array<{ id: string; sequence: number; content: string; title?: string; media?: { id?: string; url: string; mime_type: string; alt?: string }[] }>>([]);
   let editingGroupPostId = $state<string | null>(null);
   // Per-part draft cache so switching tabs doesn't lose unsaved edits.
   let groupDraftCache = $state<Map<string, { content: string; title: string; mediaItems: MediaItem[] }>>(new Map());
@@ -106,6 +106,26 @@
   const DRAFT_KEY = 'social-forge-composer-draft';
 
   // Target selection
+  //
+  // These are PLAIN Map/Set, and they are reassigned after every
+  // mutation - the idiom this file already uses for `selectedTargets`,
+  // `providerOverride` and `groupDraftCache`.
+  //
+  // Svelte 5's `proxy()` returns a Map or a Set UNCHANGED (their
+  // prototype is neither Object.prototype nor Array.prototype), so
+  // `$state(new Map())` is NOT a reactive Map: mutating it in place
+  // (`targetsLoading.add(id)`, `integrationTargets.set(id, ...)`)
+  // notifies nobody. The template guard
+  // `{#if integrationTargets.has(intId)}` is a derived with ZERO
+  // reactive dependencies, so it is evaluated once at mount - when the
+  // Map is empty - and never recomputed.
+  //
+  // The result was that the "Posting Targets" panel NEVER rendered: a
+  // Reddit subreddit, a Pinterest board or a Facebook Page could not be
+  // picked, and the post then failed at publish with "Missing
+  // subreddit in settings" - a requirement the founder had no UI to
+  // satisfy. The fetch also looped: the `$effect` that calls
+  // `fetchTargets` had no dependencies either, so it never re-ran.
   let integrationTargets = $state<Map<string, TargetInfo[]>>(new Map());
   let selectedTargets = $state<Map<string, string[]>>(new Map());
   let targetsLoading = $state<Set<string>>(new Set());
@@ -173,8 +193,16 @@
     }
     return out;
   });
+  // A post may carry no body IF it carries media: Instagram, TikTok,
+  // YouTube and Pinterest all accept a photo with no caption - the
+  // NORMAL case for a photo. The server's rule says exactly this
+  // ("An empty body is only an error when the post has no media"), and
+  // the composer's own `blockersFor` implements it, so the guard here
+  // was the last place still blocking on it: the Schedule and Post Now
+  // buttons were greyed out for a photo with no caption.
+  let hasContentOrMedia = $derived(content.trim().length > 0 || mediaItems.length > 0);
   let canPublish = $derived(
-    selectedIntegrations.length > 0 && content.trim().length > 0 && blockers.length === 0,
+    selectedIntegrations.length > 0 && hasContentOrMedia && blockers.length === 0,
   );
 
   /** Pinterest board / YT channel labels for the previews, by integration. */
@@ -219,7 +247,19 @@
     firstComment = post.first_comment || '';
     selectedTagIds = post.tags?.map(t => t.id) || [];
     mediaItems = (post.media || []).map(m => ({
-      id: crypto.randomUUID(),
+      // The SERVER'S media id, kept.
+      //
+      // It used to be a fresh `crypto.randomUUID()`, which threw the id
+      // away. The server stores `posts.media` as raw JSON, so the id
+      // the composer sent comes back when the post is loaded - and
+      // discarding it meant the composer had no way to refer to the
+      // stored media row. The alt-text PATCH then addressed a UUID that
+      // did not exist and 404'd, so the alt text was unreachable
+      // through the EDIT flow - which is how a founder actually uses
+      // it: open a scheduled post, add alt text, save.
+      //
+      // The fallback covers media JSON written before the id existed.
+      id: m.id || crypto.randomUUID(),
       url: m.url,
       mime_type: m.mime_type,
       // The alt text lives in `alt`. It used to be stuffed into
@@ -296,7 +336,9 @@
         content = part.content || '';
         title = part.title || '';
         mediaItems = (part.media ?? []).map((m) => ({
-          id: crypto.randomUUID(),
+          // The server's media id, kept - the same reason as the
+          // single-post edit path: a fresh UUID addresses nothing.
+          id: m.id || crypto.randomUUID(),
           url: m.url,
           mime_type: m.mime_type,
           alt: m.alt || '',
@@ -350,9 +392,13 @@
     // wrap them in MediaItem-shaped objects - no upload needed.
     if (composer.prefilledMedia && composer.prefilledMedia.length > 0) {
       mediaItems = composer.prefilledMedia.map(m => ({
-        id: crypto.randomUUID(),
+        // The repurpose flow copies media from another post, so the
+        // source may or may not carry a server id. Keep it when it
+        // does; fall back when it does not.
+        id: m.id || crypto.randomUUID(),
         url: m.url,
         mime_type: m.mime_type,
+        alt: m.alt ?? '',
         original_name: m.original_name || m.url.split('/').pop() || 'media',
         file_size: 0,
       }));
@@ -442,7 +488,18 @@
   // so the header indicator can name the state it is actually in.
   $effect(() => {
     if (composer.mode !== 'create') return;
-    const _ = [content, title, selectedIntegrations, scheduledAt, firstComment];
+    // The dependency list must cover EVERY field the serialised payload
+    // reads. `mediaItems` and `selectedTagIds` were serialised but not
+    // tracked, and they are read only inside the timer callback -
+    // which runs later, outside the effect's tracked body - so they
+    // were not dependencies either.
+    //
+    // The effect: the founder attaches an image and tags the post, then
+    // types nothing more. `content` and `title` did not change, so the
+    // effect never re-ran, so the draft was NEVER written - and the
+    // image and the tags were gone on reload, while the UI said
+    // "Autosave on".
+    const _ = [content, title, selectedIntegrations, scheduledAt, firstComment, mediaItems, selectedTagIds];
     clearTimeout(draftTimer);
     if (!content && !title) {
       draftState = 'idle';
@@ -486,15 +543,31 @@
 
   async function fetchTargets(integrationId: string) {
     targetsLoading.add(integrationId);
+    // Reassign so the template learns the set changed.
+    targetsLoading = new Set(targetsLoading);
     try {
       const r = await integrationsApi.listTargets(integrationId);
-      if (r.data && r.data.targets.length > 0) {
-        integrationTargets.set(integrationId, r.data.targets);
-      }
+      // Record the fetch EVEN WHEN THE LIST IS EMPTY.
+      //
+      // The map's presence means "we have asked this channel for its
+      // targets", not "this channel has targets". Most providers return
+      // an empty list - the trait default is `Ok(vec![])` - so a guard
+      // of the form "not fetched yet" keyed on a non-empty list would
+      // re-fetch on every effect run, forever.
+      const targets = r.data?.targets ?? [];
+      integrationTargets.set(integrationId, targets);
+      // Reassign so the template learns the map changed - this is
+      // what makes the "Posting Targets" panel appear.
+      integrationTargets = new Map(integrationTargets);
     } catch (e) {
+      // The fetch failed. Record it anyway, so a provider that errors
+      // is not retried on every effect run.
+      integrationTargets.set(integrationId, []);
+      integrationTargets = new Map(integrationTargets);
       toast('Failed to fetch targets: ' + (e instanceof Error ? e.message : String(e)), 'error');
     } finally {
       targetsLoading.delete(integrationId);
+      targetsLoading = new Set(targetsLoading);
     }
   }
 
@@ -517,6 +590,12 @@
    * dead code - a user could not pick the Facebook Page a post goes to, nor
    * the Pinterest board, which is a hard requirement on that platform. F2
    * wires it: whenever the selected set changes, fetch the missing ones.
+   *
+   * The guard is "not fetched yet", and `integrationTargets` records EVERY
+   * fetch - including one that returned an empty list, and one that
+   * errored. Most providers have no posting targets (the trait default is
+   * an empty list), so a guard keyed on "the list is non-empty" would
+   * re-fetch on every effect run, forever.
    */
   $effect(() => {
     for (const id of selectedIntegrations) {
@@ -640,7 +719,7 @@
   async function submit() {
     if (submitting) return;
     if (selectedIntegrations.length === 0) { error = 'Please select at least one channel'; return; }
-    if (!content.trim()) { error = 'Please write some content'; return; }
+    if (!content.trim() && mediaItems.length === 0) { error = 'Please write some content or attach a media item'; return; }
     // F2: client-side gate. The server still re-validates below; this stops the
     // request that we already know will fail, and the banner has already told
     // the user why.
@@ -779,7 +858,7 @@
   async function postNow() {
     if (submitting) return;
     if (selectedIntegrations.length === 0) { error = 'Please select at least one channel'; return; }
-    if (!content.trim()) { error = 'Please write some content'; return; }
+    if (!content.trim() && mediaItems.length === 0) { error = 'Please write some content or attach a media item'; return; }
     if (blockers.length > 0) { error = 'Fix the highlighted channel issues before posting'; return; }
     submitting = true;
     error = null;
@@ -1075,7 +1154,13 @@
 
         <!-- Posting Targets -->
         {#each selectedIntegrations as intId (intId)}
-          {#if integrationTargets.has(intId)}
+          <!--
+            The panel appears when the channel HAS targets. The map's
+            presence means "we have asked", so the emptiness has to be
+            checked here - most providers return an empty list, and a
+            "Posting Targets for X" panel with nothing in it is noise.
+          -->
+          {#if (integrationTargets.get(intId) || []).length > 0}
             <div class="bg-surface border border-line rounded-xl p-4">
               <h3 class="text-sm font-semibold mb-3">
                 Posting Targets for {integrationNames.get(intId)}

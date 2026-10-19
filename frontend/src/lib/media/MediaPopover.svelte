@@ -11,7 +11,18 @@
   }: {
     open?: boolean;
     onClose?: () => void;
-    onSelect?: (url: string) => void;
+    /**
+     * The whole item, not just its URL.
+     *
+     * The library's URL is `/api/media/<uuid>` - a UUID with no file
+     * extension - so a caller that re-derived the mime type from the
+     * URL got `application/octet-stream` for EVERY item. The composer
+     * classifies media by mime type (`image/*` vs `video/*`), so a PNG
+     * picked from the library counted as a VIDEO: the wrong count, the
+     * wrong "images and video cannot be mixed" banner, and the PNG
+     * silently consumed the platform's single-video slot.
+     */
+    onSelect?: (item: MediaItem) => void;
   } = $props();
 
   let items = $state<MediaItem[]>([]);
@@ -42,7 +53,7 @@
   }
 
   function handleSelect(item: MediaItem) {
-    onSelect?.(item.url);
+    onSelect?.(item);
     onClose?.();
   }
 

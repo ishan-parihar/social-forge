@@ -198,3 +198,280 @@ async fn admin_analytics_and_integration_toggle_run_on_sqlite() {
     .expect("toggle SQL runs on sqlite");
     assert!(!matched);
 }
+
+// ─── The MCP writes must not be the lossy copy ────────────────
+//
+// The MCP tools and the REST endpoints expose the SAME operations to
+// the same founder - an agent driving the MCP server and a browser
+// driving the dashboard are two clients of one application. Where they
+// diverged, the MCP copy was the lossy one:
+//
+//   1. `posts_update` WIPED the post. The service took a two-state
+//      input and wrote `SET media = ?, settings = ?` unconditionally, so
+//      an agent that sent only a new body erased every attached image
+//      and every provider setting (the Reddit subreddit, the Pinterest
+//      board). The post then failed at publish time with "Missing
+//      subreddit in settings", and the founder had no way to know why.
+//
+//   2. `campaign_update` could never CLEAR a field. The MCP input was
+//      two-state and mapped with `.map(Some)`, which turned "clear
+//      this" into "leave this alone": `campaign_update {goal: null}`
+//      kept the goal and reported success.
+//
+//   3. The automation tools' UPDATE and DELETE had no `user_id`
+//      predicate, so an agent could edit another user's rule.
+//
+// These tests call the MCP tool functions directly and read the row
+// back, so they exercise the real write.
+
+use social_forge::auth::middleware::DEFAULT_USER_ID;
+use social_forge::mcp::{tools_automation, tools_posts};
+use uuid::Uuid;
+
+async fn seed_integration(state: &AppState) -> Uuid {
+    let integration_id = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO integrations (id, user_id, provider_identifier, provider_name, internal_id)
+         VALUES (?, ?, 'bluesky', 'Bluesky', ?)",
+    )
+    .bind(integration_id)
+    .bind(DEFAULT_USER_ID)
+    .bind(format!("did:plc:{integration_id}"))
+    .execute(&state.db)
+    .await
+    .expect("seed integration");
+    integration_id
+}
+
+/// A draft post with a title, an attachment and a provider setting.
+async fn seed_post(state: &AppState, integration_id: Uuid) -> Uuid {
+    let post_id = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO posts (id, user_id, integration_id, state, content, title, media, settings,
+                            idempotency_key)
+         VALUES (?, ?, ?, 'draft', 'original body', 'original title', ?, ?, ?)",
+    )
+    .bind(post_id)
+    .bind(DEFAULT_USER_ID)
+    .bind(integration_id)
+    .bind(serde_json::json!([{ "url": "/api/media/abc", "mime_type": "image/png" }]))
+    .bind(serde_json::json!({ "subreddit": "rust" }))
+    // `idempotency_key` is a Uuid: sqlx stores it as a 16-byte BLOB, so
+    // it is bound as the raw bytes, not as the dashed text.
+    .bind(Uuid::new_v4().as_bytes().to_vec())
+    .execute(&state.db)
+    .await
+    .expect("seed post");
+    post_id
+}
+
+async fn post_fields(
+    state: &AppState,
+    id: Uuid,
+) -> (String, Option<String>, serde_json::Value, serde_json::Value) {
+    sqlx::query_as::<_, (String, Option<String>, serde_json::Value, serde_json::Value)>(
+        "SELECT content, title, media, settings FROM posts WHERE id = ?",
+    )
+    .bind(id)
+    .fetch_one(&state.db)
+    .await
+    .expect("post row")
+}
+
+#[tokio::test]
+async fn mcp_posts_update_keeps_the_media_and_the_settings_it_was_not_asked_to_change() {
+    let state = state().await;
+    let integration_id = seed_integration(&state).await;
+    let post_id = seed_post(&state, integration_id).await;
+
+    // The agent fixes a typo in the body. Nothing else.
+    let input = tools_posts::UpdatePostInput {
+        id: post_id.to_string(),
+        content: Some("the new body".to_string()),
+        title: None,
+        media: None,
+        settings: None,
+    };
+    tools_posts::update_post(&state, &input).await.expect("update");
+
+    let (content, title, media, settings) = post_fields(&state, post_id).await;
+    assert_eq!(content, "the new body", "the body must change");
+    assert_eq!(title, Some("original title".into()), "the title must survive");
+    assert_eq!(
+        media.as_array().map(|a| a.len()),
+        Some(1),
+        "the attached image must survive: {media}"
+    );
+    assert_eq!(
+        settings.get("subreddit").and_then(|v| v.as_str()),
+        Some("rust"),
+        "the provider setting must survive: {settings}"
+    );
+}
+
+#[tokio::test]
+async fn mcp_posts_update_can_clear_a_field_on_purpose() {
+    let state = state().await;
+    let integration_id = seed_integration(&state).await;
+    let post_id = seed_post(&state, integration_id).await;
+
+    // The agent clears the title explicitly.
+    let input = tools_posts::UpdatePostInput {
+        id: post_id.to_string(),
+        content: None,
+        title: Some(None),
+        media: None,
+        settings: None,
+    };
+    tools_posts::update_post(&state, &input).await.expect("update");
+
+    let (_, title, _, _) = post_fields(&state, post_id).await;
+    assert_eq!(title, None, "an explicit null must clear the title");
+}
+
+#[tokio::test]
+async fn mcp_campaign_update_can_clear_a_field_on_purpose() {
+    let state = state().await;
+    let campaign_id = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO campaigns (id, user_id, name, goal, status, created_at, updated_at)
+         VALUES (?, ?, 'Q3', 'Reach 10k people', 'active', unixepoch(), unixepoch())",
+    )
+    .bind(campaign_id)
+    .bind(DEFAULT_USER_ID)
+    .execute(&state.db)
+    .await
+    .expect("seed campaign");
+
+    // The agent clears the goal explicitly.
+    let input = tools_campaigns::CampaignUpdateInput {
+        campaign_id: campaign_id.to_string(),
+        name: None,
+        description: None,
+        color: None,
+        start_date: None,
+        end_date: None,
+        goal: Some(None),
+        status: None,
+        progress_metric: None,
+        progress_target: None,
+        audience_persona: None,
+        content_pillars: None,
+        budget_cents: None,
+        kpi_targets: None,
+    };
+    tools_campaigns::handle_campaign_update(&state, &input)
+        .await
+        .expect("update");
+
+    let goal: Option<String> = sqlx::query_scalar("SELECT goal FROM campaigns WHERE id = ?")
+        .bind(campaign_id)
+        .fetch_one(&state.db)
+        .await
+        .expect("campaign row");
+    assert_eq!(
+        goal, None,
+        "an explicit null must clear the goal, not leave it alone"
+    );
+}
+
+#[tokio::test]
+async fn mcp_campaign_update_keeps_a_field_it_was_not_asked_to_change() {
+    let state = state().await;
+    let campaign_id = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO campaigns (id, user_id, name, goal, status, created_at, updated_at)
+         VALUES (?, ?, 'Q3', 'Reach 10k people', 'active', unixepoch(), unixepoch())",
+    )
+    .bind(campaign_id)
+    .bind(DEFAULT_USER_ID)
+    .execute(&state.db)
+    .await
+    .expect("seed campaign");
+
+    // The agent renames the campaign. The goal must survive.
+    let input = tools_campaigns::CampaignUpdateInput {
+        campaign_id: campaign_id.to_string(),
+        name: Some("Q3 (revised)".to_string()),
+        description: None,
+        color: None,
+        start_date: None,
+        end_date: None,
+        goal: None,
+        status: None,
+        progress_metric: None,
+        progress_target: None,
+        audience_persona: None,
+        content_pillars: None,
+        budget_cents: None,
+        kpi_targets: None,
+    };
+    tools_campaigns::handle_campaign_update(&state, &input)
+        .await
+        .expect("update");
+
+    let goal: Option<String> = sqlx::query_scalar("SELECT goal FROM campaigns WHERE id = ?")
+        .bind(campaign_id)
+        .fetch_one(&state.db)
+        .await
+        .expect("campaign row");
+    assert_eq!(
+        goal,
+        Some("Reach 10k people".into()),
+        "an omitted field must keep its stored value"
+    );
+}
+
+#[tokio::test]
+async fn mcp_automation_update_refuses_a_rule_it_does_not_own() {
+    let state = state().await;
+    // A rule owned by a DIFFERENT user.
+    let other_user = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO users (id, email, password, created_at) VALUES (?, ?, 'x', unixepoch())",
+    )
+    .bind(other_user)
+    .bind(format!("{other_user}@example.test"))
+    .execute(&state.db)
+    .await
+    .expect("seed user");
+    let rule_id = Uuid::new_v4();
+    let integration_id = seed_integration(&state).await;
+    sqlx::query(
+        "INSERT INTO automation_rules (id, user_id, integration_id, name, trigger_type,
+                                      trigger_filter, response_template,
+                                      response_type, is_active, created_at, updated_at)
+         VALUES (?, ?, ?, 'Someone else''s rule', 'comment', '{}', 'hi', 'template', 1,
+                 unixepoch(), unixepoch())",
+    )
+    .bind(rule_id)
+    .bind(other_user)
+    .bind(integration_id)
+    .execute(&state.db)
+    .await
+    .expect("seed rule");
+
+    let input = tools_automation::UpdateRuleInput {
+        rule_id: rule_id.to_string(),
+        name: Some("hijacked".to_string()),
+        trigger_filter: None,
+        response_template: None,
+        response_type: None,
+        ai_model: None,
+        is_active: None,
+        cooldown_minutes: None,
+        max_responses_per_hour: None,
+    };
+    let result = tools_automation::update_rule(&state, &input).await;
+    assert!(
+        result.is_err(),
+        "an update must not touch another user's rule"
+    );
+
+    let name: String = sqlx::query_scalar("SELECT name FROM automation_rules WHERE id = ?")
+        .bind(rule_id)
+        .fetch_one(&state.db)
+        .await
+        .expect("rule row");
+    assert_eq!(name, "Someone else's rule", "the rule must be untouched");
+}

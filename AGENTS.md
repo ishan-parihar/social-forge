@@ -729,6 +729,40 @@ When a rule lives on both sides, `tests/counting_rule_test.rs` and `tests/html_t
 
 The same applies to which providers can be offered at all: a provider whose limit is 0 (Gmail, Drive, GitHub) has no "publish a post" surface, and offering it in the composer's channel grid produced a 400 at submit time ("Content is 42 chars, max 0 for Gmail").
 
+### 9.21 The MCP surface is a CLIENT of the REST surface, not a second implementation
+
+An MCP tool and the REST endpoint for the same operation must behave the same way. Where the MCP layer re-implemented the SQL, it dropped the safety half every time: the tag write lost its ownership check and its transaction, the automation update lost its `user_id` predicate, the media delete hard-coded the local directory instead of the active storage backend.
+
+The fix is to CALL the REST handler in-process (see `mcp::rest_bridge`), so the validation and the ownership checks live in one place. A tool that cannot reach its handler (because the api module is private) makes that module `pub(crate)`.
+
+The MCP input types are three-state too: `Option<Option<T>>` with `double_option`, so `null` means "clear" and absent means "keep". A two-state input mapped with `.map(Some)` turns "clear this" into "leave this alone" - and the tool reports success.
+
+### 9.22 A plain Map or Set is NOT reactive state
+
+Svelte 5's `proxy()` returns a `Map` or a `Set` UNCHANGED - their prototype is neither `Object.prototype` nor `Array.prototype`. So `$state(new Map())` is a plain collection with no reactive tracking, and mutating it in place notifies nobody.
+
+The consequence is silent: a template guard like `{#if integrationTargets.has(intId)}` compiles to a derived with ZERO reactive dependencies, which Svelte evaluates ONCE at mount and never recomputes. The panel never appeared.
+
+The fix is to REASSIGN after every mutation (`integrationTargets = new Map(integrationTargets)`) - the idiom this codebase already used for `selectedTargets`, `providerOverride` and `groupDraftCache`. Or use `SvelteMap`/`SvelteSet` from `svelte/reactivity`.
+
+### 9.23 A keyed `{#each}` needs a key that CANNOT repeat
+
+Svelte throws `each_key_duplicate` - a HARD throw, in dev and in prod - when a keyed each sees the same key twice, and it takes the whole page down.
+
+The keys come from the data: an LLM's free-text response split on whitespace repeats itself constantly ("ai ai marketing"), and a provider's analytics series list can carry the same label twice. Dedupe the data, and make the key unique (`label + '#' + index`).
+
+### 9.24 The claim is a compare-and-set, and the UPDATE is what makes it atomic
+
+SQLite issues a deferred `BEGIN`, which takes the write lock at the FIRST WRITE, not at BEGIN. So the scheduler's `SELECT` of the due ids runs with NO lock held, and two claims can read the same id list.
+
+The guard that keeps the claim exclusive is on the UPDATE: `WHERE id IN (...) AND state = 'queued'`, with `RETURNING id` so the claim returns EXACTLY the rows it flipped. Reading them back by `state = 'publishing'` does not work - a row another claim flipped is also 'publishing', and the loser would publish it too. A post published twice is unrecoverable on a real audience.
+
+### 9.25 A media URL is stored RELATIVE, so the provider needs it ABSOLUTE
+
+`MediaPublic.url` is `/api/media/<uuid>` - a relative path, because that is what the dashboard renders. A platform cannot fetch it. The trait's `resolve_media_url` default makes it absolute against the app's public base URL, because that is correct for EVERY provider.
+
+The default used to return the attachment unchanged, with each provider opting in - and eight of the twelve Tier-1 providers did not have the override, so they published with a relative URL and failed, with the error surfacing as an opaque network failure rather than a media error.
+
 ---
 
 ## 10. Environment Variables

@@ -37,6 +37,18 @@ export interface PlatformSpec {
   maxImages: number;
   /** Max videos in one post. `Infinity` when uncapped. */
   maxVideos: number;
+  /**
+   * Max MEDIA ITEMS in one post, counting images and videos together.
+   *
+   * The server enforces this separately from the per-kind caps: X takes
+   * 4 items TOTAL, Bluesky 4, Mastodon 4, Facebook 10, Reddit 20,
+   * Threads 20. The composer only checked images and videos SEPARATELY,
+   * so 8 images + 8 videos passed the composer's checks and was
+   * rejected by the server on save.
+   *
+   * `Infinity` when the platform does not cap the total.
+   */
+  maxTotal: number;
   /** True when images and videos cannot be mixed in the same post. */
   exclusiveMedia: boolean;
   /** True when the platform rejects a post with no media at all. */
@@ -77,66 +89,66 @@ export const TIER1: readonly string[] = [
 const SPECS: Record<string, PlatformSpec> = {
   x: {
     provider: 'x', label: providerMeta('x').label, counting: 'weighted',
-    maxImages: 4, maxVideos: 1, exclusiveMedia: true,
+    maxImages: 4, maxTotal: 4, maxVideos: 1, exclusiveMedia: true,
     mediaRequired: false, titleRequired: false, handlePrefix: '@', vertical: false,
   },
   // Personal and Page accounts post through the same UGC surface with the
   // same media rules; only the identity chrome differs.
   linkedin: {
     provider: 'linkedin', label: providerMeta('linkedin').label, counting: 'plain',
-    maxImages: 20, maxVideos: 1, exclusiveMedia: false,
+    maxImages: 20, maxTotal: 20, maxVideos: 1, exclusiveMedia: false,
     mediaRequired: false, titleRequired: false, handlePrefix: '', vertical: false,
   },
   'linkedin-page': {
     provider: 'linkedin-page', label: 'LinkedIn Page', counting: 'plain',
-    maxImages: 20, maxVideos: 1, exclusiveMedia: false,
+    maxImages: 20, maxTotal: 20, maxVideos: 1, exclusiveMedia: false,
     mediaRequired: false, titleRequired: false, handlePrefix: '', vertical: false,
   },
   facebook: {
     provider: 'facebook', label: providerMeta('facebook').label, counting: 'plain',
-    maxImages: 10, maxVideos: 1, exclusiveMedia: false,
+    maxImages: 10, maxTotal: 10, maxVideos: 1, exclusiveMedia: false,
     mediaRequired: false, titleRequired: false, handlePrefix: '', vertical: false,
   },
   instagram: {
     provider: 'instagram', label: providerMeta('instagram').label, counting: 'plain',
-    maxImages: 10, maxVideos: 1, exclusiveMedia: false,
+    maxImages: 10, maxTotal: 10, maxVideos: 1, exclusiveMedia: false,
     mediaRequired: true, titleRequired: false, handlePrefix: '@', vertical: false,
   },
   'instagram-standalone': {
     provider: 'instagram-standalone', label: 'Instagram (standalone)', counting: 'plain',
-    maxImages: 10, maxVideos: 1, exclusiveMedia: false,
+    maxImages: 10, maxTotal: 10, maxVideos: 1, exclusiveMedia: false,
     mediaRequired: true, titleRequired: false, handlePrefix: '@', vertical: false,
   },
   threads: {
     provider: 'threads', label: providerMeta('threads').label, counting: 'plain',
-    maxImages: 20, maxVideos: 1, exclusiveMedia: false,
+    maxImages: 20, maxTotal: 20, maxVideos: 1, exclusiveMedia: false,
     mediaRequired: false, titleRequired: false, handlePrefix: '@', vertical: false,
   },
   // A YouTube upload IS the video. A text-only post cannot publish, so the
   // gate is "one video" and the title is mandatory metadata.
   youtube: {
     provider: 'youtube', label: providerMeta('youtube').label, counting: 'plain',
-    maxImages: 0, maxVideos: 1, exclusiveMedia: true,
+    maxImages: 0, maxTotal: 1, maxVideos: 1, exclusiveMedia: true,
     mediaRequired: true, titleRequired: true, handlePrefix: '@', vertical: true,
   },
   tiktok: {
     provider: 'tiktok', label: providerMeta('tiktok').label, counting: 'plain',
-    maxImages: 0, maxVideos: 1, exclusiveMedia: true,
+    maxImages: 0, maxTotal: 1, maxVideos: 1, exclusiveMedia: true,
     mediaRequired: true, titleRequired: false, handlePrefix: '@', vertical: true,
   },
   reddit: {
     provider: 'reddit', label: providerMeta('reddit').label, counting: 'plain',
-    maxImages: 20, maxVideos: 0, exclusiveMedia: true,
+    maxImages: 20, maxTotal: 20, maxVideos: 0, exclusiveMedia: true,
     mediaRequired: false, titleRequired: true, handlePrefix: 'u/', vertical: false,
   },
   bluesky: {
     provider: 'bluesky', label: providerMeta('bluesky').label, counting: 'plain',
-    maxImages: 4, maxVideos: 1, exclusiveMedia: true,
+    maxImages: 4, maxTotal: 4, maxVideos: 1, exclusiveMedia: true,
     mediaRequired: false, titleRequired: false, handlePrefix: '@', vertical: false,
   },
   pinterest: {
     provider: 'pinterest', label: providerMeta('pinterest').label, counting: 'plain',
-    maxImages: 1, maxVideos: 1, exclusiveMedia: true,
+    maxImages: 1, maxTotal: 1, maxVideos: 1, exclusiveMedia: true,
     mediaRequired: true, titleRequired: true, handlePrefix: '', vertical: true,
   },
 };
@@ -405,6 +417,17 @@ export function blockersFor(
     out.push({
       provider, label: spec.label,
       message: `${videos} videos - ${spec.label} accepts at most ${spec.maxVideos}`,
+    });
+  }
+  // The TOTAL, not just the per-kind counts. The server caps the total
+  // separately (X 4, Bluesky 4, Mastodon 4, Facebook 10, Reddit 20,
+  // Threads 20), so 8 images + 8 videos passed every check above and
+  // was rejected by the server on save.
+  const total = images + videos;
+  if (total > spec.maxTotal) {
+    out.push({
+      provider, label: spec.label,
+      message: `${total} media items - ${spec.label} accepts at most ${spec.maxTotal} in one post`,
     });
   }
   if (spec.exclusiveMedia && images > 0 && videos > 0) {

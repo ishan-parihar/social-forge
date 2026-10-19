@@ -23,6 +23,10 @@ pub struct MediaUploadOutput {
     pub mime_type: String,
     pub filename: String,
     pub size: i64,
+    /// The alt text, echoed back so the agent can confirm what it set.
+    /// The upload persists it, but the response did not carry it.
+    #[serde(default)]
+    pub alt: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
@@ -38,6 +42,11 @@ pub struct MediaItem {
     pub filename: String,
     pub mime_type: String,
     pub size: i64,
+    /// The alt text. The frontend's `MediaItem` declares it as a real
+    /// field, but neither the REST nor the MCP response shape carried
+    /// it, so it was always undefined.
+    #[serde(default)]
+    pub alt: Option<String>,
     pub created_at: String,
 }
 
@@ -97,6 +106,7 @@ pub async fn upload_media(
         mime_type: input.mime_type.clone(),
         filename: input.filename.clone(),
         size: data.len() as i64,
+        alt: entry.alt_text.clone(),
     }))
 }
 
@@ -180,6 +190,7 @@ pub async fn upload_from_path_with_alt(
         mime_type: mime.to_string(),
         filename: original_name,
         size: file_size as i64,
+        alt: entry.alt_text.clone(),
     }))
 }
 
@@ -204,6 +215,7 @@ pub async fn list_media(
             filename: e.original_name,
             mime_type: e.mime_type,
             size: e.file_size,
+            alt: e.alt_text,
             created_at: e.created_at.to_rfc3339(),
         })
         .collect();
@@ -523,6 +535,7 @@ pub async fn upload_from_url(
         mime_type: content_type,
         filename,
         size: bytes.len() as i64,
+        alt: entry.alt_text.clone(),
     }))
 }
 

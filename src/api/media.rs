@@ -726,6 +726,33 @@ pub async fn list(
     Ok(Json(entries.into_iter().map(MediaPublic::from).collect()))
 }
 
+/// PATCH /api/media/:id — update a media item's alt text.
+///
+/// The alt text is a real column, but there was no way to write it from
+/// the dashboard: the upload hard-coded `None` and the composer's edit
+/// box only changed a browser-side object. The founder's alt text was
+/// therefore lost on reload - and destroyed by the first save of the
+/// post, which wrote the (empty) browser value back over it.
+#[derive(Debug, serde::Deserialize)]
+pub struct UpdateMediaRequest {
+    /// The alt text. `null` clears it.
+    pub alt: Option<String>,
+}
+
+/// PATCH /api/media/:id — update a media item's alt text.
+pub async fn update(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(id): Path<Uuid>,
+    Json(body): Json<UpdateMediaRequest>,
+) -> Result<Json<MediaPublic>, AppError> {
+    let entry = queries::set_media_alt(&state.db, id, auth.user_id, body.alt.as_deref())
+        .await?
+        .ok_or_else(|| AppError::NotFound("Media not found".into()))?;
+    Ok(Json(MediaPublic::from(entry)))
+}
+
+/// DELETE /api/media/:id — delete a media item
 pub async fn delete(
     State(state): State<AppState>,
     auth: AuthenticatedUser,

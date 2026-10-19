@@ -837,17 +837,11 @@ impl SocialProvider for InstagramProvider {
         let json: serde_json::Value = resp.json().await.unwrap_or_default();
         Ok(super::parse_insights_data(&json))
     }
-
-    fn resolve_media_url(&self, attachment: &MediaAttachment, app_url: &str) -> MediaAttachment {
-        if attachment.url.starts_with("/api/media/") || attachment.url.starts_with("/media/") {
-            MediaAttachment {
-                url: format!("{}{}", app_url.trim_end_matches('/'), attachment.url),
-                ..attachment.clone()
-            }
-        } else {
-            attachment.clone()
-        }
-    }
+    // `resolve_media_url` is NOT overridden here: the trait's default
+    // makes a stored relative URL absolute, which is what every
+    // provider needs. This file used to carry its own copy of that
+    // override, and a provider that forgot it published with a relative
+    // URL and failed.
 
     async fn reply_to_comment(
         &self,

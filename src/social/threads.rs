@@ -536,17 +536,11 @@ impl SocialProvider for ThreadsProvider {
         let json = self.get_mentions(&user_id).await?;
         Ok(super::parse_graph_mentions(&json, query))
     }
-
-    fn resolve_media_url(&self, attachment: &MediaAttachment, app_url: &str) -> MediaAttachment {
-        if attachment.url.starts_with("/api/media/") || attachment.url.starts_with("/media/") {
-            MediaAttachment {
-                url: format!("{}{}", app_url.trim_end_matches('/'), attachment.url),
-                ..attachment.clone()
-            }
-        } else {
-            attachment.clone()
-        }
-    }
+    // `resolve_media_url` is NOT overridden here: the trait's default
+    // makes a stored relative URL absolute, which is what every
+    // provider needs. This file used to carry its own copy of that
+    // override, and a provider that forgot it published with a relative
+    // URL and failed.
 }
 
 impl ThreadsProvider {
@@ -1038,16 +1032,22 @@ mod tests {
         assert_eq!(e.quotes, 1);
     }
 
+    /// The boundary: Threads accepts up to 20 images or one video. The
+    /// provider's own rejection message says so ("Threads posts accept
+    /// up to 20 images or one video"), and the composer's table said 20.
+    /// The shared limit check said 10, so the composer let the founder
+    /// attach 15 images with no banner and the server rejected the post
+    /// on save. The two tests bracket the boundary.
     #[test]
-    fn publish_should_reject_11th_image() {
+    fn publish_should_reject_21st_image() {
         let provider = ThreadsProvider::new(&test_config());
-        assert!(provider.validate_media(&post_with_images(11)).is_err());
+        assert!(provider.validate_media(&post_with_images(21)).is_err());
     }
 
     #[test]
-    fn publish_should_accept_10_images() {
+    fn publish_should_accept_20_images() {
         let provider = ThreadsProvider::new(&test_config());
-        assert!(provider.validate_media(&post_with_images(10)).is_ok());
+        assert!(provider.validate_media(&post_with_images(20)).is_ok());
     }
 
     #[test]

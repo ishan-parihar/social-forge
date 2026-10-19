@@ -24,7 +24,11 @@ export interface PostSummary {
   // v25 F3: the list endpoint already returns `media` (PostWithIntegrationName
   // in src/api/posts.rs carries it) - it was just never declared here, so the
   // kanban had no way to show a card's cover image. Declared, not fetched.
-  media?: { url: string; mime_type: string; alt?: string }[] | null;
+  // The attached media. The composer sends the SERVER'S media id in
+  // each item, and the server stores `posts.media` as raw JSON, so the
+  // id comes back on load. It is what lets the composer address the
+  // stored row - to write the alt text, or to delete it.
+  media?: { id?: string; url: string; mime_type: string; alt?: string }[] | null;
   // v22 Phase 6: campaign_id for kanban filtering. Previously the
   // kanban accessed this via `as any` because the field didn't exist
   // on the type. Now it's a proper optional field.
@@ -56,7 +60,11 @@ export interface PostDetail {
   content: string; title?: string; scheduled_at?: string;
   published_at?: string; platform_post_url?: string; error_message?: string; created_at: string;
   tags?: Tag[];
-  media?: { url: string; mime_type: string; alt?: string }[] | null;
+  // The attached media. The composer sends the SERVER'S media id in
+  // each item, and the server stores `posts.media` as raw JSON, so the
+  // id comes back on load. It is what lets the composer address the
+  // stored row - to write the alt text, or to delete it.
+  media?: { id?: string; url: string; mime_type: string; alt?: string }[] | null;
   repeat_interval_days?: number | null;
   repeat_end_date?: string | null;
   group_id?: string | null;

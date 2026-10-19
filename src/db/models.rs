@@ -326,6 +326,15 @@ pub struct MediaPublic {
     pub file_size: i64,
     pub width: Option<i32>,
     pub height: Option<i32>,
+    /// The alt text the founder wrote for this media.
+    ///
+    /// The column is `alt_text` and the upload paths WRITE it, but the
+    /// response shape did not carry it - so the frontend's `MediaItem.alt`
+    /// was always undefined, and the composer could not show which
+    /// attachments have alt text. An agent that set the alt text could
+    /// not read it back either.
+    #[serde(default)]
+    pub alt: Option<String>,
     pub created_at: DateTime<Utc>,
 }
 
@@ -339,6 +348,7 @@ impl From<MediaEntry> for MediaPublic {
             file_size: m.file_size,
             width: m.width,
             height: m.height,
+            alt: m.alt_text,
             created_at: m.created_at,
         }
     }

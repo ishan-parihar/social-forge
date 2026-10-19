@@ -438,6 +438,13 @@ pub struct SchedulePostOutput {
     pub id: String,
     pub state: String,
     pub scheduled_at: String,
+    /// The live permalink of the published post.
+    ///
+    /// The publish call RETURNS this URL, and the MCP tool threw it
+    /// away - so an agent could not tell the founder where the post
+    /// went. The REST endpoint returns it.
+    #[serde(default)]
+    pub platform_post_url: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
@@ -456,9 +463,35 @@ pub struct DeletePostInput {
 pub struct UpdatePostInput {
     pub id: String,
     pub content: Option<String>,
-    pub title: Option<String>,
-    pub media: Option<serde_json::Value>,
-    pub settings: Option<serde_json::Value>,
+    /// Three-state: omitted = keep the stored value, `null` = clear it,
+    /// a value = replace it.
+    ///
+    /// The field was a plain `Option<String>`, which cannot tell "the
+    /// agent did not mention the title" from "the agent cleared the
+    /// title" - and the write was unconditional, so a `posts_update`
+    /// that only sent a new body wiped the post's media and settings.
+    #[serde(default, deserialize_with = "double_option")]
+    pub title: Option<Option<String>>,
+    /// Three-state, for the same reason as `title`.
+    #[serde(default, deserialize_with = "double_option")]
+    pub media: Option<Option<serde_json::Value>>,
+    /// Three-state, for the same reason as `title`.
+    #[serde(default, deserialize_with = "double_option")]
+    pub settings: Option<Option<serde_json::Value>>,
+}
+
+/// Deserialize a field into `Option<Option<T>>` so "absent", "null" and
+/// "a value" are three distinguishable states.
+///
+/// `Option<T>` collapses "absent" and "null" into the same `None`, which
+/// is why a plain `Option<String>` could not express "leave it alone"
+/// vs "clear it".
+fn double_option<'de, T, D>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
+where
+    T: serde::Deserialize<'de>,
+    D: serde::Deserializer<'de>,
+{
+    serde::Deserialize::deserialize(deserializer).map(Some)
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
@@ -500,28 +533,68 @@ pub async fn create_post(
         None => None,
     };
 
-    let post = PostService::create(
-        &state.db,
-        &state.broadcast,
-        crate::services::posts::CreatePostInput {
-            user_id,
-            integration_id,
-            content: input.content.clone(),
-            title: input.title.clone(),
-            media_urls: input.media.clone().unwrap_or(serde_json::json!([])),
-            scheduled_at,
-            settings: input.settings.clone().unwrap_or(serde_json::json!({})),
-            first_comment: None,
-            state: None,
-        },
-    )
-    .await?;
+    // The REST handler is the one implementation: it validates the
+    // content against the provider's OWN limits (char count, media
+    // count, media type) before writing, and returns a structured
+    // error naming the failing integration.
+    //
+    // The MCP tool called `PostService::create` directly, which only
+    // enforces the global 2000-char ceiling. So an agent could post 600
+    // characters to X, get "success", and the post would sit in
+    // `queued` until it failed at publish time with "Content is 600
+    // chars, max 280 for X" - hours later, in the scheduler log.
+    let body = crate::api::posts::CreatePostRequest {
+        integration_ids: vec![integration_id],
+        content: input.content.clone(),
+        title: input.title.clone(),
+        media: input.media.clone(),
+        settings: input.settings.clone(),
+        scheduled_at: scheduled_at.map(|d| d.to_rfc3339()),
+        tag_ids: None,
+        first_comment: None,
+        sequence: None,
+        overrides: None,
+    };
+
+    let created = super::rest_bridge::rest_result(
+        crate::api::posts::create(
+            axum::extract::State(state.clone()),
+            crate::auth::middleware::AuthenticatedUser { user_id },
+            axum::Json(body),
+        )
+        .await,
+    )?;
+
+    // `rest_result` returns `rmcp::Json<Value>`, whose inner value is
+    // what the REST handler serialized.
+    let created = created.0;
+    let posts = created
+        .get("posts")
+        .and_then(|p| p.as_array())
+        .cloned()
+        .unwrap_or_default();
+    let first = posts.first().cloned().unwrap_or(serde_json::json!({}));
 
     Ok(Json(CreatePostOutput {
-        id: post.id.to_string(),
-        state: post.state.to_string(),
-        scheduled_at: post.scheduled_at.map(|d| d.to_rfc3339()),
-        created_at: post.created_at.to_rfc3339(),
+        id: first
+            .get("id")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .to_string(),
+        state: first
+            .get("state")
+            .and_then(|v| v.as_str())
+            .unwrap_or("draft")
+            .to_string(),
+        scheduled_at: first
+            .get("scheduled_at")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
+        created_at: first
+            .get("created_at")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .to_string(),
     }))
 }
 
@@ -622,6 +695,7 @@ pub async fn schedule_post(
         id: post.id.to_string(),
         state: post.state.to_string(),
         scheduled_at: scheduled_at.to_rfc3339(),
+        platform_post_url: None,
     }))
 }
 
@@ -720,6 +794,9 @@ pub async fn update_post(
         post_id,
         SvcUpdatePostInput {
             content: input.content.clone(),
+            // The three-state fields pass straight through: absent stays
+            // absent ("keep"), `null` stays `null` ("clear"), a value
+            // stays a value ("replace").
             title: input.title.clone(),
             media: input.media.clone(),
             settings: input.settings.clone(),
@@ -744,7 +821,7 @@ pub async fn publish_post(
     let user_id = resolve_first_user(state).await?;
     let post_id = Uuid::parse_str(&input.id).map_err(|_| "Invalid post ID".to_string())?;
 
-    let _platform_url = PostService::publish(
+    let platform_url = PostService::publish(
         &state.db,
         &state.providers,
         &state.broadcast,
@@ -755,10 +832,22 @@ pub async fn publish_post(
     )
     .await?;
 
+    // The post's own schedule - NOT "now". The tool used to report
+    // `Utc::now()`, which said a post published moments ago was
+    // scheduled for the current moment: a field that looked like a
+    // schedule and was fiction.
+    let scheduled_at = PostService::get(&state.db, user_id, post_id)
+        .await
+        .ok()
+        .and_then(|p| p.scheduled_at)
+        .map(|d| d.to_rfc3339())
+        .unwrap_or_default();
+
     Ok(Json(SchedulePostOutput {
         id: post_id.to_string(),
         state: "published".into(),
-        scheduled_at: chrono::Utc::now().to_rfc3339(),
+        scheduled_at,
+        platform_post_url: Some(platform_url),
     }))
 }
 

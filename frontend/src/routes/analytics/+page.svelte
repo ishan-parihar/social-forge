@@ -509,7 +509,7 @@
       <div class="bg-surface border border-line rounded-xl p-5">
         <div class="flex items-center justify-between mb-4">
           <h2 class="text-sm font-medium text-content">Scheduled today</h2>
-          <a href="/calendar" class="text-xs text-accent hover:text-accent-strong">Open calendar</a>
+          <a href="/calendar" class="text-xs text-accent hover:text-accent-strong inline-flex items-center min-h-11">Open calendar</a>
         </div>
         {#if todayPosts.length === 0}
           <p class="text-sm text-muted py-6 text-center">Nothing queued for today.</p>
@@ -654,7 +654,15 @@
           {providers.find(p => p.value === selectedProvider)?.label || selectedProvider} metrics
         </h2>
         <div class="space-y-3">
-          {#each providerAnalytics.data as metric (metric.label)}
+          <!--
+            The key is the label AND the index. The label alone is not
+            unique: the endpoint returns the provider's WHOLE series
+            list, and a provider can emit the same label twice (LinkedIn
+            sends "connections" and "connections" for two series). A
+            repeated key is a HARD THROW in Svelte
+            (`each_key_duplicate`) and it takes the whole page down.
+          -->
+          {#each providerAnalytics.data as metric, mi (metric.label + '#' + mi)}
             {@const values = metric.data.map(d => parseFloat(d.total) || 0)}
             {@const peak = Math.max(...values, 1)}
             <div>

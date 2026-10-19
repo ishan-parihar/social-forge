@@ -57,6 +57,17 @@ export function mimeForUrl(url: string): string {
 }
 
 export const mediaApi = {
+  /**
+   * Update a media item's alt text.
+   *
+   * The alt text is a real column and a real field on the wire, but
+   * there was no way to write it: the composer's edit box changed a
+   * browser-side object only, so the alt text was lost on reload - and
+   * DESTROYED by the first save of the post, which wrote the empty
+   * browser value back over it.
+   */
+  updateAlt: (id: string, alt: string | null) =>
+    api.patch<MediaItem>(`/api/media/${id}`, { alt }),
   upload: (file: File) => {
     const fd = new FormData();
     fd.append("file", file);

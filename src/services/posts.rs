@@ -30,11 +30,24 @@ pub struct CreatePostInput {
 }
 
 /// Input for updating a post
+///
+/// THREE states per field, not two:
+///   absent -> keep the stored value
+///   `null` -> clear the field
+///   a value -> replace it
+///
+/// The two-state version (`Option<T>`) collapsed "absent" and "null",
+/// and the write was an UNCONDITIONAL `SET media = ?, settings = ?` -
+/// so a caller that sent only a new body wiped every attached image
+/// and every provider setting (the Reddit subreddit, the Pinterest
+/// board, the Instagram audio id) on the post. The post then failed at
+/// publish time with "Missing subreddit in settings", and the founder
+/// had no way to know why.
 pub struct UpdatePostInput {
     pub content: Option<String>,
-    pub title: Option<String>,
-    pub media: Option<Value>,
-    pub settings: Option<Value>,
+    pub title: Option<Option<String>>,
+    pub media: Option<Option<Value>>,
+    pub settings: Option<Option<Value>>,
 }
 
 /// Input for scheduling
@@ -160,6 +173,11 @@ impl PostService {
     }
 
     /// Update a post (verifies ownership)
+    ///
+    /// Every field is three-state: absent keeps the stored value, an
+    /// explicit null clears it, a value replaces it. The write is
+    /// conditional on the flag, so a caller that only sends a new body
+    /// keeps the post's media and settings.
     pub async fn update(
         db: &SqlitePool,
         broadcaster: &Broadcaster,
@@ -168,16 +186,37 @@ impl PostService {
         input: UpdatePostInput,
     ) -> ServiceResult<Post> {
         // Verify ownership before update
-        Self::get(db, user_id, post_id).await?;
+        let existing = Self::get(db, user_id, post_id).await?;
+
+        // Resolve each field against the stored value.
+        let content = match &input.content {
+            Some(c) => Self::sanitize_content(c, 2000),
+            None => existing.content,
+        };
+        let title = match &input.title {
+            Some(Some(t)) => Some(t.clone()),
+            Some(None) => None, // explicit clear
+            None => existing.title,
+        };
+        let media = match &input.media {
+            Some(Some(m)) => m.clone(),
+            Some(None) => serde_json::Value::Null, // explicit clear
+            None => existing.media,
+        };
+        let settings = match &input.settings {
+            Some(Some(s)) => s.clone(),
+            Some(None) => serde_json::Value::Null, // explicit clear
+            None => existing.settings,
+        };
 
         let post = queries::update_post_content(
             db,
             post_id,
             user_id,
-            &input.content.unwrap_or_default(),
-            input.title.as_deref(),
-            &input.media.unwrap_or(Value::Null),
-            &input.settings.unwrap_or(Value::Null),
+            &content,
+            title.as_deref(),
+            &media,
+            &settings,
         )
         .await
         .map_err(|e| format!("Database error: {e}"))?

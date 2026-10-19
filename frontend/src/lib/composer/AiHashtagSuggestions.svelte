@@ -23,10 +23,24 @@
     error = null;
     try {
       const result = await ai.suggestHashtags(content, abortController.signal);
-      const tags = result
-        .split(/\s+/)
-        .map((t: string) => t.replace(/^#/, "").trim())
-        .filter((t: string) => t.length > 0);
+      // DEDUPE.
+      //
+      // The backend returns the LLM's raw free-text, and the frontend
+      // splits it on whitespace. The LLM repeats itself constantly -
+      // "ai ai marketing" is a perfectly ordinary completion - and the
+      // chips are a KEYED each (`{#each hashtags as tag (tag)}`). A
+      // repeated key is a HARD THROW in Svelte (`each_key_duplicate`),
+      // and this component is rendered inside the composer: the throw
+      // took down the whole modal and the founder lost the text they
+      // were writing.
+      const tags = Array.from(
+        new Set(
+          result
+            .split(/\s+/)
+            .map((t: string) => t.replace(/^#/, "").trim())
+            .filter((t: string) => t.length > 0),
+        ),
+      );
       hashtags = tags;
     } catch (e) {
       if (e instanceof DOMException && e.name === "AbortError") return;

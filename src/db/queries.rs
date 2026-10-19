@@ -1586,10 +1586,23 @@ pub async fn get_due_posts(
     let mut tx = pool.begin().await?;
 
     // SQLite has neither data-modifying CTEs (`WITH x AS (UPDATE ...)`)
-    // nor `FOR UPDATE SKIP LOCKED`. The pool opens transactions with
-    // BEGIN IMMEDIATE (see db::create_pool), so the three steps below run
-    // inside one write transaction and the claim is still atomic:
-    // collect the due ids, flip them to 'publishing', read them back.
+    // nor `FOR UPDATE SKIP LOCKED`.
+    //
+    // The claim is made atomic by the GUARD on the UPDATE, not by the
+    // transaction: the UPDATE only flips rows that are STILL 'queued'.
+    // Two claims that read the same id list both try to flip it, and
+    // only the one that wins the write lock actually changes the row -
+    // the other matches nothing and returns no rows.
+    //
+    // The comment here used to claim "the pool opens transactions with
+    // BEGIN IMMEDIATE (see db::create_pool)". It does not: sqlx issues
+    // a deferred `BEGIN`, which takes the write lock at the FIRST
+    // WRITE, not at BEGIN. So the SELECT ran with no lock held, and
+    // two claims could read the same ids. The UPDATE's missing
+    // `state = 'queued'` guard was the other half: without it, the
+    // second claim flipped rows the first had already moved to
+    // 'publishing' and returned them - and the post was PUBLISHED
+    // TWICE.
     let sql = format!(
         r#"SELECT p.id
            FROM posts p
@@ -1615,14 +1628,29 @@ pub async fn get_due_posts(
 
     let claim_sql = format!(
         "UPDATE posts SET state = 'publishing', updated_at = unixepoch()
-         WHERE id IN ({holes})"
+         WHERE id IN ({holes}) AND state = 'queued'
+         RETURNING id"
     );
-    let mut claim = sqlx::query(&claim_sql);
+    let mut claim = sqlx::query_as::<_, (Uuid,)>(&claim_sql);
     for (id,) in &ids {
         claim = claim.bind(id);
     }
-    claim.execute(&mut *tx).await?;
+    // `RETURNING id` is what makes the claim EXCLUSIVE: it returns
+    // exactly the rows THIS statement flipped. Reading them back by
+    // `state = 'publishing'` would not do - a row another claim flipped
+    // is also 'publishing', so the loser would publish it too.
+    let claimed: Vec<(Uuid,)> = claim.fetch_all(&mut *tx).await?;
 
+    if claimed.is_empty() {
+        // Another claim took every post this one selected. Publish
+        // nothing rather than publishing a post twice.
+        tx.commit().await?;
+        return Ok(Vec::new());
+    }
+
+    let claimed_holes = std::iter::repeat_n("?", claimed.len())
+        .collect::<Vec<_>>()
+        .join(", ");
     let rows_sql = format!(
         r#"SELECT p.id, p.user_id, p.integration_id,
         p.state,
@@ -1638,10 +1666,10 @@ pub async fn get_due_posts(
         i.refresh_needed as integration_refresh_needed
       FROM posts p
       JOIN integrations i ON p.integration_id = i.id
-      WHERE p.id IN ({holes})"#
+      WHERE p.id IN ({claimed_holes})"#
     );
     let mut rows_query = sqlx::query_as::<_, PostWithIntegration>(&rows_sql);
-    for (id,) in &ids {
+    for (id,) in &claimed {
         rows_query = rows_query.bind(id);
     }
     let rows: Vec<PostWithIntegration> = rows_query.fetch_all(&mut *tx).await?;
@@ -2194,9 +2222,16 @@ pub async fn list_media(
                  ORDER BY created_at DESC
                  LIMIT ? OFFSET ?"#,
                 user_id,
+                // The bind order must match the placeholder order in the
+                // SQL: `user_id, pattern, limit, offset`. It was
+                // `user_id, limit, offset, pattern`, so the LIKE
+                // pattern received the integer LIMIT - and the search
+                // matched NOTHING. Past the first page, OFFSET received
+                // the pattern string and SQLite raised a datatype
+                // mismatch, which the error handler turned into a 500.
+                pattern,
                 limit,
                 offset,
-                pattern,
             )
             .fetch_all(pool)
             .await
@@ -2219,6 +2254,33 @@ pub async fn list_media(
             .await
         }
     }
+}
+
+/// Update a media item's alt text.
+///
+/// The alt text is a real column (`media.alt_text`, migration 0004),
+/// but nothing wrote it from the dashboard: the upload hard-coded
+/// `None` and there was no endpoint to set it, so the founder's alt
+/// text lived in the browser tab and was destroyed by the first save.
+pub async fn set_media_alt(
+    pool: &SqlitePool,
+    id: Uuid,
+    user_id: Uuid,
+    alt: Option<&str>,
+) -> Result<Option<MediaEntry>, sqlx::Error> {
+    sqlx::query_as::<_, MediaEntry>(
+        r#"UPDATE media SET alt_text = ?
+           WHERE id = ? AND user_id = ?
+           RETURNING id as "id!: Uuid", user_id as "user_id!: Uuid",
+                     original_name, storage_path, mime_type, file_size,
+                     width as "width?: i32", height as "height?: i32", alt_text,
+                     created_at as "created_at!: DateTime<Utc>""#,
+    )
+    .bind(alt)
+    .bind(id)
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await
 }
 
 pub async fn delete_media(
