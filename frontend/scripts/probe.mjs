@@ -460,8 +460,26 @@ const AUDIT = () => {
   }
 
   // ── Tap targets (advisory) ──
+  //
+  // WCAG 2.2's target-size rule is about the CLICKABLE AREA, not the
+  // control's own box. A checkbox inside its own <label> is clicked
+  // through the label, so the label is the target - measuring the 16px
+  // input instead reports a violation that does not exist. Same for an
+  // <input> inside a <button> or a <label>.
+  const targetRect = (el) => {
+    const own = el.getBoundingClientRect();
+    if (own.height >= 44 && own.width >= 44) return own;
+    if (el.tagName === 'INPUT') {
+      const wrapper = el.closest('label, button, [role="button"]');
+      if (wrapper && wrapper !== el) {
+        const r = wrapper.getBoundingClientRect();
+        if (r.width > 0 && r.height > 0) return r;
+      }
+    }
+    return own;
+  };
   for (const el of document.querySelectorAll('button,a[href],[role="button"],input,select')) {
-    const r = el.getBoundingClientRect();
+    const r = targetRect(el);
     if (r.width === 0 || r.height === 0) continue;
     if (r.height < 44 || r.width < 44) {
       warns.push({

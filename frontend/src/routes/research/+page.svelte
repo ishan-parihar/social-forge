@@ -47,6 +47,27 @@
   }
 
   /**
+   * A link URL that is safe to put in an `href`.
+   *
+   * The URL comes from an RSS feed the user subscribed to, so it is not
+   * under the app's control. `javascript:` in a feed's `<link>` would
+   * become a clickable script URL on this page. Only `http` and `https`
+   * are allowed; anything else renders as plain text.
+   */
+  function safeUrl(url: string | null | undefined): string | null {
+    if (!url) return null;
+    try {
+      const parsed = new URL(url, window.location.origin);
+      if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+        return parsed.toString();
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * The best engagement per post across the slots, used to scale the
    * bars. Without it every bar was drawn at 100% width, so the chart
    * compared nothing.
@@ -294,9 +315,9 @@
           {#each data.connected_feed_items as item (item.id)}
             <li class="flex items-start gap-3 py-1.5">
               <span class="text-xs text-muted w-24 shrink-0 pt-0.5">{formatDate(item.published_at)}</span>
-              {#if item.url}
+              {#if safeUrl(item.url)}
                 <a
-                  href={item.url}
+                  href={safeUrl(item.url)}
                   target="_blank"
                   rel="noopener noreferrer"
                   class="text-sm text-content-secondary flex-1 min-w-0 truncate hover:text-content"

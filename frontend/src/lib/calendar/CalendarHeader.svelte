@@ -46,10 +46,10 @@
        360px viewport, so the month/year title was pushed off-screen - and the
        title is the one thing you need to know which month you are looking at. -->
   <div class="flex items-center gap-2 flex-wrap">
-    <button onclick={onPrev} aria-label="Previous" class="px-2 py-1 text-sm text-muted hover:text-content rounded hover:bg-surface-hover">&larr;</button>
+    <button onclick={onPrev} aria-label="Previous" class="px-2 py-1 text-sm text-muted hover:text-content rounded hover:bg-surface-hover min-h-11 min-w-11 flex items-center justify-center">&larr;</button>
     <span class="text-lg font-semibold text-center min-w-0 sm:min-w-[200px]">{title}</span>
-    <button onclick={onNext} aria-label="Next" class="px-2 py-1 text-sm text-muted hover:text-content rounded hover:bg-surface-hover">&rarr;</button>
-    <button onclick={onToday} aria-label="Go to today" class="px-2 py-1 text-xs bg-surface-hover hover:bg-line-hover rounded">Today</button>
+    <button onclick={onNext} aria-label="Next" class="px-2 py-1 text-sm text-muted hover:text-content rounded hover:bg-surface-hover min-h-11 min-w-11 flex items-center justify-center">&rarr;</button>
+    <button onclick={onToday} aria-label="Go to today" class="px-2 py-1 text-xs bg-surface-hover hover:bg-line-hover rounded min-h-11">Today</button>
   </div>
   <div class="flex items-center gap-2 flex-wrap">
     <!-- v24-2: channel filter -->
@@ -57,7 +57,7 @@
       <select
         value={selectedIntegrationId ?? ""}
         onchange={(e) => onIntegrationFilter(e.currentTarget.value || null)}
-        class="px-2 py-1.5 bg-background-input border border-line rounded-lg text-xs text-content focus:outline-none focus:border-accent"
+        class="px-2 py-1.5 bg-background-input border border-line rounded-lg text-xs text-content focus:outline-none focus:border-accent min-h-11"
       >
         <option value="">All channels</option>
         {#each integrations as integ (integ.id)}
@@ -70,7 +70,7 @@
       <select
         value={selectedCampaignId ?? ""}
         onchange={(e) => onCampaignFilter(e.currentTarget.value || null)}
-        class="px-2 py-1.5 bg-background-input border border-line rounded-lg text-xs text-content focus:outline-none focus:border-accent"
+        class="px-2 py-1.5 bg-background-input border border-line rounded-lg text-xs text-content focus:outline-none focus:border-accent min-h-11"
       >
         <option value="">All campaigns</option>
         {#each campaigns as camp (camp.id)}
@@ -82,7 +82,7 @@
       <select
         value={selectedTagId ?? ""}
         onchange={(e) => onTagFilter(e.currentTarget.value || null)}
-        class="px-2 py-1.5 bg-background-input border border-line rounded-lg text-xs text-content focus:outline-none focus:border-accent"
+        class="px-2 py-1.5 bg-background-input border border-line rounded-lg text-xs text-content focus:outline-none focus:border-accent min-h-11"
       >
         <option value="">All tags</option>
         {#each tags as tag}
@@ -95,7 +95,7 @@
         <button
           onclick={() => onViewChange(v.key)}
           aria-label={`${v.label} view`}
-          class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium capitalize transition-colors
+          class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium capitalize transition-colors min-h-11
             {view === v.key ? 'bg-accent-fill text-accent-fg' : 'text-muted hover:text-content hover:bg-surface-hover'}"
         ><span aria-hidden="true">{v.icon}</span> {v.label}</button>
       {/each}

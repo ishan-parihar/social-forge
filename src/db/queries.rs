@@ -936,6 +936,7 @@ pub async fn list_posts_search(
     q: Option<&str>,
     integration_ids: Option<&[Uuid]>,
     tag_ids: Option<&[Uuid]>,
+    campaign_id: Option<Uuid>,
     sort: &str,
     limit: i64,
     offset: i64,
@@ -991,6 +992,7 @@ pub async fn list_posts_search(
              AND (? IS NULL OR p.id IN (
                SELECT post_id FROM post_tags WHERE tag_id IN (SELECT unhex(replace(value, '-', '')) FROM json_each(?))
              ))
+             AND (? IS NULL OR p.campaign_id = ?)
            ORDER BY (SELECT COALESCE(SUM(json_extract(point.value, '$.total')), 0)
                        FROM analytics_cache ac, json_each(ac.data) AS series,
                             json_each(json_extract(series.value, '$.data')) AS point
@@ -1024,8 +1026,9 @@ pub async fn list_posts_search(
              AND (? IS NULL OR id IN (
                SELECT post_id FROM post_tags WHERE tag_id IN (SELECT unhex(replace(value, '-', '')) FROM json_each(?))
              ))
-           ORDER BY {} LIMIT ? OFFSET ?"#,
-            order_by
+             AND (? IS NULL OR campaign_id = ?)
+            ORDER BY {} LIMIT ? OFFSET ?"#,
+             order_by
         )
     };
 
@@ -1043,6 +1046,9 @@ pub async fn list_posts_search(
         .bind(ids_json(integration_ids))
         .bind(ids_json(integration_ids));
     q_builder = q_builder.bind(ids_json(tag_ids)).bind(ids_json(tag_ids));
+    // The campaign filter: one placeholder, bound twice (`? IS NULL OR
+    // campaign_id = ?`).
+    q_builder = q_builder.bind(campaign_id).bind(campaign_id);
     q_builder = q_builder.bind(limit).bind(offset);
     q_builder.fetch_all(pool).await
 }
@@ -1055,6 +1061,7 @@ pub async fn count_posts_search(
     q: Option<&str>,
     integration_ids: Option<&[Uuid]>,
     tag_ids: Option<&[Uuid]>,
+    campaign_id: Option<Uuid>,
 ) -> Result<i64, sqlx::Error> {
     let q_pattern = q.map(|s| {
         let escaped = s
@@ -1070,9 +1077,10 @@ pub async fn count_posts_search(
              AND (? IS NULL OR state = ?)
              AND (? IS NULL OR content LIKE ? ESCAPE '\' OR title LIKE ? ESCAPE '\')
              AND (? IS NULL OR integration_id IN (SELECT unhex(replace(value, '-', '')) FROM json_each(?)))
-             AND (? IS NULL OR id IN (
-               SELECT post_id FROM post_tags WHERE tag_id IN (SELECT unhex(replace(value, '-', '')) FROM json_each(?))
-             ))"#,
+              AND (? IS NULL OR id IN (
+                SELECT post_id FROM post_tags WHERE tag_id IN (SELECT unhex(replace(value, '-', '')) FROM json_each(?))
+              ))
+              AND (? IS NULL OR campaign_id = ?)"#,
     )
     .bind(user_id)
     .bind(state_filter)
@@ -1084,6 +1092,8 @@ pub async fn count_posts_search(
     .bind(ids_json(integration_ids))
     .bind(ids_json(tag_ids))
     .bind(ids_json(tag_ids))
+    .bind(campaign_id)
+    .bind(campaign_id)
     .fetch_one(pool)
     .await?;
     Ok(row.0.unwrap_or(0))

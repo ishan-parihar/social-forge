@@ -117,7 +117,15 @@
 </div>
 
 <style>
-  .dropdown-trigger { background: none; border: none; cursor: pointer; padding: 0; color: inherit; }
+  /* The trigger takes its size from the child (a `⋯` glyph is 16px).
+     That is under the 44px target minimum, so the button itself gets a
+     minimum target and centres the glyph inside it. The glyph does not
+     move: only the button's box grows. */
+  .dropdown-trigger {
+    background: none; border: none; cursor: pointer; padding: 0; color: inherit;
+    min-height: 44px; min-width: 44px;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
   .dropdown-menu {
     position: absolute; top: 100%; margin-top: 0.25rem; z-index: 50;
     min-width: 10rem; max-width: calc(100vw - 2rem); background: var(--bg-card); border: 1px solid var(--border);

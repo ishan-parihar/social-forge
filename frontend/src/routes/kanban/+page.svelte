@@ -601,13 +601,13 @@
       <span class="text-xs text-muted">Campaign:</span>
       <button
         onclick={() => selectedCampaign = null}
-        class="px-3 py-1 text-xs rounded-lg transition-colors {!selectedCampaign ? 'bg-accent-fill text-accent-fg' : 'text-muted hover:bg-surface-hover border border-line'}"
+        class="px-3 py-1 text-xs rounded-lg transition-colors min-h-11 {!selectedCampaign ? 'bg-accent-fill text-accent-fg' : 'text-muted hover:bg-surface-hover border border-line'}"
       >All</button>
       {#each campaigns as c (c.id)}
         <div class="flex items-center gap-1">
           <button
             onclick={() => selectedCampaign = selectedCampaign === c.id ? null : c.id}
-            class="px-3 py-1 text-xs rounded-lg transition-colors flex items-center gap-1.5 {selectedCampaign === c.id ? 'bg-accent-fill text-accent-fg' : 'text-muted hover:bg-surface-hover border border-line'}"
+            class="px-3 py-1 text-xs rounded-lg transition-colors flex items-center gap-1.5 min-h-11 {selectedCampaign === c.id ? 'bg-accent-fill text-accent-fg' : 'text-muted hover:bg-surface-hover border border-line'}"
           >
             <span class="w-2 h-2 rounded-full" style="background: {c.color}"></span>
             {c.name}
@@ -633,7 +633,7 @@
         {#each [{ v: null, label: 'All' }, { v: 'urgent', label: 'Urgent' }, { v: 'high', label: 'High' }, { v: 'medium', label: 'Medium' }, { v: 'low', label: 'Low' }] as opt}
           <button
             onclick={() => priorityFilter = opt.v}
-            class="px-2 py-0.5 rounded transition-colors {priorityFilter === opt.v ? 'bg-accent-fill text-accent-fg' : 'text-muted hover:text-content hover:bg-surface-hover border border-line'}"
+            class="px-2 py-0.5 rounded transition-colors min-h-11 {priorityFilter === opt.v ? 'bg-accent-fill text-accent-fg' : 'text-muted hover:text-content hover:bg-surface-hover border border-line'}"
           >{opt.label}</button>
         {/each}
       </div>
@@ -643,7 +643,7 @@
         {#each [{ v: null, label: 'All' }, { v: 'ready_to_publish', label: 'Ready' }, { v: 'in_review', label: 'Review' }, { v: 'blocked', label: 'Blocked' }, { v: 'none', label: 'No substate' }] as opt}
           <button
             onclick={() => substateFilter = opt.v}
-            class="px-2 py-0.5 rounded transition-colors {substateFilter === opt.v ? 'bg-accent-fill text-accent-fg' : 'text-muted hover:text-content hover:bg-surface-hover border border-line'}"
+            class="px-2 py-0.5 rounded transition-colors min-h-11 {substateFilter === opt.v ? 'bg-accent-fill text-accent-fg' : 'text-muted hover:text-content hover:bg-surface-hover border border-line'}"
           >{opt.label}</button>
         {/each}
       </div>
@@ -907,7 +907,7 @@
                 <button
                   onclick={quickAddIdea}
                   disabled={!quickIdeaText.trim()}
-                  class="px-2 py-1 text-xs bg-accent-fill hover:bg-accent-fill-hover disabled:opacity-50 text-accent-fg rounded transition-colors"
+                  class="px-2 py-1 text-xs bg-accent-fill hover:bg-accent-fill-hover disabled:opacity-50 text-accent-fg rounded transition-colors min-h-11 min-w-11"
                 >+</button>
               </div>
               <!-- v22 Phase 6: channel selector for quick-add. Previously

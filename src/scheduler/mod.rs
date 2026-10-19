@@ -803,6 +803,11 @@ async fn process_due_posts(
                     let fail_payload = serde_json::json!({
                         "id": post_clone.id.to_string(),
                         "error": err_str,
+                        // The provider, so the activity log can name the
+                        // channel. Without it the sentence fell back to
+                        // "Failed on a channel" - true, but useless when
+                        // the founder has four channels.
+                        "provider": post_clone.provider_identifier,
                     });
                     bcast.send("post_failed", &fail_payload);
                     // v23: persist to events_log for the dashboard.

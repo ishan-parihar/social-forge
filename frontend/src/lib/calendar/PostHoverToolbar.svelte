@@ -40,7 +40,7 @@
   <Dropdown items={items} align="right" placement="above">
     <button
       aria-label="Post actions"
-      class="text-muted hover:text-content transition-colors text-sm leading-none px-1 py-0.5 rounded"
+      class="text-muted hover:text-content transition-colors text-sm leading-none px-1 py-0.5 rounded min-h-11 min-w-11 flex items-center justify-center"
       title="Post actions"
       onclick={(e) => e.stopPropagation()}
       onkeydown={(e) => e.stopPropagation()}

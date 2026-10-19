@@ -44,7 +44,7 @@
     >
       <div class="flex items-center justify-between mb-6">
         <h3 class="font-semibold">Post Details</h3>
-        <button onclick={onclose} aria-label="Close" class="text-muted hover:text-content text-xl">&times;</button>
+        <button onclick={onclose} aria-label="Close" class="text-muted hover:text-content text-xl min-h-11 min-w-11 flex items-center justify-center">&times;</button>
       </div>
       <div class="space-y-4">
         <div>

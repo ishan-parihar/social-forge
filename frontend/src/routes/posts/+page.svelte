@@ -337,12 +337,12 @@
     <div class="flex gap-2 items-center">
       <button
         onclick={() => groupByCampaign = !groupByCampaign}
-        class="flex items-center gap-1.5 px-3 py-1.5 whitespace-nowrap text-sm border border-line rounded-lg transition-colors {groupByCampaign ? 'bg-accent-fill text-accent-fg' : 'text-muted hover:bg-surface-hover'}"
+        class="flex items-center gap-1.5 px-3 py-1.5 whitespace-nowrap text-sm border border-line rounded-lg transition-colors min-h-11 {groupByCampaign ? 'bg-accent-fill text-accent-fg' : 'text-muted hover:bg-surface-hover'}"
       >
         <Icon name="analytics" class="w-3.5 h-3.5" />
         {groupByCampaign ? 'Grouped' : 'Group by Campaign'}
       </button>
-      <button onclick={() => composer.openCreate()} class="px-3 py-1.5 whitespace-nowrap bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg text-sm transition-colors">+ New Post</button>
+      <button onclick={() => composer.openCreate()} class="px-3 py-1.5 whitespace-nowrap bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg text-sm transition-colors min-h-11">+ New Post</button>
     </div>
   </div>
 
@@ -363,7 +363,7 @@
     <select
       value={sortBy}
       onchange={handleSortChange}
-      class="px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none"
+      class="px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none min-h-11"
       title="Sort by"
     >
       <option value="scheduled_date">Sort: Scheduled date</option>
@@ -378,12 +378,12 @@
       <span class="text-xs text-muted mr-1">Channels:</span>
       <button
         onclick={() => { filterIntegrationIds = []; currentPage = 1; load(); }}
-        class="px-2 py-1 text-[10px] rounded-md transition-colors {filterIntegrationIds.length === 0 ? 'bg-accent-fill text-accent-fg' : 'text-muted hover:bg-surface-hover border border-line'}"
+        class="px-2 py-1 text-[10px] rounded-md transition-colors min-h-11 {filterIntegrationIds.length === 0 ? 'bg-accent-fill text-accent-fg' : 'text-muted hover:bg-surface-hover border border-line'}"
       >All</button>
       {#each allIntegrations as int (int.id)}
         <button
           onclick={() => toggleIntegrationFilter(int.id)}
-          class="px-2 py-1 text-[10px] rounded-md transition-colors {filterIntegrationIds.includes(int.id) ? 'bg-accent-fill text-accent-fg' : 'text-muted hover:bg-surface-hover border border-line'}"
+          class="px-2 py-1 text-[10px] rounded-md transition-colors min-h-11 {filterIntegrationIds.includes(int.id) ? 'bg-accent-fill text-accent-fg' : 'text-muted hover:bg-surface-hover border border-line'}"
         >{int.provider_name}</button>
       {/each}
     </div>
@@ -394,7 +394,7 @@
     {#each filters as f}
       <button
         onclick={() => toggleFilter(f)}
-        class="px-3 py-1.5 text-xs capitalize rounded-md transition-colors {filter === f ? 'bg-accent-fill text-accent-fg' : 'text-muted hover:bg-surface-hover'}"
+        class="px-3 py-1.5 text-xs capitalize rounded-md transition-colors min-h-11 {filter === f ? 'bg-accent-fill text-accent-fg' : 'text-muted hover:bg-surface-hover'}"
       >{f}</button>
     {/each}
   </div>
@@ -404,7 +404,7 @@
     <div class="flex items-center justify-between bg-accent-fill/10 border border-accent/30 rounded-lg px-4 py-2">
       <div class="flex items-center gap-3">
         <span class="text-sm text-accent-strong">{selectedIds.size} selected</span>
-        <button onclick={clearSelection} class="text-xs text-muted hover:text-content">Clear</button>
+        <button onclick={clearSelection} class="text-xs text-muted hover:text-content min-h-11">Clear</button>
       </div>
       <div class="flex items-center gap-2">
         <button
@@ -488,20 +488,31 @@
           type="checkbox"
           checked={posts.length > 0 && selectedIds.size === posts.length}
           onchange={toggleSelectAll}
-          class="rounded"
+          class="rounded w-4 h-4"
           aria-label="Select all"
         />
         <span>{selectedIds.size > 0 ? `${selectedIds.size} of ${posts.length} selected` : `${totalItems} total`}</span>
       </div>
       {#each posts as post (post.id)}
         <div class="flex items-center gap-3 px-4 py-3 border-b border-line last:border-0 hover:bg-surface-hover transition-colors">
-          <input
-            type="checkbox"
-            checked={selectedIds.has(post.id)}
-            onclick={(e) => toggleSelect(post.id, e)}
-            class="rounded shrink-0"
-            aria-label="Select post"
-          />
+          <!--
+            The checkbox is 16px, which is under the 44px target minimum.
+            The LABEL carries the target: it is the clickable area, and
+            the input inside it stays the size it should look. The label
+            is 44px wide and tall, so the row is easy to hit without
+            the control itself growing.
+          -->
+          <label
+            class="flex items-center justify-center shrink-0 min-h-11 min-w-11 cursor-pointer"
+          >
+            <input
+              type="checkbox"
+              checked={selectedIds.has(post.id)}
+              onclick={(e) => toggleSelect(post.id, e)}
+              class="rounded w-4 h-4"
+              aria-label="Select post"
+            />
+          </label>
           <button
             onclick={() => composer.openEdit(post.id)}
             class="flex-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-left min-w-0"
@@ -527,11 +538,19 @@
               <span class="text-xs text-error" title={post.error_message}>!</span>
             {/if}
           </button>
-          <!-- Per-row duplicate button (R-14 / U-5) -->
+          <!--
+            Per-row duplicate button (R-14 / U-5).
+
+            The padding is what carries the target size: the glyph is
+            14px, so `py-1` gave a 22px button - well under the 44px
+            minimum. `p-2.5` around the same glyph gives 36px, and
+            `min-h-11 min-w-11` (44px) makes the target itself 44px
+            without changing the visual weight of the row.
+          -->
           <button
             onclick={() => handleDuplicate(post.id)}
             disabled={duplicatingId === post.id}
-            class="text-xs text-muted hover:text-accent disabled:opacity-50 transition-colors px-2 py-1 rounded"
+            class="flex items-center justify-center text-xs text-muted hover:text-accent disabled:opacity-50 transition-colors rounded min-h-11 min-w-11 shrink-0"
             title="Duplicate post"
             aria-label="Duplicate post"
           >
@@ -554,12 +573,12 @@
           <button
             onclick={() => handlePageChange(currentPage - 1)}
             disabled={currentPage <= 1}
-            class="px-3 py-1 text-sm rounded bg-surface-hover text-content-secondary disabled:opacity-50 hover:bg-line transition-colors"
+            class="px-3 py-1 text-sm rounded bg-surface-hover text-content-secondary disabled:opacity-50 hover:bg-line transition-colors min-h-11"
           >Previous</button>
           <button
             onclick={() => handlePageChange(currentPage + 1)}
             disabled={currentPage >= totalPages}
-            class="px-3 py-1 text-sm rounded bg-surface-hover text-content-secondary disabled:opacity-50 hover:bg-line transition-colors"
+            class="px-3 py-1 text-sm rounded bg-surface-hover text-content-secondary disabled:opacity-50 hover:bg-line transition-colors min-h-11"
           >Next</button>
         </div>
       </div>
@@ -596,7 +615,7 @@
             id="bulk-date"
             type="date"
             bind:value={bulkRescheduleDate}
-            class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none"
+            class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none min-h-11"
           />
         </div>
         <div>
@@ -607,7 +626,7 @@
             id="bulk-time"
             type="time"
             bind:value={bulkRescheduleTime}
-            class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none"
+            class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none min-h-11"
           />
         </div>
         <div>
@@ -618,7 +637,7 @@
             min="0"
             step="5"
             bind:value={bulkRescheduleSpread}
-            class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none"
+            class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none min-h-11"
           />
           <p class="text-[10px] text-faint mt-1">0 = all at the same time. 30 = first at base, second at base+30min, etc.</p>
         </div>

@@ -160,7 +160,17 @@
     const stateFilter = calendarState.state.listState === 'all'
       ? undefined
       : calendarState.state.listState === 'scheduled' ? 'queued' : calendarState.state.listState;
-    const r = await postsApi.list({ limit, offset, ...(stateFilter && { state: stateFilter }) });
+    // The channel and campaign filters apply to the list view too. The
+    // list view used to fetch EVERY post and ignore both filters, so
+    // the dropdown had no effect in one of the four views - the user
+    // picked "Twitter", switched to List, and saw every channel.
+    const r = await postsApi.list({
+      limit,
+      offset,
+      ...(stateFilter && { state: stateFilter }),
+      ...(selectedIntegrationId && { integration_ids: [selectedIntegrationId] }),
+      ...(selectedCampaignId && { campaign_id: selectedCampaignId }),
+    });
     if (r.data) {
       events = r.data.posts.map((p) =>
         toCalendarEvent(p, timezone.value, campaignColorOf(p.campaign_id)),
@@ -446,10 +456,10 @@
     <div class="flex gap-2">
       <button
         onclick={() => modals.open(GeneratorModal, {}, { title: 'AI Post Generator', size: 'max-w-lg' })}
-        class="px-3 py-1.5 text-sm border border-line rounded-lg text-muted hover:text-content hover:bg-surface-hover transition-colors"
+        class="px-3 py-1.5 text-sm border border-line rounded-lg text-muted hover:text-content hover:bg-surface-hover transition-colors min-h-11"
         title="Generate multiple posts from a topic using AI"
       >✨ Generate Posts</button>
-      <button onclick={() => composer.openCreate()} class="px-3 py-1.5 bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg text-sm transition-colors">
+      <button onclick={() => composer.openCreate()} class="px-3 py-1.5 bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg text-sm transition-colors min-h-11">
         + New Post
       </button>
     </div>

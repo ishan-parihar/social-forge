@@ -206,7 +206,13 @@
           </button>
         {:else}
           <TopBar variant="rail" />
-          <button onclick={toggleSidebar} class="text-muted hover:text-content transition-colors p-1" aria-label="Collapse sidebar" title="Collapse sidebar">
+          <!--
+            A 24x24 icon button is below the 44px target minimum. The
+            padding is what carries the target, and the glyph is centred
+            inside it, so the button looks the same but is big enough to
+            hit.
+          -->
+          <button onclick={toggleSidebar} class="text-muted hover:text-content transition-colors p-2.5 -mr-2 min-h-11 min-w-11 flex items-center justify-center" aria-label="Collapse sidebar" title="Collapse sidebar">
             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
           </button>
         {/if}
@@ -219,8 +225,13 @@
             </div>
           {/if}
           {#each section.items as item}
+            <!--
+              `py-3` (12px) + a 20px line gives a 44px-tall target, the
+              WCAG 2.2 AA minimum. At `py-2` the link was 36px, and it is
+              the app's most-used control - 13 of them, on every route.
+            -->
             <a href={item.href}
-              class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors duration-200 cursor-pointer {sidebarCollapsed ? 'justify-center' : ''}
+              class="flex items-center gap-3 px-3 py-3 rounded-lg text-sm transition-colors duration-200 cursor-pointer {sidebarCollapsed ? 'justify-center' : ''}
                 {isActive(item.href, $page.url.pathname)
                   ? 'bg-surface-hover text-accent font-medium'
                   : 'text-muted hover:text-content hover:bg-surface-hover'}"
@@ -241,7 +252,7 @@
               id="sidebar-timezone"
               value={timezone.value}
               onchange={(e) => timezone.set(e.currentTarget.value)}
-              class="w-full px-2 py-1.5 bg-background-input border border-line rounded-lg text-xs text-content focus:outline-none focus:border-accent"
+              class="w-full px-2 py-2 bg-background-input border border-line rounded-lg text-xs text-content focus:outline-none focus:border-accent min-h-11"
             >
               {#each timezone.commonTimezones as tz}
                 <option value={tz}>{tz}</option>
@@ -250,7 +261,7 @@
           </div>
           <button
             onclick={() => theme.toggle()}
-            class="flex items-center gap-2 px-2 py-1.5 text-xs text-muted hover:text-content transition-colors"
+            class="flex items-center gap-2 px-2 py-2 text-xs text-muted hover:text-content transition-colors min-h-11 w-full"
             title="Toggle dark/light mode"
           >
             {#if theme.value === 'dark'}
@@ -263,7 +274,7 @@
           </button>
           <button
             onclick={async () => { await auth.logout(); goto('/login'); }}
-            class="flex items-center gap-2 px-2 py-1.5 text-xs text-muted hover:text-error transition-colors"
+            class="flex items-center gap-2 px-2 py-2 text-xs text-muted hover:text-error transition-colors min-h-11 w-full"
             title="Log out"
           >
             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
@@ -273,7 +284,7 @@
       {:else}
         <!-- Collapsed footer: just icons -->
         <div class="px-2 py-3 border-t border-line space-y-1 flex flex-col items-center">
-          <button onclick={() => theme.toggle()} class="text-muted hover:text-content transition-colors p-1.5" title="Toggle theme">
+          <button onclick={() => theme.toggle()} class="text-muted hover:text-content transition-colors p-2.5 min-h-11 min-w-11 flex items-center justify-center" title="Toggle theme">
             {#if theme.value === 'dark'}
               <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/></svg>
             {:else}
@@ -282,7 +293,7 @@
           </button>
           <button
             onclick={async () => { await auth.logout(); goto('/login'); }}
-            class="text-muted hover:text-error transition-colors p-1.5"
+            class="text-muted hover:text-error transition-colors p-2.5 min-h-11 min-w-11 flex items-center justify-center"
             title="Log out"
           >
             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>

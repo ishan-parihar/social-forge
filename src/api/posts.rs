@@ -105,6 +105,11 @@ pub struct ListPostsQuery {
     pub integration_ids: Option<String>,
     /// Phase 5: filter by tag IDs (comma-separated).
     pub tag_ids: Option<String>,
+    /// Filter by campaign. The calendar's list view sends it, so the
+    /// campaign dropdown has the same effect in every view. The query
+    /// layer had no campaign filter at all, so the parameter was
+    /// ignored and the list showed every campaign's posts.
+    pub campaign_id: Option<Uuid>,
     /// Phase 5: sort order. One of: scheduled_date (default), created_date,
     /// engagement. Prefix with '-' for descending (e.g. '-scheduled_date').
     #[serde(default = "default_sort")]
@@ -318,6 +323,7 @@ pub async fn list(
     let use_search = q.is_some()
         || integration_ids.is_some()
         || tag_ids.is_some()
+        || query.campaign_id.is_some()
         || query.sort != "scheduled_date";
 
     let (posts, total) = if use_search {
@@ -328,6 +334,7 @@ pub async fn list(
             q,
             integration_ids.as_deref(),
             tag_ids.as_deref(),
+            query.campaign_id,
             &query.sort,
             limit,
             offset,
@@ -340,6 +347,7 @@ pub async fn list(
             q,
             integration_ids.as_deref(),
             tag_ids.as_deref(),
+            query.campaign_id,
         )
         .await?;
         (posts, total)

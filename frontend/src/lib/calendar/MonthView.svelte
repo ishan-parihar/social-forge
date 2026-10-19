@@ -241,7 +241,7 @@
                   class="group/chip flex items-center gap-1 focus-visible:outline-2 focus-visible:outline-accent {event.state === 'published' || past ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'}"
                 >
                   {#if onToggleSelect}
-                    <input type="checkbox" checked={selected.has(event.id)} aria-label="Select post for bulk actions" onclick={(e) => onToggleSelect?.(event.id, e)} class="rounded shrink-0 w-3 h-3" />
+                    <input type="checkbox" checked={selected.has(event.id)} aria-label="Select post for bulk actions" onclick={(e) => onToggleSelect?.(event.id, e)} class="rounded shrink-0 w-4 h-4" />
                   {/if}
                   <!-- v25 F3: drag affordance. A six-dot grip that only appears on
                        hover tells the user which chips are movable; without it the

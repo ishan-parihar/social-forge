@@ -34,7 +34,7 @@
       {#if ontogglenav}
         <button
           onclick={ontogglenav}
-          class="text-content hover:text-accent transition-colors p-1 -ml-1"
+          class="text-content hover:text-accent transition-colors p-2.5 -ml-2 min-h-11 min-w-11 flex items-center justify-center"
           aria-label="Toggle navigation"
         >
           <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

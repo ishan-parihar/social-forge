@@ -81,7 +81,14 @@
     if (recurring) {
       repeatEnabled = true;
       intervalDays = recurring.intervalDays;
-      endDateStr = recurring.endDate;
+      // The stored value is a full ISO instant ("...T23:59:59.000Z"), but
+      // `endDateStr` is a plain `YYYY-MM-DD` - the CalendarPopover's
+      // contract. Writing the full string back corrupted it: the next
+      // `updateRepeat()` produced "2026-11-01T23:59:59.000ZT23:59:59.000Z",
+      // which the backend rejected with "Invalid end_date format", and
+      // the popover's trigger rendered its placeholder instead of the
+      // chosen date. Take the DATE part.
+      endDateStr = recurring.endDate?.slice(0, 10) ?? "";
     } else {
       repeatEnabled = false;
     }
@@ -144,7 +151,7 @@
 
 <div class="space-y-2">
   <label class="flex items-center gap-2 text-sm cursor-pointer">
-    <input type="checkbox" bind:checked={scheduled} onchange={update} class="rounded" />
+          <input type="checkbox" bind:checked={scheduled} onchange={update} class="rounded w-4 h-4" />
     Schedule for later
   </label>
 
@@ -205,7 +212,7 @@
 
     <div class="border-t border-line pt-2 mt-2">
       <label class="flex items-center gap-2 text-sm cursor-pointer">
-        <input type="checkbox" bind:checked={repeatEnabled} onchange={updateRepeat} class="rounded" />
+          <input type="checkbox" bind:checked={repeatEnabled} onchange={updateRepeat} class="rounded w-4 h-4" />
         <span class="text-accent font-medium">Repeat</span>
       </label>
 

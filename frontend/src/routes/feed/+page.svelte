@@ -394,7 +394,7 @@
       <button
         onclick={triggerImport}
         disabled={importing}
-        class="flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-lg transition-all duration-200
+        class="flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-lg transition-all duration-200 min-h-11
           bg-surface-hover text-muted border border-line
           hover:border-line hover:text-content
           disabled:opacity-50 disabled:cursor-not-allowed"
@@ -434,7 +434,7 @@
         <div bind:this={filterRef} class="relative">
           <button
             onclick={() => showFilter = !showFilter}
-            class="flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-lg transition-all duration-200
+            class="flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-lg transition-all duration-200 min-h-11
               {showFilter || activeFilterLabel
                 ? 'bg-accent-fill/20 text-accent-strong border border-accent/30 shadow-[0_0_12px_rgb(var(--brand-rgb)/0.1)]'
                 : 'bg-surface-hover text-muted border border-line hover:border-line hover:text-content'}"
@@ -732,7 +732,7 @@
             <div class="mt-2">
               <button
                 onclick={() => commentsOpenFor = commentsOpenFor === post.id ? null : post.id}
-                class="inline-flex items-center gap-1.5 text-xs font-medium transition-colors duration-150 px-2.5 py-1 rounded-lg
+                class="inline-flex items-center gap-1.5 text-xs font-medium transition-colors duration-150 px-2.5 rounded-lg min-h-11
                   {commentsOpenFor === post.id
                     ? 'bg-accent-fill/15 text-accent-strong border border-accent/25'
                     : 'text-muted hover:text-muted hover:bg-background-input border border-transparent'}"
@@ -756,7 +756,7 @@
                     href={post.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    class="inline-flex items-center gap-1.5 text-xs font-medium transition-colors duration-150"
+                    class="inline-flex items-center gap-1.5 text-xs font-medium transition-colors duration-150 min-h-11"
                     style="color: {meta.ink}"
                   >
                     View original
@@ -773,7 +773,7 @@
                     href={platformPostUrl(post.provider, post.platform_post_id)!}
                     target="_blank"
                     rel="noopener noreferrer"
-                    class="inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-medium text-muted hover:text-content transition-colors duration-150"
+                    class="inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-medium text-muted hover:text-content transition-colors duration-150 min-h-11"
                     title="Open this post on {meta.label} to edit or delete it"
                   >
                     Manage on {meta.label}
@@ -792,7 +792,7 @@
                      and made zero backend calls. -->
                 <button
                   onclick={() => openRepurposeModal(post)}
-                  class="text-xs text-accent hover:text-accent-strong transition-colors"
+                  class="text-xs text-accent hover:text-accent-strong transition-colors inline-flex items-center min-h-11 px-1"
                   title="Create a new Social Forge post from this content"
                 >
                   ✏️ Repurpose
@@ -802,7 +802,7 @@
                      errors without re-importing. -->
                 <button
                   onclick={() => openEditModal(post)}
-                  class="text-xs text-muted hover:text-success transition-colors"
+                  class="text-xs text-muted hover:text-success transition-colors inline-flex items-center min-h-11 px-1"
                   title="Edit the cached copy of this post"
                 >
                   Edit
@@ -817,14 +817,14 @@
                       toast("Post saved", "success");
                     }
                   }}
-                  class="text-xs text-muted hover:text-warning transition-colors"
+                  class="text-xs text-muted hover:text-warning transition-colors inline-flex items-center min-h-11 px-1"
                   title="Save for later"
                 >
                   🔖 Save
                 </button>
                 <button
                   onclick={() => hidePost(post)}
-                  class="text-xs text-muted hover:text-error transition-colors"
+                  class="text-xs text-muted hover:text-error transition-colors inline-flex items-center min-h-11 px-1"
                   title="Hide from feed (does not delete on platform)"
                 >
                   Hide
