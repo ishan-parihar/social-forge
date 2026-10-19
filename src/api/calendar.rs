@@ -78,7 +78,13 @@ pub async fn get(
     let start = parse_date_or_datetime(&query.start).ok_or_else(|| {
         AppError::BadRequest("Invalid start date. Use ISO8601 (YYYY-MM-DD or full datetime)".into())
     })?;
-    let end = parse_date_or_datetime(&query.end)
+    // The `end` parameter is an INCLUSIVE DATE: "end=2026-10-31" means
+    // "through the end of the 31st", not "at 00:00:00 on the 31st".
+    // Parsing it to midnight excluded every post on the last day of the
+    // range, so the 31st cell of a month view and the Sunday column of a
+    // week view were always empty. A caller that sends a full datetime
+    // gets that exact instant (the UI sends date-only).
+    let end = parse_end_date_or_datetime(&query.end)
         .ok_or_else(|| AppError::BadRequest("Invalid end date".into()))?;
 
     // v23-4: parse optional integration_ids filter (comma-separated UUIDs).
@@ -181,6 +187,27 @@ fn parse_date_or_datetime(s: &str) -> Option<DateTime<Utc>> {
     if let Ok(naive) = NaiveDate::parse_from_str(s, "%Y-%m-%d") {
         let naive_dt = naive
             .and_hms_opt(0, 0, 0)?
+            .and_local_timezone(Utc)
+            .single()?;
+        return Some(naive_dt);
+    }
+    None
+}
+
+/// Parse the `end` of an inclusive date range.
+///
+/// A date-only `end` covers the WHOLE day, so it resolves to the last
+/// representable instant of that day. A full datetime is taken as given,
+/// because a caller that sends one is expressing an exact bound.
+fn parse_end_date_or_datetime(s: &str) -> Option<DateTime<Utc>> {
+    if let Ok(dt) = DateTime::parse_from_rfc3339(s) {
+        return Some(dt.with_timezone(&Utc));
+    }
+    if let Ok(naive) = NaiveDate::parse_from_str(s, "%Y-%m-%d") {
+        // 23:59:59.999999999 - the last instant of the day. The SQL uses
+        // `<=`, so this includes every post on the end date.
+        let naive_dt = naive
+            .and_hms_nano_opt(23, 59, 59, 999_999_999)?
             .and_local_timezone(Utc)
             .single()?;
         return Some(naive_dt);

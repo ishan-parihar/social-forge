@@ -7,6 +7,7 @@
   import { tagsApi, type Tag } from "$lib/api/tags";
   import { campaignsApi, type Campaign } from "$lib/api/campaigns";
   import { calendarState } from "$lib/stores/calendar.svelte";
+  import { timezone } from "$lib/stores/timezone.svelte";
   import { toast } from "$lib/stores/toast";
   import { realtime } from "$lib/stores/realtime";
   import { confirmModal } from "$lib/stores/modals.svelte";
@@ -99,6 +100,16 @@
     refresh();
   }
 
+  /**
+   * The campaign colour for a post, looked up from the campaign list the
+   * page already holds. The calendar chip is coloured by campaign, so the
+   * colour has to travel with the event.
+   */
+  function campaignColorOf(id: string | null | undefined): string | null {
+    if (!id) return null;
+    return allCampaigns.find((c) => c.id === id)?.color ?? null;
+  }
+
   async function fetchEvents(start: string, end: string) {
     loading = true;
     fetchError = null;
@@ -109,7 +120,9 @@
     if (selectedCampaignId) filters.campaign_id = selectedCampaignId;
     const r = await calendarApi.get(start, end, Object.keys(filters).length > 0 ? filters : undefined);
     if (r.data) {
-      events = r.data.days.flatMap(d => d.posts.map(toCalendarEvent));
+      events = r.data.days.flatMap((d) =>
+        d.posts.map((p) => toCalendarEvent(p, timezone.value, campaignColorOf(p.campaign_id))),
+      );
     } else {
       // Phase v21: improved error UX - show a full-card error state with a
       // Retry button + emit a toast so the user notices even if they've
@@ -149,7 +162,9 @@
       : calendarState.state.listState === 'scheduled' ? 'queued' : calendarState.state.listState;
     const r = await postsApi.list({ limit, offset, ...(stateFilter && { state: stateFilter }) });
     if (r.data) {
-      events = r.data.posts.map(toCalendarEvent);
+      events = r.data.posts.map((p) =>
+        toCalendarEvent(p, timezone.value, campaignColorOf(p.campaign_id)),
+      );
       calendarState.setListTotalPages(Math.max(1, Math.ceil(r.data.total / limit)));
     } else {
       fetchError = r.error || "Failed to load posts";

@@ -70,7 +70,17 @@ export const campaignsApi = {
   updateStage: (
     postId: string,
     state: string,
-    campaignId?: string,
+    /**
+     * The campaign to put the post in. Three states:
+     *   undefined -> leave the post's campaign alone
+     *   null      -> unassign the post from its campaign
+     *   a uuid     -> assign the post to that campaign
+     *
+     * The backend reads all three. Omitting the key used to NULL the
+     * column, which silently dropped a post out of its campaign on every
+     * kanban drag with no campaign filter active.
+     */
+    campaignId?: string | null,
     // v25-3: optional kanban metadata. When omitted, the existing value is
     // preserved (COALESCE on the backend). Pass an empty string to
     // `due_date` to explicitly clear it.
@@ -82,7 +92,7 @@ export const campaignsApi = {
   ) =>
     api.patch<{ updated: boolean }>(`/api/posts/${postId}/stage`, {
       state,
-      campaign_id: campaignId,
+      ...(campaignId === undefined ? {} : { campaign_id: campaignId }),
       kanban_substate: kanbanMeta?.kanban_substate,
       priority: kanbanMeta?.priority,
       due_date: kanbanMeta?.due_date,

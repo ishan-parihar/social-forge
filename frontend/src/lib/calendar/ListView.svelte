@@ -86,7 +86,11 @@
   function formatDateHeader(dateStr: string): string {
     if (dateStr === '__no_date__') return 'No date (drafts)';
     const d = new Date(dateStr + 'T00:00:00');
-    const dayName = days[d.getDay()];
+    // `days` is Monday-first (it labels the Monday-start month/week grid
+    // headers) but `Date.getDay()` is Sunday-first (0 = Sun). Indexing
+    // one with the other labelled every date one day late: a Friday read
+    // "Sat". Convert the same way `getMonthDays` does.
+    const dayName = days[(d.getDay() + 6) % 7];
     return `${dayName}, ${d.getDate()} ${monthsFull[d.getMonth()]} ${d.getFullYear()}`;
   }
 

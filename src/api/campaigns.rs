@@ -84,11 +84,38 @@ pub struct UpdateCampaignRequest {
 #[derive(Debug, Deserialize)]
 pub struct UpdateStageRequest {
     pub state: String,
-    pub campaign_id: Option<Uuid>,
+    /// Three states, not two:
+    ///   absent  -> leave the campaign alone
+    ///   `null`  -> unassign the post from its campaign
+    ///   a value -> assign the post to that campaign
+    ///
+    /// This was a plain `Option<Uuid>`, and the UPDATE assigned
+    /// `campaign_id = ?` unconditionally - so a caller that simply did not
+    /// mention the campaign (the kanban drag, with no campaign filter
+    /// active) wrote NULL and silently dropped the post out of its
+    /// campaign. The frontend contract already said "omitted = keep the
+    /// existing value" for `kanban_substate` and `priority`; `campaign_id`
+    /// now behaves the same way.
+    #[serde(default, deserialize_with = "double_option")]
+    pub campaign_id: Option<Option<Uuid>>,
     // v22 Phase 6: kanban fields that can be updated alongside state.
     pub kanban_substate: Option<String>,
     pub priority: Option<String>,
     pub due_date: Option<String>,
+}
+
+/// Deserialize a field into `Option<Option<T>>` so "absent", "null" and
+/// "a value" are three distinguishable states.
+///
+/// `Option<T>` collapses "absent" and "null" into the same `None`, which
+/// is why a plain `Option<Uuid>` could not express "leave it alone" vs
+/// "clear it".
+pub fn double_option<'de, T, D>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
+where
+    T: serde::Deserialize<'de>,
+    D: serde::Deserializer<'de>,
+{
+    serde::Deserialize::deserialize(deserializer).map(Some)
 }
 
 // ── Handlers ──────────────────────────────────────────────────
@@ -351,6 +378,17 @@ pub async fn update_stage(
         }
     };
 
+    // `campaign_id` is three-state. `COALESCE(?, campaign_id)` cannot
+    // express "clear", because a NULL bind is indistinguishable from an
+    // absent one - so the assignment is gated on an explicit flag:
+    //   flag = 0 -> leave the campaign alone
+    //   flag = 1 -> write the value (which may be NULL, to unassign)
+    let (campaign_set, campaign_value): (i64, Option<Uuid>) = match &body.campaign_id {
+        None => (0, None),
+        Some(None) => (1, None),
+        Some(Some(c)) => (1, Some(*c)),
+    };
+
     // Fetch the current state to validate the transition.
     let current_state: Option<String> =
         sqlx::query_scalar(r#"SELECT state FROM posts WHERE id = ? AND user_id = ?"#)
@@ -374,14 +412,15 @@ pub async fn update_stage(
             // Explicit set or clear.
             sqlx::query(
                 r#"UPDATE posts SET
-                      campaign_id = ?,
+                      campaign_id = CASE WHEN ? THEN ? ELSE campaign_id END,
                       kanban_substate = COALESCE(?, kanban_substate),
                       priority = COALESCE(?, priority),
                       due_date = ?,
                       updated_at = unixepoch()
                     WHERE id = ? AND user_id = ?"#,
             )
-            .bind(body.campaign_id)
+            .bind(campaign_set)
+            .bind(campaign_value)
             .bind(&body.kanban_substate)
             .bind(&body.priority)
             .bind(due_date_dt)
@@ -394,13 +433,14 @@ pub async fn update_stage(
             // Leave due_date unchanged.
             sqlx::query(
                 r#"UPDATE posts SET
-                     campaign_id = ?,
+                     campaign_id = CASE WHEN ? THEN ? ELSE campaign_id END,
                      kanban_substate = COALESCE(?, kanban_substate),
                      priority = COALESCE(?, priority),
                      updated_at = unixepoch()
                    WHERE id = ? AND user_id = ?"#,
             )
-            .bind(body.campaign_id)
+            .bind(campaign_set)
+            .bind(campaign_value)
             .bind(&body.kanban_substate)
             .bind(&body.priority)
             .bind(id)
@@ -410,13 +450,25 @@ pub async fn update_stage(
             .map_err(|e| AppError::Internal(format!("Failed to update post: {e}")))?;
         }
 
+        // The post's campaign AFTER the write, so the broadcast reports the
+        // effective value (unchanged / assigned / unassigned).
+        let effective_campaign_id: Option<Uuid> = sqlx::query_scalar(
+            "SELECT campaign_id FROM posts WHERE id = ? AND user_id = ?",
+        )
+        .bind(id)
+        .bind(auth.user_id)
+        .fetch_optional(&state.db)
+        .await
+        .ok()
+        .flatten();
+
         state.broadcast.send(
             "post_stage_changed",
             &serde_json::json!({
                 "id": id.to_string(),
                 "state": body.state,
                 "previous_state": current_state,
-                "campaign_id": body.campaign_id.map(|c| c.to_string()),
+                "campaign_id": effective_campaign_id.map(|c| c.to_string()),
             }),
         );
         return Ok(Json(serde_json::json!({ "updated": true, "noop": true })));
@@ -465,7 +517,7 @@ pub async fn update_stage(
         sqlx::query(
             r#"UPDATE posts SET
                   state = ?,
-                  campaign_id = ?,
+                  campaign_id = CASE WHEN ? THEN ? ELSE campaign_id END,
                   kanban_substate = COALESCE(?, kanban_substate),
                   priority = COALESCE(?, priority),
                   due_date = ?,
@@ -473,7 +525,8 @@ pub async fn update_stage(
                 WHERE id = ? AND user_id = ?"#,
         )
         .bind(&body.state)
-        .bind(body.campaign_id)
+        .bind(campaign_set)
+        .bind(campaign_value)
         .bind(&body.kanban_substate)
         .bind(&body.priority)
         .bind(due_date_dt)
@@ -486,14 +539,15 @@ pub async fn update_stage(
         sqlx::query(
             r#"UPDATE posts SET
                  state = ?,
-                 campaign_id = ?,
+                 campaign_id = CASE WHEN ? THEN ? ELSE campaign_id END,
                  kanban_substate = COALESCE(?, kanban_substate),
                  priority = COALESCE(?, priority),
                  updated_at = unixepoch()
                WHERE id = ? AND user_id = ?"#,
         )
         .bind(&body.state)
-        .bind(body.campaign_id)
+        .bind(campaign_set)
+        .bind(campaign_value)
         .bind(&body.kanban_substate)
         .bind(&body.priority)
         .bind(id)
@@ -504,13 +558,26 @@ pub async fn update_stage(
     }
 
     // Broadcast so other tabs / the dashboard update in real-time.
+    // The broadcast carries the post's campaign AFTER the write, so a
+    // listener sees the effective value - including "unchanged" (the
+    // post kept its campaign) and "unassigned" (it lost it).
+    let effective_campaign_id: Option<Uuid> = sqlx::query_scalar(
+        "SELECT campaign_id FROM posts WHERE id = ? AND user_id = ?",
+    )
+    .bind(id)
+    .bind(auth.user_id)
+    .fetch_optional(&state.db)
+    .await
+    .ok()
+    .flatten();
+
     state.broadcast.send(
         "post_stage_changed",
         &serde_json::json!({
             "id": id.to_string(),
             "state": body.state,
             "previous_state": current_state,
-            "campaign_id": body.campaign_id.map(|c| c.to_string()),
+            "campaign_id": effective_campaign_id.map(|c| c.to_string()),
         }),
     );
 

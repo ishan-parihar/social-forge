@@ -290,7 +290,16 @@
       draggedPost.state = newState;
       posts = [...posts];
 
-      const r = await campaignsApi.updateStage(postId, newState, selectedCampaign || undefined);
+      // A kanban drag moves the post BETWEEN COLUMNS. It must not change
+      // which campaign the post belongs to:
+      //   - with a campaign filter active, every visible card already
+      //     belongs to that campaign, so stamping it is a no-op;
+      //   - with no filter active, the card keeps its own campaign.
+      // Passing the filter (or `undefined`) here used to NULL the
+      // campaign_id of every card dragged with no filter set, silently
+      // dropping those posts out of their campaigns.
+      const campaignToKeep = draggedPost.campaign_id ?? undefined;
+      const r = await campaignsApi.updateStage(postId, newState, campaignToKeep);
       if (r.error) {
         toast(`Failed to move: ${r.error}`, 'error');
         load(); // revert

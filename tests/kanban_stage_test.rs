@@ -130,3 +130,92 @@ async fn illegal_transition_into_published_is_rejected() {
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(row(&state, post_id).await.0, "draft");
 }
+
+// ─── campaign_id is three-state ───────────────────────────────
+// The UPDATE assigned `campaign_id = ?` unconditionally, so a caller that
+// did not mention the campaign wrote NULL. The kanban drag does exactly
+// that when no campaign filter is active, which silently dropped the
+// post out of its campaign. The contract is now:
+//   absent -> unchanged   |   null -> unassign   |   a uuid -> assign
+
+/// A campaign owned by the local user, plus a draft post inside it.
+async fn seed_post_in_campaign(state: &AppState) -> (Uuid, Uuid) {
+    let campaign_id = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO campaigns (id, user_id, name) VALUES (?, ?, 'probe campaign')",
+    )
+    .bind(campaign_id)
+    .bind(DEFAULT_USER_ID)
+    .execute(&state.db)
+    .await
+    .expect("seed campaign");
+
+    let post_id = seed_draft(state).await;
+    sqlx::query("UPDATE posts SET campaign_id = ? WHERE id = ?")
+        .bind(campaign_id)
+        .bind(post_id)
+        .execute(&state.db)
+        .await
+        .expect("assign campaign");
+    (campaign_id, post_id)
+}
+
+async fn campaign_of(state: &AppState, post_id: Uuid) -> Option<Uuid> {
+    sqlx::query_scalar("SELECT campaign_id FROM posts WHERE id = ?")
+        .bind(post_id)
+        .fetch_one(&state.db)
+        .await
+        .expect("campaign_id")
+}
+
+#[tokio::test]
+async fn omitting_campaign_id_leaves_the_post_in_its_campaign() {
+    let state = state().await;
+    let (campaign_id, post_id) = seed_post_in_campaign(&state).await;
+
+    // A kanban drag with no campaign filter sends only the state.
+    let (status, body) = patch_stage(&state, post_id, r#"{"state":"queued"}"#).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(
+        campaign_of(&state, post_id).await,
+        Some(campaign_id),
+        "a drag must not drop the post out of its campaign"
+    );
+}
+
+#[tokio::test]
+async fn explicit_null_campaign_id_unassigns_the_post() {
+    let state = state().await;
+    let (_campaign_id, post_id) = seed_post_in_campaign(&state).await;
+
+    let (status, body) = patch_stage(&state, post_id, r#"{"state":"draft","campaign_id":null}"#).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(
+        campaign_of(&state, post_id).await,
+        None,
+        "an explicit null must unassign the post"
+    );
+}
+
+#[tokio::test]
+async fn a_campaign_id_value_assigns_the_post() {
+    let state = state().await;
+    let (campaign_id, post_id) = seed_post_in_campaign(&state).await;
+    let other = Uuid::new_v4();
+    sqlx::query("INSERT INTO campaigns (id, user_id, name) VALUES (?, ?, 'other')")
+        .bind(other)
+        .bind(DEFAULT_USER_ID)
+        .execute(&state.db)
+        .await
+        .expect("seed other campaign");
+
+    let (status, body) = patch_stage(
+        &state,
+        post_id,
+        &format!(r#"{{"state":"draft","campaign_id":"{other}"}}"#),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(campaign_of(&state, post_id).await, Some(other));
+    let _ = campaign_id;
+}
