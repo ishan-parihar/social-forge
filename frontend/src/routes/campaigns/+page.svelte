@@ -158,7 +158,7 @@
           onclick={() => goto(`/campaigns/${c.id}`)}
           role="button"
           tabindex={0}
-          onkeydown={(e) => { if (e.key === 'Enter') goto(`/campaigns/${c.id}`); }}
+          onkeydown={(e) => { if (e.key === 'Enter' && e.target === e.currentTarget) goto(`/campaigns/${c.id}`); }}
         >
           <div class="flex items-start justify-between mb-3">
             <div class="flex items-center gap-2">
