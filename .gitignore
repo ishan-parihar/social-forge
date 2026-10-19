@@ -67,3 +67,8 @@ frontend/package-lock.json
 
 # kb flock artifacts
 *.lock
+
+# genome runtime state (locks, temp files, recon tokens, read marks)
+*.genome-lock
+*.genome-tmp
+.genome/

@@ -1,11 +1,23 @@
-# kb.toml — social-forge's role→path map (the project-kb documentation genome, mapped in place)
+# genome.toml — social-forge's role→path map and genome modules.
+# Converted from kb.toml (2026-10-19): the same role→path map, with the
+# retired `closed` role dropped (it named the same standing-notes list as
+# `ledger`) and `dated_pattern` moved from [paths] to [core], where the
+# genome reads it.
+#
+# Pointer forms: `native:<note>` — a repo-native mechanism owns the role and
+# this tooling defers to it, never shadows it. `genome doctor` reports those
+# as legitimately-elsewhere, never as missing. `overlay:` would mark an
+# operator-overlay role (none here — single-user repo).
 #
 # social-forge already runs the genome's conventions informally: the dated
 # outline succession in docs/planning/ is the dated-frozen + supersede pattern,
-# OUTLINE-2026-10-17's standing notes are the closed list, AGENTS.md §9 is the
-# regression ledger. This map wires those mechanisms to the tooling instead of
-# duplicating them. `native:` notes defer to a repo-native mechanism;
-# `overlay:` would mark an operator-overlay role (none here — single-user repo).
+# OUTLINE standing notes are the closed list, AGENTS.md §9 is the regression
+# ledger. This map wires those mechanisms to the tooling instead of
+# duplicating them.
+[genome]
+schema_version = 2
+modules = ["core", "records", "agents"]   # the legacy kb.toml set, unchanged
+
 [paths]
 agents = "AGENTS.md"
 entry = "AGENTS.md"            # §0.6 DOCUMENT MAP is the routing table
@@ -16,14 +28,21 @@ decisions = "docs/decisions"   # AD-NNN, minted on ratified direction changes
 archive = "docs/archive"      # tombstones at the original path, INDEX.md here
 worklog = "worklog.md"         # the §8 multi-agent worklog, in-repo (path fixed 2026-10-17)
 ledger = "native:OUTLINE standing notes — 'REJECTED on evidence' items (P6.1–P6.3, B12 ceiling) + the register's rejected rows"
-closed = "native:same — the standing-notes section of the current outline is the closed list"
 regressions = "native:AGENTS.md §9 Known Pitfalls — the bites and the laws that prevent them, in prose"
 workflows = "native:the current outline's wave structure (one working queue; sequential agents by §8's design)"
 state = "native:the successor-outline pattern — each OUTLINE opens with 'State today' and supersedes its predecessor; git log carries the rest"
 feed = "native:the §8 worklog protocol (worklog.md) — sequential agents, no parallel boards needed"
 runbook = "native:AGENTS.md §3 build/test workflow + Makefile + SESSION_HOOKS.md"
+asks = "native:no operator-questions register — open questions live in TODO.md's open/blocked rows ('Owner: user', 're-open when')"
+records_index = "docs/decisions/README.md"   # the AD store's own README: what an AD is and where the standing laws live
 
+[core]
 # The dated dirs also hold living reference docs (PLAN v25, VENDOR_PINS,
 # TARGETING) — only the succession files are dated-frozen, so lint checks
 # dates on the pattern, not on every file in the dir.
 dated_pattern = "OUTLINE-|AUDIT_|GAPS_"
+
+[records]
+# No generated records index: this repo's decisions live as AD-NNN files in
+# docs/decisions/ and are listed by `genome rec list`, not by a zone.
+zones = {}
