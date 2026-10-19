@@ -641,8 +641,10 @@ impl XProvider {
                 let core = tweet.pointer("/core/user_results/result/core");
                 Some(CommentData {
                     id: id.to_string(),
-                    author_name: core
-                        .and_then(|c| c.get("name"))
+                    // Current responses keep the name in `legacy`; `core` is the older location.
+                    author_name: tweet
+                        .pointer("/core/user_results/result/legacy/name")
+                        .or_else(|| core.and_then(|c| c.get("name")))
                         .and_then(|v| v.as_str())
                         .map(String::from),
                     author_avatar: core
@@ -3330,6 +3332,22 @@ mod tests {
         assert_eq!(comments.len(), 1, "module reply must be read, focal tweet skipped");
         assert_eq!(comments[0].id, "2");
         assert_eq!(comments[0].text, "a nested reply");
+    }
+
+    #[test]
+    fn parse_should_read_author_name_from_legacy_user() {
+        let fixture = serde_json::json!({
+            "data": { "threaded_conversation_with_injections_v2": { "instructions": [
+                { "entries": [
+                    { "entryId": "tweet-2", "content": { "itemContent": { "tweet_results": { "result": {
+                        "rest_id": "2", "legacy": { "full_text": "reply" },
+                        "core": { "user_results": { "result": { "legacy": { "name": "Ishan Parihar" } } } }
+                    } } } } }
+                ]}
+            ]}}
+        });
+        let comments = XProvider::parse_graphql_comments(&fixture, "1");
+        assert_eq!(comments[0].author_name.as_deref(), Some("Ishan Parihar"));
     }
 
     #[test]
