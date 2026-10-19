@@ -20,7 +20,6 @@
 // Uses the isolated test DB from `load_dotenv_for_tests` (never data/social-forge.db).
 
 use social_forge::auth::middleware::DEFAULT_USER_ID;
-use social_forge::config::Config;
 use social_forge::db;
 use social_forge::db::queries::get_due_posts;
 use social_forge::db::SqlitePool;

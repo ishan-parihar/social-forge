@@ -195,14 +195,17 @@ fn composer_plain_text(s: &str) -> String {
         };
         let tag: String = chars[i + 1..end].iter().collect::<String>().to_ascii_lowercase();
         let name = tag
-            .trim_start_matches(|c| c == '/' || c == '!' || c == '?')
+            .trim_start_matches(['/', '!', '?'])
             .split(|c: char| c.is_whitespace() || c == '/' || c == '>')
             .next()
             .unwrap_or("")
             .to_string();
-        if name == "br" {
-            out.push('\n');
-        } else if composer_is_block(&name) && !out.is_empty() && !out.ends_with('\n') {
+        // `<br>` is a line break, and a BLOCK element ends the line -
+        // but a block only ends a line that has content, so the two
+        // cases differ in the guard, not in the action.
+        let is_line_break = name == "br";
+        let is_block_end = composer_is_block(&name) && !out.is_empty() && !out.ends_with('\n');
+        if is_line_break || is_block_end {
             out.push('\n');
         }
         i = end + 1;
@@ -258,18 +261,15 @@ fn composer_looks_like_html(s: &str) -> bool {
         }
         let rest: String = bytes[i + 1..].iter().collect();
         for tag in VOID_TAGS {
-            if rest.starts_with(tag) {
-                if matches!(rest[tag.len()..].chars().next(), Some('>') | Some(' ') | Some('/')) {
+            if let Some(after_tag) = rest.strip_prefix(tag) {
+                if matches!(after_tag.chars().next(), Some('>') | Some(' ') | Some('/')) {
                     return true;
                 }
             }
         }
         for tag in KNOWN_TAGS {
-            if rest.starts_with(tag) {
-                if matches!(
-                    rest[tag.len()..].chars().next(),
-                    Some(' ') | Some('\t') | Some('\n')
-                ) {
+            if let Some(after_tag) = rest.strip_prefix(tag) {
+                if matches!(after_tag.chars().next(), Some(' ') | Some('\t') | Some('\n')) {
                     return true;
                 }
             }
