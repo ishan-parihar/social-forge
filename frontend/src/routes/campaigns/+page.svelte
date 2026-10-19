@@ -73,16 +73,18 @@
     }
   }
 
-  async function deleteCampaign(id: string, name: string) {
+  async function archiveCampaign(id: string, name: string) {
     const ok = await modals.areYouSure({
-      title: `Delete "${name}"?`,
+      title: `Archive "${name}"?`,
       message: 'The campaign will be archived. Posts in it will be unassigned but not deleted.',
       confirmLabel: 'Archive',
       cancelLabel: 'Cancel',
       danger: true,
     });
     if (!ok) return;
-    const r = await campaignsApi.delete(id);
+    // Status, not DELETE: the DELETE route also sets deleted_at, which hides the
+    // campaign from every list, so the Archived filter could never show it.
+    const r = await campaignsApi.update(id, { status: 'archived' });
     if (r.error) {
       toast(`Failed: ${r.error}`, 'error');
     } else {
@@ -197,7 +199,7 @@
               {/if}
             </span>
             <button
-              onclick={(e) => { e.stopPropagation(); deleteCampaign(c.id, c.name); }}
+              onclick={(e) => { e.stopPropagation(); archiveCampaign(c.id, c.name); }}
               class="text-muted hover:text-error transition-colors opacity-0 group-hover:opacity-100"
               title="Archive campaign"
             >

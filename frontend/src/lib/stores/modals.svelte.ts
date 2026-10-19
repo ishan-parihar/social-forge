@@ -191,8 +191,10 @@ class ModalStore {
     });
   }
 
-  /** Internal: pending confirm dialog state (read by ModalManager). */
-  _pendingConfirm: {
+  /** Internal: pending confirm dialog state (read by ModalManager).
+   * Must be $state: a plain field never re-renders ModalManager, so the
+   * confirm never appears and areYouSure() never resolves. */
+  _pendingConfirm = $state<{
     id: string;
     opts: {
       title?: string;
@@ -202,7 +204,7 @@ class ModalStore {
       danger?: boolean;
     };
     resolve: (ok: boolean) => void;
-  } | null = null;
+  } | null>(null);
 
   /** Internal: recompute zIndex + isTop for all stack entries. */
   private _recompute(): void {

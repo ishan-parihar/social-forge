@@ -99,17 +99,19 @@
     }
   }
 
-  async function deleteCampaign() {
+  async function archiveCampaign() {
     if (!campaign) return;
     const ok = await modals.areYouSure({
-      title: `Delete "${campaign.name}"?`,
+      title: `Archive "${campaign.name}"?`,
       message: 'The campaign will be archived. Posts in it will be unassigned but not deleted.',
       confirmLabel: 'Archive',
       cancelLabel: 'Cancel',
       danger: true,
     });
     if (!ok) return;
-    const r = await campaignsApi.delete(campaign.id);
+    // Status, not DELETE: the DELETE route also sets deleted_at, which hides the
+    // campaign from every list, so the Archived filter could never show it.
+    const r = await campaignsApi.update(campaign.id, { status: 'archived' });
     if (r.error) {
       toast(`Failed: ${r.error}`, 'error');
     } else {
@@ -161,7 +163,7 @@
   {:else}
     <PageHeader title={campaign.name} subtitle={campaign.description || 'No description'}>
       <Badge variant={statusVariant[campaign.status] || 'default'}>{campaign.status}</Badge>
-      <button onclick={() => goto('/campaigns')} class="px-3 py-2 text-sm text-muted hover:text-content">
+      <button onclick={() => goto('/campaigns')} class="px-3 py-2 text-sm text-muted hover:text-content whitespace-nowrap">
         ← Back
       </button>
     </PageHeader>
@@ -270,7 +272,7 @@
           <div>
             <label for="campaign-color" class="block text-sm text-muted mb-1">Color</label>
             <div class="flex items-center gap-2">
-              <input id="campaign-color" type="color" bind:value={formColor} class="w-10 h-9 p-0 rounded cursor-pointer bg-transparent border border-line" />
+              <input id="campaign-color" type="color" bind:value={formColor} class="shrink-0 w-10 h-9 p-0 rounded cursor-pointer bg-transparent border border-line" />
               <input type="text" bind:value={formColor} class="flex-1 px-3 py-2 bg-background-input border border-line rounded text-sm focus:border-accent outline-none" />
             </div>
           </div>
@@ -316,7 +318,7 @@
           </div>
         </div>
         <div class="flex items-center justify-between pt-4 border-t border-line">
-          <button onclick={deleteCampaign} class="text-sm text-error hover:text-error/80 transition-colors">
+          <button onclick={archiveCampaign} class="text-sm text-error hover:text-error/80 transition-colors">
             Archive Campaign
           </button>
           <button onclick={saveSettings} disabled={saving || !formName.trim()} class="px-4 py-2 text-sm bg-accent-fill hover:bg-accent-fill-hover text-accent-fg disabled:opacity-50 rounded transition-colors">
