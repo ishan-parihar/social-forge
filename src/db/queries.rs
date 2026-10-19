@@ -955,6 +955,15 @@ pub async fn list_posts_search(
     });
 
     let sql: String = if sort == "engagement" {
+        // The label set comes from `metric_label_matches` - the one place
+        // the provider vocabulary is mapped - so an X post's "Retweets"
+        // counts towards the sort.
+        let engagement_labels = format!(
+            "{} OR {} OR {}",
+            metric_label_matches(METRIC_LIKES),
+            metric_label_matches(METRIC_COMMENTS),
+            metric_label_matches(METRIC_SHARES),
+        );
         // Engagement sort.
         //
         // The engagement of the user's OWN posts lives in `analytics_cache`,
@@ -1000,12 +1009,7 @@ pub async fn list_posts_search(
                         AND ac.platform_post_id = p.platform_post_id
                         AND ({engagement_labels}))) DESC
            LIMIT ? OFFSET ?"#,
-            engagement_labels = format!(
-                "{} OR {} OR {}",
-                metric_label_matches(METRIC_LIKES),
-                metric_label_matches(METRIC_COMMENTS),
-                metric_label_matches(METRIC_SHARES),
-            ),
+            engagement_labels = engagement_labels,
         )
     } else {
         format!(
