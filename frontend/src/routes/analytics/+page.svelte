@@ -251,31 +251,17 @@
   /**
    * Render an events_log row as a sentence.
    *
-   * events_log stores the same event names the SSE broadcaster emits, but the
-   * payload shape differs per event and will keep changing. So this maps the
-   * names it knows, reads only fields it recognises, and falls back to a
-   * readable de-snake_cased label for anything new rather than rendering an
-   * empty row. A wrong-shaped payload degrades to less detail; it never invents
-   * a value.
+   * The backend owns this mapping (`api::activity::event_summary`) and
+   * ships the finished sentence as `summary` on every row. This page used
+   * to carry its own copy of the map, and the two drifted: the same
+   * `first_comment_failed` row read "First comment failed" here and
+   * "First comment could not be posted" on the activity page. One owner,
+   * one sentence - so this renders the backend's `summary` and only
+   * falls back to the raw event name if a row somehow lacks one.
    */
-  const EVENT_SENTENCES: Record<string, (p: Record<string, unknown>) => string> = {
-    post_published: (p) => `Published to ${labelOf(p.provider)}`,
-    post_failed: (p) => `Failed on ${labelOf(p.provider)}`,
-    post_scheduled: (p) => `Scheduled for ${labelOf(p.provider)}`,
-    post_created: (p) => `Draft created${p.provider ? ` for ${labelOf(p.provider)}` : ""}`,
-    post_deleted: () => "Post deleted",
-    post_stage_changed: () => "Post moved back to drafts",
-    integration_connected: (p) => `${labelOf(p.provider ?? p.name)} connected`,
-    integration_disconnected: (p) => `${labelOf(p.provider ?? p.name)} disconnected`,
-  };
-  function labelOf(v: unknown): string {
-    if (typeof v === "string" && v.trim()) return providerLabel(v.trim());
-    return "a channel";
-  }
-  function eventSentence(type: string, payload: Record<string, unknown>): string {
-    const fn = EVENT_SENTENCES[type];
-    if (fn) return fn(payload ?? {});
-    return type.replace(/_/g, " ").replace(/^\w/, c => c.toUpperCase());
+  function eventSentence(evt: { event_type: string; summary?: string }): string {
+    if (evt.summary && evt.summary.trim()) return evt.summary;
+    return evt.event_type.replace(/[_.]/g, " ").replace(/^\w/, (c) => c.toUpperCase());
   }
 
   // ── Empty state ──
@@ -542,7 +528,7 @@
                   {timezone.format(evt.created_at, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
                 </span>
                 <span class="text-sm text-content-secondary flex-1 min-w-0 truncate">
-                  {eventSentence(evt.event_type, evt.payload)}
+                  {eventSentence(evt)}
                 </span>
               </li>
             {/each}

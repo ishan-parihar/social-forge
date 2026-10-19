@@ -170,7 +170,14 @@ fn str_at<'a>(payload: &'a serde_json::Value, key: &str) -> Option<&'a str> {
     payload.get(key).and_then(|v| v.as_str()).filter(|s| !s.is_empty())
 }
 
-fn event_summary(event_type: &str, payload: &serde_json::Value) -> String {
+/// The one sentence for one `events_log` row.
+///
+/// This is the SINGLE OWNER of the event-to-sentence mapping. The
+/// analytics page's "Recent activity" widget renders the same rows, so it
+/// consumes this function's output (via `/api/events/recent`, which now
+/// returns a `summary` field) instead of carrying a second copy of the
+/// map that drifts.
+pub fn event_summary(event_type: &str, payload: &serde_json::Value) -> String {
     let title = str_at(payload, "title")
         .or_else(|| str_at(payload, "content"))
         .or_else(|| str_at(payload, "post_title"));
@@ -178,14 +185,34 @@ fn event_summary(event_type: &str, payload: &serde_json::Value) -> String {
 
     match event_type {
         "post_published" => match (title, provider) {
-            (Some(t), Some(p)) => format!("Published “{t}” to {p}"),
+            (Some(t), Some(p)) => format!("Published “{t}” to {}", channel_label(p)),
             (Some(t), None) => format!("Published “{t}”"),
-            (None, Some(p)) => format!("Published a post to {p}"),
+            (None, Some(p)) => format!("Published a post to {}", channel_label(p)),
             (None, None) => "Published a post".into(),
         },
         "post_failed" => match str_at(payload, "error") {
             Some(e) => format!("Publish failed: {e}"),
             None => "Publish failed".into(),
+        },
+        "post_scheduled" => match (title, provider) {
+            (Some(t), Some(p)) => format!("Scheduled “{t}” for {}", channel_label(p)),
+            (Some(t), None) => format!("Scheduled “{t}”"),
+            (None, Some(p)) => format!("Scheduled a post for {}", channel_label(p)),
+            (None, None) => "Scheduled a post".into(),
+        },
+        "post_created" => match provider {
+            Some(p) => format!("Draft created for {}", channel_label(p)),
+            None => "Draft created".into(),
+        },
+        "post_deleted" => "Post deleted".into(),
+        "post_stage_changed" => "Post moved back to drafts".into(),
+        "integration_connected" => match str_at(payload, "name").or(provider) {
+            Some(p) => format!("{} connected", channel_label(p)),
+            None => "A channel connected".into(),
+        },
+        "integration_disconnected" => match str_at(payload, "name").or(provider) {
+            Some(p) => format!("{} disconnected", channel_label(p)),
+            None => "A channel disconnected".into(),
         },
         "first_comment_failed" => "First comment could not be posted".into(),
         other => {
@@ -195,6 +222,35 @@ fn event_summary(event_type: &str, payload: &serde_json::Value) -> String {
             format!("Event: {name}")
         }
     }
+}
+
+/// A provider id rendered for a human.
+///
+/// The provider registry is not reachable from a pure function, and the
+/// ids the emitters write are the registry's keys (`x`, `linkedin`,
+/// `bluesky`). Capitalising them gives the same word a reader expects
+/// without a second copy of the display-name table.
+fn channel_label(provider: &str) -> String {
+    let p = provider.trim();
+    if p.is_empty() {
+        return "a channel".into();
+    }
+    // A payload that already carries a display name ("X (Twitter)") is
+    // used verbatim.
+    if p.chars().any(|c| c.is_uppercase()) {
+        return p.to_string();
+    }
+    let mut out = String::with_capacity(p.len());
+    for (i, ch) in p.chars().enumerate() {
+        if i == 0 {
+            out.extend(ch.to_uppercase());
+        } else if ch == '_' || ch == '-' {
+            out.push(' ');
+        } else {
+            out.push(ch);
+        }
+    }
+    out
 }
 
 fn automation_summary(trigger_type: &str, status: &str, error: Option<&str>) -> String {
@@ -387,4 +443,43 @@ pub async fn list(
 /// before the first query rather than after.
 fn epoch_now() -> i64 {
     chrono::Utc::now().timestamp()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::event_summary;
+    use serde_json::json;
+
+    #[test]
+    fn published_sentence_names_the_channel() {
+        let p = json!({"title": "Launch", "provider": "x"});
+        assert_eq!(event_summary("post_published", &p), "Published “Launch” to X");
+    }
+
+    #[test]
+    fn every_persisted_event_type_has_a_handled_sentence() {
+        // The scheduler persists exactly these three types
+        // (`send_and_log` in src/scheduler/mod.rs). If one is added there
+        // without a case here, the sentence degrades to "Event: ..." and
+        // the dashboard shows a log line instead of a sentence.
+        for t in ["post_published", "post_failed", "first_comment_failed"] {
+            let s = event_summary(t, &json!({"title": "T", "provider": "x"}));
+            assert!(!s.starts_with("Event: "), "{t} has no handled sentence: {s}");
+        }
+    }
+
+    #[test]
+    fn unknown_event_type_degrades_to_words_not_a_log_line() {
+        let s = event_summary("post.created", &json!({}));
+        assert_eq!(s, "Event: post created");
+    }
+
+    #[test]
+    fn channel_label_keeps_a_real_display_name_verbatim() {
+        let p = json!({"provider": "X (Twitter)"});
+        assert_eq!(
+            event_summary("integration_connected", &p),
+            "X (Twitter) connected"
+        );
+    }
 }

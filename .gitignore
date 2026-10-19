@@ -48,6 +48,8 @@ PROVIDER_AUDIT.md
 
 # Release artifacts (built locally, uploaded via gh release)
 dist/
+# Probe output: regenerated screenshots + report, never source
+frontend/probe-out/
 frontend/package-lock.json
 .gstack/
 

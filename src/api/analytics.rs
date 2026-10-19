@@ -651,6 +651,22 @@ pub struct EventLogEntry {
     pub created_at: chrono::DateTime<chrono::Utc>,
 }
 
+/// A row of `events_log` plus the sentence the UI shows for it.
+///
+/// The sentence is computed HERE, by the same function the read-only
+/// activity log uses (`crate::api::activity::event_summary`). The analytics
+/// page used to carry its own copy of that map, and the two drifted: the
+/// same `first_comment_failed` row read "First comment failed" on the
+/// dashboard and "First comment could not be posted" on the activity page.
+/// One owner, one sentence.
+#[derive(Debug, Serialize)]
+pub struct EventLogEntryWithSummary {
+    #[serde(flatten)]
+    pub entry: EventLogEntry,
+    /// Human-readable one-liner. The frontend renders this verbatim.
+    pub summary: String,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct RecentEventsQuery {
     pub limit: Option<i32>,
@@ -666,7 +682,7 @@ pub async fn get_recent_events(
     State(state): State<AppState>,
     auth: AuthenticatedUser,
     Query(query): Query<RecentEventsQuery>,
-) -> Result<Json<Vec<EventLogEntry>>, AppError> {
+) -> Result<Json<Vec<EventLogEntryWithSummary>>, AppError> {
     let limit = query.limit.unwrap_or(10).clamp(1, 100) as i64;
     let entries: Vec<EventLogEntry> = sqlx::query_as(
         r#"SELECT id, event_type, payload, created_at
@@ -679,6 +695,13 @@ pub async fn get_recent_events(
     .bind(limit)
     .fetch_all(&state.db)
     .await?;
+    let entries = entries
+        .into_iter()
+        .map(|entry| {
+            let summary = crate::api::activity::event_summary(&entry.event_type, &entry.payload);
+            EventLogEntryWithSummary { entry, summary }
+        })
+        .collect();
     Ok(Json(entries))
 }
 

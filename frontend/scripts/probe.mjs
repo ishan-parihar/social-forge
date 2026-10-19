@@ -318,6 +318,147 @@ const AUDIT = () => {
     }
   }
 
+  // ── Craft checks (from the website-design skill's probe) ──
+  //
+  // The repo's own probe covers contrast, overflow, headings and overlap.
+  // These four catch the defects a dashboard actually ships with: a word
+  // split mid-letter by a track that is too narrow, a web font that was
+  // never loaded (so the page silently renders in a fallback face), a
+  // grid child squeezed to 0px, and a type system that has sprawled past
+  // the point where it reads as a system.
+
+  const sel = (e) => {
+    if (!e || e.nodeType !== 1) return '?';
+    let s = e.tagName.toLowerCase();
+    if (e.id) return s + '#' + e.id;
+    if (e.classList.length) s += '.' + [...e.classList].slice(0, 2).join('.');
+    return s;
+  };
+
+  const shown = (e) => {
+    if (e.checkVisibility && !e.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })) return false;
+    for (let n = e; n && n.nodeType === 1; n = n.parentElement) {
+      const s = getComputedStyle(n);
+      if (s.display === 'none' || s.visibility === 'hidden' || +s.opacity === 0) return false;
+    }
+    return true;
+  };
+
+  // ── Document basics ──
+  if (!document.documentElement.lang) {
+    fails.push({ check: 'doc', detail: 'html has no lang attribute', selector: 'html' });
+  }
+  if (!document.title.trim()) {
+    fails.push({ check: 'doc', detail: 'document has no <title>', selector: 'head' });
+  }
+  if (!document.querySelector('meta[name="viewport"]')) {
+    fails.push({ check: 'doc', detail: 'no meta viewport', selector: 'head' });
+  }
+
+  // ── Collapsed grid/flex items ──
+  // A card with no width is invisible, but the row around it still occupies
+  // space, so the page looks like a gap rather than a bug.
+  for (const g of document.querySelectorAll('*')) {
+    const s = getComputedStyle(g);
+    if (!/(grid|flex)/.test(s.display) || !shown(g)) continue;
+    for (const c of g.children) {
+      if (!shown(c) || !c.textContent.trim() || getComputedStyle(c).position === 'absolute') continue;
+      if (c.getBoundingClientRect().width >= 2) continue;
+      // A zero-width fill inside a progress track is INTENTIONAL: the bar
+      // is at 0%, and the track itself is the visible element. The same is
+      // true of a fill whose own width is set inline. Only a genuinely
+      // squeezed CONTENT block is a defect, so require the element to be
+      // laid out by the parent's track sizing rather than sized by itself.
+      const cs = getComputedStyle(c);
+      if (cs.width !== 'auto' || cs.inlineSize !== 'auto') continue;
+      if (cs.flexBasis && cs.flexBasis !== 'auto' && cs.flexBasis !== '0px') continue;
+      fails.push({
+        check: 'collapsed-item',
+        detail: `${sel(c)} ("${c.textContent.trim().slice(0, 28)}") is squeezed to 0px wide`,
+        selector: sel(c),
+      });
+    }
+  }
+
+  // ── Broken words ──
+  // A word of 4+ letters at 18px+ that renders on two lines means the track
+  // is too narrow and the word is being split mid-letter.
+  const textNodes = [];
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  while (walker.nextNode()) {
+    const t = walker.currentNode;
+    if (!t.textContent.trim()) continue;
+    const el = t.parentElement;
+    if (!el || ['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE'].includes(el.tagName)) continue;
+    if (!shown(el)) continue;
+    textNodes.push({ el, tn: t, t: t.textContent.trim().slice(0, 32) });
+  }
+  for (const n of textNodes) {
+    const fs = parseFloat(getComputedStyle(n.el).fontSize);
+    if (fs < 18) continue;
+    const re = /\S+/g;
+    let m;
+    while ((m = re.exec(n.tn.textContent))) {
+      const w = m[0];
+      if (w.length < 4 || /[-‐‑/]/.test(w)) continue;
+      const r = document.createRange();
+      r.setStart(n.tn, m.index);
+      r.setEnd(n.tn, m.index + w.length);
+      const rects = [...r.getClientRects()].filter((q) => q.width > 1);
+      if (rects.length > 1 && Math.abs(rects[0].top - rects[rects.length - 1].top) > 2) {
+        fails.push({
+          check: 'broken-word',
+          detail: `"${w}" splits across lines at ${fs}px in ${sel(n.el)} (${Math.round(n.el.getBoundingClientRect().width)}px wide)`,
+          selector: sel(n.el),
+        });
+        break;
+      }
+    }
+  }
+
+  // ── Font fallback ──
+  // A named face with no @font-face (or a @font-face that never loaded)
+  // silently renders in the fallback, so the type voice the design asked for
+  // is not the type voice on screen.
+  const norm = (f) => f.trim().replace(/^["']|["']$/g, '').toLowerCase();
+  const loaded = new Set(
+    [...document.fonts].filter((f) => f.status === 'loaded').map((f) => norm(f.family))
+  );
+  const declared = new Set([...document.fonts].map((f) => norm(f.family)));
+  const systemFace =
+    /^(ui-|system-ui|-apple-system|blinkmacsystemfont|segoe ui|roboto$|helvetica|arial|georgia|times|menlo|monaco|consolas|courier|sfmono|sans-serif|serif|monospace|cursive|fantasy|math|emoji)/;
+  const asked = new Map();
+  for (const n of textNodes) {
+    const f = norm(getComputedStyle(n.el).fontFamily.split(',')[0]);
+    asked.set(f, (asked.get(f) || 0) + 1);
+  }
+  for (const [f, count] of asked) {
+    if (systemFace.test(f) || loaded.has(f)) continue;
+    fails.push({
+      check: 'font-fallback',
+      detail: `"${f}" is asked for by ${count} text nodes but ${declared.has(f) ? 'its @font-face never loaded' : 'no @font-face declares it'}`,
+      selector: 'html',
+    });
+  }
+
+  // ── Type and colour sprawl ──
+  // Past a point the type system stops being a system. These are advisory:
+  // a dense dashboard legitimately carries more sizes than a landing page.
+  const sizes = new Set(textNodes.map((n) => Math.round(parseFloat(getComputedStyle(n.el).fontSize))));
+  const colors = new Set(textNodes.map((n) => getComputedStyle(n.el).color));
+  if (sizes.size > 16) {
+    warns.push({
+      check: 'type-sprawl',
+      detail: `${sizes.size} distinct font sizes (${[...sizes].sort((a, b) => a - b).join(', ')})`,
+    });
+  }
+  if (colors.size > 16) {
+    warns.push({
+      check: 'color-sprawl',
+      detail: `${colors.size} distinct text colors`,
+    });
+  }
+
   // ── Tap targets (advisory) ──
   for (const el of document.querySelectorAll('button,a[href],[role="button"],input,select')) {
     const r = el.getBoundingClientRect();
@@ -397,7 +538,7 @@ async function main() {
     args: ['--no-sandbox', '--disable-dev-shm-usage'],
   });
 
-  const summary = { fails: [], warns: [], visits: 0, errors: [] };
+  const summary = { fails: [], warns: [], visits: 0, errors: [], notFound: [] };
 
   for (const theme of THEMES) {
     const context = await browser.newContext({
@@ -449,6 +590,14 @@ async function main() {
           check: 'http-5xx',
           detail: `HTTP ${res.status()} ${res.url()}`,
         });
+      } else if (res.status() === 404) {
+        // A 404 is a defect the visitor can trigger: the page asked for
+        // something the server does not serve. Record the URL, not just
+        // the count, so the report names the broken call.
+        const url = res.url();
+        // The favicon is not part of the app surface.
+        if (url.includes('/favicon')) return;
+        summary.notFound.push({ theme, url });
       }
     });
 
@@ -527,18 +676,55 @@ async function main() {
       lines.push(`  ! ${e.detail}`);
     }
   }
+  if (summary.notFound.length) {
+    lines.push('');
+    lines.push(`404 responses: ${summary.notFound.length}`);
+    const seen = new Map();
+    for (const n of summary.notFound) {
+      const k = n.url;
+      seen.set(k, (seen.get(k) || 0) + 1);
+    }
+    for (const [url, n] of seen) {
+      lines.push(`  ? ${n}x ${url}`);
+    }
+  }
   lines.push('');
   lines.push(`WARN: ${summary.warns.length}`);
   const byCheck = {};
   for (const w of summary.warns) {
     (byCheck[w.check] ||= []).push(w);
   }
-  for (const [check, items] of Object.entries(byCheck)) {
-    lines.push(`  · ${check}: ${items.length}`);
-    for (const w of items.slice(0, 6)) {
-      lines.push(`      ${w.route} @${w.width}px — ${w.detail}`);
+    for (const [check, items] of Object.entries(byCheck)) {
+      lines.push(`  · ${check}: ${items.length}`);
+      // Break the advisory down by width, so "3002 warnings" becomes
+      // "these are all the 375px drawer" or "these are everywhere".
+      const byWidth = {};
+      for (const w of items) {
+        const k = `${w.width}px`;
+        byWidth[k] = (byWidth[k] || 0) + 1;
+      }
+      lines.push(
+        `      by width: ${Object.entries(byWidth)
+          .map(([k, v]) => `${k}=${v}`)
+          .join(' ')}`
+      );
+      // Group by the offending element so the same control is not counted
+      // 78 times as 78 separate findings.
+      const byControl = new Map();
+      for (const w of items) {
+        const label = (w.detail.match(/— "(.*)"/) || [0, "?"])[1];
+        const key = `${label}`;
+        byControl.set(key, (byControl.get(key) || 0) + 1);
+      }
+      const ranked = [...byControl.entries()].sort((a, b) => b[1] - a[1]);
+      lines.push(`      by control (top 15 of ${ranked.length}):`);
+      for (const [label, n] of ranked.slice(0, 15)) {
+        lines.push(`        ${n}x ${label}`);
+      }
+      for (const w of items.slice(0, 6)) {
+        lines.push(`      ${w.route} @${w.width}px — ${w.detail}`);
+      }
     }
-  }
 
   const report = lines.join('\n');
   fs.writeFileSync(path.join(OUT_DIR, 'report.txt'), report);

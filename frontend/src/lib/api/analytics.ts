@@ -74,6 +74,12 @@ export interface EventLogEntry {
   event_type: string;
   payload: Record<string, unknown>;
   created_at: string;
+  /**
+   * The human-readable sentence for this row, computed by the backend
+   * (`api::activity::event_summary`). The backend owns this mapping so the
+   * activity log and this widget cannot disagree.
+   */
+  summary: string;
 }
 
 const daysQuery = (d?: number) => d ? `?days=${d}` : '';
