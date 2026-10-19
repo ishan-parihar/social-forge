@@ -17,6 +17,45 @@ export interface ListMediaParams {
   search?: string;
 }
 
+/**
+ * The mime type of a media URL, from its extension.
+ *
+ * The platform rules classify media by mime type - `image/*` is an
+ * image, `video/*` is a video - so a wrong mime type miscounts the
+ * media. The library picker used to label every non-image
+ * `application/octet-stream`, which is neither: an MP4 from the
+ * library was counted as neither an image nor a video, the composer's
+ * video count was wrong, and X's "images and video cannot be mixed"
+ * rule fired on a post that held one video.
+ *
+ * An unknown extension falls back to `application/octet-stream`, which
+ * is the honest answer.
+ */
+export function mimeForUrl(url: string): string {
+  const ext = (url.split('?')[0].split('#')[0].match(/\.([a-z0-9]+)$/i)?.[1] ?? '').toLowerCase();
+  const table: Record<string, string> = {
+    png: 'image/png',
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    webp: 'image/webp',
+    gif: 'image/gif',
+    avif: 'image/avif',
+    svg: 'image/svg+xml',
+    mp4: 'video/mp4',
+    m4v: 'video/mp4',
+    mov: 'video/quicktime',
+    webm: 'video/webm',
+    mkv: 'video/x-matroska',
+    avi: 'video/x-msvideo',
+    mp3: 'audio/mpeg',
+    m4a: 'audio/mp4',
+    wav: 'audio/wav',
+    ogg: 'audio/ogg',
+    pdf: 'application/pdf',
+  };
+  return table[ext] ?? 'application/octet-stream';
+}
+
 export const mediaApi = {
   upload: (file: File) => {
     const fd = new FormData();

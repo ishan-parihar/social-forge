@@ -11,7 +11,7 @@
   // solo-founder tool). The native File API + our existing mediaApi
   // covers all the needed functionality.
 
-  import { mediaApi, type MediaItem } from "$lib/api/media";
+  import { mediaApi, mimeForUrl, type MediaItem } from "$lib/api/media";
   import MediaPopover from "$lib/media/MediaPopover.svelte";
 
   let { items = [], onAdd, onRemove, onReorder }: {
@@ -94,11 +94,18 @@
 
   // Library pick.
   function handlePopoverSelect(url: string) {
-    const isImage = /\.(png|jpe?g|webp|gif|avif|svg)$/i.test(url);
+    // The mime type has to be RIGHT, not just "not an image". It used to
+    // be `application/octet-stream` for anything that was not an image,
+    // but the platform rules classify media by mime type
+    // (`image/*` is an image, `video/*` is a video) - so an MP4 from the
+    // library was counted as neither, the composer's video count was
+    // wrong, and X's "images and video cannot be mixed" rule fired on a
+    // post that had only one video.
+    const mime = mimeForUrl(url);
     onAdd?.({
       id: crypto.randomUUID(),
       url,
-      mime_type: isImage ? 'image/jpeg' : 'application/octet-stream',
+      mime_type: mime,
       original_name: url.split('/').pop() || 'library-media',
       file_size: 0,
     });
