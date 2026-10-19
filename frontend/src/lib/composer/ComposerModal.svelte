@@ -1333,7 +1333,7 @@
       <div class="flex items-center gap-2 shrink-0">
         <button
           onclick={() => showAi = !showAi}
-          class="px-3 py-1.5 min-h-11 text-sm border border-line rounded-lg transition-colors {showAi ? 'bg-accent-soft text-accent border-accent/40' : 'text-muted hover:text-content'}"
+          class="px-3 py-1.5 min-h-11 min-w-11 text-sm border border-line rounded-lg transition-colors {showAi ? 'bg-accent-soft text-accent border-accent/40' : 'text-muted hover:text-content'}"
         >AI</button>
         <!-- Preview toggle: on mobile the pane is a full-width stack below the
              editor, so this reveals it in place instead of side by side. -->

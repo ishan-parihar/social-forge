@@ -145,3 +145,159 @@ fn an_unterminated_angle_bracket_is_text() {
     assert_eq!(strip_html_tags("5 < 10"), "5 < 10");
     assert_eq!(strip_html_tags("open <br"), "open <br");
 }
+
+// ─── The composer and the server must agree ───────────────────
+//
+// The composer's `plainText` (frontend/src/lib/composer/platforms.ts)
+// and the server's `sanitize_content` are two implementations of one
+// rule, in two languages. The character count the composer shows is
+// the count of THIS string, so if the two disagree the number on
+// screen is the count of a different post than the one that gets
+// published.
+//
+// They disagreed once: the browser stripped on any `<` followed by a
+// letter, while the server (behind `looks_like_html`) only converted
+// on EVIDENCE of markup. A post reading "Use <div> for layout"
+// measured 19 in the composer and was stored as 23.
+//
+// The browser's implementation is transcribed here and compared against
+// the server's.
+
+/// The composer's `plainText`, transcribed from
+/// frontend/src/lib/composer/platforms.ts.
+fn composer_plain_text(s: &str) -> String {
+    if !composer_looks_like_html(s) {
+        return s.trim().to_string();
+    }
+    let mut out = String::new();
+    let chars: Vec<char> = s.chars().collect();
+    let mut i = 0usize;
+    while i < chars.len() {
+        if chars[i] != '<' {
+            out.push(chars[i]);
+            i += 1;
+            continue;
+        }
+        let next = chars.get(i + 1).copied();
+        let is_tag = matches!(next, Some(c) if c.is_ascii_alphabetic() || c == '/' || c == '!' || c == '?');
+        if !is_tag {
+            out.push('<');
+            i += 1;
+            continue;
+        }
+        let rest: String = chars[i + 1..].iter().collect();
+        let lower = rest.to_ascii_lowercase();
+        let end = lower.find('>').map(|p| p + i + 1);
+        let Some(end) = end else {
+            out.push('<');
+            i += 1;
+            continue;
+        };
+        let tag: String = chars[i + 1..end].iter().collect::<String>().to_ascii_lowercase();
+        let name = tag
+            .trim_start_matches(|c| c == '/' || c == '!' || c == '?')
+            .split(|c: char| c.is_whitespace() || c == '/' || c == '>')
+            .next()
+            .unwrap_or("")
+            .to_string();
+        if name == "br" {
+            out.push('\n');
+        } else if composer_is_block(&name) && !out.is_empty() && !out.ends_with('\n') {
+            out.push('\n');
+        }
+        i = end + 1;
+    }
+    // Collapse the runs of blank lines.
+    let mut result = String::new();
+    let mut blank = 0usize;
+    for c in out.chars() {
+        if c == '\n' {
+            blank += 1;
+            if blank > 1 {
+                continue;
+            }
+        } else {
+            blank = 0;
+        }
+        result.push(c);
+    }
+    result.trim().to_string()
+}
+
+fn composer_is_block(name: &str) -> bool {
+    matches!(
+        name,
+        "p" | "div" | "li" | "ul" | "ol"
+            | "h1" | "h2" | "h3" | "h4" | "h5" | "h6"
+            | "blockquote" | "pre" | "section" | "article"
+            | "header" | "footer" | "tr" | "table"
+    )
+}
+
+fn composer_looks_like_html(s: &str) -> bool {
+    const VOID_TAGS: &[&str] = &["br", "hr", "img", "input", "meta", "link", "wbr", "source"];
+    const KNOWN_TAGS: &[&str] = &[
+        "p", "div", "span", "br", "hr", "b", "i", "u", "strong", "em", "s", "strike", "a", "ul",
+        "ol", "li", "h1", "h2", "h3", "h4", "h5", "h6", "blockquote", "pre", "code", "section",
+        "article", "header", "footer", "main", "aside", "nav", "figure", "figcaption", "table",
+        "thead", "tbody", "tr", "td", "th", "img", "picture", "source", "video", "audio", "iframe",
+        "script", "style", "small", "sub", "sup", "mark", "del", "ins", "abbr", "cite", "q",
+        "kbd", "samp", "var", "wbr",
+    ];
+    let lower = s.to_ascii_lowercase();
+    let bytes: Vec<char> = lower.chars().collect();
+    let mut i = 0usize;
+    while i < bytes.len() {
+        if bytes[i] != '<' {
+            i += 1;
+            continue;
+        }
+        let next = bytes.get(i + 1).copied();
+        if matches!(next, Some('/') | Some('!') | Some('?')) {
+            return true;
+        }
+        let rest: String = bytes[i + 1..].iter().collect();
+        for tag in VOID_TAGS {
+            if rest.starts_with(tag) {
+                if matches!(rest[tag.len()..].chars().next(), Some('>') | Some(' ') | Some('/')) {
+                    return true;
+                }
+            }
+        }
+        for tag in KNOWN_TAGS {
+            if rest.starts_with(tag) {
+                if matches!(
+                    rest[tag.len()..].chars().next(),
+                    Some(' ') | Some('\t') | Some('\n')
+                ) {
+                    return true;
+                }
+            }
+        }
+        i += 1;
+    }
+    false
+}
+
+#[test]
+fn the_composer_and_the_server_produce_the_same_text() {
+    let cases = [
+        "Use <div> for layout",
+        "Ship it! 5 < 10 and 10 > 5",
+        "<p>Hello <b>world</b></p>",
+        "<p>One</p><p>Two</p>",
+        "One<br>Two",
+        "Plain text with no markup at all",
+        "a < b > c",
+        "<p class=\"lead\">Hello</p>",
+        "Tom &amp; Jerry",
+        "",
+    ];
+    for case in cases {
+        assert_eq!(
+            composer_plain_text(case),
+            PostService::sanitize_content(case, 2000),
+            "the composer and the server disagree on {case:?}"
+        );
+    }
+}
