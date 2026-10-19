@@ -54,19 +54,29 @@ export interface CreateCampaignInput {
 
 export interface UpdateCampaignInput {
   name?: string;
-  description?: string;
+  /**
+   * The clearable fields are THREE-state:
+   *   omitted -> leave the stored value alone
+   *   `null`  -> clear it
+   *   a value -> replace it
+   *
+   * The settings page used to send `|| undefined` for an emptied
+   * field, which is "omit", so the server kept the old value and the
+   * save reported success while nothing changed.
+   */
+  description?: string | null;
   color?: string;
-  start_date?: string;
-  end_date?: string;
-  goal?: string;
+  start_date?: string | null;
+  end_date?: string | null;
+  goal?: string | null;
   // v22 Phase 6: expanded fields.
   status?: 'active' | 'paused' | 'archived' | 'completed';
-  progress_metric?: 'posts' | 'engagement' | 'reach' | 'followers' | 'custom';
-  progress_target?: number;
-  audience_persona?: Record<string, unknown>;
-  content_pillars?: Array<{ title: string; description?: string; tags?: string[] }>;
-  budget_cents?: number;
-  kpi_targets?: Record<string, unknown>;
+  progress_metric?: 'posts' | 'engagement' | 'reach' | 'followers' | 'custom' | null;
+  progress_target?: number | null;
+  audience_persona?: Record<string, unknown> | null;
+  content_pillars?: Array<{ title: string; description?: string; tags?: string[] }> | null;
+  budget_cents?: number | null;
+  kpi_targets?: Record<string, unknown> | null;
 }
 
 /**

@@ -484,13 +484,16 @@
     <div class="bg-surface border border-line rounded-xl overflow-hidden">
       <!-- Select-all header row -->
       <div class="flex items-center gap-3 px-4 py-2 bg-surface-hover border-b border-line text-xs text-muted">
-        <input
-          type="checkbox"
-          checked={posts.length > 0 && selectedIds.size === posts.length}
-          onchange={toggleSelectAll}
-          class="rounded w-4 h-4"
-          aria-label="Select all"
-        />
+        <!-- The LABEL carries the target; the box stays 16px. -->
+        <label class="flex items-center justify-center shrink-0 min-h-11 min-w-11 cursor-pointer -ml-2">
+          <input
+            type="checkbox"
+            checked={posts.length > 0 && selectedIds.size === posts.length}
+            onchange={toggleSelectAll}
+            class="rounded w-4 h-4"
+            aria-label="Select all"
+          />
+        </label>
         <span>{selectedIds.size > 0 ? `${selectedIds.size} of ${posts.length} selected` : `${totalItems} total`}</span>
       </div>
       {#each posts as post (post.id)}

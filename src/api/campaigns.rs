@@ -78,19 +78,46 @@ pub struct CreateCampaignRequest {
 #[derive(Debug, Deserialize)]
 pub struct UpdateCampaignRequest {
     pub name: Option<String>,
-    pub description: Option<String>,
+    /// A campaign always has a colour, so there is nothing to clear:
+    /// two-state.
     pub color: Option<String>,
-    pub start_date: Option<String>,
-    pub end_date: Option<String>,
-    pub goal: Option<String>,
+    /// The clearable fields are THREE-state:
+    ///   absent  -> keep the stored value
+    ///   `null`  -> clear it
+    ///   a value -> replace it
+    ///
+    /// They used to be a plain `Option<T>` with `COALESCE(?, col)` in
+    /// the SQL, and `COALESCE` cannot tell "keep" from "clear" - so
+    /// emptying the Goal field and pressing Save reported "Campaign
+    /// updated" and left the old goal in place. The same for the
+    /// description, the start and end dates, the progress metric and
+    /// the progress target. The settings page even offers a "None"
+    /// option for the progress metric that could never be applied.
+    ///
+    /// `name`, `color` and `status` stay two-state: a campaign always
+    /// has a name, a colour and a status, so there is nothing to clear.
+    #[serde(default, deserialize_with = "double_option")]
+    pub description: Option<Option<String>>,
+    #[serde(default, deserialize_with = "double_option")]
+    pub start_date: Option<Option<String>>,
+    #[serde(default, deserialize_with = "double_option")]
+    pub end_date: Option<Option<String>>,
+    #[serde(default, deserialize_with = "double_option")]
+    pub goal: Option<Option<String>>,
     // v22 Phase 6: expanded fields on update.
     pub status: Option<String>,
-    pub progress_metric: Option<String>,
-    pub progress_target: Option<i32>,
-    pub audience_persona: Option<serde_json::Value>,
-    pub content_pillars: Option<serde_json::Value>,
-    pub budget_cents: Option<i32>,
-    pub kpi_targets: Option<serde_json::Value>,
+    #[serde(default, deserialize_with = "double_option")]
+    pub progress_metric: Option<Option<String>>,
+    #[serde(default, deserialize_with = "double_option")]
+    pub progress_target: Option<Option<i32>>,
+    #[serde(default, deserialize_with = "double_option")]
+    pub audience_persona: Option<Option<serde_json::Value>>,
+    #[serde(default, deserialize_with = "double_option")]
+    pub content_pillars: Option<Option<serde_json::Value>>,
+    #[serde(default, deserialize_with = "double_option")]
+    pub budget_cents: Option<Option<i32>>,
+    #[serde(default, deserialize_with = "double_option")]
+    pub kpi_targets: Option<Option<serde_json::Value>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -279,39 +306,71 @@ pub async fn update(
     Path(id): Path<Uuid>,
     Json(body): Json<UpdateCampaignRequest>,
 ) -> Result<Json<Campaign>, AppError> {
-    let start_date = body
-        .start_date
-        .as_deref()
-        .and_then(|s| chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").ok());
-    let end_date = body
-        .end_date
-        .as_deref()
-        .and_then(|s| chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").ok());
+    // A date is three-state too: absent keeps it, `null` clears it, a
+    // value replaces it. An unparseable date is a 400, not a silent
+    // "keep the old one" - the old code dropped the parse failure on
+    // the floor, so a typo in the date field was accepted and ignored.
+    let parse_date = |v: &Option<Option<String>>| -> Result<Option<Option<chrono::NaiveDate>>, AppError> {
+        match v {
+            None => Ok(None),
+            Some(None) => Ok(Some(None)),
+            Some(Some(s)) => match chrono::NaiveDate::parse_from_str(s.trim(), "%Y-%m-%d") {
+                Ok(d) => Ok(Some(Some(d))),
+                Err(_) => Err(AppError::BadRequest(format!(
+                    "Invalid date '{s}' - use YYYY-MM-DD"
+                ))),
+            },
+        }
+    };
+    let start_date = parse_date(&body.start_date)?;
+    let end_date = parse_date(&body.end_date)?;
 
     // Validate status if provided.
-    if let Some(ref status) = body.status {
+    if let Some(status) = &body.status {
         if !["active", "paused", "archived", "completed"].contains(&status.as_str()) {
             return Err(AppError::BadRequest(format!("Invalid status: {status}")));
         }
     }
+
+    // Each clearable field is written through a flag, because
+    // `COALESCE(?, col)` cannot tell "keep" from "clear":
+    //   flag = 0 -> leave the column alone
+    //   flag = 1 -> write the value (which may be NULL, to clear)
+    fn three_state<T: Clone>(v: &Option<Option<T>>) -> (i64, Option<T>) {
+        match v {
+            None => (0, None),
+            Some(None) => (1, None),
+            Some(Some(x)) => (1, Some(x.clone())),
+        }
+    }
+    let (description_set, description) = three_state(&body.description);
+    let (start_set, start_value) = three_state(&start_date);
+    let (end_set, end_value) = three_state(&end_date);
+    let (goal_set, goal) = three_state(&body.goal);
+    let (metric_set, metric) = three_state(&body.progress_metric);
+    let (target_set, target) = three_state(&body.progress_target);
+    let (persona_set, persona) = three_state(&body.audience_persona);
+    let (pillars_set, pillars) = three_state(&body.content_pillars);
+    let (budget_set, budget) = three_state(&body.budget_cents);
+    let (kpi_set, kpi) = three_state(&body.kpi_targets);
 
     // SQLite has no `$N` positional params — `?` is positional in textual
     // order, so the SET placeholders come before the WHERE ones.
     let campaign: Campaign = sqlx::query_as(
         r#"UPDATE campaigns SET
              name = COALESCE(?, name),
-             description = COALESCE(?, description),
              color = COALESCE(?, color),
-             start_date = COALESCE(?, start_date),
-             end_date = COALESCE(?, end_date),
-             goal = COALESCE(?, goal),
              status = COALESCE(?, status),
-             progress_metric = COALESCE(?, progress_metric),
-             progress_target = COALESCE(?, progress_target),
-             audience_persona = COALESCE(?, audience_persona),
-             content_pillars = COALESCE(?, content_pillars),
-             budget_cents = COALESCE(?, budget_cents),
-             kpi_targets = COALESCE(?, kpi_targets),
+             description = CASE WHEN ? THEN ? ELSE description END,
+             start_date = CASE WHEN ? THEN ? ELSE start_date END,
+             end_date = CASE WHEN ? THEN ? ELSE end_date END,
+             goal = CASE WHEN ? THEN ? ELSE goal END,
+             progress_metric = CASE WHEN ? THEN ? ELSE progress_metric END,
+             progress_target = CASE WHEN ? THEN ? ELSE progress_target END,
+             audience_persona = CASE WHEN ? THEN ? ELSE audience_persona END,
+             content_pillars = CASE WHEN ? THEN ? ELSE content_pillars END,
+             budget_cents = CASE WHEN ? THEN ? ELSE budget_cents END,
+             kpi_targets = CASE WHEN ? THEN ? ELSE kpi_targets END,
              updated_at = unixepoch()
            WHERE id = ? AND user_id = ? AND deleted_at IS NULL
            RETURNING id, user_id, name, description, color, start_date, end_date, goal,
@@ -320,18 +379,28 @@ pub async fn update(
                      deleted_at, created_at, updated_at, NULL AS post_count"#,
     )
     .bind(&body.name)
-    .bind(&body.description)
     .bind(&body.color)
-    .bind(start_date)
-    .bind(end_date)
-    .bind(&body.goal)
     .bind(&body.status)
-    .bind(&body.progress_metric)
-    .bind(body.progress_target)
-    .bind(&body.audience_persona)
-    .bind(&body.content_pillars)
-    .bind(body.budget_cents)
-    .bind(&body.kpi_targets)
+    .bind(description_set)
+    .bind(description)
+    .bind(start_set)
+    .bind(start_value)
+    .bind(end_set)
+    .bind(end_value)
+    .bind(goal_set)
+    .bind(goal)
+    .bind(metric_set)
+    .bind(metric)
+    .bind(target_set)
+    .bind(target)
+    .bind(persona_set)
+    .bind(persona)
+    .bind(pillars_set)
+    .bind(pillars)
+    .bind(budget_set)
+    .bind(budget)
+    .bind(kpi_set)
+    .bind(kpi)
     .bind(id)
     .bind(auth.user_id)
     .fetch_one(&state.db)

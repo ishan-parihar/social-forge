@@ -81,14 +81,18 @@
     saving = true;
     const r = await campaignsApi.update(campaign.id, {
       name: formName,
-      description: formDescription || undefined,
+      // `null` means "the user cleared this"; omitting the key means
+      // "leave it alone". The old `|| undefined` sent "omit" for an
+      // emptied field, so the server kept the old value and the save
+      // reported success while nothing changed.
+      description: formDescription || null,
       color: formColor,
-      start_date: formStartDate || undefined,
-      end_date: formEndDate || undefined,
-      goal: formGoal || undefined,
+      start_date: formStartDate || null,
+      end_date: formEndDate || null,
+      goal: formGoal || null,
       status: formStatus,
-      progress_metric: formProgressMetric || undefined,
-      progress_target: typeof formProgressTarget === 'number' ? formProgressTarget : undefined,
+      progress_metric: formProgressMetric || null,
+      progress_target: typeof formProgressTarget === 'number' ? formProgressTarget : null,
     });
     saving = false;
     if (r.error) {

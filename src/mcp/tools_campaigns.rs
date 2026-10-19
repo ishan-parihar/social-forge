@@ -113,18 +113,23 @@ pub async fn handle_campaign_update(
     let id = parse_id("campaign_id", &input.campaign_id)?;
     let body = UpdateCampaignRequest {
         name: input.name.clone(),
-        description: input.description.clone(),
         color: input.color.clone(),
-        start_date: input.start_date.clone(),
-        end_date: input.end_date.clone(),
-        goal: input.goal.clone(),
         status: input.status.clone(),
-        progress_metric: input.progress_metric.clone(),
-        progress_target: input.progress_target,
-        audience_persona: input.audience_persona.clone(),
-        content_pillars: input.content_pillars.clone(),
-        budget_cents: input.budget_cents,
-        kpi_targets: input.kpi_targets.clone(),
+        // The clearable fields are three-state on the API now
+        // (absent = keep, null = clear, a value = replace). The MCP
+        // input is two-state, so an omitted field stays omitted - which
+        // is "keep" - and a caller that wants to clear one passes
+        // `null` through the JSON.
+        description: input.description.clone().map(Some),
+        start_date: input.start_date.clone().map(Some),
+        end_date: input.end_date.clone().map(Some),
+        goal: input.goal.clone().map(Some),
+        progress_metric: input.progress_metric.clone().map(Some),
+        progress_target: input.progress_target.map(Some),
+        audience_persona: input.audience_persona.clone().map(Some),
+        content_pillars: input.content_pillars.clone().map(Some),
+        budget_cents: input.budget_cents.map(Some),
+        kpi_targets: input.kpi_targets.clone().map(Some),
     };
     rest_result(
         campaigns::update(

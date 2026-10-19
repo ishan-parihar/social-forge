@@ -241,7 +241,14 @@
                   class="group/chip flex items-center gap-1 focus-visible:outline-2 focus-visible:outline-accent {event.state === 'published' || past ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'}"
                 >
                   {#if onToggleSelect}
-                    <input type="checkbox" checked={selected.has(event.id)} aria-label="Select post for bulk actions" onclick={(e) => onToggleSelect?.(event.id, e)} class="rounded shrink-0 w-4 h-4" />
+                    <!--
+                      The LABEL carries the target: the box stays 16px (it
+                      is a checkbox in a dense grid) and the clickable
+                      area around it is 44px.
+                    -->
+                    <label class="flex items-center justify-center shrink-0 min-h-11 min-w-11 cursor-pointer">
+                      <input type="checkbox" checked={selected.has(event.id)} aria-label="Select post for bulk actions" onclick={(e) => onToggleSelect?.(event.id, e)} class="rounded w-4 h-4" />
+                    </label>
                   {/if}
                   <!-- v25 F3: drag affordance. A six-dot grip that only appears on
                        hover tells the user which chips are movable; without it the
