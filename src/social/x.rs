@@ -321,6 +321,27 @@ impl XProvider {
 
     // ── V2 REST API (OAuth Bearer fallback) ──────────────────
 
+    /// Read the response body as text, tolerating an empty body (returns
+    /// `json!({})`). This prevents `EOF while parsing a value` when X answers
+    /// HTTP 200 with no body (e.g. empty DM conversation list).
+    async fn read_json(
+        &self,
+        resp: wreq::Response,
+    ) -> Result<(wreq::StatusCode, serde_json::Value), ProviderError> {
+        let status = resp.status();
+        let text = resp
+            .text()
+            .await
+            .map_err(|e| ProviderError::Api(format!("X read body error: {e}")))?;
+        let json: serde_json::Value = if text.trim().is_empty() {
+            serde_json::json!({})
+        } else {
+            serde_json::from_str(&text)
+                .map_err(|e| ProviderError::Api(format!("X JSON parse error: {e}")))?
+        };
+        Ok((status, json))
+    }
+
     async fn v1_get_with_cookies(
         &self,
         url: &str,
@@ -337,11 +358,7 @@ impl XProvider {
             .send()
             .await
             .map_err(|e| ProviderError::Api(format!("X cookie GET error: {e}")))?;
-        let status = resp.status();
-        let json: serde_json::Value = resp
-            .json()
-            .await
-            .map_err(|e| ProviderError::Api(e.to_string()))?;
+        let (status, json) = self.read_json(resp).await?;
         self.check_v2_response(status, &json)
     }
 
@@ -357,11 +374,7 @@ impl XProvider {
             .send()
             .await
             .map_err(|e| ProviderError::Api(format!("X v2 GET error: {e}")))?;
-        let status = resp.status();
-        let json: serde_json::Value = resp
-            .json()
-            .await
-            .map_err(|e| ProviderError::Api(e.to_string()))?;
+        let (status, json) = self.read_json(resp).await?;
         self.check_v2_response(status, &json)
     }
 
@@ -379,11 +392,7 @@ impl XProvider {
             .send()
             .await
             .map_err(|e| ProviderError::Api(format!("X v2 POST error: {e}")))?;
-        let status = resp.status();
-        let json: serde_json::Value = resp
-            .json()
-            .await
-            .map_err(|e| ProviderError::Api(e.to_string()))?;
+        let (status, json) = self.read_json(resp).await?;
         self.check_v2_response(status, &json)
     }
 
@@ -399,11 +408,7 @@ impl XProvider {
             .send()
             .await
             .map_err(|e| ProviderError::Api(format!("X v2 DELETE error: {e}")))?;
-        let status = resp.status();
-        let json: serde_json::Value = resp
-            .json()
-            .await
-            .map_err(|e| ProviderError::Api(e.to_string()))?;
+        let (status, json) = self.read_json(resp).await?;
         self.check_v2_response(status, &json)
     }
 
