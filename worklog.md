@@ -508,3 +508,50 @@ Stage Summary:
   - The CLI now being 2026.10.20-2 means the next `genome upgrade` check will
     drift again as the skill moves. Treat `genome doctor`'s upgrade line as a
     signal to re-run the self-check, not as noise.
+
+---
+Task ID: doc-foundation-validation-2026-10-20-pass-3
+Agent: jcode
+Task: Third validation pass: the §2 layout tree, which two earlier passes had
+never measured.
+
+Work Log:
+- Re-measured every count in the §2 repository-layout tree, not just the
+  key-numbers block the first two passes had fixed. It was wrong in five places:
+  "31 provider implementation files" (the truth is 26, with the other 13 files
+  under src/social/ being support modules — whatsapp_cloud.rs being the subtle
+  one, an internal helper rather than a registered provider), "25 page routes"
+  (18 top-level + 11 nested = 29), and four stale LOC counts (run.rs, x.rs,
+  reddit.rs, queries.rs — all understated by 300-1000 lines).
+- The scripts/ entry listed three of sixteen files and omitted the two the rest
+  of the repo depends on: `genome` itself, and `vendor-pull.sh`, the CI gate
+  VENDOR_PINS documents as enforced. An agent reading the layout tree would not
+  have known the tooling existed.
+- Confirmed two claims were accurate so they did not get "fixed" into wrongness:
+  the 8 migrations contain no destructive DDL (only ON DELETE CASCADE FK
+  clauses), and the 19 SSE events §9.8 names match realtime.ts one for one.
+- Re-introduced the E001 error for the second time in this session by writing
+  "the other 13 `.rs` here" — a bare extension token, the exact shape that
+  already failed once. Caught it on the lint run rather than at push. Recorded
+  because the first occurrence was attributed to an unfamiliar tokenizer quirk,
+  which is the wrong diagnosis: it is a habit of writing prose with a bare
+  extension in backticks, and habits do not correct from memory.
+- Held AGENTS.md back from commit while a concurrent agent's §9.39–§9.43 records
+  sat uncommitted in the same file, then committed the file once their records
+  were live rather than reconstructing a split version that would have
+  discarded their work. The commit message names them as the co-author of the
+  content.
+
+Stage Summary:
+- Artifacts: AGENTS.md §2 layout tree (seven corrections).
+- Verification: `genome lint` 0 errors 0 warnings; `genome close` green; gate ok;
+  `cargo test --lib` passed; `cargo test --test surface_docs_audit` 3 passed;
+  dead-path grep clean.
+- Known issues / follow-ups:
+  - The layout tree's LOC counts will drift again as the files grow. They are
+    now four years of evidence stale; nothing in the repo asserts them. If the
+    next pass wants a guard, `surface_docs_audit` is where a count assertion
+    would go, but only for the counts the code can derive (tools, migrations,
+    tier membership) — a file's line count changes with every commit.
+  - Nothing else in §2 remains unmeasured: every number in the tree has now been
+    checked at least once against the tree it describes.
