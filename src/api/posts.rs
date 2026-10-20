@@ -1230,6 +1230,25 @@ pub async fn set_post_tags(
 pub struct KanbanReorderRequest {
     pub state: String,
     pub ordered_post_ids: Vec<Uuid>,
+    /// The states the column HOLDS, when it holds more than one.
+    ///
+    /// The board's Drafts column is the drafts PLUS the error posts -
+    /// a failed post belongs somewhere the founder can act on it. So
+    /// the reorder of that column carries both.
+    ///
+    /// The UPDATE used to be guarded by `AND state = ?` with the
+    /// column's own name, so the error posts in the ordered list did
+    /// not match, were silently not renumbered, and kept their old
+    /// `kanban_sort_order = 0`. The response reported "updated" and
+    /// the frontend ignored the count - so a founder who dragged a
+    /// failed post to the top of Drafts saw it move locally, and on the
+    /// next reload it jumped back. The ordering was silently lost.
+    ///
+    /// With the list, the column's posts are renumbered whatever
+    /// state they are in. A single-state column behaves exactly as
+    /// before.
+    #[serde(default)]
+    pub column_states: Option<Vec<String>>,
 }
 
 pub async fn kanban_reorder(
@@ -1281,6 +1300,24 @@ pub async fn kanban_reorder(
     // send a foreign user's post ID, it won't match.
     let deduped_json = serde_json::to_value(&deduped)
         .map_err(|e| crate::error::AppError::Internal(format!("Failed to encode post ids: {e}")))?;
+    // The states the column holds. A single-state column is just the
+    // column's own name; the Drafts column holds the drafts AND the
+    // error posts.
+    let mut column_states: Vec<String> = body
+        .column_states
+        .clone()
+        .unwrap_or_else(|| vec![body.state.clone()]);
+    if column_states.is_empty() {
+        column_states.push(body.state.clone());
+    }
+    for s in &column_states {
+        if !valid_states.contains(&s.as_str()) {
+            return Err(crate::error::AppError::BadRequest(format!(
+                "Invalid state in column_states: {s}"
+            )));
+        }
+    }
+
     let result = sqlx::query(
         r#"WITH ordered AS (
              SELECT unhex(replace(value, '-', '')) AS id, key + 1 AS ord FROM json_each(?)
@@ -1291,13 +1328,15 @@ pub async fn kanban_reorder(
                ),
                updated_at = unixepoch()
            WHERE user_id = ?
-             AND state = ?
+             AND state IN (
+                 SELECT value FROM json_each(?)
+             )
              AND deleted_at IS NULL
              AND id IN (SELECT id FROM ordered)"#,
     )
     .bind(deduped_json)
     .bind(auth.user_id)
-    .bind(&body.state)
+    .bind(serde_json::to_value(&column_states).unwrap_or(serde_json::json!([])))
     .execute(&mut *tx)
     .await
     .map_err(|e| crate::error::AppError::Internal(format!("Failed to reorder: {e}")))?;

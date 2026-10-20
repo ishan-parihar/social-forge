@@ -138,7 +138,23 @@ pub struct UpdateStageRequest {
     #[serde(default, deserialize_with = "double_option")]
     pub campaign_id: Option<Option<Uuid>>,
     // v22 Phase 6: kanban fields that can be updated alongside state.
-    pub kanban_substate: Option<String>,
+    //
+    // `kanban_substate` is THREE-state: absent = keep, `null` = clear,
+    // a value = set.
+    //
+    // It was a plain `Option<String>`, and the UPDATE used
+    // `kanban_substate = COALESCE(?, kanban_substate)` - which cannot
+    // express "clear". So a card tagged "Blocked" was "Blocked" for
+    // ever: the client had to refuse the clear and toast "Clearing
+    // substate is not yet supported", and the "No substate" filter
+    // that the filter bar offered could never match anything the
+    // founder wanted to clear.
+    //
+    // The SQL is a CASE with an explicit flag, for the same reason
+    // `campaign_id` has one: `COALESCE` cannot tell "keep" from
+    // "clear" either.
+    #[serde(default, deserialize_with = "double_option")]
+    pub kanban_substate: Option<Option<String>>,
     pub priority: Option<String>,
     pub due_date: Option<String>,
 }
@@ -486,7 +502,7 @@ pub async fn update_stage(
     // v25-3: validate kanban metadata fields if provided. The DB has CHECK
     // constraints (migration 034) but we want a friendly error before the
     // UPDATE rather than a raw CHECK violation.
-    if let Some(ref sub) = body.kanban_substate {
+    if let Some(Some(ref sub)) = body.kanban_substate {
         if !["ready_to_publish", "in_review", "blocked"].contains(&sub.as_str()) {
             return Err(AppError::BadRequest(format!(
                 "Invalid kanban_substate: {sub} (expected ready_to_publish | in_review | blocked)"
@@ -548,7 +564,7 @@ pub async fn update_stage(
             sqlx::query(
                 r#"UPDATE posts SET
                       campaign_id = CASE WHEN ? THEN ? ELSE campaign_id END,
-                      kanban_substate = COALESCE(?, kanban_substate),
+                      kanban_substate = CASE WHEN ? THEN ? ELSE kanban_substate END,
                       priority = COALESCE(?, priority),
                       due_date = ?,
                       updated_at = unixepoch()
@@ -556,7 +572,8 @@ pub async fn update_stage(
             )
             .bind(campaign_set)
             .bind(campaign_value)
-            .bind(&body.kanban_substate)
+            .bind(body.kanban_substate.is_some())
+            .bind(body.kanban_substate.as_ref().and_then(|v| v.as_deref()))
             .bind(&body.priority)
             .bind(due_date_dt)
             .bind(id)
@@ -569,14 +586,15 @@ pub async fn update_stage(
             sqlx::query(
                 r#"UPDATE posts SET
                      campaign_id = CASE WHEN ? THEN ? ELSE campaign_id END,
-                     kanban_substate = COALESCE(?, kanban_substate),
+                     kanban_substate = CASE WHEN ? THEN ? ELSE kanban_substate END,
                      priority = COALESCE(?, priority),
                      updated_at = unixepoch()
                    WHERE id = ? AND user_id = ?"#,
             )
             .bind(campaign_set)
             .bind(campaign_value)
-            .bind(&body.kanban_substate)
+            .bind(body.kanban_substate.is_some())
+            .bind(body.kanban_substate.as_ref().and_then(|v| v.as_deref()))
             .bind(&body.priority)
             .bind(id)
             .bind(auth.user_id)
@@ -652,7 +670,7 @@ pub async fn update_stage(
             r#"UPDATE posts SET
                   state = ?,
                   campaign_id = CASE WHEN ? THEN ? ELSE campaign_id END,
-                  kanban_substate = COALESCE(?, kanban_substate),
+                  kanban_substate = CASE WHEN ? THEN ? ELSE kanban_substate END,
                   priority = COALESCE(?, priority),
                   due_date = ?,
                   updated_at = unixepoch()
@@ -661,7 +679,8 @@ pub async fn update_stage(
         .bind(&body.state)
         .bind(campaign_set)
         .bind(campaign_value)
-        .bind(&body.kanban_substate)
+        .bind(body.kanban_substate.is_some())
+        .bind(body.kanban_substate.as_ref().and_then(|v| v.as_deref()))
         .bind(&body.priority)
         .bind(due_date_dt)
         .bind(id)
@@ -674,7 +693,7 @@ pub async fn update_stage(
             r#"UPDATE posts SET
                  state = ?,
                  campaign_id = CASE WHEN ? THEN ? ELSE campaign_id END,
-                 kanban_substate = COALESCE(?, kanban_substate),
+                 kanban_substate = CASE WHEN ? THEN ? ELSE kanban_substate END,
                  priority = COALESCE(?, priority),
                  updated_at = unixepoch()
                WHERE id = ? AND user_id = ?"#,
@@ -682,7 +701,8 @@ pub async fn update_stage(
         .bind(&body.state)
         .bind(campaign_set)
         .bind(campaign_value)
-        .bind(&body.kanban_substate)
+        .bind(body.kanban_substate.is_some())
+        .bind(body.kanban_substate.as_ref().and_then(|v| v.as_deref()))
         .bind(&body.priority)
         .bind(id)
         .bind(auth.user_id)

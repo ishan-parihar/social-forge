@@ -88,6 +88,14 @@
   // from "you have no posts", and no way to retry. It now surfaces the first
   // error so the board can show an ErrorState with a retry.
   let loadError = $state('');
+  // How many posts the board is NOT showing.
+  //
+  // The board fetches the newest 200 posts, and the server clamps the
+  // limit to 200. So a founder with 240 posts saw 200 of them, with
+  // no indication - and because the default order is
+  // `scheduled_at DESC`, the oldest (often the published archive) are
+  // the ones that vanish.
+  let totalPosts = $state(0);
   async function load() {
     loading = true;
     loadError = '';
@@ -99,7 +107,10 @@
     if (postsRes.error) loadError = postsRes.error;
     else if (campRes.error) loadError = campRes.error;
     else if (integRes.error) loadError = integRes.error;
-    if (postsRes.data) posts = postsRes.data.posts;
+    if (postsRes.data) {
+      posts = postsRes.data.posts;
+      totalPosts = postsRes.data.total ?? postsRes.data.posts.length;
+    }
     if (campRes.data) campaigns = campRes.data;
     if (integRes.data) integrations = integRes.data.integrations.filter(i => !i.disabled);
     loading = false;
@@ -169,6 +180,17 @@
     map['draft'] = [...map['draft'], ...errPosts];
     return map;
   });
+
+  /**
+   * The states a column HOLDS.
+   *
+   * The Drafts column holds the drafts AND the error posts - a failed
+   * post belongs somewhere the founder can act on it. Every other
+   * column holds one state.
+   */
+  function columnStatesFor(state: string): string[] {
+    return state === 'draft' ? ['draft', 'error'] : [state];
+  }
 
   // Quick-add idea: create a post with state='idea' and minimal content.
   // v22 Phase 6: fixed the integration_ids: [] bug. Previously quick-add
@@ -279,7 +301,18 @@
 
       // Persist the new order. No success toast - reordering is a
       // quiet operation (the card visibly moved, that's the feedback).
-      const r = await postsApi.reorderKanban(newState, colPosts.map(p => p.id));
+      //
+      // The column's STATES go with it. The Drafts column holds the
+      // drafts AND the error posts, and the reorder's UPDATE used to
+      // be guarded by the column's own name - so the error posts in
+      // the ordered list were not renumbered, kept their old order,
+      // and the founder's arrangement was silently lost on the next
+      // reload.
+      const r = await postsApi.reorderKanban(
+        newState,
+        colPosts.map(p => p.id),
+        columnStatesFor(newState),
+      );
       if (r.error) {
         toast(`Failed to reorder: ${r.error}`, 'error');
         load(); // revert
@@ -538,18 +571,21 @@
     const prev = post.kanban_substate;
     post.kanban_substate = kanban_substate;
     posts = [...posts];
-    // For null (clearing), we need to send an empty string to the backend
-    // (which interprets None as "unchanged"). But the backend's COALESCE
-    // means we can't actually clear via update_stage - only set. To clear,
-    // we'd need a dedicated endpoint. For now, only allow SETTING a substate.
-    if (!kanban_substate) {
-      // Can't clear via update_stage; revert + inform.
-      post.kanban_substate = prev;
-      posts = [...posts];
-      toast('Clearing substate is not yet supported - set a different one instead.', 'info');
-      return;
-    }
-    const r = await campaignsApi.updateStage(post.id, post.state, post.campaign_id || undefined, { kanban_substate });
+    // `null` CLEARS the substate, and the server can do it.
+    //
+    // It could not before. The field was a plain `Option<String>` and
+    // the UPDATE used `kanban_substate = COALESCE(?, kanban_substate)`
+    // - which cannot express "clear", only "keep" and "set". So a
+    // card tagged "Blocked" was "Blocked" for ever, the client had to
+    // refuse the clear and toast "Clearing substate is not yet
+    // supported", and the "No substate" option in the filter bar
+    // could never match a card the founder wanted to clear.
+    //
+    // The field is three-state now: absent = keep, `null` = clear, a
+    // value = set.
+    const r = await campaignsApi.updateStage(post.id, post.state, post.campaign_id || undefined, {
+      kanban_substate: kanban_substate,
+    });
     if (r.error) {
       post.kanban_substate = prev;
       posts = [...posts];
@@ -677,6 +713,19 @@
   {:else if loadError}
     <ErrorState message={loadError} actionLabel="Retry" onaction={load} />
   {:else}
+    <!--
+      The board fetches the newest 200 posts and the server clamps the
+      limit to 200. Without this the founder simply saw fewer posts
+      than they had, and - because the order is `scheduled_at DESC` -
+      the ones that vanished were the OLDEST, which is the published
+      archive.
+    -->
+    {#if totalPosts > posts.length}
+      <div class="mb-4 px-3 py-2 rounded-lg border border-line bg-background-input text-xs text-muted">
+        Showing the {posts.length} most recent of {totalPosts} posts. Older posts are not on the board —
+        use <a href="/posts" class="text-accent hover:underline">Posts</a> to see them all.
+      </div>
+    {/if}
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
       {#each columns as col (col.state)}
         <div

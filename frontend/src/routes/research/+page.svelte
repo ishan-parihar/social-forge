@@ -78,6 +78,45 @@
       : 0,
   );
 
+  /**
+   * A posting slot, read in the APP's timezone.
+   *
+   * The server groups the posts by their UTC hour and labels the slot
+   * "Wednesday 14:00-15:00 UTC". The founder schedules from the app's
+   * timezone, so a table labelled in UTC is a table they have to
+   * convert in their head before they can use it - and the conversion
+   * is where the mistake happens.
+   *
+   * So the LABEL is built here, in the app's timezone, from the slot's
+   * UTC hour. A UTC hour is an instant on the day the slot was
+   * measured, so it is converted against a reference date in the app's
+   * zone; the weekday follows from the same conversion, so the two can
+   * never disagree.
+   */
+  function slotLabel(slot: { weekday: string; hour: number }): { weekday: string; hour: string } {
+    try {
+      // The slot's UTC hour, on a reference day, as an instant.
+      const anchor = Date.UTC(2026, 0, 7, slot.hour, 0, 0);
+      const d = new Date(anchor);
+      const weekday = d.toLocaleDateString("en-US", {
+        weekday: "long",
+        timeZone: timezone.value,
+      });
+      const hour = d.toLocaleTimeString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+        timeZone: timezone.value,
+      });
+      return { weekday, hour: `${hour}–${hour}` };
+    } catch {
+      return {
+        weekday: slot.weekday,
+        hour: `${String(slot.hour).padStart(2, "0")}:00 UTC`,
+      };
+    }
+  }
+
   function formatDate(iso: string | null): string {
     if (!iso) return "—";
     try {
@@ -229,8 +268,8 @@
         <ul class="space-y-2.5">
           {#each data.timing.best_slots as slot (slot.label)}
             <li class="flex items-center gap-3">
-              <span class="text-xs text-muted w-32 shrink-0 truncate">{slot.weekday}</span>
-              <span class="text-xs text-faint w-20 shrink-0 tabular-nums">{String(slot.hour).padStart(2, "0")}:00 UTC</span>
+              <span class="text-xs text-muted w-32 shrink-0 truncate">{slotLabel(slot).weekday}</span>
+              <span class="text-xs text-faint w-20 shrink-0 tabular-nums">{slotLabel(slot).hour}</span>
               <div class="flex-1 bg-background-input rounded-full h-6 overflow-hidden">
                 <!--
                   Solid fill, not /60, for the same contrast reason the

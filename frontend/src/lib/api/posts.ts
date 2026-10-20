@@ -170,9 +170,10 @@ export const postsApi = {
     api.get<PostSummary[]>(`/api/posts/group/${groupId}`),
   /** v25-4: Reorder posts within a kanban column. Sends the full new order
    *  so the backend can renumber kanban_sort_order to match. */
-  reorderKanban: (state: string, orderedPostIds: string[]) =>
+  reorderKanban: (state: string, orderedPostIds: string[], columnStates?: string[]) =>
     api.patch<{ updated: number }>('/api/posts/kanban-reorder', {
       state,
       ordered_post_ids: orderedPostIds,
+      ...(columnStates ? { column_states: columnStates } : {}),
     }),
 };

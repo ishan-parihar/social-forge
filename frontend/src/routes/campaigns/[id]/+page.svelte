@@ -281,11 +281,30 @@
                     {progressValue().current} / {campaign.progress_target} {progressValue().unit}
                   {/if}
                 </span>
-                <span class="font-medium">{Math.round(progressPct())}%</span>
+                {#if progressValue().current !== null}
+                  <span class="font-medium">{Math.round(progressPct())}%</span>
+                {/if}
               </div>
+              {#if progressValue().current === null}
+                <!--
+                  The metric has no data source. "Reach", "followers" and
+                  "custom" are accepted by the server and offered in the
+                  Settings tab, but nothing in the codebase measures
+                  them.
+
+                  So there is no bar and no percentage: a 0% bar against a
+                  target reads as "you have achieved nothing", which is
+                  a claim about the campaign rather than about the
+                  metric. The founder is told the metric is not measured.
+                -->
+                <div class="h-2 bg-background-input rounded-full flex items-center justify-center">
+                  <span class="text-[10px] text-faint">Not measured</span>
+                </div>
+              {:else}
               <div class="bg-background-input rounded-full h-3 overflow-hidden">
                 <div class="h-full rounded-full transition-all duration-500" style="width: {progressPct()}%; background: {campaign.color}"></div>
               </div>
+              {/if}
             </div>
           {:else}
             <p class="text-sm text-muted">{campaign.post_count ?? 0} posts in this campaign. Set a progress target in Settings to track a goal.</p>

@@ -124,10 +124,20 @@ export const campaignsApi = {
      */
     campaignId?: string | null,
     // v25-3: optional kanban metadata. When omitted, the existing value is
-    // preserved (COALESCE on the backend). Pass an empty string to
-    // `due_date` to explicitly clear it.
+    // preserved. Pass an empty string to `due_date` to explicitly clear
+    // it.
+    //
+    // `kanban_substate` is THREE-state, and the three states have to
+    // survive the wire:
+    //   undefined -> leave it alone (the key is not sent)
+    //   null      -> CLEAR it
+    //   a value   -> set it
+    //
+    // A plain `string | undefined` could not express the middle one,
+    // and the backend's `COALESCE(?, kanban_substate)` could not
+    // either - so a card tagged "Blocked" was "Blocked" for ever.
     kanbanMeta?: {
-      kanban_substate?: string;
+      kanban_substate?: string | null;
       priority?: string;
       due_date?: string;
     },
@@ -135,7 +145,9 @@ export const campaignsApi = {
     api.patch<{ updated: boolean }>(`/api/posts/${postId}/stage`, {
       state,
       ...(campaignId === undefined ? {} : { campaign_id: campaignId }),
-      kanban_substate: kanbanMeta?.kanban_substate,
+      ...(kanbanMeta && 'kanban_substate' in kanbanMeta
+        ? { kanban_substate: kanbanMeta.kanban_substate }
+        : {}),
       priority: kanbanMeta?.priority,
       due_date: kanbanMeta?.due_date,
     }),
