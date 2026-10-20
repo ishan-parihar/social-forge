@@ -3820,8 +3820,18 @@ pub async fn list_resolved_comment_ids(
 // per page load. The background feed refresher writes here.
 
 /// A cached comment row — shape matches the `cached_comments` table.
-/// `post_text` is joined in from external_posts so the comments list
-/// can show what each comment is replying to without a second query.
+///
+/// `post_text` is joined in so the comments list can show what each
+/// comment is replying to without a second query.
+///
+/// The join was to `external_posts` alone, and `cached_comments.post_id`
+/// points at `posts.id` - a comment on one of the FOUNDER'S OWN posts.
+/// So the join matched nothing, `post_text` was always NULL, and the
+/// comments list fell back to printing the raw internal UUID where the
+/// post's text should be. A founder cannot act on a UUID.
+///
+/// Both are joined now, and the founder's own post wins: it is the one
+/// the comment is actually on.
 #[derive(Debug, Clone, sqlx::FromRow, Serialize)]
 pub struct CachedComment {
     pub id: i64,
@@ -3918,8 +3928,9 @@ pub async fn list_cached_comments(
             r#"SELECT cc.id, cc.user_id, cc.comment_id, cc.post_id, cc.provider,
                       cc.author_name, cc.author_handle, cc.author_avatar,
                       cc.text, cc.created_at, cc.fetched_at,
-                      ep.text AS post_text
+                      COALESCE(p.content, ep.text) AS post_text
                FROM cached_comments cc
+               LEFT JOIN posts p ON p.id = cc.post_id
                LEFT JOIN external_posts ep ON ep.id = cc.post_id
                WHERE cc.user_id = ? AND cc.provider = ?
                ORDER BY cc.created_at DESC
@@ -3935,8 +3946,9 @@ pub async fn list_cached_comments(
             r#"SELECT cc.id, cc.user_id, cc.comment_id, cc.post_id, cc.provider,
                       cc.author_name, cc.author_handle, cc.author_avatar,
                       cc.text, cc.created_at, cc.fetched_at,
-                      ep.text AS post_text
+                      COALESCE(p.content, ep.text) AS post_text
                FROM cached_comments cc
+               LEFT JOIN posts p ON p.id = cc.post_id
                LEFT JOIN external_posts ep ON ep.id = cc.post_id
                WHERE cc.user_id = ?
                ORDER BY cc.created_at DESC

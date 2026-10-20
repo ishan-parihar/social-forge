@@ -319,7 +319,14 @@
               {/if}
             </div>
           {:else}
-            <p class="text-sm text-muted">{campaign.post_count ?? 0} posts in this campaign. Set a progress target in Settings to track a goal.</p>
+            <p class="text-sm text-muted">
+              {campaign.post_count ?? 0} posts in this campaign.
+              {#if (campaign.failed_count ?? 0) > 0}
+                <span class="text-error">{campaign.failed_count} failed to publish</span> -
+                they are not counted as work, but they were attempted.
+              {/if}
+              Set a progress target in Settings to track a goal.
+            </p>
           {/if}
 
           <div class="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-line">

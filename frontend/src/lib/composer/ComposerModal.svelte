@@ -446,7 +446,16 @@ const MANUAL_TARGET: Record<string, { key: string; label: string; placeholder: s
       // local - while every other scheduling surface in the app (the
       // SchedulePicker) converted the wall clock through the selected
       // zone. The conversion is shared, so all three entry points agree.
-      scheduledAt = wallClockToUtc(composer.presetDate, '09:00', timezone.value);
+      //
+      // The TIME is the one the founder clicked. A ghost slot says
+      // "X (Twitter) usually posts at this time" and sits in a row;
+      // opening the composer at 09:00 when the row was 08:00 threw
+      // away the value they picked.
+      scheduledAt = wallClockToUtc(
+        composer.presetDate,
+        composer.presetTime || '09:00',
+        timezone.value
+      );
     } else if (composer.mode === 'create') {
       // Restore draft if present.
       const saved = localStorage.getItem(DRAFT_KEY);

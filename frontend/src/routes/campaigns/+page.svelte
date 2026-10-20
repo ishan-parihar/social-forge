@@ -258,7 +258,12 @@
               {/if}
             </div>
           {:else}
-            <div class="text-xs text-muted mb-3">{c.post_count ?? 0} posts</div>
+            <div class="text-xs text-muted mb-3">
+              {c.post_count ?? 0} posts
+              {#if (c.failed_count ?? 0) > 0}
+                <span class="text-error">· {c.failed_count} failed</span>
+              {/if}
+            </div>
           {/if}
 
           <!-- Footer: dates + delete -->

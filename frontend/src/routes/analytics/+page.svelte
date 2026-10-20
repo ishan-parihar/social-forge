@@ -511,7 +511,7 @@
             <dt class="text-xs text-muted">Publish success rate</dt>
             <dd class="text-2xl font-bold text-content mt-0.5">
               {adherence && adherence.scheduled > 0
-                ? `${Math.round(adherence.adherence_rate)}%`
+                ? `${Math.round(adherence.success_rate)}%`
                 : 'Not yet'}
             </dd>
             <dd class="text-xs text-faint mt-0.5">

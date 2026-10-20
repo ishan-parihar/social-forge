@@ -10,7 +10,7 @@
     referenceDate: Date; events?: CEvent[];
     selected?: Set<string>;
     onEventClick?: (id: string) => void;
-    onDateClick?: (date: string) => void;
+    onDateClick?: (date: string, hour?: string) => void;
     onDrop?: (eventId: string, newDate: string, newHour?: string) => void;
     onDuplicate?: (id: string) => void;
     onStats?: (id: string) => void;

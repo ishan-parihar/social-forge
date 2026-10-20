@@ -42,7 +42,25 @@ pub struct Campaign {
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub updated_at: chrono::DateTime<chrono::Utc>,
     /// Number of posts in this campaign (joined).
+    ///
+    /// Counts the posts that represent WORK: queued, publishing and
+    /// published. A draft and an idea are not work, and counting them
+    /// made a campaign read "10 / 10 - 100%" after the founder created
+    /// ten ideas on the kanban.
     pub post_count: Option<i64>,
+    /// The posts in this campaign that FAILED to publish.
+    ///
+    /// Reported beside `post_count` rather than inside it, because a
+    /// failed post is work the founder DID - they scheduled it, it was
+    /// attempted, it went out badly - and the progress bar said
+    /// nothing about it.
+    ///
+    /// The list page showed "4 / 24 posts" and the detail page's
+    /// "Posts (5)" tab listed five, on the same screen, with no way
+    /// to reconcile them: the fifth was a post in `error` state, and
+    /// `post_count` skipped it. Now the two numbers describe the same
+    /// set, and the failures are visible instead of invisible.
+    pub failed_count: Option<i64>,
     /// Total engagement (likes + comments + shares) across this
     /// campaign's published posts, from `analytics_cache`.
     ///
@@ -198,7 +216,10 @@ pub async fn list(
                   c.sort_order, c.deleted_at, c.created_at, c.updated_at,
                   COUNT(p.id) FILTER (
                     WHERE p.state IN ('queued', 'publishing', 'published')
-                  ) AS post_count
+                  ) AS post_count,
+                  COUNT(p.id) FILTER (
+                    WHERE p.state = 'error'
+                  ) AS failed_count
            FROM campaigns c
            LEFT JOIN posts p ON p.campaign_id = c.id AND p.deleted_at IS NULL
            WHERE c.user_id = ? AND c.deleted_at IS NULL
@@ -292,7 +313,7 @@ pub async fn create(
            RETURNING id, user_id, name, description, color, start_date, end_date, goal,
                      status, progress_metric, progress_target, audience_persona,
                      content_pillars, budget_cents, kpi_targets, sort_order,
-                     deleted_at, created_at, updated_at, NULL AS post_count"#,
+                     deleted_at, created_at, updated_at, NULL AS post_count, NULL AS failed_count"#,
     )
     .bind(Uuid::new_v4())
     .bind(auth.user_id)
@@ -402,7 +423,7 @@ pub async fn update(
            RETURNING id, user_id, name, description, color, start_date, end_date, goal,
                      status, progress_metric, progress_target, audience_persona,
                      content_pillars, budget_cents, kpi_targets, sort_order,
-                     deleted_at, created_at, updated_at, NULL AS post_count"#,
+                     deleted_at, created_at, updated_at, NULL AS post_count, NULL AS failed_count"#,
     )
     .bind(&body.name)
     .bind(&body.color)

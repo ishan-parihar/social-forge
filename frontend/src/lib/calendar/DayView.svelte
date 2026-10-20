@@ -6,17 +6,28 @@
   import { makeTouchDragHandler, type TouchDropTarget } from "./touch-drag";
   import { timezone } from "$lib/stores/timezone.svelte";
 
-  let { date, events = [], selected = new Set(), onEventClick, onDateClick, onDrop, onDuplicate, onStats, onDelete, onToggleSelect, integrations = [] }: {
+  let { date, events = [], selected = new Set(), onEventClick, onDateClick, onDrop, onDuplicate, onStats, onDelete, onToggleSelect, integrations = [], integrationFilter = null }: {
     date: Date; events?: CEvent[];
     selected?: Set<string>;
     onEventClick?: (id: string) => void;
-    onDateClick?: (date: string) => void;
+    onDateClick?: (date: string, hour?: string) => void;
     onDrop?: (eventId: string, newDate: string, newHour?: string) => void;
     onDuplicate?: (id: string) => void;
     onStats?: (id: string) => void;
     onDelete?: (id: string) => void;
     onToggleSelect?: (id: string, e: Event) => void;
     integrations?: Integration[];
+    /**
+     * The channel the view is filtered to, or null for "all".
+     *
+     * The GHOST SLOTS have to honour it. The real events do - the
+     * server filters them - but the ghosts were built from every
+     * integration, so a view filtered to LinkedIn still showed
+     * "X (Twitter) usually posts at this time" in every row. The
+     * founder had explicitly excluded those channels and the grid
+     * showed them anyway.
+     */
+    integrationFilter?: string | null;
   } = $props();
 
   let key = $derived(formatDateKey(date));
@@ -30,6 +41,8 @@
   let ghostSlots = $derived.by(() => {
     const ghosts: { hour: string; integrationName: string; integrationId: string }[] = [];
     for (const int of integrations) {
+      // The CHANNEL FILTER applies to the ghosts too.
+      if (integrationFilter && int.id !== integrationFilter) continue;
       if (!int.posting_times || int.posting_times.length === 0) continue;
       for (const pt of int.posting_times) {
         const hourStr = String(Math.floor(pt.time / 60)).padStart(2, '0');
@@ -196,8 +209,8 @@
           {#each (ghostsByHour.get(hourStr) || []) as ghost}
             <button
               class="flex items-center gap-1 border border-dashed border-line rounded px-1 min-h-6 opacity-50 hover:opacity-100 transition-opacity cursor-pointer"
-              onclick={() => onDateClick?.(key)}
-              title="{ghost.integrationName} usually posts at this time - click to create"
+              onclick={() => onDateClick?.(key, ghost.hour)}
+              title="{ghost.integrationName} usually posts at {ghost.hour} - click to create"
             >
               <span class="text-[10px] text-muted truncate">⏰ {ghost.integrationName}</span>
             </button>

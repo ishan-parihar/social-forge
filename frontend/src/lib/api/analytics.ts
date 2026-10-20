@@ -69,6 +69,16 @@ export interface AdherenceResponse {
   published: number;
   failed: number;
   adherence_rate: number;
+  /**
+   * published / scheduled * 100 - the SUCCESS RATE.
+   *
+   * A different number from `adherence_rate`, which is measured
+   * against the larger of the plan and the goal. A card that called the
+   * goal-based number a "success rate" while showing "11 of 13
+   * scheduled posts went out" underneath could not be reconciled by
+   * the person reading it.
+   */
+  success_rate: number;
 }
 
 export interface CadenceResponse {

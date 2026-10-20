@@ -8,7 +8,6 @@
   import { feedApi } from '$lib/api/feed';
   import { integrationsApi, type Integration } from '$lib/api/integrations';
   import { auth } from '$lib/api/auth';
-  import { formatDateTime } from '$lib/calendar/utils';
   import { goto } from '$app/navigation';
   import { realtime } from '$lib/stores/realtime';
   import { timezone } from '$lib/stores/timezone.svelte';
@@ -73,8 +72,20 @@
   async function load() {
     loading = true;
     // v24-3: fetch the new analytics endpoints in parallel with the existing ones.
-    const [postsRes, summaryRes, integRes, feedRes, engagementRes, adherenceRes, cadenceRes, eventsRes] = await Promise.all([
-      postsApi.list({ limit: 100 }),
+    const [postsRes, summaryRes, integRes, feedRes, engagementRes, adherenceRes, cadenceRes, eventsRes, draftTotalRes, queuedTotalRes, publishedTotalRes, errorTotalRes, draftListRes, queuedListRes, publishedListRes] = await Promise.all([
+      // The list the dashboard renders from.
+      //
+      // It was `limit: 100` of everything, and EVERY aggregate was
+      // computed from that one page. With 106 posts the dashboard said
+      // "Drafts 84" while the Posts page said 89 - the same account,
+      // two numbers, and which 6 posts fell off the end depended on
+      // the sort order.
+      //
+      // So the COUNTS come from the server (the list response carries
+      // the TRUE `total` for a filtered query) and the LISTS are
+      // fetched per state, so the rows the dashboard shows and the
+      // number it reports describe the same set.
+      postsApi.list({ limit: 200, state: 'error' }),
       // The summary is fetched with a 7-day window, and the card that
       // renders it is labelled "Channel Performance (30d)". The label
       // said 30; the data was 7 - so a channel that published only
@@ -88,6 +99,17 @@
       analyticsApi.getAdherence(7),
       analyticsApi.getCadence(30),
       analyticsApi.getRecentEvents(10),
+      // The per-state TOTALS. `limit: 1` because only the count is
+      // wanted - the server still counts every row that matches.
+      postsApi.list({ limit: 1, state: 'draft' }),
+      postsApi.list({ limit: 1, state: 'queued' }),
+      postsApi.list({ limit: 1, state: 'published' }),
+      postsApi.list({ limit: 1, state: 'error' }),
+      // The ROWS the dashboard shows, per state, so a list and its
+      // count never describe different sets.
+      postsApi.list({ limit: 200, state: 'draft' }),
+      postsApi.list({ limit: 200, state: 'queued' }),
+      postsApi.list({ limit: 200, state: 'published' }),
     ]);
 
     if (feedRes.data) {
@@ -100,9 +122,9 @@
 
     if (postsRes.data) {
       const all = postsRes.data.posts;
-      upcoming = all.filter(p => p.state === 'queued').slice(0, 5);
-      recentPublished = all.filter(p => p.state === 'published').slice(0, 5);
-      draftPosts = all.filter(p => p.state === 'draft');
+      upcoming = queuedListRes.data?.posts ?? [];
+      recentPublished = publishedListRes.data?.posts ?? [];
+      draftPosts = draftListRes.data?.posts ?? [];
       // v22 Phase 5: timezone-aware "today's schedule" filter. Previously
       // used `new Date().toDateString()` which compares in browser local
       // time, not the user's selected timezone. Now we format both the
@@ -114,11 +136,17 @@
         return formatPostDateInTimezone(p.scheduled_at) === todayStr;
       });
       todayPosts = allTodayPosts.slice(0, 5);
+      // The COUNTS are the server's.
+      //
+      // Every number here used to be `all.filter(...).length` on a
+      // clipped page, so a dashboard with more than 100 posts reported
+      // a number that disagreed with the Posts page - the same
+      // account, two different answers.
       stats = {
-        draft: all.filter(p => p.state === 'draft').length,
-        queued: all.filter(p => p.state === 'queued').length,
-        published: all.filter(p => p.state === 'published').length,
-        error: all.filter(p => p.state === 'error').length,
+        draft: draftTotalRes.data?.total ?? 0,
+        queued: queuedTotalRes.data?.total ?? 0,
+        published: publishedTotalRes.data?.total ?? 0,
+        error: errorTotalRes.data?.total ?? 0,
       };
     }
 
@@ -150,6 +178,34 @@
       return new Date(iso).toLocaleDateString('en-CA', { timeZone: tz });
     } catch {
       return new Date(iso).toDateString();
+    }
+  }
+
+  /**
+   * The wall-clock TIME of a post, in the app's selected timezone.
+   *
+   * The card used to render `formatDateTime(post.scheduled_at).slice(-5)`.
+   * `formatDateTime` returns "Oct 20, 04:07 PM", and the last five
+   * characters of that are "07 PM" - the MINUTES plus the meridiem, not
+   * the time. A post scheduled for 16:07 read as "07 PM", and a post
+   * scheduled for 09:00 read as "00 AM".
+   *
+   * So the time is read out of the instant, in the app's zone - the
+   * same zone the card's header NAMES. The old helper also formatted
+   * in the BROWSER's zone, so the time was wrong twice over: once
+   * because of the slice and once because of the zone.
+   */
+  function formatPostTimeInTimezone(iso: string): string {
+    try {
+      const tz = timezone.value;
+      return new Date(iso).toLocaleTimeString('en-US', {
+        timeZone: tz,
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      });
+    } catch {
+      return new Date(iso).toTimeString().slice(0, 5);
     }
   }
 
@@ -305,11 +361,13 @@
             </div>
             <div class="flex items-center gap-2">
               <div class="flex-1 bg-background-input rounded-full h-2 overflow-hidden">
-                <div class="h-full bg-success rounded-full transition-all duration-500" style="width: {adherenceData.scheduled > 0 ? adherenceData.adherence_rate : 0}%"></div>
+                <div class="h-full bg-success rounded-full transition-all duration-500" style="width: {adherenceData.scheduled > 0 ? adherenceData.success_rate : 0}%"></div>
               </div>
-              <span class="text-sm font-medium {adherenceData.scheduled > 0 ? 'text-success' : 'text-muted'}">{adherenceData.scheduled > 0 ? `${Math.round(adherenceData.adherence_rate)}%` : 'Not yet'}</span>
+              <span class="text-sm font-medium {adherenceData.scheduled > 0 ? 'text-success' : 'text-muted'}">{adherenceData.scheduled > 0 ? `${Math.round(adherenceData.success_rate)}%` : 'Not yet'}</span>
             </div>
-            <p class="text-[10px] text-faint mt-2">Adherence rate: published / scheduled × 100</p>
+            <p class="text-[10px] text-faint mt-2">
+              Success rate: {adherenceData.published} of {adherenceData.scheduled} scheduled posts went out
+            </p>
           </div>
         {/if}
         {#if cadenceData}
@@ -490,7 +548,7 @@
           <div class="space-y-1">
             {#each todayPosts as post}
               <div class="flex items-center gap-3 py-2 border-b border-line last:border-0">
-                <span class="text-xs text-muted w-12 font-mono">{post.scheduled_at ? formatDateTime(post.scheduled_at).slice(-5) : ''}</span>
+                <span class="text-xs text-muted w-12 font-mono">{post.scheduled_at ? formatPostTimeInTimezone(post.scheduled_at) : ''}</span>
                 <span class="flex-1 text-sm truncate text-content-secondary">{post.content || post.title || '(no content)'}</span>
                 <span class="text-xs text-muted">{post.integration_name}</span>
               </div>

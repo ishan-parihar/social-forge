@@ -608,7 +608,7 @@
       events={filteredEvents}
       {selected}
       onEventClick={(id) => selectedEvent = events.find(e => e.id === id) || null}
-      onDateClick={(date) => composer.openCreate(date)}
+      onDateClick={(date, hour) => composer.openCreate(date, undefined, undefined, undefined, hour)}
       onDrop={handleDrop}
       onDuplicate={handleDuplicate}
       onStats={handleStats}
@@ -621,7 +621,7 @@
       events={filteredEvents}
       {selected}
       onEventClick={(id) => selectedEvent = events.find(e => e.id === id) || null}
-      onDateClick={(date) => composer.openCreate(date)}
+      onDateClick={(date, hour) => composer.openCreate(date, undefined, undefined, undefined, hour)}
       onDrop={handleDrop}
       onDuplicate={handleDuplicate}
       onStats={handleStats}
@@ -634,8 +634,9 @@
       events={filteredEvents}
       {selected}
       integrations={allIntegrations}
+      integrationFilter={selectedIntegrationId}
       onEventClick={(id) => selectedEvent = events.find(e => e.id === id) || null}
-      onDateClick={(date) => composer.openCreate(date)}
+      onDateClick={(date, hour) => composer.openCreate(date, undefined, undefined, undefined, hour)}
       onDrop={handleDrop}
       onDuplicate={handleDuplicate}
       onStats={handleStats}

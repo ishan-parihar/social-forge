@@ -35,7 +35,10 @@
   <div class="min-w-0 flex-1">
     <p class="text-sm font-medium text-content">{title}</p>
     {#if message}
-      <p class="text-xs text-muted mt-0.5 break-words">{message}</p>
+      <!-- `whitespace-pre-line` so a two-line message keeps its break.
+           The DMs page's message names the channel, says what to do,
+           and then quotes the provider's own text on the next line. -->
+      <p class="text-xs text-muted mt-0.5 break-words whitespace-pre-line">{message}</p>
     {/if}
   </div>
   {#if actionLabel && onaction}

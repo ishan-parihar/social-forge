@@ -44,7 +44,20 @@ async fn call_llm(
         .config
         .llm_endpoint
         .as_ref()
-        .ok_or_else(|| AppError::BadRequest("LLM_ENDPOINT not configured".into()))?;
+        // The founder-facing message.
+        //
+        // "LLM_ENDPOINT not configured" is an INTERNAL detail: it names
+        // an env var, and it appeared in a red error in the composer
+        // every time a post was opened, because the AI hashtag panel
+        // asks for suggestions automatically. The founder cannot set an
+        // env var - the operator can - so the message has to say what
+        // is actually true and what the founder can do about it.
+        .ok_or_else(|| {
+            AppError::BadRequest(
+                "AI suggestions are not set up on this instance. Ask the operator to configure the LLM proxy."
+                    .into(),
+            )
+        })?;
     let model = state
         .config
         .llm_model

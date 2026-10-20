@@ -27,6 +27,15 @@ export interface Campaign {
   updated_at: string;
   post_count: number | null;
   /**
+   * The posts in this campaign that FAILED to publish.
+   *
+   * Reported beside `post_count` rather than inside it: a failed post
+   * is work the founder did, and the progress bar said nothing about
+   * it - so the card read "4 / 24 posts" while the detail page's
+   * "Posts (5)" tab listed five, on the same screen.
+   */
+  failed_count: number | null;
+  /**
    * Total engagement across the campaign's published posts, from
    * `analytics_cache`. The progress bar measures `progress_metric`,
    * which can be "engagement" - so it needs this number, not the post

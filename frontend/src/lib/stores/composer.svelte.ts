@@ -33,6 +33,16 @@ class ComposerStore {
 
   /** For create mode: optional preset date (YYYY-MM-DD) from calendar slot. */
   presetDate = $state<string | null>(null);
+  /**
+   * The wall-clock TIME the composer opens with, as "HH:MM".
+   *
+   * The calendar's ghost slot advertises a channel's usual posting
+   * time - "X (Twitter) usually posts at this time" - and clicking it
+   * opened the composer at the hardcoded 09:00 instead. The value the
+   * founder picked was in the chip they clicked and it was thrown
+   * away.
+   */
+  presetTime = $state<string | null>(null);
 
   /** For create mode: optional preset integration IDs (from channel menu). */
   presetIntegrationIds = $state<string[]>([]);
@@ -58,9 +68,11 @@ class ComposerStore {
     presetIntegrationIds?: string[],
     prefilledContent?: string,
     prefilledMedia?: Array<{ id?: string; url: string; mime_type: string; alt?: string; original_name?: string }>,
+    presetTime?: string | null,
   ) {
     this.mode = 'create';
     this.presetDate = presetDate ?? null;
+    this.presetTime = presetTime ?? null;
     this.presetIntegrationIds = presetIntegrationIds ?? [];
     this.prefilledContent = prefilledContent ?? null;
     this.prefilledMedia = prefilledMedia ?? null;
@@ -73,6 +85,7 @@ class ComposerStore {
     this.mode = 'edit';
     this.editingPostId = postId;
     this.presetDate = null;
+    this.presetTime = null;
     this.presetIntegrationIds = [];
     this.prefilledContent = null;
     this.prefilledMedia = null;
@@ -106,6 +119,7 @@ class ComposerStore {
     // Reset entry-point state after the modal unmounts.
     setTimeout(() => {
       this.presetDate = null;
+      this.presetTime = null;
       this.presetIntegrationIds = [];
       this.editingPostId = null;
       this.prefilledContent = null;

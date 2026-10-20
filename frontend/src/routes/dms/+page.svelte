@@ -49,7 +49,21 @@
     if (r.data) {
       conversations = r.data.conversations;
     } else {
-      error = r.error || "Failed to load conversations";
+      // The message names the CHANNEL and says what to do.
+      //
+      // The raw provider error was shown verbatim, and for X it is a
+      // POST-LOOKUP message - "X post or user not found, it may be
+      // deleted or protected" - shown for a CONVERSATION-LIST failure.
+      // The founder's first impression of the DMs page was a message
+      // about a deleted post, and a Retry button that looped the same
+      // failure forever.
+      //
+      // The provider's own text is kept - it is the detail - but it is
+      // no longer the whole message, and the thing the founder can
+      // actually DO is named.
+      const channel = integrations.find((i) => i.id === selectedIntegrationId);
+      const name = channel?.profile_name || channel?.provider_name || 'this channel';
+      error = `Could not reach ${name} for direct messages. Check the connection, or pick another channel.\n\n${r.error || ''}`;
     }
     loading = false;
   }

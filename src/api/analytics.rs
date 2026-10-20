@@ -731,6 +731,23 @@ pub struct AdherenceResponse {
     pub published: i64,
     pub failed: i64,
     pub adherence_rate: f64, // published / max(scheduled, goal * days) * 100
+    /// published / scheduled * 100.
+    ///
+    /// The SUCCESS RATE, and it is a different number from the
+    /// adherence rate.
+    ///
+    /// The two were conflated on two surfaces, and the founder could
+    /// not reconcile them: a card read "Publish success rate 24%" and
+    /// directly under it "11 of 13 scheduled posts went out" - which
+    /// is 85%. The 24% came from the goal-inflated denominator
+    /// (`max(scheduled, goal x days)`), so with a 1.5/day goal over 30
+    /// days the denominator was 45 and the "success rate" was 11/45.
+    ///
+    /// A success rate has to be a success rate. This is the plain
+    /// fraction of the scheduled posts that actually went out, and the
+    /// goal-based adherence rate is reported beside it under its own
+    /// name.
+    pub success_rate: f64,
 }
 
 /// GET /api/analytics/adherence?days=7[&goal_per_day=N]
@@ -775,12 +792,18 @@ pub async fn get_adherence(
 
     let (scheduled, published, failed) = row;
     let adherence_rate = adherence_percent(scheduled, published, goal, days);
+    let success_rate = if scheduled > 0 {
+        ((published as f64 / scheduled as f64) * 100.0).clamp(0.0, 100.0)
+    } else {
+        0.0
+    };
 
     Ok(Json(AdherenceResponse {
         scheduled,
         published,
         failed,
         adherence_rate,
+        success_rate,
     }))
 }
 
