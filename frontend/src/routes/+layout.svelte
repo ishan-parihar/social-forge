@@ -111,8 +111,31 @@
         // The confirmation. `onClose` returning false ABORTS the
         // close, so the modal stays open until the founder answers.
         onClose: async (confirmed: boolean) => {
-          if (confirmed) return true;
-          if (!composer.dirty) return true;
+          // The composer has ALREADY decided to close.
+          //
+          // `composer.close()` sets `composer.open = false`, the layout's
+          // $effect then calls `modals.close(composerModalId)`, and that
+          // re-enters THIS callback. Without the guard it asked a SECOND
+          // time - and the second question's promise was nobody's to
+          // await, so `_pendingConfirm` stayed set FOREVER. The next
+          // Escape on any page in the app then resolved that orphan and
+          // did nothing else.
+          if (!composer.open) return true;
+
+          // `composer.close()` is the ONLY thing that flips `open`.
+          // The confirmed path has to call it too, or the modal is
+          // removed from the stack while the store still says the
+          // composer is open - and the composer could then never be
+          // opened again, because the layout's effect sees `open` already
+          // true and does nothing.
+          if (confirmed) {
+            composer.close();
+            return true;
+          }
+          if (!composer.dirty) {
+            composer.close();
+            return true;
+          }
           const ok = await modals.areYouSure({
             title: 'Discard this post?',
             message:

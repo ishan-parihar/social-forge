@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { focusTrap } from '$lib/ui/focus-trap';
   import Skeleton from '$lib/ui/Skeleton.svelte';
+  import EmptyState from '$lib/ui/EmptyState.svelte';
   import { webhooksApi, type Webhook, type WebhookDelivery } from "$lib/api/webhooks";
   import { toast } from "$lib/stores/toast";
   import { modals } from '$lib/stores/modals.svelte';
@@ -147,9 +148,13 @@
   {#if loading}
     <Skeleton variant="row" rows={4} />
   {:else if webhooks.length === 0}
-    <div class="text-center py-12 text-sm text-muted">
-      No webhooks configured. Create one to receive real-time event notifications.
-    </div>
+    <EmptyState
+      icon="webhook"
+      title="No webhooks configured"
+      description="Create one to receive real-time event notifications when a post is published or fails."
+      actionLabel="Create webhook"
+      onaction={openCreate}
+    />
   {:else}
     <div class="page-enter space-y-3">
       {#each webhooks as wh (wh.id)}

@@ -45,19 +45,6 @@ export interface ModalOptions {
   closeOnClickOutside?: boolean;
   /** Escape key closes the topmost modal? Default: true */
   closeOnEscape?: boolean;
-  /**
-   * Called when the user presses Escape, INSTEAD of the default close.
-   *
-   * A modal with unsaved work wants to CONFIRM before it closes, so it
-   * sets `closeOnEscape: false` and handles Escape itself. The composer
-   * is one: Escape asks "Discard this post?" rather than throwing the
-   * text away.
-   *
-   * Without this, `closeOnEscape: false` meant Escape did NOTHING -
-   * the composer had a `handleClose(false)` whose own comment said
-   * "Backdrop/escape close", and no path ever called it.
-   */
-  onEscape?: () => void;
   /** Show a close (×) button in the header? Default: true (only if title is set) */
   withCloseButton?: boolean;
   /** Ask for confirmation before closing? The modal's onclose callback

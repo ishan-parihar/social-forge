@@ -38,12 +38,6 @@
     }
     if (modals.stack.length === 0) return;
     const top = modals.stack[modals.stack.length - 1];
-    // A modal that handles Escape itself (the composer, which confirms
-    // before discarding unsaved work) gets the call.
-    if (top.options.onEscape) {
-      top.options.onEscape();
-      return;
-    }
     if (top.options.closeOnEscape === false) return;
     modals.closeCurrent(false);
   }

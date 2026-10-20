@@ -52,22 +52,6 @@ export interface FocusTrapParams {
   enabled?: boolean;
   /** Tab to this node when the dialog has no focusable children. Default true. */
   focusSelf?: boolean;
-  /**
-   * Called when the user presses Escape. OPTIONAL, and off by default.
-   *
-   * The trap does NOT own Escape. A dialog's Escape handler belongs on
-   * the PANEL, not on a wrapper: the panel holds the focus, and a
-   * keydown from the panel's children bubbles to it. A handler on the
-   * wrapper only ever saw a keydown that nobody had consumed, which
-   * stopped working the moment the focus moved onto a child.
-   *
-   * The trap also must not STOP the event: the modal manager has its
-   * own window-level Escape handler, and a dialog may have its own.
-   * Two handlers for one keystroke fight - the composer asked "Discard
-   * this post?" and the SAME keystroke answered it, so the confirm
-   * appeared and vanished in one frame.
-   */
-  onEscape?: () => void;
 }
 
 /**

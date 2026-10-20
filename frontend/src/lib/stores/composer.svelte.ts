@@ -97,6 +97,12 @@ class ComposerStore {
   /** Close the composer. ComposerModal's onClose handles the askClose confirm. */
   close() {
     this.open = false;
+    // The dirty flag MUST be cleared here.
+    //
+    // It was never reset, so the NEXT composer session started dirty:
+    // the founder opened the composer, pressed Escape to dismiss it, and
+    // was asked "Discard this post?" about a post they had not written.
+    this.dirty = false;
     // Reset entry-point state after the modal unmounts.
     setTimeout(() => {
       this.presetDate = null;

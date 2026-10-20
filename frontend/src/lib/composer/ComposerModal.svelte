@@ -79,20 +79,27 @@ const MANUAL_TARGET: Record<string, { key: string; label: string; placeholder: s
   let { close: closeProp } = $props<{ close: (confirmed?: boolean) => void }>();
 
   /**
-   * The composer's close, with the DISCARD CONFIRMATION.
+   * Close the composer.
    *
-   * The modal manager passes `close` straight through to
-   * `modals.close(id, confirmed)`, so an Escape or a backdrop click
-   * closed the composer WITHOUT asking - and the composer had a
-   * `handleClose(false)` whose own comment said "Backdrop/escape close",
-   * with no path that ever called it.
+   * This calls the MODAL STORE's close, which runs the modal's
+   * `onClose` - the ONE place that asks "Discard this post?".
    *
-   * So the composer closes through its own handler: a backdrop click
-   * and an Escape both ask "Discard this post?" when there is
-   * something to lose, and the × button closes outright.
+   * The component must reach the store BEFORE it flips
+   * `composer.open`. `composer.close()` sets `open = false`, the
+   * layout's effect then calls `modals.close(id)`, and the store's
+   * `onClose` sees `composer.open` already false - so the guard that
+   * suppresses the SECOND prompt also suppresses the FIRST one, and
+   * the × button discards a dirty draft with no question at all.
+   *
+   * So the order is: ask the store, the store asks, and only the
+   * store's own `onClose` calls `composer.close()`.
+   *
+   * The default is `true` - "the composer is being closed, there is
+   * nothing to ask" - so a programmatic close (a failed load) does not
+   * prompt. The × button and Escape pass `false` to ASK.
    */
-  async function close(confirmed: boolean = false) {
-    await handleClose(confirmed);
+  function close(confirmed: boolean = true) {
+    closeProp(confirmed);
   }
 
   // ── Form state (mirrors routes/posts/new/+page.svelte) ──────────
@@ -1196,27 +1203,16 @@ const MANUAL_TARGET: Record<string, { key: string; label: string; placeholder: s
   }
 
   // askClose: if content is non-empty, confirm before closing.
-  async function handleClose(confirmed: boolean) {
-    if (confirmed) {
-      composer.close();
-      return;
-    }
-    // Backdrop/escape close - confirm if dirty.
-    if (content.trim() || title.trim() || selectedIntegrations.length > 0) {
-      const ok = await modals.areYouSure({
-        title: 'Discard this post?',
-        message: 'Your content will be lost. (Drafts are auto-saved if you typed something.)',
-        confirmLabel: 'Discard',
-        cancelLabel: 'Keep editing',
-        danger: true,
-      });
-      if (ok) {
-        composer.close();
-      }
-      return; // abort close either way (we handle it manually)
-    }
-    composer.close();
-  }
+  /**
+   * The DISCARD CONFIRMATION lives in the modal's `onClose` (in
+   * +layout.svelte): the store calls it before it closes, and it is the
+   * ONE place that asks "Discard this post?".
+   *
+   * The component used to have its own copy of the question. Two
+   * questions for one close meant the second one's promise was nobody's
+   * to await, and the pending confirm was left set FOREVER - so the
+   * next Escape on any page in the app was swallowed.
+   */
 
   let isDirty = $derived(!!content.trim() || !!title.trim() || selectedIntegrations.length > 0);
 
@@ -1298,7 +1294,7 @@ const MANUAL_TARGET: Record<string, { key: string; label: string; placeholder: s
         <kbd class="px-1 py-0.5 bg-surface-hover rounded">⌘</kbd>+<kbd class="px-1 py-0.5 bg-surface-hover rounded">S</kbd> save
       </span>
       <button
-        onclick={() => handleClose(true)}
+        onclick={() => close(false)}
         class="text-muted hover:text-content text-2xl leading-none -mt-1 min-h-11 min-w-11 flex items-center justify-center"
         aria-label="Close composer"
       >&times;</button>

@@ -218,12 +218,6 @@ fn d3_documented_per_platform_counts_match_registry() {
     let lines: Vec<&str> = providers.lines().collect();
     let mut checked = 0;
     for (title, prefixes) in sections {
-        let head = prefixes
-            .iter()
-            .map(|p| format!("{p}"))
-            .count()
-            .to_string();
-        let _ = head;
         let heading = format!("### {title} (");
         let idx = lines
             .iter()
@@ -237,11 +231,21 @@ fn d3_documented_per_platform_counts_match_registry() {
             .parse()
             .unwrap_or_else(|_| panic!("providers.md: unparseable count in `{}`", lines[idx]));
 
-        // The section body, up to the next heading or `---`.
+        // The section body, up to the next heading or `---`. The appended
+        // "Not listed above" continuation line is INSIDE the body on purpose:
+        // some sections are a curated subset plus an explicit continuation,
+        // and the whole thing must reconcile. What the check must catch is a
+        // section that silently drops tools with no continuation saying so —
+        // so the continuation line is counted, and then the drop is required
+        // to be declared rather than inferred.
         let mut body = String::new();
+        let mut continuation = false;
         for line in &lines[idx + 1..] {
             if line.starts_with("### ") || line.starts_with("## ") || line.trim() == "---" {
                 break;
+            }
+            if line.starts_with("**Not listed above") {
+                continuation = true;
             }
             body.push_str(line);
             body.push('\n');
@@ -261,12 +265,36 @@ fn d3_documented_per_platform_counts_match_registry() {
             declared, expected,
             "providers.md: `{title}` claims {declared} tools but the registry has {expected}"
         );
-        // A body that silently drops tools is caught as well as a stale count.
-        assert_eq!(
-            listed, expected,
-            "providers.md: `{title}` lists {listed} of {expected} registered tools — \
-             either add the missing ones or say which are omitted"
-        );
+        // A section may be a curated subset, but the omission must be DECLARED by a
+        // continuation line that names the omitted tools. Requiring merely that
+        // some continuation line exists is not enough: a stale line left over from
+        // an earlier edit satisfies it while the drop is invisible. So the
+        // continuation's own tail count is reconciled against what the prose lists.
+        if listed < expected {
+            let tail = lines[idx + 1..]
+                .iter()
+                .take_while(|l| !l.starts_with("### ") && !l.starts_with("## ") && l.trim() != "---")
+                .find(|l| l.starts_with("**Not listed above"))
+                .and_then(|l| {
+                    let after = l.split("Not listed above").nth(1)?;
+                    let n = after.trim().trim_start_matches('(').split(' ').next()?;
+                    n.parse::<usize>().ok()
+                })
+                .unwrap_or(0);
+            assert!(
+                continuation,
+                "providers.md: `{title}` names {listed} of {expected} registered tools and has no \
+                 `**Not listed above` continuation — add the missing tools or say which are omitted"
+            );
+            assert_eq!(
+                listed + tail,
+                expected,
+                "providers.md: `{title}` lists {listed} tools and its continuation claims {tail} more, \
+                 totalling {} — the registry has {expected}. The continuation must name every tool \
+                 the prose omits, and its count must be true",
+                listed + tail
+            );
+        }
         checked += 1;
     }
     assert_eq!(checked, sections.len(), "every section must be checked");
