@@ -111,3 +111,19 @@ Stage Summary:
 - Verification: 481 lib tests + the integration targets pass; `cargo clippy --all-targets --all-features --locked -- -D warnings` 0 errors; `svelte-check` 0 errors / 0 warnings; `pnpm build` clean; the probe over 13 routes x 3 widths x 2 themes reports 0 FAIL and 0 console errors.
 - Artifacts: new tests/scheduler_claim_test.rs (3 tests, one of which FAILS without the claim guard - verified by removing it) and the node-driven parity test in tests/html_to_text_test.rs. New: frontend/src/lib/composer/post-text.ts.
 - Known follow-ups: the remaining tap-target advisories are the calendar's hour-grid chips (21px, and the grid IS the design), the tag pills (their width is their text), and a few inputs in narrow cells.
+
+---
+Task ID: red-team-web-dashboard-2026-10-20-final
+Agent: omp (same session, final gate)
+Task: The last visual pass, the last advisories, and the ship gate.
+
+Work Log:
+- The probe's FONT check was wrong, and it had been reporting a failure on every page. A webfont arrives as many faces - one per weight AND per unicode subset - and the browser loads a face only when some text needs it, so a family that IS working still has faces sitting at `unloaded`. The check compared the family against the set of LOADED faces, so Inter (whose latin face was loaded and whose cyrillic face was not) read as "never loaded". Verified in a real browser FIRST: the latin face was `loaded`, `document.fonts.check('12px Inter')` was true, and the woff2 request returned 200. A family is loaded when AT LEAST ONE of its faces is.
+- "No default signature" is an empty result, not a missing resource. It was a 404, and the composer calls that endpoint on every mount - so every user without a signature saw a 404 in their console on every page. It returns `null` with a 200 now.
+- The last tap-target advisories were the buttons that were ONE line short of 44px: `px-4 py-2` around a 20px line gives 36px, `px-3 py-1.5` gives 34px. The fix is systematic rather than per-control: every button and every button-shaped link carries `min-h-11`. The inline TEXT links were left alone - "View all (8)", "Full analytics", a Telegram username - because a 44px box around a sentence inside a row pushes the row apart, and they are sentences, not controls. 142 -> 126 advisories.
+- The 375px pass: every one of the 13 routes has ZERO horizontal overflow, and the calendar's week grid is a 640px time grid inside a 335px scroll container with `overflow-x: auto` - which is the right pattern for a time grid on a phone, and was confirmed rather than assumed.
+
+Stage Summary:
+- Verification: 481 lib tests + 62 integration tests pass (0 failed); `cargo clippy --all-targets --all-features --locked -- -D warnings` 0 errors; `svelte-check` 0 errors / 0 warnings; `pnpm build` clean; the probe over 13 routes x 3 widths x 2 themes reports 0 FAIL, 0 console errors, 0 404s, and 126 advisories (from 4056 at the start of the first iteration).
+- Artifacts: 6 commits on master, all pushed to github/master (4996f07). The tree is clean.
+- Known follow-ups: the 126 remaining advisories are inline text links (sentences, not controls) and the calendar's hour-grid chips (21px - the grid IS the design). The `live_*` test binaries hit the real provider APIs and fail intermittently on rate limits; that is environmental.
