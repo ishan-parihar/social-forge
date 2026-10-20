@@ -156,16 +156,23 @@ When implementing features inspired by postiz-app or other competitors, apply th
 | `AGENTS.md` (this file) | Build/test/git/security protocol | Always, first |
 | `README.md` | User-facing overview, platform tiers, CLI/MCP reference | For product context |
 | `docs/planning/PLAN_PARITY_DEPTH_SINGLEUSER_v25.md` | Live master plan: tier rationale (§1), parity phases | Before parity/feature work |
+| `docs/PAGE-INDEX.md` | Every active doc with the question it owns | First — it is the routing index the doc map below summarises |
+| `docs/platforms-and-cli.md` | Platform list and the full CLI reference | When you need a command or a platform's capabilities |
+| `docs/deployment.md` | Deployment: env vars, TLS, reverse proxy, OAuth redirect URIs | Before deploying, or an OAuth redirect misbehaves |
+| `docs/agent-integration.md` | MCP setup, Claude Code / Codex / OpenCode session hooks | When wiring an agent to this repo |
 | `docs/audit/AUDIT_2026-10-14.md` | End-to-end audit: P0 bugs, cookie/API matrix, fragmentation, phased plan — executed through the 2026-10-15/16 cycles; **history** | For audit context on the P0 fixes and the cookie/API matrix |
-| `docs/archive/GAPS_2026-10-15.md` | What the 13 landed audit commits did NOT close at the time — superseded by the OUTLINE succession; **history** | For what was still open after the 13 landed commits, and how it was tracked before the register |
+| `docs/archive/GAPS_2026-10-15.md` | What the 13 landed audit commits did NOT close at the time — superseded by the OUTLINE succession; **history**. Tombstone: `docs/archive/GAPS_2026-10-15.md` (the original path lost its copy on archive) | For what was still open after the 13 landed commits, and how it was tracked before the register |
+| `docs/planning/TARGETING_AND_WRITER_DISCIPLINE.md` | Targeting, collisions, and the single-writer rule (G-08) — why one long-lived process owns the database | Before touching scheduling, the writer, or the deployment model |
 | `docs/planning/VENDOR_PINS.md` | Pinned transitive deps enforced by `vendor-pull.sh --check` (CI gate) | Before touching `Cargo.toml` |
+| `docs/planning/DECISIONS_2026-10-19.md` | Open decision points with recommendations — nothing in it is applied until the user approves | When a design-direction change is proposed |
+| `docs/planning/EXECUTION_2026-10-19.md` | Cycle-3 execution log: what landed, the gate results, and what did not | As evidence for register transitions |
 | `docs/planning/OUTLINE-2026-10-19-v2.md` | The live working queue (audit-revised 2026-10-19): P0 gate, B-token-efficiency, C3 eval loop, E credential-blocked live passes | Before starting ANY implementation work |
-| `docs/archive/OUTLINE-2026-10-17.md` | Superseded by the 2026-10-19 v2 outline — history, not queue. Its Wave A–C items are tracked in `TODO.md` | For provenance of the 2026-10-17 cycle |
-| `docs/archive/OUTLINE-2026-10-16.md` | Executed + red-team-audited predecessor outline (execution `d5b9bbd..7873f84`, audit `ca63a9e`) — history, not queue | For provenance of what landed 2026-10-16/17 |
+| `docs/archive/OUTLINE-2026-10-17.md` | Superseded by the 2026-10-19 v2 outline — history, not queue. Its Wave A–C items are tracked in `TODO.md`. Tombstone: `docs/archive/OUTLINE-2026-10-17.md` is the file's tombstone entry in `docs/archive/INDEX.md`; the live outline is the one below | For provenance of the 2026-10-17 cycle |
+| `docs/archive/OUTLINE-2026-10-16.md` | Executed + red-team-audited predecessor outline (execution `d5b9bbd..7873f84`, audit `ca63a9e`) — history, not queue. Tombstone: `docs/archive/INDEX.md` row; the live outline is the one below | For provenance of what landed 2026-10-16/17 |
 | `TODO.md` | The register: live status per work item (`scripts/genome status` is the supervised transition), seeded from the 2026-10-17 outline | To see or claim what's open |
 | `worklog.md` | The multi-agent worklog — this protocol, §8 | Before starting work; after finishing |
 | `docs/decisions/` | AD-NNN decision records, immutable once numbered (`scripts/genome rec new ad` mints them) | When a direction change is ratified |
-| `SESSION_HOOKS.md` | Session-start ambient-context setup (AXI) | When wiring agent hooks |
+| `docs/SESSION_HOOKS.md` | Session-start ambient-context setup (AXI) | When wiring agent hooks |
 | `skills/social-forge-agent/SKILL.md` | Installed agent skill (via `make install-skill`) | When editing the skill |
 | `skills/social-forge-agent/references/providers.md` | Per-platform provider reference | When editing provider docs |
 | `docs/planning/PHASES_P0-P9.md` | The P0–P9 phase plan the objective names: each phase's acceptance criteria and its register-row mapping | Before parity or phase work; when claiming a phase is done |
@@ -176,17 +183,17 @@ Superseded docs move to `docs/archive/` with a tombstone at the original path �
 
 ### Rust style: `rust-best-practices` skill
 
-Load the `rust-best-practices` skill (`/home/ishanp/.agents/skills/rust-best-practices/SKILL.md`, Apollo handbook, 10 chapters) before writing or reviewing Rust: `&T` over `.clone()`, `Result` + `?` over `unwrap` (never `unwrap`/`expect` outside tests), `thiserror` for libs / `anyhow` for the binary, `cargo clippy --all-targets --all-features --locked -- -D warnings` clean, descriptive test names with one assertion each.
+Load the `rust-best-practices` skill (the Apollo handbook, 10 chapters) before writing or reviewing Rust: `&T` over `.clone()`, `Result` + `?` over `unwrap` (never `unwrap`/`expect` outside tests), `thiserror` for libs / `anyhow` for the binary, `cargo clippy --all-targets --all-features --locked -- -D warnings` clean, descriptive test names with one assertion each.
 
 Social Forge is a **single-user, self-hosted social media management platform** designed for AI agents. It provides a triple interface — CLI, REST API, and MCP server — over 26 social platforms (X, Reddit, LinkedIn, Facebook, Instagram, YouTube, Threads, TikTok, Bluesky, Pinterest, Discord, Slack, Telegram, WhatsApp, WordPress, Medium, Dev.to, Hashnode, GitHub, etc.).
 
 **Architecture in one paragraph:** A single Rust binary (`social-forge`) runs an axum HTTP server (REST API + embedded SvelteKit frontend), an rmcp MCP server (stdio, for AI agents like Claude/Cursor), an in-process scheduler (polls for due posts every 30s), an SSE broadcaster (realtime updates to the frontend), and background tasks (RSS poller, feed refresher, analytics cache refresher). All state lives in a local SQLite file. OAuth tokens are AES-256-GCM encrypted at rest when `TOKEN_ENCRYPTION_KEY` is set.
 
-**Key numbers (as of v11):**
-- 389 MCP tools across 44 files in `src/mcp/`
-- 26 providers registered by default in `src/social/registry.rs` — 12 Tier-1 (depth) + 14 Tier-2 (publish-maintained), plus 1 Tier-3 (Farcaster) registered only when `ENABLE_ARCHIVE_PROVIDERS` is set. Tier membership lives in `src/social/tier.rs` (plan §1); `kick`/`vk`/`whop`/`lemmy` were removed outright.
-- 2 SQL migrations in `migrations/`
-- ~85,700 LOC of Rust + ~25,700 LOC of Svelte/TS frontend
+**Key numbers (measured 2026-10-20 against this commit; each line names where to re-measure it):**
+- **389 MCP tools** (`grep -rh '#\[tool(' src/mcp/ | wc -l` = 389), all declared in the one `SocialForgeMcpServer` impl in `src/mcp/mod.rs`; the 46 sibling `src/mcp/tools_*.rs` files are handler modules with no `#[tool]` attributes of their own. The per-module count is 47 files in `src/mcp/`.
+- **27 providers registered by default** in `src/social/registry.rs` — 12 Tier-1 (depth) + 14 Tier-2 (publish-maintained) = 26, plus `linkedin-page` and `instagram-standalone`, which are counted inside their Tier-1 parent. One more, Farcaster, is registered only when `ENABLE_ARCHIVE_PROVIDERS` is set (Tier-3, code in `src/social/archive/`). Tier membership lives in `src/social/tier.rs` (plan §1); `kick`/`vk`/`whop`/`lemmy` were removed outright.
+- **8 SQL migrations** in `migrations/` (`0001_init` … `0008_posts_media_array`), additive-only, no destructive ops.
+- **~94,200 LOC of Rust** (`find src -name '*.rs' | xargs wc -l`) + **~29,200 LOC of Svelte/TS frontend** (`find frontend/src`).
 
 ---
 
@@ -215,8 +222,8 @@ social-forge/
 │   ├── cli/                 # CLI commands (mirrors MCP tools)
 │   │   ├── run.rs           # Main CLI dispatcher (~3729 LOC)
 │   │   └── platforms/       # 32 platform shims (thin wrappers around unified commands)
-│   ├── mcp/                 # MCP server (389 tools)
-│   │   ├── mod.rs           # SocialForgeMcpServer impl + #[tool] method registration (~3492 LOC)
+│   ├── mcp/                 # MCP server (389 tools, all #[tool] methods in mod.rs below)
+│   │   ├── mod.rs           # SocialForgeMcpServer impl + all #[tool] method registration (~4114 LOC)
 │   │   ├── tools_posts.rs   # Post CRUD MCP tools
 │   │   ├── tools_admin.rs   # v9 parity wrappers (posts_repeat, posts_set_tags, media_delete, etc.)
 │   │   ├── tools_x.rs       # X-specific tools (create_tweet, reply, like, retweet, search, timeline)
@@ -258,7 +265,7 @@ social-forge/
 │   ├── tailwind.config.js   # Semantic color tokens (surface, line, muted, content, brand)
 │   ├── svelte.config.js     # adapter-static (SPA fallback)
 │   └── tsconfig.json        # Extends .svelte-kit/tsconfig.json
-├── migrations/              # 2 SQL migrations (001-002, additive-only, no destructive ops)
+├── migrations/              # 8 SQL migrations (0001-0008, additive-only, no destructive ops)
 ├── scripts/
 │   ├── install.sh           # One-line installer (downloads pre-built binary, sets up systemd)
 │   ├── social-forge.service # systemd unit
@@ -654,7 +661,7 @@ If you see `is cmake not installed?` or `Unable to find libclang`, install:
 sudo apt-get install -y cmake libclang-dev
 ```
 
-In sandboxed environments without root, you can sometimes extract the `.deb` files manually (see `/home/z/my-project/scripts/cargo-env.sh` for the env var setup).
+In sandboxed environments without root, extract the `.deb` files manually and point `CC`/`CMAKE`/`LIBCLANG_PATH` at the unpacked tree (the exact env-var set depends on your sandbox's layout).
 
 ### 9.5 SQLX offline cache
 
@@ -945,6 +952,91 @@ with no publish, no error and no refresh, and the research page's
 
 The refresher refreshes the per-post rows too. The window is the recent
 published posts, because a per-post fetch is one API call each.
+
+### 9.33 A `Uuid` column is BLOB(16), and a `String` decode only reads TEXT
+
+sqlx encodes a `Uuid` as BLOB(16) and the SQLite `Uuid` decoder reads
+exactly 16 raw bytes. It does NOT accept the 36-character TEXT form.
+
+So `SELECT id as "id!: String"` on a uuid column is a runtime failure
+("invalid length: expected 16 bytes, found 36" or a UTF-8 decode
+error) that the COMPILE-TIME check cannot see: the column is DECLARED
+`TEXT` in the migration, so the `.sqlx/` cache records the declared
+type and the build passes.
+
+23 sites did this. The symptom was a 500 on `GET /api/automation/rules`
+- and, because the failed POST still INSERTED the row, an orphaned
+rule with no id returned.
+
+The fix is the repo's own convention (30+ sites in `src/db/queries.rs`):
+an explicit `as "id!: Uuid"` override. NOT dropping the override - the
+`query!` MACRO infers the decode type from the DB describe, not from
+the Rust struct field, so a bare `id` on a TEXT column still infers
+`String`.
+
+`tests/uuid_column_decode_test.rs` drives the real router and fails
+on the old code.
+
+### 9.34 A TEXT timestamp bound against an INTEGER epoch column matches NOTHING
+
+SQLite keeps TEXT in an INTEGER-affinity column, and orders every
+INTEGER before every TEXT. A column declared `INTEGER` that is written
+with a `DateTime<Utc>` (sqlx stores RFC 3339 TEXT) compares WRONG
+against every INTEGER bound: `created_at >= ?` is always TRUE, and
+`created_at <= ?` is always FALSE.
+
+`get_engagement_summary` bound a `DateTime<Utc>` cutoff against an
+INTEGER epoch column, so the 30-day window matched ZERO rows and the
+feed half of every analytics headline was "0.0 interactions per post"
+against real posts with real engagement.
+
+Write epoch columns through the `EpochUtc` seam in `db::types` (bind
+`EpochUtc::from(dt)`, read `EpochUtc`).
+
+### 9.35 A page that is only rendered in its DEFAULT state is a page whose other states are unchecked
+
+The probe rendered the calendar in its default state - the WEEK view.
+The month and day views are separate components with their own layout,
+and NEITHER had ever been rendered by the probe. Both were broken: the
+month view's chips were 15px of a 144px cell, the day numbers were at
+2.20:1, and the day view's ghost-slot button was 21px tall.
+
+The probe now drives a page into a named state (`--state "Month"`), and
+the same hole was found in the tag modal's edit form.
+
+### 9.36 A measurement that depends on WHEN it ran is not a measurement
+
+One full probe run reported 69 contrast failures on the research page.
+The next run of the same command reported none.
+
+The theme is a class on `documentElement`, applied by the theme store
+on mount. The probe seeds the choice through localStorage and the store
+reads it on its first read - so there is a window in which the page is
+rendered with NO theme class and the tokens resolve to the un-themed
+defaults. Every failure in that run was a text tier measured against a
+background it would never meet.
+
+The audit waits for the theme class now.
+
+### 9.37 A severity that does not match the standard makes the gate lie
+
+The probe treated every tap target under 44x44 as a FAIL. But WCAG 2.2
+"Target Size (Minimum)" (2.5.8) sets the floor at 24x24, and a FAIL
+means "the probe is not clean" - so a page with a legitimate dense
+month grid could never pass.
+
+Below 24x24 is a FAIL. Between 24 and 44 is a WARNING. The severity
+has to match the standard, or the gate lies about what is broken.
+
+### 9.38 An empty list is not a failure
+
+The probe reported the two dynamic routes as FAIL when the API
+answered 200 with an EMPTY list - the page is not broken, there is no
+row to open. A fresh install looks exactly like this, and a fresh
+install is the FIRST thing a founder sees.
+
+An empty list is a SKIP, and the report says so. An API that FAILS is
+still a FAIL.
 
 ---
 

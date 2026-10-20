@@ -1,5 +1,17 @@
 # Worklog — social-forge multi-agent log (§8 protocol)
 
+## Contents
+
+- [kb-adoption-2026-10-17](#kb-adoption-2026-10-17) — adopt the doc genome, wire it to the repo's existing conventions
+- [genome-migration-2026-10-19](#genome-migration-2026-10-19) — kb.toml → genome.toml, retire the legacy `scripts/kb`
+- [red-team-web-dashboard-2026-10-19](#red-team-web-dashboard-2026-10-19) — red-team pass over the web dashboard
+- [red-team-web-dashboard-2026-10-19-continued](#red-team-web-dashboard-2026-10-19-continued)
+- [red-team-web-dashboard-2026-10-19-final](#red-team-web-dashboard-2026-10-19-final)
+- [red-team-web-dashboard-2026-10-20-iteration-2](#red-team-web-dashboard-2026-10-20-iteration-2)
+- [red-team-web-dashboard-2026-10-20-final](#red-team-web-dashboard-2026-10-20-final)
+- [red-team-iteration-3-5](#red-team-iteration-3-5)
+- [v12-red-team-iterations-6-7](#v12-red-team-iterations-6-7)
+
 Before starting work: read this file top to bottom. After finishing: append a
 section using the template in AGENTS.md §8 — never overwrite. One-liners can
 also be appended via `scripts/kb log "<entry>"` (append-only, the same file).
@@ -218,3 +230,155 @@ Stage Summary:
     rather than showing a 0% bar
   - the research page has no realtime subscription and no refresh
     button outside its error state
+
+---
+
+Task ID: v12-red-team-iterations-6-7
+Agent: omp
+Task: Continue the exhaustive red-teaming of the social-forge web
+dashboard. Iterations 3-5 fixed what the static probe and a read-only
+flow audit found. Iterations 6-7 went after what neither could see:
+the pages in their non-default states, the empty instance, the
+alternate widths, and the tool's own measurement errors.
+
+Work Log:
+- Read the flow auditor's report in full and triaged it into P0/P1/P2.
+  The P0s: editing a post WIPED the provider settings (the composer
+  sent `{}` and the server REPLACED the object, so every edit of a
+  scheduled Reddit post dropped its subreddit); the feed half of every
+  analytics headline was always zero (a TEXT timestamp bound against an
+  INTEGER epoch column); and NO UI path could put a post into a
+  campaign (the composer's dropdown set a variable that was never read,
+  and the create request had no `campaign_id` field at all).
+- Fixed each at the layer that owns the rule, with a regression test
+  that FAILS on the old code: the update MERGES settings, the epoch
+  cutoff goes through the `EpochUtc` seam, and the campaign is
+  writable on create AND on update (three-state, so an edit can set,
+  keep or clear it).
+- Found the composer was writing `settings.channel_id` - a key NO
+  provider reads - while Discord reads `settings.channel`. A Discord
+  post could therefore NEVER publish. Added a `required_settings()`
+  trait method and a create-time check, so the founder is told at
+  compose time instead of finding out from the scheduler hours later.
+- Extended the probe from 13 routes to all 29, and gave it a
+  `--state` option so a page can be measured in a named state. The
+  calendar's month and day views had NEVER been rendered: the month
+  chips were 15px of a 144px cell, the day numbers were at 2.20:1,
+  and the day view's ghost-slot button was 21px tall.
+- Found the probe's own measurement errors, which had been hiding
+  defects: it SKIPPED translucent backgrounds instead of compositing
+  them (so every tinted-chip failure was invisible), it read the
+  `color` without the inherited `opacity` (so a chip faded to 1.31:1
+  passed), it measured contrast before the theme class was applied
+  (69 failures in one run, none in the next), and it treated every
+  tap target under 44x44 as a FAIL when WCAG 2.2's floor is 24x24.
+- Ran a SECOND instance against an empty database. The composer's
+  empty-state links were 17px, and the two dynamic routes were
+  reported as FAIL when there was simply no row to open - so a fresh
+  install, the first thing a founder sees, could never pass the probe.
+- Repaired 245 of the 389 MCP tool descriptions, which had been cut
+  off mid-sentence ("Get the authenticated user's profile." became
+  "Get the authenticated").
+- Looked at every route's rendered output in both themes at 1440, 768
+  and 375, and at the 29 route screenshots by eye.
+
+Stage Summary:
+- key results:
+  - 16 commits, each with a regression test that FAILS on the old code
+  - probe over 29 routes x 3 widths x 2 themes, seeded instance:
+    0 FAIL except the /api/dms 502, 0 warnings
+  - probe over the same routes, EMPTY instance: 0 FAIL, 2 SKIPPED
+    (correctly explained), 12 warnings (24px inline links, above the
+    WCAG floor)
+  - probe over the calendar's month and day views: 0 FAIL each
+  - 481 lib tests, 27 integration test binaries pass
+  - cargo clippy --all-targets --all-features --locked -- -D warnings: 0
+  - SQLX_OFFLINE=true cargo clippy --all-targets --locked -- -D warnings: 0
+  - svelte-check: 0 errors, 0 warnings; pnpm build clean
+- artifacts produced:
+  - tests/campaign_edit_test.rs (3)
+  - tests/required_settings_test.rs (5)
+  - tests/feed_analytics_window_test.rs (2)
+  - tests/post_settings_preserved_test.rs (5)
+  - tests/uuid_column_decode_test.rs (3)
+  - tests/posts_media_shape_test.rs (3)
+  - tests/kanban_substate_test.rs (6)
+  - tests/calendar_range_timezone_test.rs (3)
+  - scripts/seed_demo.py (the seeded dataset + its uuid-type self-check)
+  - scripts/check_status_contrast.py (the status-token gate)
+  - AGENTS.md 9.33-9.38 (six new pitfalls)
+- known issues / follow-ups:
+  - the /api/dms 502 needs a REAL X token to clear; the seeded instance
+    uses a fake one on purpose
+  - "reach", "followers" and "custom" campaign metrics have no data
+    source anywhere in the codebase; the UI says "Not measured" rather
+    than showing a 0% bar
+  - the research page has no realtime subscription and no refresh
+    button outside its error state
+  - the composer previews deliberately simulate the PLATFORM's chrome
+    (a LinkedIn post is white-on-light), so their greys do not follow
+    the app's tokens. That is a feature; the greys were fixed to clear
+    AA against the surfaces they actually sit on.
+
+---
+Task ID: doc-foundation-pass-2026-10-20
+Agent: jcode
+Task: Complete the project-genome documentation management so the doc foundation
+is correct before an executor agent starts work.
+
+Work Log:
+- Surveyed the genome state first: `scripts/genome` is vendored and current
+  (2026.10.20-1), `genome.toml` maps every role (nine `native:` forms, four
+  file paths), and `lint` was already clean. The defect was not the tooling —
+  it was the content the tooling routes to.
+- Verified every number in AGENTS.md against the tree before editing:
+  `#[tool(` count = 389 (all in `src/mcp/mod.rs`; the 46 sibling `tools_*.rs`
+  files carry zero tool attributes), `ls migrations/*.sql` = 8 (doc said 2),
+  `ls src/social/*.rs` = 39 provider files, real LOC ~94.2k Rust / ~29.2k frontend
+  against the documented ~85.7k / ~25.7k.
+- Repaired the AGENTS.md §0.6 document map. Four dead `docs/archive/...` paths
+  (GAPS-15, OUTLINE-16, OUTLINE-17) and a root-level `SESSION_HOOKS.md` that
+  only exists at `docs/SESSION_HOOKS.md` are annotated or repointed. Seven live
+  docs had no row at all — PAGE-INDEX, platforms-and-cli, deployment,
+  agent-integration, TARGETING_AND_WRITER_DISCIPLINE, DECISIONS-19 and
+  EXECUTION-19 — so `ask` found them only by luck of ranking. They are routed now.
+- Replaced the stale key-numbers block with measured values, each line naming
+  the command that re-measures it, so the next agent re-measures rather than
+  trusting the prose. Also fixed the two other stale lines (§2 layout tree:
+  2 → 8 migrations, 3492 → 4114 LOC for mod.rs) and the dead `44 files` count.
+- Removed two dead pointers: a machine-local skill path
+  (/home/ishanp/.agents/...) and /home/z/my-project/scripts/cargo-env.sh, which
+  named a different machine entirely.
+- Added a table of contents to `worklog.md`: the entry count pushed it past
+  `core.toc_lines` (300), which made `genome lint` emit its first-ever W010
+  warning on this file. Lint is clean again.
+- Re-ran the doc-drift tests after the edits, because AGENTS.md is asserted
+  against the source by `tests/surface_docs_audit.rs`. That parser counts
+  `#[tool(` attributes across `src/mcp/`; it parses exactly 389, which is the
+  string the edited AGENTS.md carries, so `d1_documented_tool_counts_match_registry`
+  still passes. `cargo test --lib`: 481 passed. `cargo check --lib --bin
+  social-forge`: 0 errors.
+- Checked the odd `git` behaviour mid-session: HEAD advanced from 006aed5 to
+  73d0394 and my diff disappeared. A parallel agent had committed and pushed the
+  preview/tag colour work in the same tree. Nothing of mine was lost; the re-run
+  of every verification command after that commit is what the numbers above are
+  measured against.
+
+Stage Summary:
+- Artifacts: AGENTS.md (§0.6 doc map, key numbers, §2 layout tree, two dead
+  pointers), worklog.md (table of contents + this entry).
+- Verification: `genome lint` 0 errors 0 warnings; `genome doctor` healthy;
+  `cargo check --lib --bin social-forge` 0 errors; `cargo test --lib` 481 passed;
+  `cargo test --test surface_docs_audit` 3 passed.
+- Known issues / follow-ups:
+  - `docs/decisions/` holds zero AD records and `docs/archive/records/` does not
+    exist. That is deliberate per its README (ADs start from the first ratified
+    direction change), so no record was minted here — minting an AD needs an
+    operator ratification, and inventing one would violate law 6.
+  - `probe-out/` and `scripts/__pycache__/genomecpython-314.pyc` are tracked
+    (~4.8 MB, 157 files) although `.gitignore` lists probe-out. Turning on the
+    `ops` module would raise E305; that needs an operator decision, because
+    `docs/planning/EXECUTION_2026-10-19.md` cites `probe-out/run12` and
+    `run13-dark` as evidence and those directories no longer exist on disk.
+  - `docs/PAGE-INDEX.md` marks several archived files LIVE, and it is not in
+    `genome.toml`'s ownership map (it is an ops module role).
