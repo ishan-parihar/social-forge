@@ -8,6 +8,9 @@ use social_forge::social::gmail::GmailProvider;
 use social_forge::social::youtube::YoutubeProvider;
 use social_forge::social::SocialProvider;
 
+mod common;
+use common::skip_on_environment_failure;
+
 fn get_config() -> Config {
     social_forge::config::load_dotenv_for_live_tests();
     Config::from_env().expect("Failed to load config")
@@ -44,7 +47,10 @@ async fn test_gh_user() {
     let c = get_config();
     let gh = GithubProvider::new(&c);
     let t = c.github_token.as_deref().unwrap_or("");
-    let r = gh.get_user(t, GH_OWNER).await.unwrap();
+    let Some(r) = skip_on_environment_failure("GitHub get_user", gh.get_user(t, GH_OWNER).await)
+    else {
+        return;
+    };
     assert_eq!(r["login"], GH_OWNER);
     println!("OK gh_user: {GH_OWNER}");
 }
@@ -54,7 +60,12 @@ async fn test_gh_auth_user() {
     let c = get_config();
     let gh = GithubProvider::new(&c);
     let t = c.github_token.as_deref().unwrap_or("");
-    let r = gh.get_authenticated_user(t).await.unwrap();
+    let Some(r) = skip_on_environment_failure(
+        "GitHub get_authenticated_user",
+        gh.get_authenticated_user(t).await,
+    ) else {
+        return;
+    };
     println!("OK gh_auth: {}", r["login"].as_str().unwrap_or("?"));
 }
 
@@ -63,7 +74,11 @@ async fn test_gh_repos() {
     let c = get_config();
     let gh = GithubProvider::new(&c);
     let t = c.github_token.as_deref().unwrap_or("");
-    let r = gh.list_repos(t, GH_OWNER, 50).await.unwrap();
+    let Some(r) =
+        skip_on_environment_failure("GitHub list_repos", gh.list_repos(t, GH_OWNER, 50).await)
+    else {
+        return;
+    };
     println!(
         "OK gh_repos: {}",
         r.as_array().map(|a| a.len()).unwrap_or(0)

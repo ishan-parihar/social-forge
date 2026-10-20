@@ -172,17 +172,54 @@ pub struct Config {
 
 /// Scratch database for test processes. Under `target/`, so `cargo test` never
 /// migrates or writes the operator's `data/social-forge.db`.
+///
+/// The prefix for the per-binary file. See [`test_database_url`].
 pub const TEST_DATABASE_URL: &str = "sqlite://target/test-data/social-forge-test.db";
 
+/// The scratch database for THIS test binary.
+///
+/// `cargo test` runs every integration test binary as its own PROCESS, and
+/// they run in PARALLEL. They used to share one file, and the shared file
+/// was the cause of a flaky failure: "database is locked" in
+/// `composer_contract_test.rs`, in about one run in three.
+///
+/// SQLite serialises writers. 45 processes each running a transactional
+/// test against one file means one of them is always waiting on another's
+/// write lock, and the 15s `busy_timeout` is a long time to hold a suite
+/// up. Two processes can also deadlock against each other when one holds
+/// a read and the other wants to upgrade it.
+///
+/// The fix is one file per binary: the binary's own name is in its
+/// `current_exe` path, so the file is unique per test target and no two
+/// processes ever touch the same database.
+///
+/// The file is still under `target/`, so it is cleaned with the build and
+/// never the operator's data.
+pub fn test_database_url() -> String {
+    // `target/debug/deps/composer_contract_test-abc123` -> the file stem
+    // before the hash, so the name is stable across rebuilds (a hash
+    // change would leave a stale file behind, and the name would churn
+    // in CI logs).
+    let stem = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.file_stem().map(|s| s.to_string_lossy().to_string()))
+        .unwrap_or_else(|| "unknown".to_string());
+    let stem = stem.split('-').next().unwrap_or("unknown").to_string();
+    format!("sqlite://target/test-data/{stem}.db")
+}
+
 /// Load `.env` for an integration or live test, then point `DATABASE_URL` at
-/// [`TEST_DATABASE_URL`]. The repo `.env` names the real database, which the
-/// suite otherwise migrated and wrote. Overrides any exported `DATABASE_URL`.
-/// ponytail: one shared scratch file per target dir; tests already share state.
+/// this binary's own scratch file. The repo `.env` names the real database,
+/// which the suite otherwise migrated and wrote. Overrides any exported
+/// `DATABASE_URL`.
+///
+/// Each test binary gets its OWN file (see [`test_database_url`]), so the
+/// binaries can run in parallel without fighting over SQLite's write lock.
 pub fn load_dotenv_for_tests() {
     static ONCE: std::sync::Once = std::sync::Once::new();
     ONCE.call_once(|| {
         load_dotenv();
-        std::env::set_var("DATABASE_URL", TEST_DATABASE_URL);
+        std::env::set_var("DATABASE_URL", test_database_url());
     });
 }
 

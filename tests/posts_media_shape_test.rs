@@ -27,7 +27,10 @@ use uuid::Uuid;
 
 async fn pool() -> social_forge::db::SqlitePool {
     social_forge::config::load_dotenv_for_tests();
-    let pool = db::create_pool(social_forge::config::TEST_DATABASE_URL)
+    // This binary's own scratch file, not the shared one: the test
+    // binaries run in PARALLEL, and two processes on one SQLite file
+    // fight over the write lock.
+    let pool = db::create_pool(&social_forge::config::test_database_url())
         .await
         .expect("pool");
     db::ensure_local_user(&pool).await.expect("local user");
