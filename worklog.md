@@ -355,6 +355,22 @@ Work Log:
   the command that re-measures it, so the next agent re-measures rather than
   trusting the prose. Also fixed the two other stale lines (§2 layout tree:
   2 → 8 migrations, 3492 → 4114 LOC for mod.rs) and the dead `44 files` count.
+  VALIDATION (second pass): the word "dead" was wrong there — 44 is a real
+  number, the count of `src/mcp/tools_*.rs` handler modules, and the README's
+  "389 tools across 44 modules" is self-consistent. The actual defects in my
+  own replacement text were "27 providers" (the truth is 26: 12 + 14, with
+  `linkedin-page` and `instagram-standalone` INSIDE the 12, so my "plus 2"
+  double-counted) and "46 siblings" (there are 44). Both corrected; LOC and the
+  migration count were right as written.
+- Fixed the lint error the first pass had shipped: E001 on AGENTS.md:193. My
+  re-measure command was written as a backticked token containing an unbalanced
+  bracket, which broke the linter's own tokenizer and produced a phantom `.rs`
+  pointer that failed to resolve. Bisected it by deleting segments one at a
+  time, then reworded the line so every backticked token is a real path.
+  The command was also wrong as first written: the bracket is a regex
+  metacharacter, so the unescaped form returns 0 rather than 389. The version
+  now documented is `grep -rh --include='*.rs' 'tool(' src/mcp/ | wc -l`, which
+  returns 389 and lints clean.
 - Removed two dead pointers: a machine-local skill path
   (/home/ishanp/.agents/...) and /home/z/my-project/scripts/cargo-env.sh, which
   named a different machine entirely.
