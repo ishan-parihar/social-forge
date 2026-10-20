@@ -1322,7 +1322,7 @@ impl SocialForgeMcpServer {
             .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Get conversations (inbox) for a connected X/Twitter account.")]
+    #[tool(description = "Get conversations (inbox) for a connected Facebook page.")]
     pub async fn fb_conversations(
         &self,
         params: Parameters<tools_facebook::FbConversationsInput>,
@@ -1586,7 +1586,9 @@ impl SocialForgeMcpServer {
 
     // ── Instagram Standalone (Basic Display API) Tools ─────────────────
 
-    #[tool(description = "Get Instagram media feed for a business account.")]
+    #[tool(
+        description = "Get the Instagram media feed for a personal account (Basic Display API)."
+    )]
     pub async fn ias_get_media(
         &self,
         params: Parameters<tools_instagram_standalone::IasGetMediaInput>,
