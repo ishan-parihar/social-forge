@@ -1,4 +1,30 @@
 <script lang="ts">
+/**
+ * The settings key each provider's TARGET goes in, for the providers
+ * whose targets the founder can TYPE.
+ *
+ * The provider's `targets()` call is the normal way to get a
+ * subreddit, a board or a Discord channel: the API lists them. But the
+ * list can be empty - Reddit's `subreddits` endpoint needs a scope the
+ * app may not have, a Discord bot may be in no channels, a Telegram
+ * session may not be readable.
+ *
+ * And an empty list meant the "Posting Targets" panel was HIDDEN (the
+ * panel only rendered when the list had something in it), so the
+ * founder saw no way to set the target. The server's required-settings
+ * check then said "Reddit needs \"subreddit\" - pick it in Posting
+ * Targets before posting" - pointing at a panel that was not on the
+ * screen.
+ *
+ * So the composer can ALWAYS take a typed target, and the key it goes
+ * in is the key the provider reads.
+ */
+const MANUAL_TARGET: Record<string, { key: string; label: string; placeholder: string }> = {
+  reddit: { key: 'subreddit', label: 'Subreddit', placeholder: 'rust' },
+  pinterest: { key: 'board', label: 'Board', placeholder: 'my-board' },
+  discord: { key: 'channel', label: 'Channel', placeholder: 'general' },
+};
+
   // ComposerModal - the modal-based composer (Phase 2).
   //
   // This is the keystone of the v18 refactor: it replaces the full-page
@@ -137,6 +163,10 @@
   let integrationTargets = $state<Map<string, TargetInfo[]>>(new Map());
   let selectedTargets = $state<Map<string, string[]>>(new Map());
   let targetsLoading = $state<Set<string>>(new Set());
+  // A target the founder TYPED, per integration. The provider's own
+  // target list is the normal source; this is the fallback for when
+  // the list is empty (or the target the founder wants is not in it).
+  let manualTargets = $state<Map<string, string>>(new Map());
 
   let hasXIntegration = $derived(
     selectedIntegrations.some(id => integrationProviders.get(id) === 'x')
@@ -724,6 +754,7 @@
       wordpress: { status: 'publish' },
     };
 
+
     for (const [intId, targets] of selectedTargets) {
       if (targets.length === 0) continue;
       const target = integrationTargets.get(intId)?.find((t) => t.id === targets[0]);
@@ -743,6 +774,32 @@
         ...(entry.settings ?? {}),
       };
       perIntegration[key] = target.id;
+      entry.settings = perIntegration;
+      overridesObj[intId] = entry;
+    }
+
+    // A TYPED target, for the providers whose target list was empty.
+    //
+    // The provider's `targets()` call is the normal source. When it
+    // returns nothing, the "Posting Targets" panel is hidden, so the
+    // founder had no way to set the target - and the server's
+    // required-settings check said "pick it in Posting Targets",
+    // pointing at a panel that was not on the screen.
+    //
+    // The typed value goes in under the key the PROVIDER reads, which
+    // is the same key the picked target would have used.
+    for (const [intId, value] of manualTargets) {
+      if (!value.trim()) continue;
+      if (!selectedIntegrations.includes(intId)) continue;
+      const provider = integrationProviders.get(intId) ?? '';
+      const spec = MANUAL_TARGET[provider];
+      if (!spec) continue;
+      const entry = overridesObj[intId] ?? {};
+      const perIntegration: Record<string, unknown> = {
+        ...storedSettings,
+        ...(entry.settings ?? {}),
+      };
+      perIntegration[spec.key] = value.trim();
       entry.settings = perIntegration;
       overridesObj[intId] = entry;
     }
@@ -1303,12 +1360,25 @@
         <!-- Posting Targets -->
         {#each selectedIntegrations as intId (intId)}
           <!--
-            The panel appears when the channel HAS targets. The map's
-            presence means "we have asked", so the emptiness has to be
-            checked here - most providers return an empty list, and a
-            "Posting Targets for X" panel with nothing in it is noise.
+            The panel appears when the channel HAS targets, OR when the
+            provider takes a TYPED target.
+
+            The map's presence means "we have asked", so the emptiness
+            has to be checked here - most providers return an empty
+            list, and a "Posting Targets for X" panel with nothing in
+            it is noise.
+
+            But a provider that takes a target (Reddit's subreddit,
+            Pinterest's board, Discord's channel) ALWAYS needs a way to
+            set one. When the list came back empty the panel was
+            hidden, and the founder had no way to set the target at
+            all - the server's check said "pick it in Posting Targets",
+            pointing at a panel that was not on the screen.
           -->
-          {#if (integrationTargets.get(intId) || []).length > 0}
+          {@const targetList = integrationTargets.get(intId) || []}
+          {@const provider = integrationProviders.get(intId) ?? ''}
+          {@const manualSpec = MANUAL_TARGET[provider]}
+          {#if targetList.length > 0 || manualSpec}
             <div class="bg-surface border border-line rounded-xl p-4">
               <h3 class="text-sm font-semibold mb-3">
                 Posting Targets for {integrationNames.get(intId)}
@@ -1316,11 +1386,39 @@
                   <span class="ml-2 text-xs text-muted">Loading...</span>
                 {/if}
               </h3>
-              <TargetPicker
-                targets={integrationTargets.get(intId) || []}
-                selectedTargets={selectedTargets.get(intId) || []}
-                onToggle={(targetId) => toggleTarget(intId, targetId)}
-              />
+              {#if targetList.length > 0}
+                <TargetPicker
+                  targets={targetList}
+                  selectedTargets={selectedTargets.get(intId) || []}
+                  onToggle={(targetId) => toggleTarget(intId, targetId)}
+                />
+              {/if}
+              {#if manualSpec}
+                <div class={targetList.length > 0 ? 'mt-3' : ''}>
+                  <label class="block text-xs text-muted mb-1" for={`manual-target-${intId}`}>
+                    {manualSpec.label}
+                  </label>
+                  <input
+                    id={`manual-target-${intId}`}
+                    type="text"
+                    placeholder={manualSpec.placeholder}
+                    value={manualTargets.get(intId) ?? ''}
+                    oninput={(e) => {
+                      const v = (e.currentTarget as HTMLInputElement).value;
+                      const next = new Map(manualTargets);
+                      if (v.trim()) next.set(intId, v);
+                      else next.delete(intId);
+                      manualTargets = next;
+                    }}
+                    class="w-full px-3 py-2 min-h-11 rounded-lg text-sm bg-background-input border border-line text-content placeholder:text-faint outline-none focus:border-accent transition-colors"
+                  />
+                  <p class="text-[11px] text-muted mt-1">
+                    {targetList.length > 0
+                      ? 'Or type a target the list does not show.'
+                      : 'The provider did not list any - type the one you want.'}
+                  </p>
+                </div>
+              {/if}
             </div>
           {/if}
         {/each}

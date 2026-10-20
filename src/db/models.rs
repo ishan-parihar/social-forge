@@ -240,6 +240,14 @@ pub struct PostPublic {
     pub group_id: Option<Uuid>,
     pub first_comment: Option<String>,
     pub sequence: i32,
+    /// The campaign the post is filed under.
+    ///
+    /// The CREATE response used to omit it, so a client that set a
+    /// campaign could not confirm it was applied - the field was in
+    /// the request, it was stored, and the response did not say so.
+    /// The list response has carried it since v22; the create
+    /// response is the one that was missing it.
+    pub campaign_id: Option<Uuid>,
 }
 
 impl From<Post> for PostPublic {
@@ -262,6 +270,7 @@ impl From<Post> for PostPublic {
             group_id: p.group_id,
             first_comment: p.first_comment,
             sequence: p.sequence,
+            campaign_id: p.campaign_id,
         }
     }
 }

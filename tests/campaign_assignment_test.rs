@@ -145,6 +145,44 @@ async fn a_post_created_with_a_campaign_is_filed_under_it() {
     );
 }
 
+/// The CREATE response must echo the campaign back.
+///
+/// The `campaign_id` was in the request, it was stored, and the
+/// response did not say so - `PostPublic` had no `campaign_id` field
+/// at all. The LIST response has carried it since v22; the create
+/// response is the one that was missing it.
+///
+/// So a client could not confirm the campaign was applied without a
+/// second GET. A client that sets a campaign and is told nothing back
+/// has to assume it failed.
+#[tokio::test]
+async fn the_create_response_echoes_the_campaign_back() {
+    let state = state().await;
+    let integration_id = seed_integration(&state).await;
+    let campaign_id = seed_campaign(&state).await;
+
+    let (status, body) = call(
+        &state,
+        Method::POST,
+        "/api/posts",
+        Some(json!({
+            "integration_ids": [integration_id.to_string()],
+            "content": format!("a post whose response echoes {}", Uuid::new_v4()),
+            "campaign_id": campaign_id.to_string(),
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    let json: Value = serde_json::from_str(&body).expect("the body must be json");
+    let echoed = json["posts"][0]["campaign_id"].as_str();
+    assert_eq!(
+        echoed,
+        Some(campaign_id.to_string().as_str()),
+        "the create response must echo the campaign it filed the post under: {body}"
+    );
+}
+
 /// The campaign's post count must reflect the post.
 ///
 /// The count is of the posts that represent WORK: queued, publishing
