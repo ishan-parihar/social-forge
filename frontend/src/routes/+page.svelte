@@ -32,6 +32,29 @@
   let integrations = $state<Integration[]>([]);
   let loading = $state(true);
 
+  // The "Needs Attention" count and the rows it lists.
+  //
+  // The list shows at most FIVE drafts and THREE integrations, and
+  // the count is EVERY one of them. So a founder with 45 drafts saw
+  // "49 items" and seven rows, with nothing saying the other 42 were
+  // hidden - the count and the list described different sets.
+  //
+  // `attentionShown` is how many rows the list actually renders, and
+  // the panel says how many more there are.
+  const DRAFTS_SHOWN = 5;
+  const INTEGRATIONS_SHOWN = 3;
+  let attentionCount = $derived(
+    draftPosts.length + stats.error + integrations.filter((i) => i.refresh_needed).length
+  );
+  let attentionShown = $derived(
+    Math.min(draftPosts.length, DRAFTS_SHOWN) +
+      (stats.error > 0 ? 1 : 0) +
+      Math.min(
+        integrations.filter((i) => i.refresh_needed).length,
+        INTEGRATIONS_SHOWN
+      )
+  );
+
   // v24-3: new analytics data from the v23-1 endpoints.
   let engagementData = $state<EngagementResponse | null>(null);
   let adherenceData = $state<AdherenceResponse | null>(null);
@@ -404,9 +427,9 @@
     <div class="bg-surface border border-line rounded-xl p-5">
       <div class="flex items-center justify-between mb-3">
         <h2 class="font-medium text-sm">Needs Attention</h2>
-        <span class="text-xs text-muted">{draftPosts.length + stats.error + integrations.filter(i => i.refresh_needed).length} item{(draftPosts.length + stats.error + integrations.filter(i => i.refresh_needed).length) !== 1 ? 's' : ''}</span>
+        <span class="text-xs text-muted">{attentionCount} item{attentionCount !== 1 ? 's' : ''}</span>
       </div>
-      {#if draftPosts.length === 0 && stats.error === 0 && integrations.filter(i => i.refresh_needed).length === 0}
+      {#if attentionCount === 0}
         <div class="text-center py-4">
           <span class="text-xl">✅</span>
           <p class="text-xs text-muted mt-1">All clear - nothing needs your attention</p>
@@ -434,6 +457,24 @@
               <span class="text-[10px] text-faint">→</span>
             </a>
           {/each}
+          <!--
+            The list shows at most five drafts and three integrations.
+            The COUNT is every one of them, so with 45 drafts the
+            heading said "49 items" and the list showed seven rows -
+            with nothing saying the other 42 were hidden.
+
+            The count and the list have to describe the same set, or
+            the founder is told about 49 problems and shown 7.
+          -->
+          {#if attentionCount > attentionShown}
+            <a href="/posts?state=draft" class="flex items-center gap-2 py-1.5 px-2 -mx-2 rounded-lg hover:bg-surface-hover transition-colors group min-h-11">
+              <span class="w-1.5 h-1.5 rounded-full bg-info shrink-0"></span>
+              <span class="flex-1 text-xs text-muted group-hover:text-content">
+                {attentionCount - attentionShown} more - see all
+              </span>
+              <span class="text-[10px] text-faint">→</span>
+            </a>
+          {/if}
         </div>
       {/if}
     </div>
