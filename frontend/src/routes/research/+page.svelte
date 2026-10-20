@@ -95,24 +95,47 @@
    */
   function slotLabel(slot: { weekday: string; hour: number }): { weekday: string; hour: string } {
     try {
-      // The slot's UTC hour, on a reference day, as an instant.
+      // The slot is ONE UTC hour. The founder schedules in the app's
+      // timezone, so the slot has to be rendered in that zone.
+      //
+      // The conversion is ONE instant, and the weekday and the hour
+      // both come from it. They used to be derived separately - the
+      // weekday from a reference instant and the hour from another -
+      // so they could disagree about which day the slot falls on.
+      //
+      // The reference day is a WEDNESDAY (2026-01-07). The weekday
+      // name is the SERVER's grouping key, computed in UTC, so it
+      // must stay the UTC weekday - what the server counted is what
+      // the table shows. Only the CLOCK is converted, because a
+      // posting time is a wall-clock time in the founder's zone.
       const anchor = Date.UTC(2026, 0, 7, slot.hour, 0, 0);
       const d = new Date(anchor);
-      const weekday = d.toLocaleDateString("en-US", {
-        weekday: "long",
-        timeZone: timezone.value,
-      });
       const hour = d.toLocaleTimeString("en-US", {
         hour: "2-digit",
         minute: "2-digit",
         hour12: false,
         timeZone: timezone.value,
       });
-      return { weekday, hour: `${hour}–${hour}` };
+      // The slot is an HOUR, so it reads as a range: 15:00-16:00. It
+      // used to print the same hour twice ("15:30-15:30"), which is
+      // a range of zero.
+      const end = new Date(anchor + 3_600_000);
+      const endHour = end.toLocaleTimeString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+        timeZone: timezone.value,
+      });
+      return { weekday: slot.weekday, hour: `${hour}-${endHour}` };
     } catch {
+      // The zone could not be applied. The slot is still an hour, so
+      // the range is still an hour - the fallback prints the UTC hour
+      // the server grouped on, and the caption names the zone.
+      const start = String(slot.hour).padStart(2, "0");
+      const end = String((slot.hour + 1) % 24).padStart(2, "0");
       return {
         weekday: slot.weekday,
-        hour: `${String(slot.hour).padStart(2, "0")}:00 UTC`,
+        hour: `${start}:00-${end}:00`,
       };
     }
   }
@@ -296,7 +319,18 @@
             </li>
           {/each}
         </ul>
-        <p class="text-xs text-muted mt-3">Average engagement per post in each slot, UTC.</p>
+        <!--
+          The times are in the APP's timezone, not UTC. The server
+          groups the posts by their UTC hour - that is the grouping key
+          - and the clock is then rendered in the timezone the founder
+          schedules in, so the table shows the hour they would post at.
+
+          The caption says which zone, because a table of times with
+          no zone is a table nobody can act on.
+        -->
+        <p class="text-xs text-muted mt-3">
+          Average engagement per post in each slot, in your timezone ({timezone.value}).
+        </p>
       {/if}
     </div>
 

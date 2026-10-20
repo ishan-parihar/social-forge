@@ -876,10 +876,39 @@ async function main() {
           summary.visits += 1;
 
           const name = `${theme}-${width}-${route.replace(/[/:]/g, '_') || 'root'}`;
+          // The app shell's <main> is the scroll container, so the
+          // DOCUMENT never scrolls and `fullPage: true` captures only
+          // the viewport - the research page's timing table, the
+          // campaign detail's Posts tab and the settings forms all
+          // live below the fold and would never be seen.
+          //
+          // So the screenshot is taken with the viewport TALL enough
+          // to hold the tallest scroll container on the page. A
+          // screenshot that cannot see the section under review is
+          // not a visual verification of it.
+          const inner = await page.evaluate(() => {
+            let tallest = 0;
+            document.querySelectorAll('*').forEach((el) => {
+              const oy = getComputedStyle(el).overflowY;
+              if ((oy === 'auto' || oy === 'scroll') && el.scrollHeight > tallest) {
+                tallest = el.scrollHeight;
+              }
+            });
+            return tallest;
+          });
+          const shotHeight = Math.min(Math.max(inner + 40, 900), 8000);
+          if (shotHeight > 900) {
+            await page.setViewportSize({ width, height: shotHeight });
+            await page.waitForTimeout(400);
+          }
           await page.screenshot({
             path: path.join(OUT_DIR, `${name}.png`),
             fullPage: false,
           });
+          if (shotHeight > 900) {
+            await page.setViewportSize({ width, height: 900 });
+            await page.waitForTimeout(200);
+          }
         } catch (e) {
           summary.fails.push({
             route,
