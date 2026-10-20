@@ -294,37 +294,49 @@ social-forge mcp-call <tool_name> --args '{"key":"value"}' # Call any tool
 
 ## Platform-specific MCP tools
 
-### X / Twitter (20 tools)
+### X / Twitter (27 tools)
+
+**Not listed above (7 more, 20 shown):** `x_create_tweet`, `x_get_analytics`, `x_get_dm_conversation`, `x_get_post_analytics`, `x_list_dms`, `x_reply_tweet`, `x_send_dm`
 `x_get_me`, `x_home_timeline`, `x_search_tweets`, `x_tweet_detail`, `x_user_lookup`, `x_user_lookup_by_username`, `x_user_tweets`, `x_like_tweet`, `x_unlike_tweet`, `x_retweet`, `x_unretweet`, `x_bookmark_tweet`, `x_unbookmark_tweet`, `x_bookmarks`, `x_delete_tweet`, `x_follow_user`, `x_unfollow_user`, `x_followers`, `x_following`, `x_list_timeline`
 
 ### Facebook (15 tools)
 `fb_get_feed`, `fb_get_post`, `fb_get_comments`, `fb_create_post`, `fb_create_photo`, `fb_create_video`, `fb_delete_post`, `fb_comment`, `fb_react`, `fb_page_insights`, `fb_conversations`, `fb_conversation_messages`, `fb_send_message`, `fb_search_pages`, `fb_albums`
 
-### Instagram (15+ tools)
+### Instagram (21 tools)
+
+**Not listed above (4 more, 17 shown):** `ig_get_messages`, `ig_list_conversations`, `ig_post`, `ig_send_dm`
 `ig_get_media`, `ig_get_media_detail`, `ig_get_comments`, `ig_get_insights`, `ig_get_insights_audience`, `ig_get_followers`, `ig_get_reels`, `ig_get_stories`, `ig_get_mentions`, `ig_get_tagged`, `ig_search_hashtag`, `ig_get_hashtag_media`, `ig_create_container`, `ig_publish_container`, `ig_poll_container`, `ig_reply_to_comment`, `ig_business_discovery`
 
-### LinkedIn Page (12 tools)
+### LinkedIn Page (11 tools)
 `lip_list_pages`, `lip_get_page`, `lip_get_page_posts`, `lip_create_post`, `lip_create_comment`, `lip_delete_post`, `lip_get_analytics`, `lip_get_post_analytics`, `lip_get_followers`, `lip_get_reactions`, `lip_get_shares`
 
-### LinkedIn Personal (12 tools)
+### LinkedIn Personal (15 tools)
+
+**Not listed above (4 more, 11 shown):** `li_get_messages`, `li_list_conversations`, `li_reply_comment`, `li_send_dm`
 `li_get_profile`, `li_get_posts`, `li_create_post`, `li_delete_post`, `li_get_post_detail`, `li_get_comments`, `li_create_comment`, `li_get_reactions`, `li_get_shares`, `li_get_analytics`, `li_get_post_analytics`
 
-### Reddit (36 tools)
+### Reddit (37 tools)
 `reddit_browse`, `reddit_search`, `reddit_post_detail`, `reddit_create_post`, `reddit_create_comment`, `reddit_get_comments`, `reddit_vote`, `reddit_save`, `reddit_unsave`, `reddit_delete`, `reddit_edit`, `reddit_hide`, `reddit_subscribe`, `reddit_user_info`, `reddit_send_dm`, `reddit_inbox`, `reddit_get_karma`, `reddit_mod_remove`, `reddit_mod_approve`, `reddit_mod_distinguish`, `reddit_mod_sticky`, `reddit_mod_lock`, `reddit_mod_unlock`, `reddit_report`, `reddit_block_user`, `reddit_list_friends`, `reddit_add_friend`, `reddit_remove_friend`, `reddit_mark_nsfw`, `reddit_unmark_nsfw`, `reddit_mark_spoiler`, `reddit_unmark_spoiler`, `reddit_get_rules`, `reddit_list_flairs` (link flairs → flair_id for create_post), `reddit_get_saved`, `reddit_read_all_messages`, `reddit_crosspost`
 
-### Bluesky (5 tools)
+### Bluesky (7 tools)
+
+**Not listed above (2 more, 5 shown):** `bs_get_analytics`, `bs_reply`
 `bs_timeline`, `bs_search`, `bs_create_post`, `bs_profile`, `bs_feed`
 
-### Discord (13 tools)
+### Discord (15 tools)
+
+**Not listed above (2 more, 13 shown):** `di_webhook_info`, `di_webhook_post`
 `di_send_message`, `di_get_messages`, `di_get_channel`, `di_get_guild`, `di_get_guild_channels`, `di_get_server_info`, `di_add_reaction`, `di_delete_message`, `di_create_forum_post`, `di_get_thread_members`, `di_history` (paginated, chronological), `di_search` (guild-wide), `di_tail` (newest-id cursor for watch loops)
 
-### Telegram Bot (9 tools)
+### Telegram Bot (11 tools)
+
+**Not listed above (1 more, 10 shown):** `tb_list_chats`
 `tb_send_message`, `tb_send_photo`, `tb_send_document`, `tb_get_chat`, `tb_get_chat_member_count`, `tb_get_me`, `tb_get_updates`, `tb_pin_message`, `tb_unpin_message`, `tb_forward_message`
 
 ### Telegram User (13 tools)
 `tu_auth_status`, `tu_list_contacts`, `tu_list_dialogs`, `tu_search`, `tu_send_message`, `tu_request_code`, `tu_sign_in`, `tu_history` (chronological, offset_id paging), `tu_tail` (after_id cursor), `tu_edit`, `tu_delete`, `tu_queue_send` (rate-limited write queue; in-memory — a restart drops pending jobs), `tu_queue_status`
 
-### WhatsApp (13 tools)
+### WhatsApp (13 tools: 9 `wa_` Web session + 4 `wc_` Cloud API)
 `wa_auth_status`, `wa_chats`, `wa_contacts`, `wa_send_text`, `wa_edit_message`, `wa_revoke_message`, `wa_create_group`, `wa_list_groups`, `wa_group_invite_link`, `wc_list_templates`, `wc_create_template`, `wc_delete_template`, `wc_send_template` (WhatsApp Cloud API for business numbers; scheduled posts with settings.auth_method=cloud publish via approved templates)
 
 ### GitHub (18 tools)
