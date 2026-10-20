@@ -705,3 +705,46 @@ Stage Summary:
     `providers.md`'s per-section counts and compare against the real prefix
     groups. That is a test change, not a doc change, and it was out of scope for
     a documentation pass — noted so it is not lost.
+
+---
+Task ID: doc-foundation-validation-2026-10-20-pass-7
+Agent: jcode
+Task: Guard the per-platform drift I found in pass 6. A count corrected once will
+drift again, so the fix is a test, not a doc edit.
+
+Work Log:
+- Added D3 to `tests/surface_docs_audit.rs`, whose own header comment names the
+  drift classes it guards (D1 the total, D2 schema shape). D3 parses
+  `### Platform (N tools)` headings, counts the tools the section lists, and
+  compares all three: heading, body, and the registry parsed from the same
+  `#[tool(` scan D1 uses.
+- FIRST DRAFT WAS WEAKER THAN I SAID. It required only that *a* continuation line
+  exist somewhere in the section. Injecting a real drop (removing `bs_reply` from
+  Bluesky) left it passing, because the stale "Not listed above (2 more)" line
+  satisfied the check. Caught it by injecting drift and reading the failure
+  instead of assuming the guard worked.
+- Replaced it with a check that reconciles the continuation's own declared tail
+  count against the tools the prose lists, so a drop and a mis-stated count are
+  different failures with different messages. Verified by injection:
+    - heading drift (Bluesky 7 -> 5): FAILS, "claims 5 tools but the registry has 7"
+    - inconsistent continuation (says 2 more, names 1): FAILS, "lists 6 tools and
+      its continuation claims 2 more, totalling 8 - the registry has 7"
+    - clean file: 4/4 pass
+- Left the "Not listed above" lines I added in pass 6 rather than expanding the
+  prose, because the curated descriptions are the section's value and a test now
+  keeps the omissions honest.
+- Removed a debug `eprintln!` and a dead `head`-prefix block from my own draft
+  before it could land. Both were caught by reading the diff.
+
+Stage Summary:
+- D3 landed in `4e5b879` (swept by the concurrent agent with the strengthened
+  guard and no debug output, verified against `github/master`).
+- Verification: 4/4 pass clean; two injections proved it fails with an actionable
+  message; `genome lint` 0/0; `genome close` green; `cargo test --lib` passed.
+- Known issues / follow-ups:
+  - D3 asserts the WhatsApp section covers both `wa_` and `wc_`, and each other
+    section one prefix. A provider added under a new prefix needs a row in the
+    `sections` table, so the test fails loudly rather than silently ignoring it.
+  - The `Other platforms` table at the bottom of providers.md is not covered by D3;
+    it lists cross-platform tools. Extending D3 to it means choosing whether the
+    table counts as prose, which is a judgement call left to whoever needs it.
