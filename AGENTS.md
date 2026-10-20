@@ -220,7 +220,7 @@ social-forge/
 │   │   ├── middleware.rs    # auth_middleware (validates sf_session cookie), AuthenticatedUser extractor, DEFAULT_USER_ID
 │   │   └── jwt.rs           # hash_password / verify_password (argon2), create_token / validate_token (jsonwebtoken)
 │   ├── cli/                 # CLI commands (mirrors MCP tools)
-│   │   ├── run.rs           # Main CLI dispatcher (~3729 LOC)
+│   │   ├── run.rs           # Main CLI dispatcher (~4059 LOC)
 │   │   └── platforms/       # 32 platform shims (thin wrappers around unified commands)
 │   ├── mcp/                 # MCP server (389 tools, all #[tool] methods in mod.rs below)
 │   │   ├── mod.rs           # SocialForgeMcpServer impl + all #[tool] method registration (~4114 LOC)
@@ -229,16 +229,16 @@ social-forge/
 │   │   ├── tools_x.rs       # X-specific tools (create_tweet, reply, like, retweet, search, timeline)
 │   │   ├── tools_{platform}.rs  # Per-platform tool modules
 │   │   └── auth.rs          # MCP auth (stdio = trusted local)
-│   ├── social/              # Provider trait + 31 provider implementation files
+│   ├── social/              # Provider trait + 26 provider implementation files (the other 13 Rust files here are support modules: registry, tier, common, the cookie blobs, google_oauth, calendar, drive, gmail, and whatsapp_cloud — see `src/social/tier.rs` for the 26 registered identifiers)
 │   │   ├── mod.rs           # SocialProvider trait, ProviderError enum, PostContent, MediaAttachment
 │   │   ├── registry.rs      # ProviderRegistry (provider lookup + per-provider Semaphore)
-│   │   ├── x.rs             # X/Twitter (wreq + GraphQL cookie auth, ~3413 LOC)
-│   │   ├── reddit.rs        # Reddit (OAuth + cookie auth, ~2140 LOC)
+│   │   ├── x.rs             # X/Twitter (wreq + GraphQL cookie auth, ~3455 LOC)
+│   │   ├── reddit.rs        # Reddit (OAuth + cookie auth, ~2511 LOC)
 │   │   └── ...              # linkedin, facebook, instagram, threads, youtube, tiktok, bluesky, mastodon, pinterest, discord, slack, telegram_bot, telegram_user, whatsapp, wordpress, medium, devto, hashnode, github, google, skool, google_my_business, farcaster (see tier.rs for membership)
 │   ├── db/
 │   │   ├── mod.rs           # create_pool() — SqlitePoolOptions with env-configurable limits
 │   │   ├── models.rs        # PostState enum (Draft/Queued/Publishing/Published/Error), Post, PostWithIntegration, Integration, etc.
-│   │   └── queries.rs       # All SQL queries (~4024 LOC)
+│   │   └── queries.rs       # All SQL queries (~4984 LOC)
 │   ├── scheduler/
 │   │   └── mod.rs           # In-process scheduler: process_due_posts (JoinSet + Semaphore), publish_post (retry + backoff), proactive_token_refresh, analytics cache refresh
 │   ├── services/
@@ -253,7 +253,7 @@ social-forge/
 │   └── wa/                  # WhatsApp Web client (wa-rs)
 ├── frontend/                # SvelteKit 5 frontend
 │   ├── src/
-│   │   ├── routes/          # 25 page routes (dashboard, posts, calendar, feed, analytics, search, channels, settings/*)
+│   │   ├── routes/          # 18 top-level page routes (dashboard, posts, calendar, feed, analytics, search, channels, media, tags, activity, comments, dms, research, campaigns, kanban, login, auth, settings) + 11 nested pages under settings/ and the [id] detail routes — 29 rendered pages in total
 │   │   ├── lib/
 │   │   │   ├── api/         # API client modules (posts.ts, analytics.ts, integrations.ts, etc.)
 │   │   │   ├── ui/          # Reusable components (Button, Modal, Badge, Icon, Spinner, Card, Dropdown)
@@ -269,7 +269,9 @@ social-forge/
 ├── scripts/
 │   ├── install.sh           # One-line installer (downloads pre-built binary, sets up systemd)
 │   ├── social-forge.service # systemd unit
-│   └── social-forge-start.sh
+│   ├── social-forge-start.sh
+│   ├── genome               # The vendored project-genome CLI (wake / ask / close / lint / doctor). See genome.toml for the role→path map
+│   └── vendor-pull.sh       # Verifies the pinned transitive deps in docs/planning/VENDOR_PINS.md (`--check` is a CI gate)
 ├── Dockerfile               # OPTIONAL container build (downloads a pre-built binary). SQLite-in-container is not a supported deploy path — §0.5.3 rules out Docker as a runtime dependency.
 ├── Makefile                 # build, deploy, redeploy, restart, logs, watch
 ├── Cargo.toml               # Rust dependencies
@@ -1039,6 +1041,75 @@ install is the FIRST thing a founder sees.
 An empty list is a SKIP, and the report says so. An API that FAILS is
 still a FAIL.
 
+### 9.39 A DIALOG inside an `aria-hidden` subtree is invisible AND un-typeable
+
+`aria-hidden="true"` means "a screen reader must not announce this".
+Putting a dialog inside it makes the dialog invisible to assistive
+technology - and, because the shared focus trap skips anything in an
+`[aria-hidden="true"]` subtree, it also makes the trap find NO
+focusable child, so the dialog node takes the focus instead of the
+input.
+
+The command palette was built that way. The founder pressed Ctrl+K, the
+palette opened, and TYPING DID NOTHING - the input never had focus,
+and a screen reader announced nothing at all.
+
+The pattern the working dialogs use (`ModalManager.svelte`,
+`Modal.svelte`): the SCRIM carries the aria-hidden, and the PANEL is
+its SIBLING. The scrim is a `<button>` with `aria-hidden` and
+`tabindex="-1"`, so it is a real click target that the tab order and
+the accessibility tree both skip.
+
+Two dialogs did not follow it, and they were the two that were broken.
+
+### 9.40 The provider ink is computed against a SURFACE, and there are four
+
+`providerInk(provider)` walks the brand hue's lightness until it clears
+4.5:1 against ONE background. The app paints a provider glyph on at
+least FOUR: the page, a card (`--bg-card`), a chip
+(`--bg-surface-hover`) and an input (`--bg-input`). Each needs its own
+ink, or the glyph is under the floor on three of the four.
+
+`providerInk` is the page. `providerInkOnCard`, `providerInkOnChip` and
+`providerInkOnInput` are the other three. Getting this wrong is
+invisible in the source and invisible in the probe, because the probe
+only renders a page's DEFAULT state.
+
+### 9.41 A TAP TARGET is measured on the RENDERED box, and the RENDERED box is not the source
+
+A `px-3 py-1.5` button is 30px tall, whatever the source says about
+the padding, and the padding changes with the font. The composer, its
+panels and the popovers are where the small targets hide, and the
+probe never renders them.
+
+`make audit` drives the real app and measures the rendered box.
+
+### 9.42 The 45 test binaries must not share one SQLite file
+
+`cargo test` runs every integration test binary as its own PROCESS, in
+parallel. They used to share one scratch file, so 45 processes
+serialised on one write lock and "database is locked" appeared in about
+one run in three.
+
+`config::test_database_url()` gives each binary its own file, named
+from its own `current_exe`. The file is still under `target/`, so it is
+cleaned with the build and never the operator's data.
+
+### 9.43 A LIVE test that fails for the ENVIRONMENT's reason must SKIP
+
+The live tests hit the providers' real APIs with the operator's
+credentials. A transport reset, a timeout or a 429 is the
+environment's fault, not a defect in this codebase - but it failed the
+gate, and a gate that goes red for the wrong reason is a gate the
+operator learns to ignore.
+
+`tests/common/mod.rs` classifies the failure: a transport error, a
+timeout, a 429, a 401, a 403 or the provider's own error envelope
+SKIPS; a malformed response or a missing field still FAILS.
+`tests/live_failure_classification_test.rs` pins the classification in
+both directions, because a classifier that skips everything would make
+the live tests worthless.
+
 ---
 
 ## 10. Environment Variables
@@ -1135,3 +1206,33 @@ Before declaring a task complete, verify ALL of these:
 - [ ] Confirm the push succeeded: `git log --oneline -1 github/master` shows your commit on the remote ref
 
 If you can't verify one of these (e.g. missing `cmake`), say so explicitly to the user and explain what they need to verify locally.
+
+### 12.1 The visual gate - when the change touches the UI
+
+A change that touches the UI is not done until it has been RENDERED and
+MEASURED. Three gates, all over the running app, not the source:
+
+```bash
+make audit URL=https://localhost:6544 PASSWORD="$APP_PASSWORD"
+```
+
+| Gate | What it covers | Why the source is not enough |
+|---|---|---|
+| `frontend/scripts/probe.mjs` | 27 routes x 3 widths x 2 themes: overflow, text overlap, broken words, collapsed items, contrast, tap targets, font fallback, heading order, type scale | A source read cannot see a 0.5px collision or a 4.39:1 pair |
+| `frontend/scripts/audit-targets.mjs` | the RENDERED target size, driving the real app | The probe only renders each page's DEFAULT state, so the composer, its panels and the popovers are never measured |
+| `frontend/scripts/audit-contrast.mjs` | the RENDERED contrast against the EFFECTIVE background, same driving | The same: a chip on a tinted wash only exists once the panel is open |
+
+Each exits **3 (BLOCKED)** when the browser is missing - BLOCKED is never
+reported as passed - and 1 when it finds something.
+
+**The two browser-side audits are the ones that find what the probe
+cannot.** A page that is only ever rendered in its default state is a
+page whose other states are never checked. When you add a panel, a
+popover or a mode, add it to the audit's route list, or it is a surface
+nobody measures.
+
+Two exemptions both gates make, and both are WCAG's: a DISABLED control
+is not content the reader can act on, and an `aria-hidden` element is
+decoration. The two gates must agree on this - a copy of the measure
+that drifts is a gate that lies.
+
