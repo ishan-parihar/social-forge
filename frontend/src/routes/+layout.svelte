@@ -243,6 +243,34 @@
         role="presentation"
       ></div>
     {/if}
+    <!--
+      THE SKIP LINK.
+
+      The sidebar carries twenty-odd links, so a keyboard user had to Tab
+      through all of them - and the brand mark, and the streak badge, and
+      the notification bell - on EVERY page before they reached the
+      content. The plan's F5 gate names a skip link and there was none.
+
+      It is the first focusable element in the document, it is visible
+      only while it has the focus, and it moves the focus - not just the
+      scroll - to the main region. `href="#main-content"` alone would
+      scroll but leave the focus on the link, which is the bug that
+      makes skip links useless.
+    -->
+    <a
+      href="#main-content"
+      onclick={(e) => {
+        e.preventDefault();
+        const main = document.getElementById('main-content');
+        if (main) {
+          main.focus();
+          main.scrollIntoView();
+        }
+      }}
+      class="skip-link"
+    >
+      Skip to main content
+    </a>
     <aside
       class="{sidebarCollapsed ? 'w-14' : 'w-56'} bg-background border-r border-line flex flex-col flex-shrink-0 overflow-y-auto fixed lg:static inset-y-0 left-0 z-40 transition-all duration-200
         {sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}"
@@ -352,7 +380,10 @@
         </div>
       {/if}
     </aside>
-    <main class="flex-1 overflow-auto flex flex-col min-w-0">
+    <!-- `tabindex="-1"` so the skip link can move the FOCUS here, not
+         just the scroll. Without it the focus stays on the link and the
+         next Tab starts from the top of the document again. -->
+    <main id="main-content" tabindex="-1" class="flex-1 overflow-auto flex flex-col min-w-0 focus:outline-none">
       <!-- F1: ONE top bar for every breakpoint. It sits above the page content
            on desktop too, which is where an unread notification belongs - in the
            sidebar it was off in the corner and easy to miss. The hamburger is

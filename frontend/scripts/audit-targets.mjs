@@ -64,6 +64,21 @@ function FINDINGS() {
     if (r.width === 0 || r.height === 0) return;
     // A control that is only in the DOM and not rendered is not a target.
     if (r.height >= 44 && r.width >= 44) return;
+    // A VISUALLY HIDDEN control is not a target either.
+    //
+    // The skip link is the case: it is clipped to 1x1 until it takes the
+    // focus, which is the correct pattern - a keyboard user Tab's to it
+    // and it becomes visible. In its resting state it is a 1x1 target,
+    // and reporting that is reporting a violation of the PATTERN.
+    //
+    // The test is the COMBINATION: a 1x1 box that is clipped away (or
+    // pushed off-screen by a huge negative text-indent). A 1x1 box on
+    // its own is a real control that happens to be tiny.
+    const clippedAway =
+      (cs.clip && cs.clip !== 'auto' && /rect\(\s*0(px)?\s*,\s*0(px)?\s*,\s*0(px)?\s*,\s*0(px)?\s*\)/.test(cs.clip)) ||
+      (cs.clipPath && cs.clipPath !== 'none') ||
+      parseFloat(cs.textIndent) < -100;
+    if (clippedAway && r.width <= 2 && r.height <= 2) return;
     // The label wrapper is the real target for a checkbox.
     const wrapper = el.closest('label');
     if (wrapper) {

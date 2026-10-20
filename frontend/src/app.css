@@ -527,6 +527,52 @@ tr.data-row:hover {
    drag itself, not decoration. What gets suppressed there is the drop-target
    highlight pulse, below.
    ========================================================================== */
+/* ==========================================================================
+   THE SKIP LINK.
+
+   Hidden until it has the focus, then pinned to the top-left of the
+   viewport so a keyboard user can see it.
+
+   It is a plain class rather than a Tailwind variant chain because
+   Tailwind 3 emits `not-sr-only:focus` - the `not-` variant has to come
+   BEFORE the utility, so `focus:not-sr-only` (the order that reads
+   naturally) generates nothing at all. A skip link that never appears
+   is worse than no skip link, because the plan says it is there.
+   ========================================================================== */
+.skip-link {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border-width: 0;
+}
+
+.skip-link:focus {
+        position: fixed;
+        top: 8px;
+        left: 8px;
+        z-index: 100;
+        width: auto;
+        height: auto;
+        padding: 8px 16px;
+        margin: 0;
+        overflow: visible;
+        clip: auto;
+        white-space: normal;
+        border-radius: 8px;
+        background: rgb(var(--brand-rgb));
+        color: rgb(var(--brand-fg-rgb));
+        font-size: 0.875rem;
+        font-weight: 500;
+        /* The focus ring has to survive the jump to the top-left corner. */
+        outline: 2px solid rgb(var(--brand-rgb));
+        outline-offset: 2px;
+}
+
 @media (prefers-reduced-motion: reduce) {
         *,
         *::before,

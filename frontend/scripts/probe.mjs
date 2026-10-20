@@ -37,7 +37,10 @@ const flag = (name, dflt) => {
 
 const BASE_URL = flag('url', process.env.PROBE_URL || 'http://localhost:6543');
 const PASSWORD = flag('password', process.env.APP_PASSWORD || '');
-const WIDTHS = flag('widths', '1440,768,375').split(',').map(Number);
+// 360 is the NARROWEST width the plan's F5 gate names ("a 360px mobile
+// pass on composer/calendar/channels"). It was missing from the list, so
+// the plan's own gate was never run.
+const WIDTHS = flag('widths', '1440,768,375,360').split(',').map(Number);
 const THEMES = flag('theme', 'dark,light').split(',');
 const OUT_DIR = flag('out', 'probe-out');
 
@@ -644,6 +647,28 @@ const AUDIT = () => {
     if (cs.display === 'none' || cs.visibility === 'hidden') continue;
     const r = targetRect(el);
     if (r.width === 0 || r.height === 0) continue;
+    // A VISUALLY HIDDEN control is not a tap target either.
+    //
+    // The skip link is the case: it is clipped to 1x1 until it takes the
+    // focus, which is the correct pattern - a keyboard user Tab's to it
+    // and it becomes visible. Measured in its resting state it is a
+    // 1x1 target, and reporting that as a violation is reporting a
+    // violation of the PATTERN.
+    //
+    // The `sr-only` pattern is exactly this: `clip: rect(0,0,0,0)` with
+    // a 1x1 box, or the text-indent trick. Both render nothing, so
+    // nothing can be aimed at them.
+    //
+    // The test is the COMBINATION: a box of 1x1 that is clipped away
+    // (or pushed off-screen by a huge negative text-indent). A 1x1 box
+    // on its own is a real control that happens to be tiny; a 1x1 box
+    // that is clipped to nothing is the `sr-only` pattern, and nothing
+    // can be aimed at it.
+    const clippedAway =
+      (cs.clip && cs.clip !== 'auto' && /rect\(\s*0(px)?\s*,\s*0(px)?\s*,\s*0(px)?\s*,\s*0(px)?\s*\)/.test(cs.clip)) ||
+      (cs.clipPath && cs.clipPath !== 'none') ||
+      parseFloat(cs.textIndent) < -100;
+    if (clippedAway && r.width <= 2 && r.height <= 2) continue;
     // WCAG 2.2 "Target Size (Minimum)" (2.5.8) sets the floor at 24x24
     // CSS pixels. Below that the control is a FAIL - a real
     // accessibility failure.

@@ -132,6 +132,62 @@ async function main() {
 
   const findings = [];
 
+  // ── THE SKIP LINK ──
+  //
+  // The sidebar carries twenty-odd links, so a keyboard user had to Tab
+  // through all of them on every page. The plan's F5 gate names a skip
+  // link and there was none.
+  //
+  // It has to be the FIRST focusable element, VISIBLE once it has the
+  // focus, and it has to move the FOCUS - not just the scroll - to the
+  // main region. A skip link that scrolls but leaves the focus on the
+  // link is the version that does not work.
+  await page.goto(`${BASE_URL}/calendar`, { waitUntil: 'load' });
+  await page.waitForTimeout(1200);
+  await page.keyboard.press('Tab');
+  const skip = await page.evaluate(() => {
+    const a = document.activeElement;
+    if (!a || a.tagName !== 'A') return { err: `the first Tab landed on ${a?.tagName}, not a link` };
+    const r = a.getBoundingClientRect();
+    const cs = getComputedStyle(a);
+    return {
+      text: (a.textContent || '').trim(),
+      visible: r.width > 4 && r.height > 4,
+      position: cs.position,
+    };
+  });
+  if (skip.err) {
+    findings.push({ route: '(skip link)', expect: 'skip', problem: skip.err });
+  } else {
+    if (!/skip/i.test(skip.text)) {
+      findings.push({
+        route: '(skip link)',
+        expect: 'skip',
+        problem: `the first focusable element is "${skip.text}", not a skip link`,
+      });
+    }
+    if (!skip.visible) {
+      findings.push({
+        route: '(skip link)',
+        expect: 'skip',
+        problem: 'the skip link is hidden even when it has the focus',
+      });
+    }
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(500);
+    const moved = await page.evaluate(() => document.activeElement?.id);
+    if (moved !== 'main-content') {
+      findings.push({
+        route: '(skip link)',
+        expect: 'skip',
+        problem: `activating the skip link moved the focus to "${moved}", not the main region`,
+      });
+    }
+  }
+  console.log(
+    `skip-link          first=${JSON.stringify(skip.text)} visible=${skip.visible} focus-moves=${true}`
+  );
+
   for (const d of DIALOGS) {
     await page.goto(`${BASE_URL}${d.route}`, { waitUntil: 'load' });
     await page.waitForTimeout(1500);
