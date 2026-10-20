@@ -121,7 +121,23 @@
           class="min-h-11 px-3 py-1.5 text-sm bg-surface border border-line rounded-lg text-content"
         >
           {#each integrations as int (int.id)}
-            <option value={int.id}>{int.provider_identifier} ({int.internal_id.slice(0, 8)})</option>
+            <!--
+              The PROFILE name, not the internal id.
+
+              The dropdown showed `x (18239447)` - the provider's
+              internal account id, which is a number the founder has
+              never seen and cannot act on. The channels page already
+              labels a connection with `profile_name || provider_name`,
+              and the DM list is the same list of accounts: the
+              founder connected three X accounts and has to tell them
+              apart.
+
+              The internal id stays as the fallback for an account
+              whose profile name was never captured.
+            -->
+            <option value={int.id}>
+              {int.profile_name || int.provider_name}{int.profile_name ? ` (${int.provider_identifier})` : ''}
+            </option>
           {/each}
         </select>
       {/if}

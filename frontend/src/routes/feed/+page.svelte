@@ -39,7 +39,7 @@
   let editSubmitting = $state(false);
 
   // We need integrations list for the Repurpose target picker.
-  let allIntegrations = $state<Array<{ id: string; provider_name: string; provider_identifier: string; disabled: boolean }>>([]);
+  let allIntegrations = $state<Array<{ id: string; provider_name: string; provider_identifier: string; disabled: boolean; profile_name?: string | null }>>([]);
 
   // Filter state - accounts (channels) grouped by provider
   let showFilter = $state(false);
@@ -909,7 +909,21 @@
       >
         <option value="">Select a channel…</option>
         {#each allIntegrations as int (int.id)}
-          <option value={int.id}>{int.provider_name}</option>
+          <!--
+            The PROFILE name, so two accounts on the same platform are
+            distinguishable.
+
+            The picker says "Select a channel" - the user is choosing
+            WHICH of their accounts to publish to. With three X
+            accounts connected, three options all reading "X (Twitter)"
+            is not a choice.
+
+            The provider name is the fallback for an account whose
+            profile name was never captured.
+          -->
+          <option value={int.id}>
+            {int.profile_name ? `${int.profile_name} (${int.provider_name})` : int.provider_name}
+          </option>
         {/each}
       </select>
       <div class="flex items-center justify-end gap-2">
