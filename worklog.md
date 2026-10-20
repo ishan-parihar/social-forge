@@ -452,3 +452,59 @@ Stage Summary:
   - The false claim remains in the messages of commits 5e3db17 and 66b4823 on
     the remote. The correction is here and in AGENTS.md; the root commit is not
     rewritten, and should not be.
+
+---
+Task ID: doc-foundation-validation-2026-10-20-pass-2
+Agent: jcode
+Task: Deep validation of the documentation foundation work. Find what the first
+pass got wrong rather than confirming it.
+
+Work Log:
+- Re-measured every figure I had published as "measured", and two of them were
+  wrong. The provider count was 27; the truth is 26 (12 Tier-1 + 14 Tier-2, with
+  `linkedin-page` and `instagram-standalone` INSIDE the 12, so my "+2" added what
+  was already counted). `src/social/tier.rs` and `registry.rs` both assert 26, so
+  the code was right and my arithmetic was not. The sibling file count was 46;
+  the truth is 44 `tools_*.rs` modules plus `auth.rs` and `rest_bridge.rs`, in a
+  tree of 47 Rust files.
+- Corrected my own earlier claim rather than leaving it standing: the "dead 44
+  files" wording I used against the ORIGINAL doc was wrong. 44 is a real number
+  (the handler modules) and README's "389 tools across 44 modules" was
+  self-consistent. I had replaced a correct number with an incorrect
+  "clarification" of it.
+- Found and fixed a lint error the first pass had shipped: E001 on AGENTS.md:193.
+  My backticked re-measure command contained an unbalanced bracket, which broke
+  the linter's tokenizer into emitting a phantom `.rs` pointer. Bisected by
+  removing one backticked segment at a time until the error cleared, then
+  reworded so every backticked token is a real path. The command itself was
+  independently wrong: `[` is a regex metacharacter, so the unescaped form
+  returns 0 rather than 389. Now documented as
+  `grep -rh --include='*.rs' 'tool(' src/mcp/ | wc -l`, which returns 389.
+- Valued every PAGE-INDEX status label against body evidence and the archive
+  INDEX's recorded reasons: 18 rows, all consistent. Confirmed the tombstone
+  copies under `docs/planning/` are convention, not duplicate live plans, and
+  that lint reports no W006 overlap.
+- Confirmed reachability for all 29 tracked docs (zero orphans) and re-confirmed
+  the push protocol (no `origin` remote resolves; `github/master` does; no
+  `git push origin` remains anywhere outside `docs/archive/`).
+- Acted on the genome upgrade that `doctor` had been reporting as informational.
+  Ran the skill's own independent self-check against the vendored copy FIRST:
+  32/33, failing `p5_class_intent`. The newer CLI passes that case and scores
+  33/33. Applied with `genome upgrade --apply`, backup left under the existing
+  `.genome/` ignore. Post-upgrade lint clean and doctor healthy, no new
+  findings, so no rule in this repo depended on the old behaviour.
+
+Stage Summary:
+- Commits: 64c55eb (the three numeric defects + E001), d393b4b (CLI upgrade).
+- Verification: `test_genome.py` 32/33 before, 33/33 after; `genome lint` 0
+  errors 0 warnings; `genome doctor` healthy; `cargo test --lib` passed;
+  `cargo test --test surface_docs_audit` 3 passed; dead-path grep clean.
+- Known issues / follow-ups:
+  - Two closed items from earlier entries are now resolved (the PAGE-INDEX
+    labelling, the CLI revision). Two remain, unchanged and deliberate: the
+    `ops` module decision, and the fact that commits 5e3db17 and 66b4823 still
+    carry claims this pass falsified. The corrections live here and in
+    AGENTS.md; the history is not rewritten.
+  - The CLI now being 2026.10.20-2 means the next `genome upgrade` check will
+    drift again as the skill moves. Treat `genome doctor`'s upgrade line as a
+    signal to re-run the self-check, not as noise.
