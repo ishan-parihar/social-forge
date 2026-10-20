@@ -134,14 +134,14 @@
       <div class="inline-block animate-spin text-3xl">✨</div>
       <div class="text-sm text-muted">Generating {count} {format.replace(/_/g, ' ')} post{count > 1 ? 's' : ''} about "{topic}"...</div>
       <div class="text-xs text-faint">This takes 10-30 seconds depending on the LLM.</div>
-      <button onclick={cancel} class="text-xs text-muted hover:text-content">Cancel</button>
+      <button onclick={cancel} class="text-xs text-muted hover:text-content min-h-11">Cancel</button>
     </div>
   {:else if results}
     <!-- Results -->
     <div class="space-y-4">
       <div class="flex items-center justify-between">
         <h3 class="text-sm font-semibold">{results.posts.length} post{results.posts.length > 1 ? 's' : ''} generated</h3>
-        <button onclick={() => { results = null; }} class="text-xs text-muted hover:text-content">← Start over</button>
+        <button onclick={() => { results = null; }} class="text-xs text-muted hover:text-content min-h-11">← Start over</button>
       </div>
 
       {#each results.posts as post, i (i)}

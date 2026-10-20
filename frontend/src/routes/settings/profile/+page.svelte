@@ -183,7 +183,7 @@
       <h1 class="text-xl font-semibold">Brand Profile</h1>
       <p class="text-sm text-muted mt-1">Define your brand voice, audience, and content strategy for AI-assisted posting</p>
     </div>
-    <button onclick={saveProfile} disabled={saving || loading} class="px-4 py-2 whitespace-nowrap bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg text-sm font-medium transition-colors disabled:opacity-50">
+    <button onclick={saveProfile} disabled={saving || loading} class="px-4 py-2 whitespace-nowrap bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg text-sm font-medium transition-colors disabled:opacity-50 min-h-11">
       {saving ? "Saving..." : "Save Profile"}
     </button>
   </div>
@@ -258,10 +258,10 @@
 
     <!-- Actions -->
     <div class="flex gap-3 justify-end">
-      <button onclick={clearProfile} class="px-4 py-2 text-sm text-error hover:text-error/80 transition-colors">
+      <button onclick={clearProfile} class="px-4 py-2 text-sm text-error hover:text-error/80 transition-colors min-h-11">
         Clear All
       </button>
-      <button onclick={saveProfile} disabled={saving} class="px-4 py-2 whitespace-nowrap bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg text-sm font-medium transition-colors disabled:opacity-50">
+      <button onclick={saveProfile} disabled={saving} class="px-4 py-2 whitespace-nowrap bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg text-sm font-medium transition-colors disabled:opacity-50 min-h-11">
         {saving ? "Saving..." : "Save Profile"}
       </button>
     </div>

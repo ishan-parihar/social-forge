@@ -170,7 +170,7 @@
               <input type="checkbox" checked={selected.has(event.id)} onclick={(e) => onToggleSelect?.(event.id, e)} class="rounded w-4 h-4" />
             </label>
           {/if}
-          <button onclick={() => onEventClick?.(event.id)} class="flex-1 flex items-center gap-4 text-left min-w-0">
+          <button onclick={() => onEventClick?.(event.id)} class="flex-1 flex items-center gap-4 text-left min-w-0 min-h-11">
             <div class="text-xs text-muted w-20 shrink-0">
               {#if event.time}
                 <span class="text-accent font-mono">{event.time}</span>
@@ -206,9 +206,9 @@
                  class="text-accent hover:text-accent-strong px-1.5 py-0.5 rounded text-xs"
                  title="View original post">🔗</a>
             {/if}
-            <button onclick={() => onDuplicate?.(event.id)} class="text-muted hover:text-content px-1.5 py-0.5 rounded text-xs" title="Duplicate" aria-label="Duplicate post">📋</button>
-            <button onclick={() => onStats?.(event.id)} class="text-muted hover:text-content px-1.5 py-0.5 rounded text-xs" title="Statistics" aria-label="View post statistics">📊</button>
-            <button onclick={() => onDelete?.(event.id)} class="text-muted hover:text-error px-1.5 py-0.5 rounded text-xs" title="Delete" aria-label="Delete post">🗑️</button>
+            <button onclick={() => onDuplicate?.(event.id)} class="text-muted hover:text-content px-1.5 py-0.5 rounded text-xs min-h-11" title="Duplicate" aria-label="Duplicate post">📋</button>
+            <button onclick={() => onStats?.(event.id)} class="text-muted hover:text-content px-1.5 py-0.5 rounded text-xs min-h-11" title="Statistics" aria-label="View post statistics">📊</button>
+            <button onclick={() => onDelete?.(event.id)} class="text-muted hover:text-error px-1.5 py-0.5 rounded text-xs min-h-11" title="Delete" aria-label="Delete post">🗑️</button>
           </div>
         </div>
       {/each}

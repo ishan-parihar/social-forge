@@ -421,7 +421,7 @@
             <span class="w-1.5 h-1.5 rounded-full" style="background: {chipMeta.dot}"></span>
           {/if}
           {activeFilterLabel}
-          <button onclick={clearFilter} aria-label="Clear filter" class="ml-0.5 hover:text-accent-strong transition-colors">
+          <button onclick={clearFilter} aria-label="Clear filter" class="ml-0.5 hover:text-accent-strong transition-colors min-h-11">
             <svg class="w-3 h-3" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M3 3l6 6M9 3l-6 6" stroke-linecap="round" />
             </svg>

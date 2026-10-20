@@ -185,7 +185,7 @@
 <div class="page-enter space-y-6">
   <div class="flex flex-wrap items-center justify-between gap-3">
     <h1 class="text-xl font-semibold">Automation Rules</h1>
-    <button onclick={openCreate} class="px-3 py-1.5 bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg text-sm transition-colors">+ New Rule</button>
+    <button onclick={openCreate} class="px-3 py-1.5 bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg text-sm transition-colors min-h-11">+ New Rule</button>
   </div>
 
   {#if error}
@@ -216,7 +216,7 @@
           <span class="text-xs text-accent capitalize">{rule.platform}</span>
           <span class="text-xs text-muted capitalize">{rule.trigger_type}</span>
           <span class="text-xs text-muted capitalize">{rule.response_type.replace("_", " ")}</span>
-          <button onclick={() => toggleActive(rule)} class="w-fit">
+          <button onclick={() => toggleActive(rule)} class="w-fit min-h-11">
             {#if rule.is_active}
               <span class="px-2 py-0.5 text-xs rounded bg-success/20 text-success">Active</span>
             {:else}
@@ -224,9 +224,9 @@
             {/if}
           </button>
           <div class="flex items-center gap-2">
-            <button onclick={() => openEdit(rule)} class="text-xs text-muted hover:text-accent">Edit</button>
-            <button onclick={() => viewLogs(rule.id)} class="text-xs text-muted hover:text-accent">Logs</button>
-            <button onclick={() => deleteRule(rule.id)} class="text-xs text-muted hover:text-error">Del</button>
+            <button onclick={() => openEdit(rule)} class="text-xs text-muted hover:text-accent min-h-11">Edit</button>
+            <button onclick={() => viewLogs(rule.id)} class="text-xs text-muted hover:text-accent min-h-11">Logs</button>
+            <button onclick={() => deleteRule(rule.id)} class="text-xs text-muted hover:text-error min-h-11">Del</button>
           </div>
         </div>
       {/each}
@@ -283,8 +283,8 @@
       {#if error}<p class="text-error text-sm mb-3">{error}</p>{/if}
 
       <div class="flex gap-3 justify-end">
-        <button onclick={() => showModal = false} class="px-4 py-2 text-sm text-muted hover:text-content">Cancel</button>
-        <button onclick={saveRule} disabled={saving || !formName.trim()} class="px-4 py-2 text-sm bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded disabled:opacity-50">
+        <button onclick={() => showModal = false} class="px-4 py-2 text-sm text-muted hover:text-content min-h-11">Cancel</button>
+        <button onclick={saveRule} disabled={saving || !formName.trim()} class="px-4 py-2 text-sm bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded disabled:opacity-50 min-h-11">
           {saving ? "Saving..." : editingRule ? "Update" : "Create"}
         </button>
       </div>
@@ -298,7 +298,7 @@
     <div class="bg-background-input border border-line rounded-xl p-6 w-full max-w-lg max-h-[80vh] overflow-hidden flex flex-col">
       <div class="flex items-center justify-between mb-4">
         <h2 class="text-lg font-semibold">Execution Logs</h2>
-        <button onclick={() => showLogs = null} class="text-muted hover:text-content">✕</button>
+        <button onclick={() => showLogs = null} class="text-muted hover:text-content min-h-11">✕</button>
       </div>
       {#if loadingLogs}
         <div class="text-center py-8 text-sm text-muted">Loading logs...</div>

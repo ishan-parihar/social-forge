@@ -241,10 +241,10 @@
     <div class="flex gap-2 flex-wrap">
       {#each savedSearches as term}
         <div class="flex items-center gap-1 px-3 py-1 bg-surface border border-line rounded-full text-xs">
-          <button onclick={() => { searchQuery = term; onSearchInput(); }} class="text-muted hover:text-accent transition-colors">
+          <button onclick={() => { searchQuery = term; onSearchInput(); }} class="text-muted hover:text-accent transition-colors min-h-11">
             {term}
           </button>
-          <button onclick={() => removeSearch(term)} class="text-faint hover:text-error transition-colors ml-1">
+          <button onclick={() => removeSearch(term)} class="text-faint hover:text-error transition-colors ml-1 min-h-11">
             ✕
           </button>
         </div>
@@ -295,7 +295,7 @@
         {/if}
       </p>
       {#if posts.length === 0}
-        <button onclick={importFeed} disabled={importing} class="mt-3 px-4 py-2 bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg text-sm transition-colors disabled:opacity-50">
+        <button onclick={importFeed} disabled={importing} class="mt-3 px-4 py-2 bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg text-sm transition-colors disabled:opacity-50 min-h-11">
           {importing ? "Importing..." : "Import Feed"}
         </button>
       {/if}
@@ -355,7 +355,7 @@
     <!-- Load more -->
     {#if hasMore}
       <div class="text-center py-4">
-        <button onclick={loadMore} class="px-4 py-2 text-sm bg-surface-hover hover:bg-line border border-line rounded-lg transition-colors">
+        <button onclick={loadMore} class="px-4 py-2 text-sm bg-surface-hover hover:bg-line border border-line rounded-lg transition-colors min-h-11">
           Load More
         </button>
       </div>
@@ -370,8 +370,8 @@
       <h2 class="text-lg font-semibold mb-2">Save Search</h2>
       <p class="text-sm text-muted mb-4">Save "{searchQuery}" for quick access later</p>
       <div class="flex gap-3 justify-end">
-        <button onclick={() => showSaveDialog = false} class="px-4 py-2 text-sm text-muted hover:text-content">Cancel</button>
-        <button onclick={saveSearch} class="px-4 py-2 text-sm bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg">Save</button>
+        <button onclick={() => showSaveDialog = false} class="px-4 py-2 text-sm text-muted hover:text-content min-h-11">Cancel</button>
+        <button onclick={saveSearch} class="px-4 py-2 text-sm bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg min-h-11">Save</button>
       </div>
     </div>
   </div>

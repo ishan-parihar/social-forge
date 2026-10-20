@@ -526,13 +526,13 @@
 
     <!-- Quick Actions -->
     <div class="flex gap-3 flex-wrap">
-      <button onclick={() => composer.openCreate()} class="px-4 py-2 whitespace-nowrap bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg text-sm font-medium transition-colors">
+      <button onclick={() => composer.openCreate()} class="px-4 py-2 whitespace-nowrap bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg text-sm font-medium transition-colors min-h-11">
         <Icon name="post" class="w-4 h-4 inline" /> Compose Post
       </button>
-      <button onclick={() => goto('/feed')} class="px-4 py-2 bg-surface-hover hover:bg-line-hover border border-line rounded-lg text-sm transition-colors">
+      <button onclick={() => goto('/feed')} class="px-4 py-2 bg-surface-hover hover:bg-line-hover border border-line rounded-lg text-sm transition-colors min-h-11">
         <Icon name="feed" class="w-4 h-4 inline" /> View Feed
       </button>
-      <button onclick={() => goto('/channels')} class="px-4 py-2 bg-surface-hover hover:bg-line-hover border border-line rounded-lg text-sm transition-colors">
+      <button onclick={() => goto('/channels')} class="px-4 py-2 bg-surface-hover hover:bg-line-hover border border-line rounded-lg text-sm transition-colors min-h-11">
         <Icon name="channel" class="w-4 h-4 inline" /> Manage Channels
       </button>
       <button onclick={() => goto('/analytics')} class="px-4 py-2 whitespace-nowrap bg-surface-hover hover:bg-line-hover border border-line rounded-lg text-sm transition-colors min-h-11">

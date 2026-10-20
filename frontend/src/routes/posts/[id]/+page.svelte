@@ -79,7 +79,7 @@
 <div class="page-enter max-w-2xl mx-auto space-y-6">
   <!-- Back + actions -->
   <div class="flex items-center justify-between">
-    <button onclick={() => goto('/posts')} class="text-sm text-muted hover:text-content flex items-center gap-1">
+    <button onclick={() => goto('/posts')} class="text-sm text-muted hover:text-content flex items-center gap-1 min-h-11">
       <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
       Back to Posts
     </button>

@@ -114,7 +114,7 @@
   {#if error}
     <div class="bg-error/10 border border-error/30 rounded-lg p-4" role="alert">
       <p class="text-error text-sm">{error}</p>
-      <button onclick={() => fetchData()} class="mt-2 text-sm text-accent hover:text-accent-strong">Retry</button>
+      <button onclick={() => fetchData()} class="mt-2 text-sm text-accent hover:text-accent-strong min-h-11">Retry</button>
     </div>
   {:else if loading && !data}
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">

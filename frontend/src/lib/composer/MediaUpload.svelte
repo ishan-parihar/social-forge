@@ -238,8 +238,8 @@
                 onkeydown={(e) => { if (e.key === 'Enter') saveAlt(); if (e.key === 'Escape') { editingAlt = null; } }}
               />
               <div class="flex gap-1">
-                <button onclick={saveAlt} class="flex-1 text-[10px] bg-accent-fill text-accent-fg rounded py-0.5">Save</button>
-                <button onclick={() => editingAlt = null} class="flex-1 text-[10px] text-muted border border-line rounded py-0.5">Cancel</button>
+                <button onclick={saveAlt} class="flex-1 text-[10px] bg-accent-fill text-accent-fg rounded py-0.5 min-h-11">Save</button>
+                <button onclick={() => editingAlt = null} class="flex-1 text-[10px] text-muted border border-line rounded py-0.5 min-h-11">Cancel</button>
               </div>
             </div>
           {/if}

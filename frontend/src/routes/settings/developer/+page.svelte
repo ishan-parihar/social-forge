@@ -171,7 +171,7 @@
       {#if keysError}
         <div class="bg-surface border border-error/30 rounded-xl p-4 text-sm text-error">
           {keysError}
-          <button onclick={loadKeys} class="ml-2 underline">Retry</button>
+          <button onclick={loadKeys} class="ml-2 underline min-h-11">Retry</button>
         </div>
       {/if}
 

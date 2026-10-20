@@ -283,8 +283,8 @@
         bind:this={nameInput}
       />
       <div class="flex gap-3 justify-end">
-        <button onclick={() => showCreateModal = false} class="px-4 py-2 text-sm text-muted hover:text-content">Cancel</button>
-        <button onclick={confirmCreate} disabled={creating || !newCampaignName.trim()} class="px-4 py-2 text-sm bg-accent-fill hover:bg-accent-fill-hover text-accent-fg disabled:opacity-50 rounded transition-colors">
+        <button onclick={() => showCreateModal = false} class="px-4 py-2 text-sm text-muted hover:text-content min-h-11">Cancel</button>
+        <button onclick={confirmCreate} disabled={creating || !newCampaignName.trim()} class="px-4 py-2 text-sm bg-accent-fill hover:bg-accent-fill-hover text-accent-fg disabled:opacity-50 rounded transition-colors min-h-11">
           {creating ? 'Creating...' : 'Create'}
         </button>
       </div>

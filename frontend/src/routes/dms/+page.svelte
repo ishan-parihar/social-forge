@@ -125,7 +125,7 @@
           {/each}
         </select>
       {/if}
-      <button onclick={load} class="px-3 py-1.5 text-sm text-muted hover:text-content border border-line rounded-lg transition-colors">Refresh</button>
+      <button onclick={load} class="px-3 py-1.5 text-sm text-muted hover:text-content border border-line rounded-lg transition-colors min-h-11">Refresh</button>
     </div>
   </div>
 

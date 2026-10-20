@@ -112,7 +112,7 @@
   {#if error && !loading}
     <div class="bg-error/10 border border-error/30 text-error text-sm rounded-lg p-4 text-center">
       <p class="mb-2">{error}</p>
-      <button onclick={fetchMedia} class="text-accent hover:text-accent-strong underline">Retry</button>
+      <button onclick={fetchMedia} class="text-accent hover:text-accent-strong underline min-h-11">Retry</button>
     </div>
   {:else}
     {#if !loading && items.length === 0}

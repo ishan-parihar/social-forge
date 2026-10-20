@@ -138,7 +138,7 @@
 <div class="page-enter space-y-6">
   <div class="flex flex-wrap items-center justify-between gap-3">
     <h1 class="text-xl font-semibold">Webhooks</h1>
-    <button onclick={openCreate} class="px-4 py-2 bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg text-sm transition-colors">
+    <button onclick={openCreate} class="px-4 py-2 bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg text-sm transition-colors min-h-11">
       + Add Webhook
     </button>
   </div>
@@ -163,10 +163,10 @@
               {/if}
             </div>
             <div class="flex gap-2">
-              <button onclick={() => testWebhook(wh.id)} class="text-xs px-2 py-1 text-muted hover:text-accent border border-line rounded">Test</button>
-              <button onclick={() => viewDeliveries(wh.id)} class="text-xs px-2 py-1 text-muted hover:text-accent border border-line rounded">Deliveries</button>
-              <button onclick={() => openEdit(wh)} class="text-xs px-2 py-1 text-muted hover:text-accent border border-line rounded">Edit</button>
-              <button onclick={() => deleteWebhook(wh.id)} class="text-xs px-2 py-1 text-muted hover:text-error border border-line rounded">Delete</button>
+              <button onclick={() => testWebhook(wh.id)} class="text-xs px-2 py-1 text-muted hover:text-accent border border-line rounded min-h-11">Test</button>
+              <button onclick={() => viewDeliveries(wh.id)} class="text-xs px-2 py-1 text-muted hover:text-accent border border-line rounded min-h-11">Deliveries</button>
+              <button onclick={() => openEdit(wh)} class="text-xs px-2 py-1 text-muted hover:text-accent border border-line rounded min-h-11">Edit</button>
+              <button onclick={() => deleteWebhook(wh.id)} class="text-xs px-2 py-1 text-muted hover:text-error border border-line rounded min-h-11">Delete</button>
             </div>
           </div>
           <p class="text-xs text-muted truncate mb-2">{wh.url}</p>
@@ -219,8 +219,8 @@
         </label>
       </div>
       <div class="flex gap-3 justify-end mt-6">
-        <button onclick={() => showModal = null} class="px-4 py-2 text-sm text-muted hover:text-content">Cancel</button>
-        <button onclick={saveWebhook} disabled={saving || !formName.trim() || !formUrl.trim()} class="px-4 py-2 text-sm bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded disabled:opacity-50">
+        <button onclick={() => showModal = null} class="px-4 py-2 text-sm text-muted hover:text-content min-h-11">Cancel</button>
+        <button onclick={saveWebhook} disabled={saving || !formName.trim() || !formUrl.trim()} class="px-4 py-2 text-sm bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded disabled:opacity-50 min-h-11">
           {saving ? "Saving..." : "Save"}
         </button>
       </div>
@@ -234,7 +234,7 @@
     <div class="bg-background-input border border-line rounded-xl p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
       <div class="flex items-center justify-between mb-4">
         <h2 class="text-lg font-semibold">Delivery History</h2>
-        <button onclick={() => showDeliveries = null} class="text-muted hover:text-content">✕</button>
+        <button onclick={() => showDeliveries = null} class="text-muted hover:text-content min-h-11">✕</button>
       </div>
       {#if loadingDeliveries}
         <Skeleton variant="row" rows={3} />

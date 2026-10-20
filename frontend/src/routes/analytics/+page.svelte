@@ -346,10 +346,10 @@
       description="Publish a post, or import your existing feed to start measuring engagement."
     />
     <div class="flex gap-2 justify-center">
-      <a href="/feed" class="px-4 py-2 bg-surface-hover text-content rounded-lg hover:bg-surface-hover border border-line transition-colors text-sm">
+      <a href="/feed" class="px-4 py-2 bg-surface-hover text-content rounded-lg hover:bg-surface-hover border border-line transition-colors text-sm min-h-11">
         Import feed
       </a>
-      <a href="/posts/new" class="px-4 py-2 bg-accent-fill text-accent-fg rounded-lg hover:bg-accent-fill-hover transition-colors text-sm">
+      <a href="/posts/new" class="px-4 py-2 bg-accent-fill text-accent-fg rounded-lg hover:bg-accent-fill-hover transition-colors text-sm min-h-11">
         Create post
       </a>
     </div>

@@ -290,7 +290,7 @@
         <div class="h-full rounded-full bg-accent transition-[width] duration-300" style="width: {stagePct}%"></div>
       </div>
       <div class="skeleton h-16 rounded-lg" aria-hidden="true"></div>
-      <button onclick={cancel} class="w-full px-3 py-1.5 text-xs text-muted hover:text-content border border-line rounded-lg transition-colors">
+      <button onclick={cancel} class="w-full px-3 py-1.5 text-xs text-muted hover:text-content border border-line rounded-lg transition-colors min-h-11">
         Cancel
       </button>
     </div>

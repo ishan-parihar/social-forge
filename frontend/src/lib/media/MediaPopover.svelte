@@ -124,7 +124,7 @@
         {#if error}
           <div class="text-center py-12">
             <p class="text-sm text-error mb-3">{error}</p>
-            <button onclick={fetchMedia} class="text-sm text-accent hover:text-accent-strong">Retry</button>
+            <button onclick={fetchMedia} class="text-sm text-accent hover:text-accent-strong min-h-11">Retry</button>
           </div>
         {:else}
           <MediaGrid {items} {loading} selectable={true} onSelect={handleSelect} />

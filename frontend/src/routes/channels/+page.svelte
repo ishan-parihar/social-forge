@@ -382,8 +382,8 @@
       <input id="onboard-phone" type="tel" bind:value={onboardDialog.phone} placeholder="+1234567890" class="w-full mb-4 px-3 py-2 bg-background-input border border-line rounded text-sm" />
       {#if error}<p class="text-error text-sm mb-3" role="alert">{error}</p>{/if}
       <div class="flex justify-end gap-2">
-        <button onclick={() => { onboardDialog = null; error = ""; }} class="px-4 py-2 text-sm text-muted hover:text-content">Cancel</button>
-        <button onclick={onboardSubmitPhone} disabled={!!connecting} class="px-4 py-2 text-sm bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded disabled:opacity-50">
+        <button onclick={() => { onboardDialog = null; error = ""; }} class="px-4 py-2 text-sm text-muted hover:text-content min-h-11">Cancel</button>
+        <button onclick={onboardSubmitPhone} disabled={!!connecting} class="px-4 py-2 text-sm bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded disabled:opacity-50 min-h-11">
           {connecting ? "Sending…" : "Next"}
         </button>
       </div>
@@ -399,7 +399,7 @@
         <div class="animate-spin h-5 w-5 border-2 border-accent border-t-transparent rounded-full"></div>
       </div>
       <div class="flex justify-end mt-4">
-        <button onclick={() => { onboardDialog = null; error = ""; }} class="px-4 py-2 text-sm text-muted hover:text-content">Cancel</button>
+        <button onclick={() => { onboardDialog = null; error = ""; }} class="px-4 py-2 text-sm text-muted hover:text-content min-h-11">Cancel</button>
       </div>
 
     {:else if onboardDialog.step === "sms_code"}
@@ -408,8 +408,8 @@
       <input id="onboard-code" type="text" bind:value={onboardDialog.code} placeholder="12345" class="w-full mb-4 px-3 py-2 bg-background-input border border-line rounded text-sm font-mono text-center text-lg tracking-widest" />
       {#if error}<p class="text-error text-sm mb-3" role="alert">{error}</p>{/if}
       <div class="flex justify-end gap-2">
-        <button onclick={() => { onboardDialog = null; error = ""; }} class="px-4 py-2 text-sm text-muted hover:text-content">Cancel</button>
-        <button onclick={onboardSubmitCode} disabled={!!connecting} class="px-4 py-2 text-sm bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded disabled:opacity-50">
+        <button onclick={() => { onboardDialog = null; error = ""; }} class="px-4 py-2 text-sm text-muted hover:text-content min-h-11">Cancel</button>
+        <button onclick={onboardSubmitCode} disabled={!!connecting} class="px-4 py-2 text-sm bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded disabled:opacity-50 min-h-11">
           {connecting ? "Signing in…" : "Sign In"}
         </button>
       </div>
@@ -429,8 +429,8 @@
       </div>
       {#if error}<p class="text-error text-sm mb-3" role="alert">{error}</p>{/if}
       <div class="flex justify-end gap-2">
-        <button onclick={() => { onboardDialog = null; error = ""; }} class="px-4 py-2 text-sm text-muted hover:text-content">Cancel</button>
-        <button onclick={onboardSubmitCode} disabled={!!connecting} class="px-4 py-2 text-sm bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded disabled:opacity-50">
+        <button onclick={() => { onboardDialog = null; error = ""; }} class="px-4 py-2 text-sm text-muted hover:text-content min-h-11">Cancel</button>
+        <button onclick={onboardSubmitCode} disabled={!!connecting} class="px-4 py-2 text-sm bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded disabled:opacity-50 min-h-11">
           {connecting ? "Verifying…" : "Verify"}
         </button>
       </div>

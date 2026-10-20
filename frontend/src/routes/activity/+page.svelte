@@ -220,10 +220,10 @@
                      middle-clickable without JS. The inline-flex +
                      min-height gives it a 44px target without changing
                      the line it sits on. -->
-                <a href="/posts/{row.post_id}" class="text-accent hover:underline inline-flex items-center min-h-11">View post</a>
+                <a href="/posts/{row.post_id}" class="text-accent hover:underline inline-flex items-center">View post</a>
               {/if}
               {#if row.rule_id}
-                <a href="/automation" class="text-accent hover:underline inline-flex items-center min-h-11">View rule</a>
+                <a href="/automation" class="text-accent hover:underline inline-flex items-center">View rule</a>
               {/if}
             </div>
           </div>

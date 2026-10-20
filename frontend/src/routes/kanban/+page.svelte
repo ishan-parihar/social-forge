@@ -589,7 +589,7 @@
       <p class="text-sm text-muted mt-1">Drag posts between columns to move them through your content pipeline.</p>
     </div>
     <div class="flex gap-2">
-      <button onclick={openCreateCampaignModal} class="px-3 py-1.5 text-sm whitespace-nowrap border border-line rounded-lg text-muted hover:text-content hover:bg-surface-hover transition-colors">
+      <button onclick={openCreateCampaignModal} class="px-3 py-1.5 text-sm whitespace-nowrap border border-line rounded-lg text-muted hover:text-content hover:bg-surface-hover transition-colors min-h-11">
         + Campaign
       </button>
     </div>
@@ -616,7 +616,7 @@
             {/if}
           </button>
           {#if selectedCampaign === c.id}
-            <button onclick={() => deleteCampaign(c.id)} class="text-muted hover:text-error text-xs" title="Delete campaign">✕</button>
+            <button onclick={() => deleteCampaign(c.id)} class="text-muted hover:text-error text-xs min-h-11" title="Delete campaign">✕</button>
           {/if}
         </div>
       {/each}
@@ -648,7 +648,7 @@
         {/each}
       </div>
       {#if priorityFilter || substateFilter}
-        <button onclick={() => { priorityFilter = null; substateFilter = null; }} class="text-muted hover:text-error underline">
+        <button onclick={() => { priorityFilter = null; substateFilter = null; }} class="text-muted hover:text-error underline min-h-11">
           Clear filters
         </button>
       {/if}

@@ -10,7 +10,7 @@
   } = $props();
 </script>
 
-<button {type} {onclick} {disabled} aria-label={ariaLabel} class="btn btn-{variant} btn-{size} whitespace-nowrap">
+<button {type} {onclick} {disabled} aria-label={ariaLabel} class="btn btn-{variant} btn-{size} whitespace-nowrap min-h-11">
   {#if children}{@render children()}{/if}
 </button>
 

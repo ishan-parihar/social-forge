@@ -1313,7 +1313,7 @@
                   <p class="text-sm font-medium truncate">{selectedMusic.title}</p>
                   <p class="text-xs text-muted truncate">{selectedMusic.artist}</p>
                 </div>
-                <button onclick={() => selectedMusic = null} class="text-muted hover:text-error text-sm">&times;</button>
+                <button onclick={() => selectedMusic = null} class="text-muted hover:text-error text-sm min-h-11">&times;</button>
               </div>
             {:else}
               <p class="text-xs text-muted">Add trending music from Instagram's library to your Reel.</p>
@@ -1380,7 +1380,7 @@
         {showPreviewMobile ? 'block' : 'hidden lg:block'}">
         <!-- Mobile: close preview button -->
         <div class="lg:hidden flex justify-end">
-          <button onclick={() => showPreviewMobile = false} class="text-muted hover:text-content text-sm">Close preview</button>
+          <button onclick={() => showPreviewMobile = false} class="text-muted hover:text-content text-sm min-h-11">Close preview</button>
         </div>
         <!-- F2: one frame per selected channel, each with the full post
              context (title, media, first comment, schedule, TikTok sound,

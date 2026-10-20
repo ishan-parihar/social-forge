@@ -168,7 +168,7 @@
   {#if error}
     <div class="bg-surface border border-error/30 rounded-xl p-4 text-sm text-error">
       {error}
-      <button onclick={load} class="ml-2 underline">Retry</button>
+      <button onclick={load} class="ml-2 underline min-h-11">Retry</button>
     </div>
   {/if}
 

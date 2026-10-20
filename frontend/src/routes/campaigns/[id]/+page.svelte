@@ -189,7 +189,7 @@
   {:else}
     <PageHeader title={campaign.name} subtitle={campaign.description || 'No description'}>
       <Badge variant={statusVariant[campaign.status] || 'default'}>{campaign.status}</Badge>
-      <button onclick={() => goto('/campaigns')} class="px-3 py-2 text-sm text-muted hover:text-content whitespace-nowrap">
+      <button onclick={() => goto('/campaigns')} class="px-3 py-2 text-sm text-muted hover:text-content whitespace-nowrap min-h-11">
         ← Back
       </button>
     </PageHeader>
@@ -278,7 +278,7 @@
       {:else}
         <div class="bg-surface border border-line rounded-lg overflow-hidden">
           {#each posts as post (post.id)}
-            <a href="/posts/{post.id}" class="flex items-center gap-3 px-4 py-3 border-b border-line last:border-0 hover:bg-surface-hover transition-colors">
+            <a href="/posts/{post.id}" class="flex items-center gap-3 px-4 py-3 border-b border-line last:border-0 hover:bg-surface-hover transition-colors min-h-11">
               <span class="text-xs" style="color: {providerInk(post.integration_name?.toLowerCase()?.split(/\s+/)[0] || '')}">
                 {providerIcon(post.integration_name?.toLowerCase()?.split(/\s+/)[0] || '')}
               </span>
@@ -350,10 +350,10 @@
           </div>
         </div>
         <div class="flex items-center justify-between pt-4 border-t border-line">
-          <button onclick={archiveCampaign} class="text-sm text-error hover:text-error/80 transition-colors">
+          <button onclick={archiveCampaign} class="text-sm text-error hover:text-error/80 transition-colors min-h-11">
             Archive Campaign
           </button>
-          <button onclick={saveSettings} disabled={saving || !formName.trim()} class="px-4 py-2 text-sm bg-accent-fill hover:bg-accent-fill-hover text-accent-fg disabled:opacity-50 rounded transition-colors">
+          <button onclick={saveSettings} disabled={saving || !formName.trim()} class="px-4 py-2 text-sm bg-accent-fill hover:bg-accent-fill-hover text-accent-fg disabled:opacity-50 rounded transition-colors min-h-11">
             {saving ? 'Saving...' : 'Save Changes'}
           </button>
         </div>

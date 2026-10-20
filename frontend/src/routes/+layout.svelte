@@ -201,7 +201,7 @@
            in a duplicate lg:hidden bar, so the two instances could disagree. -->
       <div class="h-14 flex items-center justify-between px-{sidebarCollapsed ? '2' : '5'} border-b border-line sticky top-0 bg-background z-10">
         {#if sidebarCollapsed}
-          <button onclick={toggleSidebar} class="text-content hover:text-accent transition-colors mx-auto" aria-label="Expand sidebar" title="Expand sidebar">
+          <button onclick={toggleSidebar} class="text-content hover:text-accent transition-colors mx-auto min-h-11" aria-label="Expand sidebar" title="Expand sidebar">
             <Icon name="dashboard" class="w-5 h-5" />
           </button>
         {:else}
