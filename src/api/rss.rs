@@ -247,6 +247,7 @@ pub async fn import_item(
         Some(crate::db::models::PostState::Draft),
         None,
         0,
+        None,
     )
     .await?;
 

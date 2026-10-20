@@ -178,11 +178,14 @@ pub async fn handle_li_create_post(
     let (_post_id, platform_id, url) = super::tools_posts::publish_now_via_pipeline(
         state,
         &integration,
-        &input.content,
-        None,
-        vec![],
-        serde_json::Value::Object(serde_json::Map::new()),
-        None,
+        super::tools_posts::PipelinePost {
+            content: input.content.to_string(),
+            title: None,
+            media: vec![],
+            settings: serde_json::Value::Object(serde_json::Map::new()),
+            first_comment: None,
+            campaign_id: None,
+        },
     )
     .await?;
 

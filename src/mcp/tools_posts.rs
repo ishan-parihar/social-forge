@@ -299,6 +299,7 @@ pub async fn validate(
         first_comment: None,
         sequence: None,
         overrides: None,
+        campaign_id: None,
     };
     let errors = crate::api::validate_posts_for_integrations(state, &body, &integrations, &media);
 
@@ -327,29 +328,41 @@ fn parse_rfc3339_opt(s: &Option<String>) -> Result<Option<chrono::DateTime<chron
 /// idempotency key, retries with backoff, post_pending/finalize
 /// lifecycle, first-comment, attempt audit, and events.
 ///
+/// The post-shaped arguments of a publish-now call.
+///
+/// A struct rather than eight positional arguments: the argument list
+/// had grown past clippy's limit, and a positional list of eight
+/// `Option`/String/Value fields is easy to mis-order.
+pub(crate) struct PipelinePost {
+    pub content: String,
+    pub title: Option<String>,
+    pub media: Vec<crate::social::MediaAttachment>,
+    pub settings: serde_json::Value,
+    pub first_comment: Option<String>,
+    /// The campaign to file the post under.
+    pub campaign_id: Option<Uuid>,
+}
+
 /// Returns `(post_id, platform_post_id, platform_post_url)`.
 pub(crate) async fn publish_now_via_pipeline(
     state: &AppState,
     integration: &crate::db::models::Integration,
-    content: &str,
-    title: Option<&str>,
-    media: Vec<crate::social::MediaAttachment>,
-    settings: serde_json::Value,
-    first_comment: Option<&str>,
+    post: PipelinePost,
 ) -> Result<(Uuid, String, String), String> {
-    let media_json = serde_json::to_value(&media).unwrap_or(serde_json::json!([]));
-    let post = crate::db::queries::create_post(
+    let media_json = serde_json::to_value(&post.media).unwrap_or(serde_json::json!([]));
+    let row = crate::db::queries::create_post(
         &state.db,
         integration.user_id,
         integration.id,
-        content,
-        title,
+        &post.content,
+        post.title.as_deref(),
         &media_json,
-        &settings,
+        &post.settings,
         None,
         Some(crate::db::models::PostState::Queued),
-        first_comment,
+        post.first_comment.as_deref(),
         0,
+        post.campaign_id,
     )
     .await
     .map_err(|e| format!("Failed to create post row: {e}"))?;
@@ -360,17 +373,17 @@ pub(crate) async fn publish_now_via_pipeline(
         &state.broadcast,
         &state.config,
         integration.user_id,
-        post.id,
+        row.id,
         state.token_key,
     )
     .await?;
 
-    let row = crate::db::queries::get_post(&state.db, post.id, integration.user_id)
+    let row = crate::db::queries::get_post(&state.db, row.id, integration.user_id)
         .await
         .map_err(|e| format!("Failed to read back post: {e}"))?
         .ok_or_else(|| "Post row not found after publish".to_string())?;
 
-    Ok((post.id, row.platform_post_id.unwrap_or_default(), url))
+    Ok((row.id, row.platform_post_id.unwrap_or_default(), url))
 }
 
 // ── Input/Output Types ──────────────────────────────────────
@@ -383,6 +396,8 @@ pub struct CreatePostInput {
     pub scheduled_at: Option<String>,
     pub media: Option<serde_json::Value>,
     pub settings: Option<serde_json::Value>,
+    /// The campaign to file this post under.
+    pub campaign_id: Option<Uuid>,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
@@ -556,6 +571,7 @@ pub async fn create_post(
         first_comment: None,
         sequence: None,
         overrides: None,
+        campaign_id: None,
     };
 
     let created = super::rest_bridge::rest_result(
@@ -1037,6 +1053,7 @@ pub async fn create_carousel(
             settings: input.settings.clone().unwrap_or(serde_json::json!({})),
             first_comment: None,
             state: None,
+            campaign_id: None,
         },
     )
     .await?;

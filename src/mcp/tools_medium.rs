@@ -88,11 +88,14 @@ pub async fn handle_md_create_post(
     let (_post_id, platform_id, url) = super::tools_posts::publish_now_via_pipeline(
         state,
         &integration,
-        &input.content,
-        input.title.as_deref(),
-        vec![],
-        settings,
-        None,
+        super::tools_posts::PipelinePost {
+            content: input.content.to_string(),
+            title: input.title.as_deref().map(|t| t.to_string()),
+            media: vec![],
+            settings,
+            first_comment: None,
+            campaign_id: None,
+        },
     )
     .await?;
 

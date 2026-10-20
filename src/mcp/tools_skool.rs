@@ -66,15 +66,18 @@ pub async fn handle_sk_publish(
     let (_post_id, platform_id, url) = super::tools_posts::publish_now_via_pipeline(
         state,
         &integration,
-        &input.content,
-        Some(input.title.as_str()),
-        vec![],
-        json!({
-            "groupId": input.group_id,
-            "title": input.title,
-            "label": input.label.clone().unwrap_or_default(),
-        }),
-        None,
+        super::tools_posts::PipelinePost {
+            content: input.content.to_string(),
+            title: Some(input.title.as_str()).map(|t| t.to_string()),
+            media: vec![],
+            settings: json!({
+                "groupId": input.group_id,
+                "title": input.title,
+                "label": input.label.clone().unwrap_or_default(),
+            }),
+            first_comment: None,
+            campaign_id: None,
+        },
     )
     .await?;
 

@@ -153,6 +153,7 @@ async fn poll_all_feeds(
                 Some(PostState::Draft), // Changed from Queued → Draft for review
                 None,
                 0,
+                None,
             )
             .await
             {

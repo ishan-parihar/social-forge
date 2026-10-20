@@ -39,6 +39,15 @@ pub struct CreatePostRequest {
     pub first_comment: Option<String>,
     pub sequence: Option<i32>,
     pub overrides: Option<HashMap<String, PostOverride>>,
+    /// The campaign to file this post under.
+    ///
+    /// The composer's campaign dropdown set a variable that was NEVER
+    /// read, so the id was dropped on submit - and the kanban's drag
+    /// PRESERVED the existing value rather than setting one. So there
+    /// was no UI path that could put a post into a campaign: the
+    /// campaign's `post_count` was always 0 and its Posts tab was
+    /// permanently empty.
+    pub campaign_id: Option<Uuid>,
 }
 
 #[derive(Debug, Serialize)]
@@ -204,6 +213,32 @@ pub struct PostEngagement {
     pub impressions: Option<i64>,
 }
 
+/// Merge an incoming settings object over the stored one.
+///
+/// A key the caller sent is SET. A key the caller did not send is
+/// KEPT. The whole-object `null` is handled by the caller as an
+/// explicit clear.
+///
+/// The settings hold the provider's TARGET - a Reddit subreddit, a
+/// Pinterest board, a Discord channel - and the provider settings are
+/// read at PUBLISH time. A replace meant a client that sent only the
+/// keys it knew about silently deleted the target, and the post failed
+/// at publish with no reason shown.
+fn merge_settings(stored: &serde_json::Value, incoming: &serde_json::Value) -> serde_json::Value {
+    match (stored.as_object(), incoming.as_object()) {
+        (Some(s), Some(i)) => {
+            let mut out = s.clone();
+            for (k, v) in i {
+                out.insert(k.clone(), v.clone());
+            }
+            serde_json::Value::Object(out)
+        }
+        // Not a pair of objects: the incoming shape wins, because the
+        // caller sent something the stored value cannot merge into.
+        _ => incoming.clone(),
+    }
+}
+
 #[derive(Debug, Serialize)]
 pub struct PostDetailResponse {
     pub id: Uuid,
@@ -213,6 +248,18 @@ pub struct PostDetailResponse {
     pub content: String,
     pub title: Option<String>,
     pub media: serde_json::Value,
+    /// The post's stored settings - the provider settings (a Reddit
+    /// subreddit, a Pinterest board, a Discord channel) and the global
+    /// ones (an Instagram audio id).
+    ///
+    /// The detail response used to have NO settings field, so the
+    /// composer could not restore them when it opened a post for
+    /// editing. It then saved `settings: {}` - and the update path
+    /// REPLACES the settings wholesale. So editing a post to fix a typo
+    /// DELETED the subreddit, and the post failed at publish with
+    /// "Missing subreddit in settings" - a post that was working thirty
+    /// seconds earlier.
+    pub settings: serde_json::Value,
     pub scheduled_at: Option<String>,
     pub published_at: Option<String>,
     pub platform_post_url: Option<String>,
@@ -563,6 +610,7 @@ pub async fn create(
                 state_enum.clone(),
                 body.first_comment.as_deref(),
                 body.sequence.unwrap_or(0),
+                body.campaign_id,
             )
             .await?;
             posts.push(post);
@@ -581,6 +629,7 @@ pub async fn create(
             state_enum,
             body.first_comment.as_deref(),
             body.sequence.unwrap_or(0),
+            body.campaign_id,
         )
         .await?
     };
@@ -750,6 +799,7 @@ pub async fn get(
         content: post.content,
         title: post.title,
         media: media_as_array(&post.media),
+        settings: post.settings.clone(),
         scheduled_at: post.scheduled_at.map(|d| d.to_rfc3339()),
         published_at: post.published_at.map(|d| d.to_rfc3339()),
         platform_post_url: post.platform_post_url,
@@ -824,7 +874,21 @@ pub(crate) async fn update_post(
         None => existing.media,
     };
     let settings = match &body.settings {
-        Some(Some(s)) => s.clone(),
+        // The incoming object MERGES over the stored one: a key the
+        // caller sent is set, a key it did not send is KEPT.
+        //
+        // A replace was the old behaviour, and it meant a client that
+        // sent `{}` - or sent only the key it knew about - DELETED the
+        // provider settings. The composer did exactly that: it had no
+        // settings to send (the detail response had no settings
+        // field), so every edit of a scheduled Reddit post wiped its
+        // subreddit and the post failed at publish with "Missing
+        // subreddit in settings" - a post that was working thirty
+        // seconds earlier.
+        //
+        // The whole-object `null` is still an explicit CLEAR, so a
+        // caller that means to drop everything can say so.
+        Some(Some(s)) => merge_settings(&existing.settings, s),
         Some(None) => serde_json::json!({}), // explicit clear
         None => existing.settings,
     };
@@ -856,7 +920,11 @@ pub(crate) async fn update_post(
                 Some(c) => crate::services::posts::PostService::sanitize_content(c, 2000),
                 None => content,
             };
-            let settings = over.settings.clone().unwrap_or(settings);
+            let settings = over
+                .settings
+                .clone()
+                .map(|s| merge_settings(&settings, &s))
+                .unwrap_or(settings);
             (content, settings)
         }
         None => (content, settings),
@@ -884,6 +952,7 @@ pub(crate) async fn update_post(
             tag_ids: None,
             first_comment: None,
             sequence: None,
+            campaign_id: None,
             overrides: body.overrides.as_ref().map(|m| {
                 m.iter()
                     .map(|(k, v)| {
@@ -891,7 +960,18 @@ pub(crate) async fn update_post(
                             k.clone(),
                             PostOverride {
                                 content: v.content.clone(),
-                                settings: v.settings.clone(),
+                                // The override's settings MERGED over the
+                                // post's, exactly as the write does.
+                                //
+                                // The probe read the RAW override
+                                // settings, and the validator prefers
+                                // the override's over the global ones -
+                                // so an override of `{}` made the
+                                // validator report the subreddit as
+                                // missing when the stored one was
+                                // right there. The validator and the
+                                // write have to see the same settings.
+                                settings: v.settings.as_ref().map(|s| merge_settings(&settings, s)),
                             },
                         )
                     })
@@ -1109,6 +1189,7 @@ pub async fn set_post_tags(
         content: post.content,
         title: post.title,
         media: media_as_array(&post.media),
+        settings: post.settings.clone(),
         scheduled_at: post.scheduled_at.map(|d| d.to_rfc3339()),
         published_at: post.published_at.map(|d| d.to_rfc3339()),
         platform_post_url: post.platform_post_url,

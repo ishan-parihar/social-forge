@@ -81,13 +81,16 @@ pub async fn handle_sl_send_message(
     let (_post_id, platform_id, url) = super::tools_posts::publish_now_via_pipeline(
         state,
         &integration,
-        &input.content,
-        None,
-        vec![],
-        json!({
-            "channel": input.channel,
-        }),
-        None,
+        super::tools_posts::PipelinePost {
+            content: input.content.to_string(),
+            title: None,
+            media: vec![],
+            settings: json!({
+                "channel": input.channel,
+            }),
+            first_comment: None,
+            campaign_id: None,
+        },
     )
     .await?;
 

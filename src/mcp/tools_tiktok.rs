@@ -112,11 +112,14 @@ pub async fn handle_tt_create_post(
     let (_post_id, platform_id, url) = super::tools_posts::publish_now_via_pipeline(
         state,
         &integration,
-        &input.text,
-        None,
-        media,
-        serde_json::json!({}),
-        None,
+        super::tools_posts::PipelinePost {
+            content: input.text.to_string(),
+            title: None,
+            media,
+            settings: serde_json::json!({}),
+            first_comment: None,
+            campaign_id: None,
+        },
     )
     .await?;
 

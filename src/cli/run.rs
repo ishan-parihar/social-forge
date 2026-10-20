@@ -3021,6 +3021,7 @@ async fn handle_carousel_with_state(
             settings: serde_json::json!({}),
             first_comment: None,
             state: None,
+            campaign_id: None,
         },
     )
     .await
@@ -3199,6 +3200,7 @@ async fn handle_posts_create_helper(
             settings: settings_json,
             first_comment: first_comment_owned,
             state: target_state,
+            campaign_id: None,
         }
     }
 
@@ -3378,6 +3380,7 @@ async fn handle_posts_validate_helper(
         first_comment: None,
         sequence: None,
         overrides: None,
+        campaign_id: None,
     };
     let errors = crate::api::validate_posts_for_integrations(state, &body, &rows, &attachments);
     Ok(serde_json::json!({

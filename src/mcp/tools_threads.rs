@@ -207,11 +207,14 @@ pub async fn handle_th_create_thread(
     let (_post_id, platform_id, url) = super::tools_posts::publish_now_via_pipeline(
         state,
         &integration,
-        &input.text,
-        None,
-        media,
-        serde_json::Value::Object(serde_json::Map::new()),
-        None,
+        super::tools_posts::PipelinePost {
+            content: input.text.to_string(),
+            title: None,
+            media,
+            settings: serde_json::Value::Object(serde_json::Map::new()),
+            first_comment: None,
+            campaign_id: None,
+        },
     )
     .await?;
 

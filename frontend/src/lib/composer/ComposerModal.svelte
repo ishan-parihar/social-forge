@@ -76,6 +76,14 @@
   let showAi = $state(false);
   let showMusicPicker = $state(false);
   let selectedMusic = $state<{ id: string; title: string; artist: string } | null>(null);
+  // The post's stored settings, loaded when editing.
+  //
+  // The update path REPLACES the settings wholesale, so a save that
+  // omits them DELETES the provider settings - the Reddit subreddit, the
+  // Pinterest board, the Discord channel, the Instagram audio id. The
+  // composer's payload carries them forward so an edit only changes
+  // what the founder changed.
+  let storedSettings = $state<Record<string, unknown>>({});
   let providerOverride = $state<Map<string, string>>(new Map());
   let showPostSets = $state(false);
   let loading = $state(true);
@@ -238,6 +246,15 @@
     const post = r.data;
     content = post.content || '';
     title = post.title || '';
+    // The stored SETTINGS, restored so a save does not wipe them.
+    //
+    // The update path REPLACES the settings wholesale, and the composer
+    // used to send `{}` - because the detail response had no settings
+    // field to restore from. So opening a scheduled Reddit post to fix
+    // a typo and saving it DELETED the subreddit, and the post failed
+    // at publish with "Missing subreddit in settings". The post was
+    // working thirty seconds earlier.
+    storedSettings = (post.settings || {}) as Record<string, unknown>;
     selectedIntegrations = [post.integration_id];
     scheduledAt = post.scheduled_at || null;
     // The schedule as LOADED, so a save can tell "the user changed the
@@ -674,7 +691,16 @@
       if (!key) continue;
 
       const entry = overridesObj[intId] ?? {};
-      const perIntegration: Record<string, unknown> = { ...(entry.settings ?? {}) };
+      // The override's settings REPLACE the post's settings (the server
+      // treats an explicit object as a replace, the same as the create
+      // path does for a multi-channel post). So the override has to
+      // carry the STORED settings forward, or picking a new target on
+      // an existing post drops everything else the provider needs -
+      // a Reddit post's `title` next to its `subreddit`.
+      const perIntegration: Record<string, unknown> = {
+        ...storedSettings,
+        ...(entry.settings ?? {}),
+      };
       perIntegration[key] = target.id;
       // Pinterest and Reddit both publish a title. It is not in
       // `posts.title` on the publish path, so it has to be in the
@@ -686,7 +712,7 @@
       overridesObj[intId] = entry;
     }
 
-    const settings: Record<string, unknown> = {};
+    const settings: Record<string, unknown> = { ...storedSettings };
     if (selectedMusic) {
       settings.audio_id = selectedMusic.id;
       settings.audio_title = selectedMusic.title;
@@ -709,6 +735,15 @@
           ? mediaItems.map((m) => ({ id: m.id, url: m.url, mime_type: m.mime_type, alt: m.alt }))
           : null,
       overrides: Object.keys(overridesObj).length > 0 ? overridesObj : undefined,
+      // The campaign the post is filed under.
+      //
+      // The composer's campaign dropdown set a variable that was NEVER
+      // read, so the id was dropped on submit - and the kanban's drag
+      // PRESERVED the existing value rather than setting one. So there
+      // was no UI path that could put a post into a campaign: the
+      // campaign's post count was always 0 and its Posts tab was
+      // permanently empty.
+      campaign_id: selectedCampaignId || undefined,
       settings,
       // Phase v21: wire recurring schedule into the payload so it actually
       // gets sent to the backend. Previously SchedulePicker wrote to

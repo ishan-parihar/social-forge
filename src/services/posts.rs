@@ -27,6 +27,8 @@ pub struct CreatePostInput {
     pub first_comment: Option<String>,
     /// Optional state hint. If `None`, defaults to `Draft`. Pass `Some(Queued)` after `--schedule` to arm the post.
     pub state: Option<PostState>,
+    /// The campaign to file this post under.
+    pub campaign_id: Option<Uuid>,
 }
 
 /// Input for updating a post
@@ -131,6 +133,7 @@ impl PostService {
             Some(state),
             input.first_comment.as_deref(),
             0,
+            input.campaign_id,
         )
         .await
         .map_err(|e| format!("Database error: {e}"))?;
@@ -730,6 +733,7 @@ mod tests {
             Some(PostState::Queued),
             None,
             0,
+            None,
         )
         .await
         .expect("post");

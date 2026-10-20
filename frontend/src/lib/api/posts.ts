@@ -65,6 +65,15 @@ export interface PostDetail {
   // id comes back on load. It is what lets the composer address the
   // stored row - to write the alt text, or to delete it.
   media?: { id?: string; url: string; mime_type: string; alt?: string }[] | null;
+  // The post's stored settings - the provider settings (a Reddit
+  // subreddit, a Pinterest board, a Discord channel) and the global
+  // ones (an Instagram audio id).
+  //
+  // The composer restores them on load and carries them forward on
+  // save, because the update path REPLACES the settings wholesale.
+  // Without them, editing a post to fix a typo DELETED the subreddit
+  // and the post failed at publish.
+  settings?: Record<string, unknown> | null;
   repeat_interval_days?: number | null;
   repeat_end_date?: string | null;
   group_id?: string | null;
@@ -104,7 +113,7 @@ export const postsApi = {
     return api.get<{ posts: PostSummary[]; total: number }>(`/api/posts?${q}`);
   },
   get: (id: string) => api.get<PostDetail>(`/api/posts/${id}`),
-  create: (d: { integration_ids: string[]; content: string; title?: string; scheduled_at?: string; tag_ids?: string[]; first_comment?: string; media?: { id: string; url: string; mime_type: string; alt?: string }[]; overrides?: Record<string, { content?: string; settings?: Record<string, unknown> }>; settings?: Record<string, unknown> }) =>
+  create: (d: { integration_ids: string[]; content: string; title?: string; scheduled_at?: string; tag_ids?: string[]; first_comment?: string; media?: { id: string; url: string; mime_type: string; alt?: string }[]; overrides?: Record<string, { content?: string; settings?: Record<string, unknown> }>; settings?: Record<string, unknown>; campaign_id?: string }) =>
     api.post<{ posts: PostSummary[]; group_id?: string }>("/api/posts", d),
   validate: (d: { integration_ids: string[]; content: string; title?: string; scheduled_at?: string; tag_ids?: string[]; first_comment?: string; media?: { id: string; url: string; mime_type: string; alt?: string }[]; overrides?: Record<string, { content?: string; settings?: Record<string, unknown> }>; settings?: Record<string, unknown> }) =>
     api.post<{ valid: boolean; errors: Array<{ integration_id: string; provider: string; provider_name: string; kind: string; message: string; max_length?: number; actual_length?: number }> }>("/api/posts/validate", d),

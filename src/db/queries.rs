@@ -495,6 +495,7 @@ pub async fn create_posts_for_integrations(
     state: Option<PostState>,
     first_comment: Option<&str>,
     sequence: i32,
+    campaign_id: Option<Uuid>,
 ) -> Result<Vec<Post>, sqlx::Error> {
     let st = state.unwrap_or(PostState::Draft);
     let mut tx = pool.begin().await?;
@@ -503,8 +504,8 @@ pub async fn create_posts_for_integrations(
     for &integration_id in integration_ids {
         let post = sqlx::query_as::<_, Post>(
             r#"INSERT INTO posts
-               (id, user_id, integration_id, content, title, media, settings, scheduled_at, state, first_comment, sequence, idempotency_key)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               (id, user_id, integration_id, content, title, media, settings, scheduled_at, state, first_comment, sequence, idempotency_key, campaign_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                RETURNING id, user_id, integration_id, state,
                  content, title, media, settings, scheduled_at, published_at,
                  platform_post_id, platform_post_url, error_message,
@@ -525,6 +526,7 @@ pub async fn create_posts_for_integrations(
         .bind(first_comment)
         .bind(sequence)
         .bind(Uuid::new_v4())
+        .bind(campaign_id)
         .fetch_one(&mut *tx)
         .await?;
         posts.push(post);
@@ -550,14 +552,15 @@ pub async fn create_post(
     state: Option<PostState>,
     first_comment: Option<&str>,
     sequence: i32,
+    campaign_id: Option<Uuid>,
 ) -> Result<Post, sqlx::Error> {
     let st = state.unwrap_or(PostState::Draft);
     // Runtime query (Phase v22 — idempotency_key column added, can't
     // regenerate .sqlx offline cache without a live Postgres).
     sqlx::query_as::<_, Post>(
         r#"INSERT INTO posts
-           (id, user_id, integration_id, content, title, media, settings, scheduled_at, state, first_comment, sequence, idempotency_key)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           (id, user_id, integration_id, content, title, media, settings, scheduled_at, state, first_comment, sequence, idempotency_key, campaign_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            RETURNING id, user_id, integration_id, state,
               content, title, media, settings, scheduled_at, published_at,
               platform_post_id, platform_post_url, error_message,
@@ -578,6 +581,7 @@ pub async fn create_post(
     .bind(first_comment)
     .bind(sequence)
     .bind(Uuid::new_v4())
+    .bind(campaign_id)
     .fetch_one(pool)
     .await
 }
@@ -3114,8 +3118,8 @@ pub async fn get_engagement_summary(
         )
         .bind(user_id)
         .bind(provider)
-        .bind(cutoff)
-        .bind(cutoff)
+        .bind(cutoff.map(EpochUtc::from))
+        .bind(cutoff.map(EpochUtc::from))
         .fetch_one(pool)
         .await
     } else {
@@ -3136,8 +3140,8 @@ pub async fn get_engagement_summary(
                AND (? IS NULL OR ep.created_at >= ?)"#,
         )
         .bind(user_id)
-        .bind(cutoff)
-        .bind(cutoff)
+        .bind(cutoff.map(EpochUtc::from))
+        .bind(cutoff.map(EpochUtc::from))
         .fetch_one(pool)
         .await
     }
@@ -3965,6 +3969,7 @@ mod g02_tests {
             Some(PostState::Queued),
             None,
             0,
+            None,
         )
         .await
         .unwrap();
@@ -4181,6 +4186,7 @@ mod b03_b08_tests {
             Some(PostState::Published),
             None,
             sequence,
+            None,
         )
         .await
         .unwrap();
@@ -4260,6 +4266,7 @@ mod b03_b08_tests {
             Some(PostState::Queued),
             None,
             1,
+            None,
         )
         .await
         .unwrap();
@@ -4406,6 +4413,7 @@ mod b03_b08_tests {
             Some(PostState::Queued),
             None,
             0,
+            None,
         )
         .await
         .unwrap();

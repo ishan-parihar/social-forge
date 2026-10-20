@@ -673,11 +673,14 @@ pub async fn x_create_tweet(
         let (_post_id, tweet_id, url) = crate::mcp::tools_posts::publish_now_via_pipeline(
             state,
             &integration,
-            &input.content,
-            None,
-            media,
-            serde_json::json!({}),
-            None,
+            super::tools_posts::PipelinePost {
+                content: input.content.to_string(),
+                title: None,
+                media,
+                settings: serde_json::json!({}),
+                first_comment: None,
+                campaign_id: None,
+            },
         )
         .await?;
         return Ok(Json(XCreateTweetOutput {

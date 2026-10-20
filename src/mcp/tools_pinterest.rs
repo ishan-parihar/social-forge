@@ -248,11 +248,14 @@ pub async fn handle_pi_create_pin(
     let (_post_id, pin_id, url) = super::tools_posts::publish_now_via_pipeline(
         state,
         &integration,
-        &input.content,
-        None,
-        media,
-        settings,
-        None,
+        super::tools_posts::PipelinePost {
+            content: input.content.to_string(),
+            title: None,
+            media,
+            settings,
+            first_comment: None,
+            campaign_id: None,
+        },
     )
     .await?;
 
