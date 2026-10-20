@@ -237,7 +237,11 @@ pub async fn import_item(
         feed.integration_id,
         &content,
         Some(&rss_post.title),
-        &serde_json::json!({}),
+        // `media` is an ARRAY - the column's default is '[]' and every
+        // reader treats it as one. It was `{}`, and the kanban's
+        // `post.media.find(...)` crashed the whole ROUTE with
+        // "i.find is not a function" on every imported draft.
+        &serde_json::json!([]),
         &serde_json::json!({}),
         None,
         Some(crate::db::models::PostState::Draft),

@@ -1416,7 +1416,7 @@
         <!-- Post Sets -->
         <button
           onclick={() => showPostSets = true}
-          class="w-full px-3 py-2 text-sm text-muted hover:text-content border border-line rounded-lg transition-colors"
+          class="w-full px-3 py-2 text-sm text-muted hover:text-content border border-line rounded-lg transition-colors min-h-11"
         >Post Sets</button>
       </div>
     </div>

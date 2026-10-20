@@ -208,7 +208,7 @@
     <button
       onclick={importFeed}
       disabled={importing}
-      class="px-3 py-1.5 text-sm whitespace-nowrap bg-surface-hover hover:bg-line border border-line rounded-lg transition-colors disabled:opacity-50"
+      class="px-3 py-1.5 text-sm whitespace-nowrap bg-surface-hover hover: min-h-11 inline-flex items-centerbg-line border border-line rounded-lg transition-colors disabled:opacity-50"
     >
       {importing ? "Importing..." : "Import Feed"}
     </button>
@@ -222,7 +222,7 @@
         bind:value={searchQuery}
         oninput={onSearchInput}
         placeholder="Search posts, authors, hashtags..."
-        class="w-full px-4 py-2.5 pl-10 bg-background-input border border-line rounded-lg text-sm text-content-secondary placeholder-muted focus:border-accent outline-none transition-colors"
+        class="min-h-11 w-full px-4 py-2.5 pl-10 bg-background-input border border-line rounded-lg text-sm text-content-secondary placeholder-muted focus:border-accent outline-none transition-colors"
       />
       <span class="absolute left-3 top-1/2 -translate-y-1/2 text-muted"><Icon name="search" class="w-4 h-4" /></span>
     </div>
@@ -257,7 +257,7 @@
     {#each platforms as p}
       <button
         onclick={() => selectedProvider = p.value}
-        class="px-3 py-1.5 text-xs rounded-md transition-colors whitespace-nowrap flex items-center gap-1.5
+        class="px-3 py-1.5 text-xs rounded-md transition-colors min-h-11 min-w-11 inline-flex items-center justify-center whitespace-nowrap flex items-center gap-1.5
           {selectedProvider === p.value ? 'bg-accent-fill text-accent-fg' : 'text-muted hover:bg-surface-hover'}"
       >
         {#if p.icon.toLowerCase() !== p.label.toLowerCase()}<span>{p.icon}</span>{/if}
@@ -346,7 +346,11 @@
                   <EngagementCard engagement={post.engagement} provider={post.provider} compact={true} />
                 {/if}
                 {#if post.url}
-                  <a href={post.url} target="_blank" rel="noopener" class="text-xs text-accent hover:text-accent-strong transition-colors ml-auto">
+                  <!-- min-h-11 gives the link a 44px target. The
+                       `ml-auto` keeps it right-aligned; the height
+                       does not push the row apart because the row
+                       already has the engagement card's height. -->
+                  <a href={post.url} target="_blank" rel="noopener" class="text-xs text-accent hover:text-accent-strong transition-colors ml-auto inline-flex items-center min-h-11">
                     View original →
                   </a>
                 {/if}

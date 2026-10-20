@@ -109,7 +109,7 @@
           type="text"
           bind:value={label}
           placeholder="e.g. My Skool Community"
-          class="w-full bg-background border border-line rounded-lg px-3 py-2 text-sm text-white placeholder:text-faint focus:outline-none focus:ring-1 focus:ring-accent"
+          class="min-h-11 w-full bg-background border border-line rounded-lg px-3 py-2 text-sm text-white placeholder:text-faint focus:outline-none focus:ring-1 focus:ring-accent"
         />
       </div>
 
@@ -121,7 +121,7 @@
           bind:value={userCode}
           placeholder="Enter the 6-character code"
           maxlength="6"
-          class="w-full bg-background border border-line rounded-lg px-3 py-2 text-sm text-white placeholder:text-faint font-mono tracking-widest text-center focus:outline-none focus:ring-1 focus:ring-accent uppercase"
+          class="min-h-11 w-full bg-background border border-line rounded-lg px-3 py-2 text-sm text-white placeholder:text-faint font-mono tracking-widest text-center focus:outline-none focus:ring-1 focus:ring-accent uppercase"
           style="text-transform: uppercase;"
         />
       </div>

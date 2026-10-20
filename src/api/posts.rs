@@ -13,7 +13,7 @@ use uuid::Uuid;
 
 use crate::api::tags::TagResponse;
 use crate::auth::middleware::AuthenticatedUser;
-use crate::db::models::PostPublic;
+use crate::db::models::{media_as_array, PostPublic};
 use crate::db::queries;
 use crate::services::posts::PostService;
 
@@ -424,7 +424,7 @@ pub async fn list(
             state: p.state.to_string(),
             content: p.content,
             title: p.title,
-            media: p.media,
+            media: media_as_array(&p.media),
             scheduled_at: p.scheduled_at.map(|d| d.to_rfc3339()),
             published_at: p.published_at.map(|d| d.to_rfc3339()),
             platform_post_url: p.platform_post_url,
@@ -749,7 +749,7 @@ pub async fn get(
         state: post.state.to_string(),
         content: post.content,
         title: post.title,
-        media: post.media,
+        media: media_as_array(&post.media),
         scheduled_at: post.scheduled_at.map(|d| d.to_rfc3339()),
         published_at: post.published_at.map(|d| d.to_rfc3339()),
         platform_post_url: post.platform_post_url,
@@ -1108,7 +1108,7 @@ pub async fn set_post_tags(
         state: post.state.to_string(),
         content: post.content,
         title: post.title,
-        media: post.media,
+        media: media_as_array(&post.media),
         scheduled_at: post.scheduled_at.map(|d| d.to_rfc3339()),
         published_at: post.published_at.map(|d| d.to_rfc3339()),
         platform_post_url: post.platform_post_url,

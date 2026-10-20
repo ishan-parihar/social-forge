@@ -245,7 +245,7 @@
             placeholder="https://example.com/image.png"
             bind:value={imageUrl}
             onkeydown={handleImageKeydown}
-            class="flex-1 px-3 py-2 rounded text-sm bg-background-input border border-line text-content-secondary placeholder:text-faint outline-none focus:border-accent transition-colors"
+            class="min-h-11 flex-1 px-3 py-2 rounded text-sm bg-background-input border border-line text-content-secondary placeholder:text-faint outline-none focus:border-accent transition-colors"
           />
           <button
             onclick={insertImage}

@@ -49,7 +49,7 @@
     <button onclick={onPrev} aria-label="Previous" class="px-2 py-1 text-sm text-muted hover:text-content rounded hover:bg-surface-hover min-h-11 min-w-11 flex items-center justify-center">&larr;</button>
     <span class="text-lg font-semibold text-center min-w-0 sm:min-w-[200px]">{title}</span>
     <button onclick={onNext} aria-label="Next" class="px-2 py-1 text-sm text-muted hover:text-content rounded hover:bg-surface-hover min-h-11 min-w-11 flex items-center justify-center">&rarr;</button>
-    <button onclick={onToday} aria-label="Go to today" class="px-2 py-1 text-xs bg-surface-hover hover:bg-line-hover rounded min-h-11">Today</button>
+    <button onclick={onToday} aria-label="Go to today" class="px-2 py-1 text-xs bg-surface-hover hover:bg-line-hover rounded min-h-11 min-w-11">Today</button>
   </div>
   <div class="flex items-center gap-2 flex-wrap">
     <!-- v24-2: channel filter -->

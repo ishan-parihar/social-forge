@@ -400,14 +400,44 @@ This repo uses a single `master` branch. No feature branches, no PRs — commit 
 ```bash
 rm -f /tmp/sf-dev.db
 DATABASE_URL="sqlite:///tmp/sf-dev.db?mode=rwc" cargo sqlx run --source migrations/
-DATABASE_URL="sqlite:///tmp/sf-dev.db?mode=rwc" cargo sqlx prepare -- --lib --bins
+DATABASE_URL="sqlite:///tmp/sf-dev.db?mode=rwc" cargo sqlx prepare -- --all-targets
 ```
+
+`--all-targets`, NOT `--lib --bins`. The narrower form SILENTLY DROPS the
+cache entries for the test targets, and the build then fails offline with
+"there is no cached data for this query" for a query that is in the
+source and was in the cache before. (Found 2026-10-20: `cargo sqlx
+prepare -- --lib --bins` dropped two entries under
+`tests/live_github_google_test.rs` and broke the offline `--tests` build.)
 
 If you add a new query using these macros without regenerating the cache, the build will fail with:
 
 ```
 error: `SQLX_OFFLINE=true` but there is no cached data for this query
 ```
+
+### 5.1.1 A uuid column is BLOB(16), never TEXT
+
+`sqlx` encodes a `Uuid` as 16 raw bytes. A uuid column therefore holds a
+BLOB, and there are TWO ways to get that wrong, both of which compile
+cleanly and fail only at RUNTIME:
+
+|What you write|What happens|
+|---|---|
+|`SELECT id as "id!: String"`|Decodes a BLOB as utf-8: "invalid utf-8 sequence of 1 bytes from index 2" - a 500|
+|`SELECT id` (bare, in a `query_as!` macro)|The macro infers the type from the column's DECLARED type (TEXT), so it also decodes as a String - the same 500|
+
+So the macro sites MUST carry an explicit `as "id!: Uuid"` override. This
+is the repo's convention (30+ sites in `src/db/queries.rs`). The RUNTIME
+`sqlx::query_as()` path is different: there the struct field drives the
+decode, so a `Uuid` field is enough.
+
+The `.sqlx/` cache records the DECLARED type, which is why the build
+passes and the failure only appears when the endpoint is called. 23
+sites had `id!: String` and the automation rules API 500'd on its own
+create+list cycle; the CLI's `tags list` and `webhooks list` failed the
+same way. `tests/uuid_column_decode_test.rs` drives the real router and
+fails on the old shape.
 
 ### 5.2 When to use which form
 
@@ -762,6 +792,24 @@ The guard that keeps the claim exclusive is on the UPDATE: `WHERE id IN (...) AN
 `MediaPublic.url` is `/api/media/<uuid>` - a relative path, because that is what the dashboard renders. A platform cannot fetch it. The trait's `resolve_media_url` default makes it absolute against the app's public base URL, because that is correct for EVERY provider.
 
 The default used to return the attachment unchanged, with each provider opting in - and eight of the twelve Tier-1 providers did not have the override, so they published with a relative URL and failed, with the error surfacing as an opaque network failure rather than a media error.
+
+### 9.26 `posts.media` is an ARRAY, and a `{}` takes the whole ROUTE down
+
+`posts.media` holds an array of attachments. The RSS autopost path wrote a JSON OBJECT there - `create_post`'s SIXTH parameter is `media`, and it was passed `json!({})`:
+
+```rust
+create_post(db, ..., &serde_json::json!({}), &serde_json::json!({"rss_auto": true}), ...)
+```
+
+The frontend assumes an array. The kanban's `coverImage` calls `post.media.find(...)` directly, so `{}` - which has no `find` - crashed the whole ROUTE with "i.find is not a function". A pageerror, not one bad card. The calendar's `(post.media || []).map(...)` failed the same way, because `{}` is truthy so the `||` fallback never fired.
+
+Three layers own this, and each has a test in `tests/posts_media_shape_test.rs`:
+
+- the WRITER (both RSS paths) passes `json!([])`
+- the MIGRATION (`0008_posts_media_array.sql`) repairs the rows that are already there - an operator's database holds them
+- the READER (`db::models::media_as_array`) normalises anything that slipped through, so the response is an array whatever the column holds
+
+The general rule: a JSON column that the frontend treats as an array must be normalised ON THE READ, in ONE place, because the column's history is longer than the frontend's assumption.
 
 ---
 

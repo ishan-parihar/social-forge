@@ -143,7 +143,11 @@ async fn poll_all_feeds(
                 feed.integration_id,
                 &post_content,
                 Some(&title),
-                &serde_json::json!({}),
+                // `media` is an ARRAY - the column's default is '[]' and
+                // every reader treats it as one. It was `{}`, and the
+                // kanban's `post.media.find(...)` crashed the whole ROUTE
+                // with "i.find is not a function" on every RSS draft.
+                &serde_json::json!([]),
                 &serde_json::json!({"rss_auto": true}),
                 None,
                 Some(PostState::Draft), // Changed from Queued → Draft for review

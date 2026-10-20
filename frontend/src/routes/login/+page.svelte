@@ -49,7 +49,7 @@
           bind:value={password}
           autocomplete="current-password"
           bind:this={passwordInput}
-          class="w-full px-3.5 py-2.5 bg-surface-hover border border-line rounded-lg text-content text-sm
+          class="min-h-11 w-full px-3.5 py-2.5 bg-surface-hover border border-line rounded-lg text-content text-sm
             focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent
             placeholder:text-faint"
           placeholder="••••••••••••"

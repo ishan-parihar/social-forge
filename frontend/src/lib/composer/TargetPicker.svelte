@@ -77,7 +77,7 @@
         bind:value={searchQuery}
         placeholder={placeholder}
         aria-label={placeholder}
-        class="w-full pl-8 pr-3 py-1.5 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none placeholder:text-faint"
+        class="min-h-11 w-full pl-8 pr-3 py-1.5 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none placeholder:text-faint"
       />
     </div>
     {#if selectedCount > 0}

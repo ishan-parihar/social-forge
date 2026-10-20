@@ -196,7 +196,7 @@
             bind:value={delayMinutes}
             min="0"
             max="1440"
-            class="w-16 px-2 py-1 bg-background-input border border-line rounded text-xs text-content-secondary text-center"
+            class="min-h-11 w-16 px-2 py-1 bg-background-input border border-line rounded text-xs text-content-secondary text-center"
           />
           <span class="text-xs text-muted">min</span>
         </div>

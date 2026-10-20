@@ -110,7 +110,7 @@
         required
         autocomplete="off"
         placeholder={isTelegramBot ? "123456:ABC-DEF..." : "ghp_..."}
-        class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-content placeholder:text-faint focus:outline-none focus:border-accent transition-colors font-mono"
+        class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-content placeholder:text-faint focus:outline-none focus:border-accent transition-colors font-mono"
       />
     </div>
 
@@ -124,7 +124,7 @@
           type="text"
           bind:value={label}
           placeholder="My GitHub"
-          class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-content placeholder:text-faint focus:outline-none focus:border-accent transition-colors"
+          class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-content placeholder:text-faint focus:outline-none focus:border-accent transition-colors"
         />
         <p class="text-xs text-faint mt-1">Shown in the channel list so you can tell multiple tokens apart.</p>
       </div>

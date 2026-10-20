@@ -144,7 +144,7 @@ pub async fn get(
             state: p.state,
             content: p.content,
             title: p.title,
-            media: p.media,
+            media: crate::db::models::media_as_array(&p.media),
             scheduled_at: p.scheduled_at.map(|d| d.to_rfc3339()),
             published_at: p.published_at.map(|d| d.to_rfc3339()),
             platform_post_url: p.platform_post_url,

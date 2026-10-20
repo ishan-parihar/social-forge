@@ -151,7 +151,7 @@
 
 <div class="space-y-2">
   <label class="flex items-center gap-2 text-sm cursor-pointer">
-          <input type="checkbox" bind:checked={scheduled} onchange={update} class="rounded w-4 h-4" />
+          <input type="checkbox" bind:checked={scheduled} onchange={update} class="min-h-11 rounded w-4 h-4" />
     Schedule for later
   </label>
 
@@ -163,7 +163,7 @@
       <!-- v25 F5: the time input had no label at all - no id/for, no
            aria-label - so it announced as an unlabelled field. -->
       <input type="time" bind:value={timeStr} onchange={update} aria-label="Time"
-        class="px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-content-secondary" />
+        class="min-h-11 px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-content-secondary" />
     </div>
 
     <!-- v25 F2: timezone picker. Writes through the global timezone store so
@@ -212,7 +212,7 @@
 
     <div class="border-t border-line pt-2 mt-2">
       <label class="flex items-center gap-2 text-sm cursor-pointer">
-          <input type="checkbox" bind:checked={repeatEnabled} onchange={updateRepeat} class="rounded w-4 h-4" />
+          <input type="checkbox" bind:checked={repeatEnabled} onchange={updateRepeat} class="min-h-11 rounded w-4 h-4" />
         <span class="text-accent font-medium">Repeat</span>
       </label>
 
@@ -221,7 +221,7 @@
           <div class="flex-1">
             <label for="rep-interval" class="text-xs text-muted mb-1 block">Every X days</label>
             <input id="rep-interval" type="number" bind:value={intervalDays} onchange={updateRepeat} min="1" max="365"
-              class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-content-secondary" />
+              class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-content-secondary" />
           </div>
           <div class="flex-1">
             <label for="rep-end" class="text-xs text-muted mb-1 block">Until</label>

@@ -118,7 +118,7 @@
         <select
           bind:value={selectedIntegrationId}
           onchange={load}
-          class="px-3 py-1.5 text-sm bg-surface border border-line rounded-lg text-content"
+          class="min-h-11 px-3 py-1.5 text-sm bg-surface border border-line rounded-lg text-content"
         >
           {#each integrations as int (int.id)}
             <option value={int.id}>{int.provider_identifier} ({int.internal_id.slice(0, 8)})</option>
@@ -197,7 +197,7 @@
                 type="text"
                 bind:value={newMessage}
                 placeholder="Type a message..."
-                class="flex-1 px-3 py-2 bg-background-input border border-line rounded-lg text-sm"
+                class="min-h-11 flex-1 px-3 py-2 bg-background-input border border-line rounded-lg text-sm"
                 onkeydown={(e) => e.key === "Enter" && sendMessage()}
               />
               <button

@@ -96,7 +96,7 @@
           required
           autocomplete="off"
           placeholder="Paste the auth_token cookie value"
-          class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-content placeholder:text-faint focus:outline-none focus:border-accent transition-colors"
+          class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-content placeholder:text-faint focus:outline-none focus:border-accent transition-colors"
         />
       </div>
       <div>
@@ -110,7 +110,7 @@
           required
           autocomplete="off"
           placeholder="Paste the ct0 cookie value"
-          class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-content placeholder:text-faint focus:outline-none focus:border-accent transition-colors"
+          class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-content placeholder:text-faint focus:outline-none focus:border-accent transition-colors"
         />
       </div>
     {:else}
@@ -125,7 +125,7 @@
           rows="4"
           autocomplete="off"
           placeholder="reddit_session=...; token_v2=...; csv=..."
-          class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-content placeholder:text-faint focus:outline-none focus:border-accent transition-colors font-mono"
+          class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-content placeholder:text-faint focus:outline-none focus:border-accent transition-colors font-mono"
         ></textarea>
       </div>
     {/if}

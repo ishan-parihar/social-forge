@@ -148,7 +148,7 @@
       <select
         id="activity-kind"
         bind:value={kind}
-        class="px-3 py-2 bg-surface-hover border border-line rounded-lg text-sm text-content"
+        class="min-h-11 px-3 py-2 bg-surface-hover border border-line rounded-lg text-sm text-content"
       >
         <option value="all">All</option>
         <option value="event">Events</option>
@@ -161,7 +161,7 @@
       <select
         id="activity-range"
         bind:value={range}
-        class="px-3 py-2 bg-surface-hover border border-line rounded-lg text-sm text-content"
+        class="min-h-11 px-3 py-2 bg-surface-hover border border-line rounded-lg text-sm text-content"
       >
         <option value="24h">Last 24 hours</option>
         <option value="7d">Last 7 days</option>
@@ -173,7 +173,7 @@
       <select
         id="activity-provider"
         bind:value={provider}
-        class="px-3 py-2 bg-surface-hover border border-line rounded-lg text-sm text-content"
+        class="min-h-11 px-3 py-2 bg-surface-hover border border-line rounded-lg text-sm text-content"
       >
         {#each providers as p (p.value)}
           <option value={p.value}>{p.label}</option>
@@ -218,12 +218,12 @@
               {#if row.post_id}
                 <!-- A real anchor, so it is keyboard-reachable and
                      middle-clickable without JS. The inline-flex +
-                     min-height gives it a 44px target without changing
+                     min-h-11 gives it a 44px target without changing
                      the line it sits on. -->
-                <a href="/posts/{row.post_id}" class="text-accent hover:underline inline-flex items-center">View post</a>
+                <a href="/posts/{row.post_id}" class="text-accent hover:underline inline-flex items-center min-h-11">View post</a>
               {/if}
               {#if row.rule_id}
-                <a href="/automation" class="text-accent hover:underline inline-flex items-center">View rule</a>
+                <a href="/automation" class="text-accent hover:underline inline-flex items-center min-h-11">View rule</a>
               {/if}
             </div>
           </div>

@@ -101,7 +101,7 @@
             <select
               bind:value={prefs[nt.key]}
               aria-label="{nt.label} delivery"
-              class="shrink-0 bg-linetext-content-secondary border border-line rounded px-3 py-1.5 text-sm focus:outline-none focus:border-accent/50 transition-colors"
+              class="min-h-11 shrink-0 bg-linetext-content-secondary border border-line rounded px-3 py-1.5 text-sm focus:outline-none focus:border-accent/50 transition-colors"
             >
               <!--
                 Social Forge has exactly one delivery channel today: the
@@ -123,8 +123,13 @@
     <div class="bg-surface border border-line rounded-xl p-5 space-y-4">
       <div class="flex items-center justify-between">
         <h2 class="text-sm font-medium text-content">Quiet Hours</h2>
-        <label class="relative inline-flex items-center cursor-pointer">
-          <input type="checkbox" bind:checked={quietHoursEnabled} class="sr-only peer" />
+        <!--
+          The LABEL carries the target. The checkbox is `sr-only` (the
+          visible control is the styled track below it), so the label
+          needs the 44px box itself - the track is only 9x20.
+        -->
+        <label class="relative inline-flex items-center cursor-pointer min-h-11 min-w-11 justify-center">
+          <input type="checkbox" bind:checked={quietHoursEnabled} class="min-h-11 sr-only peer" />
           <div class="w-9 h-5 bg-line rounded-full peer peer-checked:bg-accent-fill peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
         </label>
       </div>
@@ -136,7 +141,7 @@
               id="quiet-start"
               type="time"
               bind:value={prefs.quiet_hours_start}
-              class="w-full bg-line text-content-secondary border border-line rounded px-3 py-1.5 text-sm focus:outline-none focus:border-accent/50 transition-colors"
+              class="min-h-11 w-full bg-line text-content-secondary border border-line rounded px-3 py-1.5 text-sm focus:outline-none focus:border-accent/50 transition-colors"
             />
           </div>
           <div>
@@ -145,7 +150,7 @@
               id="quiet-end"
               type="time"
               bind:value={prefs.quiet_hours_end}
-              class="w-full bg-line text-content-secondary border border-line rounded px-3 py-1.5 text-sm focus:outline-none focus:border-accent/50 transition-colors"
+              class="min-h-11 w-full bg-line text-content-secondary border border-line rounded px-3 py-1.5 text-sm focus:outline-none focus:border-accent/50 transition-colors"
             />
           </div>
         </div>
@@ -156,7 +161,7 @@
       <button
         onclick={handleSave}
         disabled={saving}
-        class="px-5 py-2 bg-accent-fill hover:bg-accent-fill-hover disabled:bg-line-hover disabled:text-muted text-accent-fg text-sm rounded-lg transition-colors duration-150"
+        class="px-5 py-2 bg-accent-fill hover:bg-accent-fill-hover disabled:bg-line-hover disabled:text-muted text-accent-fg text-sm rounded-lg transition-colors duration-150 min-h-11"
       >
         {saving ? 'Saving...' : 'Save Preferences'}
       </button>

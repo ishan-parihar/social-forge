@@ -153,7 +153,7 @@
           type="text"
           bind:value={saveName}
           placeholder="e.g. Weekly promotion"
-          class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none"
+          class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none"
         />
       </div>
       <div>
@@ -163,7 +163,7 @@
           bind:value={saveDescription}
           placeholder="Describe this post set..."
           rows="2"
-          class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none resize-y"
+          class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none resize-y"
         ></textarea>
       </div>
       <div class="text-xs text-muted">

@@ -93,7 +93,7 @@
         oninput={handleInput}
         placeholder="Search trending music..."
         aria-label="Search music"
-        class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none"
+        class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none"
       />
 
       {#if error}

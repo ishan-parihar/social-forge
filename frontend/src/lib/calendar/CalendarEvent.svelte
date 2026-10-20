@@ -161,7 +161,7 @@
     <div class="absolute top-0 right-0 invisible group-hover:visible group-focus-within:visible [&_.dropdown-menu]:visible flex items-center gap-0.5">
       {#if event.state === 'published' && event.postUrl}
         <a href={event.postUrl} target="_blank" rel="noopener noreferrer"
-           class="text-[10px] text-accent/60 hover:text-accent-strong px-1 py-0.5 rounded transition-colors"
+           class="text-[10px] text-accent/60 hover:text-accent-strong px-1 py-0.5 rounded transition-colors min-h-11 min-w-11 inline-flex items-center justify-center"
            title="View original post" onclick={(e) => e.stopPropagation()}>
           🔗
         </a>

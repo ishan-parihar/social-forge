@@ -151,14 +151,14 @@
   <div class="flex gap-1 border-b border-line">
     <button
       onclick={() => (activeTab = 'keys')}
-      class="px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px
+      class="px-4 py-2 text-sm font-medium transition-colors border-b-2 min-h-11 -mb-px
         {activeTab === 'keys' ? 'text-accent border-accent' : 'text-muted border-transparent hover:text-content-secondary'}"
     >
       API Keys
     </button>
     <a
       href="/settings/webhooks"
-      class="px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px
+      class="px-4 py-2 text-sm font-medium transition-colors border-b-2 min-h-11 -mb-px
         text-muted border-transparent hover:text-content-secondary"
     >
       Webhooks →
@@ -214,7 +214,7 @@
               type="text"
               bind:value={newKeyName}
               placeholder="e.g. CI/CD Pipeline"
-              class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none"
+              class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none"
             />
           </div>
           <div>
@@ -224,7 +224,7 @@
               type="text"
               bind:value={newKeyExpiry}
               placeholder="e.g. 2027-01-01T00:00:00Z"
-              class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none"
+              class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none"
             />
           </div>
           <Button onclick={handleCreateKey} disabled={creatingKey}>

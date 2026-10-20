@@ -504,8 +504,8 @@
     </div>
     {#if showBulkSchedule}
       <div class="flex items-center gap-2 bg-background-input border border-line rounded-lg p-3 flex-wrap">
-        <input type="date" aria-label="Bulk reschedule date" bind:value={bulkScheduleDate} class="px-2 py-1 bg-surface border border-line rounded text-sm text-content-secondary" />
-        <input type="time" aria-label="Bulk reschedule time" bind:value={bulkScheduleTime} class="px-2 py-1 bg-surface border border-line rounded text-sm text-content-secondary" />
+        <input type="date" aria-label="Bulk reschedule date" bind:value={bulkScheduleDate} class="min-h-11 px-2 py-1 bg-surface border border-line rounded text-sm text-content-secondary" />
+        <input type="time" aria-label="Bulk reschedule time" bind:value={bulkScheduleTime} class="min-h-11 px-2 py-1 bg-surface border border-line rounded text-sm text-content-secondary" />
         <button onclick={bulkReschedule} disabled={bulkProcessing || !bulkScheduleDate} class="px-3 py-1 bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded text-xs disabled:opacity-50 min-h-11">Apply</button>
       </div>
     {/if}

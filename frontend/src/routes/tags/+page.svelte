@@ -140,7 +140,7 @@
           bind:value={newName}
           placeholder="e.g. urgent, client, idea"
           onkeydown={(e) => e.key === 'Enter' && createTag()}
-          class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none"
+          class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none min-h-11"
         />
       </div>
       <div class="max-w-full">
@@ -150,7 +150,7 @@
             id="new-tag-color"
             type="color"
             bind:value={newColor}
-            class="shrink-0 w-9 h-9 p-0 rounded cursor-pointer bg-transparent border-0"
+            class="min-h-11 min-w-11 shrink-0 w-9 h-9 p-0 rounded cursor-pointer bg-transparent border-0"
           />
           <div class="flex flex-wrap gap-0.5">
             {#each presetColors as c}
@@ -168,7 +168,7 @@
       <button
         onclick={createTag}
         disabled={creating || !newName.trim()}
-        class="px-4 py-2 bg-accent-fill hover:bg-accent-fill-hover text-accent-fg disabled:opacity-50 rounded-lg text-sm transition-colors"
+        class="px-4 py-2 bg-accent-fill hover:bg-accent-fill-hover text-accent-fg disabled:opacity-50 rounded-lg text-sm transition-colors min-h-11"
       >
         {creating ? '...' : 'Add'}
       </button>
@@ -196,10 +196,10 @@
               <input
                 type="text"
                 bind:value={editName}
-                class="flex-1 px-2 py-1 bg-background-input border border-line rounded text-sm focus:border-accent outline-none"
+                class="min-h-11 flex-1 px-2 py-1 bg-background-input border border-line rounded text-sm focus:border-accent outline-none"
               />
               <div class="flex items-center gap-1">
-                <input type="color" bind:value={editColor} class="w-7 h-7 p-0 rounded cursor-pointer bg-transparent border-0" />
+                <input type="color" bind:value={editColor} class="min-h-11 w-7 h-7 p-0 rounded cursor-pointer bg-transparent border-0" />
                 {#each presetColors as c}
                   <button
                     onclick={() => editColor = c}

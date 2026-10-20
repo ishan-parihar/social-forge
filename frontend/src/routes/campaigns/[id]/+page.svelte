@@ -294,23 +294,23 @@
       <div class="bg-surface border border-line rounded-lg p-5 space-y-4 max-w-2xl">
         <div>
           <label for="campaign-name" class="block text-sm text-muted mb-1">Name</label>
-          <input id="campaign-name" type="text" bind:value={formName} class="w-full px-3 py-2 bg-background-input border border-line rounded text-sm focus:border-accent outline-none" />
+          <input id="campaign-name" type="text" bind:value={formName} class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded text-sm focus:border-accent outline-none" />
         </div>
         <div>
           <label for="campaign-description" class="block text-sm text-muted mb-1">Description</label>
-          <textarea id="campaign-description" bind:value={formDescription} rows="2" class="w-full px-3 py-2 bg-background-input border border-line rounded text-sm focus:border-accent outline-none"></textarea>
+          <textarea id="campaign-description" bind:value={formDescription} rows="2" class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded text-sm focus:border-accent outline-none"></textarea>
         </div>
         <div class="grid grid-cols-2 gap-4">
           <div>
             <label for="campaign-color" class="block text-sm text-muted mb-1">Color</label>
             <div class="flex items-center gap-2">
-              <input id="campaign-color" type="color" bind:value={formColor} class="shrink-0 w-10 h-9 p-0 rounded cursor-pointer bg-transparent border border-line" />
-              <input type="text" bind:value={formColor} class="flex-1 px-3 py-2 bg-background-input border border-line rounded text-sm focus:border-accent outline-none" />
+              <input id="campaign-color" type="color" bind:value={formColor} class="min-h-11 shrink-0 w-10 h-9 p-0 rounded cursor-pointer bg-transparent border border-line" />
+              <input type="text" bind:value={formColor} class="min-h-11 flex-1 px-3 py-2 bg-background-input border border-line rounded text-sm focus:border-accent outline-none" />
             </div>
           </div>
           <div>
             <label for="campaign-status" class="block text-sm text-muted mb-1">Status</label>
-            <select id="campaign-status" bind:value={formStatus} class="w-full px-3 py-2 bg-background-input border border-line rounded text-sm focus:border-accent outline-none">
+            <select id="campaign-status" bind:value={formStatus} class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded text-sm focus:border-accent outline-none">
               <option value="active">Active</option>
               <option value="paused">Paused</option>
               <option value="archived">Archived</option>
@@ -321,21 +321,21 @@
         <div class="grid grid-cols-2 gap-4">
           <div>
             <label for="campaign-start" class="block text-sm text-muted mb-1">Start Date</label>
-            <input id="campaign-start" type="date" bind:value={formStartDate} class="w-full px-3 py-2 bg-background-input border border-line rounded text-sm focus:border-accent outline-none" />
+            <input id="campaign-start" type="date" bind:value={formStartDate} class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded text-sm focus:border-accent outline-none" />
           </div>
           <div>
             <label for="campaign-end" class="block text-sm text-muted mb-1">End Date</label>
-            <input id="campaign-end" type="date" bind:value={formEndDate} class="w-full px-3 py-2 bg-background-input border border-line rounded text-sm focus:border-accent outline-none" />
+            <input id="campaign-end" type="date" bind:value={formEndDate} class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded text-sm focus:border-accent outline-none" />
           </div>
         </div>
         <div>
           <label for="campaign-goal" class="block text-sm text-muted mb-1">Goal (free text)</label>
-          <input id="campaign-goal" type="text" bind:value={formGoal} placeholder="e.g. 1000 new followers" class="w-full px-3 py-2 bg-background-input border border-line rounded text-sm focus:border-accent outline-none" />
+          <input id="campaign-goal" type="text" bind:value={formGoal} placeholder="e.g. 1000 new followers" class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded text-sm focus:border-accent outline-none" />
         </div>
         <div class="grid grid-cols-2 gap-4">
           <div>
             <label for="campaign-metric" class="block text-sm text-muted mb-1">Progress Metric</label>
-            <select id="campaign-metric" bind:value={formProgressMetric} class="w-full px-3 py-2 bg-background-input border border-line rounded text-sm focus:border-accent outline-none">
+            <select id="campaign-metric" bind:value={formProgressMetric} class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded text-sm focus:border-accent outline-none">
               <option value="">None</option>
               <option value="posts">Posts</option>
               <option value="engagement">Engagement</option>
@@ -346,7 +346,7 @@
           </div>
           <div>
             <label for="campaign-target" class="block text-sm text-muted mb-1">Progress Target</label>
-            <input id="campaign-target" type="number" bind:value={formProgressTarget} placeholder="e.g. 20" class="w-full px-3 py-2 bg-background-input border border-line rounded text-sm focus:border-accent outline-none" />
+            <input id="campaign-target" type="number" bind:value={formProgressTarget} placeholder="e.g. 20" class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded text-sm focus:border-accent outline-none" />
           </div>
         </div>
         <div class="flex items-center justify-between pt-4 border-t border-line">

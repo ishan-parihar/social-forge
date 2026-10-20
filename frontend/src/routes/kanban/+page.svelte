@@ -609,7 +609,7 @@
       <span class="text-xs text-muted">Campaign:</span>
       <button
         onclick={() => selectedCampaign = null}
-        class="px-3 py-1 text-xs rounded-lg transition-colors min-h-11 {!selectedCampaign ? 'bg-accent-fill text-accent-fg' : 'text-muted hover:bg-surface-hover border border-line'}"
+        class="px-3 py-1 text-xs rounded-lg transition-colors min-h-11 {!selectedCampaign ? 'bg-accent-fill text-accent-fg' : 'text-muted hover:bg-surface-hover border border-line'} min-w-11 inline-flex items-center justify-center"
       >All</button>
       {#each campaigns as c (c.id)}
         <div class="flex items-center gap-1">
@@ -641,7 +641,7 @@
         {#each [{ v: null, label: 'All' }, { v: 'urgent', label: 'Urgent' }, { v: 'high', label: 'High' }, { v: 'medium', label: 'Medium' }, { v: 'low', label: 'Low' }] as opt}
           <button
             onclick={() => priorityFilter = opt.v}
-            class="px-2 py-0.5 rounded transition-colors min-h-11 {priorityFilter === opt.v ? 'bg-accent-fill text-accent-fg' : 'text-muted hover:text-content hover:bg-surface-hover border border-line'}"
+            class="px-2 py-0.5 rounded transition-colors min-h-11 {priorityFilter === opt.v ? 'bg-accent-fill text-accent-fg' : 'text-muted hover:text-content hover:bg-surface-hover border border-line'} min-w-11 inline-flex items-center justify-center"
           >{opt.label}</button>
         {/each}
       </div>
@@ -651,7 +651,7 @@
         {#each [{ v: null, label: 'All' }, { v: 'ready_to_publish', label: 'Ready' }, { v: 'in_review', label: 'Review' }, { v: 'blocked', label: 'Blocked' }, { v: 'none', label: 'No substate' }] as opt}
           <button
             onclick={() => substateFilter = opt.v}
-            class="px-2 py-0.5 rounded transition-colors min-h-11 {substateFilter === opt.v ? 'bg-accent-fill text-accent-fg' : 'text-muted hover:text-content hover:bg-surface-hover border border-line'}"
+            class="px-2 py-0.5 rounded transition-colors min-h-11 {substateFilter === opt.v ? 'bg-accent-fill text-accent-fg' : 'text-muted hover:text-content hover:bg-surface-hover border border-line'} min-w-11 inline-flex items-center justify-center"
           >{opt.label}</button>
         {/each}
       </div>
@@ -735,7 +735,7 @@
                        starting a card drag. -->
                   <button
                     type="button"
-                    class="kanban-card-menu-trigger absolute top-2 right-2 w-5 h-5 flex items-center justify-center rounded text-muted hover:text-content hover:bg-surface-hover opacity-0 group-hover:opacity-100 transition-opacity {editingCardId === post.id ? 'opacity-100 bg-surface-hover' : ''} {coverImage(post) ? 'top-3' : 'top-2'}"
+                    class="kanban-card-menu-trigger absolute top-2 right-2 w-11 h-11 flex items-center justify-center rounded text-muted hover:text-content hover:bg-surface-hover opacity-0 group-hover:opacity-100 transition-opacity {editingCardId === post.id ? 'opacity-100 bg-surface-hover' : ''} {coverImage(post) ? 'top-3' : 'top-2'}"
                     onclick={(e) => { e.stopPropagation(); editingCardId === post.id ? closeCardMenu() : openCardMenu(post); }}
                     draggable={false}
                     aria-label="Edit card metadata"
@@ -933,7 +933,7 @@
                 {:else}
                   <select
                     bind:value={quickIdeaIntegrationId}
-                    class="w-full px-2 py-1 text-xs bg-background-input border border-line rounded focus:border-accent outline-none"
+                    class="min-h-11 w-full px-2 py-1 text-xs bg-background-input border border-line rounded focus:border-accent outline-none"
                   >
                     {#each integrations as int (int.id)}
                       <option value={int.id}>{int.provider_name || int.provider_identifier}</option>
@@ -972,7 +972,7 @@
         type="text"
         bind:value={newCampaignName}
         placeholder="e.g. Product launch Q3"
-        class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none mb-4"
+        class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none mb-4"
         onkeydown={(e) => { if (e.key === 'Enter') confirmCreateCampaign(); }}
       />
       <div class="flex items-center justify-end gap-2">

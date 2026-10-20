@@ -196,16 +196,16 @@
       <h2 class="text-sm font-medium text-content">Brand Identity</h2>
       <div>
         <label for="brand-name" class="text-xs text-muted mb-1 block">Brand Name</label>
-        <input id="brand-name" bind:value={brandName} placeholder="e.g. Your company name" class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm" />
+        <input id="brand-name" bind:value={brandName} placeholder="e.g. Your company name" class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm" />
       </div>
       <div>
         <label for="brand-description" class="text-xs text-muted mb-1 block">Brand Description</label>
-        <textarea id="brand-description" bind:value={brandDescription} placeholder="What does your brand do? What's your mission?" rows="3" class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm resize-none"></textarea>
+        <textarea id="brand-description" bind:value={brandDescription} placeholder="What does your brand do? What's your mission?" rows="3" class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm resize-none"></textarea>
       </div>
       <div class="grid grid-cols-2 gap-4">
         <div>
           <label for="brand-tone" class="text-xs text-muted mb-1 block">Tone of Voice</label>
-          <select id="brand-tone" bind:value={toneOfVoice} class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm">
+          <select id="brand-tone" bind:value={toneOfVoice} class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm">
             {#each toneOptions as opt}
               <option value={opt.value}>{opt.label}</option>
             {/each}
@@ -213,7 +213,7 @@
         </div>
         <div>
           <label for="brand-frequency" class="text-xs text-muted mb-1 block">Posting Frequency Goal</label>
-          <select id="brand-frequency" bind:value={postingFrequency} class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm">
+          <select id="brand-frequency" bind:value={postingFrequency} class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm">
             {#each frequencyOptions as opt}
               <option value={opt.value}>{opt.label}</option>
             {/each}
@@ -227,7 +227,7 @@
       <h2 class="text-sm font-medium text-content">Target Audience</h2>
       <div>
         <label for="audience-description" class="text-xs text-muted mb-1 block">Audience Description</label>
-        <textarea id="audience-description" bind:value={targetAudience} placeholder="Who are you trying to reach? e.g. 'Startup founders aged 25-40 interested in SaaS and productivity tools'" rows="3" class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm resize-none"></textarea>
+        <textarea id="audience-description" bind:value={targetAudience} placeholder="Who are you trying to reach? e.g. 'Startup founders aged 25-40 interested in SaaS and productivity tools'" rows="3" class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm resize-none"></textarea>
       </div>
     </div>
 
@@ -236,22 +236,22 @@
       <h2 class="text-sm font-medium text-content">Content Strategy</h2>
       <div>
         <label for="content-pillars" class="text-xs text-muted mb-1 block">Content Pillars (one per line)</label>
-        <textarea id="content-pillars" bind:value={contentPillars} placeholder={"Product updates\nIndustry insights\nCustomer stories\nEducational tutorials"} rows="5" class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm resize-none font-mono"></textarea>
+        <textarea id="content-pillars" bind:value={contentPillars} placeholder={"Product updates\nIndustry insights\nCustomer stories\nEducational tutorials"} rows="5" class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm resize-none font-mono"></textarea>
         <p class="text-[10px] text-faint mt-1">Topics you regularly post about. AI will use these to suggest content.</p>
       </div>
       <div>
         <label for="brand-keywords" class="text-xs text-muted mb-1 block">Brand Keywords</label>
-        <input id="brand-keywords" bind:value={brandKeywords} placeholder="e.g. productivity, automation, SaaS, workflow" class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm" />
+        <input id="brand-keywords" bind:value={brandKeywords} placeholder="e.g. productivity, automation, SaaS, workflow" class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm" />
         <p class="text-[10px] text-faint mt-1">Comma-separated keywords that should appear in your content.</p>
       </div>
       <div>
         <label for="hashtag-sets" class="text-xs text-muted mb-1 block">Hashtag Sets (one set per line, space-separated)</label>
-        <textarea id="hashtag-sets" bind:value={hashtagSets} placeholder={"#SaaS #Productivity #Startup\n#Automation #Workflow #Tech\n#Marketing #Growth #Business"} rows="4" class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm resize-none font-mono"></textarea>
+        <textarea id="hashtag-sets" bind:value={hashtagSets} placeholder={"#SaaS #Productivity #Startup\n#Automation #Workflow #Tech\n#Marketing #Growth #Business"} rows="4" class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm resize-none font-mono"></textarea>
         <p class="text-[10px] text-faint mt-1">Pre-defined hashtag groups for different content types.</p>
       </div>
       <div>
         <label for="avoid-topics" class="text-xs text-muted mb-1 block">Topics to Avoid</label>
-        <input id="avoid-topics" bind:value={avoidTopics} placeholder="e.g. politics, controversial topics, competitor names" class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm" />
+        <input id="avoid-topics" bind:value={avoidTopics} placeholder="e.g. politics, controversial topics, competitor names" class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm" />
         <p class="text-[10px] text-faint mt-1">AI will avoid these topics when generating content.</p>
       </div>
     </div>

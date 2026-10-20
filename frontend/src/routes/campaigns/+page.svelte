@@ -167,7 +167,7 @@
     {#each ['all', 'active', 'paused', 'archived', 'completed'] as s (s)}
       <button
         onclick={() => statusFilter = s as typeof statusFilter}
-        class="px-3 py-1 text-xs rounded-md transition-colors min-h-11 {statusFilter === s ? 'bg-accent-fill text-accent-fg' : 'bg-surface-hover text-muted hover:text-content'}"
+        class="px-3 py-1 text-xs rounded-md transition-colors min-h-11 {statusFilter === s ? 'bg-accent-fill text-accent-fg' : 'bg-surface-hover text-muted hover:text-content'} min-w-11 inline-flex items-center justify-center"
       >
         {s.charAt(0).toUpperCase() + s.slice(1)}
       </button>
@@ -213,7 +213,7 @@
               <span class="w-3 h-3 rounded-full" style="background: {c.color}"></span>
               <h2 class="font-medium">
                 <!-- Stretched link: the whole card is the link, and the ✕ sits above it (z-10). -->
-                <a href="/campaigns/{c.id}" class="text-content group-hover:text-accent transition-colors no-underline after:absolute after:inset-0 after:content-['']">{c.name}</a>
+                <a href="/campaigns/{c.id}" class="text-content group-hover:text-accent transition-colors no-un min-h-11 inline-flex items-centerderline after:absolute after:inset-0 after:content-['']">{c.name}</a>
               </h2>
             </div>
             <Badge variant={statusVariant[c.status] || 'default'}>{c.status}</Badge>
@@ -257,7 +257,7 @@
             </span>
             <button
               onclick={(e) => { e.stopPropagation(); archiveCampaign(c.id, c.name); }}
-              class="relative z-10 text-muted hover:text-error transition-colors opacity-0 group-hover:opacity-100"
+              class="relative z-10 text-muted hover:text-error transition-colors min-h-11 min-w-11 inline-flex items-center justify-center opacity-0 group-hover:opacity-100"
               title="Archive campaign"
             >
               ✕

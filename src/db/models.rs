@@ -110,6 +110,38 @@ pub fn decode_posting_times(raw: serde_json::Value) -> serde_json::Value {
     }
 }
 
+/// `posts.media` is stored as raw JSON, and the column has held more than
+/// one shape over the app's life:
+///
+///   `[]`                       the normal case
+///   `{}`                       written by an older writer
+///   `["/path/a.png", ...]`     a legacy array of BARE PATHS
+///   `[{url, mime_type, ...}]`  the current shape
+///
+/// The frontend assumes an array: the kanban's `coverImage` calls
+/// `post.media.find(...)` directly, and a `{}` took the whole ROUTE down
+/// with "i.find is not a function" - a pageerror, not just one bad card.
+///
+/// So the array-ness is guaranteed ON THE READ, in ONE place. The
+/// response shape stays what the frontend expects: an array, possibly
+/// empty, never an object and never a bare-path string.
+pub fn media_as_array(media: &serde_json::Value) -> serde_json::Value {
+    match media {
+        serde_json::Value::Array(_) => media.clone(),
+        serde_json::Value::Null => serde_json::Value::Array(Vec::new()),
+        // An object: keep it as a SINGLE attachment if it looks like one,
+        // otherwise there is no media to show.
+        serde_json::Value::Object(map) => {
+            if map.contains_key("url") {
+                serde_json::Value::Array(vec![media.clone()])
+            } else {
+                serde_json::Value::Array(Vec::new())
+            }
+        }
+        _ => serde_json::Value::Array(Vec::new()),
+    }
+}
+
 // ── Post ─────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type, PartialEq)]

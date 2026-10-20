@@ -223,7 +223,7 @@
           type="text"
           bind:value={topic}
           placeholder="e.g. Our new product launch..."
-          class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-content-secondary focus:border-accent outline-none"
+          class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-content-secondary focus:border-accent outline-none"
         />
       </div>
       <div class="flex gap-3">
@@ -232,7 +232,7 @@
           <select
             id="ai-tone"
             bind:value={tone}
-            class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-content-secondary focus:border-accent outline-none"
+            class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-content-secondary focus:border-accent outline-none"
           >
             {#each tones as t (t)}
               <option value={t}>{t}</option>
@@ -244,7 +244,7 @@
           <select
             id="ai-length"
             bind:value={length}
-            class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-content-secondary focus:border-accent outline-none"
+            class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-content-secondary focus:border-accent outline-none"
           >
             {#each lengths as l (l)}
               <option value={l}>{l}</option>
@@ -258,7 +258,7 @@
         <select
           id="ai-target-tone"
           bind:value={tone}
-          class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-content-secondary focus:border-accent outline-none"
+          class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-content-secondary focus:border-accent outline-none"
         >
           {#each tones as t (t)}
             <option value={t}>{t}</option>

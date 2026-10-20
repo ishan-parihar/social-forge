@@ -89,7 +89,7 @@
           id="generator-topic"
           bind:value={topic}
           placeholder="e.g., 'Tips for indie hackers launching their first product' or 'The future of AI in content creation'"
-          class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none resize-none"
+          class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none resize-none"
           rows="3"
         ></textarea>
       </div>
@@ -97,7 +97,7 @@
       <div class="grid grid-cols-2 gap-3">
         <div>
           <label for="generator-format" class="text-xs text-muted block mb-1">Format</label>
-          <select id="generator-format" bind:value={format} class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none">
+          <select id="generator-format" bind:value={format} class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none">
             <option value="one_short">Single short post</option>
             <option value="one_long">Single long post</option>
             <option value="thread_short">Short thread (3 tweets)</option>
@@ -106,7 +106,7 @@
         </div>
         <div>
           <label for="generator-tone" class="text-xs text-muted block mb-1">Tone</label>
-          <select id="generator-tone" bind:value={tone} class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none">
+          <select id="generator-tone" bind:value={tone} class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none">
             <option value="personal">Personal</option>
             <option value="company">Company</option>
           </select>
@@ -115,7 +115,7 @@
 
       <div>
         <label for="generator-count" class="text-xs text-muted block mb-1">Number of posts: {count}</label>
-        <input id="generator-count" type="range" min="1" max="5" bind:value={count} class="w-full" />
+        <input id="generator-count" type="range" min="1" max="5" bind:value={count} class="min-h-11 w-full" />
       </div>
 
       {#if error}

@@ -66,7 +66,7 @@
         type="url"
         bind:value={feedUrl}
         placeholder="https://example.com/rss"
-        class="w-full bg-background border border-line rounded-lg px-3 py-2 text-sm text-content placeholder:text-faint focus:outline-none focus:border-accent"
+        class="min-h-11 w-full bg-background border border-line rounded-lg px-3 py-2 text-sm text-content placeholder:text-faint focus:outline-none focus:border-accent"
         required
       />
     </div>
@@ -81,7 +81,7 @@
         <select
           id="integration"
           bind:value={integrationId}
-          class="w-full bg-background border border-line rounded-lg px-3 py-2 text-sm text-content focus:outline-none focus:border-accent"
+          class="min-h-11 w-full bg-background border border-line rounded-lg px-3 py-2 text-sm text-content focus:outline-none focus:border-accent"
           required
         >
           <option value="" disabled>Select integration</option>
@@ -101,12 +101,12 @@
         type="text"
         bind:value={title}
         placeholder="My RSS Feed"
-        class="w-full bg-background border border-line rounded-lg px-3 py-2 text-sm text-content placeholder:text-faint focus:outline-none focus:border-accent"
+        class="min-h-11 w-full bg-background border border-line rounded-lg px-3 py-2 text-sm text-content placeholder:text-faint focus:outline-none focus:border-accent"
       />
     </div>
 
     <label class="flex items-center gap-2 cursor-pointer">
-      <input type="checkbox" bind:checked={useAiSummary} class="rounded bg-background border-line" />
+      <input type="checkbox" bind:checked={useAiSummary} class="min-h-11 rounded bg-background border-line" />
       <span class="text-xs text-muted">Use AI summary (experimental)</span>
     </label>
 

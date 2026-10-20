@@ -163,9 +163,9 @@
               {/if}
             </div>
             <div class="flex gap-2">
-              <button onclick={() => testWebhook(wh.id)} class="text-xs px-2 py-1 text-muted hover:text-accent border border-line rounded min-h-11">Test</button>
-              <button onclick={() => viewDeliveries(wh.id)} class="text-xs px-2 py-1 text-muted hover:text-accent border border-line rounded min-h-11">Deliveries</button>
-              <button onclick={() => openEdit(wh)} class="text-xs px-2 py-1 text-muted hover:text-accent border border-line rounded min-h-11">Edit</button>
+              <button onclick={() => testWebhook(wh.id)} class="text-xs px-2 py-1 text-muted hover:text-accent border border min-h-11 min-w-11 inline-flex items-center justify-center-line rounded min-h-11">Test</button>
+              <button onclick={() => viewDeliveries(wh.id)} class="text-xs px-2 py-1 text-muted hover:text-accent border border min-h-11 min-w-11 inline-flex items-center justify-center-line rounded min-h-11">Deliveries</button>
+              <button onclick={() => openEdit(wh)} class="text-xs px-2 py-1 text-muted hover:text-accent border border min-h-11 min-w-11 inline-flex items-center justify-center-line rounded min-h-11">Edit</button>
               <button onclick={() => deleteWebhook(wh.id)} class="text-xs px-2 py-1 text-muted hover:text-error border border-line rounded min-h-11">Delete</button>
             </div>
           </div>
@@ -192,15 +192,15 @@
       <div class="page-enter space-y-6">
         <div>
           <label for="webhook-name" class="text-xs text-muted mb-1 block">Name</label>
-          <input id="webhook-name" bind:value={formName} placeholder="My Webhook" class="w-full px-3 py-2 bg-surface-hover border border-line rounded text-sm" />
+          <input id="webhook-name" bind:value={formName} placeholder="My Webhook" class="min-h-11 w-full px-3 py-2 bg-surface-hover border border-line rounded text-sm" />
         </div>
         <div>
           <label for="webhook-url" class="text-xs text-muted mb-1 block">URL</label>
-          <input id="webhook-url" bind:value={formUrl} placeholder="https://example.com/webhook" class="w-full px-3 py-2 bg-surface-hover border border-line rounded text-sm" />
+          <input id="webhook-url" bind:value={formUrl} placeholder="https://example.com/webhook" class="min-h-11 w-full px-3 py-2 bg-surface-hover border border-line rounded text-sm" />
         </div>
         <div>
           <label for="webhook-secret" class="text-xs text-muted mb-1 block">Secret (optional)</label>
-          <input id="webhook-secret" bind:value={formSecret} type="password" placeholder="Webhook signing secret" class="w-full px-3 py-2 bg-surface-hover border border-line rounded text-sm" />
+          <input id="webhook-secret" bind:value={formSecret} type="password" placeholder="Webhook signing secret" class="min-h-11 w-full px-3 py-2 bg-surface-hover border border-line rounded text-sm" />
         </div>
         <div>
           <span class="text-xs text-muted mb-2 block">Event Types</span>
@@ -214,7 +214,7 @@
           </div>
         </div>
         <label class="flex items-center gap-2 text-sm cursor-pointer">
-          <input type="checkbox" bind:checked={formActive} class="rounded" />
+          <input type="checkbox" bind:checked={formActive} class="min-h-11 rounded" />
           <span>Active</span>
         </label>
       </div>

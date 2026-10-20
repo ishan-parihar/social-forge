@@ -36,7 +36,7 @@ social-forge linkedin profile        # View LinkedIn profile`;
       <pre class="bg-background border border-line rounded-lg p-4 text-xs text-accent-strong font-mono overflow-x-auto">{mcpConfig}</pre>
       <button
         onclick={() => copy(mcpConfig, 'mcp')}
-        class="absolute top-2 right-2 px-2 py-1 text-xs rounded bg-line text-muted hover:text-content transition-colors"
+        class="absolute top-2 right-2 px-2 py-1 text-xs rounded bg-line tex min-h-11 min-w-11 inline-flex items-center justify-centert-muted hover:text-content transition-colors"
       >
         {copiedMcp ? '✓ Copied' : 'Copy'}
       </button>
@@ -52,7 +52,7 @@ social-forge linkedin profile        # View LinkedIn profile`;
       <pre class="bg-background border border-line rounded-lg p-4 text-xs text-success font-mono overflow-x-auto">{cliCommands}</pre>
       <button
         onclick={() => copy(cliCommands, 'cli')}
-        class="absolute top-2 right-2 px-2 py-1 text-xs rounded bg-line text-muted hover:text-content transition-colors"
+        class="absolute top-2 right-2 px-2 py-1 text-xs rounded bg-line tex min-h-11 min-w-11 inline-flex items-center justify-centert-muted hover:text-content transition-colors"
       >
         {copiedCli ? '✓ Copied' : 'Copy'}
       </button>

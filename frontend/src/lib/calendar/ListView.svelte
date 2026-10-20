@@ -203,12 +203,12 @@
           <div class="invisible sm:visible group-hover:visible group-focus-within:visible transition-all duration-150 flex items-center gap-1 shrink-0">
             {#if event.state === 'published' && event.postUrl}
               <a href={event.postUrl} target="_blank" rel="noopener noreferrer"
-                 class="text-accent hover:text-accent-strong px-1.5 py-0.5 rounded text-xs"
+                 class="text-accent hover:text-accent-strong px-1.5 py-0.5 rounded text-xs min-h-11 min-w-11 inline-flex items-center justify-center"
                  title="View original post">🔗</a>
             {/if}
-            <button onclick={() => onDuplicate?.(event.id)} class="text-muted hover:text-content px-1.5 py-0.5 rounded text-xs min-h-11" title="Duplicate" aria-label="Duplicate post">📋</button>
-            <button onclick={() => onStats?.(event.id)} class="text-muted hover:text-content px-1.5 py-0.5 rounded text-xs min-h-11" title="Statistics" aria-label="View post statistics">📊</button>
-            <button onclick={() => onDelete?.(event.id)} class="text-muted hover:text-error px-1.5 py-0.5 rounded text-xs min-h-11" title="Delete" aria-label="Delete post">🗑️</button>
+            <button onclick={() => onDuplicate?.(event.id)} class="text-muted hover:text-content px-1.5 py-0.5 rounded text-xs min-h-11 min-w-11 inline-flex items-center justify-center" title="Duplicate" aria-label="Duplicate post">📋</button>
+            <button onclick={() => onStats?.(event.id)} class="text-muted hover:text-content px-1.5 py-0.5 rounded text-xs min-h-11 min-w-11 inline-flex items-center justify-center" title="Statistics" aria-label="View post statistics">📊</button>
+            <button onclick={() => onDelete?.(event.id)} class="text-muted hover:text-error px-1.5 py-0.5 rounded text-xs min-h-11 min-w-11 inline-flex items-center justify-center" title="Delete" aria-label="Delete post">🗑️</button>
           </div>
         </div>
       {/each}

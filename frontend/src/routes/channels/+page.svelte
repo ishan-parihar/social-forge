@@ -379,7 +379,7 @@
         {#if onboardDialog.provider === "whatsapp"}Enter your phone number to get a pairing code.{:else}Enter your phone number to receive a login code via Telegram.{/if}
       </p>
       <label for="onboard-phone" class="sr-only">Phone number</label>
-      <input id="onboard-phone" type="tel" bind:value={onboardDialog.phone} placeholder="+1234567890" class="w-full mb-4 px-3 py-2 bg-background-input border border-line rounded text-sm" />
+      <input id="onboard-phone" type="tel" bind:value={onboardDialog.phone} placeholder="+1234567890" class="min-h-11 w-full mb-4 px-3 py-2 bg-background-input border border-line rounded text-sm" />
       {#if error}<p class="text-error text-sm mb-3" role="alert">{error}</p>{/if}
       <div class="flex justify-end gap-2">
         <button onclick={() => { onboardDialog = null; error = ""; }} class="px-4 py-2 text-sm text-muted hover:text-content min-h-11">Cancel</button>
@@ -405,7 +405,7 @@
     {:else if onboardDialog.step === "sms_code"}
       <p class="text-sm text-muted mb-3">Enter the code sent to your Telegram app.</p>
       <label for="onboard-code" class="sr-only">Login code</label>
-      <input id="onboard-code" type="text" bind:value={onboardDialog.code} placeholder="12345" class="w-full mb-4 px-3 py-2 bg-background-input border border-line rounded text-sm font-mono text-center text-lg tracking-widest" />
+      <input id="onboard-code" type="text" bind:value={onboardDialog.code} placeholder="12345" class="min-h-11 w-full mb-4 px-3 py-2 bg-background-input border border-line rounded text-sm font-mono text-center text-lg tracking-widest" />
       {#if error}<p class="text-error text-sm mb-3" role="alert">{error}</p>{/if}
       <div class="flex justify-end gap-2">
         <button onclick={() => { onboardDialog = null; error = ""; }} class="px-4 py-2 text-sm text-muted hover:text-content min-h-11">Cancel</button>

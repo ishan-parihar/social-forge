@@ -113,7 +113,7 @@
       <input
         type="checkbox"
         bind:checked={newTab}
-        class="accent-brand-500 w-4 h-4"
+        class="min-h-11 accent-brand-500 w-4 h-4"
       />
       <span class="text-xs text-muted">Open in new tab</span>
     </label>

@@ -117,7 +117,7 @@
       <div class="flex items-center gap-2">
         <select
           bind:value={newHour}
-          class="px-2 py-1.5 bg-background-input border border-line rounded-lg text-sm"
+          class="min-h-11 px-2 py-1.5 bg-background-input border border-line rounded-lg text-sm"
         >
           {#each Array.from({ length: 24 }, (_, i) => i) as h}
             <option value={h}>{String(h).padStart(2, '0')}</option>
@@ -126,7 +126,7 @@
         <span class="text-muted">:</span>
         <select
           bind:value={newMinute}
-          class="px-2 py-1.5 bg-background-input border border-line rounded-lg text-sm"
+          class="min-h-11 px-2 py-1.5 bg-background-input border border-line rounded-lg text-sm"
         >
           <option value={0}>00</option>
           <option value={15}>15</option>

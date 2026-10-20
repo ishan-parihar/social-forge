@@ -185,7 +185,7 @@
         aria-controls={listboxId}
         aria-autocomplete="list"
         aria-activedescendant={flat[selectedIndex] ? optionId(flat[selectedIndex].id) : undefined}
-        class="flex-1 bg-transparent border-none outline-none text-sm text-content placeholder:text-muted"
+        class="min-h-11 flex-1 bg-transparent border-none outline-none text-sm text-content placeholder:text-muted"
       />
       <kbd class="text-[10px] text-muted bg-surface-hover px-1.5 py-0.5 rounded">ESC</kbd>
     </div>

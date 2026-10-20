@@ -553,12 +553,22 @@ const AUDIT = () => {
     return own;
   };
   for (const el of document.querySelectorAll('button,a[href],[role="button"],input,select')) {
+    // A HIDDEN control is not a tap target. The composer uses a
+    // `hidden` file input for its uploads, and it measured 199x20 -
+    // a violation that does not exist, because nothing can click it.
+    // `offsetParent` is null for a `display: none` element, and it is
+    // also null for `position: fixed`, so the check is on the computed
+    // visibility and the rendered box instead.
+    const cs = getComputedStyle(el);
+    if (cs.display === 'none' || cs.visibility === 'hidden') continue;
     const r = targetRect(el);
     if (r.width === 0 || r.height === 0) continue;
     if (r.height < 44 || r.width < 44) {
       warns.push({
         check: 'tap-target',
         detail: `${Math.round(r.width)}x${Math.round(r.height)} < 44x44 — "${(el.textContent || el.getAttribute('aria-label') || el.tagName).trim().slice(0, 30)}"`,
+        cls: String(el.className || '').slice(0, 160),
+        tag: el.tagName,
       });
     }
   }
@@ -688,12 +698,22 @@ async function main() {
     const page = await context.newPage();
 
     page.on('pageerror', (err) => {
+      // The STACK is the finding. "i.find is not a function" names the
+      // symptom; the stack names the minified frame, which points back
+      // at the source. Without it, a pageerror is a dead end.
+      const stack = err && err.stack ? String(err.stack) : '';
+      const frames = stack
+        .split('\n')
+        .slice(1, 4)
+        .map((l) => l.trim())
+        .filter(Boolean)
+        .join(' | ');
       summary.fails.push({
         route: '(page lifecycle)',
         width: 0,
         theme,
         check: 'pageerror',
-        detail: String(err.message || err).slice(0, 200),
+        detail: `${String(err.message || err).slice(0, 200)}${frames ? ` @ ${frames.slice(0, 400)}` : ''}`,
       });
     });
 
@@ -855,6 +875,16 @@ async function main() {
   const report = lines.join('\n');
   fs.writeFileSync(path.join(OUT_DIR, 'report.txt'), report);
   console.log(report);
+
+  // The machine-readable form. The text report groups and TRUNCATES, so
+  // it cannot answer "which element, on which route, at which width" -
+  // and that is the only question a fix needs answered. Every warning
+  // carries the route, the width, the theme and the element's own
+  // class, so the fix can be located without re-running the browser.
+  fs.writeFileSync(
+    path.join(OUT_DIR, 'report.json'),
+    JSON.stringify({ fails: summary.fails, warns: summary.warns }, null, 2)
+  );
 
   process.exit(summary.fails.length === 0 ? 0 : 1);
 }

@@ -50,7 +50,7 @@
     <!-- Mobile: toggle button -->
     <button
       onclick={() => mobileSidebarOpen = !mobileSidebarOpen}
-      class="lg:hidden w-full flex items-center justify-between px-4 py-2.5 bg-surface border border-line rounded-lg text-sm mb-2"
+      class="lg:hidden w-full flex items-center justify-between px-4 py-2 min-h-11 bg-surface border border-line rounded-lg text-sm mb-2"
     >
       <span>{tabs.find(t => isActive(t.href, t.exact))?.label || 'Settings'}</span>
       <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -67,7 +67,7 @@
       {#each tabs as tab}
         <a
           href={tab.href}
-          class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors
+          class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors min-h-11
             {isActive(tab.href, tab.exact)
               ? 'bg-surface-hover text-accent font-medium'
               : 'text-muted hover:text-content hover:bg-surface-hover'}"
@@ -85,7 +85,7 @@
           <a
             href={tab.href}
             onclick={() => mobileSidebarOpen = false}
-            class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors
+            class="flex items-center gap-3 px-3 py-2 min-h-11 rounded-lg text-sm transition-colors
               {isActive(tab.href, tab.exact)
                 ? 'bg-surface-hover text-accent font-medium'
                 : 'text-muted hover:text-content hover:bg-surface-hover'}"

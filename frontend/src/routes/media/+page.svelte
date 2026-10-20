@@ -95,7 +95,7 @@
     <h1 class="text-xl font-semibold text-content">Media Library</h1>
     <label class="px-3 py-1.5 bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg text-sm cursor-pointer transition-colors disabled:opacity-50" class:opacity-50={uploading}>
       {uploading ? "Uploading..." : "+ Upload"}
-      <input type="file" multiple accept="image/*,video/*,audio/*,.pdf" onchange={handleUpload} class="hidden" disabled={uploading} />
+      <input type="file" multiple accept="image/*,video/*,audio/*,.pdf" onchange={handleUpload} class="min-h-11 hidden" disabled={uploading} />
     </label>
   </div>
 
@@ -104,7 +104,7 @@
       type="text"
       placeholder="Search media by name..."
       bind:value={search}
-      class="w-full px-3 py-2 pl-9 bg-background-input border border-line rounded-lg text-sm text-content-secondary placeholder-muted focus:border-accent outline-none transition-colors"
+      class="min-h-11 w-full px-3 py-2 pl-9 bg-background-input border border-line rounded-lg text-sm text-content-secondary placeholder-muted focus:border-accent outline-none transition-colors"
     />
     <span class="absolute left-3 top-1/2 -translate-y-1/2 text-muted"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></span>
   </div>
@@ -132,7 +132,7 @@
         <button
           onclick={prevPage}
           disabled={offset === 0}
-          class="px-3 py-1.5 text-sm border border-line rounded-lg disabled:opacity-30 disabled:cursor-not-allowed hover:bg-surface-hover transition-colors text-content-secondary"
+          class="px-3 py-1.5 text-sm border border-line rounded-lg disabled:opacity-30 disabled:cursor-not-allowed hover:bg-surface-hover transition-colors text-content-secondary min-h-11 inline-flex items-center"
         >
           Previous
         </button>
@@ -140,7 +140,7 @@
         <button
           onclick={nextPage}
           disabled={!hasMore}
-          class="px-3 py-1.5 text-sm border border-line rounded-lg disabled:opacity-30 disabled:cursor-not-allowed hover:bg-surface-hover transition-colors text-content-secondary"
+          class="px-3 py-1.5 text-sm border border-line rounded-lg disabled:opacity-30 disabled:cursor-not-allowed hover:bg-surface-hover transition-colors text-content-secondary min-h-11 inline-flex items-center"
         >
           Next
         </button>

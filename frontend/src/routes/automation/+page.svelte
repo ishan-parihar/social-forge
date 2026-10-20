@@ -224,9 +224,9 @@
             {/if}
           </button>
           <div class="flex items-center gap-2">
-            <button onclick={() => openEdit(rule)} class="text-xs text-muted hover:text-accent min-h-11">Edit</button>
-            <button onclick={() => viewLogs(rule.id)} class="text-xs text-muted hover:text-accent min-h-11">Logs</button>
-            <button onclick={() => deleteRule(rule.id)} class="text-xs text-muted hover:text-error min-h-11">Del</button>
+            <button onclick={() => openEdit(rule)} class="text-xs text-muted hover:text-accent min-h-11 min-w-11 inline-flex items-center justify-center">Edit</button>
+            <button onclick={() => viewLogs(rule.id)} class="text-xs text-muted hover:text-accent min-h-11 min-w-11 inline-flex items-center justify-center">Logs</button>
+            <button onclick={() => deleteRule(rule.id)} class="text-xs text-muted hover:text-error min-h-11 min-w-11 inline-flex items-center justify-center">Del</button>
           </div>
         </div>
       {/each}
@@ -241,10 +241,10 @@
       <h2 class="text-lg font-semibold mb-4">{editingRule ? "Edit" : "Create"} Automation Rule</h2>
       
       <label for="rule-name" class="block text-sm text-muted mb-1">Name</label>
-      <input id="rule-name" type="text" bind:value={formName} placeholder="Auto-reply to comments" class="w-full mb-3 px-3 py-2 bg-surface-hover border border-line rounded text-sm" />
+      <input id="rule-name" type="text" bind:value={formName} placeholder="Auto-reply to comments" class="min-h-11 w-full mb-3 px-3 py-2 bg-surface-hover border border-line rounded text-sm" />
 
       <label for="rule-platform" class="block text-sm text-muted mb-1">Platform</label>
-      <select id="rule-platform" bind:value={formPlatform} onchange={onPlatformChange} class="w-full mb-3 px-3 py-2 bg-surface-hover border border-line rounded text-sm">
+      <select id="rule-platform" bind:value={formPlatform} onchange={onPlatformChange} class="min-h-11 w-full mb-3 px-3 py-2 bg-surface-hover border border-line rounded text-sm">
         {#each platforms as p}
           <option value={p}>{p}</option>
         {/each}
@@ -256,7 +256,7 @@
           No connected {formPlatform} accounts. Connect one in the <a href="/channels" class="underline">Channels</a> page.
         </div>
       {:else}
-        <select id="rule-integration" bind:value={formIntegrationId} class="w-full mb-3 px-3 py-2 bg-surface-hover border border-line rounded text-sm">
+        <select id="rule-integration" bind:value={formIntegrationId} class="min-h-11 w-full mb-3 px-3 py-2 bg-surface-hover border border-line rounded text-sm">
           {#each platformIntegrations as integ (integ.id)}
             <option value={integ.id}>{integ.provider_name || integ.provider_identifier}</option>
           {/each}
@@ -264,21 +264,21 @@
       {/if}
 
       <label for="rule-trigger" class="block text-sm text-muted mb-1">Trigger Type</label>
-      <select id="rule-trigger" bind:value={formTrigger} class="w-full mb-3 px-3 py-2 bg-surface-hover border border-line rounded text-sm">
+      <select id="rule-trigger" bind:value={formTrigger} class="min-h-11 w-full mb-3 px-3 py-2 bg-surface-hover border border-line rounded text-sm">
         {#each triggers as t}
           <option value={t}>{t}</option>
         {/each}
       </select>
 
       <label for="rule-response-type" class="block text-sm text-muted mb-1">Response Type</label>
-      <select id="rule-response-type" bind:value={formResponseType} class="w-full mb-3 px-3 py-2 bg-surface-hover border border-line rounded text-sm">
+      <select id="rule-response-type" bind:value={formResponseType} class="min-h-11 w-full mb-3 px-3 py-2 bg-surface-hover border border-line rounded text-sm">
         {#each responseTypes as rt}
           <option value={rt}>{rt.replace("_", " ")}</option>
         {/each}
       </select>
 
       <label for="rule-template" class="block text-sm text-muted mb-1">Response Template</label>
-      <textarea id="rule-template" bind:value={formTemplate} placeholder="Thanks for your comment! {'{user}'} said: {'{comment}'}" rows="4" class="w-full mb-4 px-3 py-2 bg-surface-hover border border-line rounded text-sm font-mono"></textarea>
+      <textarea id="rule-template" bind:value={formTemplate} placeholder="Thanks for your comment! {'{user}'} said: {'{comment}'}" rows="4" class="min-h-11 w-full mb-4 px-3 py-2 bg-surface-hover border border-line rounded text-sm font-mono"></textarea>
 
       {#if error}<p class="text-error text-sm mb-3">{error}</p>{/if}
 

@@ -104,7 +104,7 @@
       {#each platforms as p}
         <button
           onclick={() => { filterPlatform = p; load(); }}
-          class="px-3 py-1.5 text-xs capitalize rounded-lg transition-colors {filterPlatform === p ? 'bg-accent-fill text-accent-fg' : 'bg-surface text-muted hover:text-content border border-line'}"
+          class="px-3 py-1.5 text-xs capitalize rounded-lg transition-colors {filterPlatform === p ? 'bg-accent-fill text-accent-fg' : 'bg-surface text-muted hover:text-content border border-line'} min-h-11 min-w-11 inline-flex items-center justify-center"
         >{p}</button>
       {/each}
     </div>
@@ -114,7 +114,7 @@
       {#each statuses as s}
         <button
           onclick={() => { filterStatus = s; load(); }}
-          class="px-3 py-1.5 text-xs capitalize rounded-lg transition-colors {filterStatus === s ? 'bg-accent-fill text-accent-fg' : 'bg-surface text-muted hover:text-content border border-line'}"
+          class="px-3 py-1.5 text-xs capitalize rounded-lg transition-colors {filterStatus === s ? 'bg-accent-fill text-accent-fg' : 'bg-surface text-muted hover:text-content border border-line'} min-h-11 min-w-11 inline-flex items-center justify-center"
         >{s}</button>
       {/each}
     </div>
@@ -146,8 +146,8 @@
           <div class="flex items-center gap-2">
             {#if c.status !== 'resolved'}
               <span class="px-2 py-0.5 text-xs rounded bg-warning/20 ring-1 ring-inset ring-warning/40 text-content">New</span>
-              <button onclick={() => resolveComment(c.id)} class="text-xs text-muted hover:text-success min-h-11" title="Resolve">✓</button>
-              <button onclick={() => replyModal = { comment: c, text: "" }} class="text-xs text-muted hover:text-accent min-h-11" title="Reply">↩</button>
+              <button onclick={() => resolveComment(c.id)} class="text-xs text-muted hover:text-success min-h-11 min-w-11 inline-flex items-center justify-center" title="Resolve">✓</button>
+              <button onclick={() => replyModal = { comment: c, text: "" }} class="text-xs text-muted hover:text-accent min-h-11 min-w-11 inline-flex items-center justify-center" title="Reply">↩</button>
             {:else}
               <span class="px-2 py-0.5 text-xs rounded bg-success/20 ring-1 ring-inset ring-success/40 text-content">Resolved</span>
             {/if}
@@ -168,7 +168,7 @@
         bind:value={replyModal.text}
         placeholder="Write your reply..."
         rows="4"
-        class="w-full px-3 py-2 bg-surface-hover border border-line rounded text-sm mb-4"
+        class="min-h-11 w-full px-3 py-2 bg-surface-hover border border-line rounded text-sm mb-4"
       ></textarea>
       <div class="flex gap-3 justify-end">
         <button onclick={() => replyModal = null} class="px-4 py-2 text-sm text-muted hover:text-content min-h-11">Cancel</button>

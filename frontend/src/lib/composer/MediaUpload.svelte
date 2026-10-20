@@ -234,7 +234,7 @@
                 type="text"
                 bind:value={altTextDraft}
                 placeholder="Alt text..."
-                class="w-full px-2 py-1 text-xs bg-background-input border border-line rounded focus:border-accent outline-none"
+                class="min-h-11 w-full px-2 py-1 text-xs bg-background-input border border-line rounded focus:border-accent outline-none"
                 onkeydown={(e) => { if (e.key === 'Enter') saveAlt(); if (e.key === 'Escape') { editingAlt = null; } }}
               />
               <div class="flex gap-1">
@@ -297,7 +297,7 @@
   {:else}
     <div class="flex items-center justify-center gap-4">
       <label class="cursor-pointer text-sm text-accent hover:text-accent-strong">
-        <input type="file" multiple accept="image/*,video/*" onchange={handleUpload} class="hidden" />
+        <input type="file" multiple accept="image/*,video/*" onchange={handleUpload} class="min-h-11 hidden" />
         {items.length > 0 ? "Add more media" : "Drop, paste, or click to upload"}
       </label>
       <span class="text-surface-hover" aria-hidden="true">|</span>

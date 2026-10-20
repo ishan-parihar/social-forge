@@ -46,7 +46,7 @@
       tabindex={value === tab.id ? 0 : -1}
       onclick={() => (value = tab.id)}
       onkeydown={(e) => onKeydown(e, i)}
-      class="px-3 py-1.5 text-xs font-medium rounded-md transition-colors {value === tab.id ? 'bg-accent-fill text-accent-fg' : 'text-muted hover:text-content'}"
+      class="px-3 py-1.5 text-xs font-medium rounded-md transition-colors min-h-11 min-w-11 inline-flex items-center justify-center {value === tab.id ? 'bg-accent-fill text-accent-fg' : 'text-muted hover:text-content'}"
     >
       {tab.label}
     </button>

@@ -192,7 +192,7 @@
           type="text"
           bind:value={newName}
           placeholder="e.g. Standard CTA"
-          class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none"
+          class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none"
         />
       </div>
       <div>
@@ -202,7 +202,7 @@
           bind:value={newContent}
           placeholder="Signature text (HTML supported)..."
           rows="4"
-          class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none resize-y"
+          class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none resize-y"
         ></textarea>
       </div>
       <div>
@@ -212,7 +212,7 @@
           type="text"
           bind:value={newProvider}
           placeholder="e.g. x, linkedin, bluesky"
-          class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none"
+          class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none"
         />
       </div>
       <Button onclick={handleCreate} disabled={creating}>
@@ -245,7 +245,7 @@
                   id="edit-name-{sig.id}"
                   type="text"
                   bind:value={editName}
-                  class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none"
+                  class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none"
                 />
               </div>
               <div>
@@ -254,7 +254,7 @@
                   id="edit-content-{sig.id}"
                   bind:value={editContent}
                   rows="3"
-                  class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none resize-y"
+                  class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none resize-y"
                 ></textarea>
               </div>
               <div>
@@ -264,7 +264,7 @@
                   type="text"
                   bind:value={editProvider}
                   placeholder="Global"
-                  class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none"
+                  class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none"
                 />
               </div>
               <div class="flex gap-2">

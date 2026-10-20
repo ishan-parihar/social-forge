@@ -905,7 +905,7 @@
         id="repurpose-channel"
         bind:value={repurposeTargetIntegration}
         disabled={repurposeSubmitting}
-        class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none mb-4"
+        class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none mb-4"
       >
         <option value="">Select a channel…</option>
         {#each allIntegrations as int (int.id)}
@@ -960,7 +960,7 @@
         bind:value={editText}
         disabled={editSubmitting}
         rows="6"
-        class="w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none mb-4 resize-y"
+        class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm focus:border-accent outline-none mb-4 resize-y"
       ></textarea>
       <div class="flex items-center justify-end gap-2">
         <button

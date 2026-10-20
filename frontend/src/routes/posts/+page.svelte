@@ -378,12 +378,12 @@
       <span class="text-xs text-muted mr-1">Channels:</span>
       <button
         onclick={() => { filterIntegrationIds = []; currentPage = 1; load(); }}
-        class="px-2 py-1 text-[10px] rounded-md transition-colors min-h-11 {filterIntegrationIds.length === 0 ? 'bg-accent-fill text-accent-fg' : 'text-muted hover:bg-surface-hover border border-line'}"
+        class="px-2 py-1 text-[10px] rounded-md transition-colors min-h-11 min-w-11 {filterIntegrationIds.length === 0 ? 'bg-accent-fill text-accent-fg' : 'text-muted hover:bg-surface-hover border border-line'}"
       >All</button>
       {#each allIntegrations as int (int.id)}
         <button
           onclick={() => toggleIntegrationFilter(int.id)}
-          class="px-2 py-1 text-[10px] rounded-md transition-colors min-h-11 {filterIntegrationIds.includes(int.id) ? 'bg-accent-fill text-accent-fg' : 'text-muted hover:bg-surface-hover border border-line'}"
+          class="px-2 py-1 text-[10px] rounded-md transition-colors min-h-11 min-w-11 {filterIntegrationIds.includes(int.id) ? 'bg-accent-fill text-accent-fg' : 'text-muted hover:bg-surface-hover border border-line'}"
         >{int.provider_name}</button>
       {/each}
     </div>
@@ -394,7 +394,7 @@
     {#each filters as f}
       <button
         onclick={() => toggleFilter(f)}
-        class="px-3 py-1.5 text-xs capitalize rounded-md transition-colors min-h-11 {filter === f ? 'bg-accent-fill text-accent-fg' : 'text-muted hover:bg-surface-hover'}"
+        class="px-3 py-1.5 text-xs capitalize rounded-md transition-colors min-h-11 min-w-11 {filter === f ? 'bg-accent-fill text-accent-fg' : 'text-muted hover:bg-surface-hover'}"
       >{f}</button>
     {/each}
   </div>
