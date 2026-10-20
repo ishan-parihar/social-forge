@@ -195,7 +195,7 @@
           <!-- Phase 2: ghost slots - per-channel posting time presets -->
           {#each (ghostsByHour.get(hourStr) || []) as ghost}
             <button
-              class="flex items-center gap-1 border border-dashed border-line rounded px-1 py-0.5 opacity-50 hover:opacity-100 transition-opacity cursor-pointer"
+              class="flex items-center gap-1 border border-dashed border-line rounded px-1 min-h-6 opacity-50 hover:opacity-100 transition-opacity cursor-pointer"
               onclick={() => onDateClick?.(key)}
               title="{ghost.integrationName} usually posts at this time - click to create"
             >

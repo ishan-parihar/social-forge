@@ -63,7 +63,7 @@
      panel. -->
 <div class="group relative flex-1 min-w-0 flex items-center">
   <div
-    class="event-chip {event.state} {isPast ? 'event-chip-past' : ''} {event.error ? 'ring-2 ring-error' : ''}
+    class="event-chip {compact ? 'compact' : ''} {event.state} {isPast ? 'event-chip-past' : ''} {event.error ? 'ring-2 ring-error' : ''}
            group-hover:opacity-0 transition-opacity duration-150"
     style={tagBarColor ? "border-left: 3px solid " + tagBarColor : ""}
     title={event.error
@@ -204,7 +204,23 @@
        truncates INSIDE it (the ellipsis is the point). */
     flex: 1 1 0%; min-width: 0;
     container-type: inline-size;
-  }  /* v22 Phase 3: use CSS variables for state colors so the calendar
+  }
+
+  /* The COMPACT chip - the month grid - is 24px tall.
+     It was 21px, and a 21px target is under even the WCAG 2.2
+     "Target Size (Minimum)" floor of 24x24 (2.5.8).
+
+     The month cell is `min-h-24` (96px), which is a MINIMUM: three
+     24px chips plus the day number need 112px, and the cell grows
+     to fit. The month grid scrolls anyway. */
+  .event-chip.compact { min-height: 24px; }
+
+  /* The month grid's chip is 24px tall - see `.event-chip.compact`.
+     A pseudo-element hit-area was tried and dropped: the chip has
+     `overflow: hidden` (so the title truncates with an ellipsis
+     instead of spilling), and an `overflow: hidden` box CLIPS its own
+     pseudo-element, so the extension measured back as 24px. */
+  /* v22 Phase 3: use CSS variables for state colors so the calendar
      chips retheme correctly in light mode. Previously these hardcoded
      dark-mode hex values. */
   /* The chip's state is carried by the WASH and the LEFT BORDER, and the

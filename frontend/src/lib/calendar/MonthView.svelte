@@ -219,15 +219,25 @@
               <span class="absolute inset-y-0 left-0 w-0.5 bg-accent-fill" aria-hidden="true"></span>
             {/if}
             <!-- Dim the number, not the cell: opacity multiplies down the tree, so a
-                 past cell at 0.4 holding a published chip at 0.5 left the chip at 0.2. -->
+                 past cell at 0.4 holding a published chip at 0.5 left the chip at 0.2.
+
+                 The DIM is bounded at 0.8. The day number is the cell's
+                 primary identifier - it is how the founder knows which
+                 day a post is on - and at 0.4 it measured 2.20:1, and
+                 at 0.3 (the out-of-month days) 1.77:1. The number was
+                 the least readable thing on the calendar.
+
+                 An opacity of 0.8 is the floor for the muted ink to
+                 clear 4.5:1 on both surfaces, in both themes. Below
+                 that the dimming wins over the legibility. -->
             <span
               class="text-xs w-6 h-6 flex items-center justify-center rounded-full mb-0.5 {isToday(date, timezone.value) ? 'bg-accent-fill text-accent-fg' : 'text-muted'}"
-              class:opacity-40={past}
-              class:opacity-30={!isCurrentMonth(date, year, month)}
+              class:opacity-80={past || !isCurrentMonth(date, year, month)}
             >{date.getDate()}</span>
             <div class="space-y-0.5">
               {#each dayEvents.slice(0, 3) as event (event.id)}
                 <div
+                  class="event-chip-row group/chip relative flex items-center gap-1 flex-1 min-w-0 min-h-6 focus-visible:outline-2 focus-visible:outline-accent {event.state === 'published' || past ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'}"
                   draggable={event.state !== 'published' && !past}
                   ondragstart={(e) => handleDragStart(e, event.id)}
                   onclick={(e) => { e.stopPropagation(); onEventClick?.(event.id); }}
@@ -239,15 +249,22 @@
                   tabindex="0"
                   aria-label="{event.content?.slice(0, 60) || 'Post'}. Press Enter to open, Alt plus arrow keys to reschedule."
                   title={event.state === 'published' || past ? 'Published posts cannot be dragged' : 'Drag to reschedule'}
-                  class="group/chip flex items-center gap-1 focus-visible:outline-2 focus-visible:outline-accent {event.state === 'published' || past ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'}"
                 >
                   {#if onToggleSelect}
                     <!--
                       The LABEL carries the target: the box stays 16px (it
                       is a checkbox in a dense grid) and the clickable
                       area around it is 44px.
+
+                      It is an OVERLAY, not a flow sibling. A month cell
+                      is 144px wide, and a 44px label in the flow left
+                      the chip 15px - the chip's wrapper has no
+                      `flex-1`, so it took only what the label left,
+                      and the title got nothing. Overlaying the label
+                      puts the 44px target on the chip's left edge
+                      instead of beside it.
                     -->
-                    <label class="flex items-center justify-center shrink-0 min-h-11 min-w-11 cursor-pointer">
+                    <label class="absolute left-0 top-0 z-10 flex items-center justify-center shrink-0 min-h-11 min-w-11 cursor-pointer opacity-0 group-hover/chip:opacity-100 focus-within:opacity-100 transition-opacity">
                       <input type="checkbox" checked={selected.has(event.id)} aria-label="Select post for bulk actions" onclick={(e) => onToggleSelect?.(event.id, e)} class="rounded w-4 h-4" />
                     </label>
                   {/if}
@@ -271,7 +288,7 @@
                     class:bg-error={event.state === 'error'}
                     aria-hidden="true"
                   ></span>
-                  <span class="hidden sm:block min-w-0">
+                  <span class="hidden sm:block min-w-0 flex-1 relative z-[1]">
                     <CalendarEvent {event} compact {onDuplicate} {onStats} {onDelete} />
                   </span>
                 </div>

@@ -644,7 +644,28 @@ const AUDIT = () => {
     if (cs.display === 'none' || cs.visibility === 'hidden') continue;
     const r = targetRect(el);
     if (r.width === 0 || r.height === 0) continue;
-    if (r.height < 44 || r.width < 44) {
+    // WCAG 2.2 "Target Size (Minimum)" (2.5.8) sets the floor at 24x24
+    // CSS pixels. Below that the control is a FAIL - a real
+    // accessibility failure.
+    //
+    // 44x44 is the AAA-ish target the skill's own rules ask for, and
+    // the size most touch interfaces aim at. A target between the two
+    // is a WARNING, not a failure: the month grid's chips are 144x24,
+    // which is a legitimate dense-overview cell and clears the
+    // standard's floor.
+    //
+    // Before this split, every dense-grid control was a FAIL, and a
+    // FAIL means "the probe is not clean" - so a page with a
+    // legitimate month view could never pass. The severity has to
+    // match the standard, or the gate lies.
+    if (r.height < 24 || r.width < 24) {
+      fails.push({
+        check: 'tap-target',
+        detail: `${Math.round(r.width)}x${Math.round(r.height)} < 24x24 — "${(el.textContent || el.getAttribute('aria-label') || el.tagName).trim().slice(0, 30)}"`,
+        cls: String(el.className || '').slice(0, 160),
+        tag: el.tagName,
+      });
+    } else if (r.height < 44 || r.width < 44) {
       warns.push({
         check: 'tap-target',
         detail: `${Math.round(r.width)}x${Math.round(r.height)} < 44x44 — "${(el.textContent || el.getAttribute('aria-label') || el.tagName).trim().slice(0, 30)}"`,
@@ -708,6 +729,36 @@ async function dismissOnboarding(page) {
     }
   } catch {
     // No overlay, or it closed on its own — nothing to dismiss.
+  }
+}
+
+// Click a control by its visible label, so a page can be measured in a
+// state other than its default.
+//
+// The calendar has THREE views - week, month and day - and each is its
+// own component with its own layout. The 2026-10-20 red-team found the
+// month view's chips squeezed to 15px of a 144px cell, and no amount of
+// probing the default (week) view would ever have seen it.
+//
+// So a route can be probed in a named state: `--state "Month"`.
+const STATE_CONTROLS = flag('state', '').split(',').filter(Boolean);
+
+async function applyStates(page) {
+  for (const label of STATE_CONTROLS) {
+    const want = label.trim();
+    try {
+      // The control's accessible name may include an ICON ("📅 Month"),
+      // so an exact match on the whole name misses it. Match the label
+      // as a WORD, which is what the user sees.
+      const btn = page.getByRole('button', { name: new RegExp(`\\b${want}\\b`) }).first();
+      if (await btn.isVisible({ timeout: 1500 })) {
+        await btn.click({ timeout: 2000 });
+        await sleep(800);
+      }
+    } catch {
+      // The control is not on this page. That is not a finding: the
+      // state is an option, not a requirement.
+    }
   }
 }
 
@@ -854,6 +905,7 @@ async function main() {
           // The onboarding modal covers every route on an empty database;
           // measuring it would measure the modal, not the page.
           await dismissOnboarding(page);
+          await applyStates(page);
 
           // Wait for the webfont before auditing.
           //
@@ -906,7 +958,10 @@ async function main() {
           }
           summary.visits += 1;
 
-          const name = `${theme}-${width}-${route.replace(/[/:]/g, '_') || 'root'}`;
+          const stateSuffix = STATE_CONTROLS.length
+            ? `_${STATE_CONTROLS.map((s) => s.trim().replace(/[^a-z0-9]+/gi, '-')).join('-')}`
+            : '';
+          const name = `${theme}-${width}-${route.replace(/[/:]/g, '_') || 'root'}${stateSuffix}`;
           // The app shell's <main> is the scroll container, so the
           // DOCUMENT never scrolls and `fullPage: true` captures only
           // the viewport - the research page's timing table, the
