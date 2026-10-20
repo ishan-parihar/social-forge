@@ -795,3 +795,110 @@ Stage Summary:
     introspection to be reachable from a test — `d1_documented_cli_command_count`
     already does this, so the pattern exists. Left as a note rather than started
     late in the session.
+
+---
+
+Task ID: iteration-6..12-red-team
+Agent: omp
+Task: Exhaustive red-teaming of the social-forge web dashboard in recursive
+      iterations, with visual testing via the browseros-neo MCP and the
+      website-design skill's probe. Fix every defect found.
+
+Work Log:
+- Built a POPULATED instance to test against. The seeded DB was empty, so every
+  page rendered its empty state and every populated-state defect was hidden.
+  `scripts/seed_demo.py` seeds 6 integrations, 17 posts across all six states,
+  3 campaigns, 6 tags, analytics cache, external posts + engagement, the event
+  log, automation rules, webhooks, signatures, RSS feeds, notifications, post
+  sets, media and comments. It asserts every uuid column it writes is BLOB(16)
+  (sqlx's `Uuid` decoder reads exactly 16 raw bytes and does NOT accept the
+  36-char TEXT form) - a TEXT uuid in a uuid column took the whole endpoint
+  down with "invalid length: expected 16 bytes, found 36".
+- Extended the probe from 13 routes to ALL 27. Sixteen pages had NEVER been
+  rendered by any gate. Everything the probe found after that was in pages
+  nobody had looked at.
+- The probe could not reach a page's ALTERNATE state. It gained `--state` and
+  a named-state click, which is how the month and day calendar views were
+  found broken.
+- Fixed, in the order found:
+  - 23 query sites cast `id as "id!: String"` on a `Uuid` column. sqlx encodes
+    a Uuid as BLOB(16) but the column is declared TEXT, so the .sqlx cache
+    recorded the DECLARED type, the build passed, and the runtime decode
+    failed with a Utf8Error. `GET /api/automation/rules` returned 500 and the
+    POST left an orphaned row. Fixed with the repo's own convention, an
+    explicit `as "id!: Uuid"`.
+  - The RSS writers passed `json!({})` as `posts.media` - an OBJECT where
+    every reader expects an ARRAY. `post.media?.find(...)` threw
+    "i.find is not a function" and took the kanban down. Fixed at both
+    writers, plus migration 0008 to normalise the existing rows, plus a
+    server-side normaliser so the shape is guaranteed on the way out.
+  - `providerInk` computed the provider glyph's colour against a HARDCODED
+    surface, and the glyph sits on three different ones. On the light theme
+    the LinkedIn ink measured 3.67:1 on the search chip and 4.32:1 on the
+    kanban card - both under the AA floor. It now takes the surface.
+  - The PROBE skipped alpha compositing, so every tinted chip measured
+    against the surface BEHIND the wash instead of the wash itself. Fixing
+    the probe revealed that in the light theme EVERY semantic hue on its own
+    wash is under 4.5:1. Fixed at the token level.
+  - `opacity` was not accounted for in the contrast check, and a calendar cell
+    with `opacity-40` dimmed its whole subtree - a past day's post measured
+    1.33:1. The probe learned about opacity groups, and the cell's dimming
+    moved from the subtree to the cell's chrome.
+  - The `!` badge on a failed calendar chip was 8px, the tag chips 9px, and
+    the month view's chip was 15px of a 144px cell.
+  - Editing a post WIPED the provider settings: the update REPLACED the
+    settings object, and the composer sent `{}` because the detail response
+    had no settings field. A working scheduled Reddit post failed at publish
+    with "Missing subreddit in settings" thirty seconds after it worked. The
+    settings now MERGE, the detail response carries them, and the composer
+    preserves them.
+  - The analytics window filter bound a `DateTime` against an INTEGER epoch
+    column, so the comparison matched NOTHING. The feed half of every
+    analytics headline was permanently zero.
+  - There was NO way to put a post into a campaign: the composer had a
+    campaign select whose value was dropped on submit, and the create API had
+    no `campaign_id` field at all. The feature was dead.
+  - The command palette was inside an `aria-hidden="true"` subtree, so a
+    screen reader announced nothing of it AND the shared focus trap could not
+    find a focusable child - the search box never took the focus and typing
+    did nothing.
+  - Seven dialogs had no focus trap, no accessible name and no aria-modal.
+  - The composer took no focus: the trap focused the first control, and the
+    async load then re-rendered and DESTROYED the focused element, which put
+    the focus on `<body>` - outside the dialog. The trap now watches for its
+    focused element being removed.
+  - Escape did nothing in the composer, and when it was made to work it left
+    an orphaned confirm that swallowed the next Escape on ANY page.
+  - The posting-volume chart contradicted the cadence card beside it: the
+    query grouped by day, so the 20 days with no post were MISSING from the
+    series rather than zero, and 11 posts on 11 days read as "you posted
+    every day at full volume" next to "0.4 posts per day".
+  - The AI panel's progress bar reported a percentage that was made up.
+  - The probe measured the page MID-FADE and called a correct page broken:
+    the entry animation's opacity made every ancestor a "translucent group".
+
+Stage Summary:
+- The gate is now FIVE scripts over the RENDERED app, all in `make audit`:
+  probe.mjs, audit-targets.mjs, audit-contrast.mjs, audit-dialogs.mjs and
+  e2e-calendar-drag.mjs. The last one is new: the plan's F3 gate was a drag
+  e2e, and there was NO e2e for it. It has teeth - breaking `wallClockToUtc`
+  makes it exit 1, restoring it makes it exit 0.
+- The last measured state: probe 0 FAIL / 0 WARN, 0 controls under the 24px
+  floor, 0 contrast failures in both themes, 0 dialog contract failures, 0 drag
+  failures. The empty instance also passes (0 FAIL, 2 correctly-explained
+  SKIPs, 12 warnings that are all inline links above the WCAG 2.2 floor).
+- Landed in commits a354b4b..78ca215.
+
+Known issues / follow-ups:
+  - OPEN: the day bucket in the analytics day series is a UTC day. The
+    founder's zone is an IANA name in a FRONTEND localStorage store
+    (`social-forge-timezone`), and `users.timezone` is a column the server
+    NEVER writes - the -300 in the seed is of unknown unit. So the server has
+    no usable per-user zone, and the posting-volume chart's day buckets
+    cannot yet follow the founder's day. The two sources are named here. The
+    DENSITY fix does not depend on it.
+  - OPEN: `/api/ai/*` has no streaming endpoint, so the composer's AI panel
+    cannot show real progress. The panel is honest about it (an indeterminate
+    indicator) rather than pretending. A streaming endpoint is backend work.
+  - The NotificationBell polls its unread count every 60s as a fallback for a
+    silently-dropped SSE stream. Deliberate, and recorded in the plan.
