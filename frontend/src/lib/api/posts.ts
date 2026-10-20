@@ -132,6 +132,12 @@ export const postsApi = {
     title?: string | null;
     media?: { id: string; url: string; mime_type: string; alt?: string }[] | null;
     settings?: Record<string, unknown> | null;
+    /**
+     * The campaign the post is filed under. `null` means "the user
+     * cleared this"; omitting it means "not mentioned, keep the
+     * stored value".
+     */
+    campaign_id?: string | null;
     tag_ids?: string[];
     first_comment?: string | null;
     /**

@@ -3323,6 +3323,9 @@ async fn handle_posts_update_helper(
         },
         tag_ids: None,
         first_comment: None,
+        // The CLI's post-edit flags do not include a campaign, so the
+        // stored one is kept: absent = keep.
+        campaign_id: None,
         overrides: None,
     };
     let post = crate::api::posts::update_post(state, user_id, post_id, body)

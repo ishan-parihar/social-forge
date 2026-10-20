@@ -253,6 +253,9 @@ impl PostService {
             &media,
             &settings,
             first_comment.as_deref(),
+            // The service's update path does not take a campaign, so
+            // the stored one is kept: absent = keep.
+            None,
         )
         .await
         .map_err(|e| format!("Database error: {e}"))?

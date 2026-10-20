@@ -1215,11 +1215,13 @@ pub async fn update_post_full(
     media: &serde_json::Value,
     settings: &serde_json::Value,
     first_comment: Option<&str>,
+    campaign_id: Option<Option<Uuid>>,
 ) -> Result<Option<Post>, sqlx::Error> {
     sqlx::query_as::<_, Post>(
         r#"UPDATE posts SET
              content = ?, title = ?, media = ?, settings = ?,
              first_comment = ?,
+             campaign_id = CASE WHEN ? THEN ? ELSE campaign_id END,
              updated_at = unixepoch()
            WHERE id = ? AND user_id = ?
            RETURNING id, user_id, integration_id, state,
@@ -1235,6 +1237,15 @@ pub async fn update_post_full(
     .bind(media)
     .bind(settings)
     .bind(first_comment)
+    // The three-state pattern: absent = keep the stored campaign,
+    // `Some(None)` = clear it, `Some(Some(id))` = set it.
+    //
+    // The campaign column existed and the composer had a dropdown for
+    // it, but the UPDATE never touched it - so filing a post under a
+    // campaign on an EDIT silently did nothing. The column was
+    // read-only after creation.
+    .bind(campaign_id.is_some())
+    .bind(campaign_id.flatten())
     .bind(id)
     .bind(user_id)
     .fetch_optional(pool)

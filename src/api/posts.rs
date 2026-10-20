@@ -106,6 +106,15 @@ pub struct UpdatePostRequest {
     /// subreddit in settings".
     #[serde(default)]
     pub overrides: Option<HashMap<String, PostOverride>>,
+    /// The campaign the post is filed under. Three-state: absent = keep,
+    /// `null` = clear, a value = set.
+    ///
+    /// The column existed and the composer had a dropdown for it, but
+    /// the UPDATE never touched it - so filing a post under a campaign
+    /// on an EDIT silently did nothing. The campaign was read-only
+    /// after creation.
+    #[serde(default, deserialize_with = "crate::api::campaigns::double_option")]
+    pub campaign_id: Option<Option<Uuid>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1005,6 +1014,7 @@ pub(crate) async fn update_post(
         &media,
         &settings,
         first_comment.as_deref(),
+        body.campaign_id,
     )
     .await?
     .ok_or_else(|| crate::error::AppError::NotFound("Post not found".into()))?;

@@ -306,6 +306,9 @@ async fn mcp_posts_update_keeps_the_media_and_the_settings_it_was_not_asked_to_c
         title: None,
         media: None,
         settings: None,
+        // The campaign is not mentioned by these parity checks, so the
+        // stored one is kept: absent = keep.
+        campaign_id: None,
     };
     tools_posts::update_post(&state, &input)
         .await
@@ -343,6 +346,9 @@ async fn mcp_posts_update_can_clear_a_field_on_purpose() {
         title: Some(None),
         media: None,
         settings: None,
+        // The campaign is not mentioned by these parity checks, so the
+        // stored one is kept: absent = keep.
+        campaign_id: None,
     };
     tools_posts::update_post(&state, &input)
         .await

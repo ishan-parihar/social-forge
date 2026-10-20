@@ -893,6 +893,12 @@
           // or a Reddit subreddit set in the composer was silently lost
           // on every edit.
           overrides: payload.overrides,
+          // The campaign the post is filed under.
+          //
+          // The update path never wrote the campaign column, so
+          // changing the campaign on an EDIT did nothing - the
+          // campaign was read-only after creation.
+          campaign_id: payload.campaign_id ?? null,
         });
         if (r.error) { error = r.error; return; }
 

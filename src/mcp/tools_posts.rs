@@ -495,6 +495,14 @@ pub struct UpdatePostInput {
     /// Three-state, for the same reason as `title`.
     #[serde(default, deserialize_with = "double_option")]
     pub settings: Option<Option<serde_json::Value>>,
+    /// File the post under a campaign. Omitted = keep the stored one,
+    /// `null` = clear it, a campaign id = set it.
+    ///
+    /// The column existed and the composer had a dropdown for it, but
+    /// neither the update handler nor this tool wrote it - so filing a
+    /// post under a campaign on an EDIT silently did nothing.
+    #[serde(default, deserialize_with = "double_option")]
+    pub campaign_id: Option<Option<Uuid>>,
 }
 
 /// Deserialize a field into `Option<Option<T>>` so "absent", "null" and
@@ -815,6 +823,9 @@ pub async fn update_post(
         tag_ids: None,
         first_comment: None,
         overrides: None,
+        // The agent can file a post under a campaign. The input is
+        // already three-state, so it passes through unchanged.
+        campaign_id: input.campaign_id,
     };
     let post = crate::api::posts::update_post(state, user_id, post_id, body)
         .await
