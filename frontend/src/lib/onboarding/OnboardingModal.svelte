@@ -87,7 +87,7 @@
             Quick Tour
           {/if}
         </h2>
-        <button onclick={skip} class="text-muted hover:text-content text-sm min-h-11">Skip</button>
+        <button onclick={skip} class="text-muted hover:text-content text-sm min-h-11 min-w-11 px-2">Skip</button>
       </div>
       <!-- Step indicator -->
       <div class="flex items-center gap-2 mt-4">
@@ -154,7 +154,7 @@
           </a>
           <button
             onclick={() => step = 2}
-            class="block w-full text-center px-4 py-2 mt-2 text-muted hover:text-content text-sm"
+            class="block w-full text-center px-4 py-2 min-h-11 mt-2 text-muted hover:text-content text-sm"
           >
             {#if integrations.length > 0}
               Continue to Quick Tour →

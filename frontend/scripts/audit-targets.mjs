@@ -1,0 +1,193 @@
+// A browser-side audit of the REAL rendered targets.
+//
+// The static probe reads the DOM at three widths, but it only visits the
+// page's default state. The composer, the modals and the popovers are
+// only reachable by interaction, and their controls are where the small
+// targets hide.
+//
+// This walks the app the way the founder does: open the composer, open
+// each panel, and report every control whose rendered box is under the
+// 44px floor.
+//
+// Run: node scripts/audit-targets.mjs --url https://localhost:6544 --password "$APP_PASSWORD"
+//
+// It exits 3 (BLOCKED) when the browser is missing, and 1 when a target
+// is under the floor, so it can be a gate.
+
+import { chromium } from 'playwright-core';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
+// The same Chromium search the probe uses. The playwright-core in this
+// repo expects a browser build that is not installed, so the path has to
+// be found the way `probe.mjs` finds it.
+const CHROME_CANDIDATES = [
+  process.env.CHROME_PATH,
+  ...fs
+    .readdirSync(path.join(os.homedir(), '.cache/ms-playwright'), { withFileTypes: true })
+    .filter((d) => d.isDirectory() && d.name.startsWith('chromium-'))
+    .flatMap((d) => [
+      path.join(os.homedir(), '.cache/ms-playwright', d.name, 'chrome-linux64/chrome'),
+      path.join(os.homedir(), '.cache/ms-playwright', d.name, 'chrome-linux/chrome'),
+    ]),
+  '/usr/bin/chromium',
+  '/usr/bin/chromium-browser',
+  '/usr/bin/google-chrome',
+].filter(Boolean);
+
+function findChrome() {
+  for (const p of CHROME_CANDIDATES) {
+    if (fs.existsSync(p)) return p;
+  }
+  return null;
+}
+
+const arg = (name, fallback) => {
+  const i = process.argv.indexOf(`--${name}`);
+  return i > -1 && process.argv[i + 1] ? process.argv[i + 1] : fallback;
+};
+
+const BASE_URL = arg('url', 'https://localhost:6544');
+const PASSWORD = arg('password', '');
+const OUT = arg('out', '');
+
+const FLOOR = 44;
+
+function FINDINGS() {
+  const out = [];
+  document.querySelectorAll('button, a[href], [role="button"], input, select, textarea, [role="checkbox"], [role="tab"]').forEach((el) => {
+    const cs = getComputedStyle(el);
+    if (cs.display === 'none' || cs.visibility === 'hidden') return;
+    if (cs.opacity === '0') return;
+    const r = el.getBoundingClientRect();
+    if (r.width === 0 || r.height === 0) return;
+    // A control that is only in the DOM and not rendered is not a target.
+    if (r.height >= 44 && r.width >= 44) return;
+    // The label wrapper is the real target for a checkbox.
+    const wrapper = el.closest('label');
+    if (wrapper) {
+      const wr = wrapper.getBoundingClientRect();
+      if (wr.height >= 44 && wr.width >= 44) return;
+    }
+    out.push({
+      tag: el.tagName.toLowerCase(),
+      role: el.getAttribute('role') || '',
+      name: (el.getAttribute('aria-label') || el.textContent || el.getAttribute('placeholder') || '').trim().slice(0, 40),
+      w: Math.round(r.width),
+      h: Math.round(r.height),
+      cls: String(el.className).slice(0, 90),
+    });
+  });
+  return out;
+}
+
+async function main() {
+  if (!PASSWORD) {
+    console.error('BLOCKED: no --password');
+    process.exit(3);
+  }
+
+  let browser;
+  try {
+    const executablePath = findChrome();
+    if (!executablePath) {
+      console.error('BLOCKED: no Chromium found. Set CHROME_PATH.');
+      process.exit(3);
+    }
+    browser = await chromium.launch({ executablePath, args: ['--no-sandbox'] });
+  } catch (e) {
+    console.error(`BLOCKED: no browser: ${e.message}`);
+    process.exit(3);
+  }
+
+  // The context carries the certificate exemption, exactly as the
+  // probe does: the instance serves a self-signed certificate.
+  const ctx = await browser.newContext({
+    viewport: { width: 1440, height: 900 },
+    ignoreHTTPSErrors: true,
+  });
+  const page = await ctx.newPage();
+  const findings = [];
+
+  const record = async (where) => {
+    const rows = await page.evaluate(FINDINGS);
+    for (const r of rows) findings.push({ where, ...r });
+  };
+
+  // Log in.
+  await page.goto(`${BASE_URL}/login`, { waitUntil: 'load' });
+  await page.fill('input[type=password]', PASSWORD);
+  await page.evaluate(() => {
+    const i = document.querySelector('input[type=password]');
+    i.closest('form').requestSubmit();
+  });
+  await page.waitForTimeout(2500);
+
+  const ROUTES = [
+    '/', '/calendar', '/posts', '/campaigns', '/channels', '/analytics',
+    '/activity', '/research', '/feed', '/media', '/tags', '/kanban',
+    '/comments', '/dms', '/search', '/automation', '/settings',
+    '/settings/profile', '/settings/notifications', '/settings/signatures',
+    '/settings/webhooks', '/settings/rss', '/settings/mcp', '/settings/developer',
+  ];
+
+  for (const route of ROUTES) {
+    await page.goto(`${BASE_URL}${route}`, { waitUntil: 'load' });
+    await page.waitForTimeout(1200);
+    await record(route);
+  }
+
+  // The composer, and the panels inside it.
+  await page.goto(`${BASE_URL}/posts/new`, { waitUntil: 'load' });
+  await page.waitForTimeout(1500);
+  const opened = await page.evaluate(() => {
+    const b = [...document.querySelectorAll('button')].find((x) => (x.textContent || '').trim() === '+ New Post');
+    if (b) { b.click(); return true; }
+    return false;
+  });
+  if (opened) {
+    await page.waitForTimeout(1500);
+    await record('composer');
+
+    // Each collapsible section in the composer.
+    for (const label of ['🧵 Thread Builder ▸', 'AI', 'Preview']) {
+      await page.evaluate((L) => {
+        const d = document.querySelector('[role=dialog]');
+        if (!d) return;
+        const b = [...d.querySelectorAll('button')].find((x) => (x.textContent || '').trim() === L);
+        if (b) b.click();
+      }, label);
+      await page.waitForTimeout(900);
+      await record(`composer:${label}`);
+    }
+  }
+
+  await browser.close();
+
+  // Dedupe by class + size + name, so one control in three themes is one finding.
+  const seen = new Set();
+  const unique = findings.filter((f) => {
+    const k = `${f.where}|${f.tag}|${f.name}|${f.w}x${f.h}|${f.cls}`;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+
+  for (const f of unique) {
+    console.log(`${f.where}  ${f.w}x${f.h}  <${f.tag}${f.role ? ` ${f.role}` : ''}> "${f.name}"  ${f.cls}`);
+  }
+  console.log(`\n${unique.length} control(s) under FLOORpx`);
+
+  if (OUT) {
+    const { writeFileSync } = await import('node:fs');
+    writeFileSync(OUT, JSON.stringify(unique, null, 2));
+  }
+
+  process.exit(unique.length ? 1 : 0);
+}
+
+main().catch((e) => {
+  console.error(e);
+  process.exit(3);
+});

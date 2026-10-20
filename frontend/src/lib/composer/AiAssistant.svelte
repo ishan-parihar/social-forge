@@ -203,7 +203,7 @@
       <button
         onclick={() => { if (status !== "working") { selectedTask = task; reset(); } }}
         disabled={status === "working"}
-        class="px-3 py-1.5 text-xs rounded-lg border transition-colors disabled:opacity-50
+        class="px-3 py-1.5 min-h-11 text-xs rounded-lg border transition-colors disabled:opacity-50
           {selectedTask === task
             ? 'bg-accent-soft text-accent border-accent/40'
             : 'text-muted border-line hover:text-content hover:border-line-hover'}"
@@ -297,7 +297,7 @@
   {:else}
     <button
       onclick={handleGenerate}
-      class="w-full px-3 py-2 bg-accent-fill hover:bg-accent-fill-hover disabled:opacity-50 rounded-lg text-sm text-accent-fg transition-colors flex items-center justify-center gap-2"
+      class="w-full px-3 py-2 min-h-11 bg-accent-fill hover:bg-accent-fill-hover disabled:opacity-50 rounded-lg text-sm text-accent-fg transition-colors flex items-center justify-center gap-2"
     >
       {status === "done" ? "Regenerate" : status === "error" ? "Try again" : "Generate"}
     </button>

@@ -107,7 +107,7 @@
 <div class="bg-surface border border-line rounded-xl p-4 space-y-3">
   <button
     onclick={toggle}
-    class="flex items-center justify-between w-full text-left"
+    class="flex items-center justify-between w-full min-h-11 text-left"
   >
     <h3 class="text-sm font-semibold flex items-center gap-2">
       🧵 Thread Builder
