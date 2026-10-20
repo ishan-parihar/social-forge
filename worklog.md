@@ -902,3 +902,110 @@ Known issues / follow-ups:
     indicator) rather than pretending. A streaming endpoint is backend work.
   - The NotificationBell polls its unread count every 60s as a fallback for a
     silently-dropped SSE stream. Deliberate, and recorded in the plan.
+
+---
+Task ID: v12-iterations-3-8
+Agent: omp (merry-tamarin)
+Task: Exhaustive recursive red-teaming of the social-forge web dashboard, with
+visual verification through the browseros-neo MCP and the rendered-page probe.
+
+Work Log:
+- The 2026-10-20 red-team had probed 13 routes of 29, and every run had been
+  against an EMPTY database: an empty state hides every populated-state
+  defect. Built `scripts/seed_demo.py` (a realistic solo-founder dataset -
+  6 integrations, 17 posts across every state, 3 campaigns, 6 tags, the
+  activity log, analytics cache, external posts, automation rules, webhooks,
+  signatures, RSS feeds, notifications, post sets, media and comments) and
+  extended the probe to all 29 routes plus the two dynamic ones.
+- The seed's first run wrote TEXT uuids into sqlx's BLOB(16) uuid columns, so
+  every query against those tables failed at runtime. The seed now writes
+  16 raw bytes and ASSERTS every uuid column's storage type before it
+  commits - a self-check that names the mistake instead of leaving a broken
+  instance behind.
+- A seeded uuid id decoded as a String was a 500 on the automation, tags and
+  webhooks endpoints - and the POST that failed had ALREADY INSERTED the row,
+  so it left an orphan with no id returned. 23 query sites. The fix is the
+  repo's own convention, an explicit `as "id!: Uuid"`: the macro infers the
+  type from the column's DECLARED type, so dropping the override would NOT
+  have worked.
+- The probe's contrast check SKIPPED translucent layers instead of
+  compositing them, so every tinted chip was measured against the surface
+  behind it. Fixed, and it immediately found that EVERY semantic hue on its
+  own wash fails AA in the light theme.
+- `providerInk` computed the brand ink against a HARDCODED surface, and the
+  app paints a provider glyph on four different surfaces. It is a parameter
+  now, and each call site states where the glyph goes.
+- The calendar's month and day views had NEVER been rendered. The month
+  view's chip was 15px of a 144px cell, its day numbers were at 2.20:1, and
+  the day view's ghost slot was 21px. The probe can now drive a page into a
+  named state (`--state "Month"`).
+- Editing a post WIPED the provider settings - the composer had no settings
+  to send, so every edit of a scheduled Reddit post removed its subreddit
+  and the post failed at publish. Fixed on both sides: the detail response
+  carries the settings, the composer preserves them, and the server MERGES
+  the incoming object over the stored one.
+- No UI path could put a post into a campaign: the select existed, the id
+  was dropped, and the create request had no `campaign_id` field. The whole
+  feature was dead.
+- The composer's channel-target map wrote `channel_id` and `page_id`, which
+  NO provider reads, while Discord reads `channel` - so a Discord post
+  ALWAYS failed at publish with "Missing channel in settings". The map now
+  names what the provider reads, and the server REFUSES a post whose
+  required setting is missing, at CREATE time, with a message that names the
+  field.
+- The connect flow's API-key fields were `text-white` on the light input
+  surface: 1.05:1, invisible. An `<input>` has NO TEXT NODE, so no
+  text-contrast gate could ever see it. The field's own ink is measured now,
+  and the connect flows are driven.
+- Eight TRUNCATED Tailwind class names in six files - `hover:text-accent-stro`,
+  `items-centerderline`, `justify-centert-muted`, `bg-linetext-content-secondary`.
+  A truncated class is a SILENT failure: not a build error, not a type error,
+  not a svelte-check warning. `check-tailwind-classes.mjs` finds them and is
+  in `make check`.
+- A live interaction audit (a subagent driving the real app with a browser)
+  found six wrong numbers: the dashboard's time was "07 PM" (a
+  `slice(-5)` on a formatted date), every dashboard aggregate came from a
+  100-row clip, "Publish success rate 24%" sat above "11 of 13 went out",
+  the comments table showed a raw UUID (the join was to `external_posts` and
+  the comments are on the founder's OWN posts), a campaign's progress hid its
+  failures, and a calendar ghost slot dropped the hour the founder clicked.
+- Seven dialogs had no focus trap, no accessible name and no aria-modal. The
+  composer took no focus at all: the trap focused the first control and the
+  async load re-rendered and DESTROYED it, putting the focus on `<body>`.
+- The composer's discard prompt left an orphaned confirm that swallowed the
+  next Escape on ANY page, because `composer.dirty` was never reset and the
+  cleanup close asked a second time.
+
+Stage Summary:
+- The gate is now SIX scripts over the RENDERED app plus two source gates:
+  probe.mjs, audit-targets.mjs, audit-contrast.mjs, audit-dialogs.mjs,
+  e2e-calendar-drag.mjs, check-hex-tokens.mjs and check-tailwind-classes.mjs.
+  `make check` runs the two source gates; `make audit` runs the five browser
+  gates.
+- The last measured state: probe 0 FAIL / 0 WARN over 29 routes x 3 widths x
+  2 themes, 0 controls under the 24px floor, 0 contrast failures in both
+  themes, 0 dialog contract failures, 0 drag failures. The EMPTY instance
+  also passes (0 FAIL, 2 correctly-explained SKIPs).
+- Every gate has been checked for TEETH: each one was made to fail on the
+  broken code and pass on the fixed code.
+- 483 lib tests + 46 integration binaries pass. Clippy is clean with
+  `-D warnings`, and the offline (`SQLX_OFFLINE=true`) build is clean.
+- Landed in commits a354b4b..15cc7f9.
+
+Known issues / follow-ups:
+  - OPEN: the day bucket in the analytics day series is a UTC day. The
+    founder's zone is an IANA name in a FRONTEND localStorage store
+    (`social-forge-timezone`), and `users.timezone` is a column the server
+    NEVER writes - the -300 in the seed is of unknown unit. So the server has
+    no usable per-user zone, and the posting-volume chart's day buckets
+    cannot yet follow the founder's day. The two sources are named here. The
+    DENSITY fix does not depend on it.
+  - OPEN: `/api/ai/*` has no streaming endpoint, so the composer's AI panel
+    cannot show real progress. The panel is honest about it (an indeterminate
+    indicator) rather than pretending. A streaming endpoint is backend work.
+  - OPEN: the plan's F1 hex gate ("no hex outside tokens") was amended to
+    name `check-hex-tokens.mjs`, whose allowlist covers the DATA files
+    (provider brand colours, the tag palette). The gate is the better
+    artefact; the plan now says so.
+  - The NotificationBell polls its unread count every 60s as a fallback for a
+    silently-dropped SSE stream. Deliberate, and recorded in the plan.

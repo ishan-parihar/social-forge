@@ -1111,6 +1111,115 @@ SKIPS; a malformed response or a missing field still FAILS.
 both directions, because a classifier that skips everything would make
 the live tests worthless.
 
+### 9.44 A `Uuid` COLUMN is BLOB(16), and a TEXT uuid in it is a runtime error
+
+sqlx encodes a `Uuid` as 16 raw bytes. The SQLite `Uuid` decoder reads
+exactly 16 bytes and does NOT accept the 36-character TEXT form - so a
+TEXT uuid in a uuid column fails at runtime with "invalid length:
+expected 16 bytes, found 36", and the whole query errors out.
+
+This bit twice, in opposite directions:
+
+  - 23 query sites cast the id `as "id!: String"`. The column is
+    DECLARED `TEXT`, so the `.sqlx/` cache recorded TEXT, the macro
+    inferred `String`, the build passed - and the runtime decode
+    failed on the BLOB. The fix is the repo's own convention, an
+    explicit `as "id!: Uuid"`, NOT dropping the override: the macro
+    infers the type from the column's DECLARED type, not from the
+    struct field, so a bare `id` still infers `String`.
+
+  - A test that wrote a TEXT uuid "to be safe" then failed to decode
+    against the BLOB the app had written. To write a TEXT row, bind a
+    `String`; to write a BLOB, bind `id.as_bytes().to_vec()`.
+
+`tests/uuid_column_decode_test.rs` drives the REAL ROUTER and asserts
+HTTP 200, because a test that re-implements the query with its own
+struct proves nothing about the production query.
+
+### 9.45 An `<input>` has NO TEXT NODE, so a text-contrast gate cannot see it
+
+The contrast audit looks for elements with their OWN TEXT and measures
+those. A form field has no text node, so it was skipped - in every
+theme, by every gate.
+
+The connect flow's API-key field was `text-white` on the light input
+surface: 1.05:1. The founder typed their API key and could not see a
+single character, and every contrast gate in the repo passed.
+
+So the field's own `color` is measured against its effective
+background, and the connect flows are DRIVEN (a provider tile is
+clicked, the form opens, its fields are measured). A provider whose
+form cannot be reached is a FAILURE, not a skip: a gate that measures
+nothing must say so.
+
+### 9.46 A TRUNCATED Tailwind class is a SILENT failure
+
+`hover:text-accent-strong` cut to `hover:text-accent-stro` is not a
+build error, not a type error and not a svelte-check warning. Tailwind
+'s JIT does not generate a rule for a class it does not recognise, so
+the element simply does not get the style - and a screenshot shows a
+link with no hover colour and reads as "a design choice".
+
+Eight were in the tree, in six files. Three had a class cut in HALF
+("tex" from "text-muted", "hover:" with nothing after it, "border
+border" with no colour) and one had a SPACE removed between two
+classes ("bg-linetext-content-secondary").
+
+`frontend/scripts/check-tailwind-classes.mjs` collects every Tailwind
+class the source uses and confirms each one is in the GENERATED
+stylesheet. It is in `make check`, next to the hex gate, and both
+need the built frontend.
+
+### 9.47 A NUMBER computed from a CLIPPED PAGE is a wrong number
+
+The dashboard fetched `limit: 100` of everything and computed every
+aggregate client-side. With 106 posts it said "Drafts 84" while the
+Posts page said 89 - the same account, two answers, and which six
+posts fell off the end depended on the sort order.
+
+The COUNTS are the server's now (the list response carries the true
+`total` for a filtered query) and the LISTS are fetched per state, so
+a list and its count never describe different sets.
+
+### 9.48 A RATE with a GOAL in the denominator is not a SUCCESS RATE
+
+The adherence rate is `published / max(scheduled, goal x days)`. It
+was labelled "Publish success rate" and sat directly above "11 of 13
+scheduled posts went out" - which is 85%, against a displayed 24%.
+
+A success rate has to be a success rate. The API returns both now
+(`success_rate` and `adherence_rate`), and each surface shows the one
+whose caption names the formula it uses.
+
+### 9.49 A MODAL that is not in the modal manager needs its own contract
+
+The onboarding tour was a full-screen `role="dialog"` with no
+accessible name, no `aria-modal`, no focus trap and no Escape
+handler, and a raw `bg-black/70` scrim that did not retheme. It is
+not in the modal manager, so none of the shared machinery applied.
+
+Every dialog needs: a name (a label, or an id pointing at a heading),
+`aria-modal="true"`, a focus trap on the PANEL, an Escape handler on
+the PANEL, and the `overlay` token for its scrim.
+
+`frontend/scripts/audit-dialogs.mjs` checks the contract over the
+real app, and the onboarding tour is dismissed AFTER the login - the
+layout only raises it once the app is authenticated, so dismissing it
+before the login does nothing.
+
+### 9.50 A PROBE that renders ONE state is a probe that misses the other states
+
+The calendar has THREE views - week, month and day - and each is its
+own component with its own layout. The probe rendered the default
+(week) and the month and day views were NEVER rendered. The month
+view's chip was 15px of a 144px cell, and the day view's ghost slot
+was 21px.
+
+`--state "Month"` drives a page into a named state, and the three
+calendar views are all probed. The same applies to the modals: a
+dialog that only appears after a click is a dialog no route-level pass
+ever rendered.
+
 ---
 
 ## 10. Environment Variables
