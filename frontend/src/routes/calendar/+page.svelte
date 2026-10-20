@@ -94,8 +94,30 @@
     // it in the browser's timezone, so a bulk reschedule meant a
     // different instant than the same time entered in the composer.
     const iso = wallClockToUtc(bulkScheduleDate, bulkScheduleTime, timezone.value);
-    for (const id of selected) { await postsApi.schedule(id, iso); }
-    selected = new Set();
+    // The response is CHECKED. The schedule endpoint refuses a post
+    // that is not schedulable in its current state (a published one),
+    // and the 404 was swallowed - so a bulk reschedule that included
+    // a published post moved the others and silently left it alone.
+    // The founder saw four posts move and one not, with no reason.
+    //
+    // The failures are collected and reported, and the posts that DID
+    // move stay selected so the founder can see which ones did not.
+    const failed: string[] = [];
+    for (const id of selected) {
+      const r = await postsApi.schedule(id, iso);
+      if (r.error) failed.push(id);
+    }
+    if (failed.length > 0) {
+      toast(
+        `${failed.length} of ${selected.size} posts could not be rescheduled - a published post cannot be rescheduled`,
+        'error'
+      );
+      // Keep only the failed ones selected, so the founder can see
+      // exactly which did not move.
+      selected = new Set(failed);
+    } else {
+      selected = new Set();
+    }
     showBulkSchedule = false;
     bulkProcessing = false;
     refresh();
@@ -184,11 +206,29 @@
     loading = false;
   }
 
+  // The range is sent as UTC INSTANTS, not as date-only strings.
+  //
+  // A date-only range is resolved by the server to UTC midnight and
+  // UTC end-of-day, while the grid's cells are the APP's timezone
+  // days. Two different definitions of "a day" - and the posts in the
+  // gap fall off the calendar entirely.
+  //
+  // The concrete case: app timezone America/New_York, a post
+  // scheduled Oct 31 20:00 EDT = Nov 1 00:00 UTC. October's month
+  // view sends start=2026-10-01&end=2026-10-31, the server resolves
+  // `end` to Oct 31 23:59:59 UTC, and the post (Nov 1 00:00 UTC) is
+  // EXCLUDED. November's month view fetches it, but the grid has no
+  // Oct 31 cell, so it is dropped on the floor. The post appeared on
+  // NO month grid, in either month.
+  //
+  // So the range is computed with `wallClockToUtc` - the ONE
+  // conversion the app has - and the server's exact-datetime path is
+  // used. The grid and the filter then agree by construction.
   function getMonthRange() {
     const d = calendarState.state.currentDate;
-    const start = new Date(d.getFullYear(), d.getMonth(), 1);
-    const end = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-    return { start: formatDateKey(start), end: formatDateKey(end) };
+    const first = formatDateKey(new Date(d.getFullYear(), d.getMonth(), 1));
+    const last = formatDateKey(new Date(d.getFullYear(), d.getMonth() + 1, 0));
+    return rangeAsInstants(first, last);
   }
 
   function getWeekRange() {
@@ -197,14 +237,36 @@
     start.setDate(start.getDate() - ((start.getDay() + 6) % 7)); // Monday
     const end = new Date(start);
     end.setDate(end.getDate() + 6);
-    return { start: formatDateKey(start), end: formatDateKey(end) };
+    return rangeAsInstants(formatDateKey(start), formatDateKey(end));
   }
 
   /** Phase v21: day-view range helper (for retryFetch). */
   function getDayRange() {
     const d = calendarState.state.currentDate;
     const key = formatDateKey(d);
-    return { start: key, end: key };
+    return rangeAsInstants(key, key);
+  }
+
+  /**
+   * A date range in the app's timezone, as UTC instants.
+   *
+   * `start` is the first instant of the start DAY in the app's zone,
+   * and `end` is the last instant of the end DAY in the app's zone.
+   */
+  function rangeAsInstants(startDate: string, endDate: string) {
+    const zone = timezone.value;
+    return {
+      start: wallClockToUtc(startDate, '00:00', zone),
+      // The end is the LAST instant of the end day, so it is the
+      // following day's midnight minus a second.
+      //
+      // The time carries seconds: `wallClockToUtc` keeps them, so
+      // this is `23:59:59` and the instant is a valid RFC 3339
+      // string. Before, the helper appended its own `:00` to a time
+      // that already had seconds, and the server answered "Invalid
+      // end date" for the whole range.
+      end: wallClockToUtc(endDate, '23:59:59', zone),
+    };
   }
 
   async function refresh() {

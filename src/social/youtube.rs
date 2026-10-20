@@ -1102,8 +1102,24 @@ impl SocialProvider for YoutubeProvider {
             &media.mime_type
         };
 
-        // YouTube title max is 100 chars
-        let title: String = post.content.chars().take(100).collect();
+        // The title.
+        //
+        // The composer's YouTube spec has `titleRequired: true`, so
+        // the founder IS forced to type a title - and it was thrown
+        // away: the video was titled with the first 100 characters of
+        // the body. The UI demanded a value the server discarded.
+        //
+        // So the title is read from the settings, and the body is only
+        // the fallback for a post that has no title at all.
+        //
+        // YouTube's title max is 100 characters.
+        let title: String = post
+            .settings
+            .get("title")
+            .and_then(|v| v.as_str())
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| post.content.chars().take(100).collect());
         let description = &post.content;
 
         let privacy_status = post

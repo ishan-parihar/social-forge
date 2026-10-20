@@ -168,12 +168,21 @@ pub async fn list(
     auth: AuthenticatedUser,
 ) -> Result<Json<Vec<Campaign>>, AppError> {
     let campaigns: Vec<Campaign> = sqlx::query_as(
+        // `post_count` counts the posts that represent WORK: queued,
+        // publishing or published.
+        //
+        // It used to be `COUNT(p.id)` - every state. So a campaign
+        // with a target of 10 posts read "10 / 10 - 100%" after the
+        // founder created 10 IDEAS on the kanban. Nothing was written,
+        // nothing was scheduled, nothing would publish.
         r#"SELECT c.id, c.user_id, c.name, c.description, c.color,
                   c.start_date, c.end_date, c.goal, c.status,
                   c.progress_metric, c.progress_target, c.audience_persona,
                   c.content_pillars, c.budget_cents, c.kpi_targets,
                   c.sort_order, c.deleted_at, c.created_at, c.updated_at,
-                  COUNT(p.id) AS post_count
+                  COUNT(p.id) FILTER (
+                    WHERE p.state IN ('queued', 'publishing', 'published')
+                  ) AS post_count
            FROM campaigns c
            LEFT JOIN posts p ON p.campaign_id = c.id AND p.deleted_at IS NULL
            WHERE c.user_id = ? AND c.deleted_at IS NULL

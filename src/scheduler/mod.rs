@@ -112,6 +112,21 @@ pub(crate) const MAX_RETRIES: u32 = 3;
 /// Max posts processed per scheduler tick
 const DUE_POSTS_LIMIT: i64 = 50;
 
+/// How many of an integration's recent published posts get their
+/// per-post analytics refreshed each cycle.
+///
+/// The per-post rows are the ones the dashboard READS - the analytics
+/// page, the research page, the campaign engagement, the per-post
+/// badges - and they used to be written only when a human opened the
+/// Post Stats modal. The cleaner deleted the expired ones every 30
+/// minutes and nothing re-created them, so the numbers silently
+/// decayed to zero.
+///
+/// 25 posts per integration per cycle is a bound on the API calls, not
+/// a judgement about what the founder cares about: the recent posts
+/// are the ones whose engagement is still moving.
+const PER_POST_ANALYTICS_LIMIT: i64 = 25;
+
 /// Gap between polls of a platform that accepted a post but has not
 /// published it yet (IG transcoding a reel, an async Reddit submit, X
 /// encoding a video).
@@ -2181,6 +2196,63 @@ async fn refresh_cache_cycle(
                         integration.provider_identifier
                     );
                 }
+            }
+
+            // The PER-POST analytics rows.
+            //
+            // The account-level row above is not what the dashboard
+            // reads. The analytics page, the research page, the
+            // campaign engagement and the per-post badges all read the
+            // per-post rows - keyed by (provider, platform_post_id) -
+            // and those rows were only ever written when a HUMAN
+            // opened the Post Stats modal. The cleaner deleted the
+            // expired ones every 30 minutes and nothing re-created
+            // them, so a founder's "Likes 42" became "Likes 0" an
+            // hour later, with no publish, no error and no refresh.
+            //
+            // So the refresher refreshes them too. The window is the
+            // recent posts, because a per-post fetch is one API call
+            // each and a founder's whole archive is not free.
+            //
+            // A failure here is NOT fatal: the account-level row is
+            // already cached, and a provider that rejects one post's
+            // analytics should not stop the cycle.
+            match queries::recent_published_posts(db, integration.id, PER_POST_ANALYTICS_LIMIT)
+                .await
+            {
+                Ok(posts) => {
+                    for (post_id, platform_post_id) in posts {
+                        match provider.post_analytics(&tok, &platform_post_id).await {
+                            Ok(analytics) => {
+                                let data = serde_json::to_value(&analytics)
+                                    .unwrap_or(serde_json::Value::Null);
+                                if let Err(e) = queries::upsert_analytics_cache(
+                                    db,
+                                    user.id,
+                                    &integration.provider_identifier,
+                                    Some(&platform_post_id),
+                                    &data,
+                                )
+                                .await
+                                {
+                                    tracing::warn!(
+                                        "Failed to cache per-post analytics for post {}: {e}",
+                                        post_id
+                                    );
+                                }
+                            }
+                            Err(e) => tracing::debug!(
+                                "Per-post analytics unavailable for post {}: {e}",
+                                post_id
+                            ),
+                        }
+                    }
+                }
+                Err(e) => tracing::warn!(
+                    "Failed to list recent published posts for user {} provider {}: {e}",
+                    user.id,
+                    integration.provider_identifier
+                ),
             }
         }
     }

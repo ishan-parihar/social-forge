@@ -4,6 +4,7 @@
   import type { CalendarEvent as CEvent } from "./types";
   import type { Integration } from "$lib/api/integrations";
   import { makeTouchDragHandler, type TouchDropTarget } from "./touch-drag";
+  import { timezone } from "$lib/stores/timezone.svelte";
 
   let { date, events = [], selected = new Set(), onEventClick, onDateClick, onDrop, onDuplicate, onStats, onDelete, onToggleSelect, integrations = [] }: {
     date: Date; events?: CEvent[];
@@ -126,7 +127,7 @@
       {date.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
       <!-- v25 F3: name the day when it IS today, so the day view carries the
            same orientation cue the week view gets from its today column. -->
-      {#if isToday(date)}
+      {#if isToday(date, timezone.value)}
         <span class="ml-2 align-middle text-[10px] font-medium uppercase tracking-wider px-1.5 py-0.5 rounded bg-accent-fill/10 text-accent-strong">Today</span>
       {/if}
     </div>

@@ -127,7 +127,7 @@
     e.stopPropagation();
     if (d < 0 || d > 6 || h < 0 || h > 23) return true;
     const target = weekDays[d];
-    if (isPast(target.date)) return true;
+    if (isPast(target.date, timezone.value)) return true;
     onDrop(eventId, target.dateStr, hours[h].slice(0, 2));
     return true;
   }
@@ -157,8 +157,8 @@
    * plus cursor-not-allowed, and drop is suppressed.
    */
   function isCellPast(date: Date, hour: string): boolean {
-    if (isPast(date)) return true;
-    if (isToday(date)) {
+    if (isPast(date, timezone.value)) return true;
+    if (isToday(date, timezone.value)) {
       const now = new Date();
       const cellHour = parseInt(hour.slice(0, 2), 10);
       return cellHour < now.getHours();

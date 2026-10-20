@@ -3,6 +3,7 @@
   import { getMonthDays, isToday, isCurrentMonth, isPast, formatDateKey, days, monthsFull } from "./utils";
   import CalendarEvent from "./CalendarEvent.svelte";
   import type { CalendarEvent as CEvent } from "./types";
+  import { timezone } from "$lib/stores/timezone.svelte";
 
   let { year, month, events = [], selected = new Set(), onEventClick, onDateClick, onDrop, onDuplicate, onStats, onDelete, onToggleSelect }: {
     year: number; month: number;
@@ -101,8 +102,8 @@
     // exists inside the rendered grid.
     void year;
     void month;
-    const today = calDays.find(isToday);
-    const nextUp = calDays.find((d) => !isPast(d));
+    const today = calDays.find((d) => isToday(d, timezone.value));
+    const nextUp = calDays.find((d) => !isPast(d, timezone.value));
     activeKey = formatDateKey(today ?? nextUp ?? calDays[0]);
   });
 
@@ -168,7 +169,7 @@
     e.stopPropagation();
     const [y, m, d] = dateStr.split("-").map(Number);
     const next = new Date(y, m - 1, d + delta);
-    if (isPast(next)) return true;
+    if (isPast(next, timezone.value)) return true;
     onDrop(eventId, formatDateKey(next));
     return true;
   }
@@ -195,7 +196,7 @@
         {#each row as date (formatDateKey(date))}
           {@const key = formatDateKey(date)}
           {@const dayEvents = eventsByDate.get(key) || []}
-          {@const past = isPast(date)}
+          {@const past = isPast(date, timezone.value)}
           <!-- svelte-ignore a11y_no_static_element_interactions -->
           <div
             data-date={key}
@@ -214,13 +215,13 @@
             <!-- v25 F3: today gets a left accent rail on the cell itself, so the
                  current day is findable while scanning a 5-row grid (the day-number
                  pill alone reads as "just another highlighted number"). -->
-            {#if isToday(date)}
+            {#if isToday(date, timezone.value)}
               <span class="absolute inset-y-0 left-0 w-0.5 bg-accent-fill" aria-hidden="true"></span>
             {/if}
             <!-- Dim the number, not the cell: opacity multiplies down the tree, so a
                  past cell at 0.4 holding a published chip at 0.5 left the chip at 0.2. -->
             <span
-              class="text-xs w-6 h-6 flex items-center justify-center rounded-full mb-0.5 {isToday(date) ? 'bg-accent-fill text-accent-fg' : 'text-muted'}"
+              class="text-xs w-6 h-6 flex items-center justify-center rounded-full mb-0.5 {isToday(date, timezone.value) ? 'bg-accent-fill text-accent-fg' : 'text-muted'}"
               class:opacity-40={past}
               class:opacity-30={!isCurrentMonth(date, year, month)}
             >{date.getDate()}</span>

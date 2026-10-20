@@ -17,15 +17,23 @@
 /**
  * The UTC instant for `date` + `time` read as a wall clock in `zone`.
  *
- * `date` is `YYYY-MM-DD`, `time` is `HH:mm`. The result is an ISO-8601
- * UTC instant, which is what the API expects.
+ * `date` is `YYYY-MM-DD`, `time` is `HH:mm` or `HH:mm:ss`. The result
+ * is an ISO-8601 UTC instant, which is what the API expects.
+ *
+ * The seconds are carried through when they are given. They used to
+ * be dropped and re-appended as `:00`, so a caller that passed
+ * `23:59:59` got `23:59:59:00` - a colon in the seconds field, which
+ * is NOT RFC 3339. The calendar's range sent that and the server
+ * answered "Invalid end date".
  */
 export function wallClockToUtc(date: string, time: string, zone: string): string {
+  const hasSeconds = /^\d{2}:\d{2}:\d{2}$/.test(time);
+  const clock = hasSeconds ? time : `${time}:00`;
   // Anchor: pretend the wall clock IS UTC. That gives a ts whose *fields*
   // are exactly what the user typed, which is what we measure the zone's
   // offset against.
-  const anchor = Date.parse(`${date}T${time}:00Z`);
-  if (Number.isNaN(anchor)) return `${date}T${time}:00.000Z`;
+  const anchor = Date.parse(`${date}T${clock}Z`);
+  if (Number.isNaN(anchor)) return `${date}T${clock}.000Z`;
 
   const offsetAt = (ts: number) => {
     // Ask Intl what the wall clock reads in `zone` at that instant,

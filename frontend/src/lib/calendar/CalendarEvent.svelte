@@ -6,6 +6,8 @@
   import { inkOnFill } from "$lib/chip-colors";
   // v23-8: import calendarState so isPast re-evaluates on the 2min nowTick.
   import { calendarState } from "$lib/stores/calendar.svelte";
+  import { timezone } from "$lib/stores/timezone.svelte";
+  import { todayKeyInZone } from "./utils";
 
   let { event, compact = false, onDuplicate, onStats, onDelete }: {
     event: CEvent;
@@ -25,9 +27,16 @@
     void calendarState.state.nowTick; // dependency - recomputes when tick changes
     return event.date ? event.date < todayStr() : false;
   });
+  /**
+   * Today's date in the APP's timezone.
+   *
+   * The event's `date` comes from `wallClock(iso, timezone.value)` - the
+   * app's zone. Comparing it against a BROWSER-local today said "the
+   * 21st" when the app's zone said "the 20th", so a post that was
+   * today in New York was greyed out as past.
+   */
   function todayStr() {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    return todayKeyInZone(timezone.value);
   }
 
   // v22 Phase 7: postiz-style tag-color top bar. If the post has tags

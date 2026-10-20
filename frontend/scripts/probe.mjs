@@ -855,6 +855,17 @@ async function main() {
           // measuring it would measure the modal, not the page.
           await dismissOnboarding(page);
 
+          // Wait for the webfont before auditing.
+          //
+          // A webfont arrives as many faces, and the browser loads a
+          // face only when some text needs it. The font-fallback check
+          // reads `document.fonts` and asks whether the family is
+          // LOADED - so auditing before the font settled reported
+          // "inter never loaded" on a page where Inter was about to be
+          // used. It was a race, not a defect, and it made the probe's
+          // font result a coin toss.
+          await page.evaluate(() => document.fonts?.ready).catch(() => {});
+
           const { fails, warns } = await page.evaluate(AUDIT);
           for (const f of fails) {
             summary.fails.push({ route, width, theme, ...f });

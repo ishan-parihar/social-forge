@@ -340,6 +340,41 @@ pub async fn find_thread_predecessor(
     Ok(row.and_then(|(pid,)| pid))
 }
 
+/// The recently published posts of an integration, with their platform
+/// post ids.
+///
+/// The analytics refresher needs this to refresh the PER-POST cache
+/// rows. The per-post rows are the ones the analytics page, the
+/// research page and the campaign engagement read - and they were
+/// only ever written when a human opened the Post Stats modal. The
+/// refresher wrote the ACCOUNT-level rows, and the cleaner deleted
+/// the expired per-post rows every 30 minutes. So a founder's
+/// "Likes 42" silently became "Likes 0" an hour later, with no
+/// publish, no error and no refresh.
+///
+/// The window is the RECENT posts, because a per-post fetch is one
+/// API call per post and a founder's whole archive is not free.
+pub async fn recent_published_posts(
+    pool: &SqlitePool,
+    integration_id: Uuid,
+    limit: i64,
+) -> Result<Vec<(Uuid, String)>, sqlx::Error> {
+    let rows: Vec<(Uuid, String)> = sqlx::query_as(
+        r#"SELECT id, platform_post_id FROM posts
+           WHERE integration_id = ?
+             AND state = 'published'
+             AND platform_post_id IS NOT NULL
+             AND deleted_at IS NULL
+           ORDER BY published_at DESC
+           LIMIT ?"#,
+    )
+    .bind(integration_id)
+    .bind(limit)
+    .fetch_all(pool)
+    .await?;
+    Ok(rows)
+}
+
 /// The error message of a thread predecessor that ended in `error`, if any.
 /// A part whose predecessor failed can never be published, so the scheduler
 /// fails it instead of requeuing it forever.

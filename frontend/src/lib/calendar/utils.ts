@@ -1,5 +1,37 @@
 import type { WeekDay, CalendarEvent } from "./types";
 
+/**
+ * Today's calendar date in the APP's timezone, as `YYYY-MM-DD`.
+ *
+ * The calendar's cells are the app's timezone days - the events are
+ * placed by `wallClock(iso, timezone)`. So "is this cell today?" and
+ * "is this cell in the past?" have to be answered in the SAME zone.
+ *
+ * They used to be answered in the BROWSER's zone, from `new Date()`.
+ * With the app in America/New_York and the browser in UTC, at 21:00
+ * UTC the browser said "the 21st" while the app's zone said "the
+ * 20th" - so the whole grid was labelled with the browser's dates
+ * while the chips were placed by the app's, and the chips fell into
+ * the neighbouring day's cell.
+ *
+ * The grid's own `Date` objects stay browser-local - they are the
+ * GRID's shape, and `formatDateKey` reads their calendar fields. What
+ * changes is the comparison: the day's KEY is compared against the
+ * app's today key, not against a browser-local `Date`.
+ */
+export function todayKeyInZone(zone: string): string {
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit',
+    }).formatToParts(new Date());
+    const get = (t: string) => parts.find((p) => p.type === t)?.value ?? '';
+    return `${get('year')}-${get('month')}-${get('day')}`;
+  } catch {
+    const t = new Date();
+    return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+  }
+}
+
 export function getMonthDays(year: number, month: number): Date[] {
   const first = new Date(year, month, 1);
   const last = new Date(year, month + 1, 0);
@@ -40,11 +72,17 @@ export function getDayHours(): string[] {
   );
 }
 
-export function isToday(d: Date): boolean {
-  const t = new Date();
-  return d.getFullYear() === t.getFullYear() &&
-    d.getMonth() === t.getMonth() &&
-    d.getDate() === t.getDate();
+/**
+ * Is this grid cell TODAY, in the app's timezone?
+ *
+ * The zone matters: the cells are the app's timezone days, so "today"
+ * has to be the app's today. A browser-local comparison said "the
+ * 21st" when the app's zone said "the 20th", and every cell was
+ * mislabelled.
+ */
+export function isToday(d: Date, zone?: string): boolean {
+  const today = zone ? todayKeyInZone(zone) : browserTodayKey();
+  return formatDateKey(d) === today;
 }
 
 export function isCurrentMonth(d: Date, y: number, m: number): boolean {
@@ -59,13 +97,21 @@ export function isCurrentMonth(d: Date, y: number, m: number): boolean {
  *
  * Compares calendar days only - time-of-day is ignored. A cell for
  * "today" returns false even if the current time is 23:59.
+ *
+ * With a zone, the comparison is against the APP's today - the cells
+ * are the app's timezone days.
  */
-export function isPast(d: Date): boolean {
+export function isPast(d: Date, zone?: string): boolean {
+  const today = zone ? todayKeyInZone(zone) : browserTodayKey();
+  // Both are `YYYY-MM-DD` keys, so a string comparison is the date
+  // comparison - and it does not depend on the browser's offset.
+  return formatDateKey(d) < today;
+}
+
+/** Today's date in the BROWSER's timezone, as `YYYY-MM-DD`. */
+function browserTodayKey(): string {
   const t = new Date();
-  // Compare year/month/day only.
-  const today = new Date(t.getFullYear(), t.getMonth(), t.getDate());
-  const cell = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  return cell.getTime() < today.getTime();
+  return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
 }
 
 export function formatDateKey(d: Date): string {

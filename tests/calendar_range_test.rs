@@ -220,7 +220,11 @@ async fn the_last_day_of_the_range_is_included() {
         .await
         .expect("router");
     let status = res.status();
-    let bytes = axum::body::to_bytes(res.into_body(), 1 << 16)
+    // The body limit is generous: the calendar returns every post in
+    // the range, and the shared test database accumulates rows from
+    // every test run. A 64KB cap overflowed once the range held a
+    // hundred posts, and the failure looked like a range bug.
+    let bytes = axum::body::to_bytes(res.into_body(), 1 << 22)
         .await
         .expect("body");
     let body: Value = serde_json::from_slice(&bytes).expect("json");

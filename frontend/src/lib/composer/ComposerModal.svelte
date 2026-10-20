@@ -683,6 +683,47 @@
       group: 'target',
     };
 
+    // The providers that publish a TITLE, and read it out of the
+    // post's settings.
+    //
+    // The composer wrote `settings["title"]` only for a `subreddit` or
+    // a `board` target, so a title typed for Dev.to, Medium,
+    // WordPress or Hashnode was DISCARDED - and each of those
+    // providers falls back to the first line of the body. The founder
+    // typed "How we cut our build time by 40%" and the published
+    // article was titled with the first line of the body.
+    //
+    // The list is here, in the composer, because the composer is what
+    // collects the title. `posts.title` is not read by any publish
+    // path.
+    const TITLE_PROVIDERS = new Set([
+      'reddit',
+      'pinterest',
+      'devto',
+      'medium',
+      'wordpress',
+      'hashnode',
+      'skool',
+      'youtube',
+    ]);
+
+    // The providers that publish a DRAFT unless told otherwise.
+    //
+    // Dev.to's `published` defaults to false, Medium's `publish_status`
+    // to "draft" and WordPress's `status` to "draft". The composer
+    // offered no way to change them, so a founder who clicked "Post
+    // Now" got the toast "Post published" and a DRAFT on the
+    // platform - invisible to the audience, with nothing in the UI
+    // saying otherwise.
+    //
+    // The founder's only actions are "Post Now" and "Schedule", and
+    // both mean "publish it". So the composer says so explicitly.
+    const PUBLISH_STATUS: Record<string, Record<string, unknown>> = {
+      devto: { published: true },
+      medium: { publish_status: 'public' },
+      wordpress: { status: 'publish' },
+    };
+
     for (const [intId, targets] of selectedTargets) {
       if (targets.length === 0) continue;
       const target = integrationTargets.get(intId)?.find((t) => t.id === targets[0]);
@@ -702,12 +743,51 @@
         ...(entry.settings ?? {}),
       };
       perIntegration[key] = target.id;
-      // Pinterest and Reddit both publish a title. It is not in
-      // `posts.title` on the publish path, so it has to be in the
-      // settings.
-      if ((target.target_type === 'subreddit' || target.target_type === 'board') && title.trim()) {
-        perIntegration.title = title.trim();
-      }
+      entry.settings = perIntegration;
+      overridesObj[intId] = entry;
+    }
+
+    // The TITLE, for every provider that publishes one.
+    //
+    // It is not in `posts.title` on the publish path - every provider
+    // that publishes a title reads it out of the post's SETTINGS. So
+    // the title has to be written into the settings of the providers
+    // that need it, and nowhere else.
+    //
+    // It used to be written only for a `subreddit` or a `board`
+    // target, so a title typed for Dev.to, Medium, WordPress or
+    // Hashnode was DISCARDED and the provider fell back to the first
+    // line of the body.
+    for (const intId of selectedIntegrations) {
+      const provider = integrationProviders.get(intId) ?? '';
+      if (!TITLE_PROVIDERS.has(provider)) continue;
+      if (!title.trim()) continue;
+      const entry = overridesObj[intId] ?? {};
+      const perIntegration: Record<string, unknown> = {
+        ...storedSettings,
+        ...(entry.settings ?? {}),
+      };
+      perIntegration.title = title.trim();
+      entry.settings = perIntegration;
+      overridesObj[intId] = entry;
+    }
+
+    // The PUBLISH STATUS, for the providers that default to a draft.
+    //
+    // The founder's only actions are "Post Now" and "Schedule", and
+    // both mean "publish it". Without this the post went out as a
+    // draft on Dev.to, Medium and WordPress, and the UI said
+    // "Post published".
+    for (const intId of selectedIntegrations) {
+      const provider = integrationProviders.get(intId) ?? '';
+      const status = PUBLISH_STATUS[provider];
+      if (!status) continue;
+      const entry = overridesObj[intId] ?? {};
+      const perIntegration: Record<string, unknown> = {
+        ...storedSettings,
+        ...(entry.settings ?? {}),
+        ...status,
+      };
       entry.settings = perIntegration;
       overridesObj[intId] = entry;
     }

@@ -146,6 +146,13 @@ async fn a_post_created_with_a_campaign_is_filed_under_it() {
 }
 
 /// The campaign's post count must reflect the post.
+///
+/// The count is of the posts that represent WORK: queued, publishing
+/// or published. A draft is not work yet - and counting it made a
+/// campaign read "10 / 10 - 100%" after the founder created 10 ideas,
+/// with nothing written, nothing scheduled and nothing to publish.
+///
+/// So the test posts a QUEUED post.
 #[tokio::test]
 async fn the_campaigns_post_count_counts_the_filed_post() {
     let state = state().await;
@@ -160,6 +167,7 @@ async fn the_campaigns_post_count_counts_the_filed_post() {
             "integration_ids": [integration_id.to_string()],
             "content": format!("a post in a campaign {}", Uuid::new_v4()),
             "campaign_id": campaign_id.to_string(),
+            "scheduled_at": "2026-12-01T12:00:00Z",
         })),
     )
     .await;
@@ -177,6 +185,44 @@ async fn the_campaigns_post_count_counts_the_filed_post() {
     assert_eq!(
         mine["post_count"], 1,
         "the campaign must count the filed post: {body}"
+    );
+}
+
+/// A DRAFT filed under a campaign is not counted as work.
+///
+/// The count used to be every post in every state, so a campaign read
+/// 100% after the founder had only created ideas.
+#[tokio::test]
+async fn a_draft_filed_under_a_campaign_is_not_counted_as_work() {
+    let state = state().await;
+    let integration_id = seed_integration(&state).await;
+    let campaign_id = seed_campaign(&state).await;
+
+    let (status, body) = call(
+        &state,
+        Method::POST,
+        "/api/posts",
+        Some(json!({
+            "integration_ids": [integration_id.to_string()],
+            "content": format!("a draft in a campaign {}", Uuid::new_v4()),
+            "campaign_id": campaign_id.to_string(),
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    let (status, body) = call(&state, Method::GET, "/api/campaigns", None).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let json: Value = serde_json::from_str(&body).expect("the body must be json");
+    let mine = json
+        .as_array()
+        .expect("an array")
+        .iter()
+        .find(|c| c["id"] == campaign_id.to_string())
+        .expect("the campaign");
+    assert_eq!(
+        mine["post_count"], 0,
+        "a draft is not work yet, so the campaign must not count it: {body}"
     );
 }
 

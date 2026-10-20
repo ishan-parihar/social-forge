@@ -36,6 +36,23 @@
   let formStatus = $state<'active' | 'paused' | 'archived' | 'completed'>('active');
   let formProgressMetric = $state<'posts' | 'engagement' | 'reach' | 'followers' | 'custom' | ''>('');
   let formProgressTarget = $state<number | ''>('');
+  // The audience persona, the content pillars, the KPI targets and the
+  // budget.
+  //
+  // The server has persisted all four since the campaign feature
+  // landed, and every screen's type declares them - but NO screen
+  // rendered or edited them. So a founder who set a persona through
+  // the API opened the campaign, saw nothing, and concluded it had
+  // never been saved. And "Save Changes" omitted them, which means
+  // "keep", so the round-trip was a no-op that reported success.
+  //
+  // They are edited as TEXT here - the stored shapes are JSON, and a
+  // free-text box that holds JSON is honest about what the app
+  // actually does with them.
+  let formPersona = $state('');
+  let formPillars = $state('');
+  let formKpiTargets = $state('');
+  let formBudget = $state('');
 
   let postId = $derived($page.params.id);
 
@@ -57,6 +74,16 @@
         formStatus = campaign.status;
         formProgressMetric = campaign.progress_metric ?? '';
         formProgressTarget = campaign.progress_target ?? '';
+        formPersona = campaign.audience_persona
+          ? JSON.stringify(campaign.audience_persona, null, 2)
+          : '';
+        formPillars = campaign.content_pillars
+          ? JSON.stringify(campaign.content_pillars, null, 2)
+          : '';
+        formKpiTargets = campaign.kpi_targets
+          ? JSON.stringify(campaign.kpi_targets, null, 2)
+          : '';
+        formBudget = campaign.budget_cents != null ? String(campaign.budget_cents) : '';
       }
     }
     if (postsRes.data) {
@@ -76,8 +103,41 @@
   let unsubscribers: (() => void)[] = [];
   onDestroy(() => unsubscribers.forEach(fn => fn()));
 
+  /**
+   * Parse a JSON field for the campaign settings.
+   *
+   * An empty box means "clear it" (`null`). A malformed box means
+   * "leave the stored value alone" AND a message - a silent drop
+   * would leave the old value in place and the founder would think
+   * their edit had saved.
+   */
+  function parseJsonField(text: string, label: string): { ok: true; value: unknown } | { ok: false } {
+    const trimmed = text.trim();
+    if (trimmed === '') return { ok: true, value: null };
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (parsed === null || typeof parsed !== 'object') {
+        toast(`${label} must be a JSON object or array`, 'error');
+        return { ok: false };
+      }
+      return { ok: true, value: parsed };
+    } catch {
+      toast(`${label} is not valid JSON`, 'error');
+      return { ok: false };
+    }
+  }
+
   async function saveSettings() {
     if (!campaign) return;
+    // The JSON fields are validated FIRST, so a malformed box is
+    // reported before anything is written - and nothing is written at
+    // all if one of them is bad.
+    const persona = parseJsonField(formPersona, 'Audience persona');
+    if (!persona.ok) return;
+    const pillars = parseJsonField(formPillars, 'Content pillars');
+    if (!pillars.ok) return;
+    const kpis = parseJsonField(formKpiTargets, 'KPI targets');
+    if (!kpis.ok) return;
     saving = true;
     const r = await campaignsApi.update(campaign.id, {
       name: formName,
@@ -93,6 +153,15 @@
       status: formStatus,
       progress_metric: formProgressMetric || null,
       progress_target: typeof formProgressTarget === 'number' ? formProgressTarget : null,
+      // The four fields that were stored and never editable.
+      //
+      // They are JSON, so a malformed box has to be REPORTED rather
+      // than silently dropped - a silent drop would leave the stored
+      // value in place and the founder would think their edit saved.
+      audience_persona: persona.value as Record<string, unknown> | null,
+      content_pillars: pillars.value as Array<{ title: string }> | null,
+      kpi_targets: kpis.value as Record<string, unknown> | null,
+      budget_cents: formBudget.trim() === '' ? null : Number(formBudget),
     });
     saving = false;
     if (r.error) {
@@ -348,6 +417,31 @@
             <label for="campaign-target" class="block text-sm text-muted mb-1">Progress Target</label>
             <input id="campaign-target" type="number" bind:value={formProgressTarget} placeholder="e.g. 20" class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded text-sm focus:border-accent outline-none" />
           </div>
+        </div>
+        <!--
+          The four fields the server has always persisted and no screen
+          ever showed. They are JSON, so they are edited as JSON.
+
+          A founder who set a persona through the API opened the
+          campaign, saw nothing, and concluded it had never been
+          saved - and "Save Changes" omitted them, so the round-trip
+          was a no-op that reported success.
+        -->
+        <div>
+          <label for="campaign-persona" class="block text-sm text-muted mb-1">Audience Persona (JSON)</label>
+          <textarea id="campaign-persona" bind:value={formPersona} rows="4" placeholder="age_range: 25-44" class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded text-sm font-mono focus:border-accent outline-none"></textarea>
+        </div>
+        <div>
+          <label for="campaign-pillars" class="block text-sm text-muted mb-1">Content Pillars (JSON array)</label>
+          <textarea id="campaign-pillars" bind:value={formPillars} rows="4" placeholder="title: Engineering" class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded text-sm font-mono focus:border-accent outline-none"></textarea>
+        </div>
+        <div>
+          <label for="campaign-kpis" class="block text-sm text-muted mb-1">KPI Targets (JSON)</label>
+          <textarea id="campaign-kpis" bind:value={formKpiTargets} rows="3" placeholder="min_engagement_rate: 3.5" class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded text-sm font-mono focus:border-accent outline-none"></textarea>
+        </div>
+        <div>
+          <label for="campaign-budget" class="block text-sm text-muted mb-1">Budget (cents)</label>
+          <input id="campaign-budget" type="number" bind:value={formBudget} placeholder="e.g. 5000" class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded text-sm focus:border-accent outline-none" />
         </div>
         <div class="flex items-center justify-between pt-4 border-t border-line">
           <button onclick={archiveCampaign} class="text-sm text-error hover:text-error/80 transition-colors min-h-11">
