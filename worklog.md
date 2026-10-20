@@ -127,3 +127,94 @@ Stage Summary:
 - Verification: 481 lib tests + 62 integration tests pass (0 failed); `cargo clippy --all-targets --all-features --locked -- -D warnings` 0 errors; `svelte-check` 0 errors / 0 warnings; `pnpm build` clean; the probe over 13 routes x 3 widths x 2 themes reports 0 FAIL, 0 console errors, 0 404s, and 126 advisories (from 4056 at the start of the first iteration).
 - Artifacts: 6 commits on master, all pushed to github/master (4996f07). The tree is clean.
 - Known follow-ups: the 126 remaining advisories are inline text links (sentences, not controls) and the calendar's hour-grid chips (21px - the grid IS the design). The `live_*` test binaries hit the real provider APIs and fail intermittently on rate limits; that is environmental.
+
+---
+Task ID: red-team-iteration-3-5
+Agent: omp
+Task: Exhaustive red-teaming of the social-forge web dashboard in recursive
+iterations. Iteration 3 started from a static probe that covered 13 of the
+app's 29 routes against an EMPTY seeded database; iterations 4 and 5 went
+after the interaction the probe cannot see.
+
+Work Log:
+- Iteration 3: found the probe covered 13 of 29 routes and the seeded
+  instance was empty, so every page rendered an empty state. Extended the
+  probe to the whole route table, wrote scripts/seed_demo.py (a realistic
+  solo-founder dataset with a self-check that every uuid column is
+  BLOB(16)), and re-probed.
+- The uuid id column was decoded as a String at 23 query sites. sqlx
+  encodes a Uuid as BLOB(16); the `.sqlx/` cache records the DECLARED
+  type (TEXT), so it compiled and failed only at RUNTIME - a 500 on
+  POST/GET /api/automation/rules, and the CLI's `tags list` and
+  `webhooks list`.
+- The probe's `effectiveBg` SKIPPED the translucent layers it walked
+  past, so every reading on a tinted chip was wrong - and the app is
+  full of tinted chips. Fixing the compositing exposed that a semantic
+  hue as TEXT on a wash of itself fails AA in the light theme for EVERY
+  hue.
+- `providerInk` computed the glyph's ink against a HARDCODED surface,
+  but the app paints a provider glyph on three different backgrounds.
+- Iteration 4: the static probe was clean, so this pass audited the
+  INTERACTION. The composer wrote `settings["channel_id"]` and
+  `settings["page_id"]` - keys NO provider reads - while Discord reads
+  `settings["channel"]`. Every Discord post was created, queued, and
+  then failed at publish. Fixed on both sides: the composer writes the
+  key the provider reads, and the create path checks the provider's
+  `required_settings()` and refuses the post with a message naming the
+  missing field.
+- The calendar's RANGE filter was UTC-bounded while its GRID was
+  app-zone-bounded, so posts in the gap fell off the calendar entirely -
+  on NO month grid, in either month. The range is now sent as UTC
+  instants computed with the app's own `wallClockToUtc`.
+- Iteration 5: editing a post WIPED its provider settings (the detail
+  response had no `settings` field, the composer sent `{}`, and the
+  update path REPLACED wholesale) - a post that was working thirty
+  seconds earlier failed at publish.
+- The feed half of every analytics headline was ALWAYS ZERO: the cutoff
+  was bound as a raw `DateTime<Utc>` (RFC 3339 TEXT) against an INTEGER
+  epoch column, and SQLite orders every INTEGER before every TEXT.
+- No post could be filed under a campaign: the composer's dropdown set
+  a variable that was NEVER read, and the create path had no
+  `campaign_id` at all.
+- The per-post analytics rows - the ones the dashboard READS - were
+  written only when a human opened the Post Stats modal, and the
+  cleaner deleted them an hour later. The founder's "Likes 42" became
+  "Likes 0" with no publish, no error and no refresh.
+- A card's substate could never be CLEARED (a COALESCE ratchet), the
+  kanban lost the error posts' order (a per-state UPDATE on a mixed
+  column), the research table was labelled UTC while the app is in the
+  founder's zone, and the Instagram music the composer collected was
+  never sent.
+
+Stage Summary:
+- key results:
+  - 7 commits, each with a regression test that FAILS on the old code
+  - probe: 0 contrast / heading / tiny-text / tap-target FAILs, 0
+    advisories, over 27 routes x 3 widths x 2 themes. The 4 remaining
+    FAILs are the /api/dms 502 from X rejecting the seeded fake token -
+    an environment artifact, and the page renders its error state.
+  - 481 lib tests, 27 integration test binaries (192 tests) pass
+  - cargo clippy --all-targets --all-features --locked -- -D warnings: 0
+  - SQLX_OFFLINE=true cargo clippy --all-targets --locked -- -D warnings: 0
+  - svelte-check: 0 errors, 0 warnings; pnpm build clean
+  - scripts/check_status_contrast.py: 88/88 token pairs clear AA
+- artifacts produced:
+  - scripts/seed_demo.py (the seeded dataset + its uuid-type self-check)
+  - scripts/check_status_contrast.py (the status-token gate)
+  - tests/uuid_column_decode_test.rs (3)
+  - tests/posts_media_shape_test.rs (3)
+  - tests/post_settings_preserved_test.rs (5)
+  - tests/required_settings_test.rs (5)
+  - tests/feed_analytics_window_test.rs (2)
+  - tests/campaign_assignment_test.rs (4)
+  - tests/calendar_range_timezone_test.rs (3)
+  - tests/kanban_substate_test.rs (6)
+  - migrations/0008_posts_media_array.sql
+- known issues / follow-ups:
+  - the /api/dms 502 needs a REAL X token to clear; the seeded instance
+    uses a fake one on purpose
+  - "reach", "followers" and "custom" campaign metrics have no data
+    source anywhere in the codebase; the UI now says "Not measured"
+    rather than showing a 0% bar
+  - the research page has no realtime subscription and no refresh
+    button outside its error state

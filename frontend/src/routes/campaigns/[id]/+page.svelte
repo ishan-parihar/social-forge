@@ -58,9 +58,21 @@
 
   async function load() {
     loading = true;
+    // The campaign's OWN posts, fetched by the server's campaign filter.
+    //
+    // The page used to fetch the newest 200 posts of the WHOLE
+    // account and filter them in the browser by `campaign_id`. So a
+    // campaign with 250 posts showed the progress bar reading
+    // "250 / 20 - 100%" (the server's count over all its posts) next
+    // to a "Posts by State" panel that listed only the few of the
+    // newest 200 that were filed under it. Two panels on one screen
+    // describing different populations, neither labelled.
+    //
+    // The filter is the server's, so both numbers now come from the
+    // same population.
     const [campRes, postsRes] = await Promise.all([
       campaignsApi.list(),
-      postsApi.list({ limit: 200 }),
+      postsApi.list({ limit: 200, campaign_id: postId }),
     ]);
     if (campRes.data) {
       campaign = campRes.data.find(c => c.id === postId) ?? null;

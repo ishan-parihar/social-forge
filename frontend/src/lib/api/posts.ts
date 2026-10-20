@@ -107,6 +107,7 @@ export const postsApi = {
     if (params?.offset) q.set("offset", String(params.offset));
     if (params?.q && params.q.trim()) q.set("q", params.q.trim());
     if (params?.campaign_id) q.set("campaign_id", params.campaign_id);
+
     if (params?.integration_ids?.length) q.set("integration_ids", params.integration_ids.join(","));
     if (params?.tag_ids?.length) q.set("tag_ids", params.tag_ids.join(","));
     if (params?.sort) q.set("sort", params.sort);
