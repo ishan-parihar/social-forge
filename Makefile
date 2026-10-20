@@ -43,7 +43,7 @@ check: vendor-pins
 
 # ── Visual + a11y audits (AGENTS.md §12) ───────────────────────
 #
-# Four gates over the RENDERED app, not the source:
+# Five gates over the RENDERED app, not the source:
 #
 #   probe.mjs         the static page probe - 27 routes x 3 widths x
 #                     2 themes, with the overflow, contrast, tap-target,
@@ -56,6 +56,10 @@ check: vendor-pins
 #   audit-dialogs.mjs   the DIALOG contract: a name, aria-modal, the
 #                     focus inside it, and Escape that closes it (or
 #                     asks first)
+#   e2e-calendar-drag.mjs
+#                     the calendar's DRAG-to-reschedule, end to end: a
+#                     real drag, the wall clock converted in the app's
+#                     zone, and the move sticking after a reload
 #
 # They need a RUNNING instance and the Chromium under
 # ~/.cache/ms-playwright. Each exits 3 (BLOCKED) when the browser is
@@ -73,6 +77,7 @@ audit:
 	cd frontend && node scripts/audit-contrast.mjs --url $(URL) --password '$(PASSWORD)' --theme dark --out /tmp/sf-contrast-dark.json
 	cd frontend && node scripts/audit-contrast.mjs --url $(URL) --password '$(PASSWORD)' --theme light --out /tmp/sf-contrast-light.json
 	cd frontend && node scripts/audit-dialogs.mjs --url $(URL) --password '$(PASSWORD)'
+	cd frontend && node scripts/e2e-calendar-drag.mjs --url $(URL) --password '$(PASSWORD)'
 
 # ── Deploy / Redeploy ───────────────────────────────────────────
 

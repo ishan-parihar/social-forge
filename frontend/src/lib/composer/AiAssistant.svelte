@@ -6,16 +6,19 @@
   // an abandoned one looked identical, a retry looked identical to the first
   // attempt, and there was no way to cancel a call that was going to take 30
   // seconds. It is now a state machine: idle → working → done | error, with an
-  // abort handle and a stage readout.
+  // abort handle and an elapsed clock.
   //
-  // On the stages: /api/ai/* returns a single JSON body. There is no streaming
-  // endpoint on the backend and F2 does not add one (that is backend work, and
-  // the brief forbids touching it). So the stage labels and the elapsed timer
-  // are a PROGRESS AFFORDANCE driven by a local clock, not a report of tokens
-  // arriving. They are labelled as such here because the next person to read
-  // this file will otherwise assume there is a stream behind them. If the
-  // backend ever grows an NDJSON or SSE response, `runTask` is the only place
-  // that needs to change - the states already exist.
+  // On the progress: /api/ai/* returns a single JSON body. There is no
+  // streaming endpoint on the backend and F2 does not add one (that is backend
+  // work, and the brief forbids touching it). So the panel shows an
+  // INDETERMINATE progress indicator and an elapsed clock, and says what
+  // the request IS ("Generating your post...") rather than narrating steps
+  // it cannot observe. It used to name stages - "Reading brand context",
+  // "Drafting the post" - and advance them on a local clock, which meant
+  // the panel was describing work that was not happening and the progress
+  // bar was reporting a percentage that was made up. If the backend ever
+  // grows an NDJSON or SSE response, `runTask` is the only place that needs
+  // to change - the states already exist.
   import { ai } from "$lib/api/ai";
   import { profileApi, type BrandProfile } from "$lib/api/profile";
   import { onMount, onDestroy } from "svelte";
@@ -29,7 +32,6 @@
   type Status = "idle" | "working" | "done" | "error";
   type Task = "generate" | "improve" | "hashtags" | "tone" | "summarize";
   let status = $state<Status>("idle");
-  let stage = $state(0);
   let elapsedMs = $state(0);
   let aiError = $state<string | null>(null);
   let aiResult = $state<string | null>(null);
@@ -41,17 +43,29 @@
   let abort: AbortController | null = null;
   let ticker: ReturnType<typeof setInterval> | null = null;
 
-  // Stage labels per task. Short enough to read at a glance while they change.
-  const STAGES: Record<Task, string[]> = {
-    generate: ["Reading brand context", "Drafting the post", "Applying your voice", "Checking channel limits"],
-    improve: ["Reading your draft", "Rewriting for clarity", "Tightening the structure"],
-    hashtags: ["Reading your draft", "Scanning topic clusters", "Ranking tags"],
-    tone: ["Reading your draft", "Shifting register", "Re-checking voice"],
-    summarize: ["Reading your draft", "Condensing", "Fitting the character budget"],
-  };
-  const stages = $derived(STAGES[selectedTask]);
-  let stageLabel = $derived(stages[Math.min(stage, stages.length - 1)]);
-  let stagePct = $derived(stages.length > 1 ? Math.round(((Math.min(stage, stages.length - 1) + 1) / stages.length) * 100) : 100);
+
+  /**
+   * What the panel says while the request is in flight.
+   *
+   * It used to name the STAGES - "Reading brand context", "Drafting the
+   * post" - and advance them on a local clock. The backend returns one
+   * JSON body, so none of those steps were happening and none of them
+   * were observable: the panel was narrating work it could not see.
+   *
+   * The founder could not tell the difference between "the model is
+   * applying my voice" and "the request is hanging", and the honest
+   * version has to say what is actually true - one request, in flight,
+   * waiting for the whole answer.
+   */
+  function workingLabel(): string {
+    switch (selectedTask) {
+      case "generate": return "Generating your post...";
+      case "improve": return "Rewriting your draft...";
+      case "hashtags": return "Finding hashtags...";
+      case "tone": return "Shifting the tone...";
+      case "summarize": return "Summarizing...";
+    }
+  }
 
   onDestroy(() => {
     abort?.abort();
@@ -65,18 +79,15 @@
   function startTicking() {
     stopTicking();
     elapsedMs = 0;
-    // 2.4s per stage: slow enough that a fast model does not strobe through
-    // every label, fast enough that a slow one does not look hung.
+    // 400ms per tick: the clock counts up in tenths of a second, so a
+    // slow model does not look hung and a fast one does not flicker.
     ticker = setInterval(() => {
       elapsedMs += 400;
-      const next = Math.floor(elapsedMs / 2400);
-      if (next !== stage) stage = Math.min(next, stages.length - 1);
     }, 400);
   }
 
   function reset() {
     status = "idle";
-    stage = 0;
     elapsedMs = 0;
     aiError = null;
     aiResult = null;
@@ -197,7 +208,7 @@
   </div>
 
   <!-- Task selector. Disabled mid-request: switching task while a call is in
-       flight would leave the stage readout describing a different job. -->
+       flight would leave the clock describing a different job. -->
   <div class="flex flex-wrap gap-2">
     {#each tasks as task}
       <button
@@ -279,15 +290,26 @@
       <div class="flex items-center justify-between text-xs">
         <span class="text-content-secondary flex items-center gap-2">
           <span class="inline-block w-3.5 h-3.5 border-2 border-line border-t-accent rounded-full animate-spin" aria-hidden="true"></span>
-          {stageLabel}
+          {workingLabel()}
         </span>
         <span class="text-faint font-mono">{elapsedLabel()}</span>
       </div>
-      <!-- Progress bar. Width is the stage count, not real completion - the
-           label above says which step it is on, and the elapsed clock says how
-           long it has been waiting. -->
-      <div class="h-1 rounded-full bg-line overflow-hidden" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={stagePct} aria-label="AI request progress">
-        <div class="h-full rounded-full bg-accent transition-[width] duration-300" style="width: {stagePct}%"></div>
+      <!--
+        The progress bar is INDETERMINATE.
+
+        It used to be a `role="progressbar"` with a clock-driven
+        `aria-valuenow` - a percentage that was made up. The backend
+        returns one JSON body, so there is no stream and no completion
+        to report, and the bar advanced on a local timer. A screen
+        reader announced "42%" while the model had produced nothing,
+        and the founder saw a bar creeping towards 100% and had no way
+        to tell it was not real.
+
+        ARIA's answer for "working, extent unknown" is a progressbar
+        with NO `aria-valuenow`. That is what this is now.
+      -->
+      <div class="h-1 rounded-full bg-line overflow-hidden" role="progressbar" aria-label="AI request in progress">
+        <div class="h-full w-1/3 rounded-full bg-accent animate-pulse"></div>
       </div>
       <div class="skeleton h-16 rounded-lg" aria-hidden="true"></div>
       <button onclick={cancel} class="w-full px-3 py-1.5 text-xs text-muted hover:text-content border border-line rounded-lg transition-colors min-h-11">
