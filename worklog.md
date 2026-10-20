@@ -748,3 +748,50 @@ Stage Summary:
   - The `Other platforms` table at the bottom of providers.md is not covered by D3;
     it lists cross-platform tools. Extending D3 to it means choosing whether the
     table counts as prose, which is a judgement call left to whoever needs it.
+
+---
+Task ID: doc-foundation-validation-2026-10-20-pass-8
+Agent: jcode
+Task: Verify the B4 verdict against the CODE rather than the artefact, and sweep
+every command the evals expect.
+
+Work Log:
+- Verified eval #42's commands against the source rather than trusting the
+  artefact, and found a real defect: it expects
+  `mcp-call x_home_timeline --args '{"count":5}'`, but `XHomeTimelineInput`
+  (src/mcp/tools_x.rs) declares `max_results` and `pagination_token`. There is no
+  `count` field, so a correct agent answer FAILS this eval. The CLI fallback in
+  the same eval is right (`x timeline --count 5`, src/cli/mod.rs), so the error is
+  confined to the MCP path. Corrected the arg and recorded both facts in
+  expected_output.
+- The 2026-10-19 paired run graded this eval `partial` and named the
+  `--limit`/`--count` confusion, but attributed it to the agent's guess. Both
+  halves are now right: the arg is `max_results`, the CLI flag is `--count`. Worth
+  noting that a graded artefact can still carry a wrong expectation.
+- THE NEAR MISS, which is the reason this entry exists. My sweep reported four
+  commands as nonexistent: `gdrive`, `gmail-ops`, `fb`, `--toolset`. All four were
+  FALSE POSITIVES produced by my own regex. clap derives kebab-case names from
+  Rust enum variants, so grepping `src/cli/*.rs` for a literal `gdrive` finds
+  nothing; and `fb` was matched out of `mcp-call fb_create_post`, a tool name and
+  not a subcommand. Checked against the built binary: `gdrive Google Drive
+  operations`, `gmail-ops Gmail operations` and `--toolset <TOOLSET>` all exist.
+  I was one commit away from "fixing" three working commands on the strength of a
+  bad grep — the exact failure mode this entire doc pass has been auditing. A
+  verification that cannot fail is worse than none, because it looks like evidence.
+- Final sweep, done correctly: all 43 evals' `mcp-call` targets are registered
+  tools, and every `social-forge <subcommand>` resolves against the binary's
+  `--help`. Only the one defect above was real.
+
+Stage Summary:
+- Eval #42 corrected; landed in `80beff9` (swept by the concurrent agent) and
+  verified on `github/master` with 43 evals intact and no stale `count` arg.
+- Verification: evals.json parses; every eval command resolves against src/cli and
+  src/mcp; `genome lint` 0/0; `cargo test --test surface_docs_audit` 4 passed.
+- Known issues / follow-ups:
+  - No test guards an eval's expected command against the CLI/tool registry, the
+    same gap D3 closed for `providers.md` counts. Adding one is straightforward
+    (parse `expected_commands`, assert each `mcp-call` target is in the registry
+    and each subcommand is in the clap tree) but it needs the clap `Command`
+    introspection to be reachable from a test — `d1_documented_cli_command_count`
+    already does this, so the pattern exists. Left as a note rather than started
+    late in the session.
