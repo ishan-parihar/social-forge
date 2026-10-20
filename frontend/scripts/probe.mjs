@@ -772,7 +772,7 @@ async function main() {
     args: ['--no-sandbox', '--disable-dev-shm-usage'],
   });
 
-  const summary = { fails: [], warns: [], visits: 0, errors: [], notFound: [] };
+  const summary = { fails: [], warns: [], skipped: [], visits: 0, errors: [], notFound: [] };
 
   // The route list is resolved ONCE, before the theme loop, because the
   // dynamic routes need a session and the ids are the same in both themes.
@@ -794,13 +794,28 @@ async function main() {
       }
       if (id) {
         routes.push(spec.path.replace('{id}', id));
-      } else {
+      } else if (res.status() !== 200) {
+        // The API itself failed. That IS a finding.
         summary.fails.push({
           route: spec.path,
           width: '',
           theme: '',
           check: 'unreachable-route',
           detail: `no id from ${spec.from} (HTTP ${res.status()}) - the page cannot be reached`,
+        });
+      } else {
+        // The API answered 200 with an EMPTY list, so the instance has
+        // no row to open. The page is not broken - there is nothing to
+        // open. A fresh install looks exactly like this, and a fresh
+        // install is the FIRST thing a founder sees.
+        //
+        // This was a FAIL, which meant the probe could never be clean
+        // on a new instance, and "clean on a new instance" is the one
+        // state that matters most.
+        summary.skipped.push({
+          route: spec.path,
+          check: 'unreachable-route',
+          detail: `no row to open - ${spec.from} returned an empty list`,
         });
       }
     }
@@ -1022,6 +1037,13 @@ async function main() {
     const at = [f.route, f.width ? `${f.width}px` : '', f.theme].filter(Boolean).join(' ');
     lines.push(`  ✗ [${f.check}] ${at} — ${f.detail}`);
   }
+  if (summary.skipped.length) {
+    lines.push('');
+    lines.push(`SKIPPED: ${summary.skipped.length}`);
+    for (const s of summary.skipped) {
+      lines.push(`  - [${s.check}] ${s.route} — ${s.detail}`);
+    }
+  }
   if (summary.errors.length) {
     lines.push('');
     lines.push(`console errors: ${summary.errors.length}`);
@@ -1090,7 +1112,11 @@ async function main() {
   // class, so the fix can be located without re-running the browser.
   fs.writeFileSync(
     path.join(OUT_DIR, 'report.json'),
-    JSON.stringify({ fails: summary.fails, warns: summary.warns }, null, 2)
+    JSON.stringify(
+      { fails: summary.fails, warns: summary.warns, skipped: summary.skipped },
+      null,
+      2
+    )
   );
 
   process.exit(summary.fails.length === 0 ? 0 : 1);

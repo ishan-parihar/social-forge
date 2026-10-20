@@ -32,7 +32,11 @@
   {:else if tags.length === 0}
     <div class="text-sm text-muted py-2">
       No tags yet.
-      <a href="/tags" class="text-accent hover:underline">Create some in the Tags page.</a>
+      <!--
+        The link is the ONLY action on this empty state, so it carries a
+        24px minimum target - see the ChannelSelector's empty state.
+      -->
+      <a href="/tags" class="text-accent hover:underline inline-flex items-center min-h-6">Create some in the Tags page.</a>
     </div>
   {:else}
     <div class="flex flex-wrap gap-2" role="group" aria-label="Tags">

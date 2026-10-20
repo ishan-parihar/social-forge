@@ -49,7 +49,16 @@
 <div>
   {#if integrations.length === 0}
     <div class="text-sm text-muted py-4 text-center">
-      No active channels. <a href="/channels" class="text-accent hover:underline">Connect a channel</a> first.
+      No active channels.
+      <!--
+        The link is the ONLY action on this empty state, so it carries a
+        24px minimum target. An inline link is 17px tall by default,
+        which is under the WCAG 2.2 "Target Size (Minimum)" floor of
+        24x24 - and this one is the difference between a founder who
+        can get started and one who has to hunt for the Channels page.
+      -->
+      <a href="/channels" class="text-accent hover:underline inline-flex items-center min-h-6">Connect a channel</a>
+      first.
     </div>
   {:else}
     {#if skippedCount > 0}
