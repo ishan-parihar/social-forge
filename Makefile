@@ -16,7 +16,7 @@ SKILL_DEST  = $(HOME)/.agents/skills/social-forge-agent
 TARGET      = x86_64-unknown-linux-gnu.2.36
 RELEASE_DIR = target/x86_64-unknown-linux-gnu/release
 
-.PHONY: build frontend vendor-pins check deploy redeploy restart status logs watch
+.PHONY: build frontend vendor-pins check audit deploy redeploy restart status logs watch
 
 # ── Build ───────────────────────────────────────────────────────
 
@@ -40,6 +40,35 @@ vendor-pins:
 # cache is committed, so the sqlx macros must not reach for a live DATABASE_URL.
 check: vendor-pins
 	SQLX_OFFLINE=true cargo check --lib --bin social-forge
+
+# ── Visual + a11y audits (AGENTS.md §12) ───────────────────────
+#
+# Three gates over the RENDERED app, not the source:
+#
+#   probe.mjs         the static page probe - 27 routes x 3 widths x
+#                     2 themes, with the overflow, contrast, tap-target,
+#                     heading, font and type-scale checks
+#   audit-targets.mjs the rendered TARGETS, driving the real app so the
+#                     composer, its panels and the popovers are reached
+#   audit-contrast.mjs the rendered CONTRAST, same driving, measuring
+#                     every text element against its EFFECTIVE
+#                     background
+#
+# They need a RUNNING instance and the Chromium under
+# ~/.cache/ms-playwright. Each exits 3 (BLOCKED) when the browser is
+# missing - never "passed".
+#
+#   make audit URL=https://localhost:6544 PASSWORD=...
+#
+# The two browser-side audits are the ones that find what the static
+# probe cannot: the probe only ever renders a page's DEFAULT state.
+audit:
+	@test -n "$(URL)" || (echo "URL is required" && exit 2)
+	@test -n "$(PASSWORD)" || (echo "PASSWORD is required" && exit 2)
+	cd frontend && node scripts/probe.mjs --url $(URL) --password '$(PASSWORD)' --out /tmp/sf-probe
+	cd frontend && node scripts/audit-targets.mjs --url $(URL) --password '$(PASSWORD)' --out /tmp/sf-targets.json
+	cd frontend && node scripts/audit-contrast.mjs --url $(URL) --password '$(PASSWORD)' --theme dark --out /tmp/sf-contrast-dark.json
+	cd frontend && node scripts/audit-contrast.mjs --url $(URL) --password '$(PASSWORD)' --theme light --out /tmp/sf-contrast-light.json
 
 # ── Deploy / Redeploy ───────────────────────────────────────────
 

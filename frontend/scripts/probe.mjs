@@ -772,7 +772,7 @@ async function main() {
     args: ['--no-sandbox', '--disable-dev-shm-usage'],
   });
 
-  const summary = { fails: [], warns: [], skipped: [], visits: 0, errors: [], notFound: [] };
+  const summary = { fails: [], warns: [], skipped: [], visits: 0, errors: [], notFound: [], providerErrors: [] };
 
   // The route list is resolved ONCE, before the theme loop, because the
   // dynamic routes need a session and the ids are the same in both themes.
@@ -874,8 +874,36 @@ async function main() {
       }
     });
 
-    page.on('response', (res) => {
+    page.on('response', async (res) => {
       if (res.status() >= 500) {
+        // A 5xx whose body says `code: "provider"` is the PROVIDER's
+        // failure, not this app's.
+        //
+        // The app labels its own failures: a provider that rejects the
+        // request comes back as a 502 with `{"code":"provider"}` and
+        // a message naming the provider's reason. A founder with a
+        // revoked X cookie sees exactly that, and the page shows the
+        // message and a Retry button.
+        //
+        // Counting it as the app's 5xx is wrong in both directions: it
+        // puts a failure the founder caused into the app's defect list,
+        // and it means the gate can never be clean on any instance
+        // whose credentials have expired. The gate has to measure THIS
+        // app, so a provider's failure is reported separately.
+        let code = null;
+        try {
+          const body = await res.json().catch(() => null);
+          if (body && typeof body.code === 'string') code = body.code;
+        } catch {
+          // A body that is not json is not a labelled failure.
+        }
+        if (code === 'provider') {
+          summary.providerErrors.push({
+            theme,
+            detail: `provider ${res.status()} ${res.url()}`,
+          });
+          return;
+        }
         summary.fails.push({
           route: '(response)',
           width: 0,
@@ -1042,6 +1070,14 @@ async function main() {
     lines.push(`SKIPPED: ${summary.skipped.length}`);
     for (const s of summary.skipped) {
       lines.push(`  - [${s.check}] ${s.route} — ${s.detail}`);
+    }
+  }
+  if (summary.providerErrors.length) {
+    lines.push('');
+    lines.push(`PROVIDER ERRORS: ${summary.providerErrors.length}`);
+    lines.push('  (the provider rejected the request - not this app)');
+    for (const s of summary.providerErrors) {
+      lines.push(`  - ${s.theme} — ${s.detail}`);
     }
   }
   if (summary.errors.length) {
