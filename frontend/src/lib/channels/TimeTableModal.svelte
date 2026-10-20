@@ -135,7 +135,7 @@
         </select>
         <button
           onclick={addSlot}
-          class="px-3 py-1.5 bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg text-sm transition-colors"
+          class="min-h-11 px-3 py-1.5 bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg text-sm transition-colors"
         >Add</button>
       </div>
       <p class="text-xs text-muted mt-2">Preview: {formatTime(newHour * 60 + newMinute)}</p>

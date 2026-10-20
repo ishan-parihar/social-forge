@@ -935,7 +935,7 @@
         <button
           onclick={submitRepurpose}
           disabled={repurposeSubmitting || !repurposeTargetIntegration}
-          class="px-3 py-1.5 text-sm bg-accent-fill hover:bg-accent-fill-hover disabled:opacity-50 text-accent-fg rounded-lg transition-colors flex items-center gap-2"
+          class="min-h-11 px-3 py-1.5 text-sm bg-accent-fill hover:bg-accent-fill-hover disabled:opacity-50 text-accent-fg rounded-lg transition-colors flex items-center gap-2"
         >
           {#if repurposeSubmitting}
             <div class="w-3 h-3 rounded-full border-2 border-white/30 border-t-white animate-spin"></div>
@@ -985,7 +985,7 @@
         <button
           onclick={submitEdit}
           disabled={editSubmitting || !editText.trim()}
-          class="px-3 py-1.5 text-sm bg-success hover:bg-success disabled:opacity-50 text-success-fg rounded-lg transition-colors flex items-center gap-2"
+          class="min-h-11 px-3 py-1.5 text-sm bg-success hover:bg-success disabled:opacity-50 text-success-fg rounded-lg transition-colors flex items-center gap-2"
         >
           {#if editSubmitting}
             <div class="w-3 h-3 rounded-full border-2 border-white/30 border-t-white animate-spin"></div>

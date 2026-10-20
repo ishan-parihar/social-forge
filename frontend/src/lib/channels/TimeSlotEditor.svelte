@@ -117,13 +117,13 @@
         <div class="flex justify-end gap-2 pt-2 border-t border-line">
             <button
                 onclick={onclose}
-                class="px-3 py-1.5 text-sm text-muted hover:text-content transition-colors"
+                class="min-h-11 px-3 py-1.5 text-sm text-muted hover:text-content transition-colors"
                 disabled={saving}
             >Cancel</button>
             <button
                 onclick={save}
                 disabled={saving}
-                class="px-3 py-1.5 text-sm bg-accent-fill text-accent-fg rounded-md hover:bg-accent-fill-hover disabled:opacity-50 transition-colors"
+                class="min-h-11 px-3 py-1.5 text-sm bg-accent-fill text-accent-fg rounded-md hover:bg-accent-fill-hover disabled:opacity-50 transition-colors"
             >
                 {#if saving}
                     <Spinner size="sm" />

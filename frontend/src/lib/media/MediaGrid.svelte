@@ -241,7 +241,7 @@
                 <button
                   type="button"
                   onclick={cancelDelete}
-                  class="px-3 py-1.5 text-xs rounded-md bg-surface-hover text-content border border-line"
+                  class="min-h-11 px-3 py-1.5 text-xs rounded-md bg-surface-hover text-content border border-line"
                 >
                   Cancel
                 </button>

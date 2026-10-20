@@ -1040,7 +1040,7 @@
         <button
           onclick={confirmCreateCampaign}
           disabled={!newCampaignName.trim()}
-          class="px-3 py-1.5 text-sm bg-accent-fill hover:bg-accent-fill-hover disabled:opacity-50 text-accent-fg rounded-lg transition-colors"
+          class="min-h-11 px-3 py-1.5 text-sm bg-accent-fill hover:bg-accent-fill-hover disabled:opacity-50 text-accent-fg rounded-lg transition-colors"
         >Create</button>
       </div>
     </div>

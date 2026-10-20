@@ -121,13 +121,13 @@
         <p class="text-xs text-muted mb-3">Split your content into a multi-part thread, or add parts manually.</p>
         <button
           onclick={splitFromContent}
-          class="px-3 py-1.5 bg-accent-fill hover:bg-accent-fill-hover rounded-lg text-xs text-accent-fg font-medium transition-colors"
+          class="min-h-11 px-3 py-1.5 bg-accent-fill hover:bg-accent-fill-hover rounded-lg text-xs text-accent-fg font-medium transition-colors"
         >
           ✂️ Split from content
         </button>
         <button
           onclick={addPart}
-          class="ml-2 px-3 py-1.5 bg-surface-hover hover:bg-line-hover border border-line rounded-lg text-xs text-muted transition-colors"
+          class="min-h-11 ml-2 px-3 py-1.5 bg-surface-hover hover:bg-line-hover border border-line rounded-lg text-xs text-muted transition-colors"
         >
           + Add empty part
         </button>

@@ -103,7 +103,7 @@
       aria-invalid={urlError ? "true" : undefined}
       aria-describedby={urlError ? "link-url-error" : undefined}
       oninput={() => (urlError = "")}
-      class="w-full px-3 py-2 rounded text-sm bg-background-input border text-content-secondary placeholder:text-faint outline-none focus:border-accent transition-colors {urlError ? 'border-error' : 'border-line'}"
+      class="w-full px-3 py-2 min-h-11 rounded text-sm bg-background-input border text-content-secondary placeholder:text-faint outline-none focus:border-accent transition-colors {urlError ? 'border-error' : 'border-line'}"
     />
     {#if urlError}
       <p id="link-url-error" role="alert" class="text-[11px] text-error mt-1">{urlError}</p>
@@ -121,14 +121,14 @@
     <div class="flex items-center gap-2 mt-3">
       <button
         onclick={applyLink}
-        class="flex-1 px-3 py-1.5 rounded text-xs font-medium bg-accent-fill text-accent-fg hover:bg-accent-fill-hover transition-colors"
+        class="flex-1 px-3 py-1.5 min-h-11 rounded text-xs font-medium bg-accent-fill text-accent-fg hover:bg-accent-fill-hover transition-colors"
         aria-label="Apply link"
       >
         Apply
       </button>
       <button
         onclick={removeLink}
-        class="px-3 py-1.5 rounded text-xs font-medium border border-line text-content-secondary hover:bg-surface-hover transition-colors"
+        class="px-3 py-1.5 min-h-11 rounded text-xs font-medium border border-line text-content-secondary hover:bg-surface-hover transition-colors"
         aria-label="Remove link"
       >
         Remove

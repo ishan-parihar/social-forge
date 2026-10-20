@@ -410,21 +410,21 @@
         <button
           onclick={handleBulkReschedule}
           disabled={bulkActionLoading}
-          class="px-3 py-1.5 text-xs bg-surface-hover hover:bg-line border border-line text-content rounded-lg disabled:opacity-50 transition-colors"
+          class="min-h-11 px-3 py-1.5 text-xs bg-surface-hover hover:bg-line border border-line text-content rounded-lg disabled:opacity-50 transition-colors"
         >
           {bulkActionLoading ? '...' : 'Reschedule'}
         </button>
         <button
           onclick={handleBulkDuplicate}
           disabled={bulkActionLoading}
-          class="px-3 py-1.5 text-xs bg-surface-hover hover:bg-line border border-line text-content rounded-lg disabled:opacity-50 transition-colors"
+          class="min-h-11 px-3 py-1.5 text-xs bg-surface-hover hover:bg-line border border-line text-content rounded-lg disabled:opacity-50 transition-colors"
         >
           Duplicate
         </button>
         <button
           onclick={handleBulkDelete}
           disabled={bulkActionLoading}
-          class="px-3 py-1.5 text-xs bg-error hover:bg-error text-error-fg rounded-lg disabled:opacity-50 transition-colors"
+          class="min-h-11 px-3 py-1.5 text-xs bg-error hover:bg-error text-error-fg rounded-lg disabled:opacity-50 transition-colors"
         >
           {bulkActionLoading ? 'Deleting...' : 'Delete'}
         </button>
@@ -653,7 +653,7 @@
         <button
           onclick={confirmBulkReschedule}
           disabled={!bulkRescheduleDate}
-          class="px-3 py-1.5 text-sm bg-accent-fill hover:bg-accent-fill-hover disabled:opacity-50 text-accent-fg rounded-lg transition-colors"
+          class="min-h-11 px-3 py-1.5 text-sm bg-accent-fill hover:bg-accent-fill-hover disabled:opacity-50 text-accent-fg rounded-lg transition-colors"
         >Reschedule</button>
       </div>
     </div>

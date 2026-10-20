@@ -128,7 +128,7 @@
         <button
           onclick={prevPage}
           disabled={currentPage <= 1}
-          class="px-2 py-1 rounded bg-surface-hover disabled:opacity-30 hover:bg-line transition-colors"
+          class="min-h-11 px-2 py-1 rounded bg-surface-hover disabled:opacity-30 hover:bg-line transition-colors"
           aria-label="Previous page"
         >◀</button>
         <span>Page {currentPage} of {totalPages}</span>

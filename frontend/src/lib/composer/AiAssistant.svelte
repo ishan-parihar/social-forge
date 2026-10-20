@@ -326,13 +326,13 @@
       <div class="flex gap-2">
         <button
           onclick={handleInsert}
-          class="px-3 py-1.5 bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg text-xs transition-colors"
+          class="min-h-11 px-3 py-1.5 bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg text-xs transition-colors"
         >
           Insert
         </button>
         <button
           onclick={reset}
-          class="px-3 py-1.5 text-xs text-muted hover:text-content border border-line rounded-lg transition-colors"
+          class="min-h-11 px-3 py-1.5 text-xs text-muted hover:text-content border border-line rounded-lg transition-colors"
         >
           Discard
         </button>
