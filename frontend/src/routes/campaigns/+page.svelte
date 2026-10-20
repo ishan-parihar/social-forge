@@ -234,11 +234,27 @@
                     {progressValue(c).current} / {c.progress_target} {progressValue(c).unit}
                   {/if}
                 </span>
-                <span>{Math.round(progressPct(c))}%</span>
+                <!--
+                  A metric with no data source gets no percentage and
+                  no bar. "Reach", "followers" and "custom" are accepted
+                  by the server and offered in the Settings tab, but
+                  nothing measures them - so a 0% bar against a target
+                  reads as "you have achieved nothing", which is a
+                  claim about the campaign rather than about the metric.
+                -->
+                {#if progressValue(c).current !== null}
+                  <span>{Math.round(progressPct(c))}%</span>
+                {/if}
               </div>
+              {#if progressValue(c).current === null}
+                <div class="h-1.5 rounded-full bg-background-input flex items-center justify-center">
+                  <span class="text-[9px] text-faint">Not measured</span>
+                </div>
+              {:else}
               <div class="bg-background-input rounded-full h-1.5 overflow-hidden">
                 <div class="h-full rounded-full transition-all duration-500" style="width: {progressPct(c)}%; background: {c.color}"></div>
               </div>
+              {/if}
             </div>
           {:else}
             <div class="text-xs text-muted mb-3">{c.post_count ?? 0} posts</div>
