@@ -159,13 +159,43 @@
      palette keyboard-exitable. -->
 <div
   class="fixed inset-0 bg-overlay z-50 flex items-start justify-center pt-[15vh] px-4"
-  onclick={onClose}
-  aria-hidden="true"
 >
+  <!--
+    The scrim is a separate, aria-hidden BUTTON.
+
+    The palette used to be one div with `aria-hidden="true"` on the
+    wrapper, so the panel - the dialog, the search box, the results -
+    was inside an aria-hidden subtree. That broke two things at once:
+
+      - a screen reader announced NOTHING. The dialog was invisible to
+        assistive technology, so the palette was unusable without a
+        mouse and unusable WITH one.
+
+      - the shared focus trap skips anything inside an
+        `[aria-hidden="true"]` subtree (that is what the attribute is
+        for), so it found NO focusable child and fell back to focusing
+        the dialog node itself. The search input never got focus.
+
+    Which means: the founder pressed Ctrl+K, the palette opened, and
+    TYPING DID NOTHING. The palette's whole reason for existing is
+    that you type into it.
+
+    The scrim is a `button` so it is a real, clickable control, and
+    `aria-hidden` + `tabindex="-1"` keep it OUT of the tab order and
+    out of the accessibility tree - a screen reader should not offer a
+    nameless "close" button, and the Escape key already closes the
+    palette.
+  -->
+  <button
+    type="button"
+    class="absolute inset-0 cursor-default"
+    aria-hidden="true"
+    tabindex="-1"
+    onclick={onClose}
+  ></button>
   <!-- Palette panel -->
   <div
-    class="bg-background-input border border-line rounded-lg shadow-lg w-full max-w-lg overflow-hidden"
-    onclick={(e) => e.stopPropagation()}
+    class="relative bg-background-input border border-line rounded-lg shadow-lg w-full max-w-lg overflow-hidden"
     role="dialog"
     aria-modal="true"
     aria-label="Command palette"

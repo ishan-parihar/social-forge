@@ -72,9 +72,30 @@
      no accessible name. -->
 <svelte:window onkeydown={(e) => { if (e.key === 'Escape') onclose?.(); }} />
 
-<div class="fixed inset-0 bg-overlay flex items-center justify-center z-50 p-4" aria-hidden="true">
+<div class="fixed inset-0 bg-overlay flex items-center justify-center z-50 p-4">
+  <!--
+    The scrim is a separate, aria-hidden BUTTON.
+
+    The picker used to be one div with `aria-hidden="true"` on the
+    wrapper, so the dialog - its title, its search box, its track list -
+    was inside an aria-hidden subtree. A screen reader announced
+    nothing, and the shared focus trap skipped every focusable child
+    for the same reason and fell back to the dialog node, so the search
+    box never got focus.
+
+    The scrim is a `button` so it is a real, clickable control, and
+    `aria-hidden` + `tabindex="-1"` keep it out of the tab order and
+    out of the accessibility tree - Escape already closes the picker.
+  -->
+  <button
+    type="button"
+    class="absolute inset-0 cursor-default"
+    aria-hidden="true"
+    tabindex="-1"
+    onclick={() => onclose?.()}
+  ></button>
   <div
-    class="bg-surface border border-line rounded-xl shadow-lg w-full max-w-md max-h-[90vh] overflow-hidden flex flex-col"
+    class="relative bg-surface border border-line rounded-xl shadow-lg w-full max-w-md max-h-[90vh] overflow-hidden flex flex-col"
     role="dialog"
     aria-modal="true"
     aria-labelledby={titleId}

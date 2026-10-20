@@ -336,12 +336,21 @@ Work Log:
   files carry zero tool attributes), `ls migrations/*.sql` = 8 (doc said 2),
   `ls src/social/*.rs` = 39 provider files, real LOC ~94.2k Rust / ~29.2k frontend
   against the documented ~85.7k / ~25.7k.
-- Repaired the AGENTS.md §0.6 document map. Four dead `docs/archive/...` paths
-  (GAPS-15, OUTLINE-16, OUTLINE-17) and a root-level `SESSION_HOOKS.md` that
-  only exists at `docs/SESSION_HOOKS.md` are annotated or repointed. Seven live
-  docs had no row at all — PAGE-INDEX, platforms-and-cli, deployment,
-  agent-integration, TARGETING_AND_WRITER_DISCIPLINE, DECISIONS-19 and
-  EXECUTION-19 — so `ask` found them only by luck of ranking. They are routed now.
+- Repaired the AGENTS.md §0.6 document map.
+  CORRECTION, written in the same session after re-reading the request against
+  the evidence: the claim in the first commit that "four rows cited
+  docs/archive/ paths that no longer exist" was FALSE, and the annotation I had
+  added to those rows has been removed. My existence check covered only a
+  curated path list and `.md` URLs, so it never actually tested the
+  `docs/archive/` rows; checked directly, all three exist (GAPS_15 170 lines,
+  OUTLINE-17 100 lines, OUTLINE-16 70 lines). I asserted an unverified claim in
+  two commit messages. The mistake was mine, not the doc's.
+  What was genuinely wrong in this map: one dead path (`SESSION_HOOKS.md` named
+  at the repo root, existing only at `docs/SESSION_HOOKS.md`, now repointed), and
+  seven live docs with no row at all — PAGE-INDEX, platforms-and-cli,
+  deployment, agent-integration, TARGETING_AND_WRITER_DISCIPLINE,
+  DECISIONS-19 and EXECUTION-19 — so `ask` reached them only by luck of
+  ranking. They are routed now.
 - Replaced the stale key-numbers block with measured values, each line naming
   the command that re-measures it, so the next agent re-measures rather than
   trusting the prose. Also fixed the two other stale lines (§2 layout tree:
@@ -380,5 +389,50 @@ Stage Summary:
     `ops` module would raise E305; that needs an operator decision, because
     `docs/planning/EXECUTION_2026-10-19.md` cites `probe-out/run12` and
     `run13-dark` as evidence and those directories no longer exist on disk.
-  - `docs/PAGE-INDEX.md` marks several archived files LIVE, and it is not in
-    `genome.toml`'s ownership map (it is an ops module role).
+
+---
+Task ID: doc-foundation-pass-2026-10-20-followup
+Agent: jcode
+Task: Re-read the request against the gathered evidence; correct what the first
+pass overstated, then continue.
+
+Work Log:
+- Re-verified the claim I had made about dead `docs/archive/` paths. It was
+  false: the existence check I wrote only covered a curated path list and `.md`
+  URLs, so it never tested those rows. All three exist (GAPS_15 170 lines,
+  OUTLINE-17 100 lines, OUTLINE-16 70 lines). Removed the incorrect
+  annotations from AGENTS.md and wrote the correction into this entry rather
+  than quietly editing history — the commit messages are immutable on the
+  remote, so the correction has to be visible somewhere, and here is where a
+  reader will look.
+- Acted on the follow-up the first pass logged but left open. PAGE-INDEX was
+  labelled the first file to read by that same pass, which made its accuracy
+  load-bearing: six of its rows said LIVE for files whose own bodies say they
+  are superseded (GAPS-15, OUTLINE-16, OUTLINE-17, OUTLINE-19, OUTLINE-19-v3,
+  AUDIT-14). All six now carry their real status, each naming its successor
+  where one exists.
+- Added an intro to PAGE-INDEX explaining that the status column is what the
+  `Owns` column is conditional on. A column that only meant something after my
+  edit needed to say so, or the next reader would treat LIVE as decoration the
+  way I found it.
+- Checked reachability for every tracked doc against PAGE-INDEX, the README,
+  AGENTS.md and SKILL.md: 29 docs, zero orphans. The two I first flagged as
+  orphans (platform-matrices.md, recipes-extended.md) are cited from SKILL.md's
+  router table — my check had simply omitted the skills directory.
+- Verified the tombstone copies under `docs/planning/` are the intended
+  convention and not duplicate live plans: five files carry the tombstone
+  comment, the planning README marks each archived, and `genome lint` reports
+  no W006 overlap.
+
+Stage Summary:
+- Artifacts: AGENTS.md (annotations removed), docs/PAGE-INDEX.md (six status
+  corrections + intro), worklog.md (correction + this entry).
+- Verification: `genome lint` 0 errors 0 warnings; `genome close` green;
+  `cargo test --lib` passed; `cargo test --test surface_docs_audit` 3 passed.
+- Known issues / follow-ups:
+  - PAGE-INDEX is still not in `genome.toml`'s ownership map. That is an `ops`
+    module role and turning `ops` on has its own consequence (E305 on tracked
+    bulk), so it stays an operator decision rather than a unilateral switch.
+  - The false claim remains in the messages of commits 5e3db17 and 66b4823 on
+    the remote. The correction is here and in AGENTS.md; the root commit is not
+    rewritten, and should not be.

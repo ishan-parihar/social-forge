@@ -1,15 +1,23 @@
 # Page index — every active doc, the question it owns
 
+`Status` is what the `Owns` column is conditional on: **LIVE** rows answer their
+question today and are safe to route to. **ARCHIVED** rows are history kept for
+provenance — their content was superseded, so read them for what happened, never
+as the current answer. Where a row was superseded, the row names its successor.
+
+Every doc in this index has a row; a doc with no row does not exist (the
+tombstone convention, AGENTS.md §0.6).
+
 | File | Status | Owns |
 |---|---|---|
 | [`SESSION_HOOKS.md`](SESSION_HOOKS.md) | LIVE | Session Hooks — Ambient Context at Session Start — AXI §7: Register your tool into the agent's session lifecycle so every conversation starts with rele… |
 | [`agent-integration.md`](agent-integration.md) | LIVE | Agent integration — Moved out of the README to keep it short. Content is unchanged.… |
-| [`GAPS_2026-10-15.md`](archive/GAPS_2026-10-15.md) | LIVE | Social Forge — Remaining Implementation Gaps (2026-10-15) — Companion to AUDIT2026-10-14.md. Everything there that the 13 landed commits (3c4dc1e..23f3b0c on ma… |
-| [`OUTLINE-2026-10-16.md`](archive/OUTLINE-2026-10-16.md) | LIVE | Social Forge — Remaining Implementation Gaps Outline (2026-10-16) — Forward-looking execution outline after the 2026-10-16 cycle (9 commits, 986f3a2..c219cc1). Every "w… |
-| [`OUTLINE-2026-10-17.md`](archive/OUTLINE-2026-10-17.md) | LIVE | Social Forge — Remaining Implementation Gaps Outline (2026-10-17) — Successor to OUTLINE-2026-10-16.md, which is FULLY EXECUTED and red-team-audited (execution: d5b9bbd… |
-| [`OUTLINE-2026-10-19-v3.md`](archive/OUTLINE-2026-10-19-v3.md) | LIVE | Social Forge — Remaining Implementation Gaps and Next Steps (2026-10-19, v3) — Successor to OUTLINE-2026-10-19-v2.md. Written after this session's execution pass (see EXECUTION202… |
-| [`OUTLINE-2026-10-19.md`](archive/OUTLINE-2026-10-19.md) | LIVE | Social Forge — Remaining Implementation Gaps Outline (2026-10-19) — Successor to OUTLINE-2026-10-17.md. Working queue is now agent-facing token efficiency: the repo gre… |
-| [`AUDIT_2026-10-14.md`](audit/AUDIT_2026-10-14.md) | LIVE | Social Forge — End-to-End Audit & Implementation Plan (2026-10-14) — Reviewed against the rust-best-practices skill (Apollo handbook; AGENTS.md §0.6 references it at /ho… |
+| [`GAPS_2026-10-15.md`](archive/GAPS_2026-10-15.md) | ARCHIVED (superseded) | Superseded by the OUTLINE succession; its gaps are closed or tracked in `TODO.md`. History only.… |
+| [`OUTLINE-2026-10-16.md`](archive/OUTLINE-2026-10-16.md) | ARCHIVED (executed, superseded) | History only. Execution `986f3a2..c219cc1`; superseded by OUTLINE-2026-10-17.… |
+| [`OUTLINE-2026-10-17.md`](archive/OUTLINE-2026-10-17.md) | ARCHIVED (superseded) | History only. Its Wave A–C items are tracked in `TODO.md`.… |
+| [`OUTLINE-2026-10-19-v3.md`](archive/OUTLINE-2026-10-19-v3.md) | ARCHIVED (superseded) | History only. Superseded by OUTLINE-2026-10-19-v2, the live queue.… |
+| [`OUTLINE-2026-10-19.md`](archive/OUTLINE-2026-10-19.md) | ARCHIVED (superseded) | History only. Superseded by OUTLINE-2026-10-19-v2, the live queue.… |
+| [`AUDIT_2026-10-14.md`](audit/AUDIT_2026-10-14.md) | ARCHIVED (executed) | History. The 2026-10-14 end-to-end audit: P0 bugs, the cookie and API matrix, and the phased plan it produced. Executed through the 2026-10-15/16 cycles; the register in `TODO.md` carries what is still open.… |
 | [`deployment.md`](deployment.md) | LIVE | Deployment — Moved out of the README to keep it short. Content is unchanged.… |
 | [`DECISIONS_2026-10-19.md`](planning/DECISIONS_2026-10-19.md) | LIVE | Decisions — 2026-10-19 (open decision points and recommendations) — Companion to OUTLINE-2026-10-19-v3.md (archived; see docs/archive) (§ "Decisions needed") and EXECUT… |
 | [`EXECUTION_2026-10-19.md`](planning/EXECUTION_2026-10-19.md) | LIVE | Execution record — 2026-10-19 (red-team follow-through) — Evidence for the register transitions made this cycle. Written after the red-team pass in this sessi… |

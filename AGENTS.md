@@ -161,14 +161,14 @@ When implementing features inspired by postiz-app or other competitors, apply th
 | `docs/deployment.md` | Deployment: env vars, TLS, reverse proxy, OAuth redirect URIs | Before deploying, or an OAuth redirect misbehaves |
 | `docs/agent-integration.md` | MCP setup, Claude Code / Codex / OpenCode session hooks | When wiring an agent to this repo |
 | `docs/audit/AUDIT_2026-10-14.md` | End-to-end audit: P0 bugs, cookie/API matrix, fragmentation, phased plan — executed through the 2026-10-15/16 cycles; **history** | For audit context on the P0 fixes and the cookie/API matrix |
-| `docs/archive/GAPS_2026-10-15.md` | What the 13 landed audit commits did NOT close at the time — superseded by the OUTLINE succession; **history**. Tombstone: `docs/archive/GAPS_2026-10-15.md` (the original path lost its copy on archive) | For what was still open after the 13 landed commits, and how it was tracked before the register |
+| `docs/archive/GAPS_2026-10-15.md` | What the 13 landed audit commits did NOT close at the time — superseded by the OUTLINE succession; **history** | For what was still open after the 13 landed commits, and how it was tracked before the register |
 | `docs/planning/TARGETING_AND_WRITER_DISCIPLINE.md` | Targeting, collisions, and the single-writer rule (G-08) — why one long-lived process owns the database | Before touching scheduling, the writer, or the deployment model |
 | `docs/planning/VENDOR_PINS.md` | Pinned transitive deps enforced by `vendor-pull.sh --check` (CI gate) | Before touching `Cargo.toml` |
 | `docs/planning/DECISIONS_2026-10-19.md` | Open decision points with recommendations — nothing in it is applied until the user approves | When a design-direction change is proposed |
 | `docs/planning/EXECUTION_2026-10-19.md` | Cycle-3 execution log: what landed, the gate results, and what did not | As evidence for register transitions |
 | `docs/planning/OUTLINE-2026-10-19-v2.md` | The live working queue (audit-revised 2026-10-19): P0 gate, B-token-efficiency, C3 eval loop, E credential-blocked live passes | Before starting ANY implementation work |
-| `docs/archive/OUTLINE-2026-10-17.md` | Superseded by the 2026-10-19 v2 outline — history, not queue. Its Wave A–C items are tracked in `TODO.md`. Tombstone: `docs/archive/OUTLINE-2026-10-17.md` is the file's tombstone entry in `docs/archive/INDEX.md`; the live outline is the one below | For provenance of the 2026-10-17 cycle |
-| `docs/archive/OUTLINE-2026-10-16.md` | Executed + red-team-audited predecessor outline (execution `d5b9bbd..7873f84`, audit `ca63a9e`) — history, not queue. Tombstone: `docs/archive/INDEX.md` row; the live outline is the one below | For provenance of what landed 2026-10-16/17 |
+| `docs/archive/OUTLINE-2026-10-17.md` | Superseded by the 2026-10-19 v2 outline — history, not queue. Its Wave A–C items are tracked in `TODO.md` | For provenance of the 2026-10-17 cycle |
+| `docs/archive/OUTLINE-2026-10-16.md` | Executed + red-team-audited predecessor outline (execution `d5b9bbd..7873f84`, audit `ca63a9e`) — history, not queue | For provenance of what landed 2026-10-16/17 |
 | `TODO.md` | The register: live status per work item (`scripts/genome status` is the supervised transition), seeded from the 2026-10-17 outline | To see or claim what's open |
 | `worklog.md` | The multi-agent worklog — this protocol, §8 | Before starting work; after finishing |
 | `docs/decisions/` | AD-NNN decision records, immutable once numbered (`scripts/genome rec new ad` mints them) | When a direction change is ratified |
