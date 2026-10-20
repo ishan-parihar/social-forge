@@ -38,8 +38,22 @@ vendor-pins:
 
 # Fast compile gate (AGENTS.md §3.2). SQLX_OFFLINE is required: the .sqlx/
 # cache is committed, so the sqlx macros must not reach for a live DATABASE_URL.
+#
+# The two SOURCE gates run here, because both need the built frontend:
+#
+#   check-hex-tokens.mjs       a literal hex outside the token layer does
+#                               not retheme, and cannot
+#   check-tailwind-classes.mjs a Tailwind class the stylesheet does not
+#                               define is a SILENT failure - the element
+#                               simply does not get the style, and nothing
+#                               reports it. A truncated class name
+#                               (`hover:text-accent-stro`) is not a build
+#                               error, not a type error and not a
+#                               svelte-check warning.
 check: vendor-pins
 	SQLX_OFFLINE=true cargo check --lib --bin social-forge
+	cd frontend && node scripts/check-hex-tokens.mjs
+	cd frontend && node scripts/check-tailwind-classes.mjs
 
 # ── Visual + a11y audits (AGENTS.md §12) ───────────────────────
 #

@@ -209,7 +209,7 @@
     <button
       onclick={importFeed}
       disabled={importing}
-      class="px-3 py-1.5 text-sm whitespace-nowrap bg-surface-hover hover: min-h-11 inline-flex items-centerbg-line border border-line rounded-lg transition-colors disabled:opacity-50"
+      class="px-3 py-1.5 text-sm whitespace-nowrap bg-surface-hover hover:bg-line min-h-11 inline-flex items-center border border-line rounded-lg transition-colors disabled:opacity-50"
     >
       {importing ? "Importing..." : "Import Feed"}
     </button>

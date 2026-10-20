@@ -109,7 +109,7 @@
       <!-- Lower modals: dim the backdrop more so the top modal stands out.
            F5: bg-overlay/60 rather than a second raw black step - the scrim
            tint comes from the theme, so this stays theme-aware. -->
-      <div class="absolute inset-0 bg-overlay/60 pointer-events-none" aria-hidden="true"></div>
+      <div class="absolute inset-0 bg-overlay pointer-events-none" aria-hidden="true"></div>
     {/if}
 
     <!-- Modal panel -->

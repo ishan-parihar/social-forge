@@ -169,9 +169,9 @@
               {/if}
             </div>
             <div class="flex gap-2">
-              <button onclick={() => testWebhook(wh.id)} class="text-xs px-2 py-1 text-muted hover:text-accent border border min-h-11 min-w-11 inline-flex items-center justify-center-line rounded min-h-11">Test</button>
-              <button onclick={() => viewDeliveries(wh.id)} class="text-xs px-2 py-1 text-muted hover:text-accent border border min-h-11 min-w-11 inline-flex items-center justify-center-line rounded min-h-11">Deliveries</button>
-              <button onclick={() => openEdit(wh)} class="text-xs px-2 py-1 text-muted hover:text-accent border border min-h-11 min-w-11 inline-flex items-center justify-center-line rounded min-h-11">Edit</button>
+              <button onclick={() => testWebhook(wh.id)} class="text-xs px-2 py-1 text-muted hover:text-accent border border-line min-h-11 min-w-11 inline-flex items-center justify-center rounded min-h-11">Test</button>
+              <button onclick={() => viewDeliveries(wh.id)} class="text-xs px-2 py-1 text-muted hover:text-accent border border-line min-h-11 min-w-11 inline-flex items-center justify-center rounded min-h-11">Deliveries</button>
+              <button onclick={() => openEdit(wh)} class="text-xs px-2 py-1 text-muted hover:text-accent border border-line min-h-11 min-w-11 inline-flex items-center justify-center rounded min-h-11">Edit</button>
               <button onclick={() => deleteWebhook(wh.id)} class="text-xs px-2 py-1 text-muted hover:text-error border border-line rounded min-h-11">Delete</button>
             </div>
           </div>

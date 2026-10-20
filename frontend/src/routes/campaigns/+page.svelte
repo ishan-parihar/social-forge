@@ -214,7 +214,7 @@
               <span class="w-3 h-3 rounded-full" style="background: {c.color}"></span>
               <h2 class="font-medium">
                 <!-- Stretched link: the whole card is the link, and the ✕ sits above it (z-10). -->
-                <a href="/campaigns/{c.id}" class="text-content group-hover:text-accent transition-colors no-un min-h-11 inline-flex items-centerderline after:absolute after:inset-0 after:content-['']">{c.name}</a>
+                <a href="/campaigns/{c.id}" class="text-content group-hover:text-accent transition-colors no-underline min-h-11 inline-flex items-center underline after:absolute after:inset-0 after:content-['']">{c.name}</a>
               </h2>
             </div>
             <Badge variant={statusVariant[c.status] || 'default'}>{c.status}</Badge>

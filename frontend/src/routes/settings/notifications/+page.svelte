@@ -101,7 +101,7 @@
             <select
               bind:value={prefs[nt.key]}
               aria-label="{nt.label} delivery"
-              class="min-h-11 shrink-0 bg-linetext-content-secondary border border-line rounded px-3 py-1.5 text-sm focus:outline-none focus:border-accent/50 transition-colors"
+              class="min-h-11 shrink-0 bg-line text-content-secondary border border-line rounded px-3 py-1.5 text-sm focus:outline-none focus:border-accent/50 transition-colors"
             >
               <!--
                 Social Forge has exactly one delivery channel today: the
