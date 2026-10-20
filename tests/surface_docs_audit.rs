@@ -172,3 +172,102 @@ fn d2_tool_schema_shape() {
     sorted.dedup();
     assert_eq!(before, sorted.len(), "duplicate tool names registered");
 }
+
+/// D3: `providers.md`'s per-platform tool counts vs the registered counts.
+///
+/// D1 asserts the TOTAL count, which passed for weeks while eight of the
+/// fourteen per-platform counts underneath it were stale. A stale
+/// per-platform number is worse than no number: an agent reads it and
+/// concludes a whole capability area is missing, or does not discover the
+/// one it needs. This walks the `### Platform (N tools)` headings and
+/// compares N against the tools actually registered under that prefix,
+/// including the tools the section's body lists, so a body that quietly
+/// shrinks is caught too.
+#[test]
+fn d3_documented_per_platform_counts_match_registry() {
+    let providers = std::fs::read_to_string(repo_path(
+        "skills/social-forge-agent/references/providers.md",
+    ))
+    .expect("read providers.md");
+
+    // Real count per tool-name prefix, from the registry itself.
+    let mut real: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    for (name, _) in parse_tools() {
+        let prefix = name.split('_').next().unwrap_or(&name).to_string();
+        *real.entry(prefix).or_insert(0) += 1;
+    }
+
+    // Heading -> the prefixes its section covers. WhatsApp spans two.
+    let sections: &[(&str, &[&str])] = &[
+        ("X / Twitter", &["x"]),
+        ("Facebook", &["fb"]),
+        ("Instagram", &["ig"]),
+        ("LinkedIn Page", &["lip"]),
+        ("LinkedIn Personal", &["li"]),
+        ("Reddit", &["reddit"]),
+        ("Bluesky", &["bs"]),
+        ("Discord", &["di"]),
+        ("Telegram Bot", &["tb"]),
+        ("Telegram User", &["tu"]),
+        ("WhatsApp", &["wa", "wc"]),
+        ("GitHub", &["gh"]),
+        ("Google", &["goog"]),
+        ("WordPress", &["wp"]),
+    ];
+
+    let lines: Vec<&str> = providers.lines().collect();
+    let mut checked = 0;
+    for (title, prefixes) in sections {
+        let head = prefixes
+            .iter()
+            .map(|p| format!("{p}"))
+            .count()
+            .to_string();
+        let _ = head;
+        let heading = format!("### {title} (");
+        let idx = lines
+            .iter()
+            .position(|l| l.starts_with(&heading))
+            .unwrap_or_else(|| panic!("providers.md: no section `### {title} (`"));
+        let declared: usize = lines[idx]
+            .split(" (")
+            .nth(1)
+            .and_then(|s| s.split(" tools").next())
+            .expect("heading must read `(N tools`")
+            .parse()
+            .unwrap_or_else(|_| panic!("providers.md: unparseable count in `{}`", lines[idx]));
+
+        // The section body, up to the next heading or `---`.
+        let mut body = String::new();
+        for line in &lines[idx + 1..] {
+            if line.starts_with("### ") || line.starts_with("## ") || line.trim() == "---" {
+                break;
+            }
+            body.push_str(line);
+            body.push('\n');
+        }
+
+        let expected: usize = prefixes.iter().map(|p| *real.get(*p).unwrap_or(&0)).sum();
+        let mut listed = 0usize;
+        for prefix in *prefixes {
+            for (name, _) in parse_tools() {
+                if name.starts_with(&format!("{prefix}_")) && body.contains(&name) {
+                    listed += 1;
+                }
+            }
+        }
+
+        assert_eq!(
+            declared, expected,
+            "providers.md: `{title}` claims {declared} tools but the registry has {expected}"
+        );
+        // A body that silently drops tools is caught as well as a stale count.
+        assert_eq!(
+            listed, expected,
+            "providers.md: `{title}` lists {listed} of {expected} registered tools — \
+             either add the missing ones or say which are omitted"
+        );
+        checked += 1;
+    }
+    assert_eq!(checked, sections.len(), "every section must be checked");
+}

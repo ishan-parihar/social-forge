@@ -82,6 +82,28 @@ function FINDINGS() {
   return out;
 }
 
+// The ENTRY ANIMATION must have finished before the measurement.
+//
+// Every page fades in over 0.2s (`.page-enter`), and the fade is an
+// `opacity` animation on an ANCESTOR of the text. A contrast measure
+// treats an ancestor with `opacity < 1` as a translucent group and
+// stops the backdrop walk there - so a page measured mid-fade was
+// measured against the wrong background. A page that ANIMATES forever
+// (the skeleton shimmer) would hang, so only the finite ones are
+// awaited.
+async function settleAnimations(page) {
+  await page
+    .evaluate(async () => {
+      const anims = document.getAnimations().filter((a) => {
+        const t = a.effect?.getComputedTiming?.();
+        return t && t.iterations !== Infinity;
+      });
+      if (!anims.length) return;
+      await Promise.all(anims.map((a) => a.finished.catch(() => undefined)));
+    })
+    .catch(() => {});
+}
+
 async function main() {
   if (!PASSWORD) {
     console.error('BLOCKED: no --password');
@@ -135,6 +157,7 @@ async function main() {
   for (const route of ROUTES) {
     await page.goto(`${BASE_URL}${route}`, { waitUntil: 'load' });
     await page.waitForTimeout(1200);
+    await settleAnimations(page);
     await record(route);
   }
 

@@ -658,3 +658,50 @@ Stage Summary:
 - Standing conclusion: the outline's B/C waves contain NO remaining work. Only
   the E wave (credential-blocked live passes) is open, and it is blocked on
   credentials exactly as TODO.md's V1a-V1d rows say.
+
+---
+Task ID: doc-foundation-validation-2026-10-20-pass-6
+Agent: jcode
+Task: Sweep the surfaces the earlier passes never checked. `providers.md` is
+asserted by the doc test, so a stale per-platform count could hide behind a
+passing test.
+
+Work Log:
+- Parsed all 389 `#[tool(` declarations from `src/mcp/mod.rs` and grouped them by
+  the real name prefix. That map is the authority for every count below; nothing
+  was taken from any doc.
+- Found `providers.md` wrong for 8 of its 14 platforms: X 20→27, Instagram 15+→21,
+  LinkedIn Page 12→11, LinkedIn Personal 12→15, Reddit 36→37, Bluesky 5→7,
+  Discord 13→15, Telegram Bot 9→11. The doc test checks that this file states the
+  TOTAL tool count, which it did, so it passed throughout.
+- Six bodies listed only a subset, so heading and body disagreed with each other as
+  well as with the registry. Appended the missing tools as an explicit
+  "Not listed above (N more, M shown)" line per section instead of merging them
+  into the original prose, so the curated descriptions survive and the gap stays
+  visible.
+- WhatsApp was the one case that needed judgement rather than arithmetic: 13
+  tools across two prefixes, 9 `wa_` Web-session and 4 `wc_` Cloud-API. The
+  heading now says so; a single number there implied one bucket that does not
+  exist.
+- Verified, not assumed: the 14 platform sections cover 235 of the 389 and the
+  other 154 are the cross-cutting tools the file already documents in its own
+  sections. That is why no total was rewritten and no false "everything is wrong"
+  claim was made.
+- Also confirmed README's claims hold (26 platforms, 389 tools, 44 modules all
+  measured) and corrected my own verification script twice — once for
+  concatenating file:path into dead-path tokens, once for a heading regex too
+  strict to parse the sentence I had written.
+
+Stage Summary:
+- Commit 830ab31: providers.md, eight heading corrections plus six body
+  completions, with the section-intro shape preserved.
+- Verification: a three-way reconciliation script (heading vs body vs registry)
+  passes for all 14 sections; `cargo test --test surface_docs_audit` 3 passed;
+  `genome lint` 0/0.
+- Known issues / follow-ups:
+  - The per-platform counts will drift again as providers gain tools, exactly as
+    they drifted here while the total-count assertion kept passing. The guard
+    that would catch it belongs in `surface_docs_audit`: parse
+    `providers.md`'s per-section counts and compare against the real prefix
+    groups. That is a test change, not a doc change, and it was out of scope for
+    a documentation pass — noted so it is not lost.

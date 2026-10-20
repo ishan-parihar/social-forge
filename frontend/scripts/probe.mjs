@@ -961,6 +961,38 @@ async function main() {
           // font result a coin toss.
           await page.evaluate(() => document.fonts?.ready).catch(() => {});
 
+          // The ENTRY ANIMATION must have finished before the audit
+          // measures anything.
+          //
+          // Every page fades in over 0.2s (`.page-enter`), and the
+          // fade is an `opacity` animation on an ANCESTOR of the text.
+          // The contrast check treats an ancestor with `opacity < 1` as
+          // a translucent group and stops the backdrop walk there - so
+          // a page measured mid-fade was measured against the wrong
+          // background.
+          //
+          // It showed up on /tags at 375px, where the taller page took
+          // longer to settle: the tag names measured 1.17:1 and the
+          // edit and delete buttons 2.37:1, and both were FINE - the
+          // real readings are 15.25:1 and 7.21:1. A false FAIL, on a
+          // page that was correct.
+          //
+          // So the probe waits for the running animations to finish.
+          // A page that ANIMATES forever (the skeleton shimmer) would
+          // hang, so only the ones that are not infinite are awaited.
+          await page
+            .evaluate(async () => {
+              const anims = document.getAnimations().filter((a) => {
+                const t = a.effect?.getComputedTiming?.();
+                return t && t.iterations !== Infinity;
+              });
+              if (!anims.length) return;
+              await Promise.all(
+                anims.map((a) => a.finished.catch(() => undefined))
+              );
+            })
+            .catch(() => {});
+
           // The theme must be APPLIED before the audit measures
           // anything.
           //
