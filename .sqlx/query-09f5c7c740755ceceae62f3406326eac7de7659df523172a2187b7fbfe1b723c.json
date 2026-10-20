@@ -1,10 +1,10 @@
 {
   "db_name": "SQLite",
-  "query": "INSERT INTO tags (id, user_id, name, color) VALUES (?, ?, ?, ?)\n                   RETURNING id as \"id!: String\", name, color,\n                             created_at as \"created_at: EpochUtc\",\n                             updated_at as \"updated_at: EpochUtc\"",
+  "query": "SELECT id as \"id!: Uuid\", name, url, is_active as \"is_active!: i64\",\n                                                  created_at as \"created_at: EpochUtc\"\n                                           FROM webhooks WHERE id = ? AND user_id = ?",
   "describe": {
     "columns": [
       {
-        "name": "id!: String",
+        "name": "id!: Uuid",
         "ordinal": 0,
         "type_info": "Text"
       },
@@ -14,23 +14,23 @@
         "type_info": "Text"
       },
       {
-        "name": "color",
+        "name": "url",
         "ordinal": 2,
         "type_info": "Text"
       },
       {
-        "name": "created_at: EpochUtc",
+        "name": "is_active!: i64",
         "ordinal": 3,
         "type_info": "Integer"
       },
       {
-        "name": "updated_at: EpochUtc",
+        "name": "created_at: EpochUtc",
         "ordinal": 4,
         "type_info": "Integer"
       }
     ],
     "parameters": {
-      "Right": 4
+      "Right": 2
     },
     "nullable": [
       true,
@@ -40,5 +40,5 @@
       false
     ]
   },
-  "hash": "90121ac0f7e80bbfe6b06186bd7bd0ce5f1af037cb4989280f9c14ba66455630"
+  "hash": "09f5c7c740755ceceae62f3406326eac7de7659df523172a2187b7fbfe1b723c"
 }

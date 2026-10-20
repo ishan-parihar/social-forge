@@ -1,10 +1,10 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id as \"id!: String\", name, trigger_type, response_type,\n                      is_active as \"is_active: i64\",\n                      created_at as \"created_at: EpochUtc\"\n               FROM automation_rules\n               WHERE user_id = ?\n               ORDER BY created_at DESC",
+  "query": "SELECT id as \"id!: Uuid\", name, trigger_type, response_type,\n                      is_active as \"is_active: i64\",\n                      created_at as \"created_at: EpochUtc\"\n               FROM automation_rules\n               WHERE user_id = ? AND integration_id = ?\n               ORDER BY created_at DESC",
   "describe": {
     "columns": [
       {
-        "name": "id!: String",
+        "name": "id!: Uuid",
         "ordinal": 0,
         "type_info": "Text"
       },
@@ -35,7 +35,7 @@
       }
     ],
     "parameters": {
-      "Right": 1
+      "Right": 2
     },
     "nullable": [
       true,
@@ -46,5 +46,5 @@
       true
     ]
   },
-  "hash": "80a135cc1ed1ec7d41fece38ca5d756e352f0345b5b6b71ecf8b798f947a2234"
+  "hash": "d5378b2d173a2b6de916cdf210950890d10af8b3c38b40478270a8038ffcd5ec"
 }

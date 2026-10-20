@@ -104,12 +104,29 @@
         --success-rgb: 34 197 94;   /* green-500 - 7.20:1 */
         --success-fg-rgb: 11 14 20;   /* --bg ink on green-500 → 8.5:1 */
         --warning-rgb: 234 179 8;  /* yellow-500 - 8.56:1 */
-        --error-rgb: 240 75 75;    /* red - 4.54:1 (nudged off 500 for AA) */
+        /* Ink placed ON a warning fill. The dark theme's yellow-500 is
+           light, so only the dark surface ink clears it (10.07:1); the
+           light theme's amber is dark enough for white (6.28:1). */
+        --warning-fg-rgb: 11 14 20;
+        /* 2026-10-20 red-team: the error and info hues are used in TWO
+           roles - as TEXT on a wash of themselves (the 10-percent message
+           and chip boxes) and as a SOLID fill under an ink.
+           red-500 cleared 4.52:1 on its /10 wash but only 3.98:1 on the
+           /20 wash, and blue-500 failed BOTH (4.43:1 and 3.83:1).
+           The hues are walked UP so the text role clears on every wash
+           the app uses, and the solid-fill role takes the dark surface
+           ink (which is what --error-fg already did).
+             error 240 75 75   → 4.52:1 on /10, 3.98:1 on /20
+             error 255 100 100 → 5.55:1 on /10, 4.91:1 on /20
+             info  61 132 246  → 4.43:1 on /10, 3.83:1 on /20
+             info  80 150 255  → 5.31:1 on /10, 4.50:1 on /20 */
+        --error-rgb: 255 100 100; /* 5.55:1 on its /10 wash, 4.91:1 on /20 */
         /* Ink placed ON an error fill. White on red-500 is 3.61:1 - under
            the AA floor for small text - so the badge uses the dark
            surface ink instead (5.81:1). Same shape as --success-fg. */
         --error-fg-rgb: 11 14 20;   /* --bg ink on red-500 → 5.81:1 */
-        --info-rgb: 61 132 246;    /* blue - 4.56:1 (nudged off 500 for AA) */
+        --info-rgb: 80 150 255;    /* 5.31:1 on its /10 wash, 4.50:1 on /20 */
+        --info-fg-rgb: 11 14 20;   /* --bg ink on the blue fill → 6.57:1 */
         /* - metric colors (F1). Data-viz hues, tuned for dark surfaces.
              These are semantic: engagement numbers mean the same thing
              everywhere, so the ramp is declared once here, not per call site. - */
@@ -214,14 +231,38 @@
         /* v22 Phase 3: light-mode status colors. F1 walked each one down from
            the 600 step until it cleared 4.5:1 on --bg AND --bg-card - the 600
            steps were 3.15:1 (green) and 2.81:1 (yellow), i.e. invisible as
-           text. They are still saturated enough to read as green/yellow. */
-        --success-rgb: 27 127 78;    /* 4.57:1 */
+           text. They are still saturated enough to read as green/yellow.
+
+           2026-10-20 red-team: each hue is used in TWO roles - as TEXT on
+           a wash of itself (the `bg-<hue>/10` message and chip boxes) and as a
+           SOLID fill under white text. The 600/700 steps cleared 4.5:1 on
+           the CARD but only ~4.4:1 on their own 10-percent wash, so every
+           tinted message box failed in the light theme. Each hue is walked down
+           one more step so BOTH roles clear:
+             success 22 110 67  → 5.41:1 on the /10 wash, 6.28:1 as a fill
+             warning 130 88 3   → 5.42:1 on the /10 wash, 6.28:1 as a fill
+             info    30 80 190  → 6.12:1 on the /10 wash, 7.13:1 as a fill
+           (The chips that were `text-<hue>` on a tint are now
+           `text-content` on the tint with the hue on a ring, so the TEXT
+           role is carried by --text-content at 14.6:1 and these values
+           only have to hold the solid-fill role and the /10 wash role.) */
+        --success-rgb: 22 110 67;    /* 5.41:1 on its /10 wash, 6.28:1 as a fill */
         --success-fg-rgb: 255 255 255; /* white text on light-mode green */
-        --warning-rgb: 149 102 3;    /* 4.59:1 */
-        --error-rgb: 218 35 35;      /* 4.51:1 */
-        /* White text on the light-mode red-600 fill: 4.83:1. */
+        --warning-rgb: 130 88 3;     /* 5.42:1 on its /10 wash, 6.28:1 as a fill */
+        --warning-fg-rgb: 255 255 255; /* white text on the light-mode amber */
+        /* The light-mode error hue is used in TWO roles: as TEXT on a wash
+           of itself (`text-error bg-error/10`, the error-message boxes),
+           and as a SOLID fill under white text (the danger button).
+           red-600 (218 35 35) cleared 4.95:1 as text on white but only
+           4.22:1 on its OWN /10 wash - under the AA floor - so every
+           error message box failed in the light theme.
+           red-700 (185 28 28) clears both: 5.45:1 as text on the
+           /10 wash, 6.47:1 with white on the solid fill. */
+        --error-rgb: 185 28 28;      /* 5.45:1 on its /10 wash, 6.47:1 as a fill */
+        /* White text on the light-mode red-700 fill: 6.47:1. */
         --error-fg-rgb: 255 255 255;
-        --info-rgb: 37 99 235;       /* 4.72:1 */
+        --info-rgb: 30 80 190;       /* 6.12:1 on its /10 wash, 7.13:1 as a fill */
+        --info-fg-rgb: 255 255 255; /* white text on the light-mode blue */
         /* - metric colors. Each walked down from the 600 step until it cleared
              4.5:1 on --bg AND --bg-card. Engagement numbers are read at a
              glance, so legibility outranks matching the 600-step swatch. - */

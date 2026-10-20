@@ -94,13 +94,25 @@
 <div class="bg-surface border border-line rounded-xl p-5 space-y-3">
   <div class="flex items-center justify-between">
     <div class="flex items-center gap-2 min-w-0">
-      <h4 class="text-sm font-semibold truncate">{feed.title || 'Untitled Feed'}</h4>
+      <!--
+        The feed title is the page's SECTION heading. It was an <h4>
+        under an <h1> ("RSS Autopost"), which skips two levels and breaks
+        the document outline. This card is the only place a feed title
+        appears, and the card IS a section of the page, so <h2> is the
+        right level.
+      -->
+      <h2 class="text-sm font-semibold truncate">{feed.title || 'Untitled Feed'}</h2>
       <!-- R-6: Use an explicit Enabled/Disabled pill instead of reusing the
            post-state Badge component (which would show "Published"/"Draft"
            - semantically wrong for an RSS feed that has no publication state). -->
+      <!-- The "Disabled" pill is `text-muted`, not `text-faint`: the faint
+           tier is the faintest text in the ramp and clears 4.5:1 against
+           the PAGE, but on the pill's own neutral wash it measured 4.21:1
+           (dark) and 4.45:1 (light) - under the AA floor for a 10px
+           label. `text-muted` measures 5.10:1 and 5.83:1 there. -->
       <span class="px-2 py-0.5 rounded text-[10px] font-medium border {feed.enabled
-        ? 'bg-success/10 border-success/30 text-success'
-        : 'bg-hue-neutral/10 border-hue-neutral/30 text-faint'}">
+        ? 'bg-success/10 border-success/50 text-content'
+        : 'bg-hue-neutral/10 border-hue-neutral/40 text-muted'}">
         {feed.enabled ? 'Enabled' : 'Disabled'}
       </span>
     </div>

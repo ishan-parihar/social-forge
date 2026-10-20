@@ -1,10 +1,10 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id as \"id!: String\" FROM automation_rules WHERE id = ? AND user_id = ?",
+  "query": "SELECT id as \"id!: Uuid\" FROM automation_rules WHERE id = ? AND user_id = ?",
   "describe": {
     "columns": [
       {
-        "name": "id!: String",
+        "name": "id!: Uuid",
         "ordinal": 0,
         "type_info": "Text"
       }
@@ -16,5 +16,5 @@
       true
     ]
   },
-  "hash": "2f2e40d6adb839f575a05a3027dd9ef4269ffb3c5614c61266dd2c67ba6af576"
+  "hash": "419e491c52c15bb242ac81b6f50d9dd0fd66117b9b61781fbae3c6de8f1a1532"
 }

@@ -1123,14 +1123,8 @@ impl SocialProvider for YoutubeProvider {
         });
 
         // C1: one shared resumable-upload path (see resumable_upload above).
-        let json = resumable_upload(
-            &self.http,
-            access_token,
-            &metadata,
-            video_bytes,
-            mime_type,
-        )
-        .await?;
+        let json =
+            resumable_upload(&self.http, access_token, &metadata, video_bytes, mime_type).await?;
         let video_id = json["id"]
             .as_str()
             .ok_or_else(|| ProviderError::Api("YouTube did not return a video ID".into()))?;

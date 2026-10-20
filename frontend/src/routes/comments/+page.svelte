@@ -145,11 +145,11 @@
           <span class="text-xs text-muted">{new Date(c.created_at).toLocaleDateString()}</span>
           <div class="flex items-center gap-2">
             {#if c.status !== 'resolved'}
-              <span class="px-2 py-0.5 text-xs rounded bg-warning/20 text-warning">New</span>
+              <span class="px-2 py-0.5 text-xs rounded bg-warning/20 ring-1 ring-inset ring-warning/40 text-content">New</span>
               <button onclick={() => resolveComment(c.id)} class="text-xs text-muted hover:text-success min-h-11" title="Resolve">✓</button>
               <button onclick={() => replyModal = { comment: c, text: "" }} class="text-xs text-muted hover:text-accent min-h-11" title="Reply">↩</button>
             {:else}
-              <span class="px-2 py-0.5 text-xs rounded bg-success/20 text-success">Resolved</span>
+              <span class="px-2 py-0.5 text-xs rounded bg-success/20 ring-1 ring-inset ring-success/40 text-content">Resolved</span>
             {/if}
           </div>
         </div>

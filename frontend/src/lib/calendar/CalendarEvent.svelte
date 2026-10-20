@@ -62,13 +62,20 @@
       : (event.content.length > 200 ? event.content.slice(0, 200) + '...' : event.content)}
   >
     {#if event.error}
-      <!-- Phase v21: postiz-style per-post error indicator.
-           A red "!" badge in the top-left corner makes failed posts
-           immediately visible on the calendar without needing to hover.
-           The chip itself also gets ring-2 ring-error (above) and
-           the title attribute shows the error message on hover. -->
+      <!--
+        A red "!" badge in the top-left corner makes failed posts
+        immediately visible on the calendar without needing to hover.
+        The chip itself also gets ring-2 ring-error (above) and the
+        title attribute shows the error message on hover.
+
+        The glyph is 10px, not 8px: an 8px character is below the 10px
+        floor the probe reports, and the badge is the ONE thing on the
+        chip that has to be readable at a glance - it is the difference
+        between "a failed post" and "a post" being noticed at all.
+        The badge box grows to match so the glyph is not squeezed.
+      -->
       <span
-        class="absolute -top-1 -left-1 w-3.5 h-3.5 rounded-full bg-error text-error-fg text-[8px] font-bold flex items-center justify-center shadow-sm z-10"
+        class="absolute -top-1 -left-1 min-w-[1.125rem] h-[1.125rem] px-0.5 rounded-full bg-error text-error-fg text-[10px] leading-none font-bold flex items-center justify-center shadow-sm z-10"
         title={`Publishing failed: ${event.error}`}
       >!</span>
     {/if}
@@ -191,7 +198,7 @@
   .tag-dot { width: 4px; height: 4px; border-radius: 50%; flex-shrink: 0; }
   .tag-chip {
     max-width: 72px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    padding: 0 4px; border-radius: 3px; font-size: 0.5625rem; line-height: 1.3;
+    padding: 0 4px; border-radius: 3px; font-size: 0.625rem; line-height: 1.3;
     font-weight: 500; flex-shrink: 0;
   }
   /* A week cell is ~130px wide and holds the tag, the time and the title.
@@ -209,8 +216,8 @@
   @container (max-width: 90px) {
     .tag-chip { display: none; }
   }
-  .tag-overflow { font-size: 0.5625rem; opacity: 0.6; flex-shrink: 0; }
+  .tag-overflow { font-size: 0.625rem; opacity: 0.6; flex-shrink: 0; }
   .event-time { opacity: 0.7; flex-shrink: 0; }
   .event-metrics { display: flex; align-items: center; gap: 0.25rem; flex-shrink: 0; margin-left: auto; overflow: hidden; }
-  .metric-item { font-size: 0.5625rem; opacity: 0.6; white-space: nowrap; }
+  .metric-item { font-size: 0.625rem; opacity: 0.6; white-space: nowrap; }
 </style>

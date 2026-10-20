@@ -14,12 +14,12 @@ use crate::error::AppError;
 
 use super::AppState;
 
-/// `id` is TEXT and `created_at` an INTEGER epoch. sqlx cannot decode `Uuid`
-/// from TEXT (it wants 16 raw blob bytes, SQLite stores 36), so both come
-/// back in their storage types and are rendered here.
+/// `id` is a uuid and `created_at` an INTEGER epoch. sqlx encodes a uuid
+/// column as BLOB(16), so the `id!: Uuid` override is what decodes the 16
+/// raw bytes; a `String` decode of the same column is the utf-8 error.
 #[derive(Debug, sqlx::FromRow)]
 struct RuleRow {
-    id: String,
+    id: Uuid,
     name: String,
     trigger_type: String,
     response_type: String,
@@ -129,7 +129,7 @@ pub async fn list_rules(
     let rules: Vec<RuleRow> = if let Some(integration_id) = query.integration_id {
         sqlx::query_as!(
             RuleRow,
-            r#"SELECT id as "id!: String", name, trigger_type, response_type,
+            r#"SELECT id as "id!: Uuid", name, trigger_type, response_type,
                       is_active as "is_active: i64",
                       created_at as "created_at: EpochUtc"
                FROM automation_rules
@@ -143,7 +143,7 @@ pub async fn list_rules(
     } else {
         sqlx::query_as!(
             RuleRow,
-            r#"SELECT id as "id!: String", name, trigger_type, response_type,
+            r#"SELECT id as "id!: Uuid", name, trigger_type, response_type,
                       is_active as "is_active: i64",
                       created_at as "created_at: EpochUtc"
                FROM automation_rules
@@ -158,7 +158,7 @@ pub async fn list_rules(
     let rule_responses: Vec<RuleResponse> = rules
         .into_iter()
         .map(|r| RuleResponse {
-            id: r.id,
+            id: r.id.to_string(),
             name: r.name,
             trigger_type: r.trigger_type,
             response_type: r.response_type,
@@ -190,7 +190,7 @@ pub async fn create_rule(
            (id, user_id, integration_id, name, trigger_type, trigger_filter,
             response_template, response_type, ai_model, cooldown_minutes, max_responses_per_hour)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-           RETURNING id as "id!: String", name, is_active as "is_active: i64""#,
+           RETURNING id as "id!: Uuid", name, is_active as "is_active: i64""#,
         id,
         auth.user_id,
         request.integration_id,
@@ -208,7 +208,7 @@ pub async fn create_rule(
     .map_err(|e| AppError::Internal(format!("Failed to create rule: {e}")))?;
 
     Ok(Json(CreateRuleResponse {
-        id: rule.id,
+        id: rule.id.to_string(),
         name: rule.name,
         is_active: rule.is_active.map(|v| v != 0).unwrap_or(true),
     }))
@@ -223,7 +223,7 @@ pub async fn update_rule(
 ) -> Result<Json<SuccessResponse>, AppError> {
     // Verify ownership
     let existing = sqlx::query!(
-        r#"SELECT id as "id!: String" FROM automation_rules WHERE id = ? AND user_id = ?"#,
+        r#"SELECT id as "id!: Uuid" FROM automation_rules WHERE id = ? AND user_id = ?"#,
         rule_id,
         auth.user_id,
     )
@@ -302,7 +302,7 @@ pub async fn get_logs(
 ) -> Result<Json<GetLogsResponse>, AppError> {
     // Verify ownership
     let existing = sqlx::query!(
-        r#"SELECT id as "id!: String" FROM automation_rules WHERE id = ? AND user_id = ?"#,
+        r#"SELECT id as "id!: Uuid" FROM automation_rules WHERE id = ? AND user_id = ?"#,
         rule_id,
         auth.user_id,
     )
@@ -314,7 +314,7 @@ pub async fn get_logs(
     }
 
     let logs = sqlx::query!(
-        r#"SELECT id as "id!: String", trigger_id, trigger_type, response, status, error_message,
+        r#"SELECT id as "id!: Uuid", trigger_id, trigger_type, response, status, error_message,
                   created_at as "created_at: EpochUtc"
            FROM automation_logs
            WHERE rule_id = ?
@@ -330,7 +330,7 @@ pub async fn get_logs(
     let log_responses: Vec<LogEntryResponse> = logs
         .into_iter()
         .map(|l| LogEntryResponse {
-            id: l.id,
+            id: l.id.to_string(),
             trigger_id: l.trigger_id,
             trigger_type: l.trigger_type,
             response: l.response,

@@ -21,11 +21,20 @@ fn repo_path(rel: &str) -> PathBuf {
 
 /// Documents whose commands are checked: the skill, its references, README.
 fn docs() -> Vec<String> {
-    let mut out = vec!["README.md".to_string(), "skills/social-forge-agent/SKILL.md".to_string()];
-    for entry in std::fs::read_dir(repo_path("skills/social-forge-agent/references")).expect("read references") {
+    let mut out = vec![
+        "README.md".to_string(),
+        "skills/social-forge-agent/SKILL.md".to_string(),
+    ];
+    for entry in std::fs::read_dir(repo_path("skills/social-forge-agent/references"))
+        .expect("read references")
+    {
         let path = entry.expect("dir entry").path();
         if path.extension().and_then(|e| e.to_str()) == Some("md") {
-            let rel = path.strip_prefix(repo_path("")).expect("under repo").to_string_lossy().into_owned();
+            let rel = path
+                .strip_prefix(repo_path(""))
+                .expect("under repo")
+                .to_string_lossy()
+                .into_owned();
             out.push(rel);
         }
     }
@@ -132,10 +141,18 @@ fn fill_placeholders(cmd: &str) -> String {
     let mut rest = cmd;
     while let Some(start) = rest.find('<') {
         match rest[start..].find('>') {
-            Some(len) if rest[start + 1..start + len].chars().all(|c| c.is_ascii_uppercase() || c == '_' || c == ' ') => {
+            Some(len)
+                if rest[start + 1..start + len]
+                    .chars()
+                    .all(|c| c.is_ascii_uppercase() || c == '_' || c == ' ') =>
+            {
                 out.push_str(&rest[..start]);
                 let name = &rest[start + 1..start + len];
-                out.push_str(if name.contains("NUMBER") { "1" } else { PLACEHOLDER });
+                out.push_str(if name.contains("NUMBER") {
+                    "1"
+                } else {
+                    PLACEHOLDER
+                });
                 rest = &rest[start + len + 1..];
             }
             _ => {
@@ -161,7 +178,9 @@ fn every_documented_social_forge_command_parses() {
             if filled.contains('<') {
                 continue;
             }
-            let Some(trimmed) = trim_shell(&filled) else { continue };
+            let Some(trimmed) = trim_shell(&filled) else {
+                continue;
+            };
             if trimmed.is_empty() {
                 continue;
             }
@@ -177,7 +196,10 @@ fn every_documented_social_forge_command_parses() {
             }
         }
     }
-    assert!(checked >= 40, "only {checked} documented commands were checked; the extractor is broken");
+    assert!(
+        checked >= 40,
+        "only {checked} documented commands were checked; the extractor is broken"
+    );
     assert!(
         failures.is_empty(),
         "{} documented command(s) the CLI rejects:\n{}",
@@ -188,9 +210,18 @@ fn every_documented_social_forge_command_parses() {
 
 #[test]
 fn trim_shell_keeps_only_the_command_part() {
-    assert_eq!(trim_shell("x post \"hi\" | jq .").as_deref(), Some("x post \"hi\""));
-    assert_eq!(trim_shell("posts list --limit 5 # newest").as_deref(), Some("posts list --limit 5"));
-    assert_eq!(trim_shell("providers --pretty && echo ok").as_deref(), Some("providers --pretty"));
+    assert_eq!(
+        trim_shell("x post \"hi\" | jq .").as_deref(),
+        Some("x post \"hi\"")
+    );
+    assert_eq!(
+        trim_shell("posts list --limit 5 # newest").as_deref(),
+        Some("posts list --limit 5")
+    );
+    assert_eq!(
+        trim_shell("providers --pretty && echo ok").as_deref(),
+        Some("providers --pretty")
+    );
     assert!(trim_shell("posts create \"$TEXT\"").is_none());
 }
 

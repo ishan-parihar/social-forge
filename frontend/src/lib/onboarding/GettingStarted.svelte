@@ -133,7 +133,7 @@
         >
           <div class="w-5 h-5 rounded-full flex items-center justify-center text-xs shrink-0
             {item.done
-              ? 'bg-success/20 text-success'
+              ? 'bg-success/20 text-content'
               : 'bg-surface-hover text-muted border border-line'}">
             {#if item.done}
               <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">

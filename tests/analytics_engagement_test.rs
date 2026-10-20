@@ -142,9 +142,14 @@ async fn get(state: &AppState, user_id: Uuid, uri: &str) -> (StatusCode, String)
         .header(header::ORIGIN, &state.config.frontend_url)
         .body(Body::empty())
         .expect("request");
-    let res = build_router(state.clone()).oneshot(req).await.expect("router");
+    let res = build_router(state.clone())
+        .oneshot(req)
+        .await
+        .expect("router");
     let status = res.status();
-    let bytes = axum::body::to_bytes(res.into_body(), 1 << 18).await.expect("body");
+    let bytes = axum::body::to_bytes(res.into_body(), 1 << 18)
+        .await
+        .expect("body");
     (status, String::from_utf8_lossy(&bytes).into_owned())
 }
 

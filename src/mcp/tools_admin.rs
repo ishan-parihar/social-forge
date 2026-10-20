@@ -137,9 +137,7 @@ pub async fn handle_posts_set_tags(
             axum::extract::State(state.clone()),
             crate::auth::middleware::AuthenticatedUser { user_id },
             axum::extract::Path(post_id),
-            axum::Json(crate::api::posts::SetPostTagsRequest {
-                tag_ids: tag_uuids,
-            }),
+            axum::Json(crate::api::posts::SetPostTagsRequest { tag_ids: tag_uuids }),
         )
         .await,
     )

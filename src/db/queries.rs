@@ -175,11 +175,12 @@ pub async fn create_integration(
 // ══════════════════════════════════════════════════════════════
 
 /// All discovered X GraphQL queryIds with their fetch time (epoch seconds).
-pub async fn list_x_query_ids(pool: &SqlitePool) -> Result<Vec<(String, String, i64)>, sqlx::Error> {
-    let rows =
-        sqlx::query!(r#"SELECT op_name, query_id, fetched_at FROM x_query_ids"#)
-            .fetch_all(pool)
-            .await?;
+pub async fn list_x_query_ids(
+    pool: &SqlitePool,
+) -> Result<Vec<(String, String, i64)>, sqlx::Error> {
+    let rows = sqlx::query!(r#"SELECT op_name, query_id, fetched_at FROM x_query_ids"#)
+        .fetch_all(pool)
+        .await?;
     Ok(rows
         .into_iter()
         .map(|r| (r.op_name, r.query_id, r.fetched_at))
@@ -1032,7 +1033,7 @@ pub async fn list_posts_search(
              ))
              AND (? IS NULL OR campaign_id = ?)
             ORDER BY {} LIMIT ? OFFSET ?"#,
-             order_by
+            order_by
         )
     };
 
@@ -1946,7 +1947,8 @@ pub async fn get_calendar_posts_with_metrics(
     if let Some(ids) = &integration_ids {
         if !ids.is_empty() {
             where_clauses.push(
-                "p.integration_id IN (SELECT unhex(replace(value, '-', '')) FROM json_each(?))".into(),
+                "p.integration_id IN (SELECT unhex(replace(value, '-', '')) FROM json_each(?))"
+                    .into(),
             );
             has_ids = true;
         }
@@ -2053,7 +2055,11 @@ pub async fn find_next_free_slot(
         .await?;
 
         integration
-            .and_then(|v| crate::db::models::decode_posting_times(v).as_array().cloned())
+            .and_then(|v| {
+                crate::db::models::decode_posting_times(v)
+                    .as_array()
+                    .cloned()
+            })
             .map(|arr| {
                 arr.iter()
                     .filter_map(|obj| obj.get("time").and_then(|t| t.as_i64()))
@@ -3994,9 +4000,17 @@ mod g02_tests {
             .fetch_one(&pool)
             .await
             .unwrap();
-        let feed = create_rss_feed(&pool, user_id, "https://example.com/feed.xml", integration_id, "F", false, true)
-            .await
-            .unwrap();
+        let feed = create_rss_feed(
+            &pool,
+            user_id,
+            "https://example.com/feed.xml",
+            integration_id,
+            "F",
+            false,
+            true,
+        )
+        .await
+        .unwrap();
 
         let first = insert_rss_post(&pool, feed.id, "guid-1", "T", "u", None, "hash-a")
             .await
@@ -4020,12 +4034,25 @@ mod g02_tests {
     #[tokio::test]
     async fn media_alt_text_round_trips() {
         let (pool, user_id) = fixture().await;
-        let stored = create_media(&pool, user_id, "bike.png", "bike.png", "image/png", 10, None, None, Some("a red bike"))
-            .await
-            .unwrap();
+        let stored = create_media(
+            &pool,
+            user_id,
+            "bike.png",
+            "bike.png",
+            "image/png",
+            10,
+            None,
+            None,
+            Some("a red bike"),
+        )
+        .await
+        .unwrap();
         assert_eq!(stored.alt_text.as_deref(), Some("a red bike"));
 
-        let read = get_media(&pool, stored.id).await.unwrap().expect("media row");
+        let read = get_media(&pool, stored.id)
+            .await
+            .unwrap()
+            .expect("media row");
         assert_eq!(read.alt_text.as_deref(), Some("a red bike"));
     }
 
@@ -4406,8 +4433,14 @@ mod b03_b08_tests {
         .fetch_one(&pool)
         .await
         .unwrap();
-        assert_eq!(state, "queued", "copies must go out on schedule, not sit as drafts");
-        assert_eq!(copy_days, None, "copies must not themselves recur (runaway guard)");
+        assert_eq!(
+            state, "queued",
+            "copies must go out on schedule, not sit as drafts"
+        );
+        assert_eq!(
+            copy_days, None,
+            "copies must not themselves recur (runaway guard)"
+        );
         assert_eq!(copy_group, Some(group), "copies join the series group");
         let delta = (scheduled.unwrap() - base.timestamp()).abs();
         assert!(

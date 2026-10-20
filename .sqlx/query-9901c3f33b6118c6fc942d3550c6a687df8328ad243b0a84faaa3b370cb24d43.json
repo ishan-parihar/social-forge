@@ -1,10 +1,10 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id as \"id!: String\", name, color,\n                  created_at as \"created_at: EpochUtc\",\n                  updated_at as \"updated_at: EpochUtc\"\n           FROM tags WHERE user_id = ? ORDER BY name ASC",
+  "query": "UPDATE tags SET\n              name = COALESCE(?, name),\n              color = COALESCE(?, color),\n              updated_at = unixepoch()\n           WHERE id = ? AND user_id = ?\n           RETURNING id as \"id!: Uuid\", name, color,\n                     created_at as \"created_at: EpochUtc\",\n                     updated_at as \"updated_at: EpochUtc\"",
   "describe": {
     "columns": [
       {
-        "name": "id!: String",
+        "name": "id!: Uuid",
         "ordinal": 0,
         "type_info": "Text"
       },
@@ -30,7 +30,7 @@
       }
     ],
     "parameters": {
-      "Right": 1
+      "Right": 4
     },
     "nullable": [
       true,
@@ -40,5 +40,5 @@
       false
     ]
   },
-  "hash": "1c22ee4b34651a037deb71ae5c4741ed7f9be092510db3ca0a4b9ac135a14743"
+  "hash": "9901c3f33b6118c6fc942d3550c6a687df8328ad243b0a84faaa3b370cb24d43"
 }

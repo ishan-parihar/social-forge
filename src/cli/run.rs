@@ -230,31 +230,30 @@ async fn init_state() -> anyhow::Result<AppState> {
     // creds set (parity bug caught during the V1b live pass). Mirror
     // main.rs's construction, but degrade with a warn instead of
     // failing: a malformed TELEGRAM_API_ID must not break `posts list`.
-    let telegram_client_manager =
-        match (&config.telegram_api_id, &config.telegram_api_hash) {
-            (Some(id_str), Some(hash)) if !id_str.is_empty() && !hash.is_empty() => {
-                match id_str.parse::<i32>() {
-                    Ok(api_id) => {
-                        let session_dir = config
-                            .telegram_session_dir
-                            .clone()
-                            .unwrap_or_else(|| "./data/telegram".into());
-                        Some(std::sync::Arc::new(crate::services::telegram_client::TelegramClientManager::new(
+    let telegram_client_manager = match (&config.telegram_api_id, &config.telegram_api_hash) {
+        (Some(id_str), Some(hash)) if !id_str.is_empty() && !hash.is_empty() => {
+            match id_str.parse::<i32>() {
+                Ok(api_id) => {
+                    let session_dir = config
+                        .telegram_session_dir
+                        .clone()
+                        .unwrap_or_else(|| "./data/telegram".into());
+                    Some(std::sync::Arc::new(
+                        crate::services::telegram_client::TelegramClientManager::new(
                             api_id,
                             hash.clone(),
                             std::path::PathBuf::from(session_dir),
-                        )))
-                    }
-                    Err(_) => {
-                        tracing::warn!(
-                            "Invalid TELEGRAM_API_ID — Telegram user client disabled"
-                        );
-                        None
-                    }
+                        ),
+                    ))
+                }
+                Err(_) => {
+                    tracing::warn!("Invalid TELEGRAM_API_ID — Telegram user client disabled");
+                    None
                 }
             }
-            _ => None,
-        };
+        }
+        _ => None,
+    };
     let wa_client: crate::wa::OptionalWhaClient = if let Some(dir) = &config.whatsapp_store_dir {
         let store_dir = std::path::PathBuf::from(dir);
         match crate::wa::WhaClient::new(store_dir).await {
@@ -357,7 +356,9 @@ fn handle_service_install() -> anyhow::Result<()> {
     match linger {
         Ok(s) if s.success() => println!("linger enabled — the service now starts at boot"),
         st => {
-            println!("note: `loginctl enable-linger` failed ({st:?}) — the service stops at logout.");
+            println!(
+                "note: `loginctl enable-linger` failed ({st:?}) — the service stops at logout."
+            );
         }
     }
 
@@ -409,9 +410,7 @@ async fn handle_mcp_tools_with_state(
     // B3: same set-membership rule as the per-session MCP filter
     // (§5.5) so shell discovery matches what a session would advertise.
     if let Some(set) = toolset.map(|s| s.trim().to_ascii_lowercase()) {
-        tools.retain(|t| {
-            crate::mcp::SocialForgeMcpServer::toolset_of(t.name.as_ref()) == set
-        });
+        tools.retain(|t| crate::mcp::SocialForgeMcpServer::toolset_of(t.name.as_ref()) == set);
     }
     tools.sort_by(|a, b| a.name.cmp(&b.name));
     if pretty {
@@ -1303,21 +1302,21 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
                             .unwrap_or("")
                             .to_string();
 
-                         crate::db::queries::create_integration(
-                             &state.db,
-                             user_id,
-                             "x",
-                             "X (Twitter)",
-                             &id,
-                             &token_str,
-                             None,
-                             None,
-                             Some(name),
-                             None,
-                             avatar,
-                             None,
-                             Some("cookie"), // §6: explicit auth_mode
-                         )
+                        crate::db::queries::create_integration(
+                            &state.db,
+                            user_id,
+                            "x",
+                            "X (Twitter)",
+                            &id,
+                            &token_str,
+                            None,
+                            None,
+                            Some(name),
+                            None,
+                            avatar,
+                            None,
+                            Some("cookie"), // §6: explicit auth_mode
+                        )
                         .await?;
 
                         output_json(&serde_json::json!({
@@ -1389,7 +1388,7 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
                                 .and_then(|s| s.split('?').next())
                                 .map(String::from);
 
-                             crate::db::queries::create_integration(
+                            crate::db::queries::create_integration(
                                 &state.db,
                                 user_id,
                                 "reddit",
@@ -3146,7 +3145,9 @@ async fn handle_posts_create_helper(
         None => None,
     };
 
-    let media_json = media.map(parse_media_arg).unwrap_or_else(|| serde_json::json!([]));
+    let media_json = media
+        .map(parse_media_arg)
+        .unwrap_or_else(|| serde_json::json!([]));
 
     let settings_json: serde_json::Value = match settings {
         Some(s) => serde_json::from_str::<serde_json::Value>(s)
@@ -3363,10 +3364,9 @@ async fn handle_posts_validate_helper(
         rows.push(integ);
     }
     let media_json = media.map(parse_media_arg);
-    let attachments: Vec<crate::social::MediaAttachment> = serde_json::from_value(
-        media_json.clone().unwrap_or(serde_json::json!([])),
-    )
-    .unwrap_or_default();
+    let attachments: Vec<crate::social::MediaAttachment> =
+        serde_json::from_value(media_json.clone().unwrap_or(serde_json::json!([])))
+            .unwrap_or_default();
     let body = crate::api::CreatePostRequest {
         integration_ids,
         content: content.to_string(),

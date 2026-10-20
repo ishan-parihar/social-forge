@@ -530,7 +530,7 @@
   <!-- Error state -->
   {#if fetchError}
     <div class="text-center py-12">
-      <div class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-error/15 border border-error/30 text-sm text-error">
+      <div class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-error/15 border border-error/30 text-sm text-content">
         <svg class="w-4 h-4 flex-shrink-0" viewBox="0 0 16 16" fill="currentColor">
           <path d="M8 1a7 7 0 110 14A7 7 0 018 1zm0 9.5a.75.75 0 100 1.5.75.75 0 000-1.5zM8.75 4.5a.75.75 0 00-1.5 0v4a.75.75 0 001.5 0v-4z"/>
         </svg>

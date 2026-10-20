@@ -103,11 +103,7 @@ pub fn parse_cookie_string(cookie_str: &str) -> Option<(String, String, String)>
 /// Build the JSON token blob stored in the integration row
 /// (`{auth_token, ct0[, cookie_string]}` — the shape XProvider's
 /// `parse_cookie_token`/`extract_cookie_string` read back).
-pub fn build_cookie_token(
-    auth_token: &str,
-    ct0: &str,
-    cookie_string: Option<&str>,
-) -> String {
+pub fn build_cookie_token(auth_token: &str, ct0: &str, cookie_string: Option<&str>) -> String {
     let mut m = serde_json::Map::new();
     m.insert(
         "auth_token".into(),
@@ -116,10 +112,7 @@ pub fn build_cookie_token(
     m.insert("ct0".into(), serde_json::Value::String(ct0.into()));
     if let Some(cs) = cookie_string {
         if !cs.is_empty() {
-            m.insert(
-                "cookie_string".into(),
-                serde_json::Value::String(cs.into()),
-            );
+            m.insert("cookie_string".into(), serde_json::Value::String(cs.into()));
         }
     }
     serde_json::Value::Object(m).to_string()
@@ -161,7 +154,11 @@ mod b12_tests {
         let db = chrome_cookie_db(
             "refuse",
             &[
-                ("auth_token", "", Some(&[0x76, 0x31, 0x30, 0xAA, 0xBB, 0xCC])),
+                (
+                    "auth_token",
+                    "",
+                    Some(&[0x76, 0x31, 0x30, 0xAA, 0xBB, 0xCC]),
+                ),
                 ("ct0", "plain-ct0", None),
             ],
         );
@@ -216,7 +213,11 @@ mod b12_tests {
     #[test]
     fn x_rows_prefer_x_com_domain() {
         let rows: Vec<CookieRow> = vec![
-            ("auth_token".into(), "from-twitter".into(), ".twitter.com".into()),
+            (
+                "auth_token".into(),
+                "from-twitter".into(),
+                ".twitter.com".into(),
+            ),
             ("ct0".into(), "tw-ct0".into(), ".twitter.com".into()),
             ("auth_token".into(), "from-x".into(), ".x.com".into()),
             ("ct0".into(), "x-ct0".into(), ".x.com".into()),

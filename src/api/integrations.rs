@@ -632,7 +632,9 @@ pub async fn connect_telegram_bot_token(
         .send()
         .await
         // without_url(): the request URL carries the bot token.
-        .map_err(|e| AppError::Provider(format!("Failed to reach Telegram: {}", e.without_url())))?;
+        .map_err(|e| {
+            AppError::Provider(format!("Failed to reach Telegram: {}", e.without_url()))
+        })?;
 
     let json: serde_json::Value = resp
         .json()
@@ -1418,10 +1420,12 @@ pub async fn connect_page(
 
     // An empty token would be stored as a working-looking integration whose
     // every publish then fails. Refuse it here, where the user can act on it.
-    let page_token = page
-        .access_token
-        .filter(|t| !t.is_empty())
-        .ok_or_else(|| AppError::BadRequest("This page did not return an access token; reconnect with a token that manages it".into()))?;
+    let page_token = page.access_token.filter(|t| !t.is_empty()).ok_or_else(|| {
+        AppError::BadRequest(
+            "This page did not return an access token; reconnect with a token that manages it"
+                .into(),
+        )
+    })?;
 
     let existing = sqlx::query_scalar::<_, i64>(
         "SELECT COUNT(*) FROM integrations WHERE user_id = $1 AND provider_identifier = $2 AND internal_id = $3",

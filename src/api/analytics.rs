@@ -474,11 +474,7 @@ pub struct DayEngagement {
 ///
 /// This inserts a zero row for every missing day between the window's
 /// start and its end, so the series is one point per calendar day.
-fn fill_missing_days(
-    rows: Vec<DayEngagement>,
-    cutoff_epoch: i64,
-    days: i64,
-) -> Vec<DayEngagement> {
+fn fill_missing_days(rows: Vec<DayEngagement>, cutoff_epoch: i64, days: i64) -> Vec<DayEngagement> {
     // The window's last day is today (in UTC, which is what the day
     // buckets use).
     let today = chrono::Utc::now().date_naive();
@@ -553,9 +549,8 @@ pub async fn get_engagement(
         crate::db::queries::own_post_engagement_totals(&state.db, auth.user_id, cutoff).await?;
 
     // Previous period totals (for delta calculation).
-    let prev =
-        crate::db::queries::own_post_engagement_totals(&state.db, auth.user_id, prev_cutoff)
-            .await?;
+    let prev = crate::db::queries::own_post_engagement_totals(&state.db, auth.user_id, prev_cutoff)
+        .await?;
 
     // Per-day breakdown for the sparkline, keyed by the day each post
     // was published.

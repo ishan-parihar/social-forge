@@ -183,8 +183,7 @@ impl RedditProvider {
                 "Reddit www API error ({status}): {body}"
             )));
         }
-        resp
-            .json()
+        resp.json()
             .await
             .map_err(|e| ProviderError::Api(e.to_string()))
     }
@@ -700,30 +699,51 @@ impl RedditProvider {
         username: &str,
     ) -> Result<serde_json::Value, ProviderError> {
         let name = username.to_string();
-        self.api_post(token, "/api/unfriend", &[("name", &name), ("type", "friend")])
-            .await
+        self.api_post(
+            token,
+            "/api/unfriend",
+            &[("name", &name), ("type", "friend")],
+        )
+        .await
     }
 
     /// Mark your own post NSFW.
-    pub async fn mark_nsfw(&mut self, token: &str, thing_id: &str) -> Result<serde_json::Value, ProviderError> {
+    pub async fn mark_nsfw(
+        &mut self,
+        token: &str,
+        thing_id: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
         let id = thing_id.to_string();
         self.api_post(token, "/api/marknsfw", &[("id", &id)]).await
     }
 
     /// Remove the NSFW tag from your own post.
-    pub async fn unmark_nsfw(&mut self, token: &str, thing_id: &str) -> Result<serde_json::Value, ProviderError> {
+    pub async fn unmark_nsfw(
+        &mut self,
+        token: &str,
+        thing_id: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
         let id = thing_id.to_string();
-        self.api_post(token, "/api/unmarknsfw", &[("id", &id)]).await
+        self.api_post(token, "/api/unmarknsfw", &[("id", &id)])
+            .await
     }
 
     /// Mark your own post as a spoiler.
-    pub async fn mark_spoiler(&mut self, token: &str, thing_id: &str) -> Result<serde_json::Value, ProviderError> {
+    pub async fn mark_spoiler(
+        &mut self,
+        token: &str,
+        thing_id: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
         let id = thing_id.to_string();
         self.api_post(token, "/api/spoiler", &[("id", &id)]).await
     }
 
     /// Remove the spoiler tag from your own post.
-    pub async fn unmark_spoiler(&mut self, token: &str, thing_id: &str) -> Result<serde_json::Value, ProviderError> {
+    pub async fn unmark_spoiler(
+        &mut self,
+        token: &str,
+        thing_id: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
         let id = thing_id.to_string();
         self.api_post(token, "/api/unspoiler", &[("id", &id)]).await
     }
@@ -748,8 +768,12 @@ impl RedditProvider {
         subreddit: &str,
     ) -> Result<serde_json::Value, ProviderError> {
         let clean = subreddit.trim_start_matches("r/").to_lowercase();
-        self.api_get(token, &format!("/r/{clean}/api/link_flair_v2"), &[("limit", "100")])
-            .await
+        self.api_get(
+            token,
+            &format!("/r/{clean}/api/link_flair_v2"),
+            &[("limit", "100")],
+        )
+        .await
     }
 
     /// Your saved posts/comments. The username is looked up per call —
@@ -770,8 +794,12 @@ impl RedditProvider {
             return Err(ProviderError::Auth("Could not resolve account name".into()));
         }
         let limit_s = limit.to_string();
-        self.api_get(token, &format!("/user/{name}/saved"), &[("limit", &limit_s)])
-            .await
+        self.api_get(
+            token,
+            &format!("/user/{name}/saved"),
+            &[("limit", &limit_s)],
+        )
+        .await
     }
 
     /// Mark all inbox messages read.
@@ -2238,31 +2266,26 @@ mod tests {
     use super::*;
     use crate::social::test_config;
 
-        /// P6.5 audit fix: a Reddit 200-with-errors envelope must surface as
-        /// an error, not success. Non-envelope and empty-errors bodies pass.
-        #[test]
-        fn reddit_error_envelope_surfaces_as_error() {
-            let err = RedditProvider::ensure_no_reddit_errors(
-                &serde_json::json!({"json": {"errors": [
-                    ["RATELIMIT", "you are doing that too much", "ratelimit"]
-                ]}}),
-            )
-            .unwrap_err();
-            assert!(err.to_string().contains("RATELIMIT"));
+    /// P6.5 audit fix: a Reddit 200-with-errors envelope must surface as
+    /// an error, not success. Non-envelope and empty-errors bodies pass.
+    #[test]
+    fn reddit_error_envelope_surfaces_as_error() {
+        let err = RedditProvider::ensure_no_reddit_errors(&serde_json::json!({"json": {"errors": [
+            ["RATELIMIT", "you are doing that too much", "ratelimit"]
+        ]}}))
+        .unwrap_err();
+        assert!(err.to_string().contains("RATELIMIT"));
 
-            assert!(RedditProvider::ensure_no_reddit_errors(
-                &serde_json::json!({"json": {"errors": []}})
-            )
-            .is_ok());
-            assert!(RedditProvider::ensure_no_reddit_errors(
-                &serde_json::json!({"json": {"data": {"id": "abc"}}})
-            )
-            .is_ok());
-            assert!(RedditProvider::ensure_no_reddit_errors(
-                &serde_json::json!({})
-            )
-            .is_ok());
-        }
+        assert!(RedditProvider::ensure_no_reddit_errors(
+            &serde_json::json!({"json": {"errors": []}})
+        )
+        .is_ok());
+        assert!(RedditProvider::ensure_no_reddit_errors(
+            &serde_json::json!({"json": {"data": {"id": "abc"}}})
+        )
+        .is_ok());
+        assert!(RedditProvider::ensure_no_reddit_errors(&serde_json::json!({})).is_ok());
+    }
 
     fn provider() -> RedditProvider {
         RedditProvider::new(&test_config())

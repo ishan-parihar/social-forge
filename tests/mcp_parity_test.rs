@@ -9,7 +9,7 @@
 use social_forge::api::AppState;
 use social_forge::config::Config;
 use social_forge::db;
-use social_forge::mcp::{tools_campaigns, tools_rss, tools_sets, tools_analytics};
+use social_forge::mcp::{tools_analytics, tools_campaigns, tools_rss, tools_sets};
 use social_forge::realtime::Broadcaster;
 use social_forge::social::registry::ProviderRegistry;
 
@@ -64,12 +64,10 @@ async fn campaign_round_trip_through_mcp_handlers() {
         .expect("create");
     let id = campaign_id(&created.0);
 
-    let listed = tools_campaigns::handle_campaign_list(
-        &state,
-        &tools_campaigns::CampaignListInput {},
-    )
-    .await
-    .expect("list");
+    let listed =
+        tools_campaigns::handle_campaign_list(&state, &tools_campaigns::CampaignListInput {})
+            .await
+            .expect("list");
     let rows = listed.0.as_array().expect("list is an array");
     assert!(
         rows.iter().any(|c| c["name"] == name.as_str()),
@@ -96,7 +94,11 @@ async fn campaign_round_trip_through_mcp_handlers() {
         .await
         .expect("update");
     assert_eq!(updated.0["status"], "paused");
-    assert_eq!(updated.0["name"], name.as_str(), "omitted fields keep their value");
+    assert_eq!(
+        updated.0["name"],
+        name.as_str(),
+        "omitted fields keep their value"
+    );
 
     tools_campaigns::handle_campaign_delete(
         &state,
@@ -130,7 +132,8 @@ async fn parity_tools_reject_malformed_ids_before_touching_the_db() {
         },
     )
     .await
-    .err().expect("bad campaign id");
+    .err()
+    .expect("bad campaign id");
     assert!(err.contains("campaign_id must be a UUID"), "got: {err}");
 
     let err = tools_sets::handle_set_create(
@@ -143,15 +146,19 @@ async fn parity_tools_reject_malformed_ids_before_touching_the_db() {
         },
     )
     .await
-    .err().expect("bad channel id");
+    .err()
+    .expect("bad channel id");
     assert!(err.contains("channel_ids must be a UUID"), "got: {err}");
 
     let err = tools_rss::handle_rss_feed_items(
         &state,
-        &tools_rss::RssFeedIdInput { feed_id: "nope".into() },
+        &tools_rss::RssFeedIdInput {
+            feed_id: "nope".into(),
+        },
     )
     .await
-    .err().expect("bad feed id");
+    .err()
+    .expect("bad feed id");
     assert!(err.contains("feed_id must be a UUID"), "got: {err}");
 }
 
@@ -161,7 +168,11 @@ async fn streak_tool_reports_the_streak_fields() {
     let out = tools_analytics::handle_streak_get(&state, &tools_analytics::StreakGetInput {})
         .await
         .expect("streak");
-    assert!(out.0["streak_days"].is_number(), "streak_days present: {}", out.0);
+    assert!(
+        out.0["streak_days"].is_number(),
+        "streak_days present: {}",
+        out.0
+    );
     assert!(out.0.get("streak_since").is_some(), "streak_since present");
 }
 
@@ -178,7 +189,11 @@ async fn admin_analytics_and_integration_toggle_run_on_sqlite() {
         &tools_admin::AnalyticsSummaryInput { days: Some(7) },
     )
     .await;
-    assert!(summary.is_ok(), "analytics summary failed: {:?}", summary.err());
+    assert!(
+        summary.is_ok(),
+        "analytics summary failed: {:?}",
+        summary.err()
+    );
 
     let feed = tools_admin::handle_feed_analytics(
         &state,
@@ -292,11 +307,17 @@ async fn mcp_posts_update_keeps_the_media_and_the_settings_it_was_not_asked_to_c
         media: None,
         settings: None,
     };
-    tools_posts::update_post(&state, &input).await.expect("update");
+    tools_posts::update_post(&state, &input)
+        .await
+        .expect("update");
 
     let (content, title, media, settings) = post_fields(&state, post_id).await;
     assert_eq!(content, "the new body", "the body must change");
-    assert_eq!(title, Some("original title".into()), "the title must survive");
+    assert_eq!(
+        title,
+        Some("original title".into()),
+        "the title must survive"
+    );
     assert_eq!(
         media.as_array().map(|a| a.len()),
         Some(1),
@@ -323,7 +344,9 @@ async fn mcp_posts_update_can_clear_a_field_on_purpose() {
         media: None,
         settings: None,
     };
-    tools_posts::update_post(&state, &input).await.expect("update");
+    tools_posts::update_post(&state, &input)
+        .await
+        .expect("update");
 
     let (_, title, _, _) = post_fields(&state, post_id).await;
     assert_eq!(title, None, "an explicit null must clear the title");

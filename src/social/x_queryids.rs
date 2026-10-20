@@ -125,7 +125,12 @@ const USER_AGENT: &str = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KH
 /// returned (never an error) so callers fall back to the static table.
 pub async fn discover(http: &wreq::Client) -> HashMap<String, String> {
     let mut found = HashMap::new();
-    let html = match http.get(X_HOME).header("user-agent", USER_AGENT).send().await {
+    let html = match http
+        .get(X_HOME)
+        .header("user-agent", USER_AGENT)
+        .send()
+        .await
+    {
         Ok(resp) => match resp.text().await {
             Ok(t) => t,
             Err(e) => {
@@ -253,7 +258,10 @@ mod tests {
             {queryId:"SecondId",operationName:"CreateTweet"}
         "#;
         let pairs = extract_pairs(bundle);
-        assert_eq!(pairs.get("CreateTweet").map(String::as_str), Some("FirstId"));
+        assert_eq!(
+            pairs.get("CreateTweet").map(String::as_str),
+            Some("FirstId")
+        );
     }
 
     #[test]
@@ -265,7 +273,10 @@ mod tests {
 
         // Discovery cache is empty in a fresh process.
         assert!(discovered_read().is_empty());
-        assert_eq!(lookup("CreateTweet").as_deref(), Some("IID9x6WsdMnTlXnzXGq8ng"));
+        assert_eq!(
+            lookup("CreateTweet").as_deref(),
+            Some("IID9x6WsdMnTlXnzXGq8ng")
+        );
         assert_eq!(lookup("NoSuchOperation"), None);
     }
 

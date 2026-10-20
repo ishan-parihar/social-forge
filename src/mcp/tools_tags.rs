@@ -62,7 +62,7 @@ pub async fn handle_tag_create(
     let tag = sqlx::query!(
         r#"INSERT INTO tags (id, user_id, name, color)
            VALUES (?, ?, ?, ?)
-           RETURNING id as "id!: String", name, color,
+           RETURNING id as "id!: Uuid", name, color,
                      created_at as "created_at: EpochUtc",
                      updated_at as "updated_at: EpochUtc""#,
         id,
@@ -76,7 +76,7 @@ pub async fn handle_tag_create(
 
     Ok(Json(serde_json::json!({
         "data": {
-            "id": tag.id,
+            "id": tag.id.to_string(),
             "name": tag.name,
             "color": tag.color,
             "created_at": tag.created_at.0.to_rfc3339(),
@@ -93,7 +93,7 @@ pub async fn handle_tag_list(
     let user_id = super::tools_posts::resolve_first_user(state).await?;
 
     let tags = sqlx::query!(
-        r#"SELECT id as "id!: String", name, color,
+        r#"SELECT id as "id!: Uuid", name, color,
                   created_at as "created_at: EpochUtc",
                   updated_at as "updated_at: EpochUtc"
            FROM tags WHERE user_id = ? ORDER BY name ASC"#,
@@ -107,7 +107,7 @@ pub async fn handle_tag_list(
         .into_iter()
         .map(|t| {
             serde_json::json!({
-                "id": t.id,
+                "id": t.id.to_string(),
                 "name": t.name,
                 "color": t.color,
                 "created_at": t.created_at.0.to_rfc3339(),
@@ -129,7 +129,7 @@ pub async fn handle_tag_get(
         Uuid::parse_str(&input.tag_id).map_err(|_| format!("Invalid tag ID: {}", input.tag_id))?;
 
     let tag = sqlx::query!(
-        r#"SELECT id as "id!: String", name, color,
+        r#"SELECT id as "id!: Uuid", name, color,
                   created_at as "created_at: EpochUtc",
                   updated_at as "updated_at: EpochUtc"
            FROM tags WHERE id = ? AND user_id = ?"#,
@@ -143,7 +143,7 @@ pub async fn handle_tag_get(
 
     Ok(Json(serde_json::json!({
         "data": {
-            "id": tag.id,
+            "id": tag.id.to_string(),
             "name": tag.name,
             "color": tag.color,
             "created_at": tag.created_at.0.to_rfc3339(),
@@ -169,7 +169,7 @@ pub async fn handle_tag_update(
               color = COALESCE(?, color),
               updated_at = unixepoch()
            WHERE id = ? AND user_id = ?
-           RETURNING id as "id!: String", name, color,
+           RETURNING id as "id!: Uuid", name, color,
                      created_at as "created_at: EpochUtc",
                      updated_at as "updated_at: EpochUtc""#,
         tag_id,
@@ -184,7 +184,7 @@ pub async fn handle_tag_update(
 
     Ok(Json(serde_json::json!({
         "data": {
-            "id": tag.id,
+            "id": tag.id.to_string(),
             "name": tag.name,
             "color": tag.color,
             "created_at": tag.created_at.0.to_rfc3339(),

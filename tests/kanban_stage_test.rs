@@ -77,20 +77,23 @@ async fn patch_stage(state: &AppState, post_id: Uuid, body: &str) -> (StatusCode
         .header(header::CONTENT_TYPE, "application/json")
         .body(Body::from(body.to_string()))
         .expect("request");
-    let res = build_router(state.clone()).oneshot(req).await.expect("router");
+    let res = build_router(state.clone())
+        .oneshot(req)
+        .await
+        .expect("router");
     let status = res.status();
-    let bytes = axum::body::to_bytes(res.into_body(), 1 << 16).await.expect("body");
+    let bytes = axum::body::to_bytes(res.into_body(), 1 << 16)
+        .await
+        .expect("body");
     (status, String::from_utf8_lossy(&bytes).into_owned())
 }
 
 async fn row(state: &AppState, post_id: Uuid) -> (String, Option<String>, Option<i64>) {
-    sqlx::query_as(
-        "SELECT state, priority, due_date FROM posts WHERE id = ?",
-    )
-    .bind(post_id)
-    .fetch_one(&state.db)
-    .await
-    .expect("row")
+    sqlx::query_as("SELECT state, priority, due_date FROM posts WHERE id = ?")
+        .bind(post_id)
+        .fetch_one(&state.db)
+        .await
+        .expect("row")
 }
 
 #[tokio::test]
@@ -100,7 +103,11 @@ async fn moving_a_draft_to_scheduled_persists() {
 
     let (status, body) = patch_stage(&state, post_id, r#"{"state":"queued"}"#).await;
     assert_eq!(status, StatusCode::OK, "{body}");
-    assert_eq!(row(&state, post_id).await.0, "queued", "state must persist, not just report success");
+    assert_eq!(
+        row(&state, post_id).await.0,
+        "queued",
+        "state must persist, not just report success"
+    );
 }
 
 #[tokio::test]
@@ -118,7 +125,11 @@ async fn same_column_update_persists_priority_and_due_date() {
     let (stage, priority, due) = row(&state, post_id).await;
     assert_eq!(stage, "draft");
     assert_eq!(priority.as_deref(), Some("high"));
-    assert_eq!(due, Some(1_893_456_000), "due_date must be the RFC3339 epoch");
+    assert_eq!(
+        due,
+        Some(1_893_456_000),
+        "due_date must be the RFC3339 epoch"
+    );
 }
 
 #[tokio::test]
@@ -141,14 +152,12 @@ async fn illegal_transition_into_published_is_rejected() {
 /// A campaign owned by the local user, plus a draft post inside it.
 async fn seed_post_in_campaign(state: &AppState) -> (Uuid, Uuid) {
     let campaign_id = Uuid::new_v4();
-    sqlx::query(
-        "INSERT INTO campaigns (id, user_id, name) VALUES (?, ?, 'probe campaign')",
-    )
-    .bind(campaign_id)
-    .bind(DEFAULT_USER_ID)
-    .execute(&state.db)
-    .await
-    .expect("seed campaign");
+    sqlx::query("INSERT INTO campaigns (id, user_id, name) VALUES (?, ?, 'probe campaign')")
+        .bind(campaign_id)
+        .bind(DEFAULT_USER_ID)
+        .execute(&state.db)
+        .await
+        .expect("seed campaign");
 
     let post_id = seed_draft(state).await;
     sqlx::query("UPDATE posts SET campaign_id = ? WHERE id = ?")
@@ -188,7 +197,8 @@ async fn explicit_null_campaign_id_unassigns_the_post() {
     let state = state().await;
     let (_campaign_id, post_id) = seed_post_in_campaign(&state).await;
 
-    let (status, body) = patch_stage(&state, post_id, r#"{"state":"draft","campaign_id":null}"#).await;
+    let (status, body) =
+        patch_stage(&state, post_id, r#"{"state":"draft","campaign_id":null}"#).await;
     assert_eq!(status, StatusCode::OK, "{body}");
     assert_eq!(
         campaign_of(&state, post_id).await,

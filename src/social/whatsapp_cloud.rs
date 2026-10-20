@@ -104,12 +104,14 @@ impl WhatsAppCloudProvider {
         if let Some(a) = after {
             query.push(("after", a.to_string()));
         }
-        let query: Vec<(&str, &str)> = query
-            .iter()
-            .map(|(k, v)| (*k, v.as_str()))
-            .collect();
-        self.graph(reqwest::Method::GET, &format!("{}/message_templates", self.creds.waba_id), &query, None)
-            .await
+        let query: Vec<(&str, &str)> = query.iter().map(|(k, v)| (*k, v.as_str())).collect();
+        self.graph(
+            reqwest::Method::GET,
+            &format!("{}/message_templates", self.creds.waba_id),
+            &query,
+            None,
+        )
+        .await
     }
 
     /// Create a template. `components` is the raw Meta component array
@@ -171,7 +173,11 @@ impl WhatsAppCloudProvider {
 
     /// Send a plain text message (only deliverable inside the 24h customer
     /// service window; template sends are the compliant outbound path).
-    pub async fn send_text(&self, to: &str, text: &str) -> Result<serde_json::Value, ProviderError> {
+    pub async fn send_text(
+        &self,
+        to: &str,
+        text: &str,
+    ) -> Result<serde_json::Value, ProviderError> {
         self.send_raw(serde_json::json!({
             "messaging_product": "whatsapp",
             "to": to,
@@ -204,9 +210,15 @@ mod tests {
         config.whatsapp_cloud_waba_id = None;
         assert!(creds_from_config(&config).is_none());
         config.whatsapp_cloud_token = Some("tok".into());
-        assert!(creds_from_config(&config).is_none(), "phone id still missing");
+        assert!(
+            creds_from_config(&config).is_none(),
+            "phone id still missing"
+        );
         config.whatsapp_cloud_phone_number_id = Some("123".into());
-        assert!(creds_from_config(&config).is_none(), "waba id still missing");
+        assert!(
+            creds_from_config(&config).is_none(),
+            "waba id still missing"
+        );
         config.whatsapp_cloud_waba_id = Some("456".into());
         let creds = creds_from_config(&config).expect("all set");
         assert_eq!(creds.phone_number_id, "123");

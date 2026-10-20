@@ -430,7 +430,10 @@ impl SocialProvider for LinkedInPageProvider {
             .delete(&url)
             .header("Authorization", format!("Bearer {access_token}"))
             .header("X-Restli-Protocol-Version", "2.0.0")
-            .header("LinkedIn-Version", crate::social::linkedin::LINKEDIN_VERSION)
+            .header(
+                "LinkedIn-Version",
+                crate::social::linkedin::LINKEDIN_VERSION,
+            )
             .send()
             .await?;
         let status = resp.status();

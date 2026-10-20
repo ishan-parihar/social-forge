@@ -7,7 +7,7 @@
   import { toast } from "$lib/stores/toast";
   import { realtime } from "$lib/stores/realtime";
   import { timezone } from "$lib/stores/timezone.svelte";
-  import { providerIcon, providerColor, providerInk, providerLabel } from "$lib/providers";
+  import { providerIcon, providerColor, providerInk, providerInkOnChip, providerLabel } from "$lib/providers";
   import EngagementCard from "$lib/components/EngagementCard.svelte";
   import MediaCarousel from "$lib/media/MediaCarousel.svelte";
 
@@ -310,7 +310,12 @@
               <img src={proxyMediaUrl(post.author_avatar)} alt="" class="w-10 h-10 rounded-full flex-shrink-0 object-cover" />
             {:else}
               <div class="w-10 h-10 rounded-full bg-line flex items-center justify-center flex-shrink-0">
-                <span class="text-sm" style="color: {providerInk(post.provider)}">{providerIcon(post.provider)}</span>
+                <!-- The glyph is painted ON the `bg-line` circle, so the ink
+                     has to clear 4.5:1 against `--line` (light) /
+                     `--bg-hover` (dark) - not against the page background.
+                     Against the page it measured 3.67:1 (LinkedIn) and
+                     3.82:1 (X) in the light theme, under the AA floor. -->
+                <span class="text-sm" style="color: {providerInkOnChip(post.provider)}">{providerIcon(post.provider)}</span>
               </div>
             {/if}
 

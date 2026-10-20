@@ -55,8 +55,8 @@ mod onboard;
 // mcp::rest_bridge).
 pub(crate) mod posts;
 pub(crate) use posts::validate_posts_for_integrations;
-pub(crate) use posts::CreatePostRequest;
 pub(crate) use posts::verify_tag_ownership;
+pub(crate) use posts::CreatePostRequest;
 mod profile;
 mod rate_limit;
 mod research;
@@ -740,9 +740,8 @@ pub fn build_router(state: AppState) -> Router {
         let frontend_path = std::path::Path::new(&dir);
         if frontend_path.join("index.html").exists() {
             let index = frontend_path.join("index.html");
-            return app.fallback_service(
-                ServeDir::new(frontend_path).fallback(ServeFile::new(index)),
-            );
+            return app
+                .fallback_service(ServeDir::new(frontend_path).fallback(ServeFile::new(index)));
         }
         tracing::warn!("FRONTEND_DIR={dir} has no index.html — falling back to embedded assets");
     }

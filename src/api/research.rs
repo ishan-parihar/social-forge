@@ -172,9 +172,9 @@ pub struct SourceCounts {
 const STOP_WORDS: &[&str] = &[
     "the", "and", "for", "are", "but", "not", "you", "your", "yours", "all", "any", "can", "had",
     "has", "have", "her", "him", "his", "how", "its", "let", "may", "new", "now", "off", "old",
-    "one", "our", "out", "per", "put", "say", "she", "too", "use", "via", "vs", "was", "who", "why",
-    "will", "with", "yet", "get", "got", "just", "like", "make", "made", "more", "most", "much",
-    "must", "need", "only", "over", "some", "such", "than", "that", "them", "then", "they",
+    "one", "our", "out", "per", "put", "say", "she", "too", "use", "via", "vs", "was", "who",
+    "why", "will", "with", "yet", "get", "got", "just", "like", "make", "made", "more", "most",
+    "much", "must", "need", "only", "over", "some", "such", "than", "that", "them", "then", "they",
     "this", "very", "want", "were", "what", "when", "where", "which", "while", "would", "about",
     "after", "again", "also", "back", "because", "been", "before", "being", "between", "both",
     "came", "come", "could", "does", "done", "down", "each", "even", "ever", "every", "from",
@@ -205,9 +205,7 @@ fn split_words(text: &str) -> Vec<String> {
         .filter(|tok| {
             // Classify on the RAW token: trimming the leading `@` first
             // would make the handle test below never fire.
-            !tok.starts_with("http")
-                && !tok.starts_with("www")
-                && !tok.starts_with('@')
+            !tok.starts_with("http") && !tok.starts_with("www") && !tok.starts_with('@')
         })
         .flat_map(|tok| {
             tok.split(|c: char| !c.is_alphanumeric())
@@ -345,14 +343,10 @@ pub async fn get(
     let timing: Option<TimingInsight> = {
         // Windowed to the same `days` as the rest of the response, so the
         // timing insight describes the same period the rankings do.
-        let slots = queries::engagement_histogram_by_slot(
-            &state.db,
-            auth.user_id,
-            None,
-            Some(cutoff),
-        )
-        .await
-        .unwrap_or_default();
+        let slots =
+            queries::engagement_histogram_by_slot(&state.db, auth.user_id, None, Some(cutoff))
+                .await
+                .unwrap_or_default();
         let posts_analyzed: i64 = slots.iter().map(|(_, _, _, p, _)| p).sum();
         (!slots.is_empty()).then(|| {
             let mut ranked: Vec<PostingSlot> = slots
@@ -476,14 +470,19 @@ mod tests {
         assert!(words.contains(&"workflows".to_string()));
         assert!(words.contains(&"robotics".to_string()));
         assert!(
-            words.iter().all(|w| !w.contains("t.co") && !w.starts_with("niche")),
+            words
+                .iter()
+                .all(|w| !w.contains("t.co") && !w.starts_with("niche")),
             "URLs and handles must not surface as topics"
         );
     }
 
     #[test]
     fn split_words_lowercases_and_keeps_digits() {
-        assert_eq!(split_words("Rust vs. RustLang2026"), vec!["rust", "rustlang2026"]);
+        assert_eq!(
+            split_words("Rust vs. RustLang2026"),
+            vec!["rust", "rustlang2026"]
+        );
     }
 
     #[test]

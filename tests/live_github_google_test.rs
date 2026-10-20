@@ -1,9 +1,9 @@
 use social_forge::config::Config;
 use social_forge::crypto;
 use social_forge::db;
-use social_forge::social::github::GithubProvider;
 use social_forge::social::calendar::CalendarProvider;
 use social_forge::social::drive::DriveProvider;
+use social_forge::social::github::GithubProvider;
 use social_forge::social::gmail::GmailProvider;
 use social_forge::social::youtube::YoutubeProvider;
 use social_forge::social::SocialProvider;

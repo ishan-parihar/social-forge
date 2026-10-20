@@ -5,7 +5,9 @@ use axum::extract::State;
 use rmcp::{schemars::JsonSchema, Json};
 use serde::{Deserialize, Serialize};
 
-use crate::api::ai::{self, ChangeToneRequest, ContentRequest, GenerateBulkRequest, GeneratePostRequest};
+use crate::api::ai::{
+    self, ChangeToneRequest, ContentRequest, GenerateBulkRequest, GeneratePostRequest,
+};
 use crate::api::AppState;
 use crate::auth::middleware::AuthenticatedUser;
 
@@ -57,8 +59,12 @@ pub async fn handle_ai_generate_post(
         length: input.length.clone(),
     };
     rest_result(
-        ai::generate_post(State(state.clone()), AuthenticatedUser { user_id }, axum::Json(body))
-            .await,
+        ai::generate_post(
+            State(state.clone()),
+            AuthenticatedUser { user_id },
+            axum::Json(body),
+        )
+        .await,
     )
 }
 
@@ -68,10 +74,16 @@ pub async fn handle_ai_improve_writing(
     input: &AiContentInput,
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = resolve_first_user(state).await?;
-    let body = ContentRequest { content: input.content.clone() };
+    let body = ContentRequest {
+        content: input.content.clone(),
+    };
     rest_result(
-        ai::improve_writing(State(state.clone()), AuthenticatedUser { user_id }, axum::Json(body))
-            .await,
+        ai::improve_writing(
+            State(state.clone()),
+            AuthenticatedUser { user_id },
+            axum::Json(body),
+        )
+        .await,
     )
 }
 
@@ -81,10 +93,16 @@ pub async fn handle_ai_suggest_hashtags(
     input: &AiContentInput,
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = resolve_first_user(state).await?;
-    let body = ContentRequest { content: input.content.clone() };
+    let body = ContentRequest {
+        content: input.content.clone(),
+    };
     rest_result(
-        ai::suggest_hashtags(State(state.clone()), AuthenticatedUser { user_id }, axum::Json(body))
-            .await,
+        ai::suggest_hashtags(
+            State(state.clone()),
+            AuthenticatedUser { user_id },
+            axum::Json(body),
+        )
+        .await,
     )
 }
 
@@ -99,8 +117,12 @@ pub async fn handle_ai_change_tone(
         tone: input.tone.clone(),
     };
     rest_result(
-        ai::change_tone(State(state.clone()), AuthenticatedUser { user_id }, axum::Json(body))
-            .await,
+        ai::change_tone(
+            State(state.clone()),
+            AuthenticatedUser { user_id },
+            axum::Json(body),
+        )
+        .await,
     )
 }
 
@@ -110,9 +132,16 @@ pub async fn handle_ai_summarize(
     input: &AiContentInput,
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = resolve_first_user(state).await?;
-    let body = ContentRequest { content: input.content.clone() };
+    let body = ContentRequest {
+        content: input.content.clone(),
+    };
     rest_result(
-        ai::summarize(State(state.clone()), AuthenticatedUser { user_id }, axum::Json(body)).await,
+        ai::summarize(
+            State(state.clone()),
+            AuthenticatedUser { user_id },
+            axum::Json(body),
+        )
+        .await,
     )
 }
 
@@ -129,7 +158,11 @@ pub async fn handle_ai_generate_bulk(
         count: input.count.unwrap_or(3),
     };
     rest_result(
-        ai::generate_bulk(State(state.clone()), AuthenticatedUser { user_id }, axum::Json(body))
-            .await,
+        ai::generate_bulk(
+            State(state.clone()),
+            AuthenticatedUser { user_id },
+            axum::Json(body),
+        )
+        .await,
     )
 }

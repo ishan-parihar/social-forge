@@ -345,9 +345,7 @@ pub async fn handle_tb_list_chats(
     const PAGES: i32 = 10;
     for _ in 0..PAGES {
         let resp = http
-            .post(format!(
-                "https://api.telegram.org/bot{token}/getUpdates"
-            ))
+            .post(format!("https://api.telegram.org/bot{token}/getUpdates"))
             .json(&serde_json::json!({
                 "offset": offset,
                 "limit": 100,
@@ -357,8 +355,10 @@ pub async fn handle_tb_list_chats(
             .send()
             .await
             .map_err(|e| format!("Request failed: {e}"))?;
-        let json: serde_json::Value =
-            resp.json().await.map_err(|e| format!("Parse failed: {e}"))?;
+        let json: serde_json::Value = resp
+            .json()
+            .await
+            .map_err(|e| format!("Parse failed: {e}"))?;
         if !json["ok"].as_bool().unwrap_or(false) {
             return Err(format!(
                 "Telegram API: {}",

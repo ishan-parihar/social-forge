@@ -43,7 +43,16 @@ const OUT_DIR = flag('out', 'probe-out');
 
 // The manual suite's routes. Kept to the surfaces this dashboard owns —
 // no team/workspace/billing/admin/agent-chat/video pages exist to probe.
-const ROUTES = flag(
+//
+// Every route the app ships is here. The 2026-10-20 red-team found 16
+// pages that had NEVER been rendered: /kanban, /comments, /dms, /search,
+// /automation, /campaigns/[id], /posts/[id] and the eight /settings/*
+// sub-pages. A page that is never rendered is a page whose defects are
+// never found, so the list is the app's route table, not a sample of it.
+//
+// The two dynamic routes need an id. They are discovered from the API at
+// run time (see RESOLVED_ROUTES) because the ids are per-instance.
+const STATIC_ROUTES = flag(
   'routes',
   [
     '/',
@@ -59,8 +68,26 @@ const ROUTES = flag(
     '/media',
     '/tags',
     '/settings',
+    '/settings/profile',
+    '/settings/notifications',
+    '/settings/signatures',
+    '/settings/webhooks',
+    '/settings/rss',
+    '/settings/mcp',
+    '/settings/developer',
+    '/kanban',
+    '/comments',
+    '/dms',
+    '/search',
+    '/automation',
   ].join(',')
 ).split(',');
+
+// Routes that need a per-instance id, and where to get one.
+const RESOLVED_ROUTES = [
+  { path: '/campaigns/{id}', from: '/api/campaigns', pick: (rows) => rows[0]?.id },
+  { path: '/posts/{id}', from: '/api/posts?limit=50', pick: (rows) => rows.posts?.[0]?.id },
+];
 
 const CHROME_CANDIDATES = [
   process.env.CHROME_PATH,
@@ -127,17 +154,54 @@ const AUDIT = () => {
     return (hi + 0.05) / (lo + 0.05);
   };
 
-  // Walk up for the first opaque background. A translucent layer (chip
-  // washes, hover tints) composites over whatever is behind it, so the
-  // effective backdrop is the nearest ancestor that is fully opaque.
+  // Walk up for the first opaque background, COMPOSITING the translucent
+  // layers found on the way.
+  //
+  // A translucent layer (chip washes, hover tints) composites over whatever
+  // is behind it, so the effective backdrop is the nearest opaque ancestor
+  // WITH the washes painted on top of it.
+  //
+  // The washes used to be SKIPPED rather than composited, which made every
+  // reading on a tinted chip wrong: a `bg-warning/10` chip measured its
+  // warning text against the surface behind it (4.95:1 in the light theme,
+  // a pass) instead of against the wash it actually sits on (4.41:1, a
+  // real failure the probe was blind to). The layers are collected
+  // nearest-first and painted back-to-front, which is the order the
+  // browser composites them in.
   const effectiveBg = (el) => {
+    const layers = [];
     let node = el;
     while (node && node.nodeType === 1) {
       const c = parseColor(getComputedStyle(node).backgroundColor);
-      if (c && c.a >= 0.95) return c;
+      if (c && c.a >= 0.95) {
+        // The opaque backdrop, with the washes painted over it.
+        let out = c;
+        for (let i = layers.length - 1; i >= 0; i--) {
+          const l = layers[i];
+          out = {
+            r: l.r * l.a + out.r * (1 - l.a),
+            g: l.g * l.a + out.g * (1 - l.a),
+            b: l.b * l.a + out.b * (1 - l.a),
+            a: 1,
+          };
+        }
+        return out;
+      }
+      if (c && c.a > 0) layers.push(c);
       node = node.parentElement;
     }
-    return { r: 255, g: 255, b: 255, a: 1 };
+    // No opaque ancestor: the page background is the backdrop.
+    let out = { r: 255, g: 255, b: 255, a: 1 };
+    for (let i = layers.length - 1; i >= 0; i--) {
+      const l = layers[i];
+      out = {
+        r: l.r * l.a + out.r * (1 - l.a),
+        g: l.g * l.a + out.g * (1 - l.a),
+        b: l.b * l.a + out.b * (1 - l.a),
+        a: 1,
+      };
+    }
+    return out;
   };
 
   // Large text (>=24px, or >=18.66px bold) clears at 3:1; the rest at
@@ -567,6 +631,40 @@ async function main() {
   });
 
   const summary = { fails: [], warns: [], visits: 0, errors: [], notFound: [] };
+
+  // The route list is resolved ONCE, before the theme loop, because the
+  // dynamic routes need a session and the ids are the same in both themes.
+  // Resolving per theme would double the API calls and could pick two
+  // different ids if the data changed between them.
+  let routes = [...STATIC_ROUTES];
+  {
+    const probeCtx = await browser.newContext({ ignoreHTTPSErrors: true });
+    const probePage = await probeCtx.newPage();
+    await login(probePage);
+    for (const spec of RESOLVED_ROUTES) {
+      const res = await probePage.request.get(`${BASE_URL}${spec.from}`);
+      let id = null;
+      try {
+        const body = await res.json();
+        id = spec.pick(body);
+      } catch {
+        id = null;
+      }
+      if (id) {
+        routes.push(spec.path.replace('{id}', id));
+      } else {
+        summary.fails.push({
+          route: spec.path,
+          width: '',
+          theme: '',
+          check: 'unreachable-route',
+          detail: `no id from ${spec.from} (HTTP ${res.status()}) - the page cannot be reached`,
+        });
+      }
+    }
+    await probeCtx.close();
+  }
+  const ROUTES = routes;
 
   for (const theme of THEMES) {
     const context = await browser.newContext({

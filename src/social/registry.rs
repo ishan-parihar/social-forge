@@ -61,8 +61,7 @@ pub struct ProviderRegistry {
     /// calls that have no integration row).
     concurrency_limits: Arc<HashMap<&'static str, usize>>,
     /// Insert-on-demand per-account semaphores, key "{provider}:{integration_id}".
-    account_concurrency:
-        Arc<std::sync::Mutex<HashMap<String, Arc<tokio::sync::Semaphore>>>>,
+    account_concurrency: Arc<std::sync::Mutex<HashMap<String, Arc<tokio::sync::Semaphore>>>>,
     /// Per-provider circuit breaker. When a provider has N consecutive
     /// failures (e.g. 5xx from the platform API), the circuit opens and
     /// subsequent publish attempts are skipped for a cooldown period
@@ -75,8 +74,7 @@ pub struct ProviderRegistry {
     /// for per-account breakers.
     cb_config: Arc<HashMap<&'static str, (u32, i64)>>,
     /// Insert-on-demand per-account breakers, key "{provider}:{integration_id}".
-    account_breakers:
-        Arc<std::sync::Mutex<HashMap<String, Arc<CircuitBreaker>>>>,
+    account_breakers: Arc<std::sync::Mutex<HashMap<String, Arc<CircuitBreaker>>>>,
 }
 
 /// Per-provider circuit breaker with three states: closed, open, half-open.
@@ -206,7 +204,9 @@ impl CircuitBreaker {
     /// nothing was learned about the platform.
     pub fn release_probe(&self) {
         use std::sync::atomic::Ordering;
-        let _ = self.state.compare_exchange(1, 2, Ordering::SeqCst, Ordering::SeqCst);
+        let _ = self
+            .state
+            .compare_exchange(1, 2, Ordering::SeqCst, Ordering::SeqCst);
     }
 
     /// Record a failed request. Increments failure count; if it
@@ -521,18 +521,12 @@ impl ProviderRegistry {
             .keys()
             .map(|id| (*id, Arc::new(tokio::sync::Semaphore::new(1))))
             .collect();
-        let concurrency_limits = map
-            .keys()
-            .map(|id| (*id, 1usize))
-            .collect();
+        let concurrency_limits = map.keys().map(|id| (*id, 1usize)).collect();
         let circuit_breakers = map
             .keys()
             .map(|id| (*id, Arc::new(CircuitBreaker::new(5, 60))))
             .collect();
-        let cb_config = map
-            .keys()
-            .map(|id| (*id, (5u32, 60i64)))
-            .collect();
+        let cb_config = map.keys().map(|id| (*id, (5u32, 60i64))).collect();
         Self {
             providers: Arc::new(map),
             concurrency: Arc::new(concurrency),
@@ -665,7 +659,10 @@ mod tests {
 
         // Distinct instances per account.
         let breaker_a2 = registry.circuit_breaker_for("x", Some(a)).unwrap();
-        assert!(!breaker_a2.allow_request(), "same key must return the SAME breaker");
+        assert!(
+            !breaker_a2.allow_request(),
+            "same key must return the SAME breaker"
+        );
     }
 
     /// C1: `None` (env-token call, no integration row) falls back to the

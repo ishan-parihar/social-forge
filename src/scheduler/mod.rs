@@ -305,7 +305,10 @@ impl SchedulerEngine {
         // Liveness starts NOW, not after the first (up to 30s) deadline
         // sleep — /ready would otherwise report `scheduler_stalled` for
         // the whole first poll window after boot.
-        LAST_TICK.store(chrono::Utc::now().timestamp(), std::sync::atomic::Ordering::Relaxed);
+        LAST_TICK.store(
+            chrono::Utc::now().timestamp(),
+            std::sync::atomic::Ordering::Relaxed,
+        );
 
         loop {
             self.reap_finished();
@@ -331,8 +334,7 @@ impl SchedulerEngine {
             }
 
             if std::mem::take(&mut self.boot) {
-                if let Ok(n) =
-                    queries::reclaim_stuck_publishing(&self.db, RECLAIM_AFTER_SECS).await
+                if let Ok(n) = queries::reclaim_stuck_publishing(&self.db, RECLAIM_AFTER_SECS).await
                 {
                     if n > 0 {
                         tracing::warn!(
@@ -356,7 +358,10 @@ impl SchedulerEngine {
                 tracing::warn!("publish_outbox drain failed: {e}");
             }
 
-            LAST_TICK.store(chrono::Utc::now().timestamp(), std::sync::atomic::Ordering::Relaxed);
+            LAST_TICK.store(
+                chrono::Utc::now().timestamp(),
+                std::sync::atomic::Ordering::Relaxed,
+            );
             sd_notify("WATCHDOG=1");
         }
 
@@ -620,10 +625,9 @@ async fn process_due_posts(
     for post in posts {
         // C1: the breaker is per ACCOUNT — one revoked X token opens the
         // circuit for that integration only, not for every X account.
-        if let Some(cb) = providers.circuit_breaker_for(
-            &post.provider_identifier,
-            Some(post.integration_id),
-        ) {
+        if let Some(cb) =
+            providers.circuit_breaker_for(&post.provider_identifier, Some(post.integration_id))
+        {
             if !cb.allow_request() {
                 // Circuit is open — push this post back to queued
                 let _ = sqlx::query(
@@ -695,10 +699,8 @@ async fn process_due_posts(
         let bcast = broadcaster.clone();
         let tk = token_key; // Copy (Option<[u8; 32]> implements Copy)
         let cfg = config.clone();
-        let cb = providers.circuit_breaker_for(
-            &post.provider_identifier,
-            Some(post.integration_id),
-        );
+        let cb =
+            providers.circuit_breaker_for(&post.provider_identifier, Some(post.integration_id));
         inflight_post_ids.insert(post.id);
         join_set.spawn(async move {
             // Acquire the per-provider concurrency permit INSIDE the
@@ -1104,9 +1106,8 @@ pub(crate) async fn publish_post(
     // optional ffmpeg binary. A missing ffmpeg warns and publishes the
     // original — nothing breaks locally.
     let resolved_media = {
-        let tf_settings = crate::services::media_transform::TransformSettings::from_settings(
-            &post.settings,
-        );
+        let tf_settings =
+            crate::services::media_transform::TransformSettings::from_settings(&post.settings);
         let app_url_for_local = app_url.clone();
         // Transformed files land in the SAME media dir — the /api/media/{id}
         // route already serves it, so only the URL's filename changes.
@@ -1168,13 +1169,23 @@ pub(crate) async fn publish_post(
                     }
                     // A predecessor that ended in `error` never publishes. Requeuing
                     // would park this part forever, so fail it with the same reason.
-                    match queries::find_failed_thread_predecessor(db, group_id, post.integration_id, seq - 1).await {
+                    match queries::find_failed_thread_predecessor(
+                        db,
+                        group_id,
+                        post.integration_id,
+                        seq - 1,
+                    )
+                    .await
+                    {
                         Ok(Some(reason)) => {
                             return Err(format!("predecessor failed: {reason}").into());
                         }
                         Ok(None) => {}
                         Err(e) => {
-                            tracing::warn!("Thread link: predecessor state lookup failed for post {}: {e}", post.id);
+                            tracing::warn!(
+                                "Thread link: predecessor state lookup failed for post {}: {e}",
+                                post.id
+                            );
                         }
                     }
                     tracing::info!(
@@ -1899,10 +1910,7 @@ fn format_overdue(overdue: chrono::Duration) -> String {
 ///
 /// Read-only — it never advances the state machine, so a stuck post is
 /// still the operator's to re-queue or cancel.
-async fn check_posting_gaps(
-    db: &SqlitePool,
-    broadcast: &Broadcaster,
-) -> Result<(), PublishError> {
+async fn check_posting_gaps(db: &SqlitePool, broadcast: &Broadcaster) -> Result<(), PublishError> {
     let stuck = queries::find_stuck_posts(db, POSTING_GAP_GRACE_SECS, POSTING_GAP_LIMIT).await?;
     if stuck.is_empty() {
         return Ok(());
@@ -2041,9 +2049,7 @@ pub fn start_streak_reset(db: SqlitePool, shutdown: tokio::sync::watch::Receiver
     );
 }
 
-async fn reset_expired_streaks(
-    db: &SqlitePool,
-) -> Result<(), PublishError> {
+async fn reset_expired_streaks(db: &SqlitePool) -> Result<(), PublishError> {
     // Reset streaks where no post has been published in the last 48 hours.
     // (48h gives a grace period so a streak isn't lost if you post at 11pm
     // one day and 1am the next — those are ~2h apart but count as 2 days.)
@@ -2399,20 +2405,22 @@ mod tests {
             .execute(&pool)
             .await
             .unwrap();
-        assert_eq!(engine_deadline(&pool).await, std::time::Duration::from_secs(0));
+        assert_eq!(
+            engine_deadline(&pool).await,
+            std::time::Duration::from_secs(0)
+        );
     }
 
-// ── §6.6: a failed thread part blocks its successors ──────
+    // ── §6.6: a failed thread part blocks its successors ──────
     #[tokio::test]
     async fn failed_thread_part_blocks_later_parts_of_same_integration() {
         let (pool, seed_post_id) = pool_with_post("error", None).await;
-        let (user_id, integration_id): (uuid::Uuid, uuid::Uuid) = sqlx::query_as(
-            "SELECT user_id, integration_id FROM posts WHERE id = ?",
-        )
-        .bind(seed_post_id)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+        let (user_id, integration_id): (uuid::Uuid, uuid::Uuid) =
+            sqlx::query_as("SELECT user_id, integration_id FROM posts WHERE id = ?")
+                .bind(seed_post_id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
         let group = uuid::Uuid::new_v4();
 
         // Head (seq 1) in error; parts 2, 3 queued; a DIFFERENT integration's
@@ -2454,8 +2462,7 @@ mod tests {
             .unwrap();
         }
 
-        let blocked =
-            block_thread_successors(&pool, group, integration_id, 1, "X API down").await;
+        let blocked = block_thread_successors(&pool, group, integration_id, 1, "X API down").await;
         assert_eq!(blocked, 2, "parts 2+3 of THIS integration are blocked");
 
         let (state, msg): (String, Option<String>) = sqlx::query_as(
@@ -2473,14 +2480,16 @@ mod tests {
         );
 
         // The other integration's part 2 in the same group is untouched.
-        let other_state: String = sqlx::query_scalar(
-            "SELECT state FROM posts WHERE integration_id = ? AND sequence = 2",
-        )
-        .bind(other_integration)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
-        assert_eq!(other_state, "queued", "other integrations stay queued (B3 scoping)");
+        let other_state: String =
+            sqlx::query_scalar("SELECT state FROM posts WHERE integration_id = ? AND sequence = 2")
+                .bind(other_integration)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(
+            other_state, "queued",
+            "other integrations stay queued (B3 scoping)"
+        );
     }
 
     #[tokio::test]
@@ -2489,13 +2498,12 @@ mod tests {
         // manual publish) must be visible to the B3 gate, so the part is failed
         // instead of requeued forever.
         let (pool, seed_post_id) = pool_with_post("error", None).await;
-        let (_user_id, integration_id): (uuid::Uuid, uuid::Uuid) = sqlx::query_as(
-            "SELECT user_id, integration_id FROM posts WHERE id = ?",
-        )
-        .bind(seed_post_id)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+        let (_user_id, integration_id): (uuid::Uuid, uuid::Uuid) =
+            sqlx::query_as("SELECT user_id, integration_id FROM posts WHERE id = ?")
+                .bind(seed_post_id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
         let group = uuid::Uuid::new_v4();
         sqlx::query(
             "UPDATE posts SET group_id = ?, sequence = 1, error_message = 'rate limit gone' WHERE id = ?",

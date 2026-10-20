@@ -263,12 +263,11 @@ async fn test_multi_account_data_model() {
     // The upsert path's ON CONFLICT (user_id, provider_identifier,
     // internal_id) depends on a UNIQUE index — SQLite exposes them via
     // pragma_index_list (pg_constraint is Postgres).
-    let constraints: Vec<(String,)> = sqlx::query_as(
-        "SELECT name FROM pragma_index_list('integrations') WHERE \"unique\" = 1",
-    )
-    .fetch_all(&db)
-    .await
-    .expect("Failed to query constraints");
+    let constraints: Vec<(String,)> =
+        sqlx::query_as("SELECT name FROM pragma_index_list('integrations') WHERE \"unique\" = 1")
+            .fetch_all(&db)
+            .await
+            .expect("Failed to query constraints");
 
     for (name,) in &constraints {
         println!("✅ Multi-account: UNIQUE index '{}'", name);

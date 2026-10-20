@@ -212,9 +212,7 @@ impl PostService {
         // content was the OLD content and whose published text was the
         // NEW one - or a failed publish with no explanation.
         if existing.state == PostState::Publishing {
-            return Err(
-                "Post is being published; edit it after the attempt finishes".to_string(),
-            );
+            return Err("Post is being published; edit it after the attempt finishes".to_string());
         }
 
         // Resolve each field against the stored value.
@@ -342,7 +340,9 @@ impl PostService {
                 let mut skipped_published = 0usize;
                 let mut failed: Vec<String> = Vec::new();
                 for group_post in &group_posts {
-                    let Some(old_at) = group_post.scheduled_at else { continue };
+                    let Some(old_at) = group_post.scheduled_at else {
+                        continue;
+                    };
                     let new_at = old_at + delta;
                     let is_published = group_post.state == crate::db::models::PostState::Published;
                     let result = if is_published && action == "schedule" {
@@ -387,7 +387,10 @@ impl PostService {
                 .await
                 .map_err(|e| format!("DB error: {e}"))?
                 .ok_or_else(|| "Post not found after reschedule".to_string())?;
-            broadcaster.send("post_scheduled", &serde_json::json!({"id": post_id.to_string()}));
+            broadcaster.send(
+                "post_scheduled",
+                &serde_json::json!({"id": post_id.to_string()}),
+            );
             return Ok(serde_json::json!({
                 "rescheduled": true,
                 "action": "schedule",
@@ -398,7 +401,10 @@ impl PostService {
                 .await
                 .map_err(|e| format!("DB error: {e}"))?
                 .ok_or_else(|| "Post not found after reschedule".to_string())?;
-            broadcaster.send("post_scheduled", &serde_json::json!({"id": post_id.to_string()}));
+            broadcaster.send(
+                "post_scheduled",
+                &serde_json::json!({"id": post_id.to_string()}),
+            );
             return Ok(serde_json::json!({
                 "rescheduled": true,
                 "action": "update",
@@ -410,7 +416,10 @@ impl PostService {
             .await
             .map_err(|e| format!("DB error: {e}"))?
             .ok_or_else(|| "Post not found after reschedule".to_string())?;
-        broadcaster.send("post_scheduled", &serde_json::json!({"id": post_id.to_string()}));
+        broadcaster.send(
+            "post_scheduled",
+            &serde_json::json!({"id": post_id.to_string()}),
+        );
         Ok(serde_json::json!({
             "rescheduled": true,
             "action": action,
@@ -483,9 +492,7 @@ impl PostService {
             PostState::Queued | PostState::Error | PostState::Draft => {}
             PostState::Idea => return Err("Idea posts must be moved to drafts first".into()),
             PostState::Published => return Err("Post already published".into()),
-            PostState::Publishing => {
-                return Err("Post is already being published".into())
-            }
+            PostState::Publishing => return Err("Post is already being published".into()),
         }
 
         if post.integration_disabled {
@@ -533,7 +540,8 @@ impl PostService {
                 // Nothing was sent: give the claim back so the post is not
                 // stranded in `publishing`.
                 if let Err(write_err) =
-                    queries::update_post_state(db, post_id, post.state.clone(), None, None, None).await
+                    queries::update_post_state(db, post_id, post.state.clone(), None, None, None)
+                        .await
                 {
                     tracing::error!("Failed to release claim for post {post_id}: {write_err}");
                 }

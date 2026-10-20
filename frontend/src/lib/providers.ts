@@ -168,12 +168,67 @@ export function providerColor(provider: string): string {
  *
  * Only for text. Fills keep `providerColor`: the contrast of text over a
  * fill is the `inkFor` caller's business.
+ *
+ * ── The SURFACE ARGUMENT (2026-10-20 red-team) ──
+ *
+ * The ink has to clear 4.5:1 against the background the glyph is actually
+ * painted on, and the app paints a provider glyph on at least THREE
+ * different backgrounds: the page (`--bg`), a card (`--bg-card` / `--surface`)
+ * and a raised chip (`--bg-hover` / `--line`). A single hardcoded surface
+ * therefore serves one of them and misses the other two.
+ *
+ * The measured failure: on /search the provider glyph sits in a
+ * `bg-line` avatar circle. In light theme `--line` is `#e2e8f0`, and the ink
+ * computed against `#ffffff` measured 3.67:1 (LinkedIn) and 3.82:1 (X) —
+ * under the WCAG AA floor, on every search result, in the light theme only.
+ * The same call on the page background was fine, which is why the dark
+ * theme never reported it.
+ *
+ * So the surface is a parameter, and the caller states where the glyph
+ * goes. `providerInk` keeps the page background as its default so the
+ * existing call sites that paint on the page are unchanged.
  */
-export function providerInk(provider: string): string {
+export function providerInk(provider: string, surface?: string): string {
   const brand = providerColor(provider);
   return theme.value === 'light'
-    ? inkForSurface(brand, '#ffffff')
-    : inkForSurface(brand, '#131720');
+    ? inkForSurface(brand, surface ?? '#ffffff')
+    : inkForSurface(brand, surface ?? '#131720');
+}
+
+/**
+ * The ink for a provider glyph painted on a raised chip.
+ *
+ * A chip is `bg-line` in the light theme and `bg-surface-hover` in the dark
+ * one, and both are a step away from the page background — so the ink has
+ * to be computed against the chip's own fill, not the page's.
+ *
+ * The values are the CSS custom properties read at call time, so a theme
+ * change is picked up without a rebuild. `getComputedStyle` is not used
+ * here on purpose: this runs during render, and a DOM read in a derived
+ * value is a layout thrash on every list row. The token values are stable
+ * per theme.
+ */
+export function providerInkOnChip(provider: string): string {
+  const brand = providerColor(provider);
+  return theme.value === 'light'
+    ? inkForSurface(brand, '#e2e8f0') // --line, light
+    : inkForSurface(brand, '#1a1f2e'); // --bg-hover, dark
+}
+
+/**
+ * The ink for a provider glyph painted on an INPUT surface.
+ *
+ * The kanban card is `bg-background-input` (`--bg-input`), which in the
+ * light theme is `#f8fafc` — a step darker than the `#ffffff` the default
+ * assumes. The LinkedIn ink measured 4.52:1 against `#ffffff` and only
+ * 4.32:1 against the real card, so the glyph was under the AA floor on
+ * every kanban card in the light theme.
+ */
+export function providerInkOnInput(provider: string): string {
+  const brand = providerColor(provider);
+  return theme.value === 'light'
+    ? inkForSurface(brand, '#f8fafc') // --bg-input, light
+    : inkForSurface(brand, '#0d1117'); // --bg-input, dark
 }
 
 /// Pick a hex clearing 4.5:1 on `surface`, moving lightness in whichever

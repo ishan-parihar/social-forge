@@ -157,9 +157,9 @@
             <div class="flex items-center gap-2">
               <span class="font-medium text-sm">{wh.name}</span>
               {#if wh.is_active}
-                <span class="px-2 py-0.5 text-xs rounded bg-success/20 text-success">Active</span>
+                <span class="px-2 py-0.5 text-xs rounded bg-success/20 ring-1 ring-inset ring-success/40 text-content">Active</span>
               {:else}
-                <span class="px-2 py-0.5 text-xs rounded bg-hue-neutral/20 text-faint">Inactive</span>
+                <span class="px-2 py-0.5 text-xs rounded bg-hue-neutral/20 text-muted">Inactive</span>
               {/if}
             </div>
             <div class="flex gap-2">
@@ -245,7 +245,7 @@
           {#each deliveries as d (d.id)}
             <div class="bg-surface border border-line rounded-lg p-3">
               <div class="flex items-center justify-between mb-1">
-                <span class="text-xs font-medium px-2 py-0.5 rounded {d.status_code && d.status_code >= 200 && d.status_code < 300 ? 'bg-success/20 text-success' : 'bg-error/20 text-error'}">{d.status_code || 'Pending'}</span>
+                <span class="text-xs font-medium px-2 py-0.5 rounded {d.status_code && d.status_code >= 200 && d.status_code < 300 ? 'bg-success/20 ring-1 ring-inset ring-success/40 text-content' : 'bg-error/20 ring-1 ring-inset ring-error/40 text-content'}">{d.status_code || 'Pending'}</span>
                 <span class="text-xs text-muted">{d.event_type}</span>
               </div>
               <p class="text-xs text-muted">{new Date(d.attempted_at).toLocaleString()}</p>

@@ -35,11 +35,26 @@ impl Category {
     fn default_spec(self) -> RateSpec {
         use Category::*;
         match self {
-            Dialogs => RateSpec { max_calls: 1, window: Duration::from_secs(60) },
-            History => RateSpec { max_calls: 30, window: Duration::from_secs(60) },
-            Send => RateSpec { max_calls: 20, window: Duration::from_secs(60) },
-            Edit => RateSpec { max_calls: 15, window: Duration::from_secs(60) },
-            Delete => RateSpec { max_calls: 15, window: Duration::from_secs(60) },
+            Dialogs => RateSpec {
+                max_calls: 1,
+                window: Duration::from_secs(60),
+            },
+            History => RateSpec {
+                max_calls: 30,
+                window: Duration::from_secs(60),
+            },
+            Send => RateSpec {
+                max_calls: 20,
+                window: Duration::from_secs(60),
+            },
+            Edit => RateSpec {
+                max_calls: 15,
+                window: Duration::from_secs(60),
+            },
+            Delete => RateSpec {
+                max_calls: 15,
+                window: Duration::from_secs(60),
+            },
         }
     }
 }
@@ -67,9 +82,15 @@ pub fn peer_key(chat_id: i64) -> String {
 fn peer_send_spec(key: &str) -> Option<RateSpec> {
     // tg-cli parity: 1 msg / 5s to a user, 20/min into groups/channels.
     if key.starts_with("user:") {
-        Some(RateSpec { max_calls: 1, window: Duration::from_secs(5) })
+        Some(RateSpec {
+            max_calls: 1,
+            window: Duration::from_secs(5),
+        })
     } else if key.starts_with("channel:") || key.starts_with("chat:") {
-        Some(RateSpec { max_calls: 20, window: Duration::from_secs(60) })
+        Some(RateSpec {
+            max_calls: 20,
+            window: Duration::from_secs(60),
+        })
     } else {
         None
     }
@@ -116,12 +137,7 @@ impl TelegramRateGuard {
 
     /// Check limits BEFORE a Telegram call. Returns how long the caller
     /// should wait; zero = proceed now. Order: breaker → account → peer.
-    pub fn before_call(
-        &self,
-        account: &str,
-        category: Category,
-        peer: Option<&str>,
-    ) -> Duration {
+    pub fn before_call(&self, account: &str, category: Category, peer: Option<&str>) -> Duration {
         let mut inner = lock(&self.inner);
         let now = Instant::now();
 
@@ -152,9 +168,7 @@ impl TelegramRateGuard {
                 if retry > Duration::ZERO {
                     // Peer refusal refunds the account slot: a burst at one
                     // peer must not consume the account-wide budget.
-                    if let Some(bucket) =
-                        inner.account.get_mut(&(account.to_string(), category))
-                    {
+                    if let Some(bucket) = inner.account.get_mut(&(account.to_string(), category)) {
                         bucket.pop_back();
                     }
                     return retry;
@@ -219,7 +233,10 @@ where
     }
     // A full bucket has a front to wait on. Matching on the front itself means a
     // zero `max_calls` cannot reach an empty `front()` and panic.
-    if let Some(&oldest) = bucket.front().filter(|_| bucket.len() >= spec.max_calls as usize) {
+    if let Some(&oldest) = bucket
+        .front()
+        .filter(|_| bucket.len() >= spec.max_calls as usize)
+    {
         return oldest + spec.window - now;
     }
     bucket.push_back(now);
@@ -245,10 +262,22 @@ const MAX_HEAD_RETRIES: u32 = 3;
 /// is permanent and drops the job.
 pub fn is_transient_send_error(err: &str) -> bool {
     let e = err.to_ascii_lowercase();
-    ["timeout", "timed out", "connection", "reset", "broken pipe", "network",
-     "unavailable", "internal", "rpc_call_fail", "rpc error 5", "dns", "eof"]
-        .iter()
-        .any(|k| e.contains(k))
+    [
+        "timeout",
+        "timed out",
+        "connection",
+        "reset",
+        "broken pipe",
+        "network",
+        "unavailable",
+        "internal",
+        "rpc_call_fail",
+        "rpc error 5",
+        "dns",
+        "eof",
+    ]
+    .iter()
+    .any(|k| e.contains(k))
 }
 
 #[derive(Debug, Default)]
@@ -341,10 +370,7 @@ pub fn parse_flood_wait(err: &str) -> Option<u64> {
 /// The queue jobs address peers by the same strings MCP callers use
 /// (username or "user:<id>" style) — the raw id form carries the kind.
 fn peer_key_for_peer_string(peer: &str) -> Option<String> {
-    if peer.starts_with("user:")
-        || peer.starts_with("channel:")
-        || peer.starts_with("chat:")
-    {
+    if peer.starts_with("user:") || peer.starts_with("channel:") || peer.starts_with("chat:") {
         Some(peer.to_string())
     } else {
         // Usernames resolve at send time; the resolved chat id keys the
@@ -353,8 +379,7 @@ fn peer_key_for_peer_string(peer: &str) -> Option<String> {
     }
 }
 
-pub static TELEGRAM_RATE_GUARD: LazyLock<TelegramRateGuard> =
-    LazyLock::new(TelegramRateGuard::new);
+pub static TELEGRAM_RATE_GUARD: LazyLock<TelegramRateGuard> = LazyLock::new(TelegramRateGuard::new);
 
 #[cfg(test)]
 mod tests {
@@ -362,7 +387,10 @@ mod tests {
 
     #[test]
     fn flood_wait_strings_parse() {
-        assert_eq!(parse_flood_wait("rpc error FLOOD_WAIT_42 (see ..)"), Some(42));
+        assert_eq!(
+            parse_flood_wait("rpc error FLOOD_WAIT_42 (see ..)"),
+            Some(42)
+        );
         assert_eq!(parse_flood_wait("FLOOD_WAIT_300"), Some(300));
         assert_eq!(parse_flood_wait("OTHER_ERROR"), None);
     }
@@ -372,9 +400,15 @@ mod tests {
         // A zero cap admits nothing. The empty bucket must not reach `front()`
         // unchecked, which panicked before the bucket check was tied to it.
         let mut store = std::collections::HashMap::new();
-        let spec = RateSpec { max_calls: 0, window: Duration::from_secs(60) };
+        let spec = RateSpec {
+            max_calls: 0,
+            window: Duration::from_secs(60),
+        };
         let wait = try_acquire(&mut store, &"peer", spec, Instant::now());
-        assert!(wait.is_zero(), "an empty bucket with cap 0 must not block or panic");
+        assert!(
+            wait.is_zero(),
+            "an empty bucket with cap 0 must not block or panic"
+        );
     }
 
     #[test]
@@ -398,10 +432,13 @@ mod tests {
         let g = TelegramRateGuard::new();
         // Burst 5 sends to one user: peer pacing (1/5s) allows only the
         // first; the four refusals must each REFUND the account slot.
-        assert!(g.before_call("acc", Category::Send, Some("user:7")).is_zero());
+        assert!(g
+            .before_call("acc", Category::Send, Some("user:7"))
+            .is_zero());
         for _ in 0..4 {
             assert!(
-                !g.before_call("acc", Category::Send, Some("user:7")).is_zero(),
+                !g.before_call("acc", Category::Send, Some("user:7"))
+                    .is_zero(),
                 "peer pacing refuses the second send within 5s"
             );
         }
@@ -442,7 +479,10 @@ mod tests {
         let g = TelegramRateGuard::new();
         let mut q = WriteQueue::default();
         for i in 0..5 {
-            q.push(SendJob { peer: "user:42".into(), text: format!("burst {i}") });
+            q.push(SendJob {
+                peer: "user:42".into(),
+                text: format!("burst {i}"),
+            });
         }
 
         let sender = |_: &SendJob| async { Ok::<(), String>(()) };
@@ -475,7 +515,10 @@ mod tests {
         let mut q = WriteQueue::default();
         // A username peer has no per-peer pacing key, so only the account gate
         // applies and the retry is not deferred by the 5s peer window.
-        q.push(SendJob { peer: "@alice".into(), text: "hello".into() });
+        q.push(SendJob {
+            peer: "@alice".into(),
+            text: "hello".into(),
+        });
         let attempts = std::cell::Cell::new(0u32);
         let sender = |_job: &SendJob| {
             attempts.set(attempts.get() + 1);
@@ -490,7 +533,11 @@ mod tests {
         };
         // First drain hits the transient error: the message stays queued.
         let (ok, _) = q.drain_with(&g, "acc", &sender).await;
-        assert_eq!((ok, q.len()), (0, 1), "a transient failure must keep the job");
+        assert_eq!(
+            (ok, q.len()),
+            (0, 1),
+            "a transient failure must keep the job"
+        );
         // The next drain sends it.
         let (ok2, _) = q.drain_with(&g, "acc", &sender).await;
         assert_eq!(ok2, 1, "the retried job is sent");
@@ -501,8 +548,14 @@ mod tests {
     async fn queue_drops_permanently_failed_head() {
         let g = TelegramRateGuard::new();
         let mut q = WriteQueue::default();
-        q.push(SendJob { peer: "user:9".into(), text: "will fail".into() });
-        q.push(SendJob { peer: "user:9".into(), text: "next".into() });
+        q.push(SendJob {
+            peer: "user:9".into(),
+            text: "will fail".into(),
+        });
+        q.push(SendJob {
+            peer: "user:9".into(),
+            text: "next".into(),
+        });
 
         let sender = |job: &SendJob| {
             let fail = job.text == "will fail";

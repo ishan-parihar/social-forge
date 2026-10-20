@@ -99,13 +99,12 @@ pub async fn get_prefs(
     State(state): State<AppState>,
     auth: AuthenticatedUser,
 ) -> Result<Json<Value>, AppError> {
-    let stored: Option<String> = sqlx::query_scalar(
-        "SELECT prefs FROM notification_prefs WHERE user_id = ?",
-    )
-    .bind(auth.user_id)
-    .fetch_optional(&state.db)
-    .await
-    .map_err(|e| AppError::Internal(format!("Failed to read notification prefs: {e}")))?;
+    let stored: Option<String> =
+        sqlx::query_scalar("SELECT prefs FROM notification_prefs WHERE user_id = ?")
+            .bind(auth.user_id)
+            .fetch_optional(&state.db)
+            .await
+            .map_err(|e| AppError::Internal(format!("Failed to read notification prefs: {e}")))?;
 
     let Some(raw) = stored else {
         return Ok(Json(default_prefs()));

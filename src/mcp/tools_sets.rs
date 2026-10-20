@@ -75,5 +75,12 @@ pub async fn handle_set_delete(
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = resolve_first_user(state).await?;
     let id = parse_id("set_id", &input.set_id)?;
-    rest_result(sets::delete_set(State(state.clone()), AuthenticatedUser { user_id }, Path(id)).await)
+    rest_result(
+        sets::delete_set(
+            State(state.clone()),
+            AuthenticatedUser { user_id },
+            Path(id),
+        )
+        .await,
+    )
 }

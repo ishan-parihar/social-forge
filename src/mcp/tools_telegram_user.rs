@@ -73,13 +73,10 @@ pub struct TuSignInOutput {
 fn client_manager(
     state: &AppState,
 ) -> Result<&std::sync::Arc<crate::services::telegram_client::TelegramClientManager>, String> {
-    state
-        .telegram_client_manager
-        .as_ref()
-        .ok_or_else(|| {
-            "Telegram user client not configured. Set TELEGRAM_API_ID and TELEGRAM_API_HASH."
-                .to_string()
-        })
+    state.telegram_client_manager.as_ref().ok_or_else(|| {
+        "Telegram user client not configured. Set TELEGRAM_API_ID and TELEGRAM_API_HASH."
+            .to_string()
+    })
 }
 
 pub async fn handle_tu_auth_status(state: &AppState) -> Result<Json<TuAuthStatusOutput>, String> {

@@ -570,8 +570,14 @@ mod tests {
     #[test]
     fn stored_posting_times_text_decodes_to_an_array() {
         let stored = json!("[{\"time\":120},{\"time\":400}]");
-        assert_eq!(decode_posting_times(stored), json!([{"time": 120}, {"time": 400}]));
+        assert_eq!(
+            decode_posting_times(stored),
+            json!([{"time": 120}, {"time": 400}])
+        );
         assert_eq!(decode_posting_times(json!("not json")), json!([]));
-        assert_eq!(decode_posting_times(json!([{"time": 60}])), json!([{"time": 60}]));
+        assert_eq!(
+            decode_posting_times(json!([{"time": 60}])),
+            json!([{"time": 60}])
+        );
     }
 }

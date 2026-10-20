@@ -2,6 +2,7 @@ use crate::api::AppState;
 use crate::cli::WebhooksAction;
 
 use crate::db::types::EpochUtc;
+use uuid::Uuid;
 
 pub async fn handle(action: WebhooksAction, state: &AppState) -> anyhow::Result<()> {
     let result: Result<serde_json::Value, String> = match action {
@@ -11,7 +12,7 @@ pub async fn handle(action: WebhooksAction, state: &AppState) -> anyhow::Result<
                 Err(e) => return Err(anyhow::anyhow!("Auth error: {e}")),
             };
             let rows: Vec<serde_json::Value> = match sqlx::query!(
-                r#"SELECT id as "id!: String", name, url, is_active as "is_active!: i64",
+                r#"SELECT id as "id!: Uuid", name, url, is_active as "is_active!: i64",
                           created_at as "created_at: EpochUtc"
                    FROM webhooks WHERE user_id = ? ORDER BY created_at DESC"#,
                 user_id,
@@ -21,7 +22,7 @@ pub async fn handle(action: WebhooksAction, state: &AppState) -> anyhow::Result<
             {
                 Ok(rows) => rows.into_iter()
                     .map(|r| serde_json::json!({
-                        "id": r.id, "name": r.name, "url": r.url,
+                        "id": r.id.to_string(), "name": r.name, "url": r.url,
                         "is_active": r.is_active != 0, "created_at": r.created_at.0.to_rfc3339(),
                     }))
                     .collect(),
@@ -37,7 +38,7 @@ pub async fn handle(action: WebhooksAction, state: &AppState) -> anyhow::Result<
             let id = uuid::Uuid::new_v4();
             let row = match sqlx::query!(
                 r#"INSERT INTO webhooks (id, user_id, name, url) VALUES (?, ?, ?, ?)
-                 RETURNING id as "id!: String", name, url, is_active as "is_active!: i64",
+                 RETURNING id as "id!: Uuid", name, url, is_active as "is_active!: i64",
                            created_at as "created_at: EpochUtc""#,
                 id,
                 user_id,
@@ -52,7 +53,7 @@ pub async fn handle(action: WebhooksAction, state: &AppState) -> anyhow::Result<
             };
             // SQLite has no `TEXT[]`; the subscribe list lives in the
             // webhook_event_types join table. '*' is the catch-all.
-            let webhook_id = row.id.clone();
+            let webhook_id = row.id;
             if let Err(e) = sqlx::query(
                 "INSERT INTO webhook_event_types (webhook_id, event_type) VALUES (?, '*')
                  ON CONFLICT DO NOTHING",
@@ -66,7 +67,7 @@ pub async fn handle(action: WebhooksAction, state: &AppState) -> anyhow::Result<
                 ));
             }
             Ok(serde_json::json!({
-                "id": row.id, "name": row.name, "url": row.url,
+                "id": row.id.to_string(), "name": row.name, "url": row.url,
                 "is_active": row.is_active != 0, "created_at": row.created_at.0.to_rfc3339(),
             }))
         }
@@ -105,7 +106,7 @@ pub async fn handle(action: WebhooksAction, state: &AppState) -> anyhow::Result<
                 Err(_) => return Err(anyhow::anyhow!("Invalid webhook ID")),
             };
             let row = match sqlx::query!(
-                r#"SELECT id as "id!: String", name, url, is_active as "is_active!: i64",
+                r#"SELECT id as "id!: Uuid", name, url, is_active as "is_active!: i64",
                                                   created_at as "created_at: EpochUtc"
                                            FROM webhooks WHERE id = ? AND user_id = ?"#,
                 webhook_id,
@@ -119,7 +120,7 @@ pub async fn handle(action: WebhooksAction, state: &AppState) -> anyhow::Result<
                 Err(e) => return Err(anyhow::anyhow!("DB error: {e}")),
             };
             Ok(serde_json::json!({
-                "id": row.id, "name": row.name, "url": row.url,
+                "id": row.id.to_string(), "name": row.name, "url": row.url,
                 "is_active": row.is_active != 0, "created_at": row.created_at.0.to_rfc3339(),
             }))
         }
@@ -138,7 +139,7 @@ pub async fn handle(action: WebhooksAction, state: &AppState) -> anyhow::Result<
                 Err(_) => return Err(anyhow::anyhow!("Invalid webhook ID")),
             };
             let existing = match sqlx::query!(
-                r#"SELECT id as "id!: String", name, url, is_active as "is_active!: i64"
+                r#"SELECT id as "id!: Uuid", name, url, is_active as "is_active!: i64"
                                                  FROM webhooks WHERE id = ? AND user_id = ?"#,
                 webhook_id,
                 user_id
@@ -178,7 +179,7 @@ pub async fn handle(action: WebhooksAction, state: &AppState) -> anyhow::Result<
                 Err(_) => return Err(anyhow::anyhow!("Invalid webhook ID")),
             };
             let row = match sqlx::query!(
-                r#"SELECT id as "id!: String", url FROM webhooks WHERE id = ? AND user_id = ?"#,
+                r#"SELECT id as "id!: Uuid", url FROM webhooks WHERE id = ? AND user_id = ?"#,
                 webhook_id,
                 user_id
             )

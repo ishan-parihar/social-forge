@@ -186,6 +186,11 @@ pub async fn handle_campaign_delete(
     let user_id = resolve_first_user(state).await?;
     let id = parse_id("campaign_id", &input.campaign_id)?;
     rest_result(
-        campaigns::delete(State(state.clone()), AuthenticatedUser { user_id }, Path(id)).await,
+        campaigns::delete(
+            State(state.clone()),
+            AuthenticatedUser { user_id },
+            Path(id),
+        )
+        .await,
     )
 }

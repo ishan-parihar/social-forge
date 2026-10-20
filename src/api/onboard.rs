@@ -1541,7 +1541,7 @@ pub async fn telegram_bot_token_submit(
                 // without_url(): the request URL carries the bot token.
                 e = html_escape(&e.without_url().to_string())
             ))
-            .into_response())
+            .into_response());
         }
     };
     let json: serde_json::Value = match resp.json().await {

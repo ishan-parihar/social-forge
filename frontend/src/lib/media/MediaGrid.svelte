@@ -234,7 +234,7 @@
                 <button
                   type="button"
                   onclick={() => confirmDelete(item.id)}
-                  class="px-3 py-1.5 text-xs font-medium rounded-md bg-error/25 text-error border border-error/40 hover:bg-error/35"
+                  class="px-3 py-1.5 text-xs font-medium rounded-md bg-error/25 text-content border border-error/50 hover:bg-error/35"
                 >
                   Delete
                 </button>

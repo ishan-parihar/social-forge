@@ -185,7 +185,9 @@ pub async fn stage_post(
         // Publish refuses a disabled integration (services/posts.rs). Staging
         // must too; `force` does not override it.
         if integration.disabled {
-            errors.push(format!("{provider} — rejected: integration is disabled. Reconnect the social account"));
+            errors.push(format!(
+                "{provider} — rejected: integration is disabled. Reconnect the social account"
+            ));
             rejected.push(provider);
             continue;
         }
@@ -225,7 +227,9 @@ pub async fn stage_post(
         };
         let whole_readiness = publish_readiness(&provider, &preflight, registry);
 
-        let limit = registry.get(&provider).map_or(0, |p| p.max_content_length());
+        let limit = registry
+            .get(&provider)
+            .map_or(0, |p| p.max_content_length());
         let segments = content_splitter::split_content(&eff_content, &provider, limit);
         if segments.len() > 1 {
             warnings.push(format!(
@@ -255,7 +259,9 @@ pub async fn stage_post(
         });
         let readiness = if segments_clean {
             for line in &whole_readiness {
-                warnings.push(format!("{provider} (whole content, resolved by split): {line}"));
+                warnings.push(format!(
+                    "{provider} (whole content, resolved by split): {line}"
+                ));
             }
             vec![]
         } else {
@@ -324,12 +330,14 @@ pub async fn stage_post(
             .collect();
         // Dry run writes nothing; surface the report through warnings so
         // every caller (CLI/MCP/REST) sees it without a new wire type.
-        warnings.push(serde_json::to_string(&serde_json::json!({
-            "dry_run": true,
-            "group_id": group_id.to_string(),
-            "integrations": readiness,
-        }))
-        .unwrap_or_default());
+        warnings.push(
+            serde_json::to_string(&serde_json::json!({
+                "dry_run": true,
+                "group_id": group_id.to_string(),
+                "integrations": readiness,
+            }))
+            .unwrap_or_default(),
+        );
         return Ok(StagingResult {
             staged: vec![],
             total_posts: 0,
@@ -344,7 +352,11 @@ pub async fn stage_post(
         return Err(format!(
             "Every integration failed readiness: {}. Nothing was staged{}.",
             errors.join("; "),
-            if request.force { " (even with force)" } else { " — pass force=true to stage anyway" }
+            if request.force {
+                " (even with force)"
+            } else {
+                " — pass force=true to stage anyway"
+            }
         ));
     }
 
@@ -371,7 +383,10 @@ pub async fn stage_post(
         }
     }
 
-    let mut tx = pool.begin().await.map_err(|e| format!("Begin failed: {e}"))?;
+    let mut tx = pool
+        .begin()
+        .await
+        .map_err(|e| format!("Begin failed: {e}"))?;
     let mut staged = Vec::new();
     for plan in accepted {
         // next-slot: the slot resolved above; explicit scheduled_at: one shared
@@ -440,7 +455,9 @@ mod tests {
     use super::*;
     use crate::db::queries;
     use crate::social::registry::ProviderRegistry;
-    use crate::social::{AuthToken, AuthUrlResponse, PageInfo, ProviderError, PublishResult, SocialProvider};
+    use crate::social::{
+        AuthToken, AuthUrlResponse, PageInfo, ProviderError, PublishResult, SocialProvider,
+    };
     use std::sync::Arc;
 
     fn req(overrides: serde_json::Value, force: bool) -> StagingRequest {
@@ -452,12 +469,12 @@ mod tests {
             scheduled_at: None,
             first_comment: None,
             overrides,
-        dry_run: false,
-        force,
-        next_slot: false,
-        group_id: None,
+            dry_run: false,
+            force,
+            next_slot: false,
+            group_id: None,
+        }
     }
-}
 
     #[test]
     fn overrides_settings_shallow_merge_base_wins_keys_not_in_over() {
@@ -569,7 +586,10 @@ mod tests {
         )
         .await
         .expect("integration");
-        let registry = ProviderRegistry::with_providers(vec![("bluesky", Arc::new(SplitFake) as Arc<dyn SocialProvider>)]);
+        let registry = ProviderRegistry::with_providers(vec![(
+            "bluesky",
+            Arc::new(SplitFake) as Arc<dyn SocialProvider>,
+        )]);
 
         // 620 chars over Bluesky's 300-char limit → ≥3 thread segments.
         let long = "lorem ipsum dolor sit amet consectetur adipiscing elit sed do ".repeat(10);
@@ -594,7 +614,11 @@ mod tests {
         .await
         .expect("stage");
 
-        assert!(result.staged.len() >= 2, "expected a split, got {}", result.staged.len());
+        assert!(
+            result.staged.len() >= 2,
+            "expected a split, got {}",
+            result.staged.len()
+        );
         let group = result.group_id.expect("campaign group_id returned");
         let mut last_seq = 0;
         for s in &result.staged {
@@ -629,7 +653,19 @@ mod tests {
             .await
             .expect("user");
         let integration = queries::create_integration(
-            &pool, user.id, "bluesky", "Bluesky", "acct-d", "access-token", None, None, None, None, None, None, None,
+            &pool,
+            user.id,
+            "bluesky",
+            "Bluesky",
+            "acct-d",
+            "access-token",
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
         )
         .await
         .expect("integration");
@@ -638,7 +674,10 @@ mod tests {
             .execute(&pool)
             .await
             .expect("disable");
-        let registry = ProviderRegistry::with_providers(vec![("bluesky", Arc::new(SplitFake) as Arc<dyn SocialProvider>)]);
+        let registry = ProviderRegistry::with_providers(vec![(
+            "bluesky",
+            Arc::new(SplitFake) as Arc<dyn SocialProvider>,
+        )]);
 
         let err = stage_post(
             &pool,
@@ -722,13 +761,12 @@ mod tests {
         .expect("stage");
 
         assert_eq!(result.staged[0].state, "queued", "next-slot must queue");
-        let (state, scheduled): (String, Option<i64>) = sqlx::query_as(
-            "SELECT state, scheduled_at FROM posts WHERE user_id = ?",
-        )
-        .bind(user.id)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+        let (state, scheduled): (String, Option<i64>) =
+            sqlx::query_as("SELECT state, scheduled_at FROM posts WHERE user_id = ?")
+                .bind(user.id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
         assert_eq!(state, "queued");
         assert!(
             scheduled.is_some(),

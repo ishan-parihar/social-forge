@@ -1,10 +1,10 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id as \"id!: String\", url FROM webhooks WHERE id = ? AND user_id = ?",
+  "query": "SELECT id as \"id!: Uuid\", url FROM webhooks WHERE id = ? AND user_id = ?",
   "describe": {
     "columns": [
       {
-        "name": "id!: String",
+        "name": "id!: Uuid",
         "ordinal": 0,
         "type_info": "Text"
       },
@@ -22,5 +22,5 @@
       false
     ]
   },
-  "hash": "82aba0beea4ae8f221dd1a98975945284b4693298a2644652be47ec6621e2d1a"
+  "hash": "c859c1558bf84ccc14a13ecc209964bf0bdb240fbfe062eb5d60dea389c020a6"
 }

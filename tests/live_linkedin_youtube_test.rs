@@ -79,7 +79,10 @@ async fn get_dev_user_integrations() -> Option<(Vec<db::models::Integration>, Uu
 #[tokio::test]
 async fn test_li_get_profile() {
     let Some((integrations, _uid)) = get_dev_user_integrations().await else {
-        log_skip("suite", "dev user not in DB — visit the onboarding page first");
+        log_skip(
+            "suite",
+            "dev user not in DB — visit the onboarding page first",
+        );
         return;
     };
     let li = integrations
@@ -107,7 +110,10 @@ async fn test_li_get_profile() {
 #[tokio::test]
 async fn test_li_get_user_id() {
     let Some((integrations, _uid)) = get_dev_user_integrations().await else {
-        log_skip("suite", "dev user not in DB — visit the onboarding page first");
+        log_skip(
+            "suite",
+            "dev user not in DB — visit the onboarding page first",
+        );
         return;
     };
     let li = integrations
@@ -135,7 +141,10 @@ async fn test_li_get_user_id() {
 #[tokio::test]
 async fn test_li_get_posts() {
     let Some((integrations, _uid)) = get_dev_user_integrations().await else {
-        log_skip("suite", "dev user not in DB — visit the onboarding page first");
+        log_skip(
+            "suite",
+            "dev user not in DB — visit the onboarding page first",
+        );
         return;
     };
     let li = integrations
@@ -173,7 +182,10 @@ async fn test_li_get_posts() {
 #[tokio::test]
 async fn test_li_get_post_detail() {
     let Some((integrations, _uid)) = get_dev_user_integrations().await else {
-        log_skip("suite", "dev user not in DB — visit the onboarding page first");
+        log_skip(
+            "suite",
+            "dev user not in DB — visit the onboarding page first",
+        );
         return;
     };
     let li = integrations
@@ -228,7 +240,10 @@ async fn test_li_get_post_detail() {
 #[tokio::test]
 async fn test_li_get_post_comments() {
     let Some((integrations, _uid)) = get_dev_user_integrations().await else {
-        log_skip("suite", "dev user not in DB — visit the onboarding page first");
+        log_skip(
+            "suite",
+            "dev user not in DB — visit the onboarding page first",
+        );
         return;
     };
     let li = integrations
@@ -284,7 +299,10 @@ async fn test_li_get_post_comments() {
 #[tokio::test]
 async fn test_li_create_comment() {
     let Some((integrations, _uid)) = get_dev_user_integrations().await else {
-        log_skip("suite", "dev user not in DB — visit the onboarding page first");
+        log_skip(
+            "suite",
+            "dev user not in DB — visit the onboarding page first",
+        );
         return;
     };
     let li = integrations
@@ -349,7 +367,10 @@ async fn test_li_create_comment() {
 #[tokio::test]
 async fn test_lip_get_page_posts() {
     let Some((integrations, _uid)) = get_dev_user_integrations().await else {
-        log_skip("suite", "dev user not in DB — visit the onboarding page first");
+        log_skip(
+            "suite",
+            "dev user not in DB — visit the onboarding page first",
+        );
         return;
     };
     let pages: Vec<_> = integrations
@@ -398,7 +419,10 @@ async fn test_lip_get_page_posts() {
 #[tokio::test]
 async fn test_lip_pages() {
     let Some((integrations, _uid)) = get_dev_user_integrations().await else {
-        log_skip("suite", "dev user not in DB — visit the onboarding page first");
+        log_skip(
+            "suite",
+            "dev user not in DB — visit the onboarding page first",
+        );
         return;
     };
     let page = integrations
@@ -433,7 +457,10 @@ async fn test_lip_pages() {
 #[tokio::test]
 async fn test_lip_fetch_page_info() {
     let Some((integrations, _uid)) = get_dev_user_integrations().await else {
-        log_skip("suite", "dev user not in DB — visit the onboarding page first");
+        log_skip(
+            "suite",
+            "dev user not in DB — visit the onboarding page first",
+        );
         return;
     };
     let pages: Vec<_> = integrations
@@ -478,7 +505,10 @@ async fn test_lip_fetch_page_info() {
 #[tokio::test]
 async fn test_lip_analytics() {
     let Some((integrations, _uid)) = get_dev_user_integrations().await else {
-        log_skip("suite", "dev user not in DB — visit the onboarding page first");
+        log_skip(
+            "suite",
+            "dev user not in DB — visit the onboarding page first",
+        );
         return;
     };
     let page = integrations
@@ -506,7 +536,10 @@ async fn test_lip_analytics() {
 #[tokio::test]
 async fn test_lip_post_analytics() {
     let Some((integrations, _uid)) = get_dev_user_integrations().await else {
-        log_skip("suite", "dev user not in DB — visit the onboarding page first");
+        log_skip(
+            "suite",
+            "dev user not in DB — visit the onboarding page first",
+        );
         return;
     };
     let page = integrations
@@ -562,7 +595,10 @@ async fn test_lip_post_analytics() {
 #[tokio::test]
 async fn test_lip_create_comment() {
     let Some((integrations, _uid)) = get_dev_user_integrations().await else {
-        log_skip("suite", "dev user not in DB — visit the onboarding page first");
+        log_skip(
+            "suite",
+            "dev user not in DB — visit the onboarding page first",
+        );
         return;
     };
     let page = integrations
@@ -639,7 +675,10 @@ async fn test_lip_create_comment() {
 #[tokio::test]
 async fn test_yt_search_videos() {
     let Some((integrations, _uid)) = get_dev_user_integrations().await else {
-        log_skip("suite", "dev user not in DB — visit the onboarding page first");
+        log_skip(
+            "suite",
+            "dev user not in DB — visit the onboarding page first",
+        );
         return;
     };
     let yt = integrations
@@ -670,7 +709,10 @@ async fn test_yt_search_videos() {
 #[tokio::test]
 async fn test_yt_get_video() {
     let Some((integrations, _uid)) = get_dev_user_integrations().await else {
-        log_skip("suite", "dev user not in DB — visit the onboarding page first");
+        log_skip(
+            "suite",
+            "dev user not in DB — visit the onboarding page first",
+        );
         return;
     };
     let yt = integrations
@@ -718,7 +760,10 @@ async fn test_yt_get_video() {
 #[tokio::test]
 async fn test_yt_get_playlists() {
     let Some((integrations, _uid)) = get_dev_user_integrations().await else {
-        log_skip("suite", "dev user not in DB — visit the onboarding page first");
+        log_skip(
+            "suite",
+            "dev user not in DB — visit the onboarding page first",
+        );
         return;
     };
     let yt = integrations
@@ -755,7 +800,10 @@ async fn test_yt_get_playlists() {
 #[tokio::test]
 async fn test_yt_get_playlist_items() {
     let Some((integrations, _uid)) = get_dev_user_integrations().await else {
-        log_skip("suite", "dev user not in DB — visit the onboarding page first");
+        log_skip(
+            "suite",
+            "dev user not in DB — visit the onboarding page first",
+        );
         return;
     };
     let yt = integrations
@@ -806,7 +854,10 @@ async fn test_yt_get_playlist_items() {
 #[tokio::test]
 async fn test_yt_get_comments() {
     let Some((integrations, _uid)) = get_dev_user_integrations().await else {
-        log_skip("suite", "dev user not in DB — visit the onboarding page first");
+        log_skip(
+            "suite",
+            "dev user not in DB — visit the onboarding page first",
+        );
         return;
     };
     let yt = integrations
@@ -857,7 +908,10 @@ async fn test_yt_get_comments() {
 #[tokio::test]
 async fn test_yt_get_channel_stats() {
     let Some((integrations, _uid)) = get_dev_user_integrations().await else {
-        log_skip("suite", "dev user not in DB — visit the onboarding page first");
+        log_skip(
+            "suite",
+            "dev user not in DB — visit the onboarding page first",
+        );
         return;
     };
     let yt = integrations
@@ -885,7 +939,10 @@ async fn test_yt_get_channel_stats() {
 #[tokio::test]
 async fn test_yt_get_analytics() {
     let Some((integrations, _uid)) = get_dev_user_integrations().await else {
-        log_skip("suite", "dev user not in DB — visit the onboarding page first");
+        log_skip(
+            "suite",
+            "dev user not in DB — visit the onboarding page first",
+        );
         return;
     };
     let yt = integrations
@@ -923,7 +980,10 @@ async fn test_yt_get_analytics() {
 #[tokio::test]
 async fn test_yt_get_subscriptions() {
     let Some((integrations, _uid)) = get_dev_user_integrations().await else {
-        log_skip("suite", "dev user not in DB — visit the onboarding page first");
+        log_skip(
+            "suite",
+            "dev user not in DB — visit the onboarding page first",
+        );
         return;
     };
     let yt = integrations
@@ -961,7 +1021,10 @@ async fn test_yt_get_subscriptions() {
 #[tokio::test]
 async fn test_yt_find_creators() {
     let Some((integrations, _uid)) = get_dev_user_integrations().await else {
-        log_skip("suite", "dev user not in DB — visit the onboarding page first");
+        log_skip(
+            "suite",
+            "dev user not in DB — visit the onboarding page first",
+        );
         return;
     };
     let yt = integrations
@@ -995,7 +1058,10 @@ async fn test_yt_find_creators() {
 #[tokio::test]
 async fn test_yt_pages() {
     let Some((integrations, _uid)) = get_dev_user_integrations().await else {
-        log_skip("suite", "dev user not in DB — visit the onboarding page first");
+        log_skip(
+            "suite",
+            "dev user not in DB — visit the onboarding page first",
+        );
         return;
     };
     let yt = integrations
@@ -1025,7 +1091,10 @@ async fn test_yt_pages() {
 #[tokio::test]
 async fn test_yt_fetch_page_info() {
     let Some((integrations, _uid)) = get_dev_user_integrations().await else {
-        log_skip("suite", "dev user not in DB — visit the onboarding page first");
+        log_skip(
+            "suite",
+            "dev user not in DB — visit the onboarding page first",
+        );
         return;
     };
     let yt = integrations

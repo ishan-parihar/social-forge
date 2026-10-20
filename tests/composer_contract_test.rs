@@ -94,9 +94,14 @@ async fn request(
         None => Body::empty(),
     };
     let req = builder.body(body).expect("request");
-    let res = build_router(state.clone()).oneshot(req).await.expect("router");
+    let res = build_router(state.clone())
+        .oneshot(req)
+        .await
+        .expect("router");
     let status = res.status();
-    let bytes = axum::body::to_bytes(res.into_body(), 1 << 16).await.expect("body");
+    let bytes = axum::body::to_bytes(res.into_body(), 1 << 16)
+        .await
+        .expect("body");
     let json: Value = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
     (status, json)
 }
@@ -300,7 +305,10 @@ async fn create_strips_html_from_the_body() {
         !content.contains('<'),
         "the stored body must not carry HTML markup, got {content:?}"
     );
-    assert!(content.contains("Hello"), "the text must survive: {content:?}");
+    assert!(
+        content.contains("Hello"),
+        "the text must survive: {content:?}"
+    );
 }
 
 #[tokio::test]

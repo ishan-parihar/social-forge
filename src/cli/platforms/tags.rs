@@ -2,6 +2,7 @@ use crate::api::AppState;
 use crate::cli::TagsAction;
 
 use crate::db::types::EpochUtc;
+use uuid::Uuid;
 
 pub async fn handle(action: TagsAction, state: &AppState) -> anyhow::Result<()> {
     let result: Result<serde_json::Value, String> = match action {
@@ -11,7 +12,7 @@ pub async fn handle(action: TagsAction, state: &AppState) -> anyhow::Result<()> 
                 Err(e) => return Err(anyhow::anyhow!("Auth error: {e}")),
             };
             let tags = match sqlx::query!(
-                r#"SELECT id as "id!: String", name, color,
+                r#"SELECT id as "id!: Uuid", name, color,
                                                 created_at as "created_at: EpochUtc",
                                                 updated_at as "updated_at: EpochUtc"
                                          FROM tags WHERE user_id = ? ORDER BY name"#,
@@ -24,7 +25,7 @@ pub async fn handle(action: TagsAction, state: &AppState) -> anyhow::Result<()> 
                 Err(e) => return Err(anyhow::anyhow!("DB error: {e}")),
             };
             let data: Vec<_> = tags.into_iter().map(|t| serde_json::json!({
-                "id": t.id, "name": t.name, "color": t.color,
+                "id": t.id.to_string(), "name": t.name, "color": t.color,
                 "created_at": t.created_at.0.to_rfc3339(), "updated_at": t.updated_at.0.to_rfc3339(),
             })).collect();
             Ok(serde_json::json!({ "data": data }))
@@ -38,7 +39,7 @@ pub async fn handle(action: TagsAction, state: &AppState) -> anyhow::Result<()> 
             let id = uuid::Uuid::new_v4();
             let tag = match sqlx::query!(
                 r#"INSERT INTO tags (id, user_id, name, color) VALUES (?, ?, ?, ?)
-                   RETURNING id as "id!: String", name, color,
+                   RETURNING id as "id!: Uuid", name, color,
                              created_at as "created_at: EpochUtc",
                              updated_at as "updated_at: EpochUtc""#,
                 id,
@@ -53,7 +54,7 @@ pub async fn handle(action: TagsAction, state: &AppState) -> anyhow::Result<()> 
                 Err(e) => return Err(anyhow::anyhow!("Create failed: {e}")),
             };
             Ok(serde_json::json!({ "data": {
-                "id": tag.id, "name": tag.name, "color": tag.color,
+                "id": tag.id.to_string(), "name": tag.name, "color": tag.color,
                 "created_at": tag.created_at.0.to_rfc3339(), "updated_at": tag.updated_at.0.to_rfc3339(),
             }}))
         }
@@ -92,7 +93,7 @@ pub async fn handle(action: TagsAction, state: &AppState) -> anyhow::Result<()> 
                 Err(_) => return Err(anyhow::anyhow!("Invalid tag ID")),
             };
             let tag = match sqlx::query!(
-                r#"SELECT id as "id!: String", name, color,
+                r#"SELECT id as "id!: Uuid", name, color,
                                                  created_at as "created_at: EpochUtc",
                                                  updated_at as "updated_at: EpochUtc"
                                           FROM tags WHERE id = ? AND user_id = ?"#,
@@ -107,7 +108,7 @@ pub async fn handle(action: TagsAction, state: &AppState) -> anyhow::Result<()> 
                 Err(e) => return Err(anyhow::anyhow!("DB error: {e}")),
             };
             Ok(serde_json::json!({
-                "id": tag.id, "name": tag.name, "color": tag.color,
+                "id": tag.id.to_string(), "name": tag.name, "color": tag.color,
                 "created_at": tag.created_at.0.to_rfc3339(), "updated_at": tag.updated_at.0.to_rfc3339(),
             }))
         }
@@ -121,7 +122,7 @@ pub async fn handle(action: TagsAction, state: &AppState) -> anyhow::Result<()> 
                 Err(_) => return Err(anyhow::anyhow!("Invalid tag ID")),
             };
             let existing = match sqlx::query!(
-                r#"SELECT id as "id!: String", name, color FROM tags WHERE id = ? AND user_id = ?"#,
+                r#"SELECT id as "id!: Uuid", name, color FROM tags WHERE id = ? AND user_id = ?"#,
                 tag_id,
                 user_id
             )

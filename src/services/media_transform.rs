@@ -88,15 +88,30 @@ pub fn render_target(provider: &str, is_video: bool) -> Option<RenderTarget> {
     match (provider, is_video) {
         // IG feed: 4:5 portrait band is the safe intersection of the
         // allowed 4:5–1.91:1 range (outside it, the API rejects).
-        ("instagram", false) | ("instagram", true) => Some(RenderTarget { width: 1080, height: 1350 }),
-        ("instagram-standalone", _) => Some(RenderTarget { width: 1080, height: 1350 }),
+        ("instagram", false) | ("instagram", true) => Some(RenderTarget {
+            width: 1080,
+            height: 1350,
+        }),
+        ("instagram-standalone", _) => Some(RenderTarget {
+            width: 1080,
+            height: 1350,
+        }),
         // Reels-style verticals.
-        ("tiktok", _) => Some(RenderTarget { width: 1080, height: 1920 }),
+        ("tiktok", _) => Some(RenderTarget {
+            width: 1080,
+            height: 1920,
+        }),
         // v2: Facebook feed 4:5 — the widest portrait band FB accepts
         // without cropping in the feed UI.
-        ("facebook", _) => Some(RenderTarget { width: 1080, height: 1350 }),
+        ("facebook", _) => Some(RenderTarget {
+            width: 1080,
+            height: 1350,
+        }),
         // v2: YouTube Shorts 9:16 (video only).
-        ("youtube", true) => Some(RenderTarget { width: 1080, height: 1920 }),
+        ("youtube", true) => Some(RenderTarget {
+            width: 1080,
+            height: 1920,
+        }),
         _ => None,
     }
 }
@@ -130,8 +145,7 @@ pub fn ffmpeg_args(
 
     match settings.mode {
         TransformMode::Crop => {
-            let vf =
-                format!("scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h}");
+            let vf = format!("scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h}");
             args.extend(["-vf".into(), vf]);
         }
         TransformMode::BlurPad => {
@@ -317,20 +331,32 @@ mod tests {
     fn spec_targets_match_the_hard_reject_platforms() {
         assert_eq!(
             render_target("instagram", false),
-            Some(RenderTarget { width: 1080, height: 1350 })
+            Some(RenderTarget {
+                width: 1080,
+                height: 1350
+            })
         );
         assert_eq!(
             render_target("tiktok", true),
-            Some(RenderTarget { width: 1080, height: 1920 })
+            Some(RenderTarget {
+                width: 1080,
+                height: 1920
+            })
         );
         // v2 rows: Facebook 4:5, YouTube Shorts 9:16 (video only).
         assert_eq!(
             render_target("facebook", false),
-            Some(RenderTarget { width: 1080, height: 1350 })
+            Some(RenderTarget {
+                width: 1080,
+                height: 1350
+            })
         );
         assert_eq!(
             render_target("youtube", true),
-            Some(RenderTarget { width: 1080, height: 1920 })
+            Some(RenderTarget {
+                width: 1080,
+                height: 1920
+            })
         );
         assert_eq!(render_target("youtube", false), None);
         // No hard spec → no transform, ever.
@@ -343,7 +369,10 @@ mod tests {
         let args = ffmpeg_args(
             Path::new("/u/a.jpg"),
             Path::new("/t/b.jpg"),
-            RenderTarget { width: 1080, height: 1350 },
+            RenderTarget {
+                width: 1080,
+                height: 1350,
+            },
             false,
             &settings(true, TransformMode::Crop),
         );
@@ -365,7 +394,10 @@ mod tests {
         let args = ffmpeg_args(
             Path::new("/u/a.jpg"),
             Path::new("/t/b.jpg"),
-            RenderTarget { width: 1080, height: 1350 },
+            RenderTarget {
+                width: 1080,
+                height: 1350,
+            },
             false,
             &settings(true, TransformMode::BlurPad),
         );
@@ -376,8 +408,14 @@ mod tests {
             "fit-not-fill foreground: {joined}"
         );
         assert!(joined.contains("overlay="), "centered overlay: {joined}");
-        assert!(joined.contains("-filter_complex"), "multi-output graph: {joined}");
-        assert!(joined.contains("-map [out]"), "map the graph output: {joined}");
+        assert!(
+            joined.contains("-filter_complex"),
+            "multi-output graph: {joined}"
+        );
+        assert!(
+            joined.contains("-map [out]"),
+            "map the graph output: {joined}"
+        );
         // The [b]scale= foreground sub-chain must fit, not crop: between
         // [b]scale= and [fg] there is decrease and no crop.
         let fg_chain = joined
@@ -389,7 +427,10 @@ mod tests {
             fg_chain.contains("force_original_aspect_ratio=decrease") && !fg_chain.contains("crop"),
             "foreground fits uncropped: {fg_chain}"
         );
-        assert!(!joined.contains("-vf"), "blur mode does not use -vf: {joined}");
+        assert!(
+            !joined.contains("-vf"),
+            "blur mode does not use -vf: {joined}"
+        );
     }
 
     #[test]
@@ -397,7 +438,10 @@ mod tests {
         let args = ffmpeg_args(
             Path::new("/u/a.mp4"),
             Path::new("/t/b.mp4"),
-            RenderTarget { width: 1080, height: 1920 },
+            RenderTarget {
+                width: 1080,
+                height: 1920,
+            },
             true,
             &settings(true, TransformMode::Crop),
         );
@@ -405,7 +449,10 @@ mod tests {
         assert!(joined.contains("libx264"), "got: {joined}");
         assert!(joined.contains("aac"), "got: {joined}");
         assert!(joined.contains("+faststart"), "got: {joined}");
-        assert!(!joined.contains("frames:v"), "video is not single-frame: {joined}");
+        assert!(
+            !joined.contains("frames:v"),
+            "video is not single-frame: {joined}"
+        );
     }
 
     #[test]
@@ -419,7 +466,10 @@ mod tests {
         let args = ffmpeg_args(
             Path::new("/u/a.mp4"),
             Path::new("/t/b.mp4"),
-            RenderTarget { width: 1080, height: 1920 },
+            RenderTarget {
+                width: 1080,
+                height: 1920,
+            },
             true,
             &s,
         );
@@ -444,7 +494,10 @@ mod tests {
         let args = ffmpeg_args(
             Path::new("/u/a.mp4"),
             Path::new("/t/b.mp4"),
-            RenderTarget { width: 1080, height: 1920 },
+            RenderTarget {
+                width: 1080,
+                height: 1920,
+            },
             true,
             &s,
         );
@@ -464,7 +517,10 @@ mod tests {
         let args = ffmpeg_args(
             Path::new("/u/a.jpg"),
             Path::new("/t/b.jpg"),
-            RenderTarget { width: 1080, height: 1350 },
+            RenderTarget {
+                width: 1080,
+                height: 1350,
+            },
             false,
             &s,
         );
@@ -540,8 +596,15 @@ mod tests {
             let wide = dir.join("wide.mp4");
             let ok = tokio::process::Command::new("ffmpeg")
                 .args([
-                    "-y", "-f", "lavfi", "-i", "testsrc=size=1600x900:duration=2:rate=10",
-                    "-c:v", "libx264", "-preset", "ultrafast",
+                    "-y",
+                    "-f",
+                    "lavfi",
+                    "-i",
+                    "testsrc=size=1600x900:duration=2:rate=10",
+                    "-c:v",
+                    "libx264",
+                    "-preset",
+                    "ultrafast",
                 ])
                 .arg(&wide)
                 .stdout(std::process::Stdio::null())
@@ -572,9 +635,14 @@ mod tests {
             // ffprobe the produced dimensions.
             let probe = tokio::process::Command::new("ffprobe")
                 .args([
-                    "-v", "error", "-select_streams", "v:0",
-                    "-show_entries", "stream=width,height",
-                    "-of", "csv=p=0",
+                    "-v",
+                    "error",
+                    "-select_streams",
+                    "v:0",
+                    "-show_entries",
+                    "stream=width,height",
+                    "-of",
+                    "csv=p=0",
                 ])
                 .arg(&out_file)
                 .output()

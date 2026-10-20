@@ -1,10 +1,10 @@
 {
   "db_name": "SQLite",
-  "query": "UPDATE tags SET\n              name = COALESCE(?, name),\n              color = COALESCE(?, color),\n              updated_at = unixepoch()\n           WHERE id = ? AND user_id = ?\n           RETURNING id as \"id!: String\", name, color,\n                     created_at as \"created_at: EpochUtc\",\n                     updated_at as \"updated_at: EpochUtc\"",
+  "query": "INSERT INTO tags (id, user_id, name, color) VALUES (?, ?, ?, ?)\n                   RETURNING id as \"id!: Uuid\", name, color,\n                             created_at as \"created_at: EpochUtc\",\n                             updated_at as \"updated_at: EpochUtc\"",
   "describe": {
     "columns": [
       {
-        "name": "id!: String",
+        "name": "id!: Uuid",
         "ordinal": 0,
         "type_info": "Text"
       },
@@ -40,5 +40,5 @@
       false
     ]
   },
-  "hash": "2640e4b9e919285acc00026f719233d828457c47cab92839825eefb03d772006"
+  "hash": "baac835f3cf957fb14fbc3e8f4766e4382ab5e69ed3fecf4d57dbf4f71827912"
 }

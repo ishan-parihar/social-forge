@@ -268,9 +268,9 @@
                   <td class="px-4 py-3 text-muted text-xs">{key.last_used_at ? formatDate(key.last_used_at) : 'Never'}</td>
                   <td class="px-4 py-3">
                     {#if key.is_active}
-                      <span class="px-2 py-0.5 rounded text-xs font-medium bg-success/20 text-success">Active</span>
+                      <span class="px-2 py-0.5 rounded text-xs font-medium bg-success/20 ring-1 ring-inset ring-success/40 text-content">Active</span>
                     {:else}
-                      <span class="px-2 py-0.5 rounded text-xs font-medium bg-error/20 text-error">Revoked</span>
+                      <span class="px-2 py-0.5 rounded text-xs font-medium bg-error/20 ring-1 ring-inset ring-error/40 text-content">Revoked</span>
                     {/if}
                   </td>
                   <td class="px-4 py-3 text-right">

@@ -26,9 +26,7 @@ impl Default for SkoolProvider {
 
 impl SkoolProvider {
     pub fn new() -> Self {
-        Self {
-            http: skool_http(),
-        }
+        Self { http: skool_http() }
     }
 
     fn api_url(&self, path: &str) -> String {

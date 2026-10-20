@@ -1,10 +1,10 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id as \"id!: String\", trigger_id, trigger_type, response, status, error_message,\n                  created_at as \"created_at: EpochUtc\"\n           FROM automation_logs\n           WHERE rule_id = ?\n           ORDER BY created_at DESC\n           LIMIT ?",
+  "query": "SELECT id as \"id!: Uuid\", trigger_id, trigger_type, response, status, error_message,\n                  created_at as \"created_at: EpochUtc\"\n           FROM automation_logs\n           WHERE rule_id = ?\n           ORDER BY created_at DESC\n           LIMIT ?",
   "describe": {
     "columns": [
       {
-        "name": "id!: String",
+        "name": "id!: Uuid",
         "ordinal": 0,
         "type_info": "Text"
       },
@@ -52,5 +52,5 @@
       true
     ]
   },
-  "hash": "5cf738cce95435356d443ecde17f657ceaee6de85b047ea768796840856092a9"
+  "hash": "28a3907844b6619f2a8a655dbcac80ec029b0c4a12d8ed133e40070ac5225fd2"
 }

@@ -32,7 +32,6 @@ static USER_AGENT: &str = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (K
 
 // sec_ch_ua() and sec_ch_ua_full_version_list() removed — unused dead code
 
-
 static GRAPHQL_FEATURES: LazyLock<serde_json::Value> = LazyLock::new(|| {
     serde_json::json!({
         "responsive_web_graphql_exclude_directive_enabled": true,
@@ -430,8 +429,7 @@ impl XProvider {
                         // which the scheduler would "refresh" (impossible for
                         // cookies) and misreport as an expired token.
                         return Err(ProviderError::Auth(
-                            "X cookie session expired or was revoked — re-import cookies"
-                                .into(),
+                            "X cookie session expired or was revoked — re-import cookies".into(),
                         ));
                     }
                     return Err(ProviderError::Api(msg.to_string()));
@@ -1097,7 +1095,8 @@ impl XProvider {
 
             let query_id = crate::social::x_queryids::lookup("CreateTweet")
                 .ok_or_else(|| ProviderError::Api("Missing CreateTweet queryId".into()))?;
-            let json = self.graphql_post(&query_id, "CreateTweet", &variables, access_token)
+            let json = self
+                .graphql_post(&query_id, "CreateTweet", &variables, access_token)
                 .await?;
 
             let tweet_id = json["data"]["create_tweet"]["tweet_results"]["result"]["rest_id"]
@@ -2078,7 +2077,8 @@ impl SocialProvider for XProvider {
             });
             let qid = crate::social::x_queryids::lookup("TweetDetail")
                 .ok_or_else(|| ProviderError::Api("Missing TweetDetail queryId".into()))?;
-            let json = self.graphql_get(&qid, "TweetDetail", &vars, access_token)
+            let json = self
+                .graphql_get(&qid, "TweetDetail", &vars, access_token)
                 .await?;
             return Ok(Self::parse_graphql_comments(&json, platform_post_id));
         }
@@ -2142,7 +2142,8 @@ impl SocialProvider for XProvider {
 
             let query_id = crate::social::x_queryids::lookup("CreateTweet")
                 .ok_or_else(|| ProviderError::Api("Missing CreateTweet queryId".into()))?;
-            let json = self.graphql_post(&query_id, "CreateTweet", &variables, access_token)
+            let json = self
+                .graphql_post(&query_id, "CreateTweet", &variables, access_token)
                 .await?;
 
             let tweet_id = json["data"]["create_tweet"]["tweet_results"]["result"]["rest_id"]
@@ -2350,10 +2351,12 @@ impl XProvider {
                         return Ok(json);
                     }
                     let vars = serde_json::json!({"screen_name": screen_name, "withSafetyModeUserFields": true});
-                    let qid = crate::social::x_queryids::lookup("UserByScreenName").ok_or_else(|| {
-                        ProviderError::Api("Missing UserByScreenName queryId".into())
-                    })?;
-                    let profile = self.graphql_get(&qid, "UserByScreenName", &vars, access_token)
+                    let qid =
+                        crate::social::x_queryids::lookup("UserByScreenName").ok_or_else(|| {
+                            ProviderError::Api("Missing UserByScreenName queryId".into())
+                        })?;
+                    let profile = self
+                        .graphql_get(&qid, "UserByScreenName", &vars, access_token)
                         .await?;
                     let data = profile
                         .pointer("/data/user/result")
@@ -2477,7 +2480,8 @@ impl XProvider {
                 serde_json::json!({"screen_name": username, "withSafetyModeUserFields": true});
             let qid = crate::social::x_queryids::lookup("UserByScreenName")
                 .ok_or_else(|| ProviderError::Api("Missing UserByScreenName queryId".into()))?;
-            let json = self.graphql_get(&qid, "UserByScreenName", &vars, access_token)
+            let json = self
+                .graphql_get(&qid, "UserByScreenName", &vars, access_token)
                 .await?;
             let result = json.pointer("/data/user/result").cloned().unwrap_or(json);
             Ok(serde_json::json!({"data": {
@@ -2517,7 +2521,8 @@ impl XProvider {
             }
             let qid = crate::social::x_queryids::lookup("HomeLatestTimeline")
                 .ok_or_else(|| ProviderError::Api("Missing HomeLatestTimeline queryId".into()))?;
-            let json = self.graphql_get(&qid, "HomeLatestTimeline", &vars, access_token)
+            let json = self
+                .graphql_get(&qid, "HomeLatestTimeline", &vars, access_token)
                 .await?;
             let cursor = Self::extract_next_cursor(&json);
             let timeline = json
@@ -2561,7 +2566,8 @@ impl XProvider {
             }
             let qid = crate::social::x_queryids::lookup("UserTweets")
                 .ok_or_else(|| ProviderError::Api("Missing UserTweets queryId".into()))?;
-            let json = self.graphql_get(&qid, "UserTweets", &vars, access_token)
+            let json = self
+                .graphql_get(&qid, "UserTweets", &vars, access_token)
                 .await?;
             let cursor = Self::extract_next_cursor(&json);
             let timeline = json
@@ -2605,7 +2611,8 @@ impl XProvider {
             });
             let qid = crate::social::x_queryids::lookup("TweetDetail")
                 .ok_or_else(|| ProviderError::Api("Missing TweetDetail queryId".into()))?;
-            let json = self.graphql_get(&qid, "TweetDetail", &vars, access_token)
+            let json = self
+                .graphql_get(&qid, "TweetDetail", &vars, access_token)
                 .await?;
             // Extract the focal tweet from the response
             let tweet = json
@@ -2646,7 +2653,8 @@ impl XProvider {
             }
             let qid = crate::social::x_queryids::lookup("SearchTimeline")
                 .ok_or_else(|| ProviderError::Api("Missing SearchTimeline queryId".into()))?;
-            let json = self.graphql_post(&qid, "SearchTimeline", &vars, access_token)
+            let json = self
+                .graphql_post(&qid, "SearchTimeline", &vars, access_token)
                 .await?;
             let cursor = Self::extract_next_cursor(&json);
             let mut result = serde_json::json!({ "data": json });
@@ -2680,7 +2688,8 @@ impl XProvider {
             });
             let qid = crate::social::x_queryids::lookup("DeleteTweet")
                 .ok_or_else(|| ProviderError::Api("Missing DeleteTweet queryId".into()))?;
-            let json = self.graphql_post(&qid, "DeleteTweet", &vars, access_token)
+            let json = self
+                .graphql_post(&qid, "DeleteTweet", &vars, access_token)
                 .await?;
             Self::write_delay();
             return Ok(serde_json::json!({ "data": json.get("data") }));
@@ -2699,7 +2708,8 @@ impl XProvider {
             let vars = serde_json::json!({ "tweet_id": tweet_id });
             let qid = crate::social::x_queryids::lookup("FavoriteTweet")
                 .ok_or_else(|| ProviderError::Api("Missing FavoriteTweet queryId".into()))?;
-            let json = self.graphql_post(&qid, "FavoriteTweet", &vars, access_token)
+            let json = self
+                .graphql_post(&qid, "FavoriteTweet", &vars, access_token)
                 .await?;
             Self::write_delay();
             return Ok(serde_json::json!({ "data": json.get("data") }));
@@ -2722,7 +2732,8 @@ impl XProvider {
             });
             let qid = crate::social::x_queryids::lookup("UnfavoriteTweet")
                 .ok_or_else(|| ProviderError::Api("Missing UnfavoriteTweet queryId".into()))?;
-            let json = self.graphql_post(&qid, "UnfavoriteTweet", &vars, access_token)
+            let json = self
+                .graphql_post(&qid, "UnfavoriteTweet", &vars, access_token)
                 .await?;
             Self::write_delay();
             return Ok(serde_json::json!({ "data": json.get("data") }));
@@ -2744,7 +2755,8 @@ impl XProvider {
             });
             let qid = crate::social::x_queryids::lookup("CreateRetweet")
                 .ok_or_else(|| ProviderError::Api("Missing CreateRetweet queryId".into()))?;
-            let json = self.graphql_post(&qid, "CreateRetweet", &vars, access_token)
+            let json = self
+                .graphql_post(&qid, "CreateRetweet", &vars, access_token)
                 .await?;
             Self::write_delay();
             return Ok(serde_json::json!({ "data": json.get("data") }));
@@ -2767,7 +2779,8 @@ impl XProvider {
             });
             let qid = crate::social::x_queryids::lookup("DeleteRetweet")
                 .ok_or_else(|| ProviderError::Api("Missing DeleteRetweet queryId".into()))?;
-            let json = self.graphql_post(&qid, "DeleteRetweet", &vars, access_token)
+            let json = self
+                .graphql_post(&qid, "DeleteRetweet", &vars, access_token)
                 .await?;
             Self::write_delay();
             return Ok(serde_json::json!({ "data": json.get("data") }));
@@ -2794,7 +2807,8 @@ impl XProvider {
             }
             let qid = crate::social::x_queryids::lookup("Bookmarks")
                 .ok_or_else(|| ProviderError::Api("Missing Bookmarks queryId".into()))?;
-            let json = self.graphql_get(&qid, "Bookmarks", &vars, access_token)
+            let json = self
+                .graphql_get(&qid, "Bookmarks", &vars, access_token)
                 .await?;
             let cursor = Self::extract_next_cursor(&json);
             let timeline = json
@@ -2828,7 +2842,8 @@ impl XProvider {
             let vars = serde_json::json!({ "tweet_id": tweet_id });
             let qid = crate::social::x_queryids::lookup("CreateBookmark")
                 .ok_or_else(|| ProviderError::Api("Missing CreateBookmark queryId".into()))?;
-            let json = self.graphql_post(&qid, "CreateBookmark", &vars, access_token)
+            let json = self
+                .graphql_post(&qid, "CreateBookmark", &vars, access_token)
                 .await?;
             return Ok(serde_json::json!({ "data": json.get("data") }));
         }
@@ -2847,7 +2862,8 @@ impl XProvider {
             let vars = serde_json::json!({ "tweet_id": tweet_id });
             let qid = crate::social::x_queryids::lookup("DeleteBookmark")
                 .ok_or_else(|| ProviderError::Api("Missing DeleteBookmark queryId".into()))?;
-            let json = self.graphql_post(&qid, "DeleteBookmark", &vars, access_token)
+            let json = self
+                .graphql_post(&qid, "DeleteBookmark", &vars, access_token)
                 .await?;
             return Ok(serde_json::json!({ "data": json.get("data") }));
         }
@@ -2876,7 +2892,8 @@ impl XProvider {
             let qid = crate::social::x_queryids::lookup("UserByScreenName")
                 .ok_or_else(|| ProviderError::Api("Missing UserByScreenName queryId".into()))?;
             // Followers is a POST GraphQL query
-            let json = self.graphql_post(&qid, "Followers", &vars, access_token)
+            let json = self
+                .graphql_post(&qid, "Followers", &vars, access_token)
                 .await?;
             let cursor = Self::extract_next_cursor(&json);
             let mut result = serde_json::json!({ "data": json });
@@ -2913,7 +2930,8 @@ impl XProvider {
             }
             let qid = crate::social::x_queryids::lookup("UserByScreenName")
                 .ok_or_else(|| ProviderError::Api("Missing UserByScreenName queryId".into()))?;
-            let json = self.graphql_post(&qid, "Following", &vars, access_token)
+            let json = self
+                .graphql_post(&qid, "Following", &vars, access_token)
                 .await?;
             let cursor = Self::extract_next_cursor(&json);
             let mut result = serde_json::json!({ "data": json });
@@ -3025,11 +3043,12 @@ impl XProvider {
             if let Some(cursor) = pagination_token {
                 vars["cursor"] = serde_json::json!(cursor);
             }
-            let qid = crate::social::x_queryids::lookup("ListLatestTweetsTimeline")
-                .ok_or_else(|| {
+            let qid =
+                crate::social::x_queryids::lookup("ListLatestTweetsTimeline").ok_or_else(|| {
                     ProviderError::Api("Missing ListLatestTweetsTimeline queryId".into())
                 })?;
-            let json = self.graphql_get(&qid, "ListLatestTweetsTimeline", &vars, access_token)
+            let json = self
+                .graphql_get(&qid, "ListLatestTweetsTimeline", &vars, access_token)
                 .await?;
             let cursor = Self::extract_next_cursor(&json);
             let timeline = json
@@ -3342,7 +3361,11 @@ mod tests {
             ]}}
         });
         let comments = XProvider::parse_graphql_comments(&fixture, "1");
-        assert_eq!(comments.len(), 1, "module reply must be read, focal tweet skipped");
+        assert_eq!(
+            comments.len(),
+            1,
+            "module reply must be read, focal tweet skipped"
+        );
         assert_eq!(comments[0].id, "2");
         assert_eq!(comments[0].text, "a nested reply");
     }

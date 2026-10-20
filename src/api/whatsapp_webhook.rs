@@ -14,8 +14,8 @@ use crate::api::AppState;
 
 /// HMAC-SHA256(secret, body) as lowercase hex — Meta's signature form.
 pub fn signature_hex(secret: &str, body: &[u8]) -> String {
-    let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes())
-        .expect("HMAC accepts any key length");
+    let mut mac =
+        Hmac::<Sha256>::new_from_slice(secret.as_bytes()).expect("HMAC accepts any key length");
     mac.update(body);
     hex::encode(mac.finalize().into_bytes())
 }

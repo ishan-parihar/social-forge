@@ -54,10 +54,20 @@ async fn create_key(state: &AppState, expires_at: Option<&str>) -> String {
         .header(header::CONTENT_TYPE, "application/json")
         .body(Body::from(body.to_string()))
         .expect("request");
-    let res = build_router(state.clone()).oneshot(req).await.expect("router");
+    let res = build_router(state.clone())
+        .oneshot(req)
+        .await
+        .expect("router");
     let status = res.status();
-    let bytes = axum::body::to_bytes(res.into_body(), 1 << 16).await.expect("body");
-    assert_eq!(status, StatusCode::OK, "{}", String::from_utf8_lossy(&bytes));
+    let bytes = axum::body::to_bytes(res.into_body(), 1 << 16)
+        .await
+        .expect("body");
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "{}",
+        String::from_utf8_lossy(&bytes)
+    );
     let json: Value = serde_json::from_slice(&bytes).expect("json");
     json["full_key"].as_str().expect("full_key").to_string()
 }

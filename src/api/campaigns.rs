@@ -310,18 +310,19 @@ pub async fn update(
     // value replaces it. An unparseable date is a 400, not a silent
     // "keep the old one" - the old code dropped the parse failure on
     // the floor, so a typo in the date field was accepted and ignored.
-    let parse_date = |v: &Option<Option<String>>| -> Result<Option<Option<chrono::NaiveDate>>, AppError> {
-        match v {
-            None => Ok(None),
-            Some(None) => Ok(Some(None)),
-            Some(Some(s)) => match chrono::NaiveDate::parse_from_str(s.trim(), "%Y-%m-%d") {
-                Ok(d) => Ok(Some(Some(d))),
-                Err(_) => Err(AppError::BadRequest(format!(
-                    "Invalid date '{s}' - use YYYY-MM-DD"
-                ))),
-            },
-        }
-    };
+    let parse_date =
+        |v: &Option<Option<String>>| -> Result<Option<Option<chrono::NaiveDate>>, AppError> {
+            match v {
+                None => Ok(None),
+                Some(None) => Ok(Some(None)),
+                Some(Some(s)) => match chrono::NaiveDate::parse_from_str(s.trim(), "%Y-%m-%d") {
+                    Ok(d) => Ok(Some(Some(d))),
+                    Err(_) => Err(AppError::BadRequest(format!(
+                        "Invalid date '{s}' - use YYYY-MM-DD"
+                    ))),
+                },
+            }
+        };
     let start_date = parse_date(&body.start_date)?;
     let end_date = parse_date(&body.end_date)?;
 
@@ -577,15 +578,14 @@ pub async fn update_stage(
 
         // The post's campaign AFTER the write, so the broadcast reports the
         // effective value (unchanged / assigned / unassigned).
-        let effective_campaign_id: Option<Uuid> = sqlx::query_scalar(
-            "SELECT campaign_id FROM posts WHERE id = ? AND user_id = ?",
-        )
-        .bind(id)
-        .bind(auth.user_id)
-        .fetch_optional(&state.db)
-        .await
-        .ok()
-        .flatten();
+        let effective_campaign_id: Option<Uuid> =
+            sqlx::query_scalar("SELECT campaign_id FROM posts WHERE id = ? AND user_id = ?")
+                .bind(id)
+                .bind(auth.user_id)
+                .fetch_optional(&state.db)
+                .await
+                .ok()
+                .flatten();
 
         state.broadcast.send(
             "post_stage_changed",
@@ -686,15 +686,14 @@ pub async fn update_stage(
     // The broadcast carries the post's campaign AFTER the write, so a
     // listener sees the effective value - including "unchanged" (the
     // post kept its campaign) and "unassigned" (it lost it).
-    let effective_campaign_id: Option<Uuid> = sqlx::query_scalar(
-        "SELECT campaign_id FROM posts WHERE id = ? AND user_id = ?",
-    )
-    .bind(id)
-    .bind(auth.user_id)
-    .fetch_optional(&state.db)
-    .await
-    .ok()
-    .flatten();
+    let effective_campaign_id: Option<Uuid> =
+        sqlx::query_scalar("SELECT campaign_id FROM posts WHERE id = ? AND user_id = ?")
+            .bind(id)
+            .bind(auth.user_id)
+            .fetch_optional(&state.db)
+            .await
+            .ok()
+            .flatten();
 
     state.broadcast.send(
         "post_stage_changed",

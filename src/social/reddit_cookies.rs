@@ -159,8 +159,7 @@ mod f3_tests {
         assert_eq!(token_v2, None);
         assert_eq!(cookie_string, "reddit_session=s1; loid=loid-1");
 
-        let rows2: Vec<CookieRow> =
-            vec![("loid".into(), "loid-1".into(), ".reddit.com".into())];
+        let rows2: Vec<CookieRow> = vec![("loid".into(), "loid-1".into(), ".reddit.com".into())];
         assert!(
             map_reddit_rows(&rows2).is_none(),
             "rows with neither session nor token_v2 must be refused"

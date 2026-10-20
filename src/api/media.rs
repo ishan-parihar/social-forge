@@ -1005,7 +1005,11 @@ pub async fn proxy_media(
     // page uploaded to an allowlisted host, say) is returned as an opaque
     // download, so it cannot run on the app origin. Same rule as serve_media.
     let inline_media = content_type.starts_with("image/") || content_type.starts_with("video/");
-    let served_type = if inline_media { content_type.as_str() } else { "application/octet-stream" };
+    let served_type = if inline_media {
+        content_type.as_str()
+    } else {
+        "application/octet-stream"
+    };
 
     // Build response headers — forward status (200 or 206 for Range)
     let mut builder = Response::builder()
@@ -1447,7 +1451,8 @@ mod tests {
                 let resp = if path == "/start" {
                     format!("HTTP/1.1 302 Found\r\nLocation: {blocked}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
                 } else {
-                    "HTTP/1.1 200 OK\r\nContent-Length: 6\r\nConnection: close\r\n\r\nleaked".to_string()
+                    "HTTP/1.1 200 OK\r\nContent-Length: 6\r\nConnection: close\r\n\r\nleaked"
+                        .to_string()
                 };
                 let _ = sock.write_all(resp.as_bytes()).await;
             }
@@ -1478,7 +1483,10 @@ mod tests {
     #[test]
     fn proxy_host_allowlist_accepts_cdn_hosts_over_https_only() {
         assert!(is_proxyable_media_host("https", "pbs.twimg.com"));
-        assert!(is_proxyable_media_host("https", "scontent-iad3-1.xx.fbcdn.net"));
+        assert!(is_proxyable_media_host(
+            "https",
+            "scontent-iad3-1.xx.fbcdn.net"
+        ));
         assert!(!is_proxyable_media_host("http", "pbs.twimg.com"));
         assert!(!is_proxyable_media_host("https", "evil.example"));
         assert!(!is_proxyable_media_host("https", "scontent-x.example.com"));

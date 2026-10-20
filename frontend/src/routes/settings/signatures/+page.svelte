@@ -279,7 +279,13 @@
             <div class="flex items-start justify-between gap-3">
               <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-2 flex-wrap">
-                  <h3 class="text-sm font-medium">{sig.name}</h3>
+                  <!--
+                    The signature's name is the heading of its card. It was
+                    an <h3> directly under the page's <h1> ("Signatures"),
+                    which skips a level. The card is a section of the page,
+                    so <h2> is the right level.
+                  -->
+                  <h2 class="text-sm font-medium">{sig.name}</h2>
                   {#if sig.provider}
                     <span class="text-xs px-2 py-0.5 rounded-full bg-accent-fill/10 text-accent border border-accent/20">{sig.provider}</span>
                   {:else}

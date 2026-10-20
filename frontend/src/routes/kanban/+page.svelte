@@ -18,7 +18,7 @@
   import { modals } from '$lib/stores/modals.svelte';
   import { toast } from '$lib/stores/toast';
   import { realtime } from '$lib/stores/realtime';
-  import { providerIcon, providerColor, providerInk } from '$lib/providers';
+  import { providerIcon, providerColor, providerInk, providerInkOnInput, providerLabel } from '$lib/providers';
   import { inkOnFill } from '$lib/chip-colors';
   import Badge from '$lib/ui/Badge.svelte';
   import { goto } from '$app/navigation';
@@ -418,11 +418,19 @@
     return ({ low: 'Low', medium: 'Medium', high: 'High', urgent: 'Urgent' } as Record<string, string>)[p] || p;
   }
   function priorityChipClass(p: string): string {
+    // The priority text is `text-content` on a tinted fill, with the
+    // urgency carried by a RING.
+    //
+    // It was `text-error` on `bg-error/10`, and in the light theme that
+    // measures 4.22:1 - under the WCAG AA floor for the 10px label. A
+    // semantic hue on a wash of itself is under the floor in the light
+    // theme for EVERY hue, so the hue moves to the ring and the text
+    // takes the content colour (14.6:1 on the card).
     return ({
       low: 'text-muted bg-line/40',
       medium: 'text-muted bg-line/40',
-      high: 'text-error bg-error/10',
-      urgent: 'text-error bg-error/20 font-bold',
+      high: 'text-content bg-error/10 ring-1 ring-inset ring-error/40',
+      urgent: 'text-content bg-error/20 ring-1 ring-inset ring-error/50 font-bold',
     } as Record<string, string>)[p] || 'text-muted bg-line/40';
   }
   // Left-border accent for the card itself - draws the eye to high/urgent.
@@ -865,7 +873,11 @@
                         aria-hidden="true"
                       >⠿</span>
                       {#if post.integration_name}
-                        <span style="color: {providerInk(providerIdFor(post))}" class="shrink-0">{providerIcon(providerIdFor(post))}</span>
+                        <!-- The glyph sits on the kanban CARD, whose fill is
+                             `--bg-input` (`bg-background-input`), not the page
+                             background. The default ink assumes `#ffffff` and
+                             measured 4.32:1 on the real card - under AA. -->
+                        <span style="color: {providerInkOnInput(providerIdFor(post))}" class="shrink-0">{providerIcon(providerIdFor(post))}</span>
                         <span class="truncate max-w-[120px]">{post.integration_name}</span>
                       {/if}
                     </span>

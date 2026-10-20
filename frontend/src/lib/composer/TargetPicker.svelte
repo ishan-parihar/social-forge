@@ -45,15 +45,20 @@
     }
   }
 
-  // Target type badge color
+  // Target type badge color.
+  //
+  // The hue is carried by the BORDER and the TINT; the text takes the
+  // content colour. A semantic hue as TEXT on a wash of itself is under
+  // the WCAG AA floor in the light theme (warning 3.84:1 at /20, success
+  // 3.81:1), so the hue moves off the text and onto the ring.
   function targetTypeColor(type: string): string {
     switch (type.toLowerCase()) {
-      case "subreddit": return "bg-warning/20 text-warning border-warning/30";
-      case "channel": return "bg-hue-blue/20 text-viz-comment border-hue-blue/30";
-      case "group": return "bg-hue-violet/20 text-viz-view border-hue-violet/30";
-      case "peer": return "bg-success/20 text-success border-success/30";
-      case "blog": return "bg-warning/20 text-warning border-warning/30";
-      case "community": return "bg-hue-teal/20 text-hue-teal border-hue-teal/30";
+      case "subreddit": return "bg-warning/20 text-content border-warning/50";
+      case "channel": return "bg-hue-blue/20 text-content border-hue-blue/50";
+      case "group": return "bg-hue-violet/20 text-content border-hue-violet/50";
+      case "peer": return "bg-success/20 text-content border-success/50";
+      case "blog": return "bg-warning/20 text-content border-warning/50";
+      case "community": return "bg-hue-teal/20 text-content border-hue-teal/50";
       default: return "bg-surface-hover text-muted border-line";
     }
   }

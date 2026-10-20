@@ -182,7 +182,9 @@ pub async fn unschedule(
         "post_scheduled",
         &serde_json::json!({"id": post_id.to_string(), "unscheduled": true}),
     );
-    Ok(Json(crate::mcp::McpJsonValue(serde_json::to_value(&post).unwrap_or_default())))
+    Ok(Json(crate::mcp::McpJsonValue(
+        serde_json::to_value(&post).unwrap_or_default(),
+    )))
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
@@ -732,12 +734,9 @@ pub async fn delete_post(
         let provider = state
             .providers
             .get(&post.provider_identifier)
-            .ok_or_else(|| format!("Provider '{}' not found", post.provider_identifier))?
-        ;
-        let token = crate::crypto::maybe_decrypt_token(
-            &post.access_token,
-            state.token_key.as_ref(),
-        );
+            .ok_or_else(|| format!("Provider '{}' not found", post.provider_identifier))?;
+        let token =
+            crate::crypto::maybe_decrypt_token(&post.access_token, state.token_key.as_ref());
         provider
             .delete_published(&token, &platform_id)
             .await
@@ -751,17 +750,15 @@ pub async fn delete_post(
 
     PostService::delete(&state.db, &state.broadcast, user_id, post_id).await?;
 
-    Ok(Json(crate::mcp::McpJsonValue(
-        serde_json::json!({
-            "success": true,
-            "deleted_from_platform": input.delete_from_platform,
-            "message": if input.delete_from_platform {
-                "Post deleted on the platform and locally"
-            } else {
-                "Post deleted"
-            },
-        }),
-    )))
+    Ok(Json(crate::mcp::McpJsonValue(serde_json::json!({
+        "success": true,
+        "deleted_from_platform": input.delete_from_platform,
+        "message": if input.delete_from_platform {
+            "Post deleted on the platform and locally"
+        } else {
+            "Post deleted"
+        },
+    }))))
 }
 
 pub async fn find_slot(

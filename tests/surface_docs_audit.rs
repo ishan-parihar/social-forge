@@ -25,7 +25,10 @@ fn parse_tools() -> Vec<(String, String)> {
         }
         let src = std::fs::read_to_string(&path).expect("read source");
         let lines: Vec<&str> = src.lines().collect();
-        raw_attrs += lines.iter().filter(|l| l.trim().starts_with("#[tool(")).count();
+        raw_attrs += lines
+            .iter()
+            .filter(|l| l.trim().starts_with("#[tool("))
+            .count();
         let mut i = 0;
         while i < lines.len() {
             let t = lines[i].trim();
@@ -45,8 +48,9 @@ fn parse_tools() -> Vec<(String, String)> {
                 macro_text.push(' ');
                 macro_text.push_str(l.trim());
             }
-            let desc = extract_description(&macro_text)
-                .unwrap_or_else(|| panic!("unparsed #[tool(] (extend parser) in {path:?}: {macro_text}"));
+            let desc = extract_description(&macro_text).unwrap_or_else(|| {
+                panic!("unparsed #[tool(] (extend parser) in {path:?}: {macro_text}")
+            });
             // Methods are `pub async fn` or plain `async fn`. Stop at the
             // first fn line and never step over another `#[tool(`.
             let mut j = end + 1;
@@ -55,7 +59,11 @@ fn parse_tools() -> Vec<(String, String)> {
                     .get(j)
                     .unwrap_or_else(|| panic!("no fn after #[tool] in {path:?}"))
                     .trim();
-                assert!(!l.starts_with("#[tool("), "#[tool( with no fn before line {} in {path:?}", j + 1);
+                assert!(
+                    !l.starts_with("#[tool("),
+                    "#[tool( with no fn before line {} in {path:?}",
+                    j + 1
+                );
                 if let Some(name) = fn_name(l) {
                     break name;
                 }
@@ -74,7 +82,13 @@ fn fn_name(line: &str) -> Option<String> {
     let rest = line.strip_prefix("pub ").unwrap_or(line);
     let rest = rest.strip_prefix("async ").unwrap_or(rest);
     let rest = rest.strip_prefix("fn ")?;
-    Some(rest.split(['(', '<']).next().unwrap_or("").trim().to_string())
+    Some(
+        rest.split(['(', '<'])
+            .next()
+            .unwrap_or("")
+            .trim()
+            .to_string(),
+    )
 }
 
 /// `description = "…"` with the quotes as delimiters. Description text
@@ -97,9 +111,10 @@ fn d1_documented_tool_counts_match_registry() {
         agents.contains(&format!("{count} MCP tools")),
         "AGENTS.md must state the true MCP tool count ({count} MCP tools)"
     );
-    let providers =
-        std::fs::read_to_string(repo_path("skills/social-forge-agent/references/providers.md"))
-            .unwrap();
+    let providers = std::fs::read_to_string(repo_path(
+        "skills/social-forge-agent/references/providers.md",
+    ))
+    .unwrap();
     assert!(
         providers.contains(&format!("{count} tools")),
         "providers.md must state the true tool count ({count} tools)"

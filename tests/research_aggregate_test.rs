@@ -9,8 +9,7 @@
 use chrono::{DateTime, TimeZone, Utc};
 use social_forge::db;
 use social_forge::db::queries::{
-    engagement_histogram_by_slot, top_external_posts_by_engagement,
-    top_own_posts_by_engagement,
+    engagement_histogram_by_slot, top_external_posts_by_engagement, top_own_posts_by_engagement,
 };
 use social_forge::db::SqlitePool;
 use uuid::Uuid;
@@ -155,13 +154,7 @@ async fn external_post(
     id
 }
 
-async fn post_engagement(
-    pool: &SqlitePool,
-    post_id: Uuid,
-    likes: i32,
-    comments: i32,
-    shares: i32,
-) {
+async fn post_engagement(pool: &SqlitePool, post_id: Uuid, likes: i32, comments: i32, shares: i32) {
     sqlx::query(
         "INSERT INTO post_engagement (id, post_id, likes, comments, shares)
          VALUES (?, ?, ?, ?, ?)
@@ -191,17 +184,111 @@ async fn fixture() -> Fixture {
 
     // (a) Own posts. The 18:00 slot beats the 09:00 slot on
     // engagement-per-post (10+5+5 = 20) vs (40+0+0 = 40 over 4 posts).
-    own_post(&pool, user_id, "Robotics teardown #1", "youtube", at(1, 18), 10, 5, 5).await;
-    own_post(&pool, user_id, "Robotics teardown #2", "youtube", at(2, 9), 10, 0, 0).await;
-    own_post(&pool, user_id, "Robotics teardown #3", "youtube", at(3, 9), 10, 0, 0).await;
-    own_post(&pool, user_id, "Robotics teardown #4", "youtube", at(4, 9), 10, 0, 0).await;
-    own_post(&pool, user_id, "Robotics teardown #5", "youtube", at(5, 9), 10, 0, 0).await;
+    own_post(
+        &pool,
+        user_id,
+        "Robotics teardown #1",
+        "youtube",
+        at(1, 18),
+        10,
+        5,
+        5,
+    )
+    .await;
+    own_post(
+        &pool,
+        user_id,
+        "Robotics teardown #2",
+        "youtube",
+        at(2, 9),
+        10,
+        0,
+        0,
+    )
+    .await;
+    own_post(
+        &pool,
+        user_id,
+        "Robotics teardown #3",
+        "youtube",
+        at(3, 9),
+        10,
+        0,
+        0,
+    )
+    .await;
+    own_post(
+        &pool,
+        user_id,
+        "Robotics teardown #4",
+        "youtube",
+        at(4, 9),
+        10,
+        0,
+        0,
+    )
+    .await;
+    own_post(
+        &pool,
+        user_id,
+        "Robotics teardown #5",
+        "youtube",
+        at(5, 9),
+        10,
+        0,
+        0,
+    )
+    .await;
 
     // (b) Competitor posts, one high, one zero (excluded), one hidden.
-    external_post(&pool, user_id, "x", "swarm robotics for warehouses", at(6, 12), 200, 40, 20, false).await;
-    external_post(&pool, user_id, "x", "quiet week, nothing happened", at(6, 13), 0, 0, 0, false).await;
-    external_post(&pool, user_id, "x", "hidden swarm post should not rank", at(6, 14), 500, 10, 5, true).await;
-    external_post(&pool, user_id, "x", "swarm robotics revisited", at(7, 12), 40, 8, 4, false).await;
+    external_post(
+        &pool,
+        user_id,
+        "x",
+        "swarm robotics for warehouses",
+        at(6, 12),
+        200,
+        40,
+        20,
+        false,
+    )
+    .await;
+    external_post(
+        &pool,
+        user_id,
+        "x",
+        "quiet week, nothing happened",
+        at(6, 13),
+        0,
+        0,
+        0,
+        false,
+    )
+    .await;
+    external_post(
+        &pool,
+        user_id,
+        "x",
+        "hidden swarm post should not rank",
+        at(6, 14),
+        500,
+        10,
+        5,
+        true,
+    )
+    .await;
+    external_post(
+        &pool,
+        user_id,
+        "x",
+        "swarm robotics revisited",
+        at(7, 12),
+        40,
+        8,
+        4,
+        false,
+    )
+    .await;
 
     Fixture { pool, user_id }
 }
@@ -216,7 +303,10 @@ async fn own_posts_rank_by_engagement_and_carry_provider() {
     assert_eq!(rows.len(), 5, "all five own posts rank: {rows:?}");
     // 10+5+5 is the top; ties broken by recency, then the 4x 10s.
     assert_eq!(rows[0].content, "Robotics teardown #1");
-    assert_eq!(rows[0].engagement, 20, "likes+comments+shares, not impressions");
+    assert_eq!(
+        rows[0].engagement, 20,
+        "likes+comments+shares, not impressions"
+    );
     assert_eq!(rows[0].provider, "youtube");
     assert_eq!(rows[0].published_at, Some(at(1, 18)));
 }
@@ -272,7 +362,11 @@ async fn external_posts_rank_by_engagement_and_drop_zero_and_hidden() {
         .await
         .expect("external posts");
 
-    assert_eq!(rows.len(), 2, "zero-engagement and hidden rows are excluded: {rows:?}");
+    assert_eq!(
+        rows.len(),
+        2,
+        "zero-engagement and hidden rows are excluded: {rows:?}"
+    );
     assert_eq!(rows[0].text, "swarm robotics for warehouses");
     assert_eq!(rows[0].engagement, 260);
     assert_eq!(rows[1].text, "swarm robotics revisited");
@@ -336,7 +430,10 @@ async fn timing_histogram_respects_the_window_and_averages_per_post() {
     let (posts_9, eng_9) = by_slot[&(4, 9)];
     assert_eq!(eng_18, 50, "likes+comments+shares sum");
     // Volume is not quality: the 09:00 slot has more posts but a worse average.
-    assert!(posts_9 > posts_18, "09:00 has more volume: {posts_9} vs {posts_18}");
+    assert!(
+        posts_9 > posts_18,
+        "09:00 has more volume: {posts_9} vs {posts_18}"
+    );
     let avg_18 = eng_18 as f64 / posts_18 as f64;
     let avg_9 = eng_9 as f64 / posts_9 as f64;
     assert!(

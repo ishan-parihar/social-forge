@@ -167,7 +167,10 @@ struct PublishRow {
 
 /// Pull a non-empty string out of a JSON payload.
 fn str_at<'a>(payload: &'a serde_json::Value, key: &str) -> Option<&'a str> {
-    payload.get(key).and_then(|v| v.as_str()).filter(|s| !s.is_empty())
+    payload
+        .get(key)
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
 }
 
 /// The one sentence for one `events_log` row.
@@ -352,7 +355,10 @@ pub async fn list(
                 provider: str_at(&payload, "provider").map(String::from),
                 // The scheduler logs both branches, so the type itself is
                 // the answer; an unmapped type is reported as ok.
-                ok: !matches!(e.event_type.as_str(), "post_failed" | "first_comment_failed"),
+                ok: !matches!(
+                    e.event_type.as_str(),
+                    "post_failed" | "first_comment_failed"
+                ),
             });
         }
     }
@@ -385,11 +391,7 @@ pub async fn list(
                 id: format!("automation:{id}", id = a.id),
                 kind: "automation".into(),
                 at: a.created_at,
-                summary: automation_summary(
-                    &a.trigger_type,
-                    &a.status,
-                    a.error_message.as_deref(),
-                ),
+                summary: automation_summary(&a.trigger_type, &a.status, a.error_message.as_deref()),
                 post_id: None,
                 rule_id: Some(a.rule_id.to_string()),
                 integration_id: None,
@@ -470,7 +472,10 @@ mod tests {
     #[test]
     fn published_sentence_names_the_channel() {
         let p = json!({"title": "Launch", "provider": "x"});
-        assert_eq!(event_summary("post_published", &p), "Published “Launch” to X");
+        assert_eq!(
+            event_summary("post_published", &p),
+            "Published “Launch” to X"
+        );
     }
 
     #[test]
@@ -481,7 +486,10 @@ mod tests {
         // the dashboard shows a log line instead of a sentence.
         for t in ["post_published", "post_failed", "first_comment_failed"] {
             let s = event_summary(t, &json!({"title": "T", "provider": "x"}));
-            assert!(!s.starts_with("Event: "), "{t} has no handled sentence: {s}");
+            assert!(
+                !s.starts_with("Event: "),
+                "{t} has no handled sentence: {s}"
+            );
         }
     }
 

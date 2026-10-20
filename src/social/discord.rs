@@ -105,9 +105,8 @@ impl DiscordProvider {
 
         while remaining > 0 {
             let batch = remaining.min(100);
-            let mut url = format!(
-                "{DISCORD_API_BASE}/channels/{channel_id}/messages?limit={batch}"
-            );
+            let mut url =
+                format!("{DISCORD_API_BASE}/channels/{channel_id}/messages?limit={batch}");
             if let Some(b) = &before {
                 url.push_str(&format!("&before={b}"));
             }
@@ -143,7 +142,10 @@ impl DiscordProvider {
             let cursor = if after.is_some() {
                 batch_json[0]["id"].as_str().unwrap_or_default().to_string()
             } else {
-                batch_json[n - 1]["id"].as_str().unwrap_or_default().to_string()
+                batch_json[n - 1]["id"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_string()
             };
             all.extend(batch_json);
             remaining = remaining.saturating_sub(n as u32);
@@ -159,7 +161,10 @@ impl DiscordProvider {
 
         // Chronological order (snowflake ids sort numerically).
         all.sort_by_key(|m| {
-            m["id"].as_str().and_then(|s| s.parse::<u64>().ok()).unwrap_or(0)
+            m["id"]
+                .as_str()
+                .and_then(|s| s.parse::<u64>().ok())
+                .unwrap_or(0)
         });
         Ok(all)
     }

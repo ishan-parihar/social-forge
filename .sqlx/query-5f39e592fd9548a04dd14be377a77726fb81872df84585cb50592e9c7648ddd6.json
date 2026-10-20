@@ -1,10 +1,10 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id as \"id!: String\", name, color,\n                                                created_at as \"created_at: EpochUtc\",\n                                                updated_at as \"updated_at: EpochUtc\"\n                                         FROM tags WHERE user_id = ? ORDER BY name",
+  "query": "INSERT INTO tags (id, user_id, name, color)\n           VALUES (?, ?, ?, ?)\n           RETURNING id as \"id!: Uuid\", name, color,\n                     created_at as \"created_at: EpochUtc\",\n                     updated_at as \"updated_at: EpochUtc\"",
   "describe": {
     "columns": [
       {
-        "name": "id!: String",
+        "name": "id!: Uuid",
         "ordinal": 0,
         "type_info": "Text"
       },
@@ -30,7 +30,7 @@
       }
     ],
     "parameters": {
-      "Right": 1
+      "Right": 4
     },
     "nullable": [
       true,
@@ -40,5 +40,5 @@
       false
     ]
   },
-  "hash": "6083d7c753df57ab1f1d13e3c0dbc515dc698297ff0cec421100bea3ebb68b52"
+  "hash": "5f39e592fd9548a04dd14be377a77726fb81872df84585cb50592e9c7648ddd6"
 }

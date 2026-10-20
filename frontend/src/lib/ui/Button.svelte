@@ -30,7 +30,13 @@
   .btn-secondary:hover:not(:disabled) { background: var(--bg-hover); border-color: var(--border-hover); }
   .btn-ghost { background: transparent; color: var(--text-muted); }
   .btn-ghost:hover:not(:disabled) { background: var(--bg-hover); color: var(--text); }
-  .btn-danger { background: rgb(var(--error-rgb)); color: var(--brand-fg); }
+  /* The danger fill is `--error-rgb`, and the ink on it is `--error-fg-rgb`.
+     It was `--brand-fg` (white), which is 3.61:1 on the dark theme's red
+     (rgb(240 75 75)) - under the AA floor for the 12px "Delete" label.
+     The token `--error-fg-rgb` already existed for exactly this case
+     (the dark surface ink on the red fill, 5.81:1) and was not used
+     here. */
+  .btn-danger { background: rgb(var(--error-rgb)); color: rgb(var(--error-fg-rgb)); }
   .btn-danger:hover:not(:disabled) { background: rgb(var(--error-rgb) / 0.85); }
   /* v25 F1: the primary CTA is the one control that must never lose its
      focus ring - it is the main action on every form. */

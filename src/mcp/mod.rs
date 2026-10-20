@@ -6,24 +6,22 @@
 // Same business logic as the REST API — shared via AppState.
 
 use rmcp::{
-    handler::server::wrapper::Parameters, schemars::JsonSchema, tool, tool_handler,
-    tool_router, transport::stdio, Json, ServiceExt,
+    handler::server::wrapper::Parameters, schemars::JsonSchema, tool, tool_handler, tool_router,
+    transport::stdio, Json, ServiceExt,
 };
 use serde::{Deserialize, Serialize};
 
 use crate::api::AppState;
 
 pub(crate) mod auth;
+pub(crate) mod rest_bridge;
 pub mod tools_admin;
 pub mod tools_ai;
-pub mod tools_campaigns;
-pub mod tools_rss;
-pub mod tools_sets;
-pub(crate) mod rest_bridge;
 pub mod tools_analytics;
 pub mod tools_automation;
 pub mod tools_bluesky;
 mod tools_calendar;
+pub mod tools_campaigns;
 pub mod tools_comments;
 pub mod tools_devto;
 pub mod tools_discord;
@@ -33,9 +31,9 @@ pub mod tools_feed;
 pub mod tools_github;
 pub mod tools_google;
 pub mod tools_hashnode;
+pub mod tools_inbox;
 pub mod tools_instagram;
 pub mod tools_instagram_standalone;
-pub mod tools_inbox;
 pub mod tools_integrations;
 pub mod tools_linkedin;
 pub mod tools_linkedin_page;
@@ -46,6 +44,8 @@ pub mod tools_notifications;
 pub mod tools_pinterest;
 pub mod tools_posts;
 pub mod tools_reddit;
+pub mod tools_rss;
+pub mod tools_sets;
 pub mod tools_setup;
 pub mod tools_skool;
 pub mod tools_slack;
@@ -120,10 +120,7 @@ impl Toolsets {
     }
 
     pub fn get(&self) -> std::collections::HashSet<String> {
-        self.0
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone()
+        self.0.lock().unwrap_or_else(|e| e.into_inner()).clone()
     }
 
     pub fn insert(&self, set: String) {
@@ -168,11 +165,16 @@ impl SocialForgeMcpServer {
     /// name; cross-platform lifecycle tools map to `core`.
     pub(crate) fn toolset_of(name: &str) -> String {
         match name {
-            "get_comments" | "reply_to_comment" | "send_dm" | "get_dm_messages"
+            "get_comments"
+            | "reply_to_comment"
+            | "send_dm"
+            | "get_dm_messages"
             | "list_dm_conversations" => "core".into(),
             _ => match name.split('_').next().unwrap_or("") {
                 "posts" | "stage" | "media" | "tag" | "notif" | "setup" | "integrations"
-                | "signatures" | "calendar" | "analytics" | "feed" | "auth" | "inbox" => "core".into(),
+                | "signatures" | "calendar" | "analytics" | "feed" | "auth" | "inbox" => {
+                    "core".into()
+                }
                 "goog" => "google".into(),
                 "gh" => "github".into(),
                 "li" | "lip" => "linkedin".into(),
@@ -204,7 +206,11 @@ impl SocialForgeMcpServer {
         if enabled.contains("all") {
             return router;
         }
-        let names: Vec<String> = router.list_all().iter().map(|t| t.name.to_string()).collect();
+        let names: Vec<String> = router
+            .list_all()
+            .iter()
+            .map(|t| t.name.to_string())
+            .collect();
         for name in names {
             // Meta tools are never filtered — an agent must always be able
             // to search and enable more toolsets.
@@ -411,7 +417,9 @@ impl SocialForgeMcpServer {
         tools_posts::delete_post(&self.state, &params.0).await
     }
 
-    #[tool(description = "Create a thread: ordered parts sharing one group_id, linked at publish time. Mirrors POST /api/posts/thread.")]
+    #[tool(
+        description = "Create a thread: ordered parts sharing one group_id, linked at publish time. Mirrors POST /api/posts/thread."
+    )]
     async fn posts_thread(
         &self,
         params: Parameters<tools_posts::ThreadInput>,
@@ -419,7 +427,9 @@ impl SocialForgeMcpServer {
         tools_posts::create_thread(&self.state, &params.0).await
     }
 
-    #[tool(description = "Move a queued/draft/error post back to draft (unschedule). Mirrors POST /api/posts/{id}/unschedule.")]
+    #[tool(
+        description = "Move a queued/draft/error post back to draft (unschedule). Mirrors POST /api/posts/{id}/unschedule."
+    )]
     async fn posts_unschedule(
         &self,
         params: Parameters<tools_posts::UnscheduleInput>,
@@ -427,7 +437,9 @@ impl SocialForgeMcpServer {
         tools_posts::unschedule(&self.state, &params.0).await
     }
 
-    #[tool(description = "Reschedule a post, or its whole thread/campaign group with move_group. For published posts pass action: 'schedule' (re-publish) or 'update' (re-date). Mirrors PUT /api/posts/{id}/date.")]
+    #[tool(
+        description = "Reschedule a post, or its whole thread/campaign group with move_group. For published posts pass action: 'schedule' (re-publish) or 'update' (re-date). Mirrors PUT /api/posts/{id}/date."
+    )]
     async fn posts_reschedule(
         &self,
         params: Parameters<tools_posts::RescheduleInput>,
@@ -435,7 +447,9 @@ impl SocialForgeMcpServer {
         tools_posts::reschedule(&self.state, &params.0).await
     }
 
-    #[tool(description = "Fetch every post in a campaign/thread group by group_id. Mirrors GET /api/posts/group/{id}.")]
+    #[tool(
+        description = "Fetch every post in a campaign/thread group by group_id. Mirrors GET /api/posts/group/{id}."
+    )]
     async fn posts_group(
         &self,
         params: Parameters<tools_posts::GroupInput>,
@@ -443,7 +457,9 @@ impl SocialForgeMcpServer {
         tools_posts::get_group(&self.state, &params.0).await
     }
 
-    #[tool(description = "Validate a post against every integration WITHOUT creating it (publish-time rules). Mirrors POST /api/posts/validate.")]
+    #[tool(
+        description = "Validate a post against every integration WITHOUT creating it (publish-time rules). Mirrors POST /api/posts/validate."
+    )]
     async fn posts_validate(
         &self,
         params: Parameters<tools_posts::ValidateInput>,
@@ -535,7 +551,9 @@ impl SocialForgeMcpServer {
         tools_posts::create_carousel(&self.state, &params.0).await
     }
 
-    #[tool(description = "Best time to post per account, from stored engagement history (E5): a ranked weekday×hour histogram of engagement on published posts. Small samples are noisy — treat as a hint.")]
+    #[tool(
+        description = "Best time to post per account, from stored engagement history (E5): a ranked weekday×hour histogram of engagement on published posts. Small samples are noisy — treat as a hint."
+    )]
     pub async fn posts_best_times(
         &self,
         params: Parameters<tools_posts::PostsBestTimesInput>,
@@ -545,7 +563,9 @@ impl SocialForgeMcpServer {
             .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Unified inbox (E3): recent comments (swept over each account's latest published posts) plus DM conversations, merged across every connected provider, newest first. One reply verb: inbox_reply.")]
+    #[tool(
+        description = "Unified inbox (E3): recent comments (swept over each account's latest published posts) plus DM conversations, merged across every connected provider, newest first. One reply verb: inbox_reply."
+    )]
     pub async fn inbox_list(
         &self,
         params: Parameters<tools_inbox::InboxListInput>,
@@ -555,7 +575,9 @@ impl SocialForgeMcpServer {
             .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Answer an inbox item with one verb (E3). For a comment: provider + kind='comment' + comment_id. For a DM: provider + kind='dm' + recipient. Text is the reply body.")]
+    #[tool(
+        description = "Answer an inbox item with one verb (E3). For a comment: provider + kind='comment' + comment_id. For a DM: provider + kind='dm' + recipient. Text is the reply body."
+    )]
     pub async fn inbox_reply(
         &self,
         params: Parameters<tools_inbox::InboxReplyInput>,
@@ -838,7 +860,9 @@ impl SocialForgeMcpServer {
 
     // ── Reddit Parity Tools (P6.5, reddit-lyr port) ──────────
 
-    #[tool(description = "Report a Reddit post or comment to the moderators. Provide at least one reason.")]
+    #[tool(
+        description = "Report a Reddit post or comment to the moderators. Provide at least one reason."
+    )]
     pub async fn reddit_report(
         &self,
         params: Parameters<tools_reddit::RedditReportInput>,
@@ -917,7 +941,9 @@ impl SocialForgeMcpServer {
         tools_reddit::handle_reddit_get_rules(&self.state, &params.0).await
     }
 
-    #[tool(description = "List a subreddit's link flairs — the id pairs usable as reddit_create_post's flair_id.")]
+    #[tool(
+        description = "List a subreddit's link flairs — the id pairs usable as reddit_create_post's flair_id."
+    )]
     pub async fn reddit_list_flairs(
         &self,
         params: Parameters<tools_reddit::RedditSubredditInput>,
@@ -2097,7 +2123,9 @@ impl SocialForgeMcpServer {
 
     // ── Discord Read Tools (E7-read, discord-cli port) ───────
 
-    #[tool(description = "Fetch deep channel history with cursor pagination (100/request). Returns messages chronologically. Pass `before` for backfill or `after` for incremental sync.")]
+    #[tool(
+        description = "Fetch deep channel history with cursor pagination (100/request). Returns messages chronologically. Pass `before` for backfill or `after` for incremental sync."
+    )]
     pub async fn di_history(
         &self,
         params: Parameters<tools_discord::DiHistoryInput>,
@@ -2107,7 +2135,9 @@ impl SocialForgeMcpServer {
             .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Search messages across a Discord guild (and optionally one channel) using Discord's built-in search.")]
+    #[tool(
+        description = "Search messages across a Discord guild (and optionally one channel) using Discord's built-in search."
+    )]
     pub async fn di_search(
         &self,
         params: Parameters<tools_discord::DiSearchInput>,
@@ -2117,7 +2147,9 @@ impl SocialForgeMcpServer {
             .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Tail a Discord channel: latest messages snapshot. Pass `after` = the previous call's newest_id to fetch only what arrived since.")]
+    #[tool(
+        description = "Tail a Discord channel: latest messages snapshot. Pass `after` = the previous call's newest_id to fetch only what arrived since."
+    )]
     pub async fn di_tail(
         &self,
         params: Parameters<tools_discord::DiTailInput>,
@@ -2127,7 +2159,9 @@ impl SocialForgeMcpServer {
             .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Post a message via a Discord webhook URL — zero setup, no bot or OAuth needed. Optionally override username/avatar; wait=true returns the sent message id.")]
+    #[tool(
+        description = "Post a message via a Discord webhook URL — zero setup, no bot or OAuth needed. Optionally override username/avatar; wait=true returns the sent message id."
+    )]
     pub async fn di_webhook_post(
         &self,
         params: Parameters<tools_discord::DiWebhookPostInput>,
@@ -2137,7 +2171,9 @@ impl SocialForgeMcpServer {
             .map(|Json(v)| Json(McpJsonValue(v)))
     }
 
-    #[tool(description = "Inspect a Discord webhook URL: validates it and returns the name, channel and guild it posts to. Use before di_webhook_post to verify a URL.")]
+    #[tool(
+        description = "Inspect a Discord webhook URL: validates it and returns the name, channel and guild it posts to. Use before di_webhook_post to verify a URL."
+    )]
     pub async fn di_webhook_info(
         &self,
         params: Parameters<tools_discord::DiWebhookInfoInput>,
@@ -2228,7 +2264,9 @@ impl SocialForgeMcpServer {
         tools_whatsapp::handle_wc_list_templates(&self.state, &params.0).await
     }
 
-    #[tool(description = "Create a WhatsApp Cloud message template (Marketing/Utility/Authentication; components is the raw Meta component array).")]
+    #[tool(
+        description = "Create a WhatsApp Cloud message template (Marketing/Utility/Authentication; components is the raw Meta component array)."
+    )]
     pub async fn wc_create_template(
         &self,
         params: Parameters<tools_whatsapp::WcCreateTemplateInput>,
@@ -2244,7 +2282,9 @@ impl SocialForgeMcpServer {
         tools_whatsapp::handle_wc_delete_template(&self.state, &params.0).await
     }
 
-    #[tool(description = "Send a WhatsApp Cloud template message (the compliant outbound path outside the 24h window).")]
+    #[tool(
+        description = "Send a WhatsApp Cloud template message (the compliant outbound path outside the 24h window)."
+    )]
     pub async fn wc_send_template(
         &self,
         params: Parameters<tools_whatsapp::WcSendTemplateInput>,
@@ -2659,7 +2699,9 @@ impl SocialForgeMcpServer {
         tools_telegram_bot::handle_tb_get_updates(&self.state, &params.0).await
     }
 
-    #[tool(description = "Discover chats/channels the bot is in by sweeping pending updates (E8). Returns distinct chats with id, type and title. Consumes pending updates like tb_get_updates; tu_list_dialogs (user session) lists all.")]
+    #[tool(
+        description = "Discover chats/channels the bot is in by sweeping pending updates (E8). Returns distinct chats with id, type and title. Consumes pending updates like tb_get_updates; tu_list_dialogs (user session) lists all."
+    )]
     pub async fn tb_list_chats(
         &self,
         params: Parameters<tools_telegram_bot::TbListChatsInput>,
@@ -2791,7 +2833,9 @@ impl SocialForgeMcpServer {
 
     // ── Telegram User-Session Parity (P6.4, tg-cli port) ───────
 
-    #[tool(description = "Fetch a Telegram chat's message history (chronological). Pass offset_id = the previous page's oldest_id to continue back in time.")]
+    #[tool(
+        description = "Fetch a Telegram chat's message history (chronological). Pass offset_id = the previous page's oldest_id to continue back in time."
+    )]
     pub async fn tu_history(
         &self,
         params: Parameters<tools_telegram_user::TuHistoryInput>,
@@ -2799,7 +2843,9 @@ impl SocialForgeMcpServer {
         tools_telegram_user::handle_tu_history(&self.state, &params.0).await
     }
 
-    #[tool(description = "Tail a Telegram chat: latest messages, optionally only newer than after_id (the previous call's newest_id).")]
+    #[tool(
+        description = "Tail a Telegram chat: latest messages, optionally only newer than after_id (the previous call's newest_id)."
+    )]
     pub async fn tu_tail(
         &self,
         params: Parameters<tools_telegram_user::TuTailInput>,
@@ -2823,7 +2869,9 @@ impl SocialForgeMcpServer {
         tools_telegram_user::handle_tu_delete_message(&self.state, &params.0).await
     }
 
-    #[tool(description = "Queue a Telegram send through the rate-limited write queue (paced per Telegram limits; use for bursts). The queue is in-memory — a server restart drops pending sends; use tu_send_message for must-not-be-lost sends.")]
+    #[tool(
+        description = "Queue a Telegram send through the rate-limited write queue (paced per Telegram limits; use for bursts). The queue is in-memory — a server restart drops pending sends; use tu_send_message for must-not-be-lost sends."
+    )]
     pub async fn tu_queue_send(
         &self,
         params: Parameters<tools_telegram_user::TuQueueSendInput>,
@@ -3923,7 +3971,9 @@ impl SocialForgeMcpServer {
 
     // ── §5.5 Meta Tools (always enabled) ──────────────────────
 
-    #[tool(description = "Search ALL available MCP tools by name/description (including ones not enabled for this session). Use this before tools_enable to discover toolsets.")]
+    #[tool(
+        description = "Search ALL available MCP tools by name/description (including ones not enabled for this session). Use this before tools_enable to discover toolsets."
+    )]
     pub async fn tools_search(
         &self,
         params: Parameters<ToolsSearchInput>,
@@ -3935,8 +3985,7 @@ impl SocialForgeMcpServer {
             .into_iter()
             .filter(|t| {
                 t.name.to_ascii_lowercase().contains(&q)
-                    || t
-                        .description
+                    || t.description
                         .as_ref()
                         .is_some_and(|d| d.to_ascii_lowercase().contains(&q))
             })
@@ -3957,7 +4006,9 @@ impl SocialForgeMcpServer {
         }))))
     }
 
-    #[tool(description = "Enable additional toolsets for this session (e.g. [\"x\", \"reddit\"]). Discover sets with tools_search. Ads are per-session; the boot default is SOCIAL_FORGE_TOOLSETS (default: core).")]
+    #[tool(
+        description = "Enable additional toolsets for this session (e.g. [\"x\", \"reddit\"]). Discover sets with tools_search. Ads are per-session; the boot default is SOCIAL_FORGE_TOOLSETS (default: core)."
+    )]
     pub async fn tools_enable(
         &self,
         params: Parameters<ToolsEnableInput>,

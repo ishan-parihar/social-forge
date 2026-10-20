@@ -91,13 +91,12 @@ async fn created_at_is_stored_as_an_integer_epoch() {
     .await
     .expect("seed post");
 
-    let stored: (String,) = sqlx::query_as(
-        "SELECT typeof(created_at) FROM external_posts WHERE platform_post_id = ?",
-    )
-    .bind(&platform_post_id)
-    .fetch_one(&pool)
-    .await
-    .expect("row");
+    let stored: (String,) =
+        sqlx::query_as("SELECT typeof(created_at) FROM external_posts WHERE platform_post_id = ?")
+            .bind(&platform_post_id)
+            .fetch_one(&pool)
+            .await
+            .expect("row");
     assert_eq!(
         stored.0, "integer",
         "the column is declared INTEGER and every reader compares it against an INTEGER cutoff; \

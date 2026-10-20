@@ -218,7 +218,7 @@
           <span class="text-xs text-muted capitalize">{rule.response_type.replace("_", " ")}</span>
           <button onclick={() => toggleActive(rule)} class="w-fit min-h-11">
             {#if rule.is_active}
-              <span class="px-2 py-0.5 text-xs rounded bg-success/20 text-success">Active</span>
+              <span class="px-2 py-0.5 text-xs rounded bg-success/20 ring-1 ring-inset ring-success/40 text-content">Active</span>
             {:else}
               <span class="px-2 py-0.5 text-xs rounded bg-muted/20 text-muted">Inactive</span>
             {/if}
@@ -310,7 +310,7 @@
             <div class="bg-surface-hover border border-line rounded-lg p-3">
               <div class="flex items-center gap-2 mb-1">
                 <span class="text-xs text-muted">{new Date(log.created_at).toLocaleString()}</span>
-                <span class="px-1.5 py-0.5 text-[10px] rounded {log.status === 'success' ? 'bg-success/20 text-success' : 'bg-error/20 text-error'}">{log.status}</span>
+                <span class="px-1.5 py-0.5 text-[10px] rounded {log.status === 'success' ? 'bg-success/20 ring-1 ring-inset ring-success/40 text-content' : 'bg-error/20 ring-1 ring-inset ring-error/40 text-content'}">{log.status}</span>
               </div>
               <div class="text-xs text-muted mb-1">Trigger: {log.trigger_type}</div>
               {#if log.error_message}

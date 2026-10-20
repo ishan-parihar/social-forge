@@ -1,10 +1,10 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id as \"id!: String\", name, url, is_active as \"is_active!: i64\",\n                                                  created_at as \"created_at: EpochUtc\"\n                                           FROM webhooks WHERE id = ? AND user_id = ?",
+  "query": "SELECT id as \"id!: Uuid\", name, color,\n                                                created_at as \"created_at: EpochUtc\",\n                                                updated_at as \"updated_at: EpochUtc\"\n                                         FROM tags WHERE user_id = ? ORDER BY name",
   "describe": {
     "columns": [
       {
-        "name": "id!: String",
+        "name": "id!: Uuid",
         "ordinal": 0,
         "type_info": "Text"
       },
@@ -14,23 +14,23 @@
         "type_info": "Text"
       },
       {
-        "name": "url",
+        "name": "color",
         "ordinal": 2,
         "type_info": "Text"
       },
       {
-        "name": "is_active!: i64",
+        "name": "created_at: EpochUtc",
         "ordinal": 3,
         "type_info": "Integer"
       },
       {
-        "name": "created_at: EpochUtc",
+        "name": "updated_at: EpochUtc",
         "ordinal": 4,
         "type_info": "Integer"
       }
     ],
     "parameters": {
-      "Right": 2
+      "Right": 1
     },
     "nullable": [
       true,
@@ -40,5 +40,5 @@
       false
     ]
   },
-  "hash": "4ec335cd6f9a390d851eea029caa9a2922e37a17d370fb33f89fb5f2606a9969"
+  "hash": "6a6b534c856ec43e15485bd0f49478acf038598a3efa461472611dfdc739e80d"
 }

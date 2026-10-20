@@ -160,10 +160,7 @@ pub async fn handle_di_search(
 /// Latest snapshot of a channel — the `tail -f` style watch cursor:
 /// pass `after` = the newest message id from the previous call to get
 /// only what arrived since.
-pub async fn handle_di_tail(
-    state: &AppState,
-    input: &DiTailInput,
-) -> Result<Json<Value>, String> {
+pub async fn handle_di_tail(state: &AppState, input: &DiTailInput) -> Result<Json<Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
     // Connection gate only (Bot API creds come from config).
     let _token = find_di_token(state, user_id, &input.channel_id).await?;
@@ -388,8 +385,7 @@ fn ensure_discord_webhook_url(url: &str) -> Result<(), String> {
         && parsed.path().starts_with("/api/webhooks/");
     if !ok {
         return Err(
-            "Not a Discord webhook URL (expected https://discord.com/api/webhooks/...)"
-                .to_string(),
+            "Not a Discord webhook URL (expected https://discord.com/api/webhooks/...)".to_string(),
         );
     }
     Ok(())
@@ -434,12 +430,11 @@ pub async fn handle_di_webhook_post(
         .await
         .map_err(|e| format!("Webhook post failed: {e}"))?;
     let status = resp.status();
-    let payload: Value = resp
-        .json()
-        .await
-        .unwrap_or(Value::Null); // 204 No Content has no body
+    let payload: Value = resp.json().await.unwrap_or(Value::Null); // 204 No Content has no body
     if !status.is_success() {
-        return Err(format!("Discord rejected the webhook ({status}): {payload}"));
+        return Err(format!(
+            "Discord rejected the webhook ({status}): {payload}"
+        ));
     }
     Ok(Json(payload))
 }
@@ -478,14 +473,12 @@ mod webhook_tests {
 
     #[test]
     fn discord_webhook_urls_are_host_guarded() {
-        assert!(ensure_discord_webhook_url(
-            "https://discord.com/api/webhooks/12345/abcdef"
-        )
-        .is_ok());
-        assert!(ensure_discord_webhook_url(
-            "https://discordapp.com/api/webhooks/12345/abcdef"
-        )
-        .is_ok());
+        assert!(
+            ensure_discord_webhook_url("https://discord.com/api/webhooks/12345/abcdef").is_ok()
+        );
+        assert!(
+            ensure_discord_webhook_url("https://discordapp.com/api/webhooks/12345/abcdef").is_ok()
+        );
         // A bare host would turn the tool into a post-anything gadget.
         assert!(ensure_discord_webhook_url("https://example.com/api/webhooks/1/x").is_err());
         assert!(ensure_discord_webhook_url("http://discord.com/api/webhooks/1/x").is_err());

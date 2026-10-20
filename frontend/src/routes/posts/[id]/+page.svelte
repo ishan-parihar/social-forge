@@ -103,6 +103,21 @@
     <ErrorState message={error} actionLabel="Retry" onaction={load} />
   {:else if post}
     <div class="bg-surface border border-line rounded-xl p-5 space-y-4">
+      <!--
+        The page's ONE h1. The detail view had no heading at all: the
+        title was an <h2> under a page with no <h1>, so the document
+        outline started at level 2 and the probe's "no <h1>" check
+        failed on this route.
+
+        The h1 IS the post title, because that is what the page is: one
+        post. When the post has no title (a Bluesky or Threads post
+        often does not), the first line of the body is the heading, and
+        a body that is only whitespace falls back to a generic label.
+      -->
+      <h1 class="text-lg font-semibold">
+        {post.title || post.content.trim().split('\n')[0] || 'Post'}
+      </h1>
+
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-2">
           <Badge state={post.state as "draft" | "queued" | "published" | "error"} />
@@ -112,10 +127,6 @@
           <span class="text-xs text-muted">{timezone.formatDateTime(post.scheduled_at)}</span>
         {/if}
       </div>
-
-      {#if post.title}
-        <h2 class="text-lg font-semibold">{post.title}</h2>
-      {/if}
 
       <!--
         The post body is rendered as TEXT, not as HTML.

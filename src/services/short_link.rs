@@ -146,7 +146,9 @@ mod tests {
     fn utm_appends_with_ampersand_when_query_exists() {
         let out = tag_urls_with_utm("https://example.com/?id=7", "x", "spring");
         assert!(
-            out.contains("https://example.com/?id=7&utm_source=x&utm_medium=social&utm_campaign=spring"),
+            out.contains(
+                "https://example.com/?id=7&utm_source=x&utm_medium=social&utm_campaign=spring"
+            ),
             "got: {out}"
         );
     }
@@ -182,10 +184,11 @@ mod tests {
 mod punctuation_and_rewrite_tests {
     use super::*;
 
-
     #[test]
     fn url_match_excludes_trailing_sentence_punctuation() {
-        let m = url_regex().find("read https://example.com/post.").expect("match");
+        let m = url_regex()
+            .find("read https://example.com/post.")
+            .expect("match");
         assert_eq!(m.as_str(), "https://example.com/post");
     }
 

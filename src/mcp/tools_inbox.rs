@@ -87,19 +87,15 @@ pub async fn handle_inbox_list(
             continue;
         }
         if let Some(providers) = &input.providers {
-            if !providers.is_empty()
-                && !providers.contains(&integration.provider_identifier)
-            {
+            if !providers.is_empty() && !providers.contains(&integration.provider_identifier) {
                 continue;
             }
         }
         let Some(provider) = state.providers.get(&integration.provider_identifier) else {
             continue;
         };
-        let token = crate::crypto::maybe_decrypt_token(
-            &integration.access_token,
-            state.token_key.as_ref(),
-        );
+        let token =
+            crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
         let iid = integration.id;
 
         let mut comments_n = 0usize;
@@ -115,13 +111,7 @@ pub async fn handle_inbox_list(
             match provider.get_post_comments(&token, pid).await {
                 Ok(comments) => {
                     for c in &comments {
-                        flatten_comments(
-                            c,
-                            &integration.provider_identifier,
-                            iid,
-                            pid,
-                            &mut items,
-                        );
+                        flatten_comments(c, &integration.provider_identifier, iid, pid, &mut items);
                         comments_n += 1 + c.replies.len();
                     }
                 }
@@ -190,12 +180,13 @@ pub async fn handle_inbox_reply(
     )
     .await?;
     let Some(provider) = state.providers.get(&integration.provider_identifier) else {
-        return Err(format!("Provider '{}' not found", integration.provider_identifier));
+        return Err(format!(
+            "Provider '{}' not found",
+            integration.provider_identifier
+        ));
     };
-    let token = crate::crypto::maybe_decrypt_token(
-        &integration.access_token,
-        state.token_key.as_ref(),
-    );
+    let token =
+        crate::crypto::maybe_decrypt_token(&integration.access_token, state.token_key.as_ref());
 
     let content = PostContent {
         content: input.text.clone(),
@@ -270,6 +261,8 @@ mod inbox_tests {
             .map(|v| v["comment_id"].as_str().unwrap())
             .collect();
         assert_eq!(ids, vec!["root", "r1", "r2", "r2a"]);
-        assert!(out.iter().all(|v| v["kind"] == "comment" && v["post_id"] == "post-1"));
+        assert!(out
+            .iter()
+            .all(|v| v["kind"] == "comment" && v["post_id"] == "post-1"));
     }
 }

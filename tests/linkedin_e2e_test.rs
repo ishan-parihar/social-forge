@@ -823,12 +823,11 @@ async fn test_linkedin_db_schema_support() {
     // Verify the unique constraint exists for (user_id, provider_identifier,
     // internal_id) — SQLite exposes unique indexes via pragma_index_list
     // (pg_constraint is Postgres).
-    let unique_cols: Vec<(String,)> = sqlx::query_as(
-        "SELECT name FROM pragma_index_list('integrations') WHERE \"unique\" = 1",
-    )
-    .fetch_all(&db)
-    .await
-    .expect("Failed to query constraints");
+    let unique_cols: Vec<(String,)> =
+        sqlx::query_as("SELECT name FROM pragma_index_list('integrations') WHERE \"unique\" = 1")
+            .fetch_all(&db)
+            .await
+            .expect("Failed to query constraints");
 
     assert!(!unique_cols.is_empty(), "Should have unique constraints");
 

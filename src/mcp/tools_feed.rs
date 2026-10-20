@@ -107,7 +107,9 @@ pub async fn handle_feed_list(
     let has_more = posts.len() as i64 > limit;
     let posts: Vec<_> = posts.into_iter().take(limit as usize).collect();
 
-    let next_cursor = posts.last().map(|p| DateTime::<Utc>::from(p.created_at).to_rfc3339());
+    let next_cursor = posts
+        .last()
+        .map(|p| DateTime::<Utc>::from(p.created_at).to_rfc3339());
 
     let feed_posts: Vec<FeedPostItem> = posts.iter().map(format_feed_post).collect();
 

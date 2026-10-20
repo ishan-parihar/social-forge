@@ -96,7 +96,11 @@ fn the_weighted_rule_matches_the_composers_rule() {
                         || (0xac00..=0xd7af).contains(&cp)
                         || (0x1f300..=0x1f9ff).contains(&cp)
                         || (0x2600..=0x27bf).contains(&cp);
-                    if heavy { 2 } else { 1 }
+                    if heavy {
+                        2
+                    } else {
+                        1
+                    }
                 })
                 .sum::<usize>(),
             "weighted length must match the composer's rule for {case:?}"

@@ -174,7 +174,11 @@ mod tests {
         let segments = split_content(&content, "whatsapp", 4096);
         assert!(segments.len() > 1);
         for seg in &segments {
-            assert!(seg.content.len() <= 4096, "segment {} bytes", seg.content.len());
+            assert!(
+                seg.content.len() <= 4096,
+                "segment {} bytes",
+                seg.content.len()
+            );
         }
     }
 
@@ -186,7 +190,11 @@ mod tests {
         let segments = split_content(text, "linkedin", 10);
         assert!(segments.len() > 1, "expected a split");
         for seg in &segments {
-            assert!(seg.content.len() <= 10, "segment over limit: {}", seg.content.len());
+            assert!(
+                seg.content.len() <= 10,
+                "segment over limit: {}",
+                seg.content.len()
+            );
         }
         let rejoined: String = segments.iter().map(|s| s.content.as_str()).collect();
         assert_eq!(rejoined, text, "no character may be lost or cut");

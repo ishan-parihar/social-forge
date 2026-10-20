@@ -25,7 +25,9 @@ const TEMPLATE_NAME: &str = "social_forge_e6_probe";
 #[tokio::test]
 async fn test_wc_template_crud_roundtrip() {
     let config = config();
-    let Some(provider) = cloud(&config) else { return };
+    let Some(provider) = cloud(&config) else {
+        return;
+    };
 
     // Clean slate: a leftover from an aborted run must not fail the create.
     let _ = provider.delete_template(TEMPLATE_NAME).await;
@@ -55,11 +57,7 @@ async fn test_wc_template_crud_roundtrip() {
         .unwrap_or_else(|e| panic!("list_templates failed: {e}"));
     let names: Vec<&str> = listed["data"]
         .as_array()
-        .map(|d| {
-            d.iter()
-                .filter_map(|t| t["name"].as_str())
-                .collect()
-        })
+        .map(|d| d.iter().filter_map(|t| t["name"].as_str()).collect())
         .unwrap_or_default();
     assert!(
         names.contains(&TEMPLATE_NAME),
@@ -83,11 +81,7 @@ async fn test_wc_template_crud_roundtrip() {
         .unwrap_or_else(|e| panic!("re-list failed: {e}"));
     let names: Vec<&str> = relisted["data"]
         .as_array()
-        .map(|d| {
-            d.iter()
-                .filter_map(|t| t["name"].as_str())
-                .collect()
-        })
+        .map(|d| d.iter().filter_map(|t| t["name"].as_str()).collect())
         .unwrap_or_default();
     assert!(
         !names.contains(&TEMPLATE_NAME),
@@ -101,7 +95,9 @@ async fn test_wc_send_template_to_test_number() {
     let config = config();
     let (Some(provider), Some(to)) = (
         cloud(&config),
-        std::env::var("WHATSAPP_CLOUD_TEST_TO").ok().filter(|v| !v.is_empty()),
+        std::env::var("WHATSAPP_CLOUD_TEST_TO")
+            .ok()
+            .filter(|v| !v.is_empty()),
     ) else {
         eprintln!("⏭ skipped: WHATSAPP_CLOUD_TEST_TO not set (no live send)");
         return;

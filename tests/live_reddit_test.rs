@@ -43,7 +43,9 @@ async fn reddit_token(config: &Config) -> Option<String> {
 }
 
 fn live_write_enabled() -> bool {
-    std::env::var("REDDIT_LIVE_WRITE").map(|v| v == "1").unwrap_or(false)
+    std::env::var("REDDIT_LIVE_WRITE")
+        .map(|v| v == "1")
+        .unwrap_or(false)
 }
 
 fn make_provider(config: &Config, token: &str) -> RedditProvider {
@@ -101,7 +103,10 @@ async fn test_reddit_get_rules() {
     // Flair listing rides the same dual-auth GET path — verify it on both
     // auth kinds when creds exist (the .json suffix fix for cookie auth).
     match p.list_flairs(&token, "rust").await {
-        Ok(v) => eprintln!("✅ list_flairs: {} entries", v.as_array().map(Vec::len).unwrap_or(0)),
+        Ok(v) => eprintln!(
+            "✅ list_flairs: {} entries",
+            v.as_array().map(Vec::len).unwrap_or(0)
+        ),
         Err(e) => panic!("list_flairs failed: {e}"),
     }
 }
@@ -187,9 +192,16 @@ async fn test_reddit_write_parity_roundtrip() {
 
     // Reporting our own fixture post is harmless (the post is deleted
     // right after; r/test mods only ever saw a self-report).
-    p.report(&token, &post_id, "social-forge self-test report", "", "", "")
-        .await
-        .unwrap_or_else(|e| panic!("report failed: {e}"));
+    p.report(
+        &token,
+        &post_id,
+        "social-forge self-test report",
+        "",
+        "",
+        "",
+    )
+    .await
+    .unwrap_or_else(|e| panic!("report failed: {e}"));
     eprintln!("✅ report accepted");
 
     // Crosspost the fixture, then delete both.
@@ -203,9 +215,13 @@ async fn test_reddit_write_parity_roundtrip() {
         .unwrap_or_default();
     eprintln!("✅ crosspost created: {cp_id}");
     if !cp_id.is_empty() {
-        p.delete(&cp_id).await.unwrap_or_else(|e| panic!("crosspost cleanup failed: {e}"));
+        p.delete(&cp_id)
+            .await
+            .unwrap_or_else(|e| panic!("crosspost cleanup failed: {e}"));
     }
-    p.delete(&post_id).await.unwrap_or_else(|e| panic!("cleanup failed: {e}"));
+    p.delete(&post_id)
+        .await
+        .unwrap_or_else(|e| panic!("cleanup failed: {e}"));
     eprintln!("✅ fixtures deleted");
 
     // Friends add/remove round-trip against the official Reddit account.

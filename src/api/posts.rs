@@ -771,13 +771,7 @@ pub async fn update(
     Path(id): Path<Uuid>,
     Json(body): Json<UpdatePostRequest>,
 ) -> Result<Json<PostPublic>, crate::error::AppError> {
-    let post = update_post(
-        &state,
-        auth.user_id,
-        id,
-        body,
-    )
-    .await?;
+    let post = update_post(&state, auth.user_id, id, body).await?;
     Ok(Json(post))
 }
 
@@ -958,7 +952,9 @@ pub async fn schedule(
     let post = queries::schedule_post(&state.db, id, auth.user_id, scheduled_at)
         .await?
         .ok_or_else(|| {
-            crate::error::AppError::NotFound("Post not found or not schedulable in its current state".into())
+            crate::error::AppError::NotFound(
+                "Post not found or not schedulable in its current state".into(),
+            )
         })?;
 
     let public = PostPublic::from(post.clone());
@@ -1501,9 +1497,7 @@ pub(crate) fn validate_posts_for_integrations(
                 kind: "too_long".into(),
                 message: format!(
                     "Content is {} chars, max {} for {}",
-                    length,
-                    max_len,
-                    integ.provider_name
+                    length, max_len, integ.provider_name
                 ),
                 max_length: Some(max_len),
                 actual_length: Some(length),

@@ -102,9 +102,14 @@ async fn get(state: &AppState, uri: &str) -> (StatusCode, String) {
         .header(header::ORIGIN, &state.config.frontend_url)
         .body(Body::empty())
         .expect("request");
-    let res = build_router(state.clone()).oneshot(req).await.expect("router");
+    let res = build_router(state.clone())
+        .oneshot(req)
+        .await
+        .expect("router");
     let status = res.status();
-    let bytes = axum::body::to_bytes(res.into_body(), 1 << 18).await.expect("body");
+    let bytes = axum::body::to_bytes(res.into_body(), 1 << 18)
+        .await
+        .expect("body");
     (status, String::from_utf8_lossy(&bytes).into_owned())
 }
 
@@ -157,9 +162,7 @@ async fn filtering_the_calendar_by_channel_returns_the_post() {
 
     let (status, body) = get(
         &state,
-        &format!(
-            "/api/calendar?start=2027-01-01&end=2027-01-02&integration_ids={integration_id}"
-        ),
+        &format!("/api/calendar?start=2027-01-01&end=2027-01-02&integration_ids={integration_id}"),
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body}");
@@ -185,9 +188,14 @@ async fn assigning_a_tag_to_a_post_is_accepted() {
         .header(header::CONTENT_TYPE, "application/json")
         .body(Body::from(format!(r#"{{"tag_ids":["{tag_id}"]}}"#)))
         .expect("request");
-    let res = build_router(state.clone()).oneshot(req).await.expect("router");
+    let res = build_router(state.clone())
+        .oneshot(req)
+        .await
+        .expect("router");
     let status = res.status();
-    let bytes = axum::body::to_bytes(res.into_body(), 1 << 18).await.expect("body");
+    let bytes = axum::body::to_bytes(res.into_body(), 1 << 18)
+        .await
+        .expect("body");
     let body = String::from_utf8_lossy(&bytes).into_owned();
 
     assert_eq!(
@@ -216,9 +224,14 @@ async fn reordering_the_kanban_persists_the_new_order() {
             r#"{{"state":"draft","ordered_post_ids":["{post_id}"]}}"#
         )))
         .expect("request");
-    let res = build_router(state.clone()).oneshot(req).await.expect("router");
+    let res = build_router(state.clone())
+        .oneshot(req)
+        .await
+        .expect("router");
     let status = res.status();
-    let bytes = axum::body::to_bytes(res.into_body(), 1 << 18).await.expect("body");
+    let bytes = axum::body::to_bytes(res.into_body(), 1 << 18)
+        .await
+        .expect("body");
     let body = String::from_utf8_lossy(&bytes).into_owned();
     assert_eq!(status, StatusCode::OK, "{body}");
 

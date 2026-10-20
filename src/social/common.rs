@@ -110,7 +110,10 @@ pub fn looks_like_html(s: &str) -> bool {
         }
         // `<br>`, `<hr>`, `<img ...>` - a void tag, or a tag with an
         // attribute.
-        let rest: String = bytes[i + 1..].iter().collect::<String>().to_ascii_lowercase();
+        let rest: String = bytes[i + 1..]
+            .iter()
+            .collect::<String>()
+            .to_ascii_lowercase();
         for tag in VOID_TAGS {
             if let Some(after_tag) = rest.strip_prefix(tag) {
                 let after = after_tag.chars().next();
@@ -138,11 +141,67 @@ const VOID_TAGS: &[&str] = &["br", "hr", "img", "input", "meta", "link", "wbr", 
 
 /// The tag names the stripper recognises.
 const KNOWN_TAGS: &[&str] = &[
-    "p", "div", "span", "br", "hr", "b", "i", "u", "strong", "em", "s", "strike", "a", "ul", "ol",
-    "li", "h1", "h2", "h3", "h4", "h5", "h6", "blockquote", "pre", "code", "section", "article",
-    "header", "footer", "main", "aside", "nav", "figure", "figcaption", "table", "thead", "tbody",
-    "tr", "td", "th", "img", "picture", "source", "video", "audio", "iframe", "script", "style",
-    "small", "sub", "sup", "mark", "del", "ins", "abbr", "cite", "q", "kbd", "samp", "var", "wbr",
+    "p",
+    "div",
+    "span",
+    "br",
+    "hr",
+    "b",
+    "i",
+    "u",
+    "strong",
+    "em",
+    "s",
+    "strike",
+    "a",
+    "ul",
+    "ol",
+    "li",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "blockquote",
+    "pre",
+    "code",
+    "section",
+    "article",
+    "header",
+    "footer",
+    "main",
+    "aside",
+    "nav",
+    "figure",
+    "figcaption",
+    "table",
+    "thead",
+    "tbody",
+    "tr",
+    "td",
+    "th",
+    "img",
+    "picture",
+    "source",
+    "video",
+    "audio",
+    "iframe",
+    "script",
+    "style",
+    "small",
+    "sub",
+    "sup",
+    "mark",
+    "del",
+    "ins",
+    "abbr",
+    "cite",
+    "q",
+    "kbd",
+    "samp",
+    "var",
+    "wbr",
 ];
 
 /// Convert HTML to the plain text a social provider expects.

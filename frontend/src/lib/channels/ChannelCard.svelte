@@ -43,13 +43,13 @@
 
   let authTypeColor = $derived.by(() => {
     const m = integration.auth_method;
-    if (m === "cookie") return "text-warning border-warning/30 bg-warning/10";
-    if (m === "pat") return "text-success border-success/30 bg-success/10";
-    if (m === "api_key") return "text-warning border-warning/30 bg-warning/10";
+    if (m === "cookie") return "text-content border-warning/50 bg-warning/10";
+    if (m === "pat") return "text-content border-success/50 bg-success/10";
+    if (m === "api_key") return "text-content border-warning/50 bg-warning/10";
     switch (authType) {
-      case "api_key": return "text-warning border-warning/30 bg-warning/10";
-      case "web3": return "text-viz-view border-hue-violet/30 bg-hue-violet/10";
-      case "extension": return "text-viz-click border-hue-cyan/30 bg-hue-cyan/10";
+      case "api_key": return "text-content border-warning/50 bg-warning/10";
+      case "web3": return "text-content border-hue-violet/50 bg-hue-violet/10";
+      case "extension": return "text-content border-hue-cyan/50 bg-hue-cyan/10";
       default: return "";
     }
   });

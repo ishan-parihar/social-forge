@@ -67,7 +67,7 @@ export function channelStatus(integration: Integration, now: Date = new Date()):
       label: "Needs reconnect",
       hint: "The stored token could not be refreshed. Reconnect to resume posting.",
       icon: "refresh",
-      chip: "text-error border-error/30 bg-error/10",
+      chip: "text-content border-error/50 bg-error/10",
       textClass: "text-error",
       actionable: true,
     };
@@ -82,7 +82,7 @@ export function channelStatus(integration: Integration, now: Date = new Date()):
         label: "Token expired",
         hint: "The access token is past its expiry. Refresh it to resume posting.",
         icon: "refresh",
-        chip: "text-error border-error/30 bg-error/10",
+        chip: "text-content border-error/50 bg-error/10",
         textClass: "text-error",
         actionable: true,
       };
@@ -94,7 +94,7 @@ export function channelStatus(integration: Integration, now: Date = new Date()):
         label: "Expiring soon",
         hint: `Token expires in ${days} day${days === 1 ? "" : "s"}. Refresh it to avoid a posting gap.`,
         icon: "clock",
-        chip: "text-warning border-warning/30 bg-warning/10",
+        chip: "text-content border-warning/50 bg-warning/10",
         textClass: "text-warning",
         actionable: true,
       };
@@ -106,7 +106,7 @@ export function channelStatus(integration: Integration, now: Date = new Date()):
     label: "Connected",
     hint: "Healthy. Scheduled posts will publish.",
     icon: "check",
-    chip: "text-success border-success/30 bg-success/10",
+    chip: "text-content border-success/50 bg-success/10",
     textClass: "text-success",
     actionable: false,
   };

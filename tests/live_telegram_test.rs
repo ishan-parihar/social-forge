@@ -16,8 +16,14 @@ use social_forge::services::telegram_client::TelegramClientManager;
 async fn manager() -> Option<Arc<TelegramClientManager>> {
     social_forge::config::load_dotenv_for_live_tests();
     let config = Config::from_env().expect("Failed to load config");
-    let (api_id, api_hash) = (config.telegram_api_id.clone(), config.telegram_api_hash.clone());
-    let Some(api_id) = api_id.and_then(|v| v.parse::<i32>().ok()).filter(|v| *v != 0) else {
+    let (api_id, api_hash) = (
+        config.telegram_api_id.clone(),
+        config.telegram_api_hash.clone(),
+    );
+    let Some(api_id) = api_id
+        .and_then(|v| v.parse::<i32>().ok())
+        .filter(|v| *v != 0)
+    else {
         eprintln!("⏭ skipped: TELEGRAM_API_ID not set");
         return None;
     };
@@ -30,7 +36,11 @@ async fn manager() -> Option<Arc<TelegramClientManager>> {
         .telegram_session_dir
         .clone()
         .unwrap_or_else(|| "data/telegram-sessions".into());
-    let mgr = Arc::new(TelegramClientManager::new(api_id, api_hash, session_dir.into()));
+    let mgr = Arc::new(TelegramClientManager::new(
+        api_id,
+        api_hash,
+        session_dir.into(),
+    ));
     match mgr.is_authenticated().await {
         Ok(true) => Some(mgr),
         Ok(false) => {
@@ -115,7 +125,10 @@ async fn test_tu_parity_full_roundtrip() {
     mgr.queue_send(&peer, "P6.4 queue probe 2")
         .await
         .unwrap_or_else(|e| panic!("queue_send 2 failed: {e}"));
-    assert!(mgr.queue_len().await <= 2, "queue bounded by what we pushed");
+    assert!(
+        mgr.queue_len().await <= 2,
+        "queue bounded by what we pushed"
+    );
 
     tokio::time::sleep(std::time::Duration::from_secs(12)).await;
     let drained_to = mgr.queue_len().await;

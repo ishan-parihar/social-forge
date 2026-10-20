@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO automation_rules\n           (id, user_id, integration_id, name, trigger_type, trigger_filter,\n            response_template, response_type, ai_model, cooldown_minutes, max_responses_per_hour)\n           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)\n           RETURNING id as \"id!: Uuid\", name, is_active as \"is_active: i64\"",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!: Uuid",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "name",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "is_active: i64",
+        "ordinal": 2,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 11
+    },
+    "nullable": [
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "f2321c5323a3c2b91e0e043a24f008df10c5d21ccaf872d2f71372942bf5080c"
+}

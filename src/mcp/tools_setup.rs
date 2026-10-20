@@ -727,21 +727,21 @@ pub async fn import_cookies(
                                 let avatar = data
                                     .and_then(|d| d.get("profile_image_url"))
                                     .and_then(|s| s.as_str());
-                                 match crate::db::queries::create_integration(
-                                     &state.db,
-                                     user_id,
-                                     "x",
-                                     "X (Twitter)",
-                                     &id,
-                                     &token_str,
-                                     None,
-                                     None,
-                                     Some(&name),
-                                     avatar,
-                                     None,
-                                     None,
-                                     Some("cookie"), // §6: explicit auth_mode
-                                 )
+                                match crate::db::queries::create_integration(
+                                    &state.db,
+                                    user_id,
+                                    "x",
+                                    "X (Twitter)",
+                                    &id,
+                                    &token_str,
+                                    None,
+                                    None,
+                                    Some(&name),
+                                    avatar,
+                                    None,
+                                    None,
+                                    Some("cookie"), // §6: explicit auth_mode
+                                )
                                 .await
                                 {
                                     Ok(_) => results.push(ImportResult {
@@ -830,21 +830,21 @@ pub async fn import_cookies(
                                     .as_str()
                                     .and_then(|s| s.split('?').next())
                                     .map(String::from);
-                                 match crate::db::queries::create_integration(
-                                     &state.db,
-                                     user_id,
-                                     "reddit",
-                                     "Reddit",
-                                     &id,
-                                     &token_str,
-                                     None,
-                                     None,
-                                     Some(&name),
-                                     icon.as_deref(),
-                                     None,
-                                     None,
-                                     Some("cookie"), // §6: explicit auth_mode
-                                 )
+                                match crate::db::queries::create_integration(
+                                    &state.db,
+                                    user_id,
+                                    "reddit",
+                                    "Reddit",
+                                    &id,
+                                    &token_str,
+                                    None,
+                                    None,
+                                    Some(&name),
+                                    icon.as_deref(),
+                                    None,
+                                    None,
+                                    Some("cookie"), // §6: explicit auth_mode
+                                )
                                 .await
                                 {
                                     Ok(_) => results.push(ImportResult {

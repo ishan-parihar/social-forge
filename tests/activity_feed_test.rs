@@ -16,8 +16,8 @@ use axum::http::header;
 use axum::http::{Method, Request, StatusCode};
 use serde_json::Value;
 use social_forge::api::{activity, build_router, AppState};
-use social_forge::auth::middleware::{DEFAULT_USER_ID, SESSION_COOKIE};
 use social_forge::auth::jwt::create_token;
+use social_forge::auth::middleware::{DEFAULT_USER_ID, SESSION_COOKIE};
 use social_forge::config::Config;
 use social_forge::db;
 use social_forge::db::SqlitePool;
@@ -238,7 +238,8 @@ async fn merge_returns_all_three_sources_newest_first() {
         at_event,
     )
     .await;
-    let (auto_id, rule_id) = seed_automation_log(pool, user_id, integration_id, "sent", at_auto).await;
+    let (auto_id, rule_id) =
+        seed_automation_log(pool, user_id, integration_id, "sent", at_auto).await;
 
     let rows = feed_rows(&state, user_id).await;
     assert_eq!(rows.len(), 3, "one row per seeded source, got: {rows:?}");
@@ -255,26 +256,50 @@ async fn merge_returns_all_three_sources_newest_first() {
     assert_eq!(ats, vec![at_pub, at_event, at_auto]);
 
     // ── publish row ──
-    assert_eq!(row_field(&rows[0], "id"), &Value::String(format!("publish:{pub_id}")));
-    assert_eq!(row_field(&rows[0], "post_id"), &Value::String(post_id.to_string()));
-    assert_eq!(row_field(&rows[0], "provider"), &Value::String("bluesky".into()));
+    assert_eq!(
+        row_field(&rows[0], "id"),
+        &Value::String(format!("publish:{pub_id}"))
+    );
+    assert_eq!(
+        row_field(&rows[0], "post_id"),
+        &Value::String(post_id.to_string())
+    );
+    assert_eq!(
+        row_field(&rows[0], "provider"),
+        &Value::String("bluesky".into())
+    );
     assert_eq!(row_field(&rows[0], "ok"), &Value::Bool(true));
     assert!(
-        row_field(&rows[0], "summary").as_str().unwrap_or_default().contains("succeeded"),
+        row_field(&rows[0], "summary")
+            .as_str()
+            .unwrap_or_default()
+            .contains("succeeded"),
         "summary should read as a sentence, got {:?}",
         row_field(&rows[0], "summary")
     );
 
     // ── event row ──
-    assert_eq!(row_field(&rows[1], "id"), &Value::String(format!("event:{event_id}")));
-    assert_eq!(row_field(&rows[1], "provider"), &Value::String("bluesky".into()));
+    assert_eq!(
+        row_field(&rows[1], "id"),
+        &Value::String(format!("event:{event_id}"))
+    );
+    assert_eq!(
+        row_field(&rows[1], "provider"),
+        &Value::String("bluesky".into())
+    );
     assert_eq!(row_field(&rows[1], "ok"), &Value::Bool(true));
 
     // ── automation row ──
     // `automation_logs` has no user_id column, so this row existing at all
     // proves the join back through `automation_rules` scoped it correctly.
-    assert_eq!(row_field(&rows[2], "id"), &Value::String(format!("automation:{auto_id}")));
-    assert_eq!(row_field(&rows[2], "rule_id"), &Value::String(rule_id.to_string()));
+    assert_eq!(
+        row_field(&rows[2], "id"),
+        &Value::String(format!("automation:{auto_id}"))
+    );
+    assert_eq!(
+        row_field(&rows[2], "rule_id"),
+        &Value::String(rule_id.to_string())
+    );
     assert_eq!(row_field(&rows[2], "ok"), &Value::Bool(true));
 }
 
@@ -287,7 +312,14 @@ async fn failed_rows_report_ok_false() {
     let post_id = seed_post(pool, user_id, integration_id).await;
 
     seed_publish_attempt(pool, post_id, 1, "failed", now_at(300)).await;
-    seed_event(pool, user_id, "post_failed", serde_json::json!({"post_id": post_id.to_string()}), now_at(600)).await;
+    seed_event(
+        pool,
+        user_id,
+        "post_failed",
+        serde_json::json!({"post_id": post_id.to_string()}),
+        now_at(600),
+    )
+    .await;
     seed_automation_log(pool, user_id, integration_id, "failed", now_at(900)).await;
 
     let rows = feed_rows(&state, user_id).await;
@@ -316,8 +348,22 @@ async fn another_users_rows_are_excluded() {
     // `publish_attempts` carry no user_id, so this only holds if the joins
     // scope them.
     seed_publish_attempt(pool, post_id, 1, "success", now_at(300)).await;
-    seed_event(pool, stranger, "post_published", serde_json::json!({}), now_at(600)).await;
-    seed_automation_log(pool, stranger, seed_integration(pool, stranger, "bluesky").await, "sent", now_at(900)).await;
+    seed_event(
+        pool,
+        stranger,
+        "post_published",
+        serde_json::json!({}),
+        now_at(600),
+    )
+    .await;
+    seed_automation_log(
+        pool,
+        stranger,
+        seed_integration(pool, stranger, "bluesky").await,
+        "sent",
+        now_at(900),
+    )
+    .await;
 
     // Read as the owner: the publish attempt is the owner's post, so it IS
     // theirs — but the event and automation rows are not.
@@ -326,11 +372,18 @@ async fn another_users_rows_are_excluded() {
         .iter()
         .map(|r| row_field(r, "kind").as_str().unwrap_or_default())
         .collect();
-    assert_eq!(kinds, vec!["publish"], "only the owner's own rows: {kinds:?}");
+    assert_eq!(
+        kinds,
+        vec!["publish"],
+        "only the owner's own rows: {kinds:?}"
+    );
 
     // Read as a user with nothing at all.
     let empty = feed_rows(&state, seed_user(pool).await).await;
-    assert!(empty.is_empty(), "an unrelated user sees nothing: {empty:?}");
+    assert!(
+        empty.is_empty(),
+        "an unrelated user sees nothing: {empty:?}"
+    );
 }
 
 #[tokio::test]

@@ -148,10 +148,7 @@ fn mozilla_profiles(root: &Path) -> Vec<PathBuf> {
     if let Ok(entries) = std::fs::read_dir(root) {
         for entry in entries.flatten() {
             let path = entry.path();
-            if path.is_dir()
-                && path.join("cookies.sqlite").exists()
-                && !profiles.contains(&path)
-            {
+            if path.is_dir() && path.join("cookies.sqlite").exists() && !profiles.contains(&path) {
                 profiles.push(path);
             }
         }

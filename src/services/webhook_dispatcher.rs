@@ -219,7 +219,6 @@ struct WebhookDispatchRow {
     secret: Option<String>,
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -242,9 +241,14 @@ mod tests {
             let _ = sock.write_all(resp.as_bytes()).await;
         });
 
-        let (code, body) = send_webhook(&format!("http://{addr}/hook"), None, "post_published", &serde_json::json!({}))
-            .await
-            .unwrap();
+        let (code, body) = send_webhook(
+            &format!("http://{addr}/hook"),
+            None,
+            "post_published",
+            &serde_json::json!({}),
+        )
+        .await
+        .unwrap();
         assert_eq!(code, 200);
         assert_eq!(body.len(), MAX_RESPONSE_BYTES, "stored body must be capped");
     }

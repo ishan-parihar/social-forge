@@ -1,10 +1,10 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id as \"id!: String\", name, color FROM tags WHERE id = ? AND user_id = ?",
+  "query": "SELECT id as \"id!: Uuid\", name, color FROM tags WHERE id = ? AND user_id = ?",
   "describe": {
     "columns": [
       {
-        "name": "id!: String",
+        "name": "id!: Uuid",
         "ordinal": 0,
         "type_info": "Text"
       },
@@ -28,5 +28,5 @@
       false
     ]
   },
-  "hash": "a879f08cd071cad6d4cd56f6751eb10f05b2a8c4a67e594a8da8c23049826fa1"
+  "hash": "1bb9322868cd905ee0bfcee0b070e32670475ed4ae4f153e7cfc10cf9f775a9a"
 }

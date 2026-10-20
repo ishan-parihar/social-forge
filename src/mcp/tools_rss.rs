@@ -75,7 +75,14 @@ pub async fn handle_rss_feed_delete(
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = resolve_first_user(state).await?;
     let id = parse_id("feed_id", &input.feed_id)?;
-    rest_result(rss::delete_feed(State(state.clone()), AuthenticatedUser { user_id }, Path(id)).await)
+    rest_result(
+        rss::delete_feed(
+            State(state.clone()),
+            AuthenticatedUser { user_id },
+            Path(id),
+        )
+        .await,
+    )
 }
 
 /// Pause or resume an RSS feed.
@@ -85,7 +92,14 @@ pub async fn handle_rss_feed_toggle(
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = resolve_first_user(state).await?;
     let id = parse_id("feed_id", &input.feed_id)?;
-    rest_result(rss::toggle_feed(State(state.clone()), AuthenticatedUser { user_id }, Path(id)).await)
+    rest_result(
+        rss::toggle_feed(
+            State(state.clone()),
+            AuthenticatedUser { user_id },
+            Path(id),
+        )
+        .await,
+    )
 }
 
 /// Poll a feed now for new items.
@@ -95,7 +109,14 @@ pub async fn handle_rss_feed_poll(
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = resolve_first_user(state).await?;
     let id = parse_id("feed_id", &input.feed_id)?;
-    rest_result(rss::poll_feed(State(state.clone()), AuthenticatedUser { user_id }, Path(id)).await)
+    rest_result(
+        rss::poll_feed(
+            State(state.clone()),
+            AuthenticatedUser { user_id },
+            Path(id),
+        )
+        .await,
+    )
 }
 
 /// List the items a feed has produced, with their import state.

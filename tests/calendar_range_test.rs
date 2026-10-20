@@ -131,7 +131,15 @@ async fn queued_post_inside_range_is_returned() {
 #[tokio::test]
 async fn published_post_inside_range_is_returned() {
     let pool = pool().await;
-    let id = seed_post(&pool, DEFAULT_USER_ID, "published", None, Some(at(18)), false).await;
+    let id = seed_post(
+        &pool,
+        DEFAULT_USER_ID,
+        "published",
+        None,
+        Some(at(18)),
+        false,
+    )
+    .await;
     assert!(calendar_ids(&pool).await.contains(&id));
 }
 
@@ -207,9 +215,14 @@ async fn the_last_day_of_the_range_is_included() {
         .header(header::ORIGIN, &state.config.frontend_url)
         .body(Body::empty())
         .expect("request");
-    let res = build_router(state.clone()).oneshot(req).await.expect("router");
+    let res = build_router(state.clone())
+        .oneshot(req)
+        .await
+        .expect("router");
     let status = res.status();
-    let bytes = axum::body::to_bytes(res.into_body(), 1 << 16).await.expect("body");
+    let bytes = axum::body::to_bytes(res.into_body(), 1 << 16)
+        .await
+        .expect("body");
     let body: Value = serde_json::from_slice(&bytes).expect("json");
     assert_eq!(status, StatusCode::OK, "{body}");
 

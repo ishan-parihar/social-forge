@@ -92,10 +92,9 @@ async fn test_di_tail_snapshot_returns_newest_id() {
 #[tokio::test]
 async fn test_di_search_returns_hit_shape() {
     let config = get_config();
-    let (Some(provider), Some(guild)) = (
-        bot_provider(&config),
-        env_or_skip("DISCORD_TEST_GUILD_ID"),
-    ) else {
+    let (Some(provider), Some(guild)) =
+        (bot_provider(&config), env_or_skip("DISCORD_TEST_GUILD_ID"))
+    else {
         return;
     };
 
@@ -103,9 +102,15 @@ async fn test_di_search_returns_hit_shape() {
         .search_guild_messages(&guild, "the", None, 25)
         .await
         .unwrap_or_else(|e| panic!("search failed: {e}"));
-    assert!(result["messages"].is_array(), "search returns a messages array");
+    assert!(
+        result["messages"].is_array(),
+        "search returns a messages array"
+    );
     let total = result["total_results"].as_u64().unwrap_or(0);
     let shown = result["messages"].as_array().map(Vec::len).unwrap_or(0);
-    assert!(shown as u64 <= total, "shown hits cannot exceed total_results");
+    assert!(
+        shown as u64 <= total,
+        "shown hits cannot exceed total_results"
+    );
     eprintln!("✅ search: {shown} hits of {total} total");
 }

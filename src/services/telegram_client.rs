@@ -8,9 +8,7 @@ use grammers_session::Session;
 use serde_json::Value;
 use tokio::sync::Mutex;
 
-use crate::services::telegram_rate::{
-    Category, SendJob, WriteQueue, TELEGRAM_RATE_GUARD,
-};
+use crate::services::telegram_rate::{Category, SendJob, WriteQueue, TELEGRAM_RATE_GUARD};
 
 /// The single user-session account key for the rate guard.
 const ACCOUNT: &str = "telegram-user";
@@ -63,7 +61,10 @@ impl TelegramClientManager {
         let mut guard = self.inner.lock().await;
         Self::ensure_client(&mut guard, self.api_id, &self.api_hash, &self.session_path).await?;
 
-        let client = guard.client.as_ref().ok_or("Telegram client not initialised")?;
+        let client = guard
+            .client
+            .as_ref()
+            .ok_or("Telegram client not initialised")?;
         match client.request_login_code(phone).await {
             Ok(token) => {
                 guard.pending_token = Some(token);
@@ -84,7 +85,10 @@ impl TelegramClientManager {
                         &self.session_path,
                     )
                     .await?;
-                    let client = guard.client.as_ref().ok_or("Telegram client not initialised")?;
+                    let client = guard
+                        .client
+                        .as_ref()
+                        .ok_or("Telegram client not initialised")?;
                     let token = client.request_login_code(phone).await.map_err(|e| {
                         format!("Request login code failed after session reset: {e}")
                     })?;
@@ -105,7 +109,10 @@ impl TelegramClientManager {
             .pending_token
             .take()
             .ok_or_else(|| "No pending login token. Call request_login_code first.".to_string())?;
-        let client = guard.client.as_ref().ok_or("Telegram client not initialised")?;
+        let client = guard
+            .client
+            .as_ref()
+            .ok_or("Telegram client not initialised")?;
 
         match client.sign_in(&token, code).await {
             Ok(user) => {
@@ -388,11 +395,7 @@ impl TelegramClientManager {
         // filter is applied client-side; raise if tails routinely drop.
         let mut messages: Vec<Value> = Vec::new();
         let mut iter = client.iter_messages(&chat).limit((limit * 2) as usize);
-        while let Some(msg) = iter
-            .next()
-            .await
-            .map_err(|e| format!("Tail error: {e}"))?
-        {
+        while let Some(msg) = iter.next().await.map_err(|e| format!("Tail error: {e}"))? {
             if let Some(after) = after_id {
                 if msg.id() <= after {
                     continue;
@@ -433,14 +436,20 @@ impl TelegramClientManager {
             .ok_or_else(|| "Telegram client not connected.".to_string())?;
 
         let chat = self.resolve_chat(client, peer).await?;
-        client.edit_message(&chat, message_id, text).await.map_err(|e| {
-            let estr = format!("{e}");
-            if crate::services::telegram_rate::parse_flood_wait(&estr).is_some() {
-                TELEGRAM_RATE_GUARD
-                    .record_flood(ACCOUNT, Category::Edit, std::time::Duration::from_secs(5));
-            }
-            format!("Edit failed: {e}")
-        })?;
+        client
+            .edit_message(&chat, message_id, text)
+            .await
+            .map_err(|e| {
+                let estr = format!("{e}");
+                if crate::services::telegram_rate::parse_flood_wait(&estr).is_some() {
+                    TELEGRAM_RATE_GUARD.record_flood(
+                        ACCOUNT,
+                        Category::Edit,
+                        std::time::Duration::from_secs(5),
+                    );
+                }
+                format!("Edit failed: {e}")
+            })?;
         TELEGRAM_RATE_GUARD.record_success(ACCOUNT, Category::Edit);
         Ok(serde_json::json!({ "edited": true, "id": message_id }))
     }
@@ -507,11 +516,7 @@ impl TelegramClientManager {
                     let peer = job.peer.clone();
                     let text = job.text.clone();
                     let mgr = Arc::clone(&mgr);
-                    async move {
-                        mgr.send_message(&peer, &text)
-                            .await
-                            .map(|_| ())
-                    }
+                    async move { mgr.send_message(&peer, &text).await.map(|_| ()) }
                 })
                 .await;
             }
@@ -547,12 +552,15 @@ impl TelegramClientManager {
             return Ok(());
         }
 
-        let parent = session_path
-            .parent()
-            .ok_or_else(|| format!("Telegram session path has no parent directory: {}", session_path.display()))?;
+        let parent = session_path.parent().ok_or_else(|| {
+            format!(
+                "Telegram session path has no parent directory: {}",
+                session_path.display()
+            )
+        })?;
         tokio::fs::create_dir_all(parent)
             .await
-        .map_err(|e| format!("Failed to create session dir: {e}"))?;
+            .map_err(|e| format!("Failed to create session dir: {e}"))?;
 
         let session = Session::load_file_or_create(session_path)
             .map_err(|e| format!("Failed to load or create session: {e}"))?;
