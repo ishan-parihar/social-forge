@@ -555,3 +555,60 @@ Stage Summary:
     tier membership) — a file's line count changes with every commit.
   - Nothing else in §2 remains unmeasured: every number in the tree has now been
     checked at least once against the tree it describes.
+
+---
+Task ID: doc-foundation-validation-2026-10-20-pass-4
+Agent: jcode
+Task: Sweep the remaining routing surfaces for unverified claims. This pass
+found the defect the whole exercise was for.
+
+Work Log:
+- Verified claims until then unexamined and found four more stale numbers in
+  the §2 layout tree: "31 provider implementation files" (26 — the other 13
+  files under src/social/ are support modules, whatsapp_cloud.rs being the
+  subtle one: an internal helper reached through the WhatsApp provider, not a
+  registered provider), "25 page routes" (18 top-level + 11 nested = 29), and
+  four understated LOC counts. Also corrected the outline's own claim set.
+- Confirmed accurate so as not to fix them into wrongness: the 8 migrations
+  contain no destructive DDL (only ON DELETE CASCADE FK clauses), and the 19
+  SSE events §9.8 names match `frontend/src/lib/stores/realtime.ts` one for one.
+- THE FINDING. AGENTS.md §0.6 routes every agent to
+  `docs/planning/OUTLINE-2026-10-19-v2.md` "before starting ANY implementation
+  work", describing it as "the live working queue". It is dated-frozen, so its
+  lineage is correct — but one day later five of its six `STILL OPEN` items had
+  already landed. Measured, each with the command its own row names:
+  SKILL.md 255 lines not 580; quick-reference 108 not 614; evals 43 with a
+  toolset-restricted #42, not 40 with none; the "progressive disclosure" and
+  "eval loop" gaps both closed by `evals/c3-paired-run.json`. Only C2 (no
+  reference-router table) is genuinely open.
+  Its stated top priority is false too: the outline says `surface_docs_audit`
+  has "2 failing tests" and is "the gate-breaker" that "outranks all Wave B/C
+  work". It is 3 passed, 0 failed.
+- Did NOT edit the outline. It is dated-frozen and its lineage is the evidence
+  that makes the audit checkable; rewriting it would destroy the thing that
+  makes the re-audit falsifiable. Wrote a dated-frozen re-audit instead
+  (`REAUDIT_OUTLINE-2026-10-19-v2_2026-10-20.md`) carrying a verdict table and
+  the measurement command per claim, and corrected the three routing surfaces
+  that reach the outline (AGENTS.md §0.6, PAGE-INDEX, planning README) to carry
+  the verdict inline and point live-status questions at TODO.md.
+- Confirmed `genome ask` now returns the re-audit as the top hit for the
+  question, which is the mechanism the agent will actually use.
+- Re-introduced the E001 bare-extension-token error a second time ("the other 13
+  `.rs` here") minutes after diagnosing it once. Recorded because the first
+  diagnosis — an unfamiliar tokenizer quirk — is wrong and produces the wrong
+  fix. It is a writing habit, and it recurs until the file is scanned.
+
+Stage Summary:
+- Commit dc41cf1: the re-audit, plus three routing corrections. The seven
+  layout-tree corrections from this pass are in 0b9d357.
+- Verification: `genome lint` 0/0; `genome close` green, gate ok;
+  `cargo test --test surface_docs_audit` 3 passed; `cargo test --lib` passed;
+  every link in the four changed files resolves.
+- Known issues / follow-ups:
+  - One dead link, pre-existing and not mine: PAGE-INDEX's VENDOR_PINS cell
+    quotes a body whose underscores were stripped, so
+    `[PLANPARITY...](PLANPARITY...)` does not resolve. It is inside quoted
+    content, and link-checking belongs to the ops module, which is off.
+  - Only C2 (the reference router) survives the outline's B/C waves. It is a
+    real gap and now the only one of the six that an agent should work.
+
