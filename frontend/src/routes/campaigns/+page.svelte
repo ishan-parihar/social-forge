@@ -248,7 +248,7 @@
               </div>
               {#if progressValue(c).current === null}
                 <div class="h-1.5 rounded-full bg-background-input flex items-center justify-center">
-                  <span class="text-[9px] text-faint">Not measured</span>
+                  <span class="text-[10px] text-faint">Not measured</span>
                 </div>
               {:else}
               <div class="bg-background-input rounded-full h-1.5 overflow-hidden">

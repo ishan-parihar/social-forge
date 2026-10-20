@@ -866,6 +866,37 @@ async function main() {
           // font result a coin toss.
           await page.evaluate(() => document.fonts?.ready).catch(() => {});
 
+          // The theme must be APPLIED before the audit measures
+          // anything.
+          //
+          // The theme is a class on `documentElement`, applied by the
+          // theme store on mount. The probe seeds the choice through
+          // localStorage, and the store reads it on its first read - so
+          // there is a window in which the page is rendered with NO
+          // theme class, and the tokens resolve to the un-themed
+          // defaults.
+          //
+          // A contrast audit run in that window measures the wrong
+          // colours: one run reported 69 failures on the research
+          // page, every one of them a text tier against a background
+          // it would never meet, and the next run of the same command
+          // reported none.
+          //
+          // A measurement that depends on WHEN it ran is not a
+          // measurement. So the audit waits for the class.
+          await page
+            .waitForFunction(
+              (t) =>
+                document.documentElement.classList.contains(t) ||
+                document.documentElement.classList.contains(t === 'dark' ? 'light' : 'dark'),
+              theme,
+              { timeout: 5_000 },
+            )
+            .catch(() => {
+              // A page that never gets a theme class is itself a
+              // finding; the audit below measures it as it is.
+            });
+
           const { fails, warns } = await page.evaluate(AUDIT);
           for (const f of fails) {
             summary.fails.push({ route, width, theme, ...f });
