@@ -101,7 +101,7 @@
         type="text"
         bind:value={address}
         {placeholder}
-        class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-white placeholder:text-faint focus:outline-none focus:border-accent transition-colors"
+        class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-content placeholder:text-faint focus:outline-none focus:border-accent transition-colors"
       />
     </div>
 
@@ -114,7 +114,7 @@
         type="text"
         bind:value={label}
         placeholder="e.g. My {provider} identity"
-        class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-white placeholder:text-faint focus:outline-none focus:border-accent transition-colors"
+        class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-content placeholder:text-faint focus:outline-none focus:border-accent transition-colors"
       />
     </div>
 

@@ -105,7 +105,7 @@
               <div class="w-8 h-8 rounded-full bg-surface-hover flex items-center justify-center text-xs">📄</div>
             {/if}
             <div class="flex-1 min-w-0">
-              <div class="text-sm text-white truncate">{page.name}</div>
+              <div class="text-sm text-content truncate">{page.name}</div>
               {#if page.username}
                 <div class="text-xs text-muted">@{page.username}</div>
               {/if}

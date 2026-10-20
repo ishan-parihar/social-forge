@@ -87,7 +87,7 @@
         type="password"
         bind:value={apiKey}
         placeholder="Enter your API key"
-        class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-white placeholder:text-faint focus:outline-none focus:border-accent transition-colors"
+        class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-content placeholder:text-faint focus:outline-none focus:border-accent transition-colors"
       />
     </div>
 
@@ -100,7 +100,7 @@
         type="text"
         bind:value={instanceUrl}
         placeholder="https://your-instance.example.com"
-        class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-white placeholder:text-faint focus:outline-none focus:border-accent transition-colors"
+        class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-content placeholder:text-faint focus:outline-none focus:border-accent transition-colors"
       />
     </div>
 
@@ -113,7 +113,7 @@
         type="text"
         bind:value={label}
         placeholder="e.g. My Blog"
-        class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-white placeholder:text-faint focus:outline-none focus:border-accent transition-colors"
+        class="min-h-11 w-full px-3 py-2 bg-background-input border border-line rounded-lg text-sm text-content placeholder:text-faint focus:outline-none focus:border-accent transition-colors"
       />
     </div>
 

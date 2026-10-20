@@ -274,7 +274,7 @@
             black strip reading "media".
           -->
           {#if item.alt && item.alt.trim()}
-            <div class="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[8px] px-1 py-0.5 truncate rounded-b-lg" title={item.alt}>
+            <div class="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[10px] px-1 py-0.5 truncate rounded-b-lg" title={item.alt}>
               {item.alt}
             </div>
           {/if}

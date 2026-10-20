@@ -170,7 +170,7 @@
       {#if items.length > 1}
         <button
           onclick={prev}
-          class="absolute left-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full
+          class="absolute left-2 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full
             bg-black/50 hover:bg-black/70 text-white flex items-center justify-center
             opacity-0 group-hover:opacity-100 transition-all duration-200
             backdrop-blur-sm ring-1 ring-white/10
@@ -183,7 +183,7 @@
         </button>
         <button
           onclick={next}
-          class="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full
+          class="absolute right-2 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full
             bg-black/50 hover:bg-black/70 text-white flex items-center justify-center
             opacity-0 group-hover:opacity-100 transition-all duration-200
             backdrop-blur-sm ring-1 ring-white/10

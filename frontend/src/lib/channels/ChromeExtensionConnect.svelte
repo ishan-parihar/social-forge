@@ -100,7 +100,7 @@
     {/if}
 
     <div class="bg-background-input border border-line rounded-lg p-4 space-y-3">
-      <h4 class="text-sm font-medium text-white">Complete Connection</h4>
+      <h4 class="text-sm font-medium text-content">Complete Connection</h4>
 
       <div>
         <label for="ext-label" class="block text-xs text-muted mb-1">Integration Label</label>
@@ -109,7 +109,7 @@
           type="text"
           bind:value={label}
           placeholder="e.g. My Skool Community"
-          class="min-h-11 w-full bg-background border border-line rounded-lg px-3 py-2 text-sm text-white placeholder:text-faint focus:outline-none focus:ring-1 focus:ring-accent"
+          class="min-h-11 w-full bg-background border border-line rounded-lg px-3 py-2 text-sm text-content placeholder:text-faint focus:outline-none focus:ring-1 focus:ring-accent"
         />
       </div>
 
@@ -121,7 +121,7 @@
           bind:value={userCode}
           placeholder="Enter the 6-character code"
           maxlength="6"
-          class="min-h-11 w-full bg-background border border-line rounded-lg px-3 py-2 text-sm text-white placeholder:text-faint font-mono tracking-widest text-center focus:outline-none focus:ring-1 focus:ring-accent uppercase"
+          class="min-h-11 w-full bg-background border border-line rounded-lg px-3 py-2 text-sm text-content placeholder:text-faint font-mono tracking-widest text-center focus:outline-none focus:ring-1 focus:ring-accent uppercase"
           style="text-transform: uppercase;"
         />
       </div>

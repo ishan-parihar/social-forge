@@ -15,6 +15,7 @@
   import { integrationsApi, type Integration } from '$lib/api/integrations';
   import { goto } from '$app/navigation';
   import { providerLabel, providerIcon, providerColor, providerInkOnChip } from '$lib/providers';
+  import { focusTrap } from '$lib/ui/focus-trap';
 
   let { onClose } = $props();
   let step = $state(1);
@@ -75,12 +76,46 @@
   ];
 </script>
 
-<div class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-  <div class="bg-surface border border-line rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+<!--
+  The scrim is the `overlay` TOKEN, not `bg-black/70`.
+
+  A pure black scrim does not retheme: in the light theme it is a hole
+  in the page. The token carries the theme's own scrim tint.
+
+  The PANEL carries the dialog role and the name, and it - not the
+  scrim - is the focus trap's node. The scrim is a sibling, marked
+  aria-hidden because it is decoration: putting the panel inside an
+  aria-hidden subtree makes it invisible to a screen reader AND stops
+  the trap from finding a focusable child, so the modal never takes
+  the focus.
+-->
+<div class="fixed inset-0 bg-overlay flex items-center justify-center z-50 p-4" aria-hidden="true"></div>
+<div class="fixed inset-0 flex items-center justify-center z-50 p-4 pointer-events-none">
+  <!--
+    The PANEL is the dialog: it carries the role, the name, the focus
+    trap and the Escape handler. The wrapper is positioning only.
+
+    The panel holds the focus, so a keydown from the panel's children
+    bubbles up to it - which is how Escape reaches the handler. A
+    handler on the wrapper only ever saw a keydown that nobody had
+    consumed.
+
+    `tabindex="-1"` is the trap's fallback: with no focusable child it
+    focuses the panel itself.
+  -->
+  <div
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="onboarding-title"
+    tabindex="-1"
+    class="relative bg-surface border border-line rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto pointer-events-auto"
+    use:focusTrap={{ enabled: true }}
+    onkeydown={(e) => { if (e.key === 'Escape') skip(); }}
+  >
     <!-- Header with step indicator -->
     <div class="px-6 py-5 border-b border-line">
       <div class="flex items-center justify-between">
-        <h2 class="text-xl font-bold text-accent">
+        <h2 id="onboarding-title" class="text-xl font-bold text-accent">
           {#if step === 1}
             Welcome to Social Forge
           {:else}

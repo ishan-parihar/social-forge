@@ -64,6 +64,34 @@ const DIALOGS = [
   { route: '/posts/new', trigger: '+ New Post', expect: 'composer' },
 ];
 
+/**
+ * Close the first-run onboarding tour.
+ *
+ * The tour is a full-screen `role="dialog"`, so while it is open every
+ * dialog measurement reads the TOUR instead of the dialog under test.
+ * The probe has the same step.
+ */
+async function dismissOnboarding(page) {
+  try {
+    // The flag, so the layout does not raise the tour again on the next
+    // navigation. The "Skip" button sets it too, but the tour may not
+    // be on screen at all - and the layout checks the flag on every
+    // mount.
+    await page.evaluate(() => {
+      try {
+        localStorage.setItem('social-forge-onboarded', 'true');
+      } catch {}
+    });
+    const skip = page.getByRole('button', { name: /skip/i }).first();
+    if (await skip.isVisible({ timeout: 1500 })) {
+      await skip.click({ timeout: 2000 });
+      await page.waitForTimeout(500);
+    }
+  } catch {
+    // No overlay, or it closed on its own.
+  }
+}
+
 async function main() {
   if (!PASSWORD) {
     console.error('BLOCKED: no --password');
@@ -88,6 +116,19 @@ async function main() {
     document.querySelector('input[type=password]').closest('form').requestSubmit();
   });
   await page.waitForTimeout(2500);
+
+  // The ONBOARDING modal is a full-screen `role="dialog"`, so if it is
+  // open every measurement below reads the WRONG dialog - and the audit
+  // would report the tour's state as the page's.
+  //
+  // It is dismissed AFTER the login, because the layout only raises it
+  // once the app is authenticated. Dismissing it before the login does
+  // nothing at all.
+  await dismissOnboarding(page);
+
+  // The tour appears once the app is AUTHENTICATED, so it is dismissed
+  // here - after the login, before the first route is measured.
+  await dismissOnboarding(page);
 
   const findings = [];
 

@@ -123,6 +123,60 @@ function AUDIT() {
   };
 
   const out = [];
+
+  // ── THE INK OF A FIELD ──
+  //
+  // An `<input>` has NO TEXT NODE, so the text-contrast loop below can
+  // never measure it: there is no text to find, so the element is
+  // skipped, and its ink is never checked.
+  //
+  // That is not a theoretical hole. The connect flow's API-key field
+  // was `text-white` on the light input surface - 1.05:1, invisible.
+  // The founder typed their API key and could not see a character, and
+  // EVERY text-contrast gate in this repo passed, because the element
+  // carrying the text is a FIELD, not a text node.
+  //
+  // So the field's own `color` is measured against its effective
+  // background, exactly as a text node's would be. A field with no
+  // value is still measured: the ink is what the founder will see when
+  // they type.
+  document.querySelectorAll('input, textarea, select').forEach((el) => {
+    if (el.disabled || el.closest('[aria-disabled="true"]')) return;
+    if (el.closest('[aria-hidden="true"]')) return;
+    const cs = getComputedStyle(el);
+    if (cs.display === 'none' || cs.visibility === 'hidden') return;
+    // A type=hidden has no ink at all.
+    if (el.type === 'hidden') return;
+    // A checkbox or a radio paints its own ink; `color` is not it.
+    if (el.type === 'checkbox' || el.type === 'radio') return;
+
+    const fg = parseColor(cs.color);
+    const bg = effectiveBg(el);
+    if (!fg || !bg) return;
+    const op = inheritedOpacity(el);
+    if (op < 0.05) return;
+    const eff = {
+      r: fg.r * op + bg.r * (1 - op),
+      g: fg.g * op + bg.g * (1 - op),
+      b: fg.b * op + bg.b * (1 - op),
+      a: 1,
+    };
+    const ratio = contrast(eff, bg);
+    const floor = el.tagName === 'SELECT' ? 3 : 4.5;
+    if (ratio < floor) {
+      out.push({
+        selector:
+          el.tagName.toLowerCase() +
+          (el.id ? '#' + el.id : '') +
+          (el.placeholder ? '[placeholder="' + el.placeholder + '"]' : ''),
+        ratio: ratio.toFixed(2),
+        fg: cs.color,
+        bg: `rgb(${Math.round(bg.r)}, ${Math.round(bg.g)}, ${Math.round(bg.b)})`,
+        text: (el.placeholder || el.value || el.name || el.type || 'field').slice(0, 60),
+      });
+    }
+  });
+
   document.querySelectorAll('*').forEach((el) => {
     // A DISABLED control is exempt. WCAG 1.4.3 names "incidental" text,
     // and a disabled control is not content the reader can act on - the
@@ -252,6 +306,120 @@ async function main() {
     await record(route);
   }
 
+  // The CONNECT FLOWS.
+  //
+  // A connect form is reachable only by clicking a provider's tile, so
+  // no route-level pass ever rendered one - and the API-key fields were
+  // `text-white` on a light input, which measures 1.05:1. The founder
+  // typed their API key and could not see a character.
+  //
+  // Each of the five connect methods is opened, because they are five
+  // different components with five different class strings.
+  await page.goto(`${BASE_URL}/channels`, { waitUntil: 'load' });
+  await page.waitForTimeout(1500);
+  const connectTiles = await page.evaluate(() =>
+    [...document.querySelectorAll('button[aria-label^="Connect"]')].map(
+      (b) => b.getAttribute('aria-label')
+    )
+  );
+  console.log(`  the connect tiles on this instance: ${connectTiles.join(', ') || '(none)'}`);
+
+  // The providers whose connect flow has a FIELD the founder types into.
+  //
+  // A provider that connects by OAuth has nothing to type, so there is
+  // no field to measure and its absence is not a hole. The list is the
+  // credential-flow providers, and each of them MUST open a form with
+  // at least one field - if one cannot, the gate is measuring nothing
+  // and says so.
+  const CREDENTIAL_PROVIDERS = ['WordPress', 'Medium', 'Dev.to', 'Hashnode', 'GitHub'];
+
+  for (const provider of CREDENTIAL_PROVIDERS) {
+    const opened = await page.evaluate((P) => {
+      const b = document.querySelector(`button[aria-label="Connect ${P}"]`);
+      if (!b) return false;
+      b.click();
+      return true;
+    }, provider);
+    if (!opened) {
+      // A hole, not a skip.
+      //
+      // "This instance has no WordPress tile" is a fact about the
+      // INSTANCE, and the instance is what the gate measures. If the
+      // form cannot be reached, the gate is measuring nothing - and a
+      // gate that measures nothing must say so, not pass.
+      findings.push({
+        where: `connect:${provider}`,
+        selector: `button[aria-label="Connect ${provider}"]`,
+        ratio: 0,
+        fg: 'n/a',
+        bg: 'n/a',
+        text: 'the connect form for this provider is NOT REACHABLE on this instance - the gate measured nothing',
+      });
+      continue;
+    }
+    await page.waitForTimeout(1500);
+    const shape = await page.evaluate(() => {
+      const d = document.querySelector('[role="dialog"]');
+      return {
+        dialog: !!d,
+        inputs: d ? d.querySelectorAll('input').length : 0,
+      };
+    });
+    if (!shape.dialog) {
+      findings.push({
+        where: `connect:${provider}`,
+        selector: '[role="dialog"]',
+        ratio: 0,
+        fg: 'n/a',
+        bg: 'n/a',
+        text: 'the connect flow opened NO dialog - the gate measured nothing',
+      });
+      continue;
+    }
+    if (shape.inputs === 0) {
+      findings.push({
+        where: `connect:${provider}`,
+        selector: '[role="dialog"] input',
+        ratio: 0,
+        fg: 'n/a',
+        bg: 'n/a',
+        text: 'the connect flow has NO FIELD - the gate measured nothing',
+      });
+      continue;
+    }
+    console.log(
+      `  connect:${provider} -> ${shape.inputs} input(s) in the dialog`
+    );
+    await record(`connect:${provider}`);
+
+    // A provider with several methods opens a chooser first.
+    const method = await page.evaluate(() => {
+      const d = document.querySelector('[role=dialog]');
+      if (!d) return null;
+      const b = [...d.querySelectorAll('button')].find((x) =>
+        /api key|cookies|access token|wallet/i.test((x.textContent || '').trim())
+      );
+      if (!b) return null;
+      const label = (b.textContent || '').trim();
+      b.click();
+      return label;
+    });
+    if (method) {
+      await page.waitForTimeout(1200);
+      await record(`connect:${provider}:${method}`);
+    }
+    // Close it.
+    await page.evaluate(() => {
+      const d = document.querySelector('[role=dialog]');
+      if (!d) return;
+      const b = [...d.querySelectorAll('button')].find(
+        (x) => (x.getAttribute('aria-label') || '') === 'Close' || (x.textContent || '').trim() === 'Cancel'
+      );
+      if (b) b.click();
+    });
+    await page.waitForTimeout(700);
+  }
+
   // The composer, and the panels inside it.
   await page.goto(`${BASE_URL}/posts/new`, { waitUntil: 'load' });
   await page.waitForTimeout(1500);
@@ -279,14 +447,17 @@ async function main() {
 
   const seen = new Set();
   const unique = findings.filter((f) => {
-    const k = `${f.where}|${f.cls}|${f.ratio}`;
+    const k = `${f.where}|${f.cls ?? f.selector}|${f.ratio}`;
     if (seen.has(k)) return false;
     seen.add(k);
     return true;
   });
 
   for (const f of unique) {
-    console.log(`${f.where}  ${f.ratio}:1 (floor ${f.floor})  ${f.size}px  ${f.color} on ${f.bg}  "${f.text}"  ${f.cls}`);
+    console.log(
+      `${f.where}  ${f.ratio}:1 (floor ${f.floor ?? 4.5})  ${f.size ?? '-'}px  ` +
+        `${f.color ?? f.fg} on ${f.bg}  "${f.text}"  ${f.cls ?? f.selector ?? ''}`
+    );
   }
   console.log(`\n${unique.length} contrast failure(s) in the ${THEME} theme`);
 
