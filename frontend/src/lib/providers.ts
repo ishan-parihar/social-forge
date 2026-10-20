@@ -231,6 +231,23 @@ export function providerInkOnInput(provider: string): string {
     : inkForSurface(brand, '#0d1117'); // --bg-input, dark
 }
 
+/**
+ * The ink for a provider glyph painted on a CARD.
+ *
+ * A card is `bg-surface` (`--bg-card`), which is `#ffffff` in the light
+ * theme and `#1a1f2e` in the dark one - NOT the page background
+ * (`#f8fafc` / `#131720`) that the default ink assumes. The two differ
+ * enough in the dark theme to put the glyph under the AA floor: the
+ * campaign detail page's provider icons measured 4.3-4.47:1 against
+ * the card and were the only thing on the page that failed.
+ */
+export function providerInkOnCard(provider: string): string {
+  const brand = providerColor(provider);
+  return theme.value === 'light'
+    ? inkForSurface(brand, '#ffffff') // --bg-card, light
+    : inkForSurface(brand, '#1a1f2e'); // --bg-card, dark
+}
+
 /// Pick a hex clearing 4.5:1 on `surface`, moving lightness in whichever
 /// direction the comparison favours, and give up to black only if the hue
 /// cannot be carried there at all.

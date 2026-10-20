@@ -14,7 +14,7 @@
   import { onMount } from 'svelte';
   import { integrationsApi, type Integration } from '$lib/api/integrations';
   import { goto } from '$app/navigation';
-  import { providerLabel, providerIcon, providerColor, providerInk } from '$lib/providers';
+  import { providerLabel, providerIcon, providerColor, providerInkOnChip } from '$lib/providers';
 
   let { onClose } = $props();
   let step = $state(1);
@@ -120,7 +120,7 @@
               <div class="flex flex-wrap gap-2">
                 {#each integrations as int (int.id)}
                   <div class="flex items-center gap-1.5 px-3 py-1.5 bg-surface-hover rounded-lg text-xs text-content">
-                    <span style="color: {providerInk(int.provider_identifier)}">{providerIcon(int.provider_identifier)}</span>
+                    <span style="color: {providerInkOnChip(int.provider_identifier)}">{providerIcon(int.provider_identifier)}</span>
                     {int.provider_name}
                   </div>
                 {/each}
@@ -138,7 +138,7 @@
                   onclick={skip}
                   class="flex flex-col items-center gap-1 p-3 bg-surface-hover hover:bg-background-input rounded-lg transition-colors text-center group"
                 >
-                  <span class="text-lg" style="color: {providerInk(p)}">{providerIcon(p)}</span>
+                  <span class="text-lg" style="color: {providerInkOnChip(p)}">{providerIcon(p)}</span>
                   <span class="text-[10px] text-muted group-hover:text-content">{providerLabel(p)}</span>
                 </a>
               {/each}
