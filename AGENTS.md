@@ -811,6 +811,141 @@ Three layers own this, and each has a test in `tests/posts_media_shape_test.rs`:
 
 The general rule: a JSON column that the frontend treats as an array must be normalised ON THE READ, in ONE place, because the column's history is longer than the frontend's assumption.
 
+### 9.27 The composer and the server must agree on the settings KEY
+
+A provider that needs a target reads it out of the post's `settings`
+under a SPECIFIC key - Discord's `channel`, Reddit's `subreddit`,
+Pinterest's `board`, Telegram-user's `target`, Hashnode's
+`publication_id`, Skool's `groupId`.
+
+The composer used to write `channel_id` and `page_id` - keys NO
+provider reads - and never wrote Discord's `channel`. So every
+Discord post was created, queued, and then failed at publish with
+"Missing channel in settings".
+
+There are TWO lists to keep in agreement, and they are in different
+places:
+
+- the composer writes the key (`ComposerModal.svelte`'s
+  `providerKeyForTarget` for a target, `TITLE_PROVIDERS` for a title,
+  `PUBLISH_STATUS` for a publish status)
+- the provider reads the key (`src/social/<provider>.rs`)
+
+And the server has the third list: `SocialProvider::required_settings()`,
+the keys a provider cannot publish without. The create path checks it
+and refuses the post with a message naming the missing field, so the
+failure happens where the founder can act on it - not hours later in
+the scheduler.
+
+A NEW provider that reads a key out of `post.settings` must add that
+key to `required_settings()`. A provider that publishes a title must
+be in the composer's `TITLE_PROVIDERS` - `posts.title` is read by NO
+publish path.
+
+### 9.28 A setting that is COLLECTED and never READ is a silent failure
+
+The composer's MusicPicker is shown for Instagram and the pick is
+written to `settings.audio_id`. Nothing read it - so a Reel went out
+silent while the composer showed a "Change/Browse" control that
+implied it had been applied.
+
+The same shape: the composer's title was written only for a
+`subreddit` or a `board` target, so Dev.to, Medium, WordPress and
+Hashnode fell back to the first line of the body. And Dev.to's
+`published`, Medium's `publish_status` and WordPress's `status` default
+to a DRAFT - so "Post Now" produced a draft and the toast said
+"Post published".
+
+The rule: a control in the composer is a PROMISE. If the composer
+collects a value, something must send it, something must read it, and
+the founder must be able to see the result. A value that is collected
+and dropped is worse than no control at all, because it looks like it
+worked.
+
+### 9.29 The edit flow must not delete what the publish flow needs
+
+The provider settings hold the target, and the provider reads them at
+PUBLISH time.
+
+The composer's edit flow deleted them: the detail response had NO
+`settings` field to restore from, the composer sent `settings: {}`, and
+the update path REPLACED the settings wholesale. So opening a
+scheduled Reddit post to fix a typo and saving it DELETED the
+subreddit - and the post failed at publish with "Missing subreddit in
+settings". A post that was working thirty seconds earlier.
+
+Two things hold this together:
+
+- the READ path returns the settings, so the client can restore them
+- the WRITE path MERGES the incoming settings over the stored ones, so
+  a key the caller did not send is KEPT
+
+The merge is the one that matters: a client that does not know about
+the settings must not be able to delete them. The whole-object `null`
+stays an explicit clear, and the validator and the write must read the
+SAME merged settings - the validator prefers the override's over the
+global ones, so reading the raw override there made it report a
+setting as missing when the stored one was right there.
+
+### 9.30 A range filter and the grid it fills must agree on "a day"
+
+The calendar's GRID is built from the APP's timezone days. The RANGE
+FILTER used to be UTC: the client sent date-only strings and the
+server resolved them to UTC midnight and UTC end-of-day.
+
+The posts in the gap fell off the calendar. With the app in
+America/New_York, a post scheduled Oct 31 20:00 EDT = Nov 1 00:00 UTC
+was EXCLUDED from October's range and then DROPPED by November's grid,
+which has no Oct 31 cell. It appeared on NO month grid, in either
+month.
+
+So the range is sent as UTC INSTANTS, computed with
+`wallClockToUtc` - the ONE conversion the app has. And
+`wallClockToUtc` keeps the seconds it is given: it used to append its
+own `:00` to a time that already had seconds, so `23:59:59` became
+`23:59:59:00`, which is NOT RFC 3339, and the server answered
+"Invalid end date" for the whole range.
+
+The same zone discipline applies to the "is this cell today" checks:
+they compare against the BROWSER's date while the cells are the APP's
+days, so the grid was labelled with the browser's dates and the chips
+fell into the neighbouring day's cell.
+
+### 9.31 `COALESCE` cannot express "clear"
+
+`kanban_substate = COALESCE(?, kanban_substate)` can express "keep"
+and "set", and NOT "clear". So a card tagged "Blocked" was "Blocked"
+for ever: the client had to refuse the clear and toast "Clearing
+substate is not yet supported", and the "No substate" filter the
+filter bar offered could never match a card the founder wanted to
+clear.
+
+The three-state pattern (`Option<Option<T>>` with `double_option`)
+plus a SQL that uses an EXPLICIT FLAG:
+
+```sql
+kanban_substate = CASE WHEN ? THEN ? ELSE kanban_substate END
+```
+
+The flag is the "the caller is setting this" bit, and the value is
+`NULL` when clearing. The same shape the `campaign_id` write already
+used.
+
+### 9.32 The refresh cycle must refresh what the dashboard READS
+
+The per-post analytics rows - the ones the analytics page, the research
+page, the campaign engagement and the per-post badges read - were
+written ONLY when a human opened the Post Stats modal. The background
+refresher wrote the ACCOUNT-level rows, and the cleaner deleted the
+expired per-post rows every 30 minutes.
+
+So a founder's "Likes 42" silently became "Likes 0" an hour later,
+with no publish, no error and no refresh, and the research page's
+"your top posts" went empty the same way.
+
+The refresher refreshes the per-post rows too. The window is the recent
+published posts, because a per-post fetch is one API call each.
+
 ---
 
 ## 10. Environment Variables
