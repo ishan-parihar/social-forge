@@ -222,6 +222,19 @@ pub enum Command {
         /// First comment (for platforms that support it, e.g. Instagram)
         #[arg(long)]
         first_comment: Option<String>,
+        /// Provider settings as a JSON object.
+        ///
+        /// Some providers cannot publish without a target, and they read
+        /// it out of the post's settings: Reddit needs `subreddit` and
+        /// `title`, Pinterest needs `board` and `title`, Discord needs
+        /// `channel`, Telegram-user needs `target`, Hashnode needs
+        /// `publication_id`.
+        ///
+        /// The composer writes these for you; from the shell you pass
+        /// them here. Without them the post is created, queued, and then
+        /// fails at publish with "Missing subreddit in settings".
+        #[arg(long)]
+        settings: Option<String>,
     },
 
     /// Stage a post across multiple platforms with auto content-splitting
@@ -255,6 +268,19 @@ pub enum Command {
         /// First comment (for platforms that support it, e.g. Instagram)
         #[arg(long)]
         first_comment: Option<String>,
+        /// Provider settings as a JSON object.
+        ///
+        /// Some providers cannot publish without a target, and they read
+        /// it out of the post's settings: Reddit needs `subreddit` and
+        /// `title`, Pinterest needs `board` and `title`, Discord needs
+        /// `channel`, Telegram-user needs `target`, Hashnode needs
+        /// `publication_id`.
+        ///
+        /// The composer writes these for you; from the shell you pass
+        /// them here. Without them the post is created, queued, and then
+        /// fails at publish with "Missing subreddit in settings".
+        #[arg(long)]
+        settings: Option<String>,
     },
 
     /// Create a carousel post with multiple images

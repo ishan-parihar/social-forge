@@ -2822,6 +2822,35 @@ async fn handle_automation_with_state(
 }
 
 // Unified Post Handler
+/// Parse the `--settings` JSON argument.
+///
+/// Some providers cannot publish without a target, and they read it out
+/// of the post's settings: Reddit needs `subreddit` and `title`,
+/// Pinterest needs `board` and `title`, Discord needs `channel`,
+/// Telegram-user needs `target`, Hashnode needs `publication_id`.
+///
+/// The CLI used to send an EMPTY settings object, so a Reddit post from
+/// the shell was created, queued, and then failed at publish with
+/// "Missing subreddit in settings" - with no way to supply it.
+fn parse_cli_settings(raw: Option<&str>) -> anyhow::Result<serde_json::Value> {
+    let Some(raw) = raw else {
+        return Ok(serde_json::json!({}));
+    };
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Ok(serde_json::json!({}));
+    }
+    let value: serde_json::Value = serde_json::from_str(trimmed)
+        .map_err(|e| anyhow::anyhow!("--settings must be a JSON object: {e}"))?;
+    if !value.is_object() {
+        return Err(anyhow::anyhow!(
+            "--settings must be a JSON object, got {}",
+            value
+        ));
+    }
+    Ok(value)
+}
+
 async fn handle_post_with_state(
     state: &AppState,
     text: &str,
@@ -2829,6 +2858,7 @@ async fn handle_post_with_state(
     media: Option<&str>,
     schedule: Option<&str>,
     first_comment: Option<&str>,
+    settings: Option<&str>,
 ) -> anyhow::Result<()> {
     let user_id = resolve_user(state).await?;
     let integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
@@ -2859,7 +2889,7 @@ async fn handle_post_with_state(
                 .collect::<Vec<_>>())
         }),
         integration_ids,
-        settings: Some(serde_json::json!({})),
+        settings: Some(parse_cli_settings(settings)?),
         scheduled_at: schedule.map(String::from),
         first_comment: first_comment.map(String::from),
         overrides: None,
@@ -2890,6 +2920,7 @@ async fn handle_stage_with_state(
     schedule: Option<&str>,
     preview_only: bool,
     first_comment: Option<&str>,
+    settings: Option<&str>,
 ) -> anyhow::Result<()> {
     let user_id = resolve_user(state).await?;
     let all_integrations = crate::db::queries::list_integrations(&state.db, user_id).await?;
@@ -2952,7 +2983,7 @@ async fn handle_stage_with_state(
         content: text.to_string(),
         media: media_json,
         integration_ids,
-        settings: serde_json::json!({}),
+        settings: parse_cli_settings(settings)?,
         scheduled_at,
         first_comment: first_comment.map(String::from),
         overrides: serde_json::Value::Null,
@@ -3780,6 +3811,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
             media,
             schedule,
             first_comment,
+            settings,
         } => {
             handle_post_with_state(
                 &state,
@@ -3788,6 +3820,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                 media.as_deref(),
                 schedule.as_deref(),
                 first_comment.as_deref(),
+                settings.as_deref(),
             )
             .await
         }
@@ -3799,6 +3832,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
             schedule,
             preview,
             first_comment,
+            settings,
         } => {
             handle_stage_with_state(
                 &state,
@@ -3809,6 +3843,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                 schedule.as_deref(),
                 preview,
                 first_comment.as_deref(),
+                settings.as_deref(),
             )
             .await
         }
