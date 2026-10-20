@@ -353,6 +353,17 @@ impl SocialProvider for PinterestProvider {
         500
     }
 
+    /// The settings this provider needs to publish.
+    ///
+    /// Pinterest publishes to a board and needs a title. `publish` reads `post.settings["board"]` and `post.settings["title"]`.
+    ///
+    /// The create path checks this list and refuses the post with a
+    /// message naming the missing field, instead of the post going to
+    /// `state='error'` in the scheduler with no reason shown.
+    fn required_settings(&self) -> &'static [&'static str] {
+        &["board", "title"]
+    }
+
     async fn generate_auth_url(
         &self,
         state: &str,

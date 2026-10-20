@@ -640,13 +640,30 @@
     // too - the title is stored in `posts.title`, which no publish path
     // reads, so it has to be in the settings for the providers that
     // publish a title.
+    // The settings key each target type is written to MUST be the key
+    // the provider READS at publish time. The two lists drifted apart:
+    // the composer wrote `channel_id` and `page_id`, and NO provider
+    // reads either. Discord reads `settings["channel"]` and errors with
+    // "Missing channel in settings" - so every Discord post failed at
+    // publish, with the founder's chosen channel never used.
+    //
+    // Facebook and YouTube are not in this table on purpose: they
+    // resolve their page and channel from the CONNECTED INTEGRATION's
+    // token (`resolve_page_id`, `_internal_id`), not from the post's
+    // settings. Writing a `page_id` for them was a dead key.
+    //
+    // So the table below is exactly the providers that read a target
+    // out of the post's settings: Reddit (subreddit) and Pinterest
+    // (board). Discord's `channel` is here too.
     const providerKeyForTarget: Record<string, string> = {
       subreddit: 'subreddit',
       board: 'board',
-      page: 'page_id',
-      facebook_page: 'page_id',
-      youtube_channel: 'channel_id',
-      channel: 'channel_id',
+      channel: 'channel',
+      // Telegram-user's targets are its dialogs; `target_type` is
+      // "peer" or "group" and the id IS the peer id the provider sends
+      // to.
+      peer: 'target',
+      group: 'target',
     };
 
     for (const [intId, targets] of selectedTargets) {

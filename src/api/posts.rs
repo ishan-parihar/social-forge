@@ -1451,6 +1451,59 @@ pub(crate) fn validate_posts_for_integrations(
             .and_then(|o| o.content.as_deref())
             .unwrap_or(&body.content);
 
+        // The settings THIS integration will publish with: its own
+        // override when it has one, else the post's global settings.
+        //
+        // This matters: a Reddit post carries `subreddit` in the
+        // PER-INTEGRATION override, and a global-only read would report
+        // the field as missing on a post that is perfectly set up.
+        let per_integration_settings = body
+            .overrides
+            .as_ref()
+            .and_then(|o| o.get(&integ.id.to_string()))
+            .and_then(|o| o.settings.clone())
+            .unwrap_or_else(|| settings.clone());
+
+        // The settings this provider REQUIRES to publish.
+        //
+        // Discord reads `settings["channel"]`, Reddit reads
+        // `settings["subreddit"]` and `settings["title"]`, and so on.
+        // Without this check the post was CREATED and QUEUED and then
+        // failed in the scheduler with "Missing channel in settings" -
+        // the founder saw a failed post and no reason, and the chosen
+        // channel was never used.
+        let missing: Vec<&str> = provider
+            .required_settings()
+            .iter()
+            .copied()
+            .filter(|key| {
+                per_integration_settings
+                    .get(*key)
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.trim().is_empty())
+                    .unwrap_or(true)
+            })
+            .collect();
+        if !missing.is_empty() {
+            errors.push(ValidationError {
+                integration_id: integ.id.to_string(),
+                provider: integ.provider_identifier.clone(),
+                provider_name: integ.provider_name.clone(),
+                kind: "missing_setting".into(),
+                message: format!(
+                    "{} needs {} - pick it in Posting Targets before posting",
+                    integ.provider_name,
+                    missing
+                        .iter()
+                        .map(|k| format!("\"{k}\""))
+                        .collect::<Vec<_>>()
+                        .join(" and ")
+                ),
+                max_length: None,
+                actual_length: None,
+            });
+        }
+
         // The text the provider will actually receive, for the length
         // check. This is the SAME conversion the content is stored
         // through (`PostService::sanitize_content`), so the number

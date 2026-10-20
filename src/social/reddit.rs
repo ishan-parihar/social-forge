@@ -1411,6 +1411,17 @@ impl SocialProvider for RedditProvider {
         10000
     }
 
+    /// The settings this provider needs to publish.
+    ///
+    /// Reddit publishes to a subreddit and needs a title. `publish` reads `post.settings["subreddit"]` and `post.settings["title"]`; both are hard requirements.
+    ///
+    /// The create path checks this list and refuses the post with a
+    /// message naming the missing field, instead of the post going to
+    /// `state='error'` in the scheduler with no reason shown.
+    fn required_settings(&self) -> &'static [&'static str] {
+        &["subreddit", "title"]
+    }
+
     fn validate_media(&self, post: &PostContent) -> Result<(), String> {
         super::validate_media_limits(self.identifier(), post)
     }

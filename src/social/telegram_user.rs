@@ -50,6 +50,17 @@ impl SocialProvider for TelegramUserProvider {
         4096
     }
 
+    /// The settings this provider needs to publish.
+    ///
+    /// Telegram-user sends to a peer. `publish` reads `post.settings["target"]` and errors with "No target peer specified".
+    ///
+    /// The create path checks this list and refuses the post with a
+    /// message naming the missing field, instead of the post going to
+    /// `state='error'` in the scheduler with no reason shown.
+    fn required_settings(&self) -> &'static [&'static str] {
+        &["target"]
+    }
+
     fn uses_oauth(&self) -> bool {
         false
     }

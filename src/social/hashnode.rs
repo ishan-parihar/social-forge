@@ -97,6 +97,17 @@ impl SocialProvider for HashnodeProvider {
         100000
     }
 
+    /// The settings this provider needs to publish.
+    ///
+    /// Hashnode publishes to a publication. `publish` reads `post.settings["publication_id"]` and errors with "Missing publication_id in settings".
+    ///
+    /// The create path checks this list and refuses the post with a
+    /// message naming the missing field, instead of the post going to
+    /// `state='error'` in the scheduler with no reason shown.
+    fn required_settings(&self) -> &'static [&'static str] {
+        &["publication_id", "title"]
+    }
+
     fn uses_oauth(&self) -> bool {
         false
     }

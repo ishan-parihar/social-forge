@@ -154,6 +154,21 @@ const AUDIT = () => {
     return (hi + 0.05) / (lo + 0.05);
   };
 
+  // The product of the `opacity` of the element and every ancestor.
+  // `opacity` is NOT inherited in CSS - a child of an `opacity: 0.5`
+  // element is composited into the parent's group and then faded, so
+  // the RENDERED ink is the product of the chain.
+  const inheritedOpacity = (el) => {
+    let o = 1;
+    let node = el;
+    while (node && node.nodeType === 1) {
+      const v = parseFloat(getComputedStyle(node).opacity);
+      if (!Number.isNaN(v)) o *= v;
+      node = node.parentElement;
+    }
+    return o;
+  };
+
   // Walk up for the first opaque background, COMPOSITING the translucent
   // layers found on the way.
   //
@@ -172,6 +187,23 @@ const AUDIT = () => {
     const layers = [];
     let node = el;
     while (node && node.nodeType === 1) {
+      // An element with `opacity < 1` is composited as a GROUP: its own
+      // background is faded into the backdrop behind the group, and the
+      // group is then drawn as one flat image. So the effective backdrop
+      // for anything INSIDE the group is the backdrop behind the group,
+      // with the group's own background faded in.
+      //
+      // That is why the calendar's chip time measured 3.24:1: the chip's
+      // 15%-alpha red wash is INSIDE the chip, and the chip's `opacity`
+      // fades the whole group - wash included - into the page.
+      const opacity = parseFloat(getComputedStyle(node).opacity);
+      if (node !== el && !Number.isNaN(opacity) && opacity < 0.999) {
+        const c = parseColor(getComputedStyle(node).backgroundColor);
+        if (c && c.a > 0) {
+          layers.push({ r: c.r, g: c.g, b: c.b, a: c.a * opacity });
+        }
+        break;
+      }
       const c = parseColor(getComputedStyle(node).backgroundColor);
       if (c && c.a >= 0.95) {
         // The opaque backdrop, with the washes painted over it.
@@ -233,8 +265,57 @@ const AUDIT = () => {
 
     const fg = parseColor(cs.color);
     if (!fg || fg.a < 0.95) continue;
+
+    // A DISABLED control is exempt from the contrast requirement (WCAG
+    // 1.4.3 names "incidental" text, and a disabled control is not
+    // content the reader can act on). The probe renders the disabled
+    // state - a `disabled:opacity-50` button measures ~2.5:1 and would
+    // be reported forever.
+    if (el.disabled || el.closest('[aria-disabled="true"]')) continue;
+
+    // An element that is INVISIBLE is not measured at all. The app
+    // hides hover-revealed controls with `opacity-0` (the kanban's
+    // "⋯" menu, the campaign's "✕", the dashboard's "→"). At opacity 0
+    // the ink and the backdrop are the same pixels, so the ratio is
+    // 1.00:1 - a perfect reading and a meaningless one. The control
+    // becomes visible on hover, and the probe's screenshots are taken
+    // without a hover, so this is the state the reader sees.
+    const ownOpacity = parseFloat(cs.opacity);
+    if (!Number.isNaN(ownOpacity) && ownOpacity < 0.05) continue;
+
+    // An `opacity` on the element (or on an ancestor) makes the RENDERED
+    // ink lighter than the computed colour. The computed colour is what
+    // the stylesheet says; the pixels are what the visitor reads.
+    //
+    // The calendar's chip time was `color: rgb(185 28 28)` with
+    // `opacity: 0.7` on a 15%-alpha red wash: the computed colour
+    // measured 5.00:1, the RENDERED ink measured 3.24:1 - under the
+    // floor. The check below read the computed colour and passed it.
+    //
+    // The opacity chain: `opacity` is NOT inherited, but an element
+    // with `opacity < 1` is composited as a GROUP, so its descendants
+    // are faded together. The fade applies to the element's own ink AND
+    // to its background - so the backdrop under a faded element is the
+    // backdrop under its GROUP, and the element's own background is
+    // faded into that same backdrop.
+    //
+    // So the correct computation is: walk up, and at the first
+    // ancestor with `opacity < 1`, that ancestor's own background is
+    // faded into ITS backdrop, and the text ink is faded the same way.
+    const opacity = inheritedOpacity(el);
+    const backdrop = effectiveBg(el);
+    let fgEff = fg;
+    if (opacity < 0.999) {
+      fgEff = {
+        r: fg.r * opacity + backdrop.r * (1 - opacity),
+        g: fg.g * opacity + backdrop.g * (1 - opacity),
+        b: fg.b * opacity + backdrop.b * (1 - opacity),
+        a: 1,
+      };
+    }
+
     const size = parseFloat(cs.fontSize);
-    const ratio = contrast(fg, effectiveBg(el));
+    const ratio = contrast(fgEff, backdrop);
     const need = requiredRatio(size, cs.fontWeight);
     if (ratio < need - 0.01) {
       fails.push({

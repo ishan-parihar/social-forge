@@ -152,7 +152,9 @@
    * Phase v21: a cell is "past" (and thus a non-drop target) if either:
    *   - the day is before today (whole day is past), OR
    *   - the day is today AND the hour has already ended.
-   * Past cells get opacity-40 + cursor-not-allowed and drop is suppressed.
+   * Past cells get the `calendar-cell-past` class (a dimmed
+   * BACKGROUND, not an `opacity` - see the style block at the bottom)
+   * plus cursor-not-allowed, and drop is suppressed.
    */
   function isCellPast(date: Date, hour: string): boolean {
     if (isPast(date)) return true;
@@ -236,7 +238,7 @@
             class="relative px-1 py-1 border-r border-line min-h-[48px] cursor-pointer hover:bg-surface-hover transition-colors
               {isDragOver ? 'ring-2 ring-accent ring-inset bg-accent-fill/5' : ''}
               {wd.isToday ? 'bg-accent-fill/5' : ''}
-              {past ? 'opacity-40 cursor-not-allowed' : ''}"
+              {past ? 'calendar-cell-past cursor-not-allowed' : ''}"
             title={past ? 'Past - cannot schedule here' : `Drop to move to ${wd.date.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })} at ${hour}`}
             ondragover={(e) => { if (!past) { e.preventDefault(); handleDragEnter(wd.dateStr, hour); } }}
             ondragleave={() => handleDragLeave(wd.dateStr, hour)}
@@ -256,7 +258,7 @@
                    mid-hover. -->
               <div
                 data-event-id={event.id}
-                class="group/chip flex items-center gap-1 flex-1 min-w-0 {event.state === 'published' || past ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'}"
+                class="group/chip relative flex items-center gap-1 flex-1 min-w-0 min-h-11 {event.state === 'published' || past ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'}"
                 draggable={event.state !== 'published' && !past}
                 ondragstart={(e) => handleDragStart(e, event.id)}
                 onclick={() => onEventClick?.(event.id)}
@@ -270,8 +272,22 @@
                 title={event.state === 'published' || past ? 'Published posts cannot be dragged' : 'Drag to reschedule'}
               >
                 {#if onToggleSelect}
-                  <!-- The LABEL carries the 44px target; the box stays small. -->
-                  <label class="flex items-center justify-center shrink-0 min-h-11 min-w-11 cursor-pointer">
+                  <!--
+                    The LABEL carries the 44px target; the box stays small.
+
+                    The label is an OVERLAY, not a flow sibling. A week
+                    cell is 80px wide, and a 44px label in the flow left
+                    the chip 23px - the chip showed "06:49" and no title
+                    at all. Overlaying it puts the 44px target on top of
+                    the chip's left edge instead of beside it, and the
+                    chip keeps the whole cell.
+
+                    The chip's own left padding makes room for it, and
+                    the box only appears on hover - a bulk-select
+                    affordance should not sit permanently over the
+                    post's title.
+                  -->
+                  <label class="absolute left-0 top-0 z-10 flex items-center justify-center shrink-0 min-h-11 min-w-11 cursor-pointer opacity-0 group-hover/chip:opacity-100 focus-within:opacity-100 transition-opacity">
                     <input type="checkbox" checked={selected.has(event.id)} aria-label="Select post for bulk actions" onclick={(e) => onToggleSelect?.(event.id, e)} class="rounded w-4 h-4" />
                   </label>
                 {/if}
@@ -290,3 +306,26 @@
     {/each}
   </div>
 </div>
+
+<style>
+  /*
+    A PAST cell is not a drop target, and it used to say so with
+    `opacity-40` on the cell.
+
+    An `opacity` is a GROUP opacity: it fades the cell's ENTIRE subtree,
+    including the post chips inside it. A scheduled post in a past hour
+    dropped to 1.33:1 - on the calendar and unreadable. The founder
+    still has to be able to see and open what they posted last week.
+
+    So the past-ness is carried by the cell's CHROME - its background
+    and its border - and the chips inside it keep their own contrast.
+    `cursor-not-allowed` and the cell's title already carry the "you
+    cannot schedule here" signal.
+  */
+  .calendar-cell-past {
+    background-color: rgb(var(--bg-rgb) / 0.45);
+  }
+  .calendar-cell-past:hover {
+    background-color: rgb(var(--bg-rgb) / 0.45);
+  }
+</style>

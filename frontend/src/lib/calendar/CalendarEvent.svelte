@@ -54,7 +54,7 @@
      panel. -->
 <div class="group relative flex-1 min-w-0 flex items-center">
   <div
-    class="event-chip {event.state} {isPast ? 'opacity-50' : ''} {event.error ? 'ring-2 ring-error' : ''}
+    class="event-chip {event.state} {isPast ? 'event-chip-past' : ''} {event.error ? 'ring-2 ring-error' : ''}
            group-hover:opacity-0 transition-opacity duration-150"
     style={tagBarColor ? "border-left: 3px solid " + tagBarColor : ""}
     title={event.error
@@ -63,19 +63,24 @@
   >
     {#if event.error}
       <!--
-        A red "!" badge in the top-left corner makes failed posts
-        immediately visible on the calendar without needing to hover.
-        The chip itself also gets ring-2 ring-error (above) and the
-        title attribute shows the error message on hover.
+        A red "!" badge makes failed posts immediately visible on the
+        calendar without needing to hover. The chip itself also gets
+        ring-2 ring-error (above) and the title attribute shows the error
+        message on hover.
+
+        The badge sits on the RIGHT. It was on the left, hanging off the
+        chip's top-left corner, where it covered the tag chip - and the
+        tag is what tells the founder WHICH post this is. The right end
+        of the chip holds the metric counts, which are the least
+        load-bearing thing on it.
 
         The glyph is 10px, not 8px: an 8px character is below the 10px
         floor the probe reports, and the badge is the ONE thing on the
         chip that has to be readable at a glance - it is the difference
         between "a failed post" and "a post" being noticed at all.
-        The badge box grows to match so the glyph is not squeezed.
       -->
       <span
-        class="absolute -top-1 -left-1 min-w-[1.125rem] h-[1.125rem] px-0.5 rounded-full bg-error text-error-fg text-[10px] leading-none font-bold flex items-center justify-center shadow-sm z-10"
+        class="absolute -top-1 -right-1 min-w-[1.125rem] h-[1.125rem] px-0.5 rounded-full bg-error text-error-fg text-[10px] leading-none font-bold flex items-center justify-center shadow-sm z-10 transition-opacity group-hover:opacity-0"
         title={`Publishing failed: ${event.error}`}
       >!</span>
     {/if}
@@ -178,28 +183,81 @@
     font-size: 0.6875rem; cursor: grab; white-space: nowrap; overflow: hidden;
     /* Fill the row so the title collapsing on hover does not reflow the
        cell - the chip used to shrink to the width of its tags, which moved
-       the whole cell's content sideways mid-hover. */
-    flex: 1 1 auto; min-width: 0;
+       the whole cell's content sideways mid-hover.
+
+       `flex-basis: 0%` is the load-bearing part. With `flex: 1 1 auto` the
+       chip's base size is its CONTENT width, and in a narrow week cell
+       (80px) the chip shrank to 23px - the 18px error badge plus the 26px
+       time - and the TITLE got ZERO pixels. The chip was on the calendar
+       showing "06:49" and nothing else.
+
+       With a zero basis the chip takes the cell's width, and the title
+       truncates INSIDE it (the ellipsis is the point). */
+    flex: 1 1 0%; min-width: 0;
     container-type: inline-size;
   }  /* v22 Phase 3: use CSS variables for state colors so the calendar
      chips retheme correctly in light mode. Previously these hardcoded
      dark-mode hex values. */
-  .event-chip.draft { background: rgb(var(--info-rgb) / 0.15); color: rgb(var(--info-rgb)); }
-  .event-chip.queued { background: rgb(var(--warning-rgb) / 0.15); color: rgb(var(--warning-rgb)); }
-  .event-chip.published { background: rgb(var(--success-rgb) / 0.15); color: rgb(var(--success-rgb)); }
-  .event-chip.error { background: rgb(var(--error-rgb) / 0.15); color: rgb(var(--error-rgb)); }
+  /* The chip's state is carried by the WASH and the LEFT BORDER, and the
+     TEXT takes the content ink.
+     
+     It used to be `color: rgb(var(--error-rgb))` - the state hue as the
+     chip's own text colour. That measures 5.00:1 for the light theme's
+     error, which sounds fine, but the chip's TIME and METRIC spans
+     carried `opacity: 0.7` on top of it, so the RENDERED ink was
+     3.24:1 - under the floor, and the probe read the computed colour
+     and passed it.
+     
+     The de-emphasised parts (the time, the metric counts) now take
+     `text-muted`, which clears AA on every state wash in both themes
+     (5.30:1 to 6.20:1), and the state hue stays in the wash and the
+     border where it is a signal and not a word.
+  */
+  .event-chip { color: rgb(var(--text-rgb)); }
+  /* A PAST post is de-emphasised with a lighter INK, not with a group
+     `opacity`. An opacity on the chip fades the whole group - wash,
+     text and all - into the page, and the text landed at 1.31:1 in the
+     light theme: the post was on the calendar and unreadable. The
+     muted ink on the state wash is 5.30:1 or better in both themes,
+     and the muted tier still reads as "not today".
+
+     The WASH stays. The chip's fill is the state signal, and a past
+     post's fill is a legitimate part of that signal - the founder
+     still wants to know it was a draft, a queued post or a failure.
+     Only the TEXT recedes, and it recedes to a colour that is still
+     legible. */
+  .event-chip-past { color: rgb(var(--text-muted-rgb)); }
+  .event-chip-past .event-time,
+  .event-chip-past .metric-item,
+  .event-chip-past .tag-overflow { color: rgb(var(--text-muted-rgb)); }
+  .event-chip.draft { background: rgb(var(--info-rgb) / 0.15); }
+  .event-chip.queued { background: rgb(var(--warning-rgb) / 0.15); }
+  .event-chip.published { background: rgb(var(--success-rgb) / 0.15); }
+  .event-chip.error { background: rgb(var(--error-rgb) / 0.15); }
   /* `flex-shrink: 0` here meant the tag block REFUSED to shrink, so in a
      narrow week cell it pushed the time and the title out of the chip:
      at 768px the chip showed "launch 11:5" - the time clipped mid-value.
      The tag chips shrink first (they are the least load-bearing: the
      full name is in the tooltip and on the detail panel); the time and
      the title keep their space. */
-  .event-tags { display: flex; align-items: center; gap: 2px; flex-shrink: 0; min-width: 0; overflow: hidden; }
+  /* The tag block can shrink, the time cannot, and the title keeps at
+     least a few characters.
+
+     The tag block was `flex-shrink: 0` and the tag chip inside it was
+     too, so in a narrow week cell the tags held their width, the time
+     held its 26px, the error badge took 18px, and the title was left
+     with ZERO pixels. The chip read "06:49" and nothing else.
+
+     So the tag chip keeps a FLOOR of about three characters (a tag that
+     reads "r…" is a coloured smear, not a label) and the title yields
+     first, down to its own floor of a couple of characters. The full
+     name is in the tooltip and on the detail panel either way. */
+  .event-tags { display: flex; align-items: center; gap: 2px; flex-shrink: 1; min-width: 0; overflow: hidden; }
   .tag-dot { width: 4px; height: 4px; border-radius: 50%; flex-shrink: 0; }
   .tag-chip {
     max-width: 72px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     padding: 0 4px; border-radius: 3px; font-size: 0.625rem; line-height: 1.3;
-    font-weight: 500; flex-shrink: 0;
+    font-weight: 500; flex-shrink: 0; min-width: 1.75rem;
   }
   /* A week cell is ~130px wide and holds the tag, the time and the title.
      The title is the only one of the three that can be shortened without
@@ -207,7 +265,10 @@
      attribute carries the full text), so the TITLE shrinks first and the
      tag keeps its label. Before this the tag chip was squeezed to 4px -
      a coloured smear, not a label - while the title still had room. */
-  .event-content { overflow: hidden; text-overflow: ellipsis; min-width: 0; flex-shrink: 1; }
+  /* The title keeps a floor of a couple of characters. Without one it can
+     be squeezed to zero - a chip that read "06:49" and no title at all -
+     and a title that is gone is worse than a title that is truncated. */
+  .event-content { overflow: hidden; text-overflow: ellipsis; min-width: 1.5rem; flex-shrink: 1; }
   /* A tag chip squeezed to 4px is a coloured smear, not a label. The
      tag block is dropped when the CHIP itself is too narrow to hold one
      (a phone-width cell): the colour is still carried by the chip's
@@ -216,8 +277,13 @@
   @container (max-width: 90px) {
     .tag-chip { display: none; }
   }
-  .tag-overflow { font-size: 0.625rem; opacity: 0.6; flex-shrink: 0; }
-  .event-time { opacity: 0.7; flex-shrink: 0; }
+  .tag-overflow { font-size: 0.625rem; color: rgb(var(--text-muted-rgb)); flex-shrink: 0; }
+  /* The de-emphasised parts take the MUTED ink, not a dimmed state hue.
+     An `opacity` on top of a coloured ink renders lighter than the
+     stylesheet says, and the calendar's chip time measured 3.24:1
+     that way. `text-muted` on the state wash is 5.30:1 or better in
+     both themes. */
+  .event-time { color: rgb(var(--text-muted-rgb)); flex-shrink: 0; }
   .event-metrics { display: flex; align-items: center; gap: 0.25rem; flex-shrink: 0; margin-left: auto; overflow: hidden; }
-  .metric-item { font-size: 0.625rem; opacity: 0.6; white-space: nowrap; }
+  .metric-item { font-size: 0.625rem; color: rgb(var(--text-muted-rgb)); white-space: nowrap; }
 </style>

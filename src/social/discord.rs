@@ -477,6 +477,17 @@ impl SocialProvider for DiscordProvider {
         1980
     }
 
+    /// The settings this provider needs to publish.
+    ///
+    /// Discord publishes to a channel. `publish` reads `post.settings["channel"]` and errors with "Missing channel in settings" when it is absent.
+    ///
+    /// The create path checks this list and refuses the post with a
+    /// message naming the missing field, instead of the post going to
+    /// `state='error'` in the scheduler with no reason shown.
+    fn required_settings(&self) -> &'static [&'static str] {
+        &["channel"]
+    }
+
     fn editor_type(&self) -> EditorType {
         EditorType::Markdown
     }

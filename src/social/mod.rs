@@ -781,6 +781,26 @@ pub trait SocialProvider: Send + Sync {
         self.max_content_length() > 0
     }
 
+    /// The `settings` keys this provider REQUIRES to publish.
+    ///
+    /// A provider that needs a target (Discord's channel, Reddit's
+    /// subreddit, Pinterest's board, Hashnode's publication) reads it out
+    /// of the post's settings and errors when it is missing. Without
+    /// this list the error only appeared at PUBLISH time, in the
+    /// scheduler, as a post that silently went to `state='error'` - the
+    /// founder saw a failed post and no reason.
+    ///
+    /// The create path checks the list and refuses the post with a
+    /// message naming the missing field.
+    ///
+    /// The DEFAULT is an empty list: a provider that publishes from the
+    /// content alone needs nothing. Only a provider that reads a key
+    /// out of `post.settings` overrides it - and the key it lists must
+    /// be the key it actually reads.
+    fn required_settings(&self) -> &'static [&'static str] {
+        &[]
+    }
+
     /// Validate content against platform-specific limits before publishing.
     ///
     /// A zero content limit is reported as a capability gap rather than as

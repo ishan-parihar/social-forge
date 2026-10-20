@@ -231,6 +231,17 @@ impl SocialProvider for SkoolProvider {
         10000
     }
 
+    /// The settings this provider needs to publish.
+    ///
+    /// Skool publishes to a group. `publish` reads `post.settings["groupId"]` and `post.settings["title"]`; `validate_post` requires both.
+    ///
+    /// The create path checks this list and refuses the post with a
+    /// message naming the missing field, instead of the post going to
+    /// `state='error'` in the scheduler with no reason shown.
+    fn required_settings(&self) -> &'static [&'static str] {
+        &["groupId", "title"]
+    }
+
     fn uses_oauth(&self) -> bool {
         false
     }

@@ -620,7 +620,15 @@
             <span class="w-2 h-2 rounded-full" style="background: {c.color}"></span>
             {c.name}
             {#if c.post_count}
-              <span class="text-[10px] opacity-60">({c.post_count})</span>
+              <!--
+                The count is dimmed with `text-faint`, not with an
+                `opacity`. An opacity on a muted ink renders lighter
+                than the stylesheet says: at opacity 0.6 the count
+                measured 2.88:1 in the light theme and 3.39:1 in the
+                dark one - under the floor in both. `text-faint` is a
+                real colour, so it measures what it says.
+              -->
+              <span class="text-[10px] text-faint">({c.post_count})</span>
             {/if}
           </button>
           {#if selectedCampaign === c.id}

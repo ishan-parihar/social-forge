@@ -41,7 +41,7 @@
   {#if actionLabel && onaction}
     <button
       onclick={onaction}
-      class="flex-shrink-0 px-2.5 py-1.5 bg-surface border border-line rounded-md text-xs text-content hover:bg-surface-hover transition-colors"
+      class="flex-shrink-0 px-2.5 py-1.5 bg-surface border border-line rounded-md text-xs text-content hover:bg-surface-hover transition-colors min-h-11"
     >
       {actionLabel}
     </button>
