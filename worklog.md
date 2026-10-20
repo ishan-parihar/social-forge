@@ -612,3 +612,49 @@ Stage Summary:
   - Only C2 (the reference router) survives the outline's B/C waves. It is a
     real gap and now the only one of the six that an agent should work.
 
+
+---
+Task ID: doc-foundation-validation-2026-10-20-pass-5
+Agent: jcode
+Task: Adversarial re-check of pass 4's headline claims. A self-audit that only
+confirms itself is worthless, so every claim was re-derived rather than re-read.
+
+Work Log:
+- FALSIFIED MY OWN VERDICT. C2 was recorded "the one real survivor" because I
+  grepped SKILL.md for a heading containing "router" and found none. The table
+  exists; it is titled `## Where to look next` and is keyed by need. All four
+  references/*.md state a purpose and say "loaded on demand from SKILL.md". So all
+  six of the outline's open items are landed, not five of six.
+  The mechanism of the error is the interesting part and is now written into the
+  re-audit: grepping for the jargon in a CLAIM rather than reading the section the
+  claim describes. That is the same error the outline itself made with its own
+  evidence. The reversal is left visible in the verdict table instead of being
+  edited away.
+- FALSIFIED A COUNT'S DERIVATION, though not its value. "26 provider files + 13
+  support" was wrong: 29 files `impl SocialProvider` (mod.rs's two impls are test
+  fixtures), of which 26 are registered and calendar/drive/gmail are capability
+  modules that appear in no tier table. 29 + 9 support + mod.rs = 39. The 26
+  survived for the wrong reason, which is worse than a wrong number because it
+  survives the next edit too.
+- Confirmed under challenge and unchanged: 44 tools_*.rs + auth.rs +
+  rest_bridge.rs + mod.rs = 47 (all 389 tools in the one mod.rs impl); 26
+  registered providers (12 + 14, no double-count this time); 19 SSE events
+  matching realtime.ts; migrations contain no destructive DDL.
+- Eval #42 read in full rather than grepped: `mcp-tools --toolset x` with an
+  expected_output that names the tool budget. And c3-paired-run.json read in
+  full: a real paired with-skill/baseline run with per-eval grades, three evals
+  in scope, 40 not yet run. The B4 and C3 verdicts rest on artefacts, not filenames.
+- Fixed my own broken verification script mid-pass: the dead-path check emitted
+  ~55 false positives by concatenating `file:path` into single tokens before
+  testing them. Re-ran it per file; genuinely zero dead paths. Noted because a
+  check that cries wolf is the next agent's reason to ignore it.
+
+Stage Summary:
+- Commit eb5d444: the re-audit's C2 correction + method note, the layout tree's
+  provider-file breakdown, and the three routing surfaces.
+- Verification: `genome lint` 0/0; `genome close` green; gate ok; `cargo test
+  --lib` passed; `cargo test --test surface_docs_audit` 3 passed; dead-path
+  check re-run per file, 0 findings.
+- Standing conclusion: the outline's B/C waves contain NO remaining work. Only
+  the E wave (credential-blocked live passes) is open, and it is blocked on
+  credentials exactly as TODO.md's V1a-V1d rows say.
