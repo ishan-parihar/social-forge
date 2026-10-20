@@ -68,7 +68,7 @@
 
 ## 0. THE GOLDEN RULES (read these first)
 
-1. **ALWAYS PUSH COMMITS AFTER EACH ITERATION.** After every meaningful unit of work — a bug fix, a feature, a refactor phase — you MUST `git commit` AND `git push origin master`. The user tests locally on their machine by pulling from `origin/master`. If you don't push, your work doesn't exist as far as the user is concerned. Do not batch 5 phases of work into one giant commit; commit each phase as you complete it.
+1. **ALWAYS PUSH COMMITS AFTER EACH ITERATION.** After every meaningful unit of work — a bug fix, a feature, a refactor phase — you MUST `git commit` AND `git push github master`. The user tests locally on their machine by pulling from `github/master`. If you don't push, your work doesn't exist as far as the user is concerned. Do not batch 5 phases of work into one giant commit; commit each phase as you complete it.
 
 2. **NEVER break the build.** Before committing, verify:
    - `cargo check --lib --bin social-forge` → 0 errors (warnings are OK)
@@ -357,7 +357,7 @@ cargo run -- x timeline
 
 ### 4.1 Commit discipline
 
-**ALWAYS PUSH AFTER EACH ITERATION.** The user pulls from `origin/master` to test locally. The workflow is:
+**ALWAYS PUSH AFTER EACH ITERATION.** The user pulls from `github/master` to test locally. The workflow is:
 
 ```bash
 # 1. Make your changes
@@ -377,11 +377,12 @@ Verification:
 - Frontend pnpm build: succeeds
 - Backend cargo test --lib: 53/53 pass"
 
-# 4. PUSH IMMEDIATELY — do not batch multiple phases
-git push origin master
+# 4. PUSH IMMEDIATELY — do not batch multiple phases. The remote is named
+# `github` (NOT `origin` — there is no `origin` remote in this repo).
+git push github master
 
-# 5. Confirm the push succeeded
-git log --oneline -1
+# 5. Confirm the push succeeded by checking the REMOTE ref, not the local HEAD
+git log --oneline -1 github/master
 ```
 
 ### 4.2 Commit message conventions
@@ -1130,7 +1131,7 @@ Before declaring a task complete, verify ALL of these:
 - [ ] `cd frontend && pnpm build` → succeeds
 - [ ] `cd frontend && pnpm exec svelte-check --threshold error` → 0 errors
 - [ ] `git add -A && git commit -m "..."` with a descriptive message
-- [ ] **`git push origin master`** ← THIS IS THE MOST IMPORTANT STEP
-- [ ] Confirm the push succeeded: `git log --oneline -1` shows your commit on `origin/master`
+- [ ] **`git push github master`** ← THIS IS THE MOST IMPORTANT STEP
+- [ ] Confirm the push succeeded: `git log --oneline -1 github/master` shows your commit on the remote ref
 
 If you can't verify one of these (e.g. missing `cmake`), say so explicitly to the user and explain what they need to verify locally.
