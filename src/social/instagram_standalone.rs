@@ -250,13 +250,41 @@ impl SocialProvider for InstagramStandaloneProvider {
         let media_type = if is_video { "VIDEO" } else { "IMAGE" };
         let url_key = if is_video { "video_url" } else { "image_url" };
 
-        let mut form: Vec<(&str, &str)> = vec![
-            (url_key, post.media[0].url.as_str()),
-            ("media_type", media_type),
-            ("access_token", access_token),
+        // The music track, if the composer picked one.
+        //
+        // The composer's MusicPicker is shown for Instagram and the
+        // pick is written to `settings.audio_id` - and nothing read it,
+        // so the reel went out silent while the composer showed a
+        // "Change/Browse" control that implied it had been applied.
+        let audio_id = post
+            .settings
+            .get("audio_id")
+            .and_then(|v| v.as_str())
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty());
+
+        // The form holds OWNED strings: the audio configuration is
+        // built at runtime, so a `Vec<(&str, &str)>` cannot carry it.
+        let mut form: Vec<(&str, String)> = vec![
+            (url_key, post.media[0].url.clone()),
+            ("media_type", media_type.to_string()),
+            ("access_token", access_token.to_string()),
         ];
         if post.media.len() == 1 {
-            form.push(("caption", &post.content));
+            form.push(("caption", post.content.clone()));
+        }
+        if let Some(audio_id) = audio_id {
+            if !is_video {
+                return Err(ProviderError::InvalidRequest(
+                    "Instagram music can only be attached to a video (Reel), not to an image."
+                        .into(),
+                ));
+            }
+            let audio_configuration = serde_json::json!({ "audio_id": audio_id }).to_string();
+            // The form owns the strings, so the configuration has to be
+            // owned too - a borrowed local would not outlive the
+            // request.
+            form.push(("audio_configuration", audio_configuration));
         }
 
         let resp = self

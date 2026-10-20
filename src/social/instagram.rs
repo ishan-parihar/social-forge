@@ -229,15 +229,51 @@ impl SocialProvider for InstagramProvider {
 
         if post.media.len() == 1 {
             // Single image: simpler IMAGE container
-            let container_id = self
-                .create_single_media_container(
+            //
+            // A REEL with a music track is different: Instagram needs
+            // `media_type=REELS`, the VIDEO (not the image) as the
+            // source, and an `audio_configuration` naming the track.
+            //
+            // The composer collected the music - the MusicPicker is
+            // shown for Instagram and the pick is written to
+            // `settings.audio_id` - and it was DISCARDED: neither
+            // instagram.rs nor instagram_standalone.rs read it, so the
+            // reel went out with no music while the composer showed a
+            // "Change/Browse" control that implied it had been applied.
+            let audio_id = post
+                .settings
+                .get("audio_id")
+                .and_then(|v| v.as_str())
+                .map(|s| s.trim())
+                .filter(|s| !s.is_empty());
+
+            let is_video = post.media[0].mime_type.starts_with("video/");
+
+            let container_id = if let Some(audio_id) = audio_id {
+                if !is_video {
+                    return Err(ProviderError::InvalidRequest(
+                        "Instagram music can only be attached to a video (Reel), not to an image."
+                            .into(),
+                    ));
+                }
+                self.create_reel_container(
+                    &ig_id,
+                    access_token,
+                    &post.media[0].url,
+                    &post.content,
+                    audio_id,
+                )
+                .await?
+            } else {
+                self.create_single_media_container(
                     &ig_id,
                     access_token,
                     &post.media[0].url,
                     &post.content,
                     false,
                 )
-                .await?;
+                .await?
+            };
 
             self.await_container_ready(access_token, &container_id)
                 .await?;
@@ -1013,6 +1049,59 @@ impl SocialProvider for InstagramProvider {
 
 impl InstagramProvider {
     /// Create a single IMAGE container and return its container ID.
+    /// Create a REEL container with a music track attached.
+    ///
+    /// Instagram's Reel creation is different from an image post:
+    ///
+    ///   - `media_type=REELS`
+    ///   - `video` (not `image_url`) is the source
+    ///   - `audio_configuration` names the track
+    ///
+    /// The `audio_id` is the id the Music API returned, and it is
+    /// carried in the post's settings as `audio_id` - the composer
+    /// writes it there and NOTHING read it, so every Reel went out
+    /// silent.
+    async fn create_reel_container(
+        &self,
+        ig_id: &str,
+        access_token: &str,
+        video_url: &str,
+        caption: &str,
+        audio_id: &str,
+    ) -> Result<String, ProviderError> {
+        let audio_configuration = serde_json::json!({
+            "audio_id": audio_id,
+        });
+        let params = vec![
+            ("media_type", "REELS".to_string()),
+            ("video", video_url.to_string()),
+            ("caption", caption.to_string()),
+            ("access_token", access_token.to_string()),
+            ("audio_configuration", audio_configuration.to_string()),
+        ];
+
+        let resp = self
+            .http
+            .post(format!("{}/{}/media", self.graph_url(), ig_id))
+            .form(&params)
+            .send()
+            .await?;
+
+        let json: serde_json::Value = resp.json().await?;
+
+        if let Some(err) = json["error"].as_object() {
+            let code = err["code"].as_i64().unwrap_or(0);
+            let msg = err["message"].as_str().unwrap_or("unknown");
+            return Err(ProviderError::Api(format!(
+                "Instagram reel creation failed (code {code}): {msg}"
+            )));
+        }
+
+        json["id"].as_str().map(|s| s.to_string()).ok_or_else(|| {
+            ProviderError::Api(format!("Instagram did not return container ID: {json:?}"))
+        })
+    }
+
     async fn create_single_media_container(
         &self,
         ig_id: &str,
