@@ -369,7 +369,13 @@ def main() -> int:
         cur.execute(
             "INSERT INTO analytics_cache (id,user_id,provider,platform_post_id,data,"
             "cached_at,expires_at) VALUES (?,?,?,?,?,?,?)",
-            (bid(4000 + i), U(), key, ppid, json.dumps(sers), NOW - 3600, NOW + 3600),
+            # The expiry is a YEAR out, not an hour. The cleaner deletes
+            # the expired rows every 30 minutes and the refresher can
+            # only re-create them with a LIVE provider token - so a
+            # one-hour expiry means the seeded instance's own-post
+            # engagement silently decays to zero and the analytics page
+            # shows "0.0 interactions per post" against real posts.
+            (bid(4000 + i), U(), key, ppid, json.dumps(sers), NOW - 3600, NOW + 365 * 86400),
         )
 
     # ── external_posts + post_engagement ──

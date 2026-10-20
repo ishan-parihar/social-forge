@@ -206,7 +206,21 @@
   let publishedCount = $derived(data?.published_in_window ?? 0);
   let engagementRate = $derived.by(() => {
     if (publishedCount === 0) return null;
-    const interactions = totals.likes + totals.comments + totals.shares;
+    // The OWN posts' interactions - not the mixed total.
+    //
+    // `totals.likes` is the founder's own engagement PLUS the imported
+    // feed's engagement (the two are added, deliberately, for the
+    // headline cards - "two sources contribute"). But the denominator
+    // here is the founder's OWN published posts. So the mixed numerator
+    // over the own-post denominator gave 105.8 "interactions per post"
+    // - a number that means nothing, because most of the numerator is
+    // other people's posts.
+    //
+    // A rate is only meaningful when both sides measure the same
+    // population, so the numerator is the own-post engagement.
+    const interactions = (engagement?.total_likes ?? 0)
+      + (engagement?.total_comments ?? 0)
+      + (engagement?.total_shares ?? 0);
     return interactions / publishedCount;
   });
 
