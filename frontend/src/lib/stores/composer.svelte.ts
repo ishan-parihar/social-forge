@@ -79,6 +79,21 @@ class ComposerStore {
     this.open = true;
   }
 
+  /**
+   * Is there unsaved work in the composer?
+   *
+   * The composer set `closeOnEscape: false`, so Escape did NOTHING -
+   * the composer had a `handleClose(false)` whose own comment said
+   * "Backdrop/escape close", and no path ever called it. The founder
+   * pressed Escape and the dialog stayed open, with no feedback.
+   *
+   * The confirmation needs to know whether there is anything to lose,
+   * and the ANSWER lives in the component (its content, title and
+   * selected channels). The component writes the answer here, and the
+   * modal's `onClose` reads it.
+   */
+  dirty = false;
+
   /** Close the composer. ComposerModal's onClose handles the askClose confirm. */
   close() {
     this.open = false;

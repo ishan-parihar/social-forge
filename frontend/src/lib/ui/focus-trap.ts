@@ -52,6 +52,22 @@ export interface FocusTrapParams {
   enabled?: boolean;
   /** Tab to this node when the dialog has no focusable children. Default true. */
   focusSelf?: boolean;
+  /**
+   * Called when the user presses Escape. OPTIONAL, and off by default.
+   *
+   * The trap does NOT own Escape. A dialog's Escape handler belongs on
+   * the PANEL, not on a wrapper: the panel holds the focus, and a
+   * keydown from the panel's children bubbles to it. A handler on the
+   * wrapper only ever saw a keydown that nobody had consumed, which
+   * stopped working the moment the focus moved onto a child.
+   *
+   * The trap also must not STOP the event: the modal manager has its
+   * own window-level Escape handler, and a dialog may have its own.
+   * Two handlers for one keystroke fight - the composer asked "Discard
+   * this post?" and the SAME keystroke answered it, so the confirm
+   * appeared and vanished in one frame.
+   */
+  onEscape?: () => void;
 }
 
 /**
@@ -64,7 +80,8 @@ export function focusTrap(node: HTMLElement, params: FocusTrapParams | boolean =
   let prevFocus: HTMLElement | null = null;
 
   function onKeydown(e: KeyboardEvent) {
-    if (!active || e.key !== 'Tab') return;
+    if (!active) return;
+    if (e.key !== 'Tab') return;
     const items = focusableWithin(node);
     if (items.length === 0) {
       // Nothing to move to. Hold focus here rather than letting it escape.
@@ -97,19 +114,93 @@ export function focusTrap(node: HTMLElement, params: FocusTrapParams | boolean =
     // Capture phase: a dialog that stops propagation (the media carousel
     // carousel does, for arrow keys) must not be able to swallow Tab.
     document.addEventListener('keydown', onKeydown, true);
-    // One frame of delay so the dialog's children have layout boxes -
-    // focusableWithin() filters on getClientRects().
-    requestAnimationFrame(() => {
+    focusFirst();
+    watchContent();
+  }
+
+  /**
+   * Keep the focus inside the dialog when its CONTENT is replaced.
+   *
+   * A dialog that loads its content asynchronously re-renders when the
+   * data lands, and the re-render DESTROYS the element that had the
+   * focus. The browser then puts the focus on `<body>` - which is
+   * OUTSIDE the dialog.
+   *
+   * The composer is one: its `onMount` fetches the integrations, the
+   * tags and the brand profile. The trap focused the first control, and
+   * a moment later the content was replaced and the focus was gone. The
+   * founder's first keystroke went to the page BEHIND the dialog.
+   *
+   * So the trap watches for the focused element being removed, and
+   * puts the focus back on the dialog's first control. This is the
+   * same reason a dialog needs a focus trap at all: the focus must
+   * never be able to leave.
+   */
+  let observer: MutationObserver | null = null;
+
+  function watchContent() {
+    observer?.disconnect();
+    observer = new MutationObserver(() => {
       if (!active) return;
-      const target = focusableWithin(node)[0] ?? (opts.focusSelf === false ? null : node);
-      target?.focus();
+      const current = document.activeElement as HTMLElement | null;
+      // The focus is still inside the dialog - nothing to do.
+      if (current && current !== document.body && node.contains(current)) return;
+      const items = focusableWithin(node);
+      if (items.length > 0) items[0].focus();
+      else if (opts.focusSelf !== false) node.focus();
     });
+    observer.observe(node, { childList: true, subtree: true });
+  }
+
+  /**
+   * Move the focus to the dialog's first focusable child.
+   *
+   * A dialog that renders its content ASYNCHRONOUSLY has no focusable
+   * child at the moment the trap is enabled. The composer is one: its
+   * `onMount` fetches the integrations, the tags and the brand
+   * profile, and until those land it renders a spinner - so a single
+   * frame after enabling there was nothing to focus, and the focus
+   * stayed on `<body>`.
+   *
+   * The consequence was the worst kind: the dialog was open, it looked
+   * right, and the founder's first keystroke went to the PAGE BEHIND
+   * it. The caret was invisible and the typing went nowhere.
+   *
+   * So the trap waits for a focusable child, polling a few frames. It
+   * gives up after the window and falls back to the dialog node itself,
+   * which still contains the focus.
+   */
+  function focusFirst() {
+    // Hold the focus on the dialog node FIRST, so the focus is never on
+    // the page behind it. A dialog that is still loading has no
+    // focusable child, and the focus sitting on `<body>` means the
+    // founder's first keystroke goes to the page behind the dialog.
+    if (opts.focusSelf !== false) node.focus();
+
+    // Then move to the first focusable child, waiting for it if the
+    // dialog renders its content asynchronously.
+    const deadline = 60;
+    let tries = 0;
+    const attempt = () => {
+      if (!active) return;
+      const items = focusableWithin(node);
+      if (items.length > 0) {
+        items[0].focus();
+        return;
+      }
+      tries += 1;
+      if (tries >= deadline) return; // the focus stays on the dialog node
+      requestAnimationFrame(attempt);
+    };
+    requestAnimationFrame(attempt);
   }
 
   function disable() {
     if (!active) return;
     active = false;
     document.removeEventListener('keydown', onKeydown, true);
+    observer?.disconnect();
+    observer = null;
     prevFocus = null;
   }
 

@@ -45,6 +45,19 @@ export interface ModalOptions {
   closeOnClickOutside?: boolean;
   /** Escape key closes the topmost modal? Default: true */
   closeOnEscape?: boolean;
+  /**
+   * Called when the user presses Escape, INSTEAD of the default close.
+   *
+   * A modal with unsaved work wants to CONFIRM before it closes, so it
+   * sets `closeOnEscape: false` and handles Escape itself. The composer
+   * is one: Escape asks "Discard this post?" rather than throwing the
+   * text away.
+   *
+   * Without this, `closeOnEscape: false` meant Escape did NOTHING -
+   * the composer had a `handleClose(false)` whose own comment said
+   * "Backdrop/escape close", and no path ever called it.
+   */
+  onEscape?: () => void;
   /** Show a close (×) button in the header? Default: true (only if title is set) */
   withCloseButton?: boolean;
   /** Ask for confirmation before closing? The modal's onclose callback
@@ -58,7 +71,7 @@ export interface ModalOptions {
   /** Called when the modal is about to close. If askClose is true, this
    *  receives `confirmed: false` for backdrop/escape and `confirmed: true`
    *  for explicit close-button clicks. Return false to abort the close. */
-  onClose?: (confirmed: boolean) => boolean | void;
+  onClose?: (confirmed: boolean) => boolean | void | Promise<boolean | void>;
   /** Custom class for the modal panel. */
   panelClass?: string;
 }
@@ -145,9 +158,24 @@ class ModalStore {
     if (!entry) return;
 
     // Give the onClose callback a chance to abort.
+    //
+    // The callback may be ASYNCHRONOUS - a modal with unsaved work has
+    // to ASK before it closes, and the ask is a dialog. So a promise is
+    // awaited, and the close happens when it resolves.
     if (entry.options.onClose) {
       const result = entry.options.onClose(confirmed);
       if (result === false) return; // abort close
+      if (result && typeof (result as Promise<unknown>).then === 'function') {
+        (result as Promise<boolean | void>).then((r) => {
+          // The modal was closed (or replaced) while the question was
+          // on screen.
+          if (!this.stack.some((e) => e.id === id)) return;
+          if (r === false) return; // the founder chose to stay
+          this.stack = this.stack.filter(e => e.id !== id);
+          this._recompute();
+        });
+        return;
+      }
     }
 
     this.stack = this.stack.filter(e => e.id !== id);

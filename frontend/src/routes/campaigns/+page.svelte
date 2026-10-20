@@ -6,6 +6,7 @@
   // page. This is the entry point for campaign management - previously
   // campaigns were only accessible via the kanban filter.
   import { onMount, onDestroy } from 'svelte';
+  import { focusTrap } from '$lib/ui/focus-trap';
   import { campaignsApi, formatDateOnly, type Campaign } from '$lib/api/campaigns';
   import { goto } from '$app/navigation';
   import { realtime } from '$lib/stores/realtime';
@@ -287,9 +288,36 @@
 
 <!-- Create campaign modal -->
 {#if showCreateModal}
-  <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" role="dialog">
-    <div class="bg-background-input border border-line rounded-xl p-6 w-full max-w-md">
-      <h2 class="text-lg font-semibold mb-4">Create Campaign</h2>
+    <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <!--
+  The scrim is a separate, aria-hidden BUTTON and the panel is its
+  SIBLING.
+
+  The wrapper used to carry `aria-hidden="true"`, which made the whole
+  dialog invisible to a screen reader, and the shared focus trap skips
+  anything in an aria-hidden subtree - so it found no focusable child
+  and the focus never entered the dialog. See AGENTS.md 9.39.
+
+  The scrim carries the aria-hidden and the tabindex="-1": a screen
+  reader should not offer a nameless "close" button, and Escape
+  already closes the dialog.
+-->
+    <button
+      type="button"
+      class="absolute inset-0 bg-overlay cursor-default"
+      aria-hidden="true"
+      tabindex="-1"
+      onclick={() => { showCreateModal = false }}
+    ></button>
+<div class="relative bg-background-input border border-line rounded-xl p-6 w-full max-w-md"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="create-campaign-title"
+      tabindex="-1"
+      onkeydown={(e) => { if (e.key === "Escape") { e.stopPropagation(); showCreateModal = false; } }}
+      use:focusTrap
+    >
+      <h2 id="create-campaign-title" class="text-lg font-semibold mb-4">Create Campaign</h2>
       <input
         type="text"
         bind:value={newCampaignName}

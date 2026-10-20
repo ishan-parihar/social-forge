@@ -930,7 +930,7 @@
         <button
           onclick={() => (repurposeModalOpen = false)}
           disabled={repurposeSubmitting}
-          class="px-3 py-1.5 text-sm text-muted hover:text-content border border-line rounded-lg disabled:opacity-50 transition-colors"
+          class="min-h-11 px-3 py-1.5 text-sm text-muted hover:text-content border border-line rounded-lg disabled:opacity-50 transition-colors"
         >Cancel</button>
         <button
           onclick={submitRepurpose}
@@ -980,7 +980,7 @@
         <button
           onclick={() => (editModalOpen = false)}
           disabled={editSubmitting}
-          class="px-3 py-1.5 text-sm text-muted hover:text-content border border-line rounded-lg disabled:opacity-50 transition-colors"
+          class="min-h-11 px-3 py-1.5 text-sm text-muted hover:text-content border border-line rounded-lg disabled:opacity-50 transition-colors"
         >Cancel</button>
         <button
           onclick={submitEdit}

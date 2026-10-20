@@ -1,5 +1,6 @@
 <script lang="ts">
   import Icon from "$lib/ui/Icon.svelte";
+  import { focusTrap } from '$lib/ui/focus-trap';
   import Skeleton from '$lib/ui/Skeleton.svelte';
   import { onMount, onDestroy } from "svelte";
   import { feedApi, proxyMediaUrl, type FeedPost, type FeedAccount } from "$lib/api/feed";
@@ -374,9 +375,36 @@
 
 <!-- Save Search Dialog -->
 {#if showSaveDialog}
-  <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50" role="dialog">
-    <div class="bg-background-input border border-line rounded-xl p-6 w-full max-w-sm">
-      <h2 class="text-lg font-semibold mb-2">Save Search</h2>
+    <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <!--
+  The scrim is a separate, aria-hidden BUTTON and the panel is its
+  SIBLING.
+
+  The wrapper used to carry `aria-hidden="true"`, which made the whole
+  dialog invisible to a screen reader, and the shared focus trap skips
+  anything in an aria-hidden subtree - so it found no focusable child
+  and the focus never entered the dialog. See AGENTS.md 9.39.
+
+  The scrim carries the aria-hidden and the tabindex="-1": a screen
+  reader should not offer a nameless "close" button, and Escape
+  already closes the dialog.
+-->
+    <button
+      type="button"
+      class="absolute inset-0 bg-overlay cursor-default"
+      aria-hidden="true"
+      tabindex="-1"
+      onclick={() => { showSaveDialog = false }}
+    ></button>
+<div class="relative bg-background-input border border-line rounded-xl p-6 w-full max-w-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="save-search-title"
+      tabindex="-1"
+      onkeydown={(e) => { if (e.key === "Escape") { e.stopPropagation(); showSaveDialog = false; } }}
+      use:focusTrap
+    >
+      <h2 id="save-search-title" class="text-lg font-semibold mb-2">Save Search</h2>
       <p class="text-sm text-muted mb-4">Save "{searchQuery}" for quick access later</p>
       <div class="flex gap-3 justify-end">
         <button onclick={() => showSaveDialog = false} class="px-4 py-2 text-sm text-muted hover:text-content min-h-11">Cancel</button>

@@ -98,7 +98,35 @@
       composerModalId = modals.open(ComposerModal, {}, {
         title: '',
         closeOnClickOutside: false,
-        closeOnEscape: false,
+        // Escape DOES close the composer - through the modal's
+        // `onClose`, which asks "Discard this post?" when there is
+        // something to lose.
+        //
+        // It used to be `closeOnEscape: false`, which meant Escape did
+        // NOTHING: the composer had a `handleClose(false)` whose own
+        // comment said "Backdrop/escape close", and no path ever
+        // called it. The founder pressed Escape and the dialog stayed
+        // open with no feedback.
+        closeOnEscape: true,
+        // The confirmation. `onClose` returning false ABORTS the
+        // close, so the modal stays open until the founder answers.
+        onClose: async (confirmed: boolean) => {
+          if (confirmed) return true;
+          if (!composer.dirty) return true;
+          const ok = await modals.areYouSure({
+            title: 'Discard this post?',
+            message:
+              'Your content will be lost. (Drafts are auto-saved if you typed something.)',
+            confirmLabel: 'Discard',
+            cancelLabel: 'Keep editing',
+            danger: true,
+          });
+          if (ok) {
+            composer.close();
+            return true;
+          }
+          return false; // keep editing
+        },
         withCloseButton: false,
         fullScreen: true,
       });

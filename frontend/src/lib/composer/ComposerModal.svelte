@@ -76,12 +76,45 @@ const MANUAL_TARGET: Record<string, { key: string; label: string; placeholder: s
   import { timezone } from '$lib/stores/timezone.svelte';
 
   // Props passed by ModalManager (it injects a `close` function).
-  let { close } = $props<{ close: (confirmed?: boolean) => void }>();
+  let { close: closeProp } = $props<{ close: (confirmed?: boolean) => void }>();
+
+  /**
+   * The composer's close, with the DISCARD CONFIRMATION.
+   *
+   * The modal manager passes `close` straight through to
+   * `modals.close(id, confirmed)`, so an Escape or a backdrop click
+   * closed the composer WITHOUT asking - and the composer had a
+   * `handleClose(false)` whose own comment said "Backdrop/escape close",
+   * with no path that ever called it.
+   *
+   * So the composer closes through its own handler: a backdrop click
+   * and an Escape both ask "Discard this post?" when there is
+   * something to lose, and the × button closes outright.
+   */
+  async function close(confirmed: boolean = false) {
+    await handleClose(confirmed);
+  }
 
   // ── Form state (mirrors routes/posts/new/+page.svelte) ──────────
   let content = $state('');
   let title = $state('');
   let selectedIntegrations = $state<string[]>([]);
+
+  /**
+   * Whether there is unsaved work.
+   *
+   * The store holds it so the modal's `onClose` - which runs OUTSIDE
+   * the component - can read it and ask before discarding.
+   */
+  let dirty = $derived(
+    content.trim().length > 0 ||
+      title.trim().length > 0 ||
+      selectedIntegrations.length > 0
+  );
+
+  $effect(() => {
+    composer.dirty = dirty;
+  });
   let allIntegrations = $state<Integration[]>([]);
   let integrationProviders = $derived(new Map(allIntegrations.map(i => [i.id, i.provider_identifier])));
   let integrationNames = $derived(new Map(allIntegrations.map(i => [i.id, i.provider_name])));

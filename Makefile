@@ -43,7 +43,7 @@ check: vendor-pins
 
 # ── Visual + a11y audits (AGENTS.md §12) ───────────────────────
 #
-# Three gates over the RENDERED app, not the source:
+# Four gates over the RENDERED app, not the source:
 #
 #   probe.mjs         the static page probe - 27 routes x 3 widths x
 #                     2 themes, with the overflow, contrast, tap-target,
@@ -53,6 +53,9 @@ check: vendor-pins
 #   audit-contrast.mjs the rendered CONTRAST, same driving, measuring
 #                     every text element against its EFFECTIVE
 #                     background
+#   audit-dialogs.mjs   the DIALOG contract: a name, aria-modal, the
+#                     focus inside it, and Escape that closes it (or
+#                     asks first)
 #
 # They need a RUNNING instance and the Chromium under
 # ~/.cache/ms-playwright. Each exits 3 (BLOCKED) when the browser is
@@ -69,6 +72,7 @@ audit:
 	cd frontend && node scripts/audit-targets.mjs --url $(URL) --password '$(PASSWORD)' --out /tmp/sf-targets.json
 	cd frontend && node scripts/audit-contrast.mjs --url $(URL) --password '$(PASSWORD)' --theme dark --out /tmp/sf-contrast-dark.json
 	cd frontend && node scripts/audit-contrast.mjs --url $(URL) --password '$(PASSWORD)' --theme light --out /tmp/sf-contrast-light.json
+	cd frontend && node scripts/audit-dialogs.mjs --url $(URL) --password '$(PASSWORD)'
 
 # ── Deploy / Redeploy ───────────────────────────────────────────
 
