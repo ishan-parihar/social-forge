@@ -74,7 +74,7 @@
         analyticsApi.getCadence(days, signal),
         analyticsApi.getRecentEvents(8, signal),
         feedApi.analytics(days),
-        postsApi.list({ limit: 100 }),
+        postsApi.list({ limit: 100, sort: "-engagement" }),
         selectedProvider === "all"
           ? Promise.resolve({ data: null, error: undefined })
           : analyticsApi.getProvider(selectedProvider, days, signal),
@@ -191,22 +191,19 @@
   // published. Without it, 500 likes across 2 posts and 500 likes across 100
   // posts look identical.
   //
-  // The denominator MUST be windowed to the same `days` as the numerator.
-  // `allPosts` is the newest 100 posts regardless of age, so dividing an
-  // N-day engagement total by an all-time count produces a rate wrong by
-  // exactly the ratio of the two windows, and silently so, because both
-  // numbers look plausible on their own. Guarded against divide-by-zero, and
-  // reported as "Not yet" (not 0) when nothing has published, because "no
-  // posts" is not a 0% rate.
-  let publishedInWindow = $derived.by(() => {
-    const cutoff = Date.now() - days * 86_400_000;
-    return allPosts.filter(p =>
-      p.state === "published" &&
-      p.published_at &&
-      Date.parse(p.published_at) >= cutoff
-    );
-  });
-  let publishedCount = $derived(publishedInWindow.length);
+  // The denominator MUST be windowed to the same `days` as the numerator
+  // AND it must be COMPLETE.
+  //
+  // The frontend used to compute it from `allPosts` - the newest 100
+  // posts it happened to have loaded. So with 150 published in the
+  // window the rate was divided by 100, and both numbers looked
+  // plausible on their own.
+  //
+  // The server counts it: `published_in_window` is the posts published
+  // inside the window, by publish time, over the WHOLE account. The
+  // client's own list is still used for the "top posts" ranking, which
+  // is now sorted by the server.
+  let publishedCount = $derived(data?.published_in_window ?? 0);
   let engagementRate = $derived.by(() => {
     if (publishedCount === 0) return null;
     const interactions = totals.likes + totals.comments + totals.shares;

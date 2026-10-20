@@ -460,45 +460,45 @@ pub struct FeedAnalyticsInput {
     pub days: Option<i32>,
 }
 
-#[derive(Default, sqlx::FromRow)]
-struct FeedTotals {
-    total_posts: i64,
-    total_likes: i64,
-    total_comments: i64,
-    total_shares: i64,
-    total_impressions: i64,
-}
-
 /// Get feed-level analytics: engagement totals across all imported
 /// feed posts, top posts by engagement, engagement trends over time.
 pub async fn handle_feed_analytics(
     state: &AppState,
     input: &FeedAnalyticsInput,
 ) -> Result<Json<serde_json::Value>, String> {
-    let _user_id = super::tools_posts::resolve_first_user(state).await?;
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
     let days = input.days.unwrap_or(30).clamp(1, 365) as i64;
 
-    let totals: FeedTotals = sqlx::query_as(
-        "SELECT
-            COUNT(*) as total_posts,
-            COALESCE(SUM(likes), 0) as total_likes,
-            COALESCE(SUM(comments), 0) as total_comments,
-            COALESCE(SUM(shares), 0) as total_shares,
-            COALESCE(SUM(impressions), 0) as total_impressions
-           FROM post_engagement
-           WHERE updated_at > unixepoch() - $1 * 86400",
-    )
-    .bind(days as f64)
-    .fetch_one(&state.db)
-    .await
-    .map_err(|e| format!("DB error: {e}"))?;
+    // The SAME query the REST endpoint runs, with the SAME user
+    // scoping.
+    //
+    // The MCP version used to aggregate `post_engagement` across every
+    // row in the table - it read the user id and threw it away
+    // (`let _user_id = ...`). The REST version filters by
+    // `ep.user_id = ?`. So the agent's tool and the founder's page
+    // reported DIFFERENT numbers for the same question, and the
+    // agent's number was not scoped to the founder at all.
+    //
+    // The cutoff is an epoch, and the query binds it through the
+    // `EpochUtc` seam - `external_posts.created_at` is an INTEGER
+    // epoch column, and a TEXT cutoff compared against it matches NO
+    // ROWS.
+    let cutoff = chrono::Utc::now() - chrono::Duration::days(days);
+    let summary =
+        crate::db::queries::get_engagement_summary(&state.db, user_id, None, Some(cutoff))
+            .await
+            .map_err(|e| format!("DB error: {e}"))?;
 
     Ok(Json(serde_json::json!({
-        "total_posts": totals.total_posts,
-        "total_likes": totals.total_likes,
-        "total_comments": totals.total_comments,
-        "total_shares": totals.total_shares,
-        "total_impressions": totals.total_impressions,
+        "total_likes": summary.total_likes.unwrap_or(0),
+        "total_comments": summary.total_comments.unwrap_or(0),
+        "total_shares": summary.total_shares.unwrap_or(0),
+        "total_views": summary.total_views.unwrap_or(0),
+        "total_reposts": summary.total_reposts.unwrap_or(0),
+        "total_replies": summary.total_replies.unwrap_or(0),
+        "total_upvotes": summary.total_upvotes.unwrap_or(0),
+        "total_awards": summary.total_awards.unwrap_or(0),
+        "posts_with_engagement": summary.posts_with_engagement.unwrap_or(0),
         "days": days,
     })))
 }

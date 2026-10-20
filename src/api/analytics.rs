@@ -254,6 +254,20 @@ pub struct DayCount {
 pub struct AnalyticsSummaryResponse {
     pub total_posts: i64,
     pub published: i64,
+    /// The posts PUBLISHED inside the window, counted by their publish
+    /// time.
+    ///
+    /// `published` is counted by `created_at`, so a post drafted 40 days
+    /// ago and published today is in `published` but not in the window.
+    /// It is the right DENOMINATOR for "interactions per post published
+    /// in the last N days", because the numerator (the engagement
+    /// total) is windowed by publish time too.
+    ///
+    /// The frontend used to compute the denominator from the newest 100
+    /// posts it happened to have loaded, so with 150 published in the
+    /// window the rate was divided by 100 - and both numbers looked
+    /// plausible on their own.
+    pub published_in_window: i64,
     pub failed: i64,
     pub draft: i64,
     pub queued: i64,
@@ -342,9 +356,25 @@ pub async fn get_summary(
         .map(|(date, count)| DayCount { date, count })
         .collect();
 
+    // The posts published INSIDE the window, by publish time. The
+    // denominator for "interactions per post published in the last N
+    // days", and the one the frontend could not compute for itself -
+    // it only ever held the newest 100 posts.
+    let published_in_window: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM posts
+          WHERE user_id = ? AND state = 'published'
+            AND published_at IS NOT NULL AND published_at >= ?",
+    )
+    .bind(auth.user_id)
+    .bind(cutoff)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(0);
+
     Ok(Json(AnalyticsSummaryResponse {
         total_posts,
         published,
+        published_in_window,
         failed,
         draft,
         queued,

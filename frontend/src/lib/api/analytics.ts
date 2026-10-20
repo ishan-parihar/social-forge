@@ -29,6 +29,16 @@ export interface PostAnalytics {
 export interface AnalyticsSummary {
   total_posts: number;
   published: number;
+  /**
+   * The posts PUBLISHED inside the window, by publish time.
+   *
+   * `published` is counted by creation date, so a post drafted long ago
+   * and published today is in `published` but not in the window. This
+   * is the denominator for "interactions per post published in the
+   * last N days" - the frontend cannot compute it, because it only
+   * ever holds the newest 100 posts.
+   */
+  published_in_window: number;
   failed: number;
   draft: number;
   queued: number;
