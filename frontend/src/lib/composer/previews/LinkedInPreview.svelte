@@ -63,7 +63,7 @@
       <div class="text-xs text-gray-500">{authorHandle} · 1st</div>
       <div class="text-xs text-gray-500">Just now · 🌐</div>
     </div>
-    <span class="text-gray-400 text-lg">•••</span>
+    <span class="text-gray-500 text-lg">•••</span>
   </div>
 
   <!-- Content -->
@@ -80,7 +80,7 @@
       {#if media[0].mime_type.startsWith('image/')}
         <img src={media[0].url} alt="" class="w-full max-h-[300px] object-cover" />
       {:else}
-        <div class="w-full h-[200px] bg-gray-100 flex items-center justify-center text-gray-400 text-sm">video</div>
+        <div class="w-full h-[200px] bg-gray-100 flex items-center justify-center text-gray-600 text-sm">video</div>
       {/if}
     </div>
   {/if}

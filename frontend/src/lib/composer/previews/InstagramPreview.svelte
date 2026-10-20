@@ -74,7 +74,7 @@
       {#if media[0].mime_type.startsWith('image/')}
         <img src={media[0].url} alt="" class="w-full h-full object-cover" />
       {:else}
-        <div class="w-full h-full flex items-center justify-center text-gray-400 text-sm">video</div>
+        <div class="w-full h-full flex items-center justify-center text-gray-500 text-sm">video</div>
       {/if}
       {#if media.length > 1}
         <div class="absolute top-2 right-2 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded">
@@ -83,7 +83,7 @@
       {/if}
     </div>
   {:else}
-    <div class="aspect-square bg-gray-100 flex items-center justify-center text-gray-400 text-sm border border-gray-200">
+    <div class="aspect-square bg-gray-100 flex items-center justify-center text-gray-600 text-sm border border-gray-200">
       No image - IG posts require media
     </div>
   {/if}

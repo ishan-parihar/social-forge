@@ -44,7 +44,7 @@
       <div class="text-sm font-semibold">{authorName}</div>
       <div class="text-xs text-gray-500">1.2K subscribers · Just now</div>
     </div>
-    <span class="text-gray-400 text-lg">•••</span>
+    <span class="text-gray-500 text-lg">•••</span>
   </div>
 
   <!-- 16:9 thumbnail -->
@@ -54,7 +54,7 @@
            costs a decode per keystroke-triggered re-render. The frame the
            platform will show is the same box; the poster arrives with the
            real thumbnail once the upload finishes. -->
-      <div class="text-center text-gray-400 text-xs">
+      <div class="text-center text-gray-500 text-xs">
         <svg class="w-10 h-10 mx-auto mb-1" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
         Video ready
       </div>

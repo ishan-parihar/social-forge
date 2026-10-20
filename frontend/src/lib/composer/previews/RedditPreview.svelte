@@ -30,9 +30,9 @@
   <div class="flex">
     <!-- Vote column -->
     <div class="bg-gray-100 flex flex-col items-center py-2 px-2 gap-1">
-      <svg class="w-5 h-5 text-gray-400" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4l8 8h-5v8h-6v-8H4z"/></svg>
+      <svg class="w-5 h-5 text-gray-500" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4l8 8h-5v8h-6v-8H4z"/></svg>
       <span class="text-xs font-bold text-orange-600">1.2k</span>
-      <svg class="w-5 h-5 text-gray-400" viewBox="0 0 24 24" fill="currentColor"><path d="M12 20l-8-8h5V4h6v8h5z"/></svg>
+      <svg class="w-5 h-5 text-gray-500" viewBox="0 0 24 24" fill="currentColor"><path d="M12 20l-8-8h5V4h6v8h5z"/></svg>
     </div>
     <!-- Content -->
     <div class="flex-1 p-3">

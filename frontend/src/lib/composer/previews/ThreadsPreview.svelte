@@ -31,7 +31,7 @@
     <div class="flex-1 min-w-0">
       <div class="flex items-center gap-2 text-sm mb-1">
         <span class="font-semibold">{authorName}</span>
-        <span class="text-gray-400 text-xs">2h</span>
+        <span class="text-gray-500 text-xs">2h</span>
       </div>
       <p class="text-sm whitespace-pre-wrap break-words">
         {text.slice(0, limit)}<span class="bg-red-100 text-red-600 rounded-sm">{text.slice(limit)}</span>

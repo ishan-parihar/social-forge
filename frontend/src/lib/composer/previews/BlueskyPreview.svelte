@@ -33,8 +33,8 @@
     <div class="flex-1 min-w-0">
       <div class="flex items-center gap-1 text-sm flex-wrap">
         <span class="font-semibold">{authorName}</span>
-        <span class="text-gray-400">@{handle}.bsky.social</span>
-        <span class="text-gray-400">· 2h</span>
+        <span class="text-gray-500">@{handle}.bsky.social</span>
+        <span class="text-gray-500">· 2h</span>
       </div>
       <p class="mt-1 text-sm whitespace-pre-wrap break-words">
         {text.slice(0, limit)}<span class="bg-red-100 text-red-600 rounded-sm">{text.slice(limit)}</span>

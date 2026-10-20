@@ -203,7 +203,7 @@
                 {#each presetColors as c}
                   <button
                     onclick={() => editColor = c}
-                    class="w-4 h-4 rounded-full border border-line {editColor === c ? 'ring-2 ring-accent' : ''}"
+                    class="w-5 h-5 rounded-full border border-line {editColor === c ? 'ring-2 ring-accent' : ''} min-h-11 min-w-11 p-2.5 bg-clip-content"
                     style="background: {c}"
                     aria-label="Select color {c}"
                   ></button>
