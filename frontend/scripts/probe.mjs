@@ -421,9 +421,19 @@ const AUDIT = () => {
   // silently renders in the fallback, so the type voice the design asked for
   // is not the type voice on screen.
   const norm = (f) => f.trim().replace(/^["']|["']$/g, '').toLowerCase();
-  const loaded = new Set(
-    [...document.fonts].filter((f) => f.status === 'loaded').map((f) => norm(f.family))
-  );
+  // A family is LOADED when AT LEAST ONE of its faces is loaded.
+  //
+  // A webfont arrives as many faces - one per weight AND per unicode
+  // subset (latin, cyrillic, greek). The browser loads a face only when
+  // some text needs it, so a family that IS working still has faces
+  // sitting at `unloaded`. The old check compared the family against
+  // the set of LOADED faces, so Inter - whose latin face was loaded and
+  // whose cyrillic face was not - read as "never loaded", and the
+  // probe reported a font failure on every page.
+  const loaded = new Set();
+  for (const f of document.fonts) {
+    if (f.status === 'loaded') loaded.add(norm(f.family));
+  }
   const declared = new Set([...document.fonts].map((f) => norm(f.family)));
   const systemFace =
     /^(ui-|system-ui|-apple-system|blinkmacsystemfont|segoe ui|roboto$|helvetica|arial|georgia|times|menlo|monaco|consolas|courier|sfmono|sans-serif|serif|monospace|cursive|fantasy|math|emoji)/;

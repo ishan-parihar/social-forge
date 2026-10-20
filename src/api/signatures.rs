@@ -179,9 +179,12 @@ pub async fn get_default(
     State(state): State<AppState>,
     auth: AuthenticatedUser,
     Query(query): Query<GetDefaultQuery>,
-) -> Result<Json<SignatureResponse>, AppError> {
+) -> Result<Json<Option<SignatureResponse>>, AppError> {
+    // "No default signature" is an EMPTY RESULT, not a missing
+    // resource. It used to be a 404, and the composer calls this on
+    // every mount - so every user without a signature saw a 404 in
+    // their console on every page. The response is now `null`.
     let sig = queries::get_default_signature(&state.db, auth.user_id, query.provider.as_deref())
-        .await?
-        .ok_or_else(|| AppError::NotFound("No default signature set".into()))?;
-    Ok(Json(SignatureResponse::from(sig)))
+        .await?;
+    Ok(Json(sig.map(SignatureResponse::from)))
 }

@@ -18,9 +18,15 @@ export const signaturesApi = {
   delete: (id: string) => api.del(`/api/signatures/${id}`),
   /** Phase v21/v22: set a signature as the default for its provider. */
   setDefault: (id: string) => api.post<Signature>(`/api/signatures/${id}/set-default`, {}),
-  /** Phase v21/v22: get the default signature for a provider (or global if no provider). Returns 404 if none set. */
+  /**
+   * Get the default signature for a provider (or global if no provider).
+   *
+   * `null` when no default is set. It used to be a 404, which put an
+   * error in every user's console on every page - the composer calls
+   * this on mount.
+   */
   getDefault: (provider?: string) => {
     const q = provider ? `?provider=${encodeURIComponent(provider)}` : '';
-    return api.get<Signature>(`/api/signatures/default${q}`);
+    return api.get<Signature | null>(`/api/signatures/default${q}`);
   },
 };
