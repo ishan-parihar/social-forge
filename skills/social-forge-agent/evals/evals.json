@@ -421,9 +421,9 @@
       "prompt": "I only want X tools in this session, keeping the tool budget small. Show my last 5 home timeline posts.",
       "expected_commands": [
         "social-forge mcp-tools --toolset x --pretty",
-        "social-forge mcp-call x_home_timeline --args '{\"count\":5}'"
+        "social-forge mcp-call x_home_timeline --args '{\"max_results\":5}'"
       ],
-      "expected_output": "Sizes the x toolset before enabling it and does not load the full 389-tool surface; timeline returns up to 5 tweets. If the CLI is used for the read instead, the flag is `--count 5` (not `--limit`).",
+      "expected_output": "Sizes the x toolset before enabling it and does not load the full 389-tool surface; timeline returns up to 5 tweets. If the CLI is used for the read instead, the flag is `--count 5` (not `--limit`). The MCP input field is `max_results`, not `count`.",
       "files": []
     },
     {

@@ -250,6 +250,51 @@ pub struct DayCount {
     pub count: i64,
 }
 
+/// A DENSE day series: every day in the window, zeros included.
+///
+/// The query it replaces grouped by day, so it returned only the days
+/// that HAD posts. The chart then drew one bar per day-with-a-post -
+/// a month with 11 posts on 11 different days drew 11 full-height
+/// bars, and the chart said "you posted every day at full volume"
+/// while the cadence card beside it said "0.4 posts per day against a
+/// goal of 1.5".
+///
+/// The chart shows a WINDOW, so the series has to cover the window.
+///
+/// The day is a UTC day, the convention the rest of the endpoint uses.
+/// The founder's own zone is an IANA name in a FRONTEND localStorage
+/// store, which the server never sees, so the day bucket cannot follow
+/// it here.
+fn dense_day_series(cutoff_epoch: i64, epochs: &[i64]) -> Vec<DayCount> {
+    use std::collections::HashMap;
+
+    let mut counts: HashMap<chrono::NaiveDate, i64> = HashMap::new();
+    for ts in epochs {
+        let Some(dt) = chrono::DateTime::from_timestamp(*ts, 0) else {
+            continue;
+        };
+        *counts.entry(dt.date_naive()).or_insert(0) += 1;
+    }
+
+    let Some(start) = chrono::DateTime::from_timestamp(cutoff_epoch, 0) else {
+        return Vec::new();
+    };
+    let start = start.date_naive();
+    let today = chrono::Utc::now().date_naive();
+
+    let mut out = Vec::new();
+    let mut day = start;
+    while day <= today {
+        let count = counts.get(&day).copied().unwrap_or(0);
+        out.push(DayCount {
+            date: day.format("%Y-%m-%d").to_string(),
+            count,
+        });
+        day += chrono::Duration::days(1);
+    }
+    out
+}
+
 #[derive(Debug, Serialize)]
 pub struct AnalyticsSummaryResponse {
     pub total_posts: i64,
@@ -315,17 +360,37 @@ pub async fn get_summary(
 
     // "Posting volume" counts PUBLISHED posts, by the day they went
     // out - for the same reason as the channel mix above.
-    let day_rows: Vec<(String, i64)> = sqlx::query_as(
-        "SELECT date(p.published_at, 'unixepoch'), COUNT(*) \
-         FROM posts p WHERE p.user_id = ? AND p.state = 'published' \
-           AND p.published_at >= ? AND p.published_at IS NOT NULL \
-         GROUP BY date(p.published_at, 'unixepoch') \
-         ORDER BY date(p.published_at, 'unixepoch') ASC",
+    //
+    // THE SERIES IS DENSE.
+    //
+    // `GROUP BY day` returns only the days that HAVE posts. The chart
+    // then drew one bar per day-with-a-post, so a month with 11 posts
+    // on 11 different days drew 11 full-height bars - the chart said
+    // "you posted every day at full volume" while the card beside it
+    // said "0.4 posts per day against a goal of 1.5". Two numbers, one
+    // page, and they contradicted each other.
+    //
+    // The chart shows a WINDOW, so the series has to cover the window:
+    // every day in it, zeros included.
+    //
+    // The epochs are selected and bucketed in RUST rather than grouped
+    // in SQL, so the day key and the gap-filling live in ONE place.
+    //
+    // The day is a UTC day, the convention the rest of this endpoint
+    // uses. The founder's own zone is an IANA name in a FRONTEND
+    // localStorage store, which the server never sees - so the day
+    // bucket cannot follow it here. See the worklog: the two sources
+    // of the zone are named there as an open item.
+    let published_epochs: Vec<i64> = sqlx::query_scalar(
+        "SELECT p.published_at FROM posts p \
+         WHERE p.user_id = ? AND p.state = 'published' \
+           AND p.published_at >= ? AND p.published_at IS NOT NULL",
     )
     .bind(auth.user_id)
     .bind(cutoff)
     .fetch_all(&state.db)
     .await?;
+    let posts_by_day = dense_day_series(cutoff, &published_epochs);
 
     let mut published = 0i64;
     let mut failed = 0i64;
@@ -350,11 +415,6 @@ pub async fn get_summary(
         .collect();
 
     let best_provider = posts_by_provider.first().cloned();
-
-    let posts_by_day: Vec<DayCount> = day_rows
-        .into_iter()
-        .map(|(date, count)| DayCount { date, count })
-        .collect();
 
     // The posts published INSIDE the window, by publish time. The
     // denominator for "interactions per post published in the last N
@@ -901,6 +961,8 @@ pub async fn get_recent_events(
 #[cfg(test)]
 mod tests {
     use super::adherence_percent;
+    use super::dense_day_series;
+    use chrono::{Duration, Utc};
 
     #[test]
     fn no_goal_keeps_plan_only_rate() {
@@ -929,5 +991,64 @@ mod tests {
     fn rate_is_clamped_to_a_renderable_width() {
         // Goal 1/day over 1 day but 3 published: >100% must not reach the bar.
         assert_eq!(adherence_percent(3, 3, Some(1.0), 1), 100.0);
+    }
+
+    /// The day series covers EVERY day in the window, zeros included.
+    ///
+    /// The query it replaces grouped by day, so it returned only the
+    /// days that had posts - and the chart drew one full-height bar per
+    /// such day. A month with 11 posts on 11 different days read as
+    /// "you posted every day at full volume" next to a card that said
+    /// "0.4 posts per day".
+    #[test]
+    fn the_day_series_covers_every_day_in_the_window() {
+        let today = Utc::now().date_naive();
+        let start = today - Duration::days(6);
+        let midnight = |d: chrono::NaiveDate| d.and_hms_opt(0, 0, 0).unwrap().and_utc().timestamp();
+        let cutoff = midnight(start);
+
+        // Two posts, on the FIRST and the LAST day of the window.
+        let first = midnight(start);
+        let last = midnight(today);
+        let series = dense_day_series(cutoff, &[first, last, last]);
+
+        // Seven days, not two.
+        assert_eq!(series.len(), 7, "the series must cover every day");
+
+        // Contiguous and ascending.
+        for pair in series.windows(2) {
+            let a = chrono::NaiveDate::parse_from_str(&pair[0].date, "%Y-%m-%d").unwrap();
+            let b = chrono::NaiveDate::parse_from_str(&pair[1].date, "%Y-%m-%d").unwrap();
+            assert_eq!(
+                (b - a).num_days(),
+                1,
+                "the days must be contiguous: {pair:?}"
+            );
+        }
+
+        // The counts: one on the first day, two on the last, ZERO in
+        // between.
+        assert_eq!(series[0].count, 1);
+        assert_eq!(series[6].count, 2);
+        assert!(
+            series[1..6].iter().all(|d| d.count == 0),
+            "the days with no posts must be zero, not missing: {series:?}"
+        );
+    }
+
+    /// The date format is the one the frontend slices.
+    ///
+    /// The chart does `day.date.slice(5)` to show "MM-DD", so the
+    /// format has to stay "YYYY-MM-DD".
+    #[test]
+    fn the_day_series_dates_are_iso_days() {
+        let cutoff = Utc::now().timestamp();
+        let series = dense_day_series(cutoff, &[]);
+        assert!(!series.is_empty());
+        assert!(
+            chrono::NaiveDate::parse_from_str(&series[0].date, "%Y-%m-%d").is_ok(),
+            "the date must be YYYY-MM-DD: {}",
+            series[0].date
+        );
     }
 }

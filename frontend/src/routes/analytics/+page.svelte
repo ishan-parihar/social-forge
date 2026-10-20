@@ -261,6 +261,20 @@
 
   // ── Derived: channel mix ──
   let maxCount = $derived(data ? Math.max(...data.posts_by_day.map(d => d.count), 1) : 1);
+
+  /**
+   * How many days between two x-axis labels.
+   *
+   * The series is dense - every day in the window - so a 30-day window
+   * is 30 columns. A 10px "MM-DD" label is about 28px wide and the
+   * columns are about 30px, so labelling every day made the axis an
+   * unreadable smear. The step keeps the labels at least 40px apart.
+   */
+  let labelStep = $derived(
+    data && data.posts_by_day.length > 0
+      ? Math.max(1, Math.ceil(data.posts_by_day.length / 12))
+      : 1
+  );
   let maxProviderCount = $derived(data ? Math.max(...data.posts_by_provider.map(p => p.count), 1) : 1);
   let filteredProviders = $derived(
     data
@@ -649,9 +663,23 @@
           {/each}
         </div>
         <div class="flex gap-1 mt-2">
-          {#each data.posts_by_day as day (day.date)}
+          {#each data.posts_by_day as day, i (day.date)}
             <div class="flex-1 text-center">
-              <span class="text-[10px] text-muted">{day.date.slice(5)}</span>
+              <!--
+                Only every Nth day is labelled.
+
+                The series is DENSE - every day in the window, zeros
+                included - so a 30-day window is 30 labels. At 10px they
+                are about 28px wide each in a 30px column, and they
+                overlapped into an unreadable smear.
+
+                The step is chosen so the labels stay at least 40px
+                apart, and the FIRST and LAST are always labelled so the
+                axis has both ends.
+              -->
+              {#if i % labelStep === 0 || i === data.posts_by_day.length - 1}
+                <span class="text-[10px] text-muted">{day.date.slice(5)}</span>
+              {/if}
             </div>
           {/each}
         </div>

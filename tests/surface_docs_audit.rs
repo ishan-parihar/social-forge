@@ -273,7 +273,9 @@ fn d3_documented_per_platform_counts_match_registry() {
         if listed < expected {
             let tail = lines[idx + 1..]
                 .iter()
-                .take_while(|l| !l.starts_with("### ") && !l.starts_with("## ") && l.trim() != "---")
+                .take_while(|l| {
+                    !l.starts_with("### ") && !l.starts_with("## ") && l.trim() != "---"
+                })
                 .find(|l| l.starts_with("**Not listed above"))
                 .and_then(|l| {
                     let after = l.split("Not listed above").nth(1)?;
