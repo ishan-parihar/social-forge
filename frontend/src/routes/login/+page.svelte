@@ -65,8 +65,8 @@
       <button
         type="submit"
         disabled={loading || !password}
-        class="w-full py-2.5 px-4 bg-accent-fill hover:bg-accent-fill-hover text-accent-fg disabled:bg-surface-hover disabled:text-faint
-          text-white font-medium text-sm rounded-lg transition-colors
+        class="w-full min-h-11 py-2.5 px-4 bg-accent-fill hover:bg-accent-fill-hover text-accent-fg disabled:bg-surface-hover disabled:text-faint
+          font-medium text-sm rounded-lg transition-colors
           focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-background"
       >
         {loading ? 'Verifying…' : 'Unlock'}
