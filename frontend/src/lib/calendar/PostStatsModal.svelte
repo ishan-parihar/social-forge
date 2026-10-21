@@ -37,8 +37,12 @@
 
   /** A provider-token 401 is an actionable state: the channel's token
    *  expired, and the fix is a refresh - not a trip to the Channels
-   *  page to hunt for which one. Offer the refresh INLINE. */
+   *  page to hunt for which one. Offer the refresh INLINE. When the
+   *  refresh ITSELF fails (an expired X cookie session has no usable
+   *  refresh token), the button can never succeed - clear the state
+   * and offer the real next step: reconnect the channel. */
   let tokenExpired = $state(false);
+  let needsReconnect = $state(false);
 
   /** Refresh the channel's token, then reload the analytics. */
   async function refreshChannelToken() {
@@ -47,9 +51,13 @@
     try {
       const r = await integrationsApi.refresh(integrationId);
       if (r.error) {
-        error = r.error;
+        // The refresh failed - for an expired cookie session it will
+        // fail again every time. Stop offering it.
+        tokenExpired = false;
+        needsReconnect = true;
       } else {
         tokenExpired = false;
+        needsReconnect = false;
         error = null;
         await fetchData();
       }
@@ -139,6 +147,7 @@
     loading = true;
     error = null;
     tokenExpired = false;
+    needsReconnect = false;
     try {
       const r = await analyticsApi.getPostAnalytics(postId, days, signal);
       if (signal.aborted) return;
@@ -146,11 +155,10 @@
         analyticsData = r.data.data;
       } else {
         error = r.error || "No data returned";
-        // A provider-token 401 arrives as status 401 with the
-        // unwrapped "Token expired" message (client.ts no longer
-        // bounces to /login on it). Detect it so the modal can offer
-        // the inline refresh.
-        if (r.status === 401 && /token/i.test(r.error || "")) {
+        // A provider-token 401: the client carries the envelope's
+        // `code` alongside the unwrapped message, so branch on the
+        // machine-readable reason, not the human string.
+        if (r.code === "token_expired") {
           tokenExpired = true;
         }
         analyticsData = null;
@@ -199,6 +207,22 @@
           </button>
           <div class="text-xs text-muted mt-2">
             {integrationName || 'The channel'}'s access token expired. Refresh it and the stats load again.
+          </div>
+        </div>
+      {:else if needsReconnect}
+        <!-- The refresh FAILED - for an expired cookie session it can
+             never succeed, so the real next step is reconnecting the
+             channel. A button that cannot succeed is worse than no
+             button. -->
+        <div class="mt-3">
+          <a
+            href="/channels"
+            class="inline-flex items-center min-h-11 px-4 rounded-lg bg-accent-fill hover:bg-accent-fill-hover text-accent-fg text-sm font-medium"
+          >
+            Reconnect {integrationName || 'the channel'}
+          </a>
+          <div class="text-xs text-muted mt-2">
+            The token refresh failed - {integrationName || 'the channel'} needs reconnecting from the Channels page.
           </div>
         </div>
       {/if}

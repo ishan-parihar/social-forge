@@ -1762,3 +1762,18 @@ Stage Summary:
   iteration), and now it names the channel and offers the refresh.
 
 Known issues: none new.
+
+Follow-up to stats-modal-inline-token-refresh (same session):
+- The client now carries the error envelope's machine-readable `code`
+  alongside the unwrapped message (all error paths, not just 401) -
+  callers branch on code === "token_expired" instead of
+  pattern-matching the human string.
+- The failed-refresh path is driven and fixed: clicking Refresh on
+  this instance's expired X cookie session fails (no usable refresh
+  token), and the modal previously re-offered the same failing
+  button with a promise it would work. Now the refresh failure
+  clears the refresh state and offers the REAL next step - a
+  "Reconnect X (Twitter)" link to /channels with the honest
+  explanation. Verified live in the real browser: refresh clicked ->
+  refresh button gone -> Reconnect link shown.
+- A button that cannot succeed is worse than no button.

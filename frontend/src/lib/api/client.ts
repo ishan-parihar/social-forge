@@ -5,7 +5,7 @@ class ApiClient {
     this.base = base;
   }
 
-  async request<T>(method: string, path: string, body?: unknown, timeoutMs = 30000, signal?: AbortSignal): Promise<{ data?: T; error?: string; status: number }> {
+  async request<T>(method: string, path: string, body?: unknown, timeoutMs = 30000, signal?: AbortSignal): Promise<{ data?: T; error?: string; status: number; code?: string }> {
     let headers: Record<string, string> = {};
     let reqBody: BodyInit | undefined;
     if (body && !(body instanceof FormData)) {
@@ -58,7 +58,11 @@ class ApiClient {
         }
         // Unwrap the error envelope so the UI shows a message, not
         // raw JSON ("{\"error\":\"Token expired\"...}" in the stats
-        // modal). The envelope's `error` field is the human text.
+        // modal). The envelope's `error` field is the human text; the
+        // `code` travels WITH the error so callers can branch on the
+        // machine-readable reason (the stats modal offers a token
+        // refresh only on "token_expired") instead of pattern-matching
+        // the human string.
         let msg = text || "Unauthorized";
         try {
           const env = JSON.parse(text) as Record<string, unknown>;
@@ -66,7 +70,7 @@ class ApiClient {
         } catch {
           /* non-JSON body: keep the raw text */
         }
-        return { error: msg, status: 401 };
+        return { error: msg, status: 401, code };
       }
 
       const text = await res.text();
@@ -78,7 +82,7 @@ class ApiClient {
       }
       if (!res.ok) {
         const errorMsg = typeof data.error === 'string' ? data.error : `HTTP ${res.status}`;
-        return { error: errorMsg, status: res.status };
+        return { error: errorMsg, status: res.status, code: typeof data.code === 'string' ? data.code : undefined };
       }
       return { data: data as T, status: res.status };
     } catch (e: unknown) {
