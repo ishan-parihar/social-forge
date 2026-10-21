@@ -1468,3 +1468,17 @@ Stage Summary:
   44); resolve_first_user DB-backed resolution.
 
 Known issues: none new.
+
+Follow-up to gate-coverage-login-and-calendar-states:
+- Verified the --state clicks REALLY land: applyStates matches the
+  button's accessible name as a word (getByRole name=/\bMonth\b/) and
+  the calendar's view buttons carry aria-label="Month view" etc.;
+  the passes' screenshot names carry the _Month/_List/_Day suffix
+  (added only after a successful state click) and the three profiles
+  are materially different (Day's slot-row WARNs and List's pager
+  FAILs exist only in their own views). A gate that silently
+  re-measured the default would have shown the same profile three
+  times.
+- make audit now removes its five probe output dirs at the end
+  (~100MB per run); this session already hit EDQUOT on accumulated
+  probe litter and a write failure looks like an app failure.

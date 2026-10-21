@@ -111,6 +111,10 @@ audit:
 	# founder, and where the Unlock button's invisible text-white lived
 	# hand-patched rather than gate-covered (the 9.45 finding).
 	cd frontend && node scripts/probe.mjs --url $(URL) --password '$(PASSWORD)' --routes /login --logged-out --out /tmp/sf-probe-login
+	# Each pass writes ~20MB of screenshots; the audit runs five of them.
+# This session hit EDQUOT on ~550MB of accumulated probe output and a
+# later run FAILED on write errors that looked like app failures.
+	rm -rf /tmp/sf-probe /tmp/sf-probe-month /tmp/sf-probe-list /tmp/sf-probe-day /tmp/sf-probe-login
 
 # ── Deploy / Redeploy ───────────────────────────────────────────
 
