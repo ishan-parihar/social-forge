@@ -1009,3 +1009,73 @@ Known issues / follow-ups:
     artefact; the plan now says so.
   - The NotificationBell polls its unread count every 60s as a fallback for a
     silently-dropped SSE stream. Deliberate, and recorded in the plan.
+
+---
+Task ID: v12-iterations-9-10 (final state)
+Agent: omp (merry-tamarin)
+Task: The closing iterations - the plan's own gates that were never run,
+plus the recursive re-verification pass.
+
+Work Log:
+- 360px was not in the probe's width list, so the plan's F5 gate ("a
+  360px mobile pass on composer/calendar/channels") had never run. It
+  runs now, across every route, and the whole app passes at 360.
+- There was NO skip link. The plan's F5 names one. It is the first
+  focusable element, visible once focused, and it moves the FOCUS - not
+  just the scroll - to the main region. `audit-dialogs.mjs` checks the
+  whole contract. It is a plain `.skip-link` class because Tailwind 3
+  emits `not-sr-only:focus` - the `not-` variant must come BEFORE the
+  utility, so the natural order generates nothing at all.
+- The probe and the target audit learned to see a VISUALLY HIDDEN
+  control: a 1x1 box that is CLIPPED AWAY is not a target (the skip
+  link pattern); a 1x1 box that is merely tiny still is. Verified in
+  the browser against all three cases.
+- The composer's TARGET PICKER had no role at all. It is a multi-select
+  `role="listbox"` with `aria-multiselectable` and `role="option"` +
+  `aria-selected` per row. The channels' QUICK MENU is a `role="menu"`
+  with `role="menuitem"` per row.
+- F4's verification was "analytics with seeded data renders non-empty" -
+  a sentence, not a gate. `audit-analytics.mjs` checks non-zero
+  engagement, a DENSE day series, and a success rate that RECONCILES
+  with the "N of M went out" beside it. Its teeth are proven: labelling
+  the goal-inflated rate a success rate makes it report "the success
+  rate reads 24% but 11 of 14 scheduled posts went out, which is 79%".
+- THE CALENDAR'S DAY BUCKET NOW FOLLOWS THE FOUNDER'S ZONE - the
+  worklog's biggest OPEN item. A post at 02:00 UTC on the 25th was on
+  "the 25th"; in New York it is the 24th, so evening posts sat on the
+  wrong day. The client resolves the zone's offset (via `zoneOffsetMs`,
+  the ONE implementation, extracted from `wallClockToUtc`) and the
+  server buckets into the local day. `tz_offset` is VALIDATED - an
+  absurd value used to PANIC the handler (`TimeDelta::seconds out of
+  bounds`, no CatchPanic layer). The mutation run that "passed" with
+  the validation deleted was a STALE BUILD (cargo finished in 0.25s);
+  the real run rebuilt (16s) and the test caught the panic.
+- `check_status_contrast.py` (all 88 status-token pairs, both themes)
+  was written as a gate but never wired in - a future hue change would
+  have passed every gate while reintroducing the 2026-10-20 finding.
+  It is in `make check`.
+- The login page's Unlock button was 343x40 and carried a raw
+  `text-white` alongside `text-accent-fg` - the same class of defect
+  that made the connect forms invisible in the light theme.
+
+Stage Summary:
+- SEVEN gates, all with proven teeth: probe (29 routes x 4 widths x 2
+  themes), targets, contrast (both themes, fields included, connect
+  flows driven), dialogs (with the skip link), analytics, drag e2e,
+  plus the three source gates (hex, tailwind classes, status tokens).
+- The last full-gate state: probe 0 FAIL / 0 WARN, 0 controls under the
+  floor, 0 contrast failures in both themes, 0 dialog contract
+  failures, 0 analytics failures, 0 drag failures. 483 lib tests, 47
+  integration binaries, clippy clean online and offline, svelte-check
+  clean.
+- The empty instance also passes.
+- Landed in commits a354b4b..9864450.
+
+Known issues / follow-ups:
+  - OPEN (backend): `/api/ai/*` has no streaming endpoint, so the
+    composer's AI panel shows an indeterminate indicator rather than
+    real progress. Honest, and documented.
+  - OPEN (backend): the ANALYTICS day series (not the calendar - that
+    one is fixed) still buckets in UTC. It is a trend chart; the
+    founder's zone would make the boundary day consistent. The same
+    `tz_offset` seam is available when wanted.
