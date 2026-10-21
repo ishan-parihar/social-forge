@@ -93,8 +93,11 @@ export const researchApi = {
    * Aggregated read-only research snapshot. No writes; every section is
    * derived from stored data only and comes back empty when it has none.
    */
-  get: (days?: number, signal?: AbortSignal) => {
-    const q = days ? `?days=${days}` : "";
+  get: (days?: number, tz?: string, signal?: AbortSignal) => {
+    const parts: string[] = [];
+    if (days) parts.push(`days=${days}`);
+    if (tz) parts.push(`tz=${encodeURIComponent(tz)}`);
+    const q = parts.length ? `?${parts.join('&')}` : "";
     return api.get<ResearchResponse>(`/api/research${q}`, signal);
   },
 };

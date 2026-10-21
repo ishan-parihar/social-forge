@@ -2988,11 +2988,16 @@ pub async fn engagement_histogram_by_slot(
     // Optional window floor. `None` keeps the pre-cutoff behaviour the
     // MCP `posts_best_times` tool relies on (all history).
     cutoff: Option<DateTime<Utc>>,
-) -> Result<Vec<(String, i32, i32, i64, i64)>, sqlx::Error> {
+) -> Result<Vec<(String, i64, i64, i64)>, sqlx::Error> {
+    // One row per (provider, epoch): the WEEKDAY×HOUR fold is the
+    // CALLER's job, because a zone-aware fold cannot be expressed in
+    // SQLite (`strftime('%w'/'%H')` is UTC-only; `localtime` is the
+    // OS zone, not the founder's). Grouping the raw epoch here keeps
+    // the SQL a pure aggregation and lets the caller bucket in the
+    // founder's zone - the same shape as the analytics day series.
     sqlx::query_as(
         r#"SELECT ep.provider,
-           CAST(strftime('%w', datetime(ep.created_at, 'unixepoch')) AS INTEGER),
-           CAST(strftime('%H', datetime(ep.created_at, 'unixepoch')) AS INTEGER),
+           CAST(strftime('%s', datetime(ep.created_at, 'unixepoch')) AS INTEGER),
            COUNT(*),
            SUM(COALESCE(pe.likes, 0) + COALESCE(pe.comments, 0) + COALESCE(pe.shares, 0))
           FROM external_posts ep
@@ -3002,7 +3007,7 @@ pub async fn engagement_histogram_by_slot(
            AND (? IS NULL OR ep.provider = ?)
            AND (? IS NULL OR ep.created_at >= ?)
            AND (COALESCE(pe.likes, 0) + COALESCE(pe.comments, 0) + COALESCE(pe.shares, 0)) > 0
-         GROUP BY 1, 2, 3"#,
+         GROUP BY 1, 2"#,
     )
     .bind(user_id)
     .bind(provider)
@@ -4608,9 +4613,17 @@ mod b03_b08_tests {
             .await
             .unwrap();
         assert_eq!(rows.len(), 1, "only the engaged post buckets: {rows:?}");
-        let (provider, wd, h, posts, engagement) = &rows[0];
+        let (provider, epoch, posts, engagement) = &rows[0];
         assert_eq!(provider, "x");
-        assert_eq!((*wd, *h), (3, 14), "Wednesday 14:00 UTC bucket");
+        // The caller folds the epoch into a weekday/hour slot in UTC
+        // when no zone is given.
+        use chrono::Timelike;
+        let dt = DateTime::<Utc>::from_timestamp(*epoch, 0).unwrap();
+        let (wd, h) = (
+            dt.format("%w").to_string().parse::<i32>().unwrap(),
+            dt.hour() as i32,
+        );
+        assert_eq!((wd, h), (3, 14), "Wednesday 14:00 UTC bucket");
         assert_eq!(*posts, 1);
         assert_eq!(*engagement, 15, "likes+comments+shares summed");
 

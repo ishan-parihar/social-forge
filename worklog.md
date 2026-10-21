@@ -1250,3 +1250,50 @@ Follow-up to analytics-zone-day-completion (same session):
 - Housekeeping: frontend/probe-out/ (a stale 13-route report from
   an old 6543 run) was gitignored but still TRACKED from before the
   ignore landed; untracked and deleted.
+
+---
+Task ID: research-best-time-zone
+Agent: omp (goal session, 2026-10-21)
+Task: Make the research "best time to post" slots zone-aware, closing
+the last UTC-labelled timing surface in the app.
+
+Work Log:
+- `engagement_histogram_by_slot` now returns one row per (provider,
+  epoch): the weekday/hour fold moved out of SQL (strftime('%w'/'%H')
+  is UTC-only; `localtime` is the OS zone, not the founder's) to the
+  caller, the same shape as the analytics day series.
+- ONE slot rule: `api::research::week_slot(epoch, Option<Tz>)` folds
+  an epoch into a (weekday, hour) slot in the founder's zone
+  (DST-correct) or UTC. The research insight and the MCP
+  `posts_best_times` tool both fold through it (9.18), so the two
+  surfaces cannot disagree about a post's slot.
+- GET /api/research takes `tz=<IANA name>` (unknown -> 400): the
+  slots are bucketed in the founder's LOCAL weekday and hour, and the
+  label names the zone ("Saturday 06:00-07:00 America/New_York") -
+  "post Mon 15:00" is only actionable in the zone the founder posts
+  from. The MCP tool keeps its documented UTC fold and its note says
+  so.
+- The research page's client-side `slotLabel` is DELETED: it used to
+  convert the clock to the app's zone while keeping the UTC weekday -
+  a second implementation of the server's rule that could disagree at
+  the midnight boundary (a 22:00 NY post was "Sunday" by the clock
+  and "Saturday" by the server's key, with the weekday pinned to the
+  server's). The page now renders the server's zone-correct label
+  and sends `timezone.value` in the request.
+
+Stage Summary:
+- cargo test --lib: 488 pass (incl. the zone-fold regression:
+  2026-10-25T02:00Z -> Sunday 02:00 UTC, Saturday 22:00 New York).
+- clippy --lib --bins --all-features --locked: clean.
+- pnpm build + svelte-check + make check: clean.
+- All 7 browser gates against the release binary on :6544: probe
+  0 FAIL / 0 WARN, 0 targets under floor, 0 analytics/dialog/
+  contrast/drag failures.
+- Live oracle: the same imported posts read 06:00-07:00 in
+  America/New_York and 10:00-11:00 UTC (EDT, -4h); the label names
+  the zone; tz=Not/AZone -> 400.
+
+Known issues: unchanged from the previous entries (the two-streak
+TopBar measure, the gate threshold drift, /login gate coverage,
+calendar Month/List probe states, the client/server day-rule parity
+test).

@@ -27,6 +27,14 @@ pub struct ResearchQuery {
     /// Window in days for every section. Default 90, clamped to 1..3650.
     #[serde(default = "default_days")]
     pub days: i32,
+    /// The founder's zone as an IANA NAME ("America/New_York"). The
+    /// best-time slots are bucketed in the founder's LOCAL weekday
+    /// and hour (DST-correct), because "post Mon 15:00" is only
+    /// actionable in the zone the founder posts from - the composer,
+    /// the calendar and the analytics series all already speak the
+    /// founder's zone. Unknown name: 400. Absent: UTC (legacy).
+    #[serde(default)]
+    pub tz: Option<String>,
     /// Items per ranked section. Default 10, clamped to 1..50.
     #[serde(default = "default_limit")]
     pub limit: i64,
@@ -48,7 +56,7 @@ fn default_min_word_length() -> usize {
     4
 }
 
-const WEEKDAYS: [&str; 7] = [
+pub const WEEKDAYS: [&str; 7] = [
     "Sunday",
     "Monday",
     "Tuesday",
@@ -57,6 +65,36 @@ const WEEKDAYS: [&str; 7] = [
     "Friday",
     "Saturday",
 ];
+
+/// Fold one epoch into a (weekday, hour) slot in the founder's zone
+/// (DST-correct, per-instant) or UTC when no zone is given.
+///
+/// THE ONE slot rule (AGENTS.md 9.18): the research insight and the MCP
+/// `posts_best_times` tool both fold through it, so an agent and the
+/// dashboard cannot disagree about the same post's slot.
+///
+/// `weekday` is SQLite's `strftime('%w')` convention (0 = Sunday) so
+/// `WEEKDAYS[weekday]` keeps indexing the way it always did.
+pub fn week_slot(
+    epoch: i64,
+    tz: Option<chrono_tz::Tz>,
+) -> Option<(i32, i32)> {
+    use chrono::Timelike;
+    let dt = chrono::DateTime::<chrono::Utc>::from_timestamp(epoch, 0)?;
+    let local = match tz {
+        Some(z) => {
+            dt + chrono::Duration::seconds(
+                crate::api::calendar::zone_offset_seconds(z, dt),
+            )
+        }
+        None => dt,
+    };
+    // %w: 0=Sunday..6=Saturday. date_naive has no weekday-offset trap
+    // because NaiveDateTime's `weekday()` is the same convention's
+    // enum - but formatting keeps the i32 shape the callers share.
+    let wd = local.format("%w").to_string().parse::<i32>().ok()?;
+    Some((wd, local.hour() as i32))
+}
 
 // ── Response types ─────────────────────────────────────────────
 
@@ -337,23 +375,50 @@ pub async fn get(
     // (c) When the founder's own posts performed best.
     //
     // Reuses the same histogram `handle_posts_best_times` backs, so the
-    // dashboard and the MCP tool cannot disagree. Unlike the MCP tool this
-    // also carries engagement_per_post, which is the number a founder needs
-    // to compare slots of different volumes.
+    // dashboard and the MCP tool cannot disagree - the fold is THE
+    // SAME `week_slot` rule (the histogram returns per-epoch rows and
+    // each surface folds them itself, in its own zone). Unlike the MCP
+    // tool this also carries engagement_per_post, which is the number
+    // a founder needs to compare slots of different volumes.
     let timing: Option<TimingInsight> = {
+        // The zone is parsed ONCE here and the slot label names it: a
+        // "post Mon 15:00" hint is only actionable in the zone the
+        // founder posts from, and it used to be labelled UTC while
+        // the composer and the calendar beside it spoke local time.
+        let zone = query
+            .tz
+            .as_deref()
+            .map(crate::api::calendar::parse_zone)
+            .transpose()
+            .map_err(AppError::BadRequest)?;
+        let zone_label = zone
+            .map(|z| z.name().to_string())
+            .unwrap_or_else(|| "UTC".into());
         // Windowed to the same `days` as the rest of the response, so the
         // timing insight describes the same period the rankings do.
-        let slots =
+        let rows =
             queries::engagement_histogram_by_slot(&state.db, auth.user_id, None, Some(cutoff))
                 .await
                 .unwrap_or_default();
-        let posts_analyzed: i64 = slots.iter().map(|(_, _, _, p, _)| p).sum();
-        (!slots.is_empty()).then(|| {
-            let mut ranked: Vec<PostingSlot> = slots
+        // Fold per-epoch rows into (weekday, hour) slots through the ONE
+        // rule, summing posts and engagement per slot.
+        let mut slot_map: std::collections::HashMap<(i32, i32), (i64, i64)> =
+            std::collections::HashMap::new();
+        for (_, epoch, posts, engagement) in rows {
+            if let Some(slot) = week_slot(epoch, zone) {
+                let e = slot_map.entry(slot).or_insert((0, 0));
+                e.0 += posts;
+                e.1 += engagement;
+            }
+        }
+        let posts_analyzed: i64 = slot_map.values().map(|(p, _)| p).sum();
+        (!slot_map.is_empty()).then(|| {
+            let mut ranked: Vec<PostingSlot> = slot_map
                 .into_iter()
-                .map(|(_, weekday, hour, posts, engagement)| {
+                .map(|((weekday, hour), (posts, engagement))| {
                     let wd = WEEKDAYS[weekday as usize];
-                    let label = format!("{wd} {hour:02}:00–{:02}:00 UTC", (hour + 1) % 24);
+                    let label =
+                        format!("{wd} {hour:02}:00–{:02}:00 {zone_label}", (hour + 1) % 24);
                     PostingSlot {
                         weekday: wd.to_string(),
                         hour,
@@ -461,6 +526,24 @@ pub async fn get(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The slot fold is zone-aware: a post at 2026-10-25T02:00:00Z is
+    /// Saturday 22:00 in New York but Sunday 02:00 in UTC. The research
+    /// page sends the zone name, so the founder reads the slot in the
+    /// zone they post from - and the weekday and the hour come from ONE
+    /// fold, so they cannot disagree at the midnight boundary.
+    #[test]
+    fn week_slot_folds_the_weekday_and_hour_in_the_founders_zone() {
+        let ny = crate::api::calendar::parse_zone("America/New_York").unwrap();
+        let epoch = chrono::DateTime::parse_from_rfc3339("2026-10-25T02:00:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc)
+            .timestamp();
+        // UTC fold: Sunday (%w=0) 02:00.
+        assert_eq!(week_slot(epoch, None), Some((0, 2)));
+        // New York fold: Saturday (%w=6) 22:00, EDT.
+        assert_eq!(week_slot(epoch, Some(ny)), Some((6, 22)));
+    }
 
     #[test]
     fn split_words_drops_punctuation_urls_and_handles() {

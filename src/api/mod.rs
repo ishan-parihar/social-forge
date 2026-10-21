@@ -59,7 +59,7 @@ pub(crate) use posts::verify_tag_ownership;
 pub(crate) use posts::CreatePostRequest;
 mod profile;
 mod rate_limit;
-mod research;
+pub mod research; // `week_slot`/`WEEKDAYS` shared with the MCP posts_best_times fold (9.18)
 pub(crate) mod rss;
 pub(crate) mod sets;
 mod signatures;

@@ -1087,17 +1087,6 @@ pub struct PostsBestTimesInput {
     pub top: Option<usize>,
 }
 
-const WEEKDAYS: [&str; 7] = [
-    "Sunday",
-    "Monday",
-    "Tuesday",
-    "Wednesday",
-    "Thursday",
-    "Friday",
-    "Saturday",
-];
-
-/// E5: best-time-to-post from stored engagement history — the honest
 /// smallest version: a per-account weekday×hour histogram of engagement
 /// on published posts, ranked. Accounts without engagement data still
 /// report their posting-frequency histogram (engagement 0).
@@ -1146,26 +1135,43 @@ pub async fn handle_posts_best_times(
     let top = input.top.unwrap_or(3).max(1);
 
     // Group slots per provider, then rank by engagement (posts as tiebreak).
-    let mut per_provider: std::collections::HashMap<String, Vec<(i32, i32, i64, i64)>> =
+    // Fold per-epoch rows into weekday×hour slots through the SAME rule
+    // the research insight uses (`api::research::week_slot`, AGENTS.md
+    // 9.18), so the two surfaces cannot disagree about a post's slot.
+    // The MCP tool folds in UTC and says so in its note; the research
+    // page folds in the founder's zone.
+    // (provider -> (weekday, hour) -> (posts, engagement))
+    type SlotMap = std::collections::HashMap<(i32, i32), (i64, i64)>;
+    let mut per_provider: std::collections::HashMap<String, SlotMap> =
         std::collections::HashMap::new();
-    for (provider, weekday, hour, posts, engagement) in rows {
-        per_provider
+    for (provider, epoch, posts, engagement) in rows {
+        let Some(slot) = crate::api::research::week_slot(epoch, None) else {
+            continue;
+        };
+        let e = per_provider
             .entry(provider)
             .or_default()
-            .push((weekday, hour, posts, engagement));
+            .entry(slot)
+            .or_insert((0, 0));
+        e.0 += posts;
+        e.1 += engagement;
     }
 
     let mut providers = Vec::new();
-    for (provider, mut slots) in per_provider {
-        slots.sort_by(|a, b| b.3.cmp(&a.3).then(b.2.cmp(&a.2)));
-        let posts_analyzed: i64 = slots.iter().map(|s| s.2).sum();
+    for (provider, slot_map) in per_provider {
+        let mut slots: Vec<((i32, i32), i64, i64)> = slot_map
+            .into_iter()
+            .map(|(slot, (posts, eng))| (slot, posts, eng))
+            .collect();
+        slots.sort_by(|a, b| b.2.cmp(&a.2).then(b.1.cmp(&a.1)));
+        let posts_analyzed: i64 = slots.iter().map(|s| s.1).sum();
         providers.push(serde_json::json!({
             "provider": provider,
             "posts_analyzed": posts_analyzed,
-            "best_slots": slots.iter().take(top).map(|(wd, h, posts, eng)| serde_json::json!({
-                "weekday": WEEKDAYS[*wd as usize],
+            "best_slots": slots.iter().take(top).map(|((wd, h), posts, eng)| serde_json::json!({
+                "weekday": crate::api::research::WEEKDAYS[*wd as usize],
                 "hour": h,
-                "label": format!("{} {:02}:00–{:02}:00 UTC", WEEKDAYS[*wd as usize], h, (h + 1) % 24),
+                "label": format!("{} {:02}:00–{:02}:00 UTC", crate::api::research::WEEKDAYS[*wd as usize], h, (h + 1) % 24),
                 "posts": posts,
                 "engagement": eng,
             })).collect::<Vec<_>>(),
