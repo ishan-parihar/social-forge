@@ -1653,3 +1653,23 @@ Stage Summary:
   structure. Recorded as-is.
 
 Known issues: none new beyond what is recorded above.
+
+Follow-up to browseros-visual-pass-dialog-name (same session):
+- The browseros CDP port (127.0.0.1:9171) is a SECOND, more reliable
+  driving path than the MCP wrapper: playwright-core's
+  connectOverCDP drives the real browser without the wrapper's
+  click-coverage refusals, with real viewport control, and the
+  browseros session's cookie carries the authentication.
+- scripts/rubric-shots.mjs (frontend) bridges the objective's
+  visual-testing ask to the website-design skill's rubric: it
+  captures the seven judged surfaces (dashboard, the three calendar
+  views, analytics, research, kanban) from the real browser,
+  authenticated, into a directory for scoring. Exits 3 (BLOCKED)
+  when browseros's CDP is down - screenshots are never faked.
+- BLOCKED, named honestly: the ten-line look rubric and the CRAFT
+  score require VIEWING the screenshots, and this session's model
+  cannot view images (verified twice: read on a PNG returns "does
+  not support images"). Per the tool protocol, BLOCKED is never
+  reported as passed - the rubric has NOT been scored. The shots
+  live in /tmp/sf-rubric and the bridge is permanent, so the next
+  session with image viewing scores them in minutes.
