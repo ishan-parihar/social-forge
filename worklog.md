@@ -1673,3 +1673,16 @@ Follow-up to browseros-visual-pass-dialog-name (same session):
   reported as passed - the rubric has NOT been scored. The shots
   live in /tmp/sf-rubric and the bridge is permanent, so the next
   session with image viewing scores them in minutes.
+
+Full-suite verification at 8414a04 (same session):
+- The complete make audit (9 passes) ran against the HEAD release
+  binary end to end: default 27-route probe 0 FAIL / 0 WARN; targets
+  0 under the 24px floor at all three widths; dialogs 0 contract
+  failures (composer name="Composer"); analytics 0; drag 0; the
+  calendar Month/List/Day state passes 0 FAIL each (88/54/112
+  24-44 band WARNs - the dense-grid chip class, correct severity);
+  the /login logged-out pass 0/0. Exit 0, ~13 minutes.
+- Rubric-scoring attempt via a subagent confirmed CANNOT VIEW
+  IMAGES is a property of the model chain, not of the file or tool:
+  the shots remain ready in /tmp/sf-rubric for a vision-capable
+  session. No scores fabricated.
