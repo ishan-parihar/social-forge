@@ -70,6 +70,16 @@ pub fn zone_offset_seconds(
     at.with_timezone(&zone).offset().fix().local_minus_utc() as i64
 }
 
+/// The zone's UTC offset at an instant, from the zone's NAME.
+///
+/// The name-taking form callers outside the crate (the parity test,
+/// which compares this rule against the browser's `Intl`) and any
+/// in-crate caller that only has a name use. Parses through THE ONE
+/// `parse_zone`, so an unknown name is an error, never a silent UTC.
+pub fn zone_offset_by_name(zone: &str, at: chrono::DateTime<chrono::Utc>) -> Option<i64> {
+    parse_zone(zone).ok().map(|tz| zone_offset_seconds(tz, at))
+}
+
 /// The LOCAL day an instant belongs to, given the zone's UTC offset.
 ///
 /// THE ONE IMPLEMENTATION of the day-key rule. The REST calendar and

@@ -36,7 +36,7 @@ pub(crate) mod ai;
 mod analytics;
 mod auth;
 mod automation;
-pub(crate) mod calendar;
+pub mod calendar; // pub: tests/wall_clock_parity_test.rs drives zone_offset_by_name (the day-key seam)
 pub(crate) mod campaigns;
 pub(crate) mod comments;
 mod developer;

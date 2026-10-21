@@ -1307,3 +1307,50 @@ cell was a mangled "06:00–07:00 Amer...". Fixed: PostingSlot carries
 (full, zone-named) stays the each-key and is the cell's tooltip;
 the caption below already names the zone. Probe on /research: 0 FAIL,
 0 WARN against the rebuilt binary.
+
+---
+Task ID: wall-clock-parity
+Agent: omp (goal session, 2026-10-21)
+Task: Pin the client/server day-rule pairing - `zone_offset_seconds`
+(server, chrono-tz) vs the composer's `zoneOffsetMs` (browser, Intl) -
+two implementations of one rule with nothing comparing them.
+
+Work Log:
+- `api::calendar` gains `zone_offset_by_name(zone, at)` - the
+  name-taking form of the offset rule, parsing through THE ONE
+  `parse_zone`. The module is `pub` now, the same pattern as
+  `api::activity` and `api::research` before it, so an integration
+  test can drive the real seam.
+- tests/wall_clock_parity_test.rs, the counting_rule_test shape:
+  it loads the REAL frontend/src/lib/composer/wall-clock.ts and runs
+  it under node (--experimental-strip-types), never a transcription.
+  Two tests:
+  1. Per-instant agreement across 15 discriminating cases: both sides
+     of the US fall-back (2026-11-01), US spring-forward (2026-03-08),
+     EU fall-back (2026-10-25) and NZ spring-forward (2026-09-27)
+     transitions, the transition instants themselves, Kolkata and
+     Kathmandu (half-hour/45-minute offsets), and ordinary instants.
+     The browser side asserts a non-zero offset for non-UTC zones, so
+     a stale system ICU fails loudly instead of comparing against a
+     silent fallback.
+  2. The WRITE-path round-trip: wallClockToUtc's instant + the
+     SERVER's offset reads back the wall clock the founder typed,
+     exactly for ordinary clocks (day and clock fields, seconds
+     included). The pathological clocks are pinned for
+     determinism, not exactness: the spring-forward GAP (2026-03-08
+     02:30 New York, which does not exist) reads back 03:30 or 01:30,
+     and the fall-back AMBIGUITY (2026-11-01 01:30, which happens
+     twice) reads back 01:30 on the day - the founder gets a
+     deterministic answer, not an error.
+
+Stage Summary:
+- cargo test --test wall_clock_parity_test: 2 pass. cargo test --lib:
+  488 pass. clippy clean.
+- No product code changed except the pub wrapper - this iteration is
+  the pin, not a fix: the two rules were already agreeing per-instant
+  (the DST work landed them through the same seam); now they cannot
+  drift apart silently.
+
+Known issues: unchanged (TopBar's separate users.streak_days measure,
+the probe/audit-targets threshold drift, /login gate coverage,
+calendar Month/List probe states).
