@@ -8,7 +8,7 @@
   import { campaignsApi, type Campaign } from "$lib/api/campaigns";
   import { calendarState } from "$lib/stores/calendar.svelte";
   import { timezone } from "$lib/stores/timezone.svelte";
-  import { wallClockToUtc } from "$lib/composer/wall-clock";
+  import { wallClockToUtc, zoneOffsetMs } from "$lib/composer/wall-clock";
   import { toast } from "$lib/stores/toast";
   import { realtime } from "$lib/stores/realtime";
   import { confirmModal } from "$lib/stores/modals.svelte";
@@ -133,6 +133,31 @@
     return allCampaigns.find((c) => c.id === id)?.color ?? null;
   }
 
+  /**
+   * The founder's UTC offset, in SECONDS.
+   *
+   * The server buckets a post into the day it belongs to, and the day a
+   * post belongs to is a LOCAL day. The server has no timezone
+   * database, so the client resolves the zone's offset and sends it.
+   *
+   * This is the ONE implementation of "what is this zone's offset"
+   * (AGENTS.md §9.18): `zoneOffsetMs` in wall-clock.ts, the same helper
+   * `wallClockToUtc` uses. The first version here computed the offset
+   * by mixing the browser's local fields with the zone's fields, which
+   * returns ZERO when the selected zone is the browser's zone - the
+   * common case - and the whole fix was a no-op.
+   *
+   * The offset is measured at the window's start instant, which is the
+   * instant the server's range filter uses.
+   */
+  function tzOffsetSeconds(startIso: string): number {
+    try {
+      return Math.round(zoneOffsetMs(timezone.value, new Date(startIso).getTime()) / 1000);
+    } catch {
+      return 0;
+    }
+  }
+
   async function fetchEvents(start: string, end: string) {
     loading = true;
     fetchError = null;
@@ -141,7 +166,12 @@
     const filters: { integration_ids?: string[]; campaign_id?: string } = {};
     if (selectedIntegrationId) filters.integration_ids = [selectedIntegrationId];
     if (selectedCampaignId) filters.campaign_id = selectedCampaignId;
-    const r = await calendarApi.get(start, end, Object.keys(filters).length > 0 ? filters : undefined);
+    const r = await calendarApi.get(
+      start,
+      end,
+      Object.keys(filters).length > 0 ? filters : undefined,
+      tzOffsetSeconds(start)
+    );
     if (r.data) {
       events = r.data.days.flatMap((d) =>
         d.posts.map((p) => toCalendarEvent(p, timezone.value, campaignColorOf(p.campaign_id))),

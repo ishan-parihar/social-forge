@@ -23,6 +23,24 @@ pub struct CalendarQuery {
     // campaign_id. When provided, the query narrows to matching posts.
     pub integration_ids: Option<String>, // comma-separated UUIDs
     pub campaign_id: Option<Uuid>,
+    /// The founder's UTC offset, in SECONDS.
+    ///
+    /// The day a post belongs to is a LOCAL day, and the founder's zone
+    /// is a local day. The day key was `utc.format("%Y-%m-%d")`, so a
+    /// post at 02:00 UTC on the 25th was on "the 25th" - in New York
+    /// that is the 24th, and the post sat on the WRONG DAY of the
+    /// calendar.
+    ///
+    /// The offset is sent by the client rather than looked up here,
+    /// because the server has no timezone database (no `chrono-tz`) and
+    /// `users.timezone` is a column the server NEVER writes - the -300
+    /// in the seed is of unknown unit. The client knows the zone: it is
+    /// an IANA name in a frontend localStorage store, and it can
+    /// resolve the offset for the window exactly.
+    ///
+    /// Absent, the day key is UTC - the old behaviour, and the right
+    /// fallback for a caller that does not care.
+    pub tz_offset: Option<i64>,
 }
 
 #[derive(Debug, Serialize)]
@@ -87,6 +105,24 @@ pub async fn get(
     let end = parse_end_date_or_datetime(&query.end)
         .ok_or_else(|| AppError::BadRequest("Invalid end date".into()))?;
 
+    // The offset is a NUMBER from a query string, so it has to be
+    // validated before it is used.
+    //
+    // `chrono::Duration::seconds` PANICS when the magnitude is beyond
+    // i64::MAX/1000, and there is no CatchPanic layer in the router,
+    // so `tz_offset=99999999999999999999` took the whole handler down.
+    // A real UTC offset is within 18 hours; anything beyond a DAY is
+    // not an offset, and the caller gets a 400 naming the bound.
+    let tz_offset = match query.tz_offset {
+        Some(secs) if secs.unsigned_abs() > 86_400 => {
+            return Err(AppError::BadRequest(
+                "tz_offset must be within plus or minus one day (in seconds)".into(),
+            ));
+        }
+        Some(secs) => Some(secs),
+        None => None,
+    };
+
     // v23-4: parse optional integration_ids filter (comma-separated UUIDs).
     let integration_ids: Option<Vec<Uuid>> = query
         .integration_ids
@@ -113,10 +149,28 @@ pub async fn get(
         std::collections::BTreeMap::new();
     for p in posts {
         // Use published_at for published posts, scheduled_at for queued/draft posts
+        //
+        // The day key is a LOCAL day: the post belongs to the day the
+        // founder sees, in THEIR zone.
+        //
+        // The offset is applied to the instant and THEN the date is
+        // taken, which is the only order that is right: taking the UTC
+        // date first and shifting it afterwards would move a post
+        // across midnight the wrong way (a 02:00 UTC post in New York
+        // is the PREVIOUS day, and a post at 23:00 UTC in Auckland is
+        // the NEXT day).
+        let local = |dt: chrono::DateTime<chrono::Utc>| -> String {
+            match tz_offset {
+                Some(secs) => (dt + chrono::Duration::seconds(secs))
+                    .format("%Y-%m-%d")
+                    .to_string(),
+                None => dt.format("%Y-%m-%d").to_string(),
+            }
+        };
         let date_key = if p.state == "published" && p.published_at.is_some() {
-            p.published_at.map(|d| d.format("%Y-%m-%d").to_string())
+            p.published_at.map(&local)
         } else {
-            p.scheduled_at.map(|d| d.format("%Y-%m-%d").to_string())
+            p.scheduled_at.map(&local)
         }
         .unwrap_or_else(|| "unscheduled".into());
 

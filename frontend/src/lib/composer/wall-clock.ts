@@ -35,28 +35,38 @@ export function wallClockToUtc(date: string, time: string, zone: string): string
   const anchor = Date.parse(`${date}T${clock}Z`);
   if (Number.isNaN(anchor)) return `${date}T${clock}.000Z`;
 
-  const offsetAt = (ts: number) => {
-    // Ask Intl what the wall clock reads in `zone` at that instant,
-    // rebuild it as a UTC instant, and the difference is the zone's
-    // offset.
-    const parts = new Intl.DateTimeFormat('en-US', {
-      timeZone: zone, hourCycle: 'h23',
-      year: 'numeric', month: '2-digit', day: '2-digit',
-      hour: '2-digit', minute: '2-digit', second: '2-digit',
-    }).formatToParts(new Date(ts));
-    const get = (t: string) => Number(parts.find(p => p.type === t)?.value ?? '0');
-    // hourCycle 'h23' keeps midnight at 00. (With `hour12: false` some ICU
-    // builds render it as 24, which would push the whole day forward.)
-    return Date.UTC(get('year'), get('month') - 1, get('day'), get('hour'), get('minute'), get('second')) - ts;
-  };
-
-  let ts = anchor - offsetAt(anchor);
+  let ts = anchor - zoneOffsetMs(zone, anchor);
   // One correction pass: near a DST transition the offset at the anchor can
   // differ from the offset at the answer, which would land the post an hour
   // out. Re-measuring at the candidate instant fixes it.
-  const adjusted = anchor - offsetAt(ts);
+  const adjusted = anchor - zoneOffsetMs(zone, ts);
   if (adjusted !== ts) ts = adjusted;
   return new Date(ts).toISOString();
+}
+
+/**
+ * The zone's UTC offset at an instant, in MILLISECONDS.
+ *
+ * THE ONE IMPLEMENTATION of "what is this zone's offset" (AGENTS.md
+ * §9.18: one implementation per rule). `wallClockToUtc` uses it, and
+ * the calendar uses it to tell the server which LOCAL DAY a post
+ * belongs to - so a post at 02:00 UTC lands on the day the founder
+ * sees, not the UTC day.
+ *
+ * Ask Intl what the wall clock reads in `zone` at that instant, rebuild
+ * it as a UTC instant, and the difference is the zone's offset.
+ *
+ * hourCycle 'h23' keeps midnight at 00. (With `hour12: false` some ICU
+ * builds render it as 24, which would push the whole day forward.)
+ */
+export function zoneOffsetMs(zone: string, at: number): number {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: zone, hourCycle: 'h23',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  }).formatToParts(new Date(at));
+  const get = (t: string) => Number(parts.find(p => p.type === t)?.value ?? '0');
+  return Date.UTC(get('year'), get('month') - 1, get('day'), get('hour'), get('minute'), get('second')) - at;
 }
 
 /**

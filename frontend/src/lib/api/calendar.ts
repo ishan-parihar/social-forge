@@ -46,8 +46,23 @@ export interface CalendarFilters {
 }
 
 export const calendarApi = {
-  get: (start: string, end: string, filters?: CalendarFilters) => {
+  /**
+   * @param tzOffsetSeconds The founder's UTC offset, in SECONDS.
+   *
+   * A post's DAY is a local day, and the server has no timezone
+   * database and no per-user zone. The client knows the zone (an
+   * IANA name in a localStorage store) and resolves the offset for
+   * the window, so the server can bucket the posts into the days the
+   * founder actually sees.
+   *
+   * Without it the server buckets in UTC, so a post at 02:00 UTC sat
+   * on "the 25th" while the founder in New York saw it on the 24th.
+   */
+  get: (start: string, end: string, filters?: CalendarFilters, tzOffsetSeconds?: number) => {
     let url = `/api/calendar?start=${start}&end=${end}`;
+    if (tzOffsetSeconds !== undefined) {
+      url += `&tz_offset=${tzOffsetSeconds}`;
+    }
     // v23-4: append optional filters.
     if (filters?.integration_ids?.length) {
       url += `&integration_ids=${filters.integration_ids.join(',')}`;
