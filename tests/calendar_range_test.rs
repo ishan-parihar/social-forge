@@ -242,3 +242,58 @@ async fn the_last_day_of_the_range_is_included() {
         "a post at 23:30 on the end date must be inside the range; got {ids:?}"
     );
 }
+
+// ── MCP parity: the tool must refuse what the REST endpoint refuses ──
+// AGENTS.md 9.21: the MCP surface is a CLIENT of the REST surface. The
+// REST endpoint returns 400 for an unknown zone and for an out-of-bound
+// constant; the tool must error the same way - not answer a plausible
+// empty calendar that an agent would read as "nothing scheduled".
+//
+// Both cases used to be silent in the tool: a bad name fell back to UTC
+// per-post, and a garbage offset was swallowed by the day-key helper's
+// internal bound.
+
+use social_forge::mcp::tools_calendar::{CalendarInput, get_calendar};
+
+#[tokio::test]
+async fn the_mcp_calendar_tool_refuses_an_unknown_zone_even_on_an_empty_range() {
+    let state = router_state().await;
+    let input = CalendarInput {
+        start: "2026-10-20".into(),
+        end: "2026-10-27".into(),
+        tz: Some("Not/AZone".into()),
+        tz_offset: None,
+    };
+    let err = match get_calendar(&state, &input).await {
+        Err(e) => e,
+        Ok(_) => panic!("an unknown zone must be an error, not an empty calendar"),
+    };
+    assert!(
+        err.contains("not a known IANA zone"),
+        "the error must name the bad zone: {err}"
+    );
+}
+
+#[tokio::test]
+async fn the_mcp_calendar_tool_does_not_let_a_zone_name_bypass_the_offset_bound() {
+    let state = router_state().await;
+    let input = CalendarInput {
+        start: "2026-10-20".into(),
+        end: "2026-10-27".into(),
+        // A VALID name beside a GARBAGE offset: the pre-fix code gated
+        // the bound under `if zone.is_none()`, so the name skipped the
+        // check and the malformed offset was silently accepted. This
+        // test is RED on that shape and GREEN only on the
+        // unconditional bound.
+        tz: Some("America/New_York".into()),
+        tz_offset: Some(999_999_999_999),
+    };
+    let err = match get_calendar(&state, &input).await {
+        Err(e) => e,
+        Ok(_) => panic!("a valid zone must not smuggle an absurd offset past the bound"),
+    };
+    assert!(
+        err.contains("tz_offset must be within"),
+        "the error must name the bound: {err}"
+    );
+}

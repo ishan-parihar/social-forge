@@ -259,3 +259,150 @@ async fn an_absurd_offset_is_a_400_not_a_panic() {
         "the 400 has to come from the handler's own bound, not the query extractor: {body}"
     );
 }
+
+/// THE DST CASE: the client used to send ONE constant offset per
+/// window, so a window spanning 2026-11-01 in New York bucketed the
+/// POST-transition posts an hour late. US fall-back is at 06:00 UTC
+/// (02:00 EDT -> 01:00 EST). A post at 04:30 UTC on Nov 2 is AFTER
+/// the transition: the real offset is -5h, local 23:30 on Nov 1.
+/// The legacy constant -14400 (what the client resolved at the start
+/// of an October-windowed week) gives 00:30 on Nov 2 - the WRONG
+/// day. A zone NAME resolves per-instant and puts it on the 1st.
+#[tokio::test]
+async fn a_dst_spanning_window_buckets_post_transition_posts_in_the_zones_day() {
+    let state = state().await;
+    let integration_id = seed_integration(&state).await;
+
+    let (status, body) = call(
+        &state,
+        Method::POST,
+        "/api/posts",
+        Some(json!({
+            "integration_ids": [integration_id],
+            "content": "a post after the fall-back, bucketed by name",
+            "state": "queued",
+            "scheduled_at": "2026-11-02T04:30:00Z",
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "create failed: {body}");
+
+    let window = "start=2026-11-01T00:00:00Z&end=2026-11-04T00:00:00Z";
+    let by_name = day_of(
+        &state,
+        &format!("/api/calendar?{window}&tz=America/New_York"),
+        "a post after the fall-back, bucketed by name",
+    )
+    .await;
+    assert_eq!(
+        by_name, "2026-11-01",
+        "04:30 UTC on Nov 2 is 23:30 Nov 1 in New York (EST, -5h); the post is on {by_name}"
+    );
+
+    // TEETH: the legacy constant -14400 (the offset before the
+    // transition, which is what the old client resolved once per
+    // window) must give the OTHER day. If it gives the same day, the
+    // name path has nothing to fix and this test is vacuous.
+    let by_constant = day_of(
+        &state,
+        &format!("/api/calendar?{window}&tz_offset=-14400"),
+        "a post after the fall-back, bucketed by name",
+    )
+    .await;
+    assert_eq!(
+        by_constant, "2026-11-02",
+        "the pre-transition constant puts the post on Nov 2 - this is the \
+         bug the zone name fixes, so the name and the constant must disagree"
+    );
+}
+
+/// A zone NAME and the offset the client used to send must AGREE
+/// inside a window with NO transition (the name must not regress the
+/// legacy path's correct case), and the NAME must win across one.
+#[tokio::test]
+async fn the_zone_name_agrees_with_the_constant_offset_outside_a_transition() {
+    let state = state().await;
+    let integration_id = seed_integration(&state).await;
+
+    let (status, body) = call(
+        &state,
+        Method::POST,
+        "/api/posts",
+        Some(json!({
+            "integration_ids": [integration_id],
+            "content": "same-instant name vs offset parity",
+            "state": "queued",
+            "scheduled_at": "2026-10-25T02:00:00Z",
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "create failed: {body}");
+
+    let by_name = day_of(
+        &state,
+        "/api/calendar?start=2026-10-20T00:00:00Z&end=2026-10-30T00:00:00Z&tz=America/New_York",
+        "same-instant name vs offset parity",
+    )
+    .await;
+    let by_offset = day_of(
+        &state,
+        "/api/calendar?start=2026-10-20T00:00:00Z&end=2026-10-30T00:00:00Z&tz_offset=-14400",
+        "same-instant name vs offset parity",
+    )
+    .await;
+    assert_eq!(
+        by_name, by_offset,
+        "no DST transition in this window: the name and the constant must agree"
+    );
+    assert_eq!(by_name, "2026-10-24");
+}
+
+/// An unknown zone NAME is refused with a 400, not silently treated
+/// as UTC: a garbled zone would misplace every post in the window
+/// with a 200 and plausible day keys - the worst kind of wrong. This
+/// is the same discipline as the `tz_offset` bound below.
+#[tokio::test]
+async fn an_unknown_zone_name_is_a_400_not_a_silent_utc_fallback() {
+    let state = state().await;
+
+    let (status, body) = call(
+        &state,
+        Method::GET,
+        "/api/calendar?start=2026-10-20T00:00:00Z&end=2026-10-30T00:00:00Z&tz=Mars/Olympus_Mons",
+        None,
+    )
+    .await;
+    assert_eq!(
+        status, StatusCode::BAD_REQUEST,
+        "a garbled zone must be loud, not a 200 with UTC day keys: {body}"
+    );
+    assert!(
+        body.contains("not a known IANA zone"),
+        "the 400 must name the bad zone so the caller can fix it: {body}"
+    );
+}
+
+/// A zone name must not BYPASS the offset bound: adding a parameter
+/// beside the garbage one must not let it through. The MCP tool has
+/// the same contract (see calendar_range_test), and the REST handler
+/// must 400 the pair, not let the valid name win.
+#[tokio::test]
+async fn a_zone_name_does_not_bypass_the_offset_bound() {
+    let state = state().await;
+    let (status, body) = call(
+        &state,
+        Method::GET,
+        "/api/calendar?start=2026-10-20T00:00:00Z&end=2026-10-30T00:00:00Z&tz=America/New_York&tz_offset=999999999999",
+        None,
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::BAD_REQUEST,
+        "an absurd offset must be a 400 even beside a valid zone: {body}"
+    );
+    assert!(
+        body.contains("tz_offset must be within"),
+        "the 400 must come from the handler's own bound: {body}"
+    );
+}

@@ -20,7 +20,7 @@ pub mod tools_ai;
 pub mod tools_analytics;
 pub mod tools_automation;
 pub mod tools_bluesky;
-mod tools_calendar;
+pub mod tools_calendar; // tests drive the loud-refusal contract directly (9.21 parity)
 pub mod tools_campaigns;
 pub mod tools_comments;
 pub mod tools_devto;
@@ -248,7 +248,7 @@ impl SocialForgeMcpServer {
     // ── Calendar Tools ──────────────────────────────────────
 
     #[tool(
-        description = "Get posts grouped by LOCAL day for a date range, matching the web calendar. Pass start and end as RFC3339, and tz_offset as the founder's UTC offset in seconds so the day keys match the calendar the founder sees."
+        description = "Get posts grouped by LOCAL day for a date range, matching the web calendar. Pass start and end as RFC3339, and tz as the founder's IANA zone name (e.g. America/New_York) so the day keys match the calendar the founder sees, DST-correct. Legacy: tz_offset in seconds."
     )]
     async fn calendar_get(
         &self,

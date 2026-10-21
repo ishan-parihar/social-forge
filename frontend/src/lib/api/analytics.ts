@@ -104,9 +104,20 @@ export interface EventLogEntry {
 
 const daysQuery = (d?: number) => d ? `?days=${d}` : '';
 
+// The zone NAME rides along on every summary fetch: the server buckets
+// the day series into the founder's local days (DST-correct), the same
+// days the calendar shows. Without it the series is UTC-dayed and the
+// two pages of the same app disagree about which day a post went out.
+const summaryQuery = (days?: number, tz?: string) => {
+  const parts: string[] = [];
+  if (days) parts.push(`days=${days}`);
+  if (tz) parts.push(`tz=${encodeURIComponent(tz)}`);
+  return parts.length ? `?${parts.join('&')}` : '';
+};
+
 export const analyticsApi = {
-  getSummary: (days?: number, signal?: AbortSignal) => {
-    return api.get<AnalyticsSummary>(`/api/analytics/summary${daysQuery(days)}`, signal);
+  getSummary: (days?: number, tz?: string, signal?: AbortSignal) => {
+    return api.get<AnalyticsSummary>(`/api/analytics/summary${summaryQuery(days, tz)}`, signal);
   },
   getProvider: (provider: string, days?: number, signal?: AbortSignal) => {
     return api.get<ProviderAnalytics>(`/api/analytics?provider=${provider}${days ? `&days=${days}` : ''}`, signal);

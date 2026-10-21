@@ -105,6 +105,12 @@ wreq-util = "=3.0.0-rc.10"
 
 # Time + UUID
 chrono = { version = "0.4", features = ["serde"] }
+# Compile-time embedded IANA tzdata. The server resolves the founder's
+# zone NAME per-instant (DST-correct), so a calendar window spanning a
+# transition no longer buckets post-transition posts an hour late.
+# No runtime database - the tzdata is baked into the binary, which keeps
+# the single-binary rule (AGENTS.md 0.5.3) intact.
+chrono-tz = "0.10"
 uuid = { version = "1", features = ["v4", "serde"] }
 
 # Telegram MTProto (Grammers — pure Rust, no C deps)

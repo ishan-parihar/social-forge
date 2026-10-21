@@ -8,7 +8,7 @@
   import { campaignsApi, type Campaign } from "$lib/api/campaigns";
   import { calendarState } from "$lib/stores/calendar.svelte";
   import { timezone } from "$lib/stores/timezone.svelte";
-  import { wallClockToUtc, zoneOffsetMs } from "$lib/composer/wall-clock";
+  import { wallClockToUtc } from "$lib/composer/wall-clock";
   import { toast } from "$lib/stores/toast";
   import { realtime } from "$lib/stores/realtime";
   import { confirmModal } from "$lib/stores/modals.svelte";
@@ -134,38 +134,16 @@
   }
 
   /**
-   * The founder's UTC offset, in SECONDS.
+   * The founder's zone, as an IANA NAME.
    *
-   * The server buckets a post into the day it belongs to, and the day a
-   * post belongs to is a LOCAL day. The server has no timezone
-   * database, so the client resolves the zone's offset and sends it.
-   *
-   * This is the ONE implementation of "what is this zone's offset"
-   * (AGENTS.md §9.18): `zoneOffsetMs` in wall-clock.ts, the same helper
-   * `wallClockToUtc` uses. The first version here computed the offset
-   * by mixing the browser's local fields with the zone's fields, which
-   * returns ZERO when the selected zone is the browser's zone - the
-   * common case - and the whole fix was a no-op.
-   *
-   * The offset is measured at the window's start instant and applied
-   * to EACH POST's own instant on the server (the range filter itself
-   * uses the raw UTC start and end, which the offset never touches).
-   *
-   * ONE OFFSET PER WINDOW is a known limit: a window spanning a DST
-   * transition buckets the post-transition posts with the
-   * pre-transition offset, so a post within an hour of local midnight
-   * lands on the wrong day. The default zone list is mostly DST zones
-   * and the transitions are in late October / early November. The
-   * cheap fix, when it is wanted, is to send the zone NAME instead of
-   * one constant.
+   * The server buckets a post into the day it belongs to, and the day
+   * a post belongs to is a LOCAL day. The server resolves the name
+   * per-instant (it now embeds the IANA database via chrono-tz), so a
+   * window spanning a DST transition is bucketed correctly - the
+   * client no longer resolves the offset at all. The old constant
+   * offset sent ONE value per window and was wrong across a
+   * transition.
    */
-  function tzOffsetSeconds(startIso: string): number {
-    try {
-      return Math.round(zoneOffsetMs(timezone.value, new Date(startIso).getTime()) / 1000);
-    } catch {
-      return 0;
-    }
-  }
 
   async function fetchEvents(start: string, end: string) {
     loading = true;
@@ -175,11 +153,15 @@
     const filters: { integration_ids?: string[]; campaign_id?: string } = {};
     if (selectedIntegrationId) filters.integration_ids = [selectedIntegrationId];
     if (selectedCampaignId) filters.campaign_id = selectedCampaignId;
+    // The ZONE NAME, not a constant offset: the server resolves the
+    // offset per-instant (DST-correct), so a window spanning a
+    // transition no longer buckets the post-transition posts an hour
+    // late. The client no longer resolves the offset at all.
     const r = await calendarApi.get(
       start,
       end,
       Object.keys(filters).length > 0 ? filters : undefined,
-      tzOffsetSeconds(start)
+      timezone.value
     );
     if (r.data) {
       events = r.data.days.flatMap((d) =>

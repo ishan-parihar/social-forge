@@ -40,7 +40,48 @@ pub struct CalendarQuery {
     ///
     /// Absent, the day key is UTC - the old behaviour, and the right
     /// fallback for a caller that does not care.
+    /// The founder's zone as an IANA NAME ("America/New_York").
+    ///
+    /// Preferred over `tz_offset` because a CONSTANT offset is wrong
+    /// across a DST transition: a week window spanning 2026-11-01 in
+    /// New York contained two offsets, and the posts after the
+    /// transition were bucketed an hour late - a post within an hour
+    /// of local midnight landed on the wrong day. A NAME resolves the
+    /// offset per-instant, which is what the frontend's own
+    /// `zoneOffsetMs` already does.
+    ///
+    /// Unknown names fall back to UTC rather than failing the request:
+    /// a typo in a zone name must not take the calendar down.
+    pub tz: Option<String>,
+    /// The zone's UTC offset in SECONDS. Legacy form: correct within a
+    /// window that has no DST transition, wrong across one. Kept for
+    /// the MCP tool and any API caller that only knows an offset.
     pub tz_offset: Option<i64>,
+}
+
+// ── zone resolution ───────────────────────────────────────────
+
+/// Parse an IANA zone name ONCE, up front. An unknown name is a
+/// caller error and must be refused - NOT silently treated as UTC:
+/// a garbled zone would misplace every post in the window with a 200
+/// and plausible-looking day keys, the worst kind of wrong (the same
+/// reason `tz_offset` beyond a day is a 400, not a clamp).
+pub fn parse_zone(name: &str) -> Result<chrono_tz::Tz, String> {
+    use std::str::FromStr;
+    chrono_tz::Tz::from_str(name)
+        .map_err(|_| format!("tz is not a known IANA zone name: {name}"))
+}
+
+/// The offset of a PARSED zone (see `parse_zone`) at one instant.
+/// Per-instant, so a window spanning a DST transition buckets every
+/// post into the day the founder sees - the same as the frontend's
+/// `zoneOffsetMs`.
+pub fn zone_offset_seconds(
+    zone: chrono_tz::Tz,
+    at: chrono::DateTime<chrono::Utc>,
+) -> i64 {
+    use chrono::Offset;
+    at.with_timezone(&zone).offset().fix().local_minus_utc() as i64
 }
 
 /// The LOCAL day an instant belongs to, given the zone's UTC offset.
@@ -131,22 +172,41 @@ pub async fn get(
     let end = parse_end_date_or_datetime(&query.end)
         .ok_or_else(|| AppError::BadRequest("Invalid end date".into()))?;
 
-    // The offset is a NUMBER from a query string, so it has to be
-    // validated before it is used.
+    // A NAME beats a constant: it resolves the offset PER-INSTANT
+    // (DST-correct), so a window spanning a transition buckets every
+    // post into the day the founder sees. The constant stays for
+    // callers that only know an offset (the MCP tool's legacy input).
     //
+    // An unknown NAME is refused with a 400, exactly like an out-of-
+    // bound constant: a garbled zone must be loud, not silently UTC
+    // (which would misplace every post in the window with a 200).
+    // `tz_offset` is validated ALWAYS, not only on the no-`tz` arm:
     // `chrono::Duration::seconds` PANICS when the magnitude is beyond
-    // i64::MAX/1000, and there is no CatchPanic layer in the router,
-    // so `tz_offset=99999999999999999999` took the whole handler down.
-    // A real UTC offset is within 18 hours; anything beyond a DAY is
-    // not an offset, and the caller gets a 400 naming the bound.
-    let tz_offset = match query.tz_offset {
-        Some(secs) if secs.unsigned_abs() > 86_400 => {
+    // i64::MAX/1000, there is no CatchPanic layer in the router, and
+    // a caller that sends BOTH a name and a garbage offset must not
+    // reach the bucketing just because the name wins.
+    if let Some(secs) = query.tz_offset {
+        if secs.unsigned_abs() > 86_400 {
             return Err(AppError::BadRequest(
                 "tz_offset must be within plus or minus one day (in seconds)".into(),
             ));
         }
-        Some(secs) => Some(secs),
+    }
+    let tz = match query.tz.as_deref() {
+        Some(name) => Some(parse_zone(name).map_err(AppError::BadRequest)?),
         None => None,
+    };
+    // The constant is only USED when no name was given (the name
+    // resolves per-instant), but it was validated above either way.
+    let const_offset = if tz.is_some() { None } else { query.tz_offset };
+    // One closure for all three cases: name (per-instant), constant
+    // offset, UTC (absent).
+    let local = |dt: chrono::DateTime<chrono::Utc>| -> String {
+        let secs = match tz {
+            Some(zone) => zone_offset_seconds(zone, dt),
+            None => const_offset.unwrap_or(0),
+        };
+        local_day_key(dt, Some(secs))
     };
 
     // v23-4: parse optional integration_ids filter (comma-separated UUIDs).
@@ -185,7 +245,9 @@ pub async fn get(
         // across midnight the wrong way (a 02:00 UTC post in New York
         // is the PREVIOUS day, and a post at 23:00 UTC in Auckland is
         // the NEXT day).
-        let local = |dt: chrono::DateTime<chrono::Utc>| -> String { local_day_key(dt, tz_offset) };
+        //
+        // `local` is the shared closure built above: per-instant for a
+        // zone name, constant for a legacy offset, UTC when absent.
         let date_key = if p.state == "published" && p.published_at.is_some() {
             p.published_at.map(&local)
         } else {
@@ -288,4 +350,36 @@ fn parse_end_date_or_datetime(s: &str) -> Option<DateTime<Utc>> {
         return Some(naive_dt);
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{parse_zone, zone_offset_seconds};
+
+    /// The shared resolver resolves the offset PER-INSTANT, which is
+    /// the whole point of taking a NAME instead of a constant: New
+    /// York is -4h before the 2026-11-01 06:00 UTC fall-back and -5h
+    /// after. Pinned here, where the rule lives (AGENTS.md 9.18).
+    #[test]
+    fn zone_offset_seconds_resolves_the_transition_per_instant() {
+        let tz = parse_zone("America/New_York").expect("known zone");
+        let before = chrono::DateTime::parse_from_rfc3339("2026-11-01T05:00:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        let after = chrono::DateTime::parse_from_rfc3339("2026-11-01T07:00:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        assert_eq!(zone_offset_seconds(tz, before), -4 * 3600);
+        assert_eq!(zone_offset_seconds(tz, after), -5 * 3600);
+    }
+
+    /// An unknown name is REFUSED, not treated as UTC: a garbled
+    /// zone must never silently misplace every post in a window.
+    #[test]
+    fn an_unknown_zone_name_is_refused_not_treated_as_utc() {
+        assert!(parse_zone("Mars/Olympus_Mons").is_err());
+        assert!(parse_zone("America%2FNew_York").is_err(),
+            "a doubly-encoded name (the classic client bug) must be loud, not UTC");
+        assert!(parse_zone("").is_err());
+    }
 }

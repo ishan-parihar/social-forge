@@ -160,7 +160,7 @@ Written by `scripts/vendor-pull.sh --update`.
 <!-- vendor-pull:begin -->
 lock_digest: 75d9d1881e68d643750aa4488f324f17684167fae824f13645a141ca1dd99ad3
 core2_state: stub.idle
-last_checked: 2026-10-18T12:05:22Z
+last_checked: 2026-10-21T14:27:46Z
 <!-- vendor-pull:end -->
 
 ## 7. Follow-ups

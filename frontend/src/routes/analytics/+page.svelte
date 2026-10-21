@@ -68,7 +68,7 @@
     // version made a second round-trip on its own for the provider detail.
     const [summaryRes, engagementRes, adherenceRes, cadenceRes, eventsRes, feedRes, postsRes, provRes] =
       await Promise.all([
-        analyticsApi.getSummary(days, signal),
+        analyticsApi.getSummary(days, timezone.value, signal),
         analyticsApi.getEngagement(days, signal),
         analyticsApi.getAdherence(days, signal),
         analyticsApi.getCadence(days, signal),

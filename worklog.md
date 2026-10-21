@@ -1091,3 +1091,75 @@ Known issues / follow-ups:
     midnight lands on the wrong day. The cheap fix, when it is wanted,
     is to send the zone NAME instead of one constant. Known and
     documented at the call site.
+
+---
+Task ID: dst-zone-name-bucketing
+Agent: omp (goal session, 2026-10-21)
+Task: Fix the two open visual-layer bucketing bugs: the calendar's DST
+wrong-day bucketing (one constant offset per window) and the analytics
+day series bucketing in UTC while the calendar buckets locally.
+
+Work Log:
+- Added `chrono-tz` 0.10 (compile-time embedded IANA tzdata, single-binary
+  rule intact) and recorded the lock via `vendor-pull.sh --update`.
+- ONE seam, one rule: `api::calendar::parse_zone` (parses an IANA name
+  ONCE, up front) + `zone_offset_seconds` (per-instant offset) +
+  `local_day_key` (unchanged day-key rule). REST, MCP and analytics all
+  route through it.
+- GET /api/calendar accepts `tz=<IANA name>`, resolved per-instant
+  (DST-correct). `tz_offset` stays as the legacy constant form, and its
+  bound is now UNCONDITIONAL: a valid name must not smuggle a garbage
+  offset past the 400.
+- Unknown zone name is a 400 naming the bad zone - NOT a silent UTC
+  fallback (a garbled zone would misplace every post in the window with
+  a 200 and plausible day keys). The first implementation had exactly
+  that silent fallback; the test that pinned it was rewritten.
+- `calendar_get` (MCP) takes `tz` too; parse lifted ABOVE the post loop
+  (was per-post inside it, so an empty range answered Ok with no days -
+  an agent would read a bad zone as "nothing scheduled"); offset bound
+  unconditional, matching REST (9.21).
+- Analytics `dense_day_series` buckets in the founder's zone: buckets,
+  `start` AND `today` are all zone days. The UTC-`start` bug dropped
+  every post published in the first hours of the window (they bucketed
+  below the loop's first day while the SQL counts included them).
+- Frontend: calendar, dashboard and analytics clients send the zone
+  NAME (`timezone.value`); the client no longer resolves offsets.
+- Tests: DST regression asserts Nov 1 by name AND Nov 2 by constant
+  (teeth both directions); zone-edge series test; unknown-zone 400;
+  MCP unknown-zone + bypass tests; REST bypass mirror. The MCP bypass
+  test was run RED against the buggy shape before the fix landed
+  (9.51 discipline).
+
+Stage Summary:
+- cargo test --lib: 486 pass. calendar suites: 8 + 8 pass.
+- clippy --lib --bins --all-features --locked: clean (pre-existing
+  core2 patch warning only).
+- pnpm build + svelte-check: clean. make check: clean (88 contrast
+  pairs, tailwind classes, vendor pins).
+- All 7 browser gates against the final release binary on :6544:
+  probe 27x4x2 0 FAIL / 0 WARN, 0 targets under floor, 0 analytics
+  failures, 0 dialog failures, 0 contrast failures both themes,
+  0 drag failures.
+- Live oracle on the release binary: `tz=Not/AZone` -> 400 with the
+  message; a 02:00Z post lands 10-24 under `tz=America/New_York` and
+  10-25 under UTC; the name+offset bypass pair -> 400.
+
+Known issues / environment findings:
+- The :6544 audit instance is supervised by /tmp/supervise-seed.sh
+  (while-true respawner, seeded DB at /tmp/sf-seed). It now runs the
+  RELEASE binary. Killing the server does not kill the instance; a
+  gate run can silently measure a stale build if the binary is not
+  rebuilt first. It was serving a DEBUG binary from an earlier tree
+  state for part of this session, which produced a false "tz not
+  applied" signal.
+- `make deploy`/`make redeploy` are broken on this host by the
+  cargo-zigbuild 0.23.4 / zig 0.16.0 skew ("unsupported linker arg:
+  --no-keep-memory"); native `cargo build --release` + supervisor
+  respawn is the working path here.
+- A server started without APP_URL/FRONTEND_URL overrides uses the
+  repo .env's :6543 and fails CSRF for a :6544 origin.
+- OPEN (separate item): the remaining analytics sites
+  (get_engagement.by_day_sql, get_cadence.day_rows,
+  calculate_streak) still day-bucket in UTC; the summary series is
+  zone-correct now, those three are not.
+- OPEN (unchanged): /api/ai/* streaming (backend, not visual-layer).

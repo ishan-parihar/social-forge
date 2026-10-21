@@ -236,6 +236,10 @@ fn filter_series_to_window(data: serde_json::Value, days: Option<i64>) -> serde_
 #[derive(Debug, Deserialize)]
 pub struct AnalyticsSummaryQuery {
     pub days: Option<i32>,
+    /// The founder's zone as an IANA NAME ("America/New_York"). The
+    /// day series buckets into the zone's days, so the chart's day
+    /// boundaries match the calendar's. Absent: UTC (legacy).
+    pub tz: Option<String>,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -261,11 +265,16 @@ pub struct DayCount {
 ///
 /// The chart shows a WINDOW, so the series has to cover the window.
 ///
-/// The day is a UTC day, the convention the rest of the endpoint uses.
-/// The founder's own zone is an IANA name in a FRONTEND localStorage
-/// store, which the server never sees, so the day bucket cannot follow
-/// it here.
-fn dense_day_series(cutoff_epoch: i64, epochs: &[i64]) -> Vec<DayCount> {
+/// The day is the LOCAL day in the founder's zone when `tz` is given
+/// (an IANA name, resolved per-instant - DST-correct), and a UTC day
+/// otherwise. Before the zone arrived the chart bucketed in UTC while
+/// the calendar bucketed locally, so the same publish showed up on
+/// two different days on the two pages of the same app.
+fn dense_day_series(
+    cutoff_epoch: i64,
+    epochs: &[i64],
+    tz: Option<chrono_tz::Tz>,
+) -> Vec<DayCount> {
     use std::collections::HashMap;
 
     let mut counts: HashMap<chrono::NaiveDate, i64> = HashMap::new();
@@ -273,14 +282,39 @@ fn dense_day_series(cutoff_epoch: i64, epochs: &[i64]) -> Vec<DayCount> {
         let Some(dt) = chrono::DateTime::from_timestamp(*ts, 0) else {
             continue;
         };
-        *counts.entry(dt.date_naive()).or_insert(0) += 1;
+        let day = match tz {
+            Some(z) => (dt + chrono::Duration::seconds(
+                crate::api::calendar::zone_offset_seconds(z, dt),
+            )).date_naive(),
+            None => dt.date_naive(),
+        };
+        *counts.entry(day).or_insert(0) += 1;
     }
 
-    let Some(start) = chrono::DateTime::from_timestamp(cutoff_epoch, 0) else {
+    let Some(cutoff_dt) = chrono::DateTime::from_timestamp(cutoff_epoch, 0) else {
         return Vec::new();
     };
-    let start = start.date_naive();
-    let today = chrono::Utc::now().date_naive();
+    // ALL THREE edges are the zone's days, or the window is incoherent:
+    // buckets are zone days, `today` is the zone's date of now, and
+    // `start` must be the zone's date of the cutoff. With a UTC start,
+    // a post published at 01:00 UTC on the cutoff day in New York
+    // (still 21:00 the PREVIOUS local day) passed the SQL filter but
+    // bucketed to a day BEFORE the loop's first day - it existed in
+    // the SQL counts and was MISSING from the chart.
+    let zone_date = |dt: chrono::DateTime<chrono::Utc>| {
+        match tz {
+            Some(z) => (dt
+                + chrono::Duration::seconds(
+                    crate::api::calendar::zone_offset_seconds(z, dt),
+                ))
+            .date_naive(),
+            None => dt.date_naive(),
+        }
+    };
+    let start = zone_date(cutoff_dt);
+    // "Today" is the zone's today, not UTC's: in Auckland the UTC
+    // day is YESTERDAY'S, and the series would end one day early.
+    let today = zone_date(chrono::Utc::now());
 
     let mut out = Vec::new();
     let mut day = start;
@@ -390,7 +424,11 @@ pub async fn get_summary(
     .bind(cutoff)
     .fetch_all(&state.db)
     .await?;
-    let posts_by_day = dense_day_series(cutoff, &published_epochs);
+    let tz = match query.tz.as_deref() {
+        Some(name) => Some(crate::api::calendar::parse_zone(name).map_err(AppError::BadRequest)?),
+        None => None,
+    };
+    let posts_by_day = dense_day_series(cutoff, &published_epochs, tz);
 
     let mut published = 0i64;
     let mut failed = 0i64;
@@ -1033,7 +1071,7 @@ mod tests {
         // Two posts, on the FIRST and the LAST day of the window.
         let first = midnight(start);
         let last = midnight(today);
-        let series = dense_day_series(cutoff, &[first, last, last]);
+        let series = dense_day_series(cutoff, &[first, last, last], None);
 
         // Seven days, not two.
         assert_eq!(series.len(), 7, "the series must cover every day");
@@ -1066,12 +1104,48 @@ mod tests {
     #[test]
     fn the_day_series_dates_are_iso_days() {
         let cutoff = Utc::now().timestamp();
-        let series = dense_day_series(cutoff, &[]);
+        let series = dense_day_series(cutoff, &[], None);
         assert!(!series.is_empty());
         assert!(
             chrono::NaiveDate::parse_from_str(&series[0].date, "%Y-%m-%d").is_ok(),
             "the date must be YYYY-MM-DD: {}",
             series[0].date
         );
+    }
+
+    /// A windowed post must land INSIDE the series. The bug: buckets
+    /// and `today` were zone days but `start` was the UTC date of the
+    /// cutoff, so a post at 01:00 UTC on the cutoff day in New York
+    /// (21:00 the PREVIOUS local day) passed the SQL filter, bucketed
+    /// to a day BEFORE the loop's first day, and vanished from the
+    /// chart while the SQL counts still included it.
+    #[test]
+    fn a_zone_series_covers_a_post_published_at_the_windows_zone_edge() {
+        let ny = crate::api::calendar::parse_zone("America/New_York").unwrap();
+        // 2026-10-21 01:00Z: local New York 2026-10-20 21:00 (EDT).
+        let edge_post = chrono::DateTime::parse_from_rfc3339("2026-10-21T01:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc)
+            .timestamp();
+        // Cutoff exactly at the window start: 2026-10-21 00:00Z.
+        let cutoff = chrono::DateTime::parse_from_rfc3339("2026-10-21T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc)
+            .timestamp();
+        let series = dense_day_series(cutoff, &[edge_post], Some(ny));
+        // The series starts at the ZONE date of the cutoff (Oct 20 in
+        // New York), so the edge post's zone day is the FIRST day and
+        // the count is visible - not dropped off the front.
+        assert_eq!(
+            series[0].date, "2026-10-20",
+            "the first day is the zone date of the cutoff: {}",
+            series[0].date
+        );
+        assert_eq!(
+            series[0].count, 1,
+            "the edge post bucketed to the first day, so it is IN the chart"
+        );
+        let total: i64 = series.iter().map(|d| d.count).sum();
+        assert_eq!(total, 1, "no post may vanish from the window");
     }
 }

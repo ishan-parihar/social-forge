@@ -92,7 +92,7 @@
       // last week showed nothing, and a channel that published 20 days
       // ago was counted as if it had not published at all. The label
       // now names the window the data actually covers.
-      analyticsApi.getSummary(7),
+      analyticsApi.getSummary(7, timezone.value),
       integrationsApi.list(),
       feedApi.analytics(7),
       analyticsApi.getEngagement(7),
