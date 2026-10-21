@@ -1554,3 +1554,20 @@ Known issues: the queue from the previous entries is now empty. The
 remaining work is discovery, not named items: another red-team pass
 over the surfaces this session did not touch (automation, feed,
 campaigns detail, comments) with the widened audit gates.
+
+Correction to resolve-first-user-seeded-instance's summary:
+- "every item landed with red-proofed regression tests" overstated.
+  Red-proofed: the DST day-key tests, the zone-name bypass test, the
+  wall-clock parity pair, the streak session-user test, the
+  resolve_first_user seeded-instance test. NOT red-proofed: the
+  analytics zone-series tests and the resolve constant-arm (both
+  verified green against discriminating data, but no mutation run).
+- Two paths were named as landed while never executed (9.38):
+  (1) the tap-target re-band's 24-44 WARN branch - the live run
+  found zero controls in the band, so the new classification has
+  only run its all-clear path; the branch's first real exercise will
+  be whichever future control lands in the band;
+  (2) resolve_first_user's multiple-users refusal arm - NOW COVERED:
+  tests/resolve_local_user_test.rs::two_users_without_the_constant_
+  is_a_loud_refusal executes it against a two-row users table and
+  passes.

@@ -104,3 +104,33 @@ async fn an_empty_instance_is_a_loud_error() {
         "the error must name the mis-seeding: {err}"
     );
 }
+
+/// The refused arm: an instance with TWO users and no DEFAULT_USER_ID
+/// row is not a shape single-user mode defines - the error names that
+/// rather than picking one arbitrarily. This arm was implemented and
+/// promised by the doc comment but never executed before this test:
+/// the seeded instance has one user, the normal install one, so both
+/// live runs took the other two arms (9.38: a branch that has never
+/// run must say so - now it has run).
+#[tokio::test]
+async fn two_users_without_the_constant_is_a_loud_refusal() {
+    let state = bare_state().await;
+    sqlx::query("DELETE FROM users")
+        .execute(&state.db)
+        .await
+        .expect("clear users");
+    for n in 0..2 {
+        let id = Uuid::new_v4();
+        sqlx::query("INSERT INTO users (id, email, password, name) VALUES (?, ?, 'x', 'Two')")
+            .bind(id)
+            .bind(format!("{id}@two{n}.test"))
+            .execute(&state.db)
+            .await
+            .expect("seed user");
+    }
+    let err = resolve_first_user(&state).await.expect_err("must refuse");
+    assert!(
+        err.contains("zero or multiple users"),
+        "the error must name the multiple-user shape: {err}"
+    );
+}
