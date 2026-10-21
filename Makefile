@@ -67,6 +67,10 @@ check: vendor-pins
 #   audit-contrast.mjs the rendered CONTRAST, same driving, measuring
 #                     every text element against its EFFECTIVE
 #                     background
+#   audit-analytics.mjs  the ANALYTICS dashboard with a seeded account:
+#                        non-zero engagement, a DENSE posting-volume
+#                        series, and a success rate that RECONCILES with
+#                        the numbers printed beside it.
 #   audit-dialogs.mjs   the DIALOG contract: a name, aria-modal, the
 #                     focus inside it, and Escape that closes it (or
 #                     asks first)
@@ -91,6 +95,7 @@ audit:
 	cd frontend && node scripts/audit-contrast.mjs --url $(URL) --password '$(PASSWORD)' --theme dark --out /tmp/sf-contrast-dark.json
 	cd frontend && node scripts/audit-contrast.mjs --url $(URL) --password '$(PASSWORD)' --theme light --out /tmp/sf-contrast-light.json
 	cd frontend && node scripts/audit-dialogs.mjs --url $(URL) --password '$(PASSWORD)'
+	cd frontend && node scripts/audit-analytics.mjs --url $(URL) --password '$(PASSWORD)'
 	cd frontend && node scripts/e2e-calendar-drag.mjs --url $(URL) --password '$(PASSWORD)'
 
 # ── Deploy / Redeploy ───────────────────────────────────────────
