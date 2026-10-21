@@ -1513,3 +1513,44 @@ Stage Summary:
 
 Known issues: resolve_first_user DB-backed resolution remains the
 open queue item.
+
+---
+Task ID: resolve-first-user-seeded-instance
+Agent: omp (goal session, 2026-10-22)
+Task: Make resolve_first_user (the ~80-site MCP/CLI user seam) resolve
+the instance's REAL local user instead of returning a hard-coded
+constant - the seeded-instance defect the streak fix exposed.
+
+Work Log:
+- resolve_first_user used to return DEFAULT_USER_ID
+  unconditionally. On any instance the app started, that is correct:
+  ensure_local_user creates the row. But an EXTERNALLY-seeded
+  instance (a copy, a fixture, a migrated database - this session's
+  own audit instance) carries its single users row under a different
+  id, and then every MCP tool read a user that owned no posts.
+- The fix: the constant when its row exists (the normal install,
+  unchanged behaviour for every standard deployment), otherwise the
+  instance's single real user, otherwise a loud error naming the
+  mis-seeding. Multiple users is refused - single-user mode has no
+  rule for picking one arbitrarily.
+- tests/resolve_local_user_test.rs pins all three arms against the
+  real helper. Red-proof: mutating the resolve back to
+  always-the-constant made the seeded-instance test FAIL (the
+  constant answered instead of the seeded user) and green on
+  revert.
+- mcp_parity_test's streak call updated for the StreakGetInput { tz }
+  shape from the previous iteration.
+- Visibility: mcp::auth and resolve_first_user are pub (the
+  test-reachable-seam pattern, like api::calendar and
+  api::activity).
+
+Stage Summary:
+- cargo test --lib 488; resolve_local_user 3; mcp_parity 9;
+  mcp_tools 20; streak_unification 3 - all green. clippy clean.
+- The ~80 call sites' behaviour is UNCHANGED on a standard install:
+  the constant's row exists there and the first query confirms it.
+
+Known issues: the queue from the previous entries is now empty. The
+remaining work is discovery, not named items: another red-team pass
+over the surfaces this session did not touch (automation, feed,
+campaigns detail, comments) with the widened audit gates.

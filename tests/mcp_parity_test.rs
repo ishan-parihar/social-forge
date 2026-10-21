@@ -165,9 +165,12 @@ async fn parity_tools_reject_malformed_ids_before_touching_the_db() {
 #[tokio::test]
 async fn streak_tool_reports_the_streak_fields() {
     let state = state().await;
-    let out = tools_analytics::handle_streak_get(&state, &tools_analytics::StreakGetInput {})
-        .await
-        .expect("streak");
+    let out = tools_analytics::handle_streak_get(
+        &state,
+        &tools_analytics::StreakGetInput { tz: None },
+    )
+    .await
+    .expect("streak");
     assert!(
         out.0["streak_days"].is_number(),
         "streak_days present: {}",

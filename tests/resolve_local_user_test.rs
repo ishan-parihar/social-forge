@@ -1,0 +1,106 @@
+// ─── resolve_first_user: the seeded-instance fix ───
+//
+// `resolve_first_user` behind ~80 MCP/CLI call sites used to return the
+// hard-coded DEFAULT_USER_ID unconditionally. On any instance the app
+// itself started, `ensure_local_user` has created that row, so the
+// constant was right. But an EXTERNALLY-seeded instance (a copy, a
+// fixture, a migrated database) can carry its single users row under a
+// different id - and then every tool read a user that owned nothing:
+// empty lists, zero streaks, confident wrong answers. This session's
+// own seeded audit instance is exactly that shape.
+//
+// The fix resolves: the constant when its row exists, otherwise the
+// instance's single real user, otherwise a loud error. These tests pin
+// all three arms against the real helper.
+//
+// Run: cargo test --test resolve_local_user_test
+
+use social_forge::api::AppState;
+use social_forge::auth::middleware::DEFAULT_USER_ID;
+use social_forge::config::Config;
+use social_forge::db;
+use social_forge::mcp::auth::resolve_first_user;
+use social_forge::realtime::Broadcaster;
+use social_forge::social::registry::ProviderRegistry;
+use uuid::Uuid;
+
+/// A state on the isolated test DB, WITHOUT ensure_local_user: the
+/// users table is whatever this test makes it.
+async fn bare_state() -> AppState {
+    social_forge::config::load_dotenv_for_tests();
+    let config = Config::from_env().expect("config");
+    let pool = db::create_pool(&config.database_url).await.expect("pool");
+    let registry = ProviderRegistry::new(&config, None, None);
+    AppState {
+        db: pool,
+        config: config.clone(),
+        broadcast: Broadcaster::new(),
+        providers: registry,
+        token_key: None,
+        telegram_client_manager: None,
+        wa_client: None,
+        media_http_client: reqwest::Client::new(),
+        media_wreq_client: wreq::Client::new(),
+    }
+}
+
+async fn user_count(state: &AppState) -> i64 {
+    sqlx::query_scalar("SELECT COUNT(*) FROM users")
+        .fetch_one(&state.db)
+        .await
+        .unwrap()
+}
+
+/// The normal install: DEFAULT_USER_ID's row exists, the answer is the
+/// constant, no extra lookup.
+#[tokio::test]
+async fn the_constant_wins_when_its_row_exists() {
+    let state = bare_state().await;
+    db::ensure_local_user(&state.db).await.expect("local user");
+    let resolved = resolve_first_user(&state).await.expect("resolve");
+    assert_eq!(resolved, DEFAULT_USER_ID);
+}
+
+/// The externally-seeded instance: no constant row, one real user under
+/// a different id - the tools must read THAT user, not a ghost. This
+/// is the exact shape of the seeded audit instance that showed every
+/// MCP tool answering 0 for the founder's real posts.
+#[tokio::test]
+async fn an_externally_seeded_instance_resolves_its_real_user() {
+    let state = bare_state().await;
+    // Clean slate: this binary's other tests may have created users.
+    sqlx::query("DELETE FROM users")
+        .execute(&state.db)
+        .await
+        .expect("clear users");
+    let seeded = Uuid::new_v4();
+    sqlx::query("INSERT INTO users (id, email, password, name) VALUES (?, ?, 'x', 'Seeded')")
+        .bind(seeded)
+        .bind(format!("{seeded}@seed.test"))
+        .execute(&state.db)
+        .await
+        .expect("seed user");
+    assert_eq!(user_count(&state).await, 1, "exactly one user, not the constant");
+
+    let resolved = resolve_first_user(&state).await.expect("resolve");
+    assert_eq!(
+        resolved, seeded,
+        "no DEFAULT_USER_ID row: the instance's single real user is the answer"
+    );
+}
+
+/// A mis-seeded instance (no users at all) is a loud error, not a
+/// confident wrong answer.
+#[tokio::test]
+async fn an_empty_instance_is_a_loud_error() {
+    let state = bare_state().await;
+    sqlx::query("DELETE FROM users")
+        .execute(&state.db)
+        .await
+        .expect("clear users");
+    let err = resolve_first_user(&state).await.expect_err("must refuse");
+    assert!(
+        err.contains("not a valid single-user install"),
+        "the error must name the mis-seeding: {err}"
+    );
+}

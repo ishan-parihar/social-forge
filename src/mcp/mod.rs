@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::api::AppState;
 
-pub(crate) mod auth;
+pub mod auth; // pub: tests/resolve_local_user_test.rs drives resolve_first_user (the ~80-site seam)
 pub(crate) mod rest_bridge;
 pub mod tools_admin;
 pub mod tools_ai;
