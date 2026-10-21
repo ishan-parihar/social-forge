@@ -147,8 +147,17 @@
    * returns ZERO when the selected zone is the browser's zone - the
    * common case - and the whole fix was a no-op.
    *
-   * The offset is measured at the window's start instant, which is the
-   * instant the server's range filter uses.
+   * The offset is measured at the window's start instant and applied
+   * to EACH POST's own instant on the server (the range filter itself
+   * uses the raw UTC start and end, which the offset never touches).
+   *
+   * ONE OFFSET PER WINDOW is a known limit: a window spanning a DST
+   * transition buckets the post-transition posts with the
+   * pre-transition offset, so a post within an hour of local midnight
+   * lands on the wrong day. The default zone list is mostly DST zones
+   * and the transitions are in late October / early November. The
+   * cheap fix, when it is wanted, is to send the zone NAME instead of
+   * one constant.
    */
   function tzOffsetSeconds(startIso: string): number {
     try {

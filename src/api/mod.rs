@@ -36,7 +36,7 @@ pub(crate) mod ai;
 mod analytics;
 mod auth;
 mod automation;
-mod calendar;
+pub(crate) mod calendar;
 pub(crate) mod campaigns;
 pub(crate) mod comments;
 mod developer;

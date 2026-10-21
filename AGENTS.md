@@ -1167,8 +1167,9 @@ classes ("bg-linetext-content-secondary").
 
 `frontend/scripts/check-tailwind-classes.mjs` collects every Tailwind
 class the source uses and confirms each one is in the GENERATED
-stylesheet. It is in `make check`, next to the hex gate, and both
-need the built frontend.
+stylesheet. It is in `make check`, beside the hex gate (both need the
+BUILT frontend) and `scripts/check_status_contrast.py` (which reads the
+SOURCE app.css and needs no build).
 
 ### 9.47 A NUMBER computed from a CLIPPED PAGE is a wrong number
 
@@ -1219,6 +1220,35 @@ was 21px.
 calendar views are all probed. The same applies to the modals: a
 dialog that only appears after a click is a dialog no route-level pass
 ever rendered.
+
+### 9.51 A query PARAMETER that reaches a date library PANICS the handler
+
+`tz_offset` came off the query string as a raw `Option<i64>` and went
+straight into `chrono::Duration::seconds`, which PANICS past
+i64::MAX/1000. There is no CatchPanic layer in the router, so
+`tz_offset=9223372036854775807` took the whole `/api/calendar` handler
+down - and the same shape exists in ANY parameter that feeds a date
+or duration library.
+
+The bound has to be in the handler: a real UTC offset is within 18
+hours, and anything beyond a DAY is refused with a 400 that names the
+bound. The shared helper enforces it too, because a shared helper is
+called from places that did not validate.
+
+THE TEST TRAP, and it is subtle: a value the EXTRACTOR rejects proves
+nothing about the handler. axum's `Query` deserializes the whole query
+string BEFORE the handler runs, and its own 400 is
+indistinguishable from the handler's unless the test asserts on the
+BODY. A 20-digit `tz_offset` never reaches the handler at all, so a
+test using one passed with the validation DELETED. Use a value that
+DESERIALIZES and then panics (i64::MAX is 19 digits), and assert the
+response contains the handler's own message.
+
+And the mutation run itself has a trap: a "Finished in 0.25s" build
+after editing an 85k-LOC lib is a STALE BUILD, and a test that has
+never seen its own failure proves nothing. A real rebuild of the lib
+takes seconds; the mutated run must PANIC (`TimeDelta::seconds out of
+bounds`), not pass.
 
 ---
 

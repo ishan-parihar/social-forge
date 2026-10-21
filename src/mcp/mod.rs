@@ -248,7 +248,7 @@ impl SocialForgeMcpServer {
     // ── Calendar Tools ──────────────────────────────────────
 
     #[tool(
-        description = "Get posts for a date range (for calendar view). Pass start and end dates as RFC3339."
+        description = "Get posts grouped by LOCAL day for a date range, matching the web calendar. Pass start and end as RFC3339, and tz_offset as the founder's UTC offset in seconds so the day keys match the calendar the founder sees."
     )]
     async fn calendar_get(
         &self,

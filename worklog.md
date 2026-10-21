@@ -14,7 +14,7 @@
 
 Before starting work: read this file top to bottom. After finishing: append a
 section using the template in AGENTS.md §8 — never overwrite. One-liners can
-also be appended via `scripts/kb log "<entry>"` (append-only, the same file).
+also be appended via `scripts/genome log "<title>" --body-file <file>`.
 
 ---
 Task ID: kb-adoption-2026-10-17
@@ -1079,3 +1079,15 @@ Known issues / follow-ups:
     one is fixed) still buckets in UTC. It is a trend chart; the
     founder's zone would make the boundary day consistent. The same
     `tz_offset` seam is available when wanted.
+  - CLOSED: the MCP `calendar_get` tool now takes `tz_offset` and
+    buckets through the SAME day-key helper as GET /api/calendar
+    (`api::calendar::local_day_key`), so the two surfaces no longer
+    disagree for the same operation (AGENTS.md 9.21). An agent asking
+    "what is on Oct 25?" and a founder looking at the calendar now get
+    the same answer.
+  - OPEN: the client sends ONE offset per window, so a window spanning
+    a DST transition (EU 2026-10-25, US 2026-11-01) buckets the
+    post-transition posts an hour late. A post within an hour of local
+    midnight lands on the wrong day. The cheap fix, when it is wanted,
+    is to send the zone NAME instead of one constant. Known and
+    documented at the call site.

@@ -14,6 +14,19 @@ use crate::db::queries;
 pub struct CalendarInput {
     pub start: String,
     pub end: String,
+    /// The founder's UTC offset, in SECONDS.
+    ///
+    /// The day a post belongs to is a LOCAL day. Without this the tool
+    /// buckets in UTC, while GET /api/calendar buckets in the founder's
+    /// zone - so an agent asking "what is on Oct 25?" through this tool
+    /// and a founder looking at the calendar got DIFFERENT answers for
+    /// the same operation (AGENTS.md 9.21: the MCP surface is a CLIENT
+    /// of the REST surface, not a second implementation).
+    ///
+    /// Validated: beyond plus or minus one day is not an offset, and
+    /// the day-key helper enforces the bound too.
+    #[serde(default)]
+    pub tz_offset: Option<i64>,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
@@ -58,9 +71,12 @@ pub async fn get_calendar(
     let mut day_map: std::collections::BTreeMap<String, Vec<CalendarPost>> =
         std::collections::BTreeMap::new();
     for p in posts {
+        // THE SHARED DAY KEY (AGENTS.md 9.21). This used to be a local
+        // `d.format("%Y-%m-%d")` - always UTC - so the tool disagreed
+        // with GET /api/calendar for the same operation.
         let date_key = p
             .scheduled_at
-            .map(|d| d.format("%Y-%m-%d").to_string())
+            .map(|d| crate::api::calendar::local_day_key(d, input.tz_offset))
             .unwrap_or_else(|| "unscheduled".into());
 
         let preview = p.content.chars().take(100).collect::<String>();

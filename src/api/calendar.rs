@@ -43,6 +43,32 @@ pub struct CalendarQuery {
     pub tz_offset: Option<i64>,
 }
 
+/// The LOCAL day an instant belongs to, given the zone's UTC offset.
+///
+/// THE ONE IMPLEMENTATION of the day-key rule. The REST calendar and
+/// the MCP `calendar_get` tool both call it, because the two surfaces
+/// must not disagree: an agent asking "what is on Oct 25?" through the
+/// tool and a founder looking at the calendar have to get the same
+/// answer, and before this existed the tool bucketed in UTC while the
+/// REST endpoint bucketed in the founder's zone.
+///
+/// The offset is applied to the instant and THEN the date is taken,
+/// which is the only order that is right: taking the UTC date first
+/// and shifting it afterwards would move a post across midnight the
+/// wrong way (a 02:00 UTC post in New York is the PREVIOUS day, and a
+/// post at 23:00 UTC in Auckland is the NEXT day).
+pub fn local_day_key(dt: chrono::DateTime<chrono::Utc>, tz_offset: Option<i64>) -> String {
+    match tz_offset {
+        // Validated by the caller: within plus or minus one day. The
+        // bound is enforced here too because `Duration::seconds`
+        // PANICS past i64::MAX/1000 and this function is shared.
+        Some(secs) if secs.unsigned_abs() <= 86_400 => (dt + chrono::Duration::seconds(secs))
+            .format("%Y-%m-%d")
+            .to_string(),
+        _ => dt.format("%Y-%m-%d").to_string(),
+    }
+}
+
 #[derive(Debug, Serialize)]
 pub struct CalendarPost {
     pub id: Uuid,
@@ -159,14 +185,7 @@ pub async fn get(
         // across midnight the wrong way (a 02:00 UTC post in New York
         // is the PREVIOUS day, and a post at 23:00 UTC in Auckland is
         // the NEXT day).
-        let local = |dt: chrono::DateTime<chrono::Utc>| -> String {
-            match tz_offset {
-                Some(secs) => (dt + chrono::Duration::seconds(secs))
-                    .format("%Y-%m-%d")
-                    .to_string(),
-                None => dt.format("%Y-%m-%d").to_string(),
-            }
-        };
+        let local = |dt: chrono::DateTime<chrono::Utc>| -> String { local_day_key(dt, tz_offset) };
         let date_key = if p.state == "published" && p.published_at.is_some() {
             p.published_at.map(&local)
         } else {
