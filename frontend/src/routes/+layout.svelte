@@ -96,7 +96,13 @@
   $effect(() => {
     if (composer.open && !composerModalId) {
       composerModalId = modals.open(ComposerModal, {}, {
+        // The composer renders its OWN "Create Post"/"Edit Post" heading
+        // inside the panel, so a title here would duplicate it. The
+        // ariaLabel names the dialog for the accessibility tree without
+        // the duplicate: before this, a screen reader announced the
+        // generic "Dialog" (AGENTS.md 9.49's name requirement).
         title: '',
+        ariaLabel: 'Composer',
         closeOnClickOutside: false,
         // Escape DOES close the composer - through the modal's
         // `onClose`, which asks "Discard this post?" when there is

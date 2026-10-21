@@ -88,7 +88,7 @@
     role="dialog"
     aria-modal="true"
     aria-labelledby={entry.options.title ? `mm-title-${entry.id}` : undefined}
-    aria-label={entry.options.title ? undefined : 'Dialog'}
+    aria-label={entry.options.title ? undefined : (entry.options.ariaLabel || 'Dialog')}
   >
     <!-- Backdrop -->
     {#if entry.isTop}

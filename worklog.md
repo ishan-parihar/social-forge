@@ -1601,3 +1601,55 @@ Stage Summary:
 
 Known issues: none new. The unexercised 24-44 WARN branch remains
 the one named gap (previous entry).
+
+---
+Task ID: browseros-visual-pass-dialog-name
+Agent: omp (goal session, 2026-10-22)
+Task: The objective's browseros-neo visual pass - drive the real
+dashboard in the real browser and look at what the DOM gates
+cannot see.
+
+Work Log:
+- Drove browseros-neo (MCP over HTTP, 127.0.0.1:9012) end to end:
+  initialize/session-id handshake, navigate, snapshot, act,
+  evaluate, screenshot. Logged in through the real form (native
+  setter + requestSubmit; the act 'type' sets the value without
+  Svelte's rune seeing it, so the Unlock button never enabled).
+- FINDING (visual-layer, real-browser-only): the composer dialog's
+  accessible name was the generic "Dialog". ModalManager falls back
+  to aria-label='Dialog' when the caller passes no title, and the
+  composer mounts with title:'' because it renders its own
+  "Create Post" heading - so every screen-reader announcement for
+  the app's most important dialog was the word "Dialog". The
+  audit-dialogs gate SAW name="Dialog" and passed it: a gate that
+  accepts a generic name is not checking the 9.49 contract's "a name
+  that describes WHAT the dialog is".
+- Fix: ModalOptions gains ariaLabel (for callers that render their
+  own heading inside); ModalManager uses it before the generic
+  fallback; the composer mounts with ariaLabel:'Composer'. The gate
+  now FAILS a generic "Dialog"/"Modal" name, so the class is caught.
+- FINDING (environment, not app): browseros's own transient
+  <bit-notification-bar-root> overlay covered the Month-view
+  button at one click point and act refused the click; the bar is
+  extension chrome that dissolves, not app content - playwright
+  contexts never have it. Recorded so the next real-browser pass
+  knows covered-element refusals can be transient.
+- The Month view driven in the real browser renders the full a11y
+  grid (day cells, named post chips with keyboard-resize hints) -
+  structural evidence the state renders, on top of the probe's
+  numeric gates.
+- Image viewing is unavailable in this session's model, so the
+  screenshot rubric is BLOCKED per the tool protocol - the
+  structural snapshots carry the visual-layer evidence instead.
+
+Stage Summary:
+- audit-dialogs against the rebuilt binary: composer
+  name="Composer" modal=true focusInside=true, 0 contract failures.
+- make check clean; svelte-check + pnpm build clean.
+- The composer click in the last browseros attempt did not open
+  the dialog (the earlier attempt did); the DOM gate exercises the
+  same modal-manager path and shows the named dialog, and the
+  earlier real-browser session rendered the composer's full
+  structure. Recorded as-is.
+
+Known issues: none new beyond what is recorded above.

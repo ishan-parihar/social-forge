@@ -41,6 +41,11 @@ import type { Component, Snippet } from 'svelte';
 export interface ModalOptions {
   /** Optional title shown in the modal header. If empty, no header is rendered. */
   title?: string;
+  /** Accessible name when the caller renders its OWN heading inside the
+   *  panel (the composer) and a second header would duplicate it. Without
+   *  this or `title`, the dialog's accessible name is the generic
+   *  "Dialog" - and a screen reader announces nothing useful. */
+  ariaLabel?: string;
   /** Click outside the modal to close? Default: true */
   closeOnClickOutside?: boolean;
   /** Escape key closes the topmost modal? Default: true */

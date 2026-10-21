@@ -257,6 +257,14 @@ async function main() {
       continue;
     }
     if (!state.name) findings.push({ ...d, problem: 'the dialog has no accessible NAME' });
+    // The FALLBACK name is not a name: ModalManager's aria-label="Dialog"
+    // default reads as present to the check above while announcing nothing
+    // useful to a screen reader. A real name describes WHAT the dialog is
+    // (AGENTS.md 9.49) - the composer answered "Dialog" for months while
+    // this gate passed it.
+    if (state.name && /^(dialog|modal)$/i.test(state.name.trim())) {
+      findings.push({ ...d, problem: `the dialog's name is the generic "${state.name}" - a screen reader announces nothing useful` });
+    }
     if (state.ariaModal !== 'true')
       findings.push({ ...d, problem: 'aria-modal is not "true"' });
     if (state.inAriaHidden)
