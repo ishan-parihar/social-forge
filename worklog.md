@@ -1427,3 +1427,44 @@ Follow-up to streak-one-measure (same session):
   resolve_first_user DB-backed (resolve the single local user) is a
   wide-radius change needing its own tests; it is its own item, not
   silently assumed done.
+
+---
+Task ID: gate-coverage-login-and-calendar-states
+Agent: omp (goal session, 2026-10-22)
+Task: Close the gate-coverage gaps - /login was in no gate's route
+list, and the calendar's Month/List/Day views were never rendered by
+make audit (9.50: a page probed only in its default state is a page
+whose other states are unchecked).
+
+Work Log:
+- probe.mjs gains --logged-out: it skips the login AND the dynamic
+  route resolution, so the pass measures the pages an anonymous
+  visitor sees. /login CANNOT go in the authenticated route list: the
+  layout guard redirects a logged-in visitor to '/' (+layout.ts), so
+  an authenticated probe of /login would measure the dashboard twice
+  while claiming to cover the login page.
+- make audit now runs four additional passes: /login logged-out, and
+  /calendar in the Month, List and Day states (probe.mjs --state).
+  AGENTS.md 9.50's "the three calendar views are all probed" is now
+  TRUE of make audit, not just of a manual invocation.
+- The new passes found real defects on their first run, exactly the
+  9.50 shape: the List view's ◀/▶ pagination buttons rendered 23x24
+  and 23x44 - under the 24x24 WCAG 2.5.8 floor - and no gate had ever
+  seen them because nothing drove the List state. Both buttons are a
+  44x44 box now (min-h-11 min-w-11 inline-flex, the kanban-link
+  pattern).
+- The Month (88) and Day (112) WARNs are honest 24-44-band
+  classifications of dense-grid chips and 24px slot rows - the 9.37
+  hazard class where a 44px-everywhere rule would blow the layout;
+  they are WARNs by the probe's WCAG-matched severity, not failures.
+
+Stage Summary:
+- All five audit passes green against the release binary: default
+  27-route pass 0 FAIL / 0 WARN; /login logged-out 0/0; Month 0 FAIL;
+  List 0 FAIL; Day 0 FAIL.
+- pnpm build + svelte-check + check-tailwind clean; the List-button
+  fix is in the embedded frontend of the rebuilt binary.
+- OPEN (unchanged): probe/audit-targets threshold convergence (24 vs
+  44); resolve_first_user DB-backed resolution.
+
+Known issues: none new.

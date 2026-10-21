@@ -98,6 +98,19 @@ audit:
 	cd frontend && node scripts/audit-dialogs.mjs --url $(URL) --password '$(PASSWORD)'
 	cd frontend && node scripts/audit-analytics.mjs --url $(URL) --password '$(PASSWORD)'
 	cd frontend && node scripts/e2e-calendar-drag.mjs --url $(URL) --password '$(PASSWORD)'
+	# The calendar's non-default views, 9.50: each is its own component
+	# with its own layout, and the default-view probe never renders them.
+	# The 2026-10-20 red-team found the month view's chips at 15px while
+	# every gate was green, because no audit pass drove the state.
+	cd frontend && node scripts/probe.mjs --url $(URL) --password '$(PASSWORD)' --routes /calendar --state 'Month' --out /tmp/sf-probe-month
+	cd frontend && node scripts/probe.mjs --url $(URL) --password '$(PASSWORD)' --routes /calendar --state 'List' --out /tmp/sf-probe-list
+	cd frontend && node scripts/probe.mjs --url $(URL) --password '$(PASSWORD)' --routes /calendar --state 'Day' --out /tmp/sf-probe-day
+	# The login page, in its OWN logged-out pass: the layout guard
+	# redirects an authenticated visitor away from /login, so the main
+	# probe can never measure it. This is the page that greets the
+	# founder, and where the Unlock button's invisible text-white lived
+	# hand-patched rather than gate-covered (the 9.45 finding).
+	cd frontend && node scripts/probe.mjs --url $(URL) --password '$(PASSWORD)' --routes /login --logged-out --out /tmp/sf-probe-login
 
 # ── Deploy / Redeploy ───────────────────────────────────────────
 

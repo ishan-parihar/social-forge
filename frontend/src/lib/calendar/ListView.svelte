@@ -122,20 +122,24 @@
       {/each}
     </div>
 
-    <!-- Pagination -->
+    <!-- Pagination. Both buttons are a 44x44 box (min-h-11 min-w-11):
+         a lone arrow glyph inside px-2 renders ~23x24, under the
+         24x24 WCAG 2.5.8 floor the probe FAILs - this is the shape
+         only the List-state pass sees, which is why every gate was
+         green while the buttons were 1px short (9.50). -->
     {#if totalPages > 1}
       <div class="flex items-center gap-2 text-xs text-muted">
         <button
           onclick={prevPage}
           disabled={currentPage <= 1}
-          class="min-h-11 px-2 py-1 rounded bg-surface-hover disabled:opacity-30 hover:bg-line transition-colors"
+          class="min-h-11 min-w-11 inline-flex items-center justify-center rounded bg-surface-hover disabled:opacity-30 hover:bg-line transition-colors"
           aria-label="Previous page"
         >◀</button>
         <span>Page {currentPage} of {totalPages}</span>
         <button
           onclick={nextPage}
           disabled={currentPage >= totalPages}
-          class="px-2 py-1 rounded bg-surface-hover disabled:opacity-30 hover:bg-line transition-colors"
+          class="min-h-11 min-w-11 inline-flex items-center justify-center rounded bg-surface-hover disabled:opacity-30 hover:bg-line transition-colors"
           aria-label="Next page"
         >▶</button>
       </div>

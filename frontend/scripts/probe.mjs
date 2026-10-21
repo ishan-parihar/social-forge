@@ -37,6 +37,11 @@ const flag = (name, dflt) => {
 
 const BASE_URL = flag('url', process.env.PROBE_URL || 'http://localhost:6543');
 const PASSWORD = flag('password', process.env.APP_PASSWORD || '');
+// Skip the login and probe the routes UNAUTHENTICATED - the only way to
+// measure /login, because the layout guard redirects a logged-in
+// visitor to '/' and an authenticated probe of /login measures the
+// dashboard twice. Used by make audit's dedicated login pass.
+const LOGGED_OUT = argv.includes('--logged-out');
 // 360 is the NARROWEST width the plan's F5 gate names ("a 360px mobile
 // pass on composer/calendar/channels"). It was missing from the list, so
 // the plan's own gate was never run.
@@ -85,6 +90,11 @@ const STATIC_ROUTES = flag(
     '/automation',
   ].join(',')
 ).split(',');
+// NOTE: /login is NOT in this list, and cannot be: the layout guard
+// redirects an authenticated visitor to '/' (+layout.ts), and the
+// probe logs in first, so a /login visit here would measure the
+// DASHBOARD twice. The login page is probed by a separate logged-out
+// pass in `make audit` (--routes /login --logged-out).
 
 // Routes that need a per-instance id, and where to get one.
 const RESOLVED_ROUTES = [
@@ -804,7 +814,7 @@ async function main() {
   // Resolving per theme would double the API calls and could pick two
   // different ids if the data changed between them.
   let routes = [...STATIC_ROUTES];
-  {
+  if (!LOGGED_OUT) {
     const probeCtx = await browser.newContext({ ignoreHTTPSErrors: true });
     const probePage = await probeCtx.newPage();
     await login(probePage);
@@ -947,7 +957,9 @@ async function main() {
       }
     });
 
-    await login(page);
+    if (!LOGGED_OUT) {
+      await login(page);
+    }
 
     for (const route of ROUTES) {
       for (const width of WIDTHS) {
