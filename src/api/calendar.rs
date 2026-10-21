@@ -23,23 +23,6 @@ pub struct CalendarQuery {
     // campaign_id. When provided, the query narrows to matching posts.
     pub integration_ids: Option<String>, // comma-separated UUIDs
     pub campaign_id: Option<Uuid>,
-    /// The founder's UTC offset, in SECONDS.
-    ///
-    /// The day a post belongs to is a LOCAL day, and the founder's zone
-    /// is a local day. The day key was `utc.format("%Y-%m-%d")`, so a
-    /// post at 02:00 UTC on the 25th was on "the 25th" - in New York
-    /// that is the 24th, and the post sat on the WRONG DAY of the
-    /// calendar.
-    ///
-    /// The offset is sent by the client rather than looked up here,
-    /// because the server has no timezone database (no `chrono-tz`) and
-    /// `users.timezone` is a column the server NEVER writes - the -300
-    /// in the seed is of unknown unit. The client knows the zone: it is
-    /// an IANA name in a frontend localStorage store, and it can
-    /// resolve the offset for the window exactly.
-    ///
-    /// Absent, the day key is UTC - the old behaviour, and the right
-    /// fallback for a caller that does not care.
     /// The founder's zone as an IANA NAME ("America/New_York").
     ///
     /// Preferred over `tz_offset` because a CONSTANT offset is wrong
@@ -47,15 +30,18 @@ pub struct CalendarQuery {
     /// New York contained two offsets, and the posts after the
     /// transition were bucketed an hour late - a post within an hour
     /// of local midnight landed on the wrong day. A NAME resolves the
-    /// offset per-instant, which is what the frontend's own
-    /// `zoneOffsetMs` already does.
+    /// offset per-instant (the server embeds the IANA database via
+    /// chrono-tz), which is what the frontend's own `zoneOffsetMs`
+    /// does. A name takes precedence when both are sent.
     ///
-    /// Unknown names fall back to UTC rather than failing the request:
-    /// a typo in a zone name must not take the calendar down.
+    /// An unknown name is REFUSED with a 400 naming it - a garbled
+    /// zone must not silently bucket every post in UTC.
     pub tz: Option<String>,
     /// The zone's UTC offset in SECONDS. Legacy form: correct within a
     /// window that has no DST transition, wrong across one. Kept for
     /// the MCP tool and any API caller that only knows an offset.
+    /// Validated on EVERY request (see the handler) - a valid `tz`
+    /// shadows the constant's USE but not its validation.
     pub tz_offset: Option<i64>,
 }
 
@@ -100,9 +86,12 @@ pub fn zone_offset_seconds(
 /// post at 23:00 UTC in Auckland is the NEXT day).
 pub fn local_day_key(dt: chrono::DateTime<chrono::Utc>, tz_offset: Option<i64>) -> String {
     match tz_offset {
-        // Validated by the caller: within plus or minus one day. The
-        // bound is enforced here too because `Duration::seconds`
-        // PANICS past i64::MAX/1000 and this function is shared.
+        // The CALLERS validate the offset (both the REST handler and
+        // the MCP tool refuse |offset| > 86400 before calling); this
+        // bound is a BACKSTOP, not the validation, because
+        // `Duration::seconds` PANICS past i64::MAX/1000 and this
+        // function is shared - a future caller that forgets the check
+        // falls back to UTC instead of panicking.
         Some(secs) if secs.unsigned_abs() <= 86_400 => (dt + chrono::Duration::seconds(secs))
             .format("%Y-%m-%d")
             .to_string(),

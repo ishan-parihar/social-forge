@@ -1075,22 +1075,22 @@ Known issues / follow-ups:
   - OPEN (backend): `/api/ai/*` has no streaming endpoint, so the
     composer's AI panel shows an indeterminate indicator rather than
     real progress. Honest, and documented.
-  - OPEN (backend): the ANALYTICS day series (not the calendar - that
-    one is fixed) still buckets in UTC. It is a trend chart; the
-    founder's zone would make the boundary day consistent. The same
-    `tz_offset` seam is available when wanted.
+  - CLOSED 2026-10-21: see dst-zone-name-bucketing below - the
+    series now buckets per-instant in the founder's zone, with a
+    zone-day window edge.
   - CLOSED: the MCP `calendar_get` tool now takes `tz_offset` and
     buckets through the SAME day-key helper as GET /api/calendar
     (`api::calendar::local_day_key`), so the two surfaces no longer
     disagree for the same operation (AGENTS.md 9.21). An agent asking
     "what is on Oct 25?" and a founder looking at the calendar now get
     the same answer.
-  - OPEN: the client sends ONE offset per window, so a window spanning
-    a DST transition (EU 2026-10-25, US 2026-11-01) buckets the
-    post-transition posts an hour late. A post within an hour of local
-    midnight lands on the wrong day. The cheap fix, when it is wanted,
-    is to send the zone NAME instead of one constant. Known and
-    documented at the call site.
+    (2026-10-21: the happy path only - an unknown zone on an empty
+    range, and a valid name beside an out-of-range offset, still
+    disagreed. Both fixed; see dst-zone-name-bucketing.)
+  - CLOSED 2026-10-21: see dst-zone-name-bucketing below - the client
+    sends the zone NAME and the server resolves it per instant, so a
+    window spanning a DST transition no longer buckets the
+    post-transition posts an hour late.
 
 ---
 Task ID: dst-zone-name-bucketing
