@@ -1354,3 +1354,11 @@ Stage Summary:
 Known issues: unchanged (TopBar's separate users.streak_days measure,
 the probe/audit-targets threshold drift, /login gate coverage,
 calendar Month/List probe states).
+
+Red-proof for wall-clock-parity (same session, after the commit):
+mutating `zone_offset_by_name` to a constant 0 made BOTH tests fail
+(per-instant: "server said 0s, the composer's Intl rule said -14400s";
+round-trip: the read-back wall clock shifted), and reverting restored
+green - the tests have seen their own failure (AGENTS 9.51). The ICU
+sanity assertion (assert_ne! 0 for non-UTC zones) is in the committed
+test at the per-case loop, lines 100-103.
