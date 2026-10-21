@@ -88,9 +88,19 @@
   </div>
 
   <!-- Target List -->
+  //
+  <!-- A MULTI-SELECT LISTBOX.
+       The list had no role at all, so a screen reader announced a row
+       of unnamed buttons and the founder had no way to hear how many
+       channels they had chosen. `aria-multiselectable` says that
+       several can be on at once, and each option carries its own
+       state. -->
   <div
     class="overflow-y-auto rounded-lg border border-line"
     style="max-height: {maxHeight};"
+    role="listbox"
+    aria-multiselectable="true"
+    aria-label={placeholder}
   >
     {#if filteredTargets.length === 0}
       <div class="text-sm text-muted py-6 text-center">
@@ -103,6 +113,8 @@
           <button
             onclick={() => toggleTarget(target.id)}
             class="w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-surface-hover {isSelected ? 'bg-accent-fill/5' : ''}"
+            role="option"
+            aria-selected={isSelected}
             aria-label="{isSelected ? 'Deselect' : 'Select'} {target.name}"
           >
             <!-- Checkbox -->

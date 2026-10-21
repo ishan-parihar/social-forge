@@ -96,22 +96,35 @@
 <div class="fixed inset-0 z-40" onclick={onclose} role="presentation"></div>
 
 <!-- Menu -->
-<div class="absolute right-0 top-full mt-1 w-56 bg-surface border border-line rounded-lg shadow-xl z-50 py-1 text-sm">
-  <button
+//
+// A MENU, and it says so.
+//
+// The popover had no role at all, so a screen reader announced a
+// stack of unnamed buttons with no indication that it was a menu and
+// no way to know what was in it until it was read out one item at a
+// time. `role="menu"` plus `role="menuitem"` on each row is what a
+// screen reader expects, and it is what the plan's F5 gate names
+// ("aria for modals/pickers").
+<div
+  role="menu"
+  aria-label="Channel actions"
+  class="absolute right-0 top-full mt-1 w-56 bg-surface border border-line rounded-lg shadow-xl z-50 py-1 text-sm"
+>
+  <button role="menuitem"
     onclick={createPostHere}
     class="w-full text-left px-3 py-2 hover:bg-surface-hover transition-colors flex items-center gap-2"
   >
     <span>✏️</span> Create post here
   </button>
 
-  <button
+  <button role="menuitem"
     onclick={copyChannelId}
     class="w-full text-left px-3 py-2 hover:bg-surface-hover transition-colors flex items-center gap-2"
   >
     <span>📋</span> Copy channel ID
   </button>
 
-  <button
+  <button role="menuitem"
     onclick={editTimeSlots}
     class="w-full text-left px-3 py-2 hover:bg-surface-hover transition-colors flex items-center gap-2"
   >
@@ -119,7 +132,7 @@
   </button>
 
   {#if integration.refresh_needed}
-    <button
+    <button role="menuitem"
       onclick={reconnect}
       class="w-full text-left px-3 py-2 hover:bg-surface-hover transition-colors flex items-center gap-2 text-warning"
     >
@@ -129,7 +142,7 @@
 
   <div class="border-t border-line my-1"></div>
 
-  <button
+  <button role="menuitem"
     onclick={toggleDisable}
     class="w-full text-left px-3 py-2 hover:bg-surface-hover transition-colors flex items-center gap-2"
   >
@@ -137,7 +150,7 @@
     {integration.disabled ? 'Enable' : 'Disable'}
   </button>
 
-  <button
+  <button role="menuitem"
     onclick={deleteChannel}
     class="w-full text-left px-3 py-2 hover:bg-surface-hover transition-colors flex items-center gap-2 text-error"
   >
