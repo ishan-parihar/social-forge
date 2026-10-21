@@ -435,6 +435,8 @@
     modals.open(PostStatsModal, {
       postId: eventId,
       postTitle: post?.title || 'Post',
+      integrationId: post?.integrationId,
+      integrationName: post?.integrationName,
       onclose: () => {},
     }, {
       title: 'Post Statistics',

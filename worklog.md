@@ -1731,3 +1731,34 @@ Known issues: the stats modal showing "Token expired" for an
 unrefreshed channel is the honest state; a follow-up could add a
 "Refresh token" affordance in that modal, but the destructive
 bounce is gone.
+
+---
+Task ID: stats-modal-inline-token-refresh
+Agent: omp (goal session, 2026-10-22)
+Task: The named follow-up from dialog-gate-widening-401-bounce: the
+stats modal honestly says "Token expired" but gives the founder
+nothing to act on. Add the refresh affordance inline.
+
+Work Log:
+- CalendarEvent gains integrationId (the post API already returns
+  integration_id; the mapping never carried it), threaded through
+  toCalendarEvent and the stats modal's mount.
+- PostStatsModal detects the provider-token 401 (status 401 with the
+  unwrapped "Token expired" message) and, when it has the
+  integration, renders an inline "Refresh <channel> token" button
+  (integrationsApi.refresh - the same call the Channels page
+  makes), then reloads the analytics on success.
+- Live verification in the real browser: the stats modal on the
+  expired-token post shows "Token expired" + "Refresh X (Twitter)
+  token" with a one-line explanation - the founder acts in place
+  instead of hunting the Channels page.
+
+Stage Summary:
+- svelte-check + pnpm build + tailwind-class check + make check
+  clean; calendar probe 0 FAIL / 0 WARN; dialog gate 8/8 (0
+  failures) against the rebuilt binary.
+- The fix completes the 401 story end to end: session 401 bounces
+  (correct), provider 401 stays in the modal (fixed last
+  iteration), and now it names the channel and offers the refresh.
+
+Known issues: none new.

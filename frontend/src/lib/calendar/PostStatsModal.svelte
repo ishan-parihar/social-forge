@@ -19,17 +19,44 @@
   // the sums came out NaN and the chart labels rendered "Invalid Date".
 
   import { analyticsApi, type AnalyticsSeries } from "$lib/api/analytics";
+  import { integrationsApi } from "$lib/api/integrations";
   import { engagementIcon, engagementLabel, formatMetricCount } from "./engagement";
 
-  let { postId, postTitle, onclose }: {
+  let { postId, postTitle, integrationId, integrationName, onclose }: {
     postId: string;
     postTitle: string;
+    integrationId?: string;
+    integrationName?: string;
     onclose: () => void;
   } = $props();
 
   let days = $state<7 | 30 | 90>(7);
   let analyticsData = $state<AnalyticsSeries[] | null>(null);
   let loading = $state(false);
+  let refreshing = $state(false);
+
+  /** A provider-token 401 is an actionable state: the channel's token
+   *  expired, and the fix is a refresh - not a trip to the Channels
+   *  page to hunt for which one. Offer the refresh INLINE. */
+  let tokenExpired = $state(false);
+
+  /** Refresh the channel's token, then reload the analytics. */
+  async function refreshChannelToken() {
+    if (!integrationId || refreshing) return;
+    refreshing = true;
+    try {
+      const r = await integrationsApi.refresh(integrationId);
+      if (r.error) {
+        error = r.error;
+      } else {
+        tokenExpired = false;
+        error = null;
+        await fetchData();
+      }
+    } finally {
+      refreshing = false;
+    }
+  }
   let error = $state<string | null>(null);
   let abortController: AbortController | null = null;
 
@@ -111,6 +138,7 @@
     const signal = abortController.signal;
     loading = true;
     error = null;
+    tokenExpired = false;
     try {
       const r = await analyticsApi.getPostAnalytics(postId, days, signal);
       if (signal.aborted) return;
@@ -118,6 +146,13 @@
         analyticsData = r.data.data;
       } else {
         error = r.error || "No data returned";
+        // A provider-token 401 arrives as status 401 with the
+        // unwrapped "Token expired" message (client.ts no longer
+        // bounces to /login on it). Detect it so the modal can offer
+        // the inline refresh.
+        if (r.status === 401 && /token/i.test(r.error || "")) {
+          tokenExpired = true;
+        }
         analyticsData = null;
       }
     } catch (e: unknown) {
@@ -151,7 +186,23 @@
       <span class="animate-spin text-muted text-2xl">⏳</span>
     </div>
   {:else if error && !analyticsData}
-    <div class="text-center py-8 text-sm text-error">{error}</div>
+    <div class="text-center py-8 text-sm text-error">
+      {error}
+      {#if tokenExpired && integrationId}
+        <div class="mt-3">
+          <button
+            onclick={refreshChannelToken}
+            disabled={refreshing}
+            class="min-h-11 px-4 py-2 rounded-lg bg-accent-fill hover:bg-accent-fill-hover text-accent-fg text-sm font-medium disabled:opacity-50 transition-colors"
+          >
+            {refreshing ? 'Refreshing…' : `Refresh ${integrationName || 'channel'} token`}
+          </button>
+          <div class="text-xs text-muted mt-2">
+            {integrationName || 'The channel'}'s access token expired. Refresh it and the stats load again.
+          </div>
+        </div>
+      {/if}
+    </div>
   {:else if !analyticsData || analyticsData.length === 0}
     <div class="text-center py-8 text-sm text-muted">
       No analytics data available yet.

@@ -7,12 +7,16 @@ export type CalendarView = "month" | "week" | "day" | "list";
 export interface CalendarEvent {
   id: string;
   date: string;         // YYYY-MM-DD
-  time?: string;        // HH:mm (optional)
+  time?: string;       // HH:mm (optional)
   title: string;
   content: string;      // preview text
   state: string;
   platform: string;
   integrationName: string;
+  // The integration row's id - present on every post the API
+  // returns (`integration_id`). The stats modal needs it to offer
+  // an inline token refresh when the provider token expired.
+  integrationId?: string;
   postUrl?: string;
   error?: string;
   tags?: Array<{ id: string; name: string; color: string }>;
@@ -107,6 +111,7 @@ export function toCalendarEvent(
     state: post.state,
     platform: post.integration_name,
     integrationName: post.integration_name,
+    integrationId: post.integration_id,
     postUrl: post.platform_post_url,
     error: post.error_message,
     tags: post.tags?.map(t => ({ id: t.id, name: t.name, color: t.color })),
