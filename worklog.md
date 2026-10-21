@@ -1409,3 +1409,21 @@ Stage Summary:
 
 Known issues: unchanged (probe/audit-targets threshold drift, /login
 gate coverage, calendar Month/List probe states).
+
+Follow-up to streak-one-measure (same session):
+- Red-proof run: reverting streak_check's user to the hard-coded
+  DEFAULT_USER_ID made the_badge_counts_the_session_users_own_
+  published_days FAIL ("no published posts for this session's user:
+  left 3, right 0" - the constant read another user's posts, the
+  exact pre-fix defect) and green again on revert.
+- The MCP analytics_streak tool now takes tz (IANA name, unknown ->
+  error, the same loud contract as REST) so an agent can ask in the
+  founder's zone.
+- OPEN, named: the MCP tool resolves its user through
+  resolve_first_user, which is hard-coded DEFAULT_USER_ID across
+  ~80 tool sites. On an instance whose users row differs from that
+  constant, EVERY MCP tool reads a user that owns no posts - the
+  badge had exactly this defect before this fix. Making
+  resolve_first_user DB-backed (resolve the single local user) is a
+  wide-radius change needing its own tests; it is its own item, not
+  silently assumed done.

@@ -102,22 +102,33 @@ pub async fn handle_analytics_get_post(
 // ── Streak ───────────────────────────────────────────────────
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
-pub struct StreakGetInput {}
+pub struct StreakGetInput {
+    /// The founder's zone as an IANA name ("America/New_York"). The
+    /// days are counted in this zone, matching the web badge. Unknown
+    /// name: an error, not a silent UTC streak.
+    pub tz: Option<String>,
+}
 
 /// Current posting streak: consecutive days with a published post.
 ///
 /// Computed through the SAME zone-day rule as `/api/streak` and the
-/// cadence card (`analytics::calculate_streak`, 9.21), with the tool's
-/// documented local-user convention (`resolve_first_user`, which is
-/// DEFAULT_USER_ID in single-user mode). No zone input on the tool
-/// yet, so the days are UTC; the badge sends the founder's zone.
+/// cadence card (`analytics::calculate_streak`, 9.21). The zone comes
+/// from the input (unknown name refused, same loud contract as REST);
+/// absent, UTC. The USER is the tool convention's local user
+/// (`resolve_first_user`, DEFAULT_USER_ID in single-user mode) - not
+/// the session, because stdio MCP has no session; that convention is
+/// shared by ~80 tool sites and is its own open item.
 pub async fn handle_streak_get(
     state: &AppState,
-    _input: &StreakGetInput,
+    input: &StreakGetInput,
 ) -> Result<Json<serde_json::Value>, String> {
     let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let zone = match input.tz.as_deref() {
+        Some(name) => Some(crate::api::calendar::parse_zone(name)?),
+        None => None,
+    };
     let streak =
-        crate::api::analytics::calculate_streak(&state.db, user_id, None).await;
+        crate::api::analytics::calculate_streak(&state.db, user_id, zone).await;
     Ok(Json(serde_json::json!({
         "streak_days": streak,
         "streak_since": null,
