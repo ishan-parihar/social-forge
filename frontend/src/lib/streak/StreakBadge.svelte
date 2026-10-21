@@ -1,12 +1,16 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { timezone } from '$lib/stores/timezone.svelte';
 
   let streak = $state(0);
   let loading = $state(true);
 
   async function fetchStreak() {
     try {
-      const res = await fetch('/api/streak');
+      // The zone NAME goes with the request so the TopBar number is the
+      // SAME zone-day measure the cadence card shows - two streak numbers
+      // on screen that disagree is the bug this fixes.
+      const res = await fetch(`/api/streak?tz=${encodeURIComponent(timezone.value)}`);
       if (res.ok) {
         const data = await res.json();
         streak = data.streak_days || 0;

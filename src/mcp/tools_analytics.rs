@@ -105,10 +105,21 @@ pub async fn handle_analytics_get_post(
 pub struct StreakGetInput {}
 
 /// Current posting streak: consecutive days with a published post.
+///
+/// Computed through the SAME zone-day rule as `/api/streak` and the
+/// cadence card (`analytics::calculate_streak`, 9.21), with the tool's
+/// documented local-user convention (`resolve_first_user`, which is
+/// DEFAULT_USER_ID in single-user mode). No zone input on the tool
+/// yet, so the days are UTC; the badge sends the founder's zone.
 pub async fn handle_streak_get(
     state: &AppState,
     _input: &StreakGetInput,
 ) -> Result<Json<serde_json::Value>, String> {
-    let axum::Json(body) = crate::api::streak_check(state.db.clone()).await;
-    Ok(Json(body))
+    let user_id = super::tools_posts::resolve_first_user(state).await?;
+    let streak =
+        crate::api::analytics::calculate_streak(&state.db, user_id, None).await;
+    Ok(Json(serde_json::json!({
+        "streak_days": streak,
+        "streak_since": null,
+    })))
 }

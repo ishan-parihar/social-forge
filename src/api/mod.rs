@@ -4,7 +4,7 @@
 
 use axum::{
     body::Body,
-    extract::State,
+    extract::{Query, State},
     http::{Request, Response, StatusCode},
     middleware::{self, Next},
     Router,
@@ -33,7 +33,7 @@ use sqlx::SqlitePool;
 
 pub mod activity; // pub: tests/activity_feed_test.rs calls the handler directly
 pub(crate) mod ai;
-mod analytics;
+pub mod analytics; // `calculate_streak` is THE one streak measure: /api/streak, the cadence card and the MCP tool all read it
 mod auth;
 mod automation;
 pub mod calendar; // pub: tests/wall_clock_parity_test.rs drives zone_offset_by_name (the day-key seam)
@@ -228,13 +228,7 @@ pub fn build_router(state: AppState) -> Router {
                 move || metrics_check(db_for_metrics)
             }),
         )
-        .route(
-            "/api/streak",
-            axum::routing::get({
-                let db_for_streak = state.db.clone();
-                move || streak_check(db_for_streak)
-            }),
-        )
+        .route("/api/streak", axum::routing::get(streak_check))
         .route("/api/auth/logout", axum::routing::post(auth::logout))
         // SSE realtime stream — auth-gated to prevent event leakage on
         // networked deployments (BUG #19). The auth_middleware validates
@@ -997,29 +991,44 @@ async fn metrics_check(db: SqlitePool) -> axum::Json<serde_json::Value> {
 
 /// Streak endpoint — returns the user's current posting streak.
 /// Used by the frontend flame icon in the top bar.
-pub(crate) async fn streak_check(db: SqlitePool) -> axum::Json<serde_json::Value> {
-    use sqlx::Row;
-    let user_id = crate::auth::middleware::DEFAULT_USER_ID;
-    let row = sqlx::query("SELECT streak_days, streak_since FROM users WHERE id = ?")
-        .bind(user_id)
-        .fetch_optional(&db)
-        .await;
+///
+/// THE ONE STREAK MEASURE: computed through `analytics::calculate_streak`
+/// (consecutive founder's-zone days ending today or yesterday), the same
+/// number the cadence card shows. It used to read `users.streak_days`,
+/// the scheduler's separate 24h-window counter, so the two "streak"
+/// numbers on screen could disagree across a midnight boundary.
+#[derive(Debug, serde::Deserialize)]
+pub(crate) struct StreakQuery {
+    /// The founder's zone as an IANA name. The badge sends it, so the
+    /// TopBar number matches the cadence card in the same zone.
+    pub tz: Option<String>,
+}
 
-    match row {
-        Ok(Some(r)) => {
-            let streak_days: i32 = r.try_get("streak_days").unwrap_or(0);
-            let streak_since: Option<chrono::DateTime<chrono::Utc>> =
-                r.try_get("streak_since").ok();
-            axum::Json(serde_json::json!({
-                "streak_days": streak_days,
-                "streak_since": streak_since.map(|d| d.to_rfc3339()),
-            }))
+pub(crate) async fn streak_check(
+    State(state): State<AppState>,
+    auth: crate::auth::middleware::AuthenticatedUser,
+    Query(query): Query<StreakQuery>,
+) -> Result<axum::Json<serde_json::Value>, crate::error::AppError> {
+    use crate::error::AppError;
+    let zone = match query.tz.as_deref() {
+        Some(name) => {
+            Some(crate::api::calendar::parse_zone(name).map_err(AppError::BadRequest)?)
         }
-        _ => axum::Json(serde_json::json!({
-            "streak_days": 0,
-            "streak_since": null,
-        })),
-    }
+        None => None,
+    };
+    // Computed, not stored: the scheduler's counter stays as a cheap
+    // hint, but the DISPLAYED streak is this one so there is only ever
+    // one number the founder can read.
+    // THE SESSION'S user, not the hard-coded DEFAULT_USER_ID: the
+    // constant is only the JWT's subject convention; on an instance
+    // seeded with a different users row the constant owns NO posts and
+    // the badge reads 0 forever. `AuthenticatedUser` resolves the
+    // session to the founder, exactly like the cadence handler.
+    let streak = crate::api::analytics::calculate_streak(&state.db, auth.user_id, zone).await;
+    Ok(axum::Json(serde_json::json!({
+        "streak_days": streak,
+        "streak_since": null,
+    })))
 }
 
 /// State carried by the CSRF middleware.

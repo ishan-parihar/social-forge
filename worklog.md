@@ -1362,3 +1362,50 @@ round-trip: the read-back wall clock shifted), and reverting restored
 green - the tests have seen their own failure (AGENTS 9.51). The ICU
 sanity assertion (assert_ne! 0 for non-UTC zones) is in the committed
 test at the per-case loop, lines 100-103.
+
+---
+Task ID: streak-one-measure
+Agent: omp (goal session, 2026-10-22)
+Task: Unify the two "streak" numbers on screen - the TopBar flame
+badge (users.streak_days, the scheduler's 24h-window counter) and the
+cadence card's zone-day streak - into ONE measure.
+
+Work Log:
+- /api/streak is a real handler now (State + AuthenticatedUser +
+  Query<StreakQuery>): it computes through analytics::calculate_streak
+  - THE SAME zone-day rule the cadence card reads - with the session's
+  user and the zone the badge sends (StreakBadge passes
+  timezone.value). It used to read users.streak_days, a separate
+  24h-window counter the scheduler maintains, looked up by the
+  HARD-CODED DEFAULT_USER_ID - so the two streak numbers could
+  disagree across a midnight boundary, and on an instance whose users
+  row is not exactly that constant the badge read a user that owns NO
+  posts: 0 forever, a real defect this instance's seed exposed.
+- The MCP analytics_streak tool computes through the same
+  calculate_streak with its documented resolve_first_user convention;
+  its days are UTC (no zone input yet).
+- The scheduler's counter is untouched: it stays as a cheap internal
+  hint, but nothing DISPLAYS it, so there is only ever one number the
+  founder can read.
+- tests/streak_unification_test.rs drives the real router: (1) badge
+  == cadence for the same zone, both 3 against three consecutive
+  published days, in UTC and New York; (2) the session-user pin - a
+  fresh non-DEFAULT_USER_ID user with no posts reads 0, with today's
+  post reads 1, isolated per-test by its own user row and session;
+  (3) an unknown zone is a loud 400.
+- Found while proving it live: my external sqlite3 writes to the
+  seeded DB were invisible to the server (single-writer rule, G-08 -
+  the app's pool reads its own WAL view). External writes to the
+  operator's DB are out of contract; the seeded instance is now clean
+  (probe rows deleted, verified 0) and the proof lives in the
+  integration test, which seeds through the router's own pool.
+
+Stage Summary:
+- cargo test --test streak_unification_test: 3 pass. cargo test
+  --lib: 488 pass. clippy clean. pnpm build + svelte-check clean.
+- Live (seeded instance, release binary): badge == cadence == 0 -
+  correct for its data (last post 10-19, two-day gap); bad zone ->
+  400. The non-zero agreement proof is the integration test's.
+
+Known issues: unchanged (probe/audit-targets threshold drift, /login
+gate coverage, calendar Month/List probe states).

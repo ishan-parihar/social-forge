@@ -995,11 +995,12 @@ pub async fn get_cadence(
 /// Calculate the current posting streak: consecutive days (ending today
 /// or yesterday) with at least one published post.
 ///
-/// The days are the founder's LOCAL days (`zone_date`): a streak that
-/// anchors to UTC today/yesterday resets at the wrong hour for every
-/// founder whose midnight is not UTC midnight - a 10:00pm New York post
-/// was "tomorrow" to the UTC anchor and broke a live streak.
-async fn calculate_streak(
+/// `pub` because `/api/streak` serves the SAME number the cadence card
+/// shows - one measure of "streak" in the app, computed through the same
+/// zone-day rule (the TopBar badge used to read the scheduler's separate
+/// 24h-window counter, and the two could disagree across a midnight
+/// boundary).
+pub async fn calculate_streak(
     db: &sqlx::SqlitePool,
     user_id: Uuid,
     tz: Option<chrono_tz::Tz>,
