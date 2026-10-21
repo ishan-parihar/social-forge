@@ -202,35 +202,43 @@ async function main() {
     '/settings/webhooks', '/settings/rss', '/settings/mcp', '/settings/developer',
   ];
 
-  for (const route of ROUTES) {
-    await page.goto(`${BASE_URL}${route}`, { waitUntil: 'load' });
-    await page.waitForTimeout(1200);
-    await settleAnimations(page);
-    await record(route);
-  }
+  // The founder's phone widths, not just the desktop: the mobile
+  // layouts are DIFFERENT CSS (collapsed sidebars, stacked toolbars),
+  // and a control that clears the floor at 1440 can be squeezed by
+  // its mobile layout. The probe measures 375/360 for overflow and
+  // contrast; this gate now measures them for tap targets too.
+  for (const width of [1440, 375, 360]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const route of ROUTES) {
+      await page.goto(`${BASE_URL}${route}`, { waitUntil: 'load' });
+      await page.waitForTimeout(1200);
+      await settleAnimations(page);
+      await record(`${route}@${width}`);
+    }
 
-  // The composer, and the panels inside it.
-  await page.goto(`${BASE_URL}/posts/new`, { waitUntil: 'load' });
-  await page.waitForTimeout(1500);
-  const opened = await page.evaluate(() => {
-    const b = [...document.querySelectorAll('button')].find((x) => (x.textContent || '').trim() === '+ New Post');
-    if (b) { b.click(); return true; }
-    return false;
-  });
-  if (opened) {
+    // The composer, and the panels inside it.
+    await page.goto(`${BASE_URL}/posts/new`, { waitUntil: 'load' });
     await page.waitForTimeout(1500);
-    await record('composer');
+    const opened = await page.evaluate(() => {
+      const b = [...document.querySelectorAll('button')].find((x) => (x.textContent || '').trim() === '+ New Post');
+      if (b) { b.click(); return true; }
+      return false;
+    });
+    if (opened) {
+      await page.waitForTimeout(1500);
+      await record(`composer@${width}`);
 
-    // Each collapsible section in the composer.
-    for (const label of ['🧵 Thread Builder ▸', 'AI', 'Preview']) {
-      await page.evaluate((L) => {
-        const d = document.querySelector('[role=dialog]');
-        if (!d) return;
-        const b = [...d.querySelectorAll('button')].find((x) => (x.textContent || '').trim() === L);
-        if (b) b.click();
-      }, label);
-      await page.waitForTimeout(900);
-      await record(`composer:${label}`);
+      // Each collapsible section in the composer.
+      for (const label of ['🧵 Thread Builder ▸', 'AI', 'Preview']) {
+        await page.evaluate((L) => {
+          const d = document.querySelector('[role=dialog]');
+          if (!d) return;
+          const b = [...d.querySelectorAll('button')].find((x) => (x.textContent || '').trim() === L);
+          if (b) b.click();
+        }, label);
+        await page.waitForTimeout(900);
+        await record(`composer:${label}@${width}`);
+      }
     }
   }
 

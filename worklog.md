@@ -1571,3 +1571,33 @@ Correction to resolve-first-user-seeded-instance's summary:
   tests/resolve_local_user_test.rs::two_users_without_the_constant_
   is_a_loud_refusal executes it against a two-row users table and
   passes.
+
+---
+Task ID: target-audit-mobile-widths
+Agent: omp (goal session, 2026-10-22)
+Task: Fresh discovery pass - extend the tap-target gate to the
+founder's phone widths, which no target audit had ever measured
+(the probe measures 375/360 for overflow/contrast; audit-targets
+only walked at 1440).
+
+Work Log:
+- audit-targets.mjs walks the 25 routes and the composer panels at
+  1440, 375 AND 360 now. The mobile layouts are DIFFERENT CSS
+  (collapsed sidebars, stacked toolbars), so a control that clears
+  the floor at 1440 can be squeezed by its mobile layout - the
+  desktop-only audit could not see it. The 'where' keys carry the
+  width (route@375); make audit reads only the exit code, so no
+  consumer broke.
+- Result on the first full run: 0 controls under the 24px floor and
+  0 in the 24-44 band across all 75 route-width combinations plus
+  the composer and its three panels at each width. The mobile
+  layouts clear the floor everywhere the audit walks.
+
+Stage Summary:
+- Live run against the HEAD release binary: exit 0, empty JSON.
+- No product change: this iteration widened the gate and found
+  nothing to fix - recorded so the next pass knows mobile tap
+  targets were measured, not skipped.
+
+Known issues: none new. The unexercised 24-44 WARN branch remains
+the one named gap (previous entry).
