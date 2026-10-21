@@ -56,6 +56,7 @@ const FLOOR = 44;
 
 function FINDINGS() {
   const out = [];
+  const warn = [];
   document.querySelectorAll('button, a[href], [role="button"], input, select, textarea, [role="checkbox"], [role="tab"]').forEach((el) => {
     const cs = getComputedStyle(el);
     if (cs.display === 'none' || cs.visibility === 'hidden') return;
@@ -63,7 +64,24 @@ function FINDINGS() {
     const r = el.getBoundingClientRect();
     if (r.width === 0 || r.height === 0) return;
     // A control that is only in the DOM and not rendered is not a target.
-    if (r.height >= 44 && r.width >= 44) return;
+    //
+    // SEVERITY matches the standard and the probe (AGENTS.md 9.37,
+    // WCAG 2.5.8 Target Size Minimum): below 24x24 is a FAIL, 24-44 is
+    // a WARNING. The audit used to treat anything under 44 as a FAIL,
+    // so a control the probe classified as a warning failed the gate
+    // here - two gates disagreeing about the same rendered box.
+    if (r.height >= 24 && r.width >= 24) {
+      if (r.height >= 44 && r.width >= 44) return;
+      warn.push({
+        tag: el.tagName.toLowerCase(),
+        role: el.getAttribute('role') || '',
+        name: (el.getAttribute('aria-label') || el.textContent || el.getAttribute('placeholder') || '').trim().slice(0, 40),
+        w: Math.round(r.width),
+        h: Math.round(r.height),
+        cls: String(el.className).slice(0, 90),
+      });
+      return;
+    }
     // A VISUALLY HIDDEN control is not a target either.
     //
     // The skip link is the case: it is clipped to 1x1 until it takes the
@@ -79,11 +97,24 @@ function FINDINGS() {
       (cs.clipPath && cs.clipPath !== 'none') ||
       parseFloat(cs.textIndent) < -100;
     if (clippedAway && r.width <= 2 && r.height <= 2) return;
-    // The label wrapper is the real target for a checkbox.
+    // A control in the 24-44 band inside a 44px label clears the FAIL
+    // band via the wrapper (checkboxes): the wrapper is the real
+    // target, and the 9.37 warning band applies to the same box.
     const wrapper = el.closest('label');
     if (wrapper) {
       const wr = wrapper.getBoundingClientRect();
-      if (wr.height >= 44 && wr.width >= 44) return;
+      if (wr.height >= 24 && wr.width >= 24) {
+        if (wr.height >= 44 && wr.width >= 44) return;
+        warn.push({
+          tag: el.tagName.toLowerCase(),
+          role: el.getAttribute('role') || '',
+          name: (el.getAttribute('aria-label') || el.textContent || el.getAttribute('placeholder') || '').trim().slice(0, 40),
+          w: Math.round(r.width),
+          h: Math.round(r.height),
+          cls: String(el.className).slice(0, 90),
+        });
+        return;
+      }
     }
     out.push({
       tag: el.tagName.toLowerCase(),
@@ -94,7 +125,7 @@ function FINDINGS() {
       cls: String(el.className).slice(0, 90),
     });
   });
-  return out;
+  return { fails: out, warns: warn };
 }
 
 // The ENTRY ANIMATION must have finished before the measurement.
@@ -146,10 +177,12 @@ async function main() {
   });
   const page = await ctx.newPage();
   const findings = [];
+  const warnings = [];
 
   const record = async (where) => {
-    const rows = await page.evaluate(FINDINGS);
-    for (const r of rows) findings.push({ where, ...r });
+    const { fails, warns } = await page.evaluate(FINDINGS);
+    for (const r of fails) findings.push({ where, ...r });
+    for (const r of warns) warnings.push({ where, ...r });
   };
 
   // Log in.
@@ -205,21 +238,30 @@ async function main() {
 
   // Dedupe by class + size + name, so one control in three themes is one finding.
   const seen = new Set();
-  const unique = findings.filter((f) => {
+  const dedupe = (list) => list.filter((f) => {
     const k = `${f.where}|${f.tag}|${f.name}|${f.w}x${f.h}|${f.cls}`;
     if (seen.has(k)) return false;
     seen.add(k);
     return true;
   });
+  const unique = dedupe(findings);
+  const uniqueWarns = dedupe(warnings);
 
   for (const f of unique) {
     console.log(`${f.where}  ${f.w}x${f.h}  <${f.tag}${f.role ? ` ${f.role}` : ''}> "${f.name}"  ${f.cls}`);
   }
-  console.log(`\n${unique.length} control(s) under FLOORpx`);
+  console.log(`\n${unique.length} control(s) under the 24x24 floor`);
+  if (uniqueWarns.length) {
+    console.log(`${uniqueWarns.length} control(s) in the 24-44 warning band (reported, not gating):`);
+    for (const f of uniqueWarns.slice(0, 10)) {
+      console.log(`  ${f.where}  ${f.w}x${f.h}  "${f.name}"`);
+    }
+    if (uniqueWarns.length > 10) console.log(`  ... and ${uniqueWarns.length - 10} more`);
+  }
 
   if (OUT) {
     const { writeFileSync } = await import('node:fs');
-    writeFileSync(OUT, JSON.stringify(unique, null, 2));
+    writeFileSync(OUT, JSON.stringify({ fails: unique, warnings: uniqueWarns }, null, 2));
   }
 
   process.exit(unique.length ? 1 : 0);

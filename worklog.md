@@ -1482,3 +1482,34 @@ Follow-up to gate-coverage-login-and-calendar-states:
 - make audit now removes its five probe output dirs at the end
   (~100MB per run); this session already hit EDQUOT on accumulated
   probe litter and a write failure looks like an app failure.
+
+---
+Task ID: target-gate-severity-band
+Agent: omp (goal session, 2026-10-22)
+Task: Converge the two tap-target gates (AGENTS.md 9.37: "the
+severity has to match the standard, or the gate lies" and "the two
+gates must agree").
+
+Work Log:
+- audit-targets.mjs is re-banded to the standard and to the probe:
+  below 24x24 is a FAIL (exit 1), 24-44 is a WARNING (reported,
+  written to the JSON under 'warnings', not gating). It used to fail
+  the gate on anything under 44, so a control the probe classified
+  as a warning failed make audit - the two gates disagreed about the
+  same rendered box.
+- The checkbox-wrapper case keeps its own band logic (a 24-44
+  control inside a 44px label is a warning, not a fail).
+- The OUT json is now {fails, warnings} - the old flat array shape
+  changed; any consumer reading it must take the new shape (none in
+  the repo; make audit only checks the exit code).
+
+Stage Summary:
+- Live run against the release binary: 0 controls under the 24px
+  floor, 0 in the 24-44 band across the 25 walked routes + the
+  composer and its three panels, exit 0. The kanban Posts link that
+  the old gate failed is 44x44 and absent from both bands.
+- Both gates now classify by the standard's severity: probe FAIL
+  <24 / WARN 24-44, audit-targets FAIL <24 / WARN 24-44.
+
+Known issues: resolve_first_user DB-backed resolution remains the
+open queue item.
