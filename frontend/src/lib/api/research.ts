@@ -32,10 +32,13 @@ export interface TopExternalPost {
 export interface PostingSlot {
   /** e.g. "Wednesday". */
   weekday: string;
-  /** 0-23, UTC. */
+  /** 0-23, in the app's zone when the request named one, UTC otherwise. */
   hour: number;
-  /** e.g. "Wednesday 14:00–15:00 UTC". */
+  /** e.g. "Wednesday 14:00–15:00 America/New_York" - the full slot
+   *  description, unique per slot; it is the list key and the tooltip. */
   label: string;
+  /** The clock range alone ("14:00–15:00") for narrow table cells. */
+  hour_range: string;
   /** How many of the founder's own posts went out in this slot — the sample
    *  the ranking rests on. */
   posts: number;

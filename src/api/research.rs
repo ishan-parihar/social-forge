@@ -127,9 +127,13 @@ pub struct ExternalPostRow {
 #[derive(Debug, Serialize)]
 pub struct PostingSlot {
     pub weekday: String,
-    /// 0..23, UTC.
+    /// 0..23, in the zone the request named (UTC when none).
     pub hour: i32,
     pub label: String,
+    /// The clock range alone ("06:00–07:00"), for narrow table cells -
+    /// the full label names the zone and would truncate mid-word in
+    /// the 80px cell; the caption below already names the zone.
+    pub hour_range: String,
     /// How many of the founder's own posts (in the window) went out in
     /// this slot — the sample the ranking rests on.
     pub posts: i64,
@@ -417,12 +421,13 @@ pub async fn get(
                 .into_iter()
                 .map(|((weekday, hour), (posts, engagement))| {
                     let wd = WEEKDAYS[weekday as usize];
-                    let label =
-                        format!("{wd} {hour:02}:00–{:02}:00 {zone_label}", (hour + 1) % 24);
+                    let hour_range = format!("{hour:02}:00–{:02}:00", (hour + 1) % 24);
+                    let label = format!("{wd} {hour_range} {zone_label}");
                     PostingSlot {
                         weekday: wd.to_string(),
                         hour,
                         label,
+                        hour_range,
                         posts,
                         engagement,
                         engagement_per_post: engagement as f64 / posts as f64,

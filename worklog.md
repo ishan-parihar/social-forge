@@ -1297,3 +1297,13 @@ Known issues: unchanged from the previous entries (the two-streak
 TopBar measure, the gate threshold drift, /login gate coverage,
 calendar Month/List probe states, the client/server day-rule parity
 test).
+
+Correction to research-best-time-zone (same session): its summary
+said "the page now renders the server's label verbatim" - false.
+The cell rendered `slot.label.replace(/^\w+\s/, "")`, which left the
+zone name on the clock inside an 80px truncate span, so the visible
+cell was a mangled "06:00–07:00 Amer...". Fixed: PostingSlot carries
+`hour_range` (the clock alone) and the cell renders it; `label`
+(full, zone-named) stays the each-key and is the cell's tooltip;
+the caption below already names the zone. Probe on /research: 0 FAIL,
+0 WARN against the rebuilt binary.

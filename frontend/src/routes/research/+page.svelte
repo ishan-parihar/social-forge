@@ -236,14 +236,13 @@
         <ul class="space-y-2.5">
           {#each data.timing.best_slots as slot (slot.label)}
             <li class="flex items-center gap-3">
-              <!-- The label comes from the SERVER, which now buckets the
-                   weekday AND the hour in the app's zone from one instant
-                   (it used to send a UTC slot and this page re-derived the
-                   clock client-side while keeping the UTC weekday - a
-                   second implementation of the same rule that could
-                   disagree at the midnight boundary). -->
+              <!-- `label` (weekday + range + zone) stays the each-key and
+                   the tooltip; the CELL renders `hour_range`, the clock
+                   alone - the zone name would truncate mid-word inside
+                   the 80px span, and the caption below already names the
+                   zone. -->
               <span class="text-xs text-muted w-32 shrink-0 truncate">{slot.weekday}</span>
-              <span class="text-xs text-faint w-20 shrink-0 tabular-nums">{slot.label.replace(/^\w+\s/, "")}</span>
+              <span class="text-xs text-faint w-20 shrink-0 tabular-nums" title={slot.label}>{slot.hour_range}</span>
               <div class="flex-1 bg-background-input rounded-full h-6 overflow-hidden">
                 <!--
                   Solid fill, not /60, for the same contrast reason the
