@@ -1231,3 +1231,22 @@ Known issues:
 - Gate coverage gaps: /login is in no gate's route list; the
   calendar Month/List views are not probed by make audit (no --state
   passes).
+
+Follow-up to analytics-zone-day-completion (same session):
+- OPEN: the two tap-target gates carry DIFFERENT thresholds -
+  probe.mjs FAILs below 24px and WARNs 24-44 (WCAG 2.5.8), while
+  audit-targets.mjs FAILs anything under 44px. A control in the
+  24-44 band passes the probe with a warning and fails make audit.
+  AGENTS.md 9.37 requires the two gates to agree; converging them
+  means either fixing ~100 sub-44 controls the audit already
+  measures or re-banding the audit's FLOOR - a deliberate decision
+  for the next session, not a silent one.
+- OPEN: the TopBar streak badge reads `users.streak_days`, a
+  24h-window counter maintained by the scheduler - a DIFFERENT
+  measure from the zone-day streak on the cadence card
+  (`calculate_streak`), which this session made zone-aware. Two
+  "streak" numbers can now be on screen, one zone-aware and one
+  not, and they can disagree across a DST or midnight boundary.
+- Housekeeping: frontend/probe-out/ (a stale 13-route report from
+  an old 6543 run) was gitignored but still TRACKED from before the
+  ignore landed; untracked and deleted.
