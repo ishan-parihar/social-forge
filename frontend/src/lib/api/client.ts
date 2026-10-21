@@ -32,14 +32,41 @@ class ApiClient {
       const res = await fetch(`${this.base}${path}`, { ...reqInit, signal: combinedSignal });
       clearTimeout(timeout);
 
-      // 401 → bounce to /login. The session either never existed,
-      // expired, or the cookie was cleared. Don't try to parse the
-      // body - just redirect.
+      // A SESSION 401 bounces to /login: the session never existed,
+      // expired, or the cookie was cleared. But NOT every 401 is the
+      // session: a provider token that expired mid-fetch answers 401
+      // with code "token_expired" (the analytics and publish paths),
+      // and bouncing on THAT destroys the modal the founder just
+      // opened and dumps them on the login page while still logged
+      // in - the stats button on a calendar list row did exactly
+      // that. Parse the body: only the session 401 ("no_session")
+      // navigates; every other 401 returns to the caller as the
+      // error it is, where the UI can say what actually happened.
       if (res.status === 401 && !path.startsWith("/api/auth/")) {
-        if (typeof window !== "undefined") {
-          window.location.href = "/login";
+        const text = await res.text();
+        let code: string | undefined;
+        try {
+          code = (JSON.parse(text) as Record<string, unknown>).code as string | undefined;
+        } catch {
+          code = undefined;
         }
-        return { error: "Not authenticated", status: 401 };
+        if (code === "no_session") {
+          if (typeof window !== "undefined") {
+            window.location.href = "/login";
+          }
+          return { error: "Not authenticated", status: 401 };
+        }
+        // Unwrap the error envelope so the UI shows a message, not
+        // raw JSON ("{\"error\":\"Token expired\"...}" in the stats
+        // modal). The envelope's `error` field is the human text.
+        let msg = text || "Unauthorized";
+        try {
+          const env = JSON.parse(text) as Record<string, unknown>;
+          if (env.error) msg = String(env.error);
+        } catch {
+          /* non-JSON body: keep the raw text */
+        }
+        return { error: msg, status: 401 };
       }
 
       const text = await res.text();

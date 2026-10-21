@@ -62,6 +62,17 @@ const DIALOGS = [
   { route: '/search', trigger: 'Save', expect: 'save-search' },
   { route: '/settings/webhooks', trigger: '+ Add Webhook', expect: 'webhook' },
   { route: '/posts/new', trigger: '+ New Post', expect: 'composer' },
+  // The modals that need a POST or calendar data to open. The
+  // seeded instance has one queued post per state, so the calendar
+  // in LIST view exposes the per-chip stats trigger (ⓘ on the chip)
+  // and the AI generator button in the composer header.
+  //
+  // These are the modals whose titles could regress to the generic
+  // "Dialog" the same way the composer's did: PostStats and the AI
+  // Generator are the two the founder opens most after the composer
+  // itself.
+  { route: '/calendar?display=list', trigger: 'View post statistics', expect: 'post-stats' },
+  { route: '/calendar', trigger: 'Generate multiple posts from a topic using AI', expect: 'ai-generator' },
 ];
 
 /**

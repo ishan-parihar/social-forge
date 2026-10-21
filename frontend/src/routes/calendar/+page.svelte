@@ -673,6 +673,7 @@
       onStats={handleStats}
       onDelete={handleDelete}
       onToggleSelect={toggleSelect}
+      showActions={true}
     />
   {/if}
 

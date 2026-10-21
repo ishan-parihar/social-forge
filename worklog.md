@@ -1686,3 +1686,48 @@ Full-suite verification at 8414a04 (same session):
   IMAGES is a property of the model chain, not of the file or tool:
   the shots remain ready in /tmp/sf-rubric for a vision-capable
   session. No scores fabricated.
+
+---
+Task ID: dialog-gate-widening-401-bounce
+Agent: omp (goal session, 2026-10-22)
+Task: Widen the dialog gate to every reachable modal surface (the
+review's follow-up to the composer's generic "Dialog" name), and fix
+what the widened gate found.
+
+Work Log:
+- audit-dialogs.mjs's trigger list grew from 6 to 8: the Post
+  Statistics modal (calendar list row) and the AI Post Generator -
+  the two the founder opens most after the composer. Trigger
+  matching is exact on accessible name / title / aria-label; the
+  generator's emoji-prefixed text is matched via its title
+  attribute.
+- The widened gate found a REAL defect on its first run: clicking
+  the list row's View-post-statistics button navigated the founder
+  to /login. Root cause, two layers:
+  1. GET /api/analytics/post/{id} answers 401 "token_expired" when
+     the post's PROVIDER token is expired - a normal, actionable
+     state (refresh the channel token), not session death.
+  2. The client's global 401 interceptor bounced to /login on ANY
+     401 without reading the body, so the provider-401 destroyed
+     the just-opened modal and dumped a still-logged-in founder on
+     the login page.
+- Fix, at the client seam (one place, every caller): the bounce
+     fires only on the SESSION 401 (body code "no_session"); every
+     other 401 returns to the caller as an error, with the envelope
+     unwrapped so the UI shows "Token expired", not raw JSON.
+- Live verification through the real browser (browseros CDP):
+  the stats click now OPENS the modal and it STAYS OPEN, showing
+  "Token expired" inline - a message the founder can act on.
+
+Stage Summary:
+- audit-dialogs: 8/8 dialogs pass with real accessible names
+  (composer "Composer", post-stats "Post Statistics", generator
+  "AI Post Generator"), 0 contract failures.
+- Regression after the client.ts change (it is global): the
+  default probe 0 FAIL / 0 WARN, analytics 0 failures, make check
+  clean, svelte-check clean, rebuilt release binary live.
+
+Known issues: the stats modal showing "Token expired" for an
+unrefreshed channel is the honest state; a follow-up could add a
+"Refresh token" affordance in that modal, but the destructive
+bounce is gone.
