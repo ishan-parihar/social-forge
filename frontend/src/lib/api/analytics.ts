@@ -126,15 +126,18 @@ export const analyticsApi = {
     const q = days ? `?days=${days}` : '';
     return api.get<PostAnalytics>(`/api/analytics/post/${postId}${q}`, signal);
   },
-  // v23: new dashboard endpoints.
-  getEngagement: (days?: number, signal?: AbortSignal) => {
-    return api.get<EngagementResponse>(`/api/analytics/engagement${daysQuery(days)}`, signal);
+  // v23: new dashboard endpoints. All three day-series endpoints take
+  // the zone NAME: the server buckets the days per-instant (DST-
+  // correct), the same days the calendar shows, so the charts on one
+  // page cannot disagree at the day boundary.
+  getEngagement: (days?: number, tz?: string, signal?: AbortSignal) => {
+    return api.get<EngagementResponse>(`/api/analytics/engagement${summaryQuery(days, tz)}`, signal);
   },
-  getAdherence: (days?: number, signal?: AbortSignal) => {
-    return api.get<AdherenceResponse>(`/api/analytics/adherence${daysQuery(days)}`, signal);
+  getAdherence: (days?: number, tz?: string, signal?: AbortSignal) => {
+    return api.get<AdherenceResponse>(`/api/analytics/adherence${summaryQuery(days, tz)}`, signal);
   },
-  getCadence: (days?: number, signal?: AbortSignal) => {
-    return api.get<CadenceResponse>(`/api/analytics/cadence${daysQuery(days)}`, signal);
+  getCadence: (days?: number, tz?: string, signal?: AbortSignal) => {
+    return api.get<CadenceResponse>(`/api/analytics/cadence${summaryQuery(days, tz)}`, signal);
   },
   getRecentEvents: (limit?: number, signal?: AbortSignal) => {
     const q = limit ? `?limit=${limit}` : '';

@@ -95,9 +95,9 @@
       analyticsApi.getSummary(7, timezone.value),
       integrationsApi.list(),
       feedApi.analytics(7),
-      analyticsApi.getEngagement(7),
-      analyticsApi.getAdherence(7),
-      analyticsApi.getCadence(30),
+      analyticsApi.getEngagement(7, timezone.value),
+      analyticsApi.getAdherence(7, timezone.value),
+      analyticsApi.getCadence(30, timezone.value),
       analyticsApi.getRecentEvents(10),
       // The per-state TOTALS. `limit: 1` because only the count is
       // wanted - the server still counts every row that matches.

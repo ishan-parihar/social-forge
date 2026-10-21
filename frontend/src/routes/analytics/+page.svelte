@@ -69,9 +69,9 @@
     const [summaryRes, engagementRes, adherenceRes, cadenceRes, eventsRes, feedRes, postsRes, provRes] =
       await Promise.all([
         analyticsApi.getSummary(days, timezone.value, signal),
-        analyticsApi.getEngagement(days, signal),
-        analyticsApi.getAdherence(days, signal),
-        analyticsApi.getCadence(days, signal),
+        analyticsApi.getEngagement(days, timezone.value, signal),
+        analyticsApi.getAdherence(days, timezone.value, signal),
+        analyticsApi.getCadence(days, timezone.value, signal),
         analyticsApi.getRecentEvents(8, signal),
         feedApi.analytics(days),
         postsApi.list({ limit: 100, sort: "-engagement" }),

@@ -723,7 +723,10 @@
     {#if totalPosts > posts.length}
       <div class="mb-4 px-3 py-2 rounded-lg border border-line bg-background-input text-xs text-muted">
         Showing the {posts.length} most recent of {totalPosts} posts. Older posts are not on the board —
-        use <a href="/posts" class="text-accent hover:underline">Posts</a> to see them all.
+        <!-- inline-flex + min-h-11 gives the link a full 44x44 box (WCAG 2.5.8
+             and the audit's FLOOR), the same pattern ChannelSelector uses;
+             an inline link inside text-xs is ~15px and both gates fail it -->
+        use <a href="/posts" class="text-accent hover:underline inline-flex items-center justify-center min-h-11 min-w-11 align-middle">Posts</a> to see them all.
       </div>
     {/if}
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

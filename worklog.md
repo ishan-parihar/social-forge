@@ -1163,3 +1163,71 @@ Known issues / environment findings:
   calculate_streak) still day-bucket in UTC; the summary series is
   zone-correct now, those three are not.
 - OPEN (unchanged): /api/ai/* streaming (backend, not visual-layer).
+
+---
+Task ID: analytics-zone-day-completion
+Agent: omp (goal session, 2026-10-21)
+Task: Close the last three UTC day-bucketing sites on /analytics so the
+page stops disagreeing with itself at the day boundary (the OPEN item
+from dst-zone-name-bucketing).
+
+Work Log:
+- `AnalyticsDaysQuery` gains `tz` (IANA name, unknown -> 400, parsed
+  ONCE via the shared `parse_query_zone`). The summary endpoint now
+  uses the same helper instead of its own inline parse.
+- ONE day-date rule for every analytics series: `zone_date(dt, tz)`
+  (AGENTS.md 9.18). `dense_day_series`, `fill_missing_days` and
+  `calculate_streak` all bucket through it.
+- `get_engagement`: the SQL no longer groups by
+  `date(published_at,'unixepoch')` (UTC). It selects one row per post
+  (epoch + per-metric sums via the metric-label vocabulary) and the
+  day bucket is computed in Rust - SQLite's
+  `date(ts,'unixepoch',?)` takes a CONSTANT modifier and cannot
+  express a per-instant zone offset, so the DST bug would come back
+  with any SQL-side grouping. `fill_missing_days` now takes the zone:
+  BOTH edges (start AND today) are zone days.
+- `get_cadence`: same shape - per-post epochs, zone-day counts in
+  Rust. The "Cadence against goal" chart can no longer disagree with
+  the zone-correct "Posting volume" chart beside it.
+- `calculate_streak`: the DISTINCT-date SQL is replaced by per-post
+  epochs deduped by zone day, and the today/yesterday anchor is the
+  ZONE's, so a streak no longer resets at the wrong hour for a
+  founder whose midnight is not UTC midnight.
+- Frontend: getEngagement/getAdherence/getCadence take the zone NAME;
+  the analytics page and the dashboard pass `timezone.value`.
+- Visual-layer fix found by the gate run (not by the analytics diff):
+  the kanban "older posts" banner's inline Posts link was 31x15 -
+  under the 24x24 WCAG 2.5.8 floor AND audit-targets' 44px floor. It
+  is a conditional banner that only renders past 200 posts, which is
+  why earlier probes passed: the seeded DB had not crossed the limit.
+  Now `inline-flex min-h-11 min-w-11` (the ChannelSelector pattern),
+  44x44 rendered.
+- Environment finding: the probe run that reported 19 navigation
+  FAILs ("system error -122") was EDQUOT - ~550MB of my own leftover
+  /tmp/probe-* screenshot dirs filled the tmpfs quota and the probe
+  could not WRITE its screenshots. Cleaned. A gate run that fails on
+  `write` errors is measuring the disk, not the app.
+
+Stage Summary:
+- cargo test --lib: 487 pass (incl. the new engagement zone-edge
+  series test). Calendar suites: 8 + 8.
+- clippy --lib --bins --all-features --locked: clean.
+- pnpm build + svelte-check: clean. make check: all gates clean.
+- All 7 browser gates against the final release binary on :6544:
+  probe 27x4x2 0 FAIL / 0 WARN, 0 targets under floor, 0 analytics
+  failures, 0 dialog failures, 0 contrast failures both themes,
+  0 drag failures.
+- Live oracles: `tz=Not/AZone` -> 400 on /engagement; /cadence
+  answers the zone name (NY and UTC agree on the seeded mid-day
+  posts - correct for that data; the near-midnight disagreement is
+  pinned by the unit tests with discriminating instants).
+
+Known issues:
+- OPEN: research "best time to post" still buckets weekday/hour in
+  UTC and labels it UTC while the rest of the app is zone-aware.
+- OPEN: the client/server day-rule pairing - `zone_offset_seconds`
+  vs the frontend's `wallClock` - two implementations of one rule
+  with nothing pinning them (the counting_rule_test shape).
+- Gate coverage gaps: /login is in no gate's route list; the
+  calendar Month/List views are not probed by make audit (no --state
+  passes).

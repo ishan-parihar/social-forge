@@ -270,6 +270,34 @@ pub struct DayCount {
 /// otherwise. Before the zone arrived the chart bucketed in UTC while
 /// the calendar bucketed locally, so the same publish showed up on
 /// two different days on the two pages of the same app.
+/// The LOCAL date of an instant in the founder's zone (DST-correct),
+/// or the UTC date when no zone was given. THE ONE day-date rule for
+/// every analytics series (AGENTS.md 9.18); `dense_day_series`,
+/// `fill_missing_days` and `calculate_streak` all bucket through it.
+fn zone_date(dt: chrono::DateTime<chrono::Utc>, tz: Option<chrono_tz::Tz>) -> chrono::NaiveDate {
+    match tz {
+        Some(z) => (dt
+            + chrono::Duration::seconds(
+                crate::api::calendar::zone_offset_seconds(z, dt),
+            ))
+        .date_naive(),
+        None => dt.date_naive(),
+    }
+}
+
+/// Parse the `tz` query parameter ONCE, refusing an unknown name -
+/// the same loud contract as the calendar endpoint. A garbled zone
+/// must not silently answer a UTC-dayed chart that the founder reads
+/// as their own days.
+fn parse_query_zone(tz: Option<&str>) -> Result<Option<chrono_tz::Tz>, AppError> {
+    match tz {
+        Some(name) => Ok(Some(
+            crate::api::calendar::parse_zone(name).map_err(AppError::BadRequest)?,
+        )),
+        None => Ok(None),
+    }
+}
+
 fn dense_day_series(
     cutoff_epoch: i64,
     epochs: &[i64],
@@ -282,13 +310,7 @@ fn dense_day_series(
         let Some(dt) = chrono::DateTime::from_timestamp(*ts, 0) else {
             continue;
         };
-        let day = match tz {
-            Some(z) => (dt + chrono::Duration::seconds(
-                crate::api::calendar::zone_offset_seconds(z, dt),
-            )).date_naive(),
-            None => dt.date_naive(),
-        };
-        *counts.entry(day).or_insert(0) += 1;
+        *counts.entry(zone_date(dt, tz)).or_insert(0) += 1;
     }
 
     let Some(cutoff_dt) = chrono::DateTime::from_timestamp(cutoff_epoch, 0) else {
@@ -301,20 +323,10 @@ fn dense_day_series(
     // (still 21:00 the PREVIOUS local day) passed the SQL filter but
     // bucketed to a day BEFORE the loop's first day - it existed in
     // the SQL counts and was MISSING from the chart.
-    let zone_date = |dt: chrono::DateTime<chrono::Utc>| {
-        match tz {
-            Some(z) => (dt
-                + chrono::Duration::seconds(
-                    crate::api::calendar::zone_offset_seconds(z, dt),
-                ))
-            .date_naive(),
-            None => dt.date_naive(),
-        }
-    };
-    let start = zone_date(cutoff_dt);
+    let start = zone_date(cutoff_dt, tz);
     // "Today" is the zone's today, not UTC's: in Auckland the UTC
     // day is YESTERDAY'S, and the series would end one day early.
-    let today = zone_date(chrono::Utc::now());
+    let today = zone_date(chrono::Utc::now(), tz);
 
     let mut out = Vec::new();
     let mut day = start;
@@ -424,11 +436,7 @@ pub async fn get_summary(
     .bind(cutoff)
     .fetch_all(&state.db)
     .await?;
-    let tz = match query.tz.as_deref() {
-        Some(name) => Some(crate::api::calendar::parse_zone(name).map_err(AppError::BadRequest)?),
-        None => None,
-    };
-    let posts_by_day = dense_day_series(cutoff, &published_epochs, tz);
+    let posts_by_day = dense_day_series(cutoff, &published_epochs, parse_query_zone(query.tz.as_deref())?);
 
     let mut published = 0i64;
     let mut failed = 0i64;
@@ -491,6 +499,11 @@ pub async fn get_summary(
 #[derive(Debug, Deserialize)]
 pub struct AnalyticsDaysQuery {
     pub days: Option<i32>,
+    /// The founder's zone as an IANA NAME ("America/New_York"). The
+    /// day series buckets into the zone's days (DST-correct), the same
+    /// days the calendar and the summary series show. Unknown name is
+    /// a 400. Absent: UTC (legacy).
+    pub tz: Option<String>,
     /// Optional per-day posting goal. Honored by the endpoints that measure
     /// against a goal (adherence, cadence); see [`resolve_goal_per_day`].
     /// Ignored by the endpoints that have no goal notion.
@@ -602,12 +615,21 @@ pub struct DayEngagement {
 ///
 /// This inserts a zero row for every missing day between the window's
 /// start and its end, so the series is one point per calendar day.
-fn fill_missing_days(rows: Vec<DayEngagement>, cutoff_epoch: i64, days: i64) -> Vec<DayEngagement> {
-    // The window's last day is today (in UTC, which is what the day
-    // buckets use).
-    let today = chrono::Utc::now().date_naive();
+///
+/// BOTH edges are the zone's days (see `zone_date`): with a UTC start
+/// and a zone today, a post in the first hours of the window buckets
+/// to a day the loop never emits - it exists in the SQL totals and is
+/// missing from the chart.
+fn fill_missing_days(
+    rows: Vec<DayEngagement>,
+    cutoff_epoch: i64,
+    days: i64,
+    tz: Option<chrono_tz::Tz>,
+) -> Vec<DayEngagement> {
+    let now = chrono::Utc::now();
+    let today = zone_date(now, tz);
     let first = chrono::DateTime::from_timestamp(cutoff_epoch, 0)
-        .map(|dt| dt.date_naive())
+        .map(|dt| zone_date(dt, tz))
         .unwrap_or(today);
 
     let mut by_date: std::collections::HashMap<chrono::NaiveDate, DayEngagement> =
@@ -687,54 +709,95 @@ pub async fn get_engagement(
     // place the provider vocabulary is mapped. Matching only
     // 'likes'/'comments'/'shares' meant an X user's sparkline showed
     // likes but no comments and no shares, forever.
+    //
+    // The DAY bucket is computed in RUST, not SQL: the day a post
+    // belongs to is the founder's LOCAL day (DST-correct, via the
+    // zone name), and SQLite's `date(ts,'unixepoch',?)` takes a
+    // CONSTANT modifier - it cannot express a per-instant offset.
+    // This is the same shape as `dense_day_series`: select per-post
+    // rows, bucket by zone day. The UTC `GROUP BY date(...)` shape
+    // made this chart disagree with the zone-correct "Posting
+    // volume" chart on the same page at the day boundary.
     let by_day_sql = format!(
         r#"SELECT
-            date(p.published_at, 'unixepoch') as date,
-            COALESCE(SUM((SELECT json_extract(point.value, '$.total')
+            p.published_at as published_at,
+            COALESCE((SELECT json_extract(point.value, '$.total')
                             FROM analytics_cache ac, json_each(ac.data) AS series,
                                  json_each(json_extract(series.value, '$.data')) AS point
-                           WHERE ac.user_id = p.user_id
-                             AND ac.platform_post_id = p.platform_post_id
-                             AND {likes}
-                           ORDER BY point.key DESC LIMIT 1)), 0) as likes,
-            COALESCE(SUM((SELECT json_extract(point.value, '$.total')
+                            WHERE ac.user_id = p.user_id
+                              AND ac.platform_post_id = p.platform_post_id
+                              AND {likes}
+                            ORDER BY point.key DESC LIMIT 1), 0) as likes,
+            COALESCE((SELECT json_extract(point.value, '$.total')
                             FROM analytics_cache ac, json_each(ac.data) AS series,
                                  json_each(json_extract(series.value, '$.data')) AS point
-                           WHERE ac.user_id = p.user_id
-                             AND ac.platform_post_id = p.platform_post_id
-                             AND {comments}
-                           ORDER BY point.key DESC LIMIT 1)), 0) as comments,
-            COALESCE(SUM((SELECT json_extract(point.value, '$.total')
+                            WHERE ac.user_id = p.user_id
+                              AND ac.platform_post_id = p.platform_post_id
+                              AND {comments}
+                            ORDER BY point.key DESC LIMIT 1), 0) as comments,
+            COALESCE((SELECT json_extract(point.value, '$.total')
                             FROM analytics_cache ac, json_each(ac.data) AS series,
                                  json_each(json_extract(series.value, '$.data')) AS point
-                           WHERE ac.user_id = p.user_id
-                             AND ac.platform_post_id = p.platform_post_id
-                             AND {shares}
-                           ORDER BY point.key DESC LIMIT 1)), 0) as shares,
-            COALESCE(SUM((SELECT json_extract(point.value, '$.total')
+                            WHERE ac.user_id = p.user_id
+                              AND ac.platform_post_id = p.platform_post_id
+                              AND {shares}
+                            ORDER BY point.key DESC LIMIT 1), 0) as shares,
+            COALESCE((SELECT json_extract(point.value, '$.total')
                             FROM analytics_cache ac, json_each(ac.data) AS series,
                                  json_each(json_extract(series.value, '$.data')) AS point
-                           WHERE ac.user_id = p.user_id
-                             AND ac.platform_post_id = p.platform_post_id
-                             AND {impressions}
-                           ORDER BY point.key DESC LIMIT 1)), 0) as impressions
+                            WHERE ac.user_id = p.user_id
+                              AND ac.platform_post_id = p.platform_post_id
+                              AND {impressions}
+                            ORDER BY point.key DESC LIMIT 1), 0) as impressions
            FROM posts p
            WHERE p.user_id = ? AND p.deleted_at IS NULL
              AND p.state = 'published'
              AND p.published_at >= ?
-             GROUP BY date(p.published_at, 'unixepoch')
-            ORDER BY date(p.published_at, 'unixepoch') ASC"#,
+           ORDER BY p.published_at ASC"#,
         likes = crate::db::queries::metric_label_matches(crate::db::queries::METRIC_LIKES),
         comments = crate::db::queries::metric_label_matches(crate::db::queries::METRIC_COMMENTS),
         shares = crate::db::queries::metric_label_matches(crate::db::queries::METRIC_SHARES),
         impressions =
             crate::db::queries::metric_label_matches(crate::db::queries::METRIC_IMPRESSIONS),
     );
-    let by_day_rows: Vec<DayEngagement> = sqlx::query_as(&by_day_sql)
+    #[derive(sqlx::FromRow)]
+    struct PostEngagement {
+        published_at: i64,
+        likes: i64,
+        comments: i64,
+        shares: i64,
+        impressions: i64,
+    }
+    let post_rows: Vec<PostEngagement> = sqlx::query_as(&by_day_sql)
         .bind(auth.user_id)
         .bind(crate::db::types::EpochUtc::from(cutoff))
         .fetch_all(&state.db)
         .await?;
+    let zone = parse_query_zone(query.tz.as_deref())?;
+    let mut by_zone_day: std::collections::HashMap<chrono::NaiveDate, DayEngagement> =
+        std::collections::HashMap::new();
+    for r in post_rows {
+        let Some(dt) = chrono::DateTime::from_timestamp(r.published_at, 0) else {
+            continue;
+        };
+        let day = zone_date(dt, zone);
+        let e = by_zone_day.entry(day).or_insert(DayEngagement {
+            date: day.format("%Y-%m-%d").to_string(),
+            likes: 0,
+            comments: 0,
+            shares: 0,
+            impressions: 0,
+        });
+        e.likes += r.likes;
+        e.comments += r.comments;
+        e.shares += r.shares;
+        e.impressions += r.impressions;
+    }
+    let by_day_rows: Vec<DayEngagement> = {
+        let mut v: Vec<DayEngagement> = by_zone_day.into_values().collect();
+        v.sort_by(|a, b| a.date.cmp(&b.date));
+        v
+    };
 
     // Fill in the days with no published post.
     //
@@ -748,7 +811,7 @@ pub async fn get_engagement(
     //
     // Filling the gaps makes the x-axis "days in the window" - which is
     // what the chart's label says it is.
-    let by_day = fill_missing_days(by_day_rows, cutoff.timestamp(), days);
+    let by_day = fill_missing_days(by_day_rows, cutoff.timestamp(), days, zone);
 
     Ok(Json(EngagementResponse {
         total_likes: current.likes,
@@ -867,21 +930,37 @@ pub async fn get_cadence(
 ) -> Result<Json<CadenceResponse>, AppError> {
     let days = query.days.unwrap_or(30).clamp(1, 3650) as i64;
     let cutoff = (chrono::Utc::now() - chrono::Duration::days(days)).timestamp();
+    let zone = parse_query_zone(query.tz.as_deref())?;
 
-    let day_rows: Vec<(String, i64)> = sqlx::query_as(
-        r#"SELECT date(p.published_at, 'unixepoch'), COUNT(*)
+    // Per-post epochs; the day bucket is computed in RUST (see
+    // `get_engagement` for why SQL cannot express a per-instant
+    // zone offset). This is the "Cadence against goal" chart on the
+    // same page as the zone-correct "Posting volume" - the two must
+    // not disagree at the day boundary.
+    let epochs: Vec<i64> = sqlx::query_scalar(
+        r#"SELECT p.published_at
            FROM posts p
            WHERE p.user_id = ? AND p.deleted_at IS NULL
              AND p.state = 'published' AND p.published_at >= ?
-           GROUP BY date(p.published_at, 'unixepoch')
-           ORDER BY date(p.published_at, 'unixepoch') ASC"#,
+           ORDER BY p.published_at ASC"#,
     )
     .bind(auth.user_id)
     .bind(cutoff)
     .fetch_all(&state.db)
     .await?;
 
-    let total_posts: i64 = day_rows.iter().map(|(_, c)| c).sum();
+    let mut day_counts: std::collections::HashMap<chrono::NaiveDate, i64> =
+        std::collections::HashMap::new();
+    for ts in &epochs {
+        let Some(dt) = chrono::DateTime::from_timestamp(*ts, 0) else {
+            continue;
+        };
+        *day_counts.entry(zone_date(dt, zone)).or_insert(0) += 1;
+    }
+    let mut day_keys: Vec<chrono::NaiveDate> = day_counts.keys().copied().collect();
+    day_keys.sort();
+
+    let total_posts: i64 = epochs.len() as i64;
     let actual_per_day = if days > 0 {
         total_posts as f64 / days as f64
     } else {
@@ -889,14 +968,19 @@ pub async fn get_cadence(
     };
 
     // Streak: count consecutive days (ending today or yesterday) with
-    // at least one published post.
-    let streak_days = calculate_streak(&state.db, auth.user_id).await;
+    // at least one published post - in the founder's zone, so the
+    // streak does not reset at the wrong hour for a founder whose
+    // midnight is not UTC midnight.
+    let streak_days = calculate_streak(&state.db, auth.user_id, zone).await;
 
     let goal = resolve_goal_per_day(&state.db, auth.user_id, query.goal_per_day).await;
 
-    let by_day: Vec<DayCount> = day_rows
+    let by_day: Vec<DayCount> = day_keys
         .into_iter()
-        .map(|(date, count)| DayCount { date, count })
+        .map(|d| DayCount {
+            count: day_counts[&d],
+            date: d.format("%Y-%m-%d").to_string(),
+        })
         .collect();
 
     Ok(Json(CadenceResponse {
@@ -910,13 +994,22 @@ pub async fn get_cadence(
 
 /// Calculate the current posting streak: consecutive days (ending today
 /// or yesterday) with at least one published post.
-async fn calculate_streak(db: &sqlx::SqlitePool, user_id: Uuid) -> i64 {
-    let rows: Vec<(String,)> = sqlx::query_as(
-        r#"SELECT DISTINCT date(p.published_at, 'unixepoch')
+///
+/// The days are the founder's LOCAL days (`zone_date`): a streak that
+/// anchors to UTC today/yesterday resets at the wrong hour for every
+/// founder whose midnight is not UTC midnight - a 10:00pm New York post
+/// was "tomorrow" to the UTC anchor and broke a live streak.
+async fn calculate_streak(
+    db: &sqlx::SqlitePool,
+    user_id: Uuid,
+    tz: Option<chrono_tz::Tz>,
+) -> i64 {
+    let epochs: Vec<(i64,)> = sqlx::query_as(
+        r#"SELECT p.published_at
            FROM posts p
            WHERE p.user_id = ? AND p.deleted_at IS NULL
              AND p.state = 'published' AND p.published_at IS NOT NULL
-           ORDER BY date(p.published_at, 'unixepoch') DESC
+           ORDER BY p.published_at DESC
            LIMIT 400"#, // cap at ~13 months
     )
     .bind(user_id)
@@ -924,35 +1017,39 @@ async fn calculate_streak(db: &sqlx::SqlitePool, user_id: Uuid) -> i64 {
     .await
     .unwrap_or_default();
 
-    if rows.is_empty() {
+    if epochs.is_empty() {
         return 0;
     }
 
-    let parse_date = |s: &str| chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").ok();
-    let today = chrono::Utc::now().date_naive();
+    // Distinct zone days, newest first.
+    let mut days: Vec<chrono::NaiveDate> = epochs
+        .iter()
+        .filter_map(|(ts,)| chrono::DateTime::from_timestamp(*ts, 0))
+        .map(|dt| zone_date(dt, tz))
+        .collect();
+    days.dedup(); // ordered DESC, so duplicates are adjacent
+
+    let today = zone_date(chrono::Utc::now(), tz);
     let yesterday = today - chrono::Duration::days(1);
 
     // Start from today or yesterday (so a streak isn't broken if the
     // user hasn't posted yet today).
-    let first_date = parse_date(&rows[0].0);
-    let streak_start = match first_date {
-        Some(d) if d == today || d == yesterday => d,
+    let streak_start = match days[0] {
+        d if d == today || d == yesterday => d,
         _ => return 0,
     };
 
     let mut streak = 1i64;
     let mut expected = streak_start - chrono::Duration::days(1);
-    for (date_str,) in rows.iter().skip(1) {
-        if let Some(d) = parse_date(date_str) {
-            if d == expected {
-                streak += 1;
-                expected -= chrono::Duration::days(1);
-            } else if d < expected {
-                // Gap found — streak over.
-                break;
-            }
-            // If d > expected (duplicate day, shouldn't happen with DISTINCT), skip.
+    for d in days.iter().skip(1) {
+        if *d == expected {
+            streak += 1;
+            expected -= chrono::Duration::days(1);
+        } else if *d < expected {
+            // Gap found - streak over.
+            break;
         }
+        // If *d > expected (duplicate day), skip - dedup prevents it.
     }
     streak
 }
@@ -1023,6 +1120,8 @@ pub async fn get_recent_events(
 mod tests {
     use super::adherence_percent;
     use super::dense_day_series;
+    use super::fill_missing_days;
+    use super::DayEngagement;
     use chrono::{Duration, Utc};
 
     #[test]
@@ -1147,5 +1246,50 @@ mod tests {
         );
         let total: i64 = series.iter().map(|d| d.count).sum();
         assert_eq!(total, 1, "no post may vanish from the window");
+    }
+
+    /// The engagement series' edges are the ZONE's days, the same rule
+    /// as `dense_day_series`. With a UTC start and a zone today, a
+    /// post published at 01:00 UTC on the cutoff day in New York
+    /// buckets BELOW the loop's first day and vanishes from the
+    /// sparkline while the headline totals still count it.
+    #[test]
+    fn the_engagement_series_covers_a_post_published_at_the_windows_zone_edge() {
+        let ny = crate::api::calendar::parse_zone("America/New_York").unwrap();
+        // 2026-10-21 01:00Z: local New York 2026-10-20 21:00 (EDT).
+        let edge = chrono::DateTime::parse_from_rfc3339("2026-10-21T01:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        let cutoff = chrono::DateTime::parse_from_rfc3339("2026-10-21T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        // One row, already bucketed by the caller to the post's zone day.
+        let rows = vec![DayEngagement {
+            date: super::zone_date(edge, Some(ny)).format("%Y-%m-%d").to_string(),
+            likes: 5,
+            comments: 0,
+            shares: 0,
+            impressions: 0,
+        }];
+        let series = fill_missing_days(rows, cutoff.timestamp(), 7, Some(ny));
+        assert_eq!(
+            series[0].date, "2026-10-20",
+            "the first day is the zone date of the cutoff: {}",
+            series[0].date
+        );
+        let day_with_post = series.iter().find(|d| d.date == "2026-10-20").unwrap();
+        assert_eq!(
+            day_with_post.likes, 5,
+            "the edge post's engagement is IN the sparkline, not dropped"
+        );
+        // The series ends at the zone's TODAY (the window is "up to
+        // now"), and starts at the zone date of the cutoff - every day
+        // between, zeros included.
+        let last = series.last().unwrap();
+        assert_eq!(
+            last.date,
+            super::zone_date(Utc::now(), Some(ny)).format("%Y-%m-%d").to_string(),
+            "the last day is the zone's today, not UTC's"
+        );
     }
 }
