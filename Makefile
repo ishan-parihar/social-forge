@@ -54,6 +54,7 @@ check: vendor-pins
 	SQLX_OFFLINE=true cargo check --lib --bin social-forge
 	cd frontend && node scripts/check-hex-tokens.mjs
 	cd frontend && node scripts/check-tailwind-classes.mjs
+	python3 scripts/check_status_contrast.py
 
 # ── Visual + a11y audits (AGENTS.md §12) ───────────────────────
 #
