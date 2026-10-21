@@ -1777,3 +1777,34 @@ Follow-up to stats-modal-inline-token-refresh (same session):
   explanation. Verified live in the real browser: refresh clicked ->
   refresh button gone -> Reconnect link shown.
 - A button that cannot succeed is worse than no button.
+
+---
+Task ID: real-browser-discovery-sweep
+Agent: omp (goal session, 2026-10-22)
+Task: Discovery pass over every surface no gate had driven - via
+the browseros CDP bridge, watching page errors, bad responses, and
+rendered state.
+
+Work Log:
+- Campaign detail (/campaigns/{id}): renders fully - overview,
+  posts-by-state, progress bar, dates, goal - no errors, no bad
+  responses.
+- Feed, comments: clean. DMs: the known X-provider 502 on
+  conversations (the expired token; the probe already classifies
+  it PROVIDER ERROR, not an app defect).
+- All six settings subpages (signatures, rss, notifications,
+  profile, mcp, developer): zero page errors.
+- The composer driven end to end for the first time in a real
+  browser: opened from the + New Post button, text typed into the
+  contenteditable through the CDP bridge, the character counter
+  updated live (155/4000 - the plain-text rule fires on real
+  input). No page errors, no bad responses.
+
+Stage Summary:
+- One sweep, zero new defects: the surfaces converge. The 401 arc
+  (bounce -> stay -> refresh -> reconnect) was this session's last
+  defect class, and every driven surface since renders clean.
+- The queue now feeds from: the vision-blocked rubric (shots and
+  bridge ready), the next gate widening, or founder reports.
+
+Known issues: none new.
