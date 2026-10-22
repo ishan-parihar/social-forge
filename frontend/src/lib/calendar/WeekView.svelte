@@ -81,6 +81,31 @@
     if (firstDay) activeCell = `${firstDay}-${first.slice(0, 2)}`;
   });
 
+  // Open the week at the start of the working day (postiz opens at the
+  // first slot with content; 07:00 is the sane floor either way). Without
+  // this the grid mounts scrolled to midnight and the founder's whole
+  // working day is below the fold.
+  //
+  // Run once per MOUNT (the `didInitialScroll` flag). Re-running on week
+  // change would yank the scroller back while the founder is reading a
+  // later hour; a fresh mount (navigation) is the only moment it helps.
+  let didInitialScroll = $state(false);
+  $effect(() => {
+    void weekDays;
+    if (didInitialScroll || !gridEl) return;
+    const withPosts = weekDays.flatMap((wd) => wd.events);
+    let targetHour = "07:00";
+    if (withPosts.length > 0) {
+      const earliest = withPosts
+        .map((e) => (e.time || "23:59").slice(0, 2) + ":00")
+        .sort()[0];
+      targetHour = earliest;
+    }
+    didInitialScroll = true;
+    const idx = hours.indexOf(targetHour);
+    if (idx > 0) gridEl.scrollTop = idx * 48;
+  });
+
   function focusCell(cellKey: string) {
     activeCell = cellKey;
     tick().then(() => {
@@ -205,8 +230,11 @@
      at a 360px viewport and every chip was clipped into a sliver, with no way to
      scroll to the rest. The vertical scroller stays on the body, so the header
      and body scroll together horizontally. -->
-<div role="group" class="week-calendar bg-surface border border-line rounded-xl overflow-x-auto" ontouchstart={touchDrag.onTouchStart} ontouchmove={touchDrag.onTouchMove} ontouchend={touchDrag.onTouchEnd}>
-  <div class="grid grid-cols-8 min-w-[640px] text-center border-b border-line" role="row">
+<div role="group" class="week-calendar bg-surface border border-line rounded-xl flex flex-col overflow-x-auto max-h-full" ontouchstart={touchDrag.onTouchStart} ontouchmove={touchDrag.onTouchMove} ontouchend={touchDrag.onTouchEnd}>
+  <!-- The header is its own scroller child at `top:0` of the BODY
+       scroller below, so the day names stay pinned while the hours
+       scroll (postiz pins the same 62px header). -->
+  <div class="grid grid-cols-8 min-w-[640px] text-center border-b border-line sticky top-0 z-10 bg-surface" role="row">
     <div class="py-2 px-2 text-xs text-muted border-r border-line min-w-0 truncate" title={timezone.value}>{tzLabel}</div>
     {#each weekDays as wd (wd.dateStr)}
       <!-- v25 F3: today is a filled accent header cell, not just accent-colored
@@ -222,7 +250,13 @@
       </div>
     {/each}
   </div>
-  <div class="overflow-y-auto max-h-[600px]" bind:this={gridEl} role="grid" aria-label="Week view. Arrow keys move between hour slots.">
+  <!-- max-h is set by the page to the viewport minus chrome, so the
+       hours scroll INSIDE the calendar card with the day header pinned
+       - the postiz shape. A fixed 600px wasted the space below the fold
+       on a tall screen and clipped the grid on a short one. -->
+  <div class="overflow-y-auto flex-1 min-h-0 overscroll-contain" bind:this={gridEl} role="grid" aria-label="Week view. Arrow keys move between hour slots.">
+    <!-- Scroll the current hour into view on first render (postiz
+         opens at the top of the working day, not at midnight). -->
     {#each hours as hour (hour)}
       <div class="grid grid-cols-8 min-w-[640px] border-b border-line min-h-[48px]" role="row">
         <div class="text-xs text-muted px-2 py-1 border-r border-line min-w-0 truncate">{hour}</div>

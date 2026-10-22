@@ -134,7 +134,7 @@
   });
 </script>
 
-<div role="group" class="bg-surface border border-line rounded-xl overflow-hidden" ontouchstart={touchDrag.onTouchStart} ontouchmove={touchDrag.onTouchMove} ontouchend={touchDrag.onTouchEnd}>
+<div role="group" class="bg-surface border border-line rounded-xl overflow-hidden flex flex-col max-h-full" ontouchstart={touchDrag.onTouchStart} ontouchmove={touchDrag.onTouchMove} ontouchend={touchDrag.onTouchEnd}>
   <div class="py-3 border-b border-line px-4">
     <div class="text-lg font-semibold text-center">
       {date.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
@@ -160,7 +160,11 @@
       {/if}
     </div>
   </div>
-  <div class="overflow-y-auto max-h-[700px]">
+  <!-- Same shape as WeekView: the scroller fills the height the page
+       gives the card instead of a fixed 700px, so all of a day's posts
+       are reachable by scroll at any window height. `gridEl` is unused
+       here (the day grid is single-column, no cell focus needed). -->
+  <div class="overflow-y-auto flex-1 min-h-0 overscroll-contain">
     {#each hours as hour (hour)}
       {@const hourStr = hour.slice(0, 2)}
       {@const isDragOver = dragOverHour === hourStr}

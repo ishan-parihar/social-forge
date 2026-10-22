@@ -596,6 +596,14 @@
     {/if}
   {/if}
 
+  <!-- v28: the view card takes the REST of the viewport, so the week
+       and day hour grids scroll INSIDE the card (postiz's shape) and the
+       month grid scrolls as a whole with its weekday header pinned.
+       The header/filter chrome above measured: 24px title row + 44px
+       CalendarHeader + the p-4 gutter + the sticky TopBar is ~168px;
+       100dvh - 168px keeps the card inside one screen with the page's
+       own scroll reserved for the cases below. -->
+  <div class="calendar-view-shell">
   {#if fetchError}
     <!-- Phase v21: postiz-style full-card error state with Retry button.
          Previously this was a tiny red <div class="text-center py-4 text-sm text-error">
@@ -678,6 +686,33 @@
       showActions={true}
     />
   {/if}
+  </div>
 
   <PostDetail event={selectedEvent} onclose={() => selectedEvent = null} onDuplicate={handleDuplicate} {duplicating} />
 </div>
+
+<style>
+  /* The height the calendar card gets: the viewport minus the app chrome
+     above it. `min-height` keeps an empty week grid from collapsing, and
+     `100dvh` tracks mobile URL bars. Below `sm` the page keeps its normal
+     document flow (the whole page scrolls; the card grows with content). */
+  .calendar-view-shell {
+    height: calc(100dvh - 168px);
+    min-height: 420px;
+    display: flex;
+    flex-direction: column;
+  }
+  .calendar-view-shell > :global(*) {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  @media (max-width: 639px) {
+    .calendar-view-shell {
+      height: auto;
+      min-height: 0;
+    }
+    .calendar-view-shell > :global(*) {
+      flex: none;
+    }
+  }
+</style>

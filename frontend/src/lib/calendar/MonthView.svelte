@@ -181,8 +181,8 @@
      root's `overflow-hidden`. The floor is 560px = 80px/day, which keeps the
      grid legible from `sm` up. Below `sm` there is no floor: the chips become
      dots (see below), so seven days fit a phone without scrolling. -->
-<div class="month-calendar bg-surface border border-line rounded-xl overflow-x-auto">
-  <div class="grid grid-cols-7 sm:min-w-[560px] text-center text-xs text-muted py-2.5 border-b border-line" aria-hidden="true">
+<div class="month-calendar bg-surface border border-line rounded-xl overflow-x-auto max-h-full overflow-y-auto overscroll-contain">
+  <div class="grid grid-cols-7 sm:min-w-[560px] text-center text-xs text-muted py-2.5 border-b border-line sticky top-0 z-10 bg-surface" aria-hidden="true">
     {#each days as d}<span>{d}</span>{/each}
   </div>
   <div
@@ -234,8 +234,12 @@
               class="text-xs w-6 h-6 flex items-center justify-center rounded-full mb-0.5 {isToday(date, timezone.value) ? 'bg-accent-fill text-accent-fg' : 'text-muted'}"
               class:opacity-80={past || !isCurrentMonth(date, year, month)}
             >{date.getDate()}</span>
-            <div class="space-y-0.5">
-              {#each dayEvents.slice(0, 3) as event (event.id)}
+            <!-- The post stack scrolls per-cell when it outgrows the
+                 cell, so every post on a day is reachable without the
+                 whole month grid scrolling away. `min-h-0` lets the
+                 flex child shrink. -->
+            <div class="space-y-0.5 max-h-32 overflow-y-auto overscroll-contain min-h-0">
+              {#each dayEvents as event (event.id)}
                 <div
                   class="event-chip-row group/chip relative flex items-center gap-1 flex-1 min-w-0 min-h-6 focus-visible:outline-2 focus-visible:outline-accent {event.state === 'published' || past ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'}"
                   draggable={event.state !== 'published' && !past}
@@ -293,9 +297,6 @@
                   </span>
                 </div>
               {/each}
-              {#if dayEvents.length > 3}
-                <div class="text-[10px] text-muted px-1">+{dayEvents.length - 3} more</div>
-              {/if}
             </div>
           </div>
         {/each}
