@@ -905,6 +905,28 @@ async function main() {
         // documented "no default signature" 404, not an app error.
         const t = msg.text();
         if (t.includes('signatures/default')) return;
+        // The LOGGED-OUT pass measures /login by design, and the
+        // layout's documented session probe (GET /api/auth/me,
+        // +layout.ts) answers 401 there on every visit. Chrome logs
+        // that as a console error; it is the expected answer, not a
+        // defect. Without this exemption the login page's console
+        // reports "8 errors ... (7 more)" on a clean build, and a
+        // REAL error would hide inside the noise. Only the logged-out
+        // pass is exempted: an authenticated session that trips 401
+        // is a defect and stays reported.
+        //
+        // The message TEXT does not name the URL ("Failed to load
+        // resource: ... 401 ()"), so the check reads the source
+        // location from `msg.location()` first and only falls back to
+        // the text (which a fetch() rejection can carry).
+        const srcUrl = (msg.location() && msg.location().url) || '';
+        if (
+          LOGGED_OUT &&
+          /\b401\b/.test(t) &&
+          (srcUrl.includes('/api/auth/me') || t.includes('auth/me'))
+        ) {
+          return;
+        }
         summary.errors.push({ theme, detail: t.slice(0, 200) });
       }
     });
