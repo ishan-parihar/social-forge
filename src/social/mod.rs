@@ -1876,6 +1876,7 @@ pub(crate) fn test_config() -> crate::config::Config {
         reddit_password: Some("test_reddit_pass".into()),
         reddit_access_token: None,
         reddit_refresh_token: None,
+        reddit_cookie_token: None,
         discord_client_id: None,
         discord_client_secret: None,
         discord_bot_token: None,

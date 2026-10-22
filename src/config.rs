@@ -99,6 +99,10 @@ pub struct Config {
     pub reddit_password: Option<String>,
     pub reddit_access_token: Option<String>,
     pub reddit_refresh_token: Option<String>,
+    /// REDDIT_COOKIE_TOKEN: the JSON cookie blob
+    /// ({reddit_session, token_v2?, cookie_string?}) the manual paste
+    /// flow and `connect reddit`'s env fallback accept.
+    pub reddit_cookie_token: Option<String>,
     pub discord_client_id: Option<String>,
     pub discord_client_secret: Option<String>,
     pub discord_bot_token: Option<String>,
@@ -321,6 +325,7 @@ impl Config {
             reddit_password: opt("REDDIT_PASSWORD"),
             reddit_access_token: opt("REDDIT_ACCESS_TOKEN"),
             reddit_refresh_token: opt("REDDIT_REFRESH_TOKEN"),
+            reddit_cookie_token: opt("REDDIT_COOKIE_TOKEN"),
             discord_client_id: opt("DISCORD_CLIENT_ID"),
             discord_client_secret: opt("DISCORD_CLIENT_SECRET"),
             discord_bot_token: opt("DISCORD_BOT_TOKEN"),

@@ -1201,8 +1201,20 @@ APP_URL=https://localhost:6543
 /// credential. Placeholder rows with an empty `access_token` (and any row the
 /// user disabled) must NOT make `connect` report `already_connected` — that
 /// blocks reconnect forever with no way out short of SQL.
+///
+/// A SEED token is not a credential either (AGENTS §0.5: seed_demo.py rows
+/// are fixtures, not accounts). Recognizing them here lets `connect x`
+/// replace the stub with the real browser/env cookies instead of answering
+/// `already_connected` for a row whose token is `{"auth_token":"seed"}`.
 fn is_credential_row(i: &crate::db::models::Integration) -> bool {
-    !i.disabled && !i.access_token.is_empty()
+    if i.disabled || i.access_token.is_empty() {
+        return false;
+    }
+    let t = i.access_token.as_str();
+    if t == "seed-token" || t.contains("\"seed\"") {
+        return false;
+    }
+    true
 }
 
 async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::Result<()> {
@@ -1318,6 +1330,17 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
                             Some("cookie"), // §6: explicit auth_mode
                         )
                         .await?;
+                        // Drop the seed_demo fixture row (if any) so the
+                        // channel list shows the real account, not the
+                        // fictional seed one beside it.
+                        let seeds =
+                            crate::db::queries::delete_seed_integrations(
+                                &state.db,
+                                user_id,
+                                "x",
+                            )
+                            .await
+                            .unwrap_or(0);
 
                         output_json(&serde_json::json!({
                             "status": "connected",
@@ -1327,6 +1350,7 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
                             "name": name,
                             "username": username,
                             "id": id,
+                            "seed_rows_replaced": seeds,
                         }));
                     }
                     Err(e) => {
@@ -1365,14 +1389,39 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
                 return Ok(());
             }
 
-            match crate::social::reddit_cookies::extract_reddit_cookies() {
-                Some(cookies) => {
-                    let token_str = crate::social::reddit_cookies::build_cookie_token(
-                        &cookies.reddit_session,
-                        cookies.token_v2.as_deref(),
-                        Some(&cookies.cookie_string),
-                    );
-
+            // Browser cookie import first, then the REDDIT_COOKIE_TOKEN env
+            // var (the same JSON blob the manual paste flow accepts:
+            // {reddit_session, token_v2?, cookie_string?}). Both paths
+            // share the same get_www validation — a credential that cannot
+            // authenticate never becomes an integration row.
+            let env_token = state
+                .config
+                .reddit_cookie_token
+                .as_deref()
+                .filter(|t| !t.is_empty())
+                .map(|t| {
+                    (
+                        t.to_string(),
+                        "env-cookies".to_string(),
+                        "REDDIT_COOKIE_TOKEN".to_string(),
+                    )
+                });
+            let imported = crate::social::reddit_cookies::extract_reddit_cookies().map(
+                |cookies| {
+                    (
+                        crate::social::reddit_cookies::build_cookie_token(
+                            &cookies.reddit_session,
+                            cookies.token_v2.as_deref(),
+                            Some(&cookies.cookie_string),
+                        ),
+                        "browser-import".to_string(),
+                        cookies.source,
+                    )
+                },
+            );
+            let imported = imported.or(env_token);
+            match imported {
+                Some((token_str, method, source)) => {
                     let mut provider_obj =
                         crate::social::reddit::RedditProvider::new(&state.config);
                     provider_obj.prepare_from_token(&token_str);
@@ -1404,14 +1453,25 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
                                 Some("cookie"), // §6: explicit auth_mode
                             )
                             .await?;
+                            // Drop the seed_demo fixture row (if any) — see
+                            // the X branch for why.
+                            let seeds =
+                                crate::db::queries::delete_seed_integrations(
+                                    &state.db,
+                                    user_id,
+                                    "reddit",
+                                )
+                                .await
+                                .unwrap_or(0);
 
                             output_json(&serde_json::json!({
                                 "status": "connected",
                                 "provider": "reddit",
-                                "method": "browser-import",
-                                "source": cookies.source,
+                                "method": method,
+                                "source": source,
                                 "name": name,
                                 "id": id,
+                                "seed_rows_replaced": seeds,
                             }));
                         }
                         Err(e) => {
@@ -1419,7 +1479,7 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
                                 "status": "error",
                                 "provider": "reddit",
                                 "error": format!("Cookie import succeeded but validation failed: {e}. The cookies may be expired."),
-                                "hint": "Log into reddit.com in your browser, then run this command again.",
+                                "hint": "Log into reddit.com in your browser (or refresh REDDIT_COOKIE_TOKEN in .env), then run this command again.",
                             }));
                         }
                     }
@@ -1428,10 +1488,11 @@ async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::
                     output_json(&serde_json::json!({
                         "status": "no_browser_cookies",
                         "provider": "reddit",
-                        "error": "No Reddit cookies found in any browser.",
+                        "error": "No Reddit cookies found in any browser or .env.",
                         "hints": [
                             "Log into reddit.com in Chrome, Brave, Firefox, or Zen browser",
                             "Then run 'social-forge connect reddit' again",
+                            "Or set REDDIT_COOKIE_TOKEN in ~/.social-forge/.env",
                             "Or visit http://localhost:6543/api/public/connect/reddit-cookies for manual entry",
                         ],
                     }));

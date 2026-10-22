@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM integrations WHERE user_id = ? AND provider_identifier = ?\n         AND (access_token = 'seed-token' OR access_token LIKE '%\"seed\"%')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "291458a8fec13d7b71cedce632b7ad6f52f6de6581773d3b3eebcff1b7806d94"
+}

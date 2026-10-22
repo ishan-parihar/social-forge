@@ -509,6 +509,26 @@ pub async fn delete_integration(
     Ok(r.rows_affected() > 0)
 }
 
+/// Delete a provider's SEED rows (the seed_demo.py fixtures: `seed-token`
+/// access tokens or X's `{"auth_token":"seed"}` cookie blob) for a user.
+/// Called when a REAL credential for the same provider lands, so the
+/// channel list shows the real account and not the fictional seed one
+/// beside it. Returns the number of seed rows removed.
+pub async fn delete_seed_integrations(
+    pool: &SqlitePool,
+    user_id: Uuid,
+    provider_identifier: &str,
+) -> Result<u64, sqlx::Error> {
+    let r = sqlx::query!(
+        "DELETE FROM integrations WHERE user_id = ? AND provider_identifier = ?\n         AND (access_token = 'seed-token' OR access_token LIKE '%\"seed\"%')",
+        user_id,
+        provider_identifier,
+    )
+    .execute(pool)
+    .await?;
+    Ok(r.rows_affected())
+}
+
 // ══════════════════════════════════════════════════════════════
 // POSTS
 // ══════════════════════════════════════════════════════════════
