@@ -311,4 +311,12 @@
   .event-time { color: rgb(var(--text-muted-rgb)); flex-shrink: 0; }
   .event-metrics { display: flex; align-items: center; gap: 0.25rem; flex-shrink: 0; margin-left: auto; overflow: hidden; }
   .metric-item { font-size: 0.625rem; color: rgb(var(--text-muted-rgb)); white-space: nowrap; }
+  /* A phone-width cell cannot hold time + title + engagement badges:
+     the badges measured OVERLAPPING the time text at 375px (the probe's
+     "\u{1f441}\u{2022} 2k overlaps 06:50" FAIL). The badges are secondary
+     data - the same floor that drops the tag chips drops them, and the
+     full numbers stay in the tooltip, the detail panel and Post Stats. */
+  @container (max-width: 90px) {
+    .event-metrics { display: none; }
+  }
 </style>
