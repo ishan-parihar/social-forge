@@ -4647,13 +4647,10 @@ pub async fn own_post_engagement_totals(
     cutoff: DateTime<Utc>,
     until: DateTime<Utc>,
 ) -> Result<OwnPostEngagementTotals, sqlx::Error> {
-    // The `json_each` label match is case-insensitive, and the last point
-    // of the series is read with `ORDER BY key DESC LIMIT 1` - the
-    // provider's series is a running total, so its last point is the
-    // current value.
-    //
-    // The label set comes from `metric_label_matches`, the ONE place the
-    // provider vocabulary is mapped. It used to match only
+    // The metric expressions come from `metric_value_expr` - the ONE
+    // implementation every own-post engagement reader shares: the last
+    // point of a cumulative series, labels mapped by
+    // `metric_label_matches`. It used to match only
     // 'likes'/'comments'/'shares', which never matched X ("Retweets",
     // "Replies") or Bluesky ("Reposts", "Replies") - so those users read
     // 0 comments and 0 shares forever.
@@ -4665,44 +4662,20 @@ pub async fn own_post_engagement_totals(
              COALESCE(SUM(impressions), 0) AS impressions
            FROM (
              SELECT p.id AS post_id,
-                    (SELECT json_extract(point.value, '$.total')
-                       FROM analytics_cache ac, json_each(ac.data) AS series,
-                            json_each(json_extract(series.value, '$.data')) AS point
-                      WHERE ac.user_id = p.user_id
-                        AND ac.platform_post_id = p.platform_post_id
-                        AND {likes}
-                      ORDER BY point.key DESC LIMIT 1) AS likes,
-                    (SELECT json_extract(point.value, '$.total')
-                       FROM analytics_cache ac, json_each(ac.data) AS series,
-                            json_each(json_extract(series.value, '$.data')) AS point
-                      WHERE ac.user_id = p.user_id
-                        AND ac.platform_post_id = p.platform_post_id
-                        AND {comments}
-                      ORDER BY point.key DESC LIMIT 1) AS comments,
-                    (SELECT json_extract(point.value, '$.total')
-                       FROM analytics_cache ac, json_each(ac.data) AS series,
-                            json_each(json_extract(series.value, '$.data')) AS point
-                      WHERE ac.user_id = p.user_id
-                        AND ac.platform_post_id = p.platform_post_id
-                        AND {shares}
-                      ORDER BY point.key DESC LIMIT 1) AS shares,
-                    (SELECT json_extract(point.value, '$.total')
-                       FROM analytics_cache ac, json_each(ac.data) AS series,
-                            json_each(json_extract(series.value, '$.data')) AS point
-                      WHERE ac.user_id = p.user_id
-                        AND ac.platform_post_id = p.platform_post_id
-                        AND {impressions}
-                      ORDER BY point.key DESC LIMIT 1) AS impressions
+                    {likes} AS likes,
+                    {comments} AS comments,
+                    {shares} AS shares,
+                    {impressions} AS impressions
                FROM posts p
               WHERE p.user_id = ?
                 AND p.deleted_at IS NULL
                 AND p.state = 'published'
                 AND p.published_at >= ?
                 AND p.published_at < ?)"#,
-        likes = metric_label_matches(METRIC_LIKES),
-        comments = metric_label_matches(METRIC_COMMENTS),
-        shares = metric_label_matches(METRIC_SHARES),
-        impressions = metric_label_matches(METRIC_IMPRESSIONS),
+        likes = metric_value_expr(METRIC_LIKES, "p"),
+        comments = metric_value_expr(METRIC_COMMENTS, "p"),
+        shares = metric_value_expr(METRIC_SHARES, "p"),
+        impressions = metric_value_expr(METRIC_IMPRESSIONS, "p"),
     );
     sqlx::query_as::<_, OwnPostEngagementTotals>(&sql)
         .bind(user_id)
@@ -4821,43 +4794,19 @@ pub async fn post_engagement_by_post(
         .join(", ");
     let sql = format!(
         r#"SELECT p.id AS post_id,
-                  (SELECT json_extract(point.value, '$.total')
-                     FROM analytics_cache ac, json_each(ac.data) AS series,
-                          json_each(json_extract(series.value, '$.data')) AS point
-                    WHERE ac.user_id = p.user_id
-                      AND ac.platform_post_id = p.platform_post_id
-                      AND {likes}
-                    ORDER BY point.key DESC LIMIT 1) AS likes,
-                  (SELECT json_extract(point.value, '$.total')
-                     FROM analytics_cache ac, json_each(ac.data) AS series,
-                          json_each(json_extract(series.value, '$.data')) AS point
-                    WHERE ac.user_id = p.user_id
-                      AND ac.platform_post_id = p.platform_post_id
-                      AND {comments}
-                    ORDER BY point.key DESC LIMIT 1) AS comments,
-                  (SELECT json_extract(point.value, '$.total')
-                     FROM analytics_cache ac, json_each(ac.data) AS series,
-                          json_each(json_extract(series.value, '$.data')) AS point
-                    WHERE ac.user_id = p.user_id
-                      AND ac.platform_post_id = p.platform_post_id
-                      AND {shares}
-                    ORDER BY point.key DESC LIMIT 1) AS shares,
-                  (SELECT json_extract(point.value, '$.total')
-                     FROM analytics_cache ac, json_each(ac.data) AS series,
-                          json_each(json_extract(series.value, '$.data')) AS point
-                    WHERE ac.user_id = p.user_id
-                      AND ac.platform_post_id = p.platform_post_id
-                      AND {impressions}
-                    ORDER BY point.key DESC LIMIT 1) AS impressions
+                  {likes} AS likes,
+                  {comments} AS comments,
+                  {shares} AS shares,
+                  {impressions} AS impressions
              FROM posts p
             WHERE p.user_id = ?
               AND p.deleted_at IS NULL
               AND p.id IN ({holes})"#,
         holes = holes,
-        likes = metric_label_matches(METRIC_LIKES),
-        comments = metric_label_matches(METRIC_COMMENTS),
-        shares = metric_label_matches(METRIC_SHARES),
-        impressions = metric_label_matches(METRIC_IMPRESSIONS),
+        likes = metric_value_expr(METRIC_LIKES, "p"),
+        comments = metric_value_expr(METRIC_COMMENTS, "p"),
+        shares = metric_value_expr(METRIC_SHARES, "p"),
+        impressions = metric_value_expr(METRIC_IMPRESSIONS, "p"),
     );
     let mut q = sqlx::query_as::<_, PostEngagementRow>(&sql);
     q = q.bind(user_id);
