@@ -976,6 +976,26 @@ async function main() {
         // The favicon is not part of the app surface.
         if (url.includes('/favicon')) return;
         summary.notFound.push({ theme, url });
+      } else if (res.status() === 401) {
+        // A 401 is tracked BY URL because the console text does not
+        // name the source ("Failed to load resource: ... 401 ()"),
+        // so a genuinely unauthorized call was indistinguishable
+        // from the layout's documented session probe in the console
+        // summary. Here the two CAN be told apart:
+        //   - /api/auth/me on the LOGGED-OUT pass: the expected
+        //     answer of the auth guard (+layout.ts) - exempted.
+        //   - anything else, or any 401 on an authenticated pass: a
+        //     defect (an expired session bouncing a page's data call,
+        //     or a route the guard failed to protect) - report it.
+        const url = res.url();
+        if (LOGGED_OUT && url.includes('/api/auth/me')) return;
+        summary.fails.push({
+          route: '(response)',
+          width: 0,
+          theme,
+          check: 'http-401',
+          detail: `HTTP 401 ${url}`,
+        });
       }
     });
 
