@@ -1995,3 +1995,25 @@ Stage Summary:
 - Commit 900ab2c pushed to github/master.
 - New permanent gate: state-hunt.mjs (usable standalone; candidate to wire into make audit).
 - All gates green on the rebuilt binary.
+
+---
+Task ID: v27-red-team-3b
+Agent: omp (glm-5.3)
+Task: Red-team iteration 3b - harden the gate suite per the review of red-team 3 (900ab2c).
+
+Work Log:
+- Extracted the ONE contrast implementation into frontend/scripts/contrast-core.mjs (AGENTS.md 9.18); probe.mjs, audit-contrast.mjs and state-hunt.mjs all import it. The core is the probe's compositing (wash layers over the nearest opaque ancestor + opacity-group handling). Each script keeps only its report policy. Assembly via new Function: the audit functions serialize into the page (no module scope there) and ESM strict mode would scope a direct eval's consts to the eval itself. Two traps hit and fixed while wiring: a literal \\n in the Function assembly, and state-hunt's body calling effBg (old private name) against the core's effectiveBg.
+- Wired state-hunt.mjs into make audit (the 14 driven states were ungated).
+- Added the BLOCKED login guard to every gate script (state-hunt, audit-dialogs, audit-targets, audit-contrast, audit-analytics, e2e-calendar-drag): waitForSelector on the client-rendered password field, exit 3 instead of a 30s fill() timeout.
+- audit-dialogs: empty-list SKIP for row-scoped triggers (the /comments reply modal); a fresh install has no comment to open (AGENTS.md 9.38 precedent, probe's unreachable-route).
+- Diagnosed a suite-wide 403: the hand-started 6544 instance had been relaunched without APP_URL/FRONTEND_URL, so CSRF reverted to port 6543. Relaunch now pins both to 6544.
+- Re-seeded the demo DB (backup at /tmp/social-forge.db.bak-214031) after a feed refresh emptied the comments list and left the posting-volume series non-dense.
+
+Known issues / follow-ups:
+- The 51 controls in the 24-44 warning band (audit-targets) are reported, not gating - the dense calendar grid is the bulk; per WCAG 2.5.8 they pass.
+- CRAFT rubric scoring stays BLOCKED in this environment: the model has no image vision (read of a PNG returns "Current model does not support images"); rubric-shots.mjs captures for a vision-capable session.
+
+Stage Summary:
+- Commit b3bfc58 pushed to github/master.
+- make audit exit 0 with all 11 gates (probe, targets, contrast dark+light, dialogs, analytics, calendar-drag, 4 calendar states, logged-out login, state-hunt).
+- The contrast rule is now written once; a fourth copy would be a build-time-visible defect, not a silent drift.
