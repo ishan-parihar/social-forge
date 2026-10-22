@@ -14,10 +14,9 @@ function getInitialView(): CalendarView {
       return stored;
     }
   }
-  // A seven-column week grid is unreadable at phone width; day view is the default there.
-  if (typeof window !== 'undefined' && window.matchMedia('(max-width: 639px)').matches) {
-    return 'day';
-  }
+  // The week view is the DEFAULT on every breakpoint (the mobile floor
+  // `min-w-[640px]` + `overflow-x-auto` makes it pan-able on phones),
+  // matching postiz. Day/list stay one tap away in the header.
   return 'week';
 }
 

@@ -555,7 +555,7 @@
         onclick={() => modals.open(GeneratorModal, {}, { title: 'AI Post Generator', size: 'max-w-lg' })}
         class="px-3 py-1.5 text-sm border border-line rounded-lg text-muted hover:text-content hover:bg-surface-hover transition-colors min-h-11"
         title="Generate multiple posts from a topic using AI"
-      >✨ Generate Posts</button>
+      >Generate Posts</button>
       <button onclick={() => composer.openCreate()} class="px-3 py-1.5 bg-accent-fill hover:bg-accent-fill-hover text-accent-fg rounded-lg text-sm transition-colors min-h-11">
         + New Post
       </button>

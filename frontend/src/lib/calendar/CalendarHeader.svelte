@@ -23,11 +23,14 @@
     onCampaignFilter?: (id: string | null) => void;
   } = $props();
 
-  const views: { key: CalendarView; label: string; icon: string }[] = [
-    { key: "day", label: "Day", icon: "\u{1F4C5}" },
-    { key: "week", label: "Week", icon: "\u{1F4C6}" },
-    { key: "month", label: "Month", icon: "\u{1F4C5}" },
-    { key: "list", label: "List", icon: "\u{1F4CB}" },
+  // v28: postiz's view switch carries no per-button glyphs - the label
+  // is the whole control, and emoji rendered as color glyphs that fought
+  // both themes. Text-only keeps the segmented control neutral.
+  const views: { key: CalendarView; label: string }[] = [
+    { key: "day", label: "Day" },
+    { key: "week", label: "Week" },
+    { key: "month", label: "Month" },
+    { key: "list", label: "List" },
   ];
 
   let title = $derived.by(() => {
@@ -97,7 +100,7 @@
           aria-label={`${v.label} view`}
           class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium capitalize transition-colors min-h-11
             {view === v.key ? 'bg-accent-fill text-accent-fg' : 'text-muted hover:text-content hover:bg-surface-hover'}"
-        ><span aria-hidden="true">{v.icon}</span> {v.label}</button>
+         >{v.label}</button>
       {/each}
     </div>
   </div>
