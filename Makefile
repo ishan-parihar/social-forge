@@ -98,6 +98,13 @@ audit:
 	cd frontend && node scripts/audit-dialogs.mjs --url $(URL) --password '$(PASSWORD)'
 	cd frontend && node scripts/audit-analytics.mjs --url $(URL) --password '$(PASSWORD)'
 	cd frontend && node scripts/e2e-calendar-drag.mjs --url $(URL) --password '$(PASSWORD)'
+	# The DEEP state walker: states none of the above reach (the media
+	# panel, the comments thread's Hide, the channel/schedule/Tags panels
+	# of the composer, search results, automation/webhook/signature
+	# dialogs, post detail, kanban card). The 2026-10-22 red-team found
+	# the 199x20 upload label and the 26x16 Hide exactly here - both
+	# invisible to every default-state gate.
+	cd frontend && node scripts/state-hunt.mjs --url $(URL) --password '$(PASSWORD)'
 	# The calendar's non-default views, 9.50: each is its own component
 	# with its own layout, and the default-view probe never renders them.
 	# The 2026-10-20 red-team found the month view's chips at 15px while

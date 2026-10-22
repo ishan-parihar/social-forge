@@ -122,6 +122,15 @@ async function main() {
   const page = await ctx.newPage();
 
   await page.goto(`${BASE_URL}/login`, { waitUntil: 'load' });
+  // The password field is client-rendered (adapter-static SPA shell), so
+  // wait for it and report BLOCKED if the app never comes up instead of
+  // timing out inside fill() - the same guard state-hunt.mjs carries.
+  try {
+    await page.waitForSelector('input[type=password]', { timeout: 20000 });
+  } catch {
+    console.error('BLOCKED: login page never rendered a password field');
+    process.exit(3);
+  }
   await page.fill('input[type=password]', PASSWORD);
   await page.evaluate(() => {
     document.querySelector('input[type=password]').closest('form').requestSubmit();
@@ -232,6 +241,24 @@ async function main() {
     }, d.trigger);
 
     if (opened.err) {
+      // An EMPTY LIST is a skip, not a fail (AGENTS.md 9.38, the probe's
+      // unreachable-route precedent): a page with no rows has no trigger
+      // to open, and a fresh install - the FIRST thing a founder sees -
+      // looks exactly like this. The dialog-page triggers are row-scoped
+      // (the comments page's "\u21a9" is on a comment), so the probe's
+      // empty API list is the same verdict here. A page whose rows
+      // exist but whose trigger is missing still FAILS below.
+      const hasEmptyState = await page.evaluate(() =>
+        /no comments found|no posts found|nothing here|empty|no results/i.test(
+          (document.querySelector('main')?.textContent || '')
+        )
+      );
+      if (hasEmptyState) {
+        console.log(
+          `  skip ${d.route} (${d.expect}) - empty list, no row to open`
+        );
+        continue;
+      }
       findings.push({ ...d, problem: opened.err });
       continue;
     }

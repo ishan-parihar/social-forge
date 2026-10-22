@@ -26,6 +26,8 @@ import { chromium } from 'playwright-core';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { CONTRAST_CORE } from './contrast-core.mjs';
+
 
 // ── CLI ──────────────────────────────────────────────────────
 
@@ -140,114 +142,15 @@ function findChrome() {
 // Run as a single function in the page so one round-trip collects every
 // measurement. Pure DOM reads — no layout mutation.
 
-const AUDIT = () => {
+// The AUDIT body: the shared contrast measurement from contrast-core.mjs
+// (§9.18: ONE implementation - probe.mjs, audit-contrast.mjs and state-hunt.mjs
+// each carried a private copy until copy #3 shipped a channel-alpha typo) plus
+// this script's own report policy. Assembled with new Function because ESM is
+// strict mode and a direct eval would scope the helpers to the eval itself.
+const AUDIT_BODY = `
+${CONTRAST_CORE}
   const fails = [];
   const warns = [];
-
-  const parseColor = (v) => {
-    const m = v.match(/rgba?\(([^)]+)\)/);
-    if (!m) return null;
-    const [r, g, b, a] = m[1].split(/[,\s/]+/).filter(Boolean).map(Number);
-    return { r, g, b, a: a === undefined ? 1 : a };
-  };
-
-  // WCAG relative luminance.
-  const lum = ({ r, g, b }) => {
-    const f = (c) => {
-      const s = c / 255;
-      return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-    };
-    return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
-  };
-
-  const contrast = (fg, bg) => {
-    const l1 = lum(fg);
-    const l2 = lum(bg);
-    const [hi, lo] = l1 > l2 ? [l1, l2] : [l2, l1];
-    return (hi + 0.05) / (lo + 0.05);
-  };
-
-  // The product of the `opacity` of the element and every ancestor.
-  // `opacity` is NOT inherited in CSS - a child of an `opacity: 0.5`
-  // element is composited into the parent's group and then faded, so
-  // the RENDERED ink is the product of the chain.
-  const inheritedOpacity = (el) => {
-    let o = 1;
-    let node = el;
-    while (node && node.nodeType === 1) {
-      const v = parseFloat(getComputedStyle(node).opacity);
-      if (!Number.isNaN(v)) o *= v;
-      node = node.parentElement;
-    }
-    return o;
-  };
-
-  // Walk up for the first opaque background, COMPOSITING the translucent
-  // layers found on the way.
-  //
-  // A translucent layer (chip washes, hover tints) composites over whatever
-  // is behind it, so the effective backdrop is the nearest opaque ancestor
-  // WITH the washes painted on top of it.
-  //
-  // The washes used to be SKIPPED rather than composited, which made every
-  // reading on a tinted chip wrong: a `bg-warning/10` chip measured its
-  // warning text against the surface behind it (4.95:1 in the light theme,
-  // a pass) instead of against the wash it actually sits on (4.41:1, a
-  // real failure the probe was blind to). The layers are collected
-  // nearest-first and painted back-to-front, which is the order the
-  // browser composites them in.
-  const effectiveBg = (el) => {
-    const layers = [];
-    let node = el;
-    while (node && node.nodeType === 1) {
-      // An element with `opacity < 1` is composited as a GROUP: its own
-      // background is faded into the backdrop behind the group, and the
-      // group is then drawn as one flat image. So the effective backdrop
-      // for anything INSIDE the group is the backdrop behind the group,
-      // with the group's own background faded in.
-      //
-      // That is why the calendar's chip time measured 3.24:1: the chip's
-      // 15%-alpha red wash is INSIDE the chip, and the chip's `opacity`
-      // fades the whole group - wash included - into the page.
-      const opacity = parseFloat(getComputedStyle(node).opacity);
-      if (node !== el && !Number.isNaN(opacity) && opacity < 0.999) {
-        const c = parseColor(getComputedStyle(node).backgroundColor);
-        if (c && c.a > 0) {
-          layers.push({ r: c.r, g: c.g, b: c.b, a: c.a * opacity });
-        }
-        break;
-      }
-      const c = parseColor(getComputedStyle(node).backgroundColor);
-      if (c && c.a >= 0.95) {
-        // The opaque backdrop, with the washes painted over it.
-        let out = c;
-        for (let i = layers.length - 1; i >= 0; i--) {
-          const l = layers[i];
-          out = {
-            r: l.r * l.a + out.r * (1 - l.a),
-            g: l.g * l.a + out.g * (1 - l.a),
-            b: l.b * l.a + out.b * (1 - l.a),
-            a: 1,
-          };
-        }
-        return out;
-      }
-      if (c && c.a > 0) layers.push(c);
-      node = node.parentElement;
-    }
-    // No opaque ancestor: the page background is the backdrop.
-    let out = { r: 255, g: 255, b: 255, a: 1 };
-    for (let i = layers.length - 1; i >= 0; i--) {
-      const l = layers[i];
-      out = {
-        r: l.r * l.a + out.r * (1 - l.a),
-        g: l.g * l.a + out.g * (1 - l.a),
-        b: l.b * l.a + out.b * (1 - l.a),
-        a: 1,
-      };
-    }
-    return out;
-  };
 
   // Large text (>=24px, or >=18.66px bold) clears at 3:1; the rest at
   // 4.5:1 — WCAG 1.4.3.
@@ -282,12 +185,12 @@ const AUDIT = () => {
     // A DISABLED control is exempt from the contrast requirement (WCAG
     // 1.4.3 names "incidental" text, and a disabled control is not
     // content the reader can act on). The probe renders the disabled
-    // state - a `disabled:opacity-50` button measures ~2.5:1 and would
+    // state - a \`disabled:opacity-50\` button measures ~2.5:1 and would
     // be reported forever.
     if (el.disabled || el.closest('[aria-disabled="true"]')) continue;
 
     // An element that is INVISIBLE is not measured at all. The app
-    // hides hover-revealed controls with `opacity-0` (the kanban's
+    // hides hover-revealed controls with \`opacity-0\` (the kanban's
     // "⋯" menu, the campaign's "✕", the dashboard's "→"). At opacity 0
     // the ink and the backdrop are the same pixels, so the ratio is
     // 1.00:1 - a perfect reading and a meaningless one. The control
@@ -296,24 +199,24 @@ const AUDIT = () => {
     const ownOpacity = parseFloat(cs.opacity);
     if (!Number.isNaN(ownOpacity) && ownOpacity < 0.05) continue;
 
-    // An `opacity` on the element (or on an ancestor) makes the RENDERED
+    // An \`opacity\` on the element (or on an ancestor) makes the RENDERED
     // ink lighter than the computed colour. The computed colour is what
     // the stylesheet says; the pixels are what the visitor reads.
     //
-    // The calendar's chip time was `color: rgb(185 28 28)` with
-    // `opacity: 0.7` on a 15%-alpha red wash: the computed colour
+    // The calendar's chip time was \`color: rgb(185 28 28)\` with
+    // \`opacity: 0.7\` on a 15%-alpha red wash: the computed colour
     // measured 5.00:1, the RENDERED ink measured 3.24:1 - under the
     // floor. The check below read the computed colour and passed it.
     //
-    // The opacity chain: `opacity` is NOT inherited, but an element
-    // with `opacity < 1` is composited as a GROUP, so its descendants
+    // The opacity chain: \`opacity\` is NOT inherited, but an element
+    // with \`opacity < 1\` is composited as a GROUP, so its descendants
     // are faded together. The fade applies to the element's own ink AND
     // to its background - so the backdrop under a faded element is the
     // backdrop under its GROUP, and the element's own background is
     // faded into that same backdrop.
     //
     // So the correct computation is: walk up, and at the first
-    // ancestor with `opacity < 1`, that ancestor's own background is
+    // ancestor with \`opacity < 1\`, that ancestor's own background is
     // faded into ITS backdrop, and the text ink is faded the same way.
     const opacity = inheritedOpacity(el);
     const backdrop = effectiveBg(el);
@@ -333,7 +236,7 @@ const AUDIT = () => {
     if (ratio < need - 0.01) {
       fails.push({
         check: 'contrast',
-        detail: `${Math.round(size)}px ${ratio.toFixed(2)}:1 < ${need}:1 — "${el.textContent.trim().slice(0, 40)}"`,
+        detail: \`\${Math.round(size)}px \${ratio.toFixed(2)}:1 < \${need}:1 — "\${el.textContent.trim().slice(0, 40)}"\`,
         selector: el.tagName.toLowerCase() + (el.className ? '.' + String(el.className).split(' ')[0] : ''),
       });
     }
@@ -345,7 +248,7 @@ const AUDIT = () => {
   if (de.scrollWidth > de.clientWidth + 1) {
     fails.push({
       check: 'overflow',
-      detail: `scrollWidth ${de.scrollWidth} > clientWidth ${de.clientWidth}`,
+      detail: \`scrollWidth \${de.scrollWidth} > clientWidth \${de.clientWidth}\`,
       selector: 'html',
     });
   }
@@ -366,7 +269,7 @@ const AUDIT = () => {
       if (!canScroll(el)) {
         fails.push({
           check: 'overflow',
-          detail: `element scrollWidth ${el.scrollWidth} > clientWidth ${el.clientWidth}`,
+          detail: \`element scrollWidth \${el.scrollWidth} > clientWidth \${el.clientWidth}\`,
           selector: el.tagName.toLowerCase(),
         });
       }
@@ -381,7 +284,7 @@ const AUDIT = () => {
   if (h1s.length === 0) {
     fails.push({ check: 'heading', detail: 'no <h1> on the page', selector: 'body' });
   } else if (h1s.length > 1) {
-    fails.push({ check: 'heading', detail: `${h1s.length} <h1> elements`, selector: 'h1' });
+    fails.push({ check: 'heading', detail: \`\${h1s.length} <h1> elements\`, selector: 'h1' });
   }
   let prev = 0;
   for (const h of heads) {
@@ -389,7 +292,7 @@ const AUDIT = () => {
     if (prev && lvl > prev + 1) {
       fails.push({
         check: 'heading',
-        detail: `<h${prev}> → <h${lvl}> skips a level — "${h.textContent.trim().slice(0, 40)}"`,
+        detail: \`<h\${prev}> → <h\${lvl}> skips a level — "\${h.textContent.trim().slice(0, 40)}"\`,
         selector: h.tagName.toLowerCase(),
       });
     }
@@ -468,7 +371,7 @@ const AUDIT = () => {
         if (ox * oy > area * 0.35) {
           fails.push({
             check: 'overlap',
-            detail: `"${ea.textContent.trim().slice(0, 24)}" overlaps "${eb.textContent.trim().slice(0, 24)}"`,
+            detail: \`"\${ea.textContent.trim().slice(0, 24)}" overlaps "\${eb.textContent.trim().slice(0, 24)}"\`,
             selector: ea.tagName.toLowerCase(),
           });
         }
@@ -532,7 +435,7 @@ const AUDIT = () => {
       if (cs.flexBasis && cs.flexBasis !== 'auto' && cs.flexBasis !== '0px') continue;
       fails.push({
         check: 'collapsed-item',
-        detail: `${sel(c)} ("${c.textContent.trim().slice(0, 28)}") is squeezed to 0px wide`,
+        detail: \`\${sel(c)} ("\${c.textContent.trim().slice(0, 28)}") is squeezed to 0px wide\`,
         selector: sel(c),
       });
     }
@@ -554,7 +457,7 @@ const AUDIT = () => {
   for (const n of textNodes) {
     const fs = parseFloat(getComputedStyle(n.el).fontSize);
     if (fs < 18) continue;
-    const re = /\S+/g;
+    const re = /\\S+/g;
     let m;
     while ((m = re.exec(n.tn.textContent))) {
       const w = m[0];
@@ -566,7 +469,7 @@ const AUDIT = () => {
       if (rects.length > 1 && Math.abs(rects[0].top - rects[rects.length - 1].top) > 2) {
         fails.push({
           check: 'broken-word',
-          detail: `"${w}" splits across lines at ${fs}px in ${sel(n.el)} (${Math.round(n.el.getBoundingClientRect().width)}px wide)`,
+          detail: \`"\${w}" splits across lines at \${fs}px in \${sel(n.el)} (\${Math.round(n.el.getBoundingClientRect().width)}px wide)\`,
           selector: sel(n.el),
         });
         break;
@@ -584,7 +487,7 @@ const AUDIT = () => {
   // A webfont arrives as many faces - one per weight AND per unicode
   // subset (latin, cyrillic, greek). The browser loads a face only when
   // some text needs it, so a family that IS working still has faces
-  // sitting at `unloaded`. The old check compared the family against
+  // sitting at \`unloaded\`. The old check compared the family against
   // the set of LOADED faces, so Inter - whose latin face was loaded and
   // whose cyrillic face was not - read as "never loaded", and the
   // probe reported a font failure on every page.
@@ -604,7 +507,7 @@ const AUDIT = () => {
     if (systemFace.test(f) || loaded.has(f)) continue;
     fails.push({
       check: 'font-fallback',
-      detail: `"${f}" is asked for by ${count} text nodes but ${declared.has(f) ? 'its @font-face never loaded' : 'no @font-face declares it'}`,
+      detail: \`"\${f}" is asked for by \${count} text nodes but \${declared.has(f) ? 'its @font-face never loaded' : 'no @font-face declares it'}\`,
       selector: 'html',
     });
   }
@@ -617,13 +520,13 @@ const AUDIT = () => {
   if (sizes.size > 16) {
     warns.push({
       check: 'type-sprawl',
-      detail: `${sizes.size} distinct font sizes (${[...sizes].sort((a, b) => a - b).join(', ')})`,
+      detail: \`\${sizes.size} distinct font sizes (\${[...sizes].sort((a, b) => a - b).join(', ')})\`,
     });
   }
   if (colors.size > 16) {
     warns.push({
       check: 'color-sprawl',
-      detail: `${colors.size} distinct text colors`,
+      detail: \`\${colors.size} distinct text colors\`,
     });
   }
 
@@ -648,10 +551,10 @@ const AUDIT = () => {
   };
   for (const el of document.querySelectorAll('button,a[href],[role="button"],input,select')) {
     // A HIDDEN control is not a tap target. The composer uses a
-    // `hidden` file input for its uploads, and it measured 199x20 -
+    // \`hidden\` file input for its uploads, and it measured 199x20 -
     // a violation that does not exist, because nothing can click it.
-    // `offsetParent` is null for a `display: none` element, and it is
-    // also null for `position: fixed`, so the check is on the computed
+    // \`offsetParent\` is null for a \`display: none\` element, and it is
+    // also null for \`position: fixed\`, so the check is on the computed
     // visibility and the rendered box instead.
     const cs = getComputedStyle(el);
     if (cs.display === 'none' || cs.visibility === 'hidden') continue;
@@ -665,17 +568,17 @@ const AUDIT = () => {
     // 1x1 target, and reporting that as a violation is reporting a
     // violation of the PATTERN.
     //
-    // The `sr-only` pattern is exactly this: `clip: rect(0,0,0,0)` with
+    // The \`sr-only\` pattern is exactly this: \`clip: rect(0,0,0,0)\` with
     // a 1x1 box, or the text-indent trick. Both render nothing, so
     // nothing can be aimed at them.
     //
     // The test is the COMBINATION: a box of 1x1 that is clipped away
     // (or pushed off-screen by a huge negative text-indent). A 1x1 box
     // on its own is a real control that happens to be tiny; a 1x1 box
-    // that is clipped to nothing is the `sr-only` pattern, and nothing
+    // that is clipped to nothing is the \`sr-only\` pattern, and nothing
     // can be aimed at it.
     const clippedAway =
-      (cs.clip && cs.clip !== 'auto' && /rect\(\s*0(px)?\s*,\s*0(px)?\s*,\s*0(px)?\s*,\s*0(px)?\s*\)/.test(cs.clip)) ||
+      (cs.clip && cs.clip !== 'auto' && /rect\\(\\s*0(px)?\\s*,\\s*0(px)?\\s*,\\s*0(px)?\\s*,\\s*0(px)?\\s*\\)/.test(cs.clip)) ||
       (cs.clipPath && cs.clipPath !== 'none') ||
       parseFloat(cs.textIndent) < -100;
     if (clippedAway && r.width <= 2 && r.height <= 2) continue;
@@ -696,14 +599,14 @@ const AUDIT = () => {
     if (r.height < 24 || r.width < 24) {
       fails.push({
         check: 'tap-target',
-        detail: `${Math.round(r.width)}x${Math.round(r.height)} < 24x24 — "${(el.textContent || el.getAttribute('aria-label') || el.tagName).trim().slice(0, 30)}"`,
+        detail: \`\${Math.round(r.width)}x\${Math.round(r.height)} < 24x24 — "\${(el.textContent || el.getAttribute('aria-label') || el.tagName).trim().slice(0, 30)}"\`,
         cls: String(el.className || '').slice(0, 160),
         tag: el.tagName,
       });
     } else if (r.height < 44 || r.width < 44) {
       warns.push({
         check: 'tap-target',
-        detail: `${Math.round(r.width)}x${Math.round(r.height)} < 44x44 — "${(el.textContent || el.getAttribute('aria-label') || el.tagName).trim().slice(0, 30)}"`,
+        detail: \`\${Math.round(r.width)}x\${Math.round(r.height)} < 44x44 — "\${(el.textContent || el.getAttribute('aria-label') || el.tagName).trim().slice(0, 30)}"\`,
         cls: String(el.className || '').slice(0, 160),
         tag: el.tagName,
       });
@@ -721,14 +624,18 @@ const AUDIT = () => {
       if (own) {
         warns.push({
           check: 'tiny-text',
-          detail: `${size}px — "${el.textContent.trim().slice(0, 30)}"`,
+          detail: \`\${size}px — "\${el.textContent.trim().slice(0, 30)}"\`,
         });
       }
     }
   }
 
   return { fails, warns };
-};
+`;
+
+// AUDIT_BODY already has the core spliced in at its ${CONTRAST_CORE} marker -
+// the template interpolates at module load, so no second copy here.
+const AUDIT = new Function(AUDIT_BODY);
 
 // ── Runner ───────────────────────────────────────────────────
 

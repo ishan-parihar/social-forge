@@ -18,6 +18,7 @@
 // contrast failure is found.
 
 import { chromium } from 'playwright-core';
+import { CONTRAST_CORE } from './contrast-core.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -57,86 +58,27 @@ const THEME = arg('theme', 'dark');
 // failure is. A duplicate is deliberate: the probe and this audit must
 // measure the same way, and a copy that drifts is caught by the shared
 // numbers this prints.
-function AUDIT() {
-  const parseColor = (v) => {
-    const m = v.match(/rgba?\(([^)]+)\)/);
-    if (!m) return null;
-    const p = m[1].split(/[,/\s]+/).filter(Boolean).map(Number);
-    return { r: p[0], g: p[1], b: p[2], a: p.length > 3 ? p[3] : 1 };
-  };
-  const lum = ({ r, g, b }) => {
-    const f = (c) => {
-      const s = c / 255;
-      return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
-    };
-    return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
-  };
-  const contrast = (a, b) => {
-    const l1 = lum(a);
-    const l2 = lum(b);
-    const hi = Math.max(l1, l2);
-    const lo = Math.min(l1, l2);
-    return (hi + 0.05) / (lo + 0.05);
-  };
-  const effectiveBg = (el) => {
-    const layers = [];
-    let node = el;
-    while (node && node.nodeType === 1) {
-      const c = parseColor(getComputedStyle(node).backgroundColor);
-      if (c && c.a >= 0.95) {
-        let out = c;
-        for (let i = layers.length - 1; i >= 0; i--) {
-          const l = layers[i];
-          out = {
-            r: l.r * l.a + out.r * (1 - l.a),
-            g: l.g * l.a + out.g * (1 - l.a),
-            b: l.b * l.a + out.b * (1 - l.a),
-            a: 1,
-          };
-        }
-        return out;
-      }
-      if (c && c.a > 0) layers.push(c);
-      node = node.parentElement;
-    }
-    let out = { r: 255, g: 255, b: 255, a: 1 };
-    for (let i = layers.length - 1; i >= 0; i--) {
-      const l = layers[i];
-      out = {
-        r: l.r * l.a + out.r * (1 - l.a),
-        g: l.g * l.a + out.g * (1 - l.a),
-        b: l.b * l.a + out.b * (1 - l.a),
-        a: 1,
-      };
-    }
-    return out;
-  };
-  const inheritedOpacity = (el) => {
-    let node = el;
-    let o = 1;
-    while (node && node.nodeType === 1) {
-      const v = parseFloat(getComputedStyle(node).opacity);
-      if (!Number.isNaN(v)) o *= v;
-      node = node.parentElement;
-    }
-    return o;
-  };
+const AUDIT_BODY = `
+  // The measurement itself is the ONE shared implementation in
+  // contrast-core.mjs - this copy used to be a private duplicate whose
+  // drift was the point of AGENTS.md 9.18.
+  ${CONTRAST_CORE}
 
   const out = [];
 
   // ── THE INK OF A FIELD ──
   //
-  // An `<input>` has NO TEXT NODE, so the text-contrast loop below can
+  // An \`<input>\` has NO TEXT NODE, so the text-contrast loop below can
   // never measure it: there is no text to find, so the element is
   // skipped, and its ink is never checked.
   //
   // That is not a theoretical hole. The connect flow's API-key field
-  // was `text-white` on the light input surface - 1.05:1, invisible.
+  // was \`text-white\` on the light input surface - 1.05:1, invisible.
   // The founder typed their API key and could not see a character, and
   // EVERY text-contrast gate in this repo passed, because the element
   // carrying the text is a FIELD, not a text node.
   //
-  // So the field's own `color` is measured against its effective
+  // So the field's own \`color\` is measured against its effective
   // background, exactly as a text node's would be. A field with no
   // value is still measured: the ink is what the founder will see when
   // they type.
@@ -147,7 +89,7 @@ function AUDIT() {
     if (cs.display === 'none' || cs.visibility === 'hidden') return;
     // A type=hidden has no ink at all.
     if (el.type === 'hidden') return;
-    // A checkbox or a radio paints its own ink; `color` is not it.
+    // A checkbox or a radio paints its own ink; \`color\` is not it.
     if (el.type === 'checkbox' || el.type === 'radio') return;
 
     const fg = parseColor(cs.color);
@@ -171,7 +113,7 @@ function AUDIT() {
           (el.placeholder ? '[placeholder="' + el.placeholder + '"]' : ''),
         ratio: ratio.toFixed(2),
         fg: cs.color,
-        bg: `rgb(${Math.round(bg.r)}, ${Math.round(bg.g)}, ${Math.round(bg.b)})`,
+        bg: \`rgb(\${Math.round(bg.r)}, \${Math.round(bg.g)}, \${Math.round(bg.b)})\`,
         text: (el.placeholder || el.value || el.name || el.type || 'field').slice(0, 60),
       });
     }
@@ -223,13 +165,21 @@ function AUDIT() {
       floor,
       size,
       color: cs.color,
-      bg: `rgb(${Math.round(bg.r)}, ${Math.round(bg.g)}, ${Math.round(bg.b)})`,
+      bg: \`rgb(\${Math.round(bg.r)}, \${Math.round(bg.g)}, \${Math.round(bg.b)})\`,
       cls: String(el.className).slice(0, 90),
       tag: el.tagName.toLowerCase(),
     });
   });
   return out;
-}
+
+`;
+
+// Assembled with new Function: ESM is strict mode, so a direct eval would
+// scope the helpers to the eval itself, and the module import does not exist
+// in the serialized page context.
+// AUDIT_BODY already has the core spliced in at its ${CONTRAST_CORE} marker -
+// the template interpolates at module load, so no second copy here.
+const AUDIT = new Function(AUDIT_BODY);
 
 // The ENTRY ANIMATION must have finished before the measurement.
 //
@@ -273,6 +223,15 @@ async function main() {
   const findings = [];
 
   await page.goto(`${BASE_URL}/login`, { waitUntil: 'load' });
+    // The password field is client-rendered (adapter-static SPA shell), so
+  // wait for it and report BLOCKED if the app never comes up instead of
+  // timing out inside fill() - the same guard state-hunt.mjs carries.
+  try {
+    await page.waitForSelector('input[type=password]', { timeout: 20000 });
+  } catch {
+    console.error('BLOCKED: login page never rendered a password field');
+    process.exit(3);
+  }
   await page.fill('input[type=password]', PASSWORD);
   await page.evaluate(() => {
     document.querySelector('input[type=password]').closest('form').requestSubmit();

@@ -187,6 +187,15 @@ async function main() {
 
   // Log in.
   await page.goto(`${BASE_URL}/login`, { waitUntil: 'load' });
+    // The password field is client-rendered (adapter-static SPA shell), so
+  // wait for it and report BLOCKED if the app never comes up instead of
+  // timing out inside fill() - the same guard state-hunt.mjs carries.
+  try {
+    await page.waitForSelector('input[type=password]', { timeout: 20000 });
+  } catch {
+    console.error('BLOCKED: login page never rendered a password field');
+    process.exit(3);
+  }
   await page.fill('input[type=password]', PASSWORD);
   await page.evaluate(() => {
     const i = document.querySelector('input[type=password]');

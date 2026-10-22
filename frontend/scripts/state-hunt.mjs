@@ -17,13 +17,19 @@ const CHROME_CANDIDATES = [
 const CHROME = CHROME_CANDIDATES.find((p) => fs.existsSync(p));
 if (!CHROME) { console.error('BLOCKED: no chromium'); process.exit(3); }
 
+import { CONTRAST_CORE } from './contrast-core.mjs';
+
 const arg = (n, d) => { const i = process.argv.indexOf(`--${n}`); return i > -1 && process.argv[i+1] ? process.argv[i+1] : d; };
 const BASE = arg('url', 'https://localhost:6544');
 const PASSWORD = arg('password', '');
 
 const findings = [];
 async function audit(page, where) {
-  const data = await page.evaluate(() => {
+  // The body runs in the page; the contrast measurement is the ONE shared
+  // implementation (contrast-core.mjs), spliced textually because the
+  // function is serialized into the browser where module imports don't exist.
+  const data = await page.evaluate(new Function(CONTRAST_CORE + `
+return (() => {
     const out = [];
     const isHidden = (el) => {
       if (!el.isConnected) return true;
@@ -33,7 +39,7 @@ async function audit(page, where) {
       return r.width===0 && r.height===0;
     };
     const docOver = document.documentElement.scrollWidth - document.documentElement.clientWidth;
-    if (docOver > 1) out.push({kind:'doc-overflow', desc:`${docOver}px`});
+    if (docOver > 1) out.push({kind:'doc-overflow', desc:\`\${docOver}px\`});
     for (const el of document.querySelectorAll('button, a[href], input, select, textarea, [role=button], [role=tab], [role=checkbox], [role=switch], summary, label:has(input)')) {
       if (isHidden(el) || el.closest('[aria-hidden="true"]')) continue;
       if (el.disabled || el.getAttribute('aria-disabled')==='true') continue;
@@ -47,23 +53,10 @@ async function audit(page, where) {
         const wrap = el.parentElement;
         if (wrap && /cursor-pointer|cursor-grab/.test(getComputedStyle(wrap).cursor||'')) { const wr = wrap.getBoundingClientRect(); if (wr.width>=24 && wr.height>=24) continue; }
         if ((el.textContent||'').trim().startsWith('Skip to main content')) continue;
-        out.push({kind:'tiny-target', desc:`${Math.round(r.width)}x${Math.round(r.height)} ${el.textContent.trim().slice(0,30)||el.type||el.tagName}`, tag: el.tagName});
+        out.push({kind:'tiny-target', desc:\`\${Math.round(r.width)}x\${Math.round(r.height)} \${el.textContent.trim().slice(0,30)||el.type||el.tagName}\`, tag: el.tagName});
       }
     }
-    const parseColor = (v) => { const m = v.match(/rgba?\(([^)]+)\)/); if (!m) return null;
-      const p = m[1].split(/[,/\s]+/).filter(Boolean).map(Number);
-      return {r:p[0],g:p[1],b:p[2],a:p.length>3?p[3]:1}; };
-    const lum = ({r,g,b}) => { const f=(c)=>{c/=255; return c<=0.03928?c/12.92:Math.pow((c+0.055)/1.055,2.4);}; return 0.2126*f(r)+0.7152*f(g)+0.0722*f(b); };
-    const effBg = (el) => {
-      const layers=[]; let n=el;
-      while (n && n.nodeType===1) {
-        const c = parseColor(getComputedStyle(n).backgroundColor);
-        if (c && c.a>=0.95) { let o=c; for (let i=layers.length-1;i>=0;i--){const l=layers[i]; o={r:l.r*l.a+o.r*(1-l.a),g:l.g*l.a+o.g*(1-l.a),b:l.b*l.a+o.b*(1-l.a),a:1};} return o; }
-        if (c && c.a>0) layers.push(c);
-        n = n.parentElement;
-      }
-      return {r:255,g:255,b:255,a:1};
-    };
+    // (the shared parseColor/lum/effectiveBg arrive via the CONTRAST_CORE prefix)
     // skip-link is the standard visually-hidden-until-focus a11y pattern
     const isSkip = (el) => (el.textContent||'').trim().startsWith('Skip to main content');
     for (const el of document.querySelectorAll('body *')) {
@@ -73,16 +66,17 @@ async function audit(page, where) {
       if (!own) continue;
       const cs = getComputedStyle(el);
       const fg = parseColor(cs.color); if (!fg) continue;
-      const bg = effBg(el);
+      const bg = effectiveBg(el);
       const r1 = lum(fg), r2 = lum(bg);
       const ratio = (Math.max(r1,r2)+0.05)/(Math.min(r1,r2)+0.05);
       const size = parseFloat(cs.fontSize);
       const bold = (parseInt(cs.fontWeight)||400) >= 700;
       const floor = (size>=24 || (size>=18.66 && bold)) ? 3 : 4.5;
-      if (ratio < floor - 0.05) out.push({kind:'low-contrast', desc:`${ratio.toFixed(2)}:1 "${el.textContent.trim().slice(0,36)}"`, fs:size});
+      if (ratio < floor - 0.05) out.push({kind:'low-contrast', desc:\`\${ratio.toFixed(2)}:1 "\${el.textContent.trim().slice(0,36)}"\`, fs:size});
     }
     return out;
-  });
+})();`));
+
   for (const d of data) findings.push({where, ...d});
 }
 
@@ -93,10 +87,24 @@ const findBtn = (page, text, scope='document') => page.evaluate((t) => {
 }, text);
 
 async function main() {
+  // A missing password is a missing PRECONDITION, not a crash: every
+  // gate here exits 3 (BLOCKED) when it cannot run (AGENTS.md §12),
+  // and a fill() timeout 30s deep in the run is that failure reported
+  // in the least useful way.
+  if (!PASSWORD) { console.error('BLOCKED: no --password'); process.exit(3); }
   const browser = await chromium.launch({ executablePath: CHROME, args: ['--ignore-certificate-errors'] });
   const page = await browser.newPage();
   await page.setViewportSize({width:1440, height:900});
   await page.goto(`${BASE}/login`, {waitUntil:'load'});
+  // The password field is client-rendered (SvelteKit SPA shell): wait
+  // for it, and report BLOCKED if the app never comes up rather than
+  // timing out inside fill().
+  try {
+    await page.waitForSelector('input[type=password]', { timeout: 20000 });
+  } catch {
+    console.error('BLOCKED: login page never rendered a password field');
+    process.exit(3);
+  }
   await page.fill('input[type=password]', PASSWORD);
   await page.evaluate(() => document.querySelector('input[type=password]').closest('form').requestSubmit());
   await page.waitForTimeout(2500);
