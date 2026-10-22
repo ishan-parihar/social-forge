@@ -1808,3 +1808,43 @@ Stage Summary:
   bridge ready), the next gate widening, or founder reports.
 
 Known issues: none new.
+
+---
+Task ID: dms-cookie-auth-misdiagnosis
+Agent: omp (goal session, 2026-10-22)
+Task: Post-completion review finding: the DMs page told the founder
+"X post or user not found - it may be deleted or protected" when
+the real cause is structural - X's DM API is bearer-only and the
+channel is cookie-auth.
+
+Work Log:
+- Root cause chain: get_dm_conversations calls
+  api.twitter.com/2/dm_conversations with Bearer {access_token};
+  for a cookie-auth channel that string is the cookie blob, not a
+  bearer - X answers 404 (not 401), classify_error maps 404 to
+  NotFound, and friendly_error renders the deleted-post copy. The
+  From<ProviderError> mapping never sees a 401 because there is no
+  401. The "(raw: Unknown API error)" suffix is the server's own
+  friendly_error detail flag, not provider text.
+- Fix at the DMs handler seam (all three operations: list, read,
+  send): a cookie-auth X channel is refused with a 400 naming the
+  real limitation - "X direct messages need an OAuth-connected
+  channel. Cookie-auth channels (auth_token + ct0) cannot use X's
+  DM API." No provider call is made.
+- tests/dms_cookie_auth_test.rs drives the real router: the list
+  refusal carries the real message and NOT the deleted-post
+  misdiagnosis; the send path refuses the same way. Red-proof:
+  disabling the refusal made both tests FAIL (the 502
+  misdiagnosis returns), green on revert.
+- Live: the cookie-auth X channel now answers 400 with the real
+  reason; the DMs page renders it under its existing actionable
+  wrapper.
+
+Stage Summary:
+- cargo test --lib 488; dms_cookie_auth 2 (red-proofed); clippy
+  clean; the /dms probe pass clean against the rebuilt binary.
+- The DMs surface now tells the truth on every path: OAuth
+  channels get their data, cookie channels get the structural
+  reason.
+
+Known issues: none new.

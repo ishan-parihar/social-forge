@@ -94,6 +94,27 @@ pub struct SendDmResponse {
 
 // ── Handlers ────────────────────────────────────────────────
 
+/// X's DM API (`api.twitter.com/2/dm_conversations`) is
+/// BEARER-ONLY: it authenticates with an app-scoped OAuth 2.0 bearer
+/// token. A cookie-auth X channel (auth_token + ct0) has no bearer,
+/// so the call is made with a string that is not a bearer token - and
+/// X answers 404 "Not Found", which the error classifier maps to
+/// "post or user not found, it may be deleted or protected". That is
+/// a MISDIAGNOSIS the founder cannot act on: the channel's cookies
+/// are fine, the DMs surface just does not exist for cookie auth.
+/// Refuse with the real reason instead.
+fn x_cookie_auth_dm_refusal(integration: &crate::db::models::Integration) -> Option<AppError> {
+    if integration.provider_identifier == "x" && integration.auth_method == "cookie" {
+        Some(AppError::BadRequest(
+            "X direct messages need an OAuth-connected channel. Cookie-auth channels \
+             (auth_token + ct0) cannot use X's DM API."
+                .into(),
+        ))
+    } else {
+        None
+    }
+}
+
 /// GET /api/dms/conversations?integration_id=X&limit=50
 pub async fn list_conversations(
     State(state): State<AppState>,
@@ -103,6 +124,14 @@ pub async fn list_conversations(
     let integration = queries::get_integration(&state.db, query.integration_id, auth.user_id)
         .await?
         .ok_or_else(|| AppError::NotFound("Integration not found".into()))?;
+
+    if let Some(refusal) = x_cookie_auth_dm_refusal(&integration) {
+        return Err(refusal);
+    }
+
+    if let Some(refusal) = x_cookie_auth_dm_refusal(&integration) {
+        return Err(refusal);
+    }
 
     let provider = state
         .providers
@@ -207,6 +236,10 @@ pub async fn send_dm(
     let integration = queries::get_integration(&state.db, request.integration_id, auth.user_id)
         .await?
         .ok_or_else(|| AppError::NotFound("Integration not found".into()))?;
+
+    if let Some(refusal) = x_cookie_auth_dm_refusal(&integration) {
+        return Err(refusal);
+    }
 
     let provider = state
         .providers
