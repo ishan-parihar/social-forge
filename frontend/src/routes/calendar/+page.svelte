@@ -482,6 +482,39 @@
   });
 
   onMount(async () => {
+    // v28: measure the chrome above the calendar card and feed the
+    // shell's height (see the style block). Re-measured whenever the
+    // header's own height CHANGES — a window resize alone misses the
+    // filter row reflowing onto a second line (font swap, scrollbar
+    // appearance, viewport emulation), so the header wrapper itself is
+    // observed. ponytail: one getBoundingClientRect per observed change.
+    const measureShell = () => {
+      const shell = document.querySelector('.calendar-view-shell');
+      if (shell) {
+        const top = shell.getBoundingClientRect().top + window.scrollY;
+        (shell as HTMLElement).style.setProperty('--cal-shell-top', `${Math.round(top)}px`);
+      }
+    };
+    measureShell();
+    window.addEventListener('resize', measureShell);
+    let headerObserver: ResizeObserver | undefined;
+    try {
+      headerObserver = new ResizeObserver(measureShell);
+      const shell = document.querySelector('.calendar-view-shell');
+      // Observe every sibling BEFORE the shell — any of them growing
+      // pushes the shell down. (The header rows wrap; the shell must
+      // follow.)
+      let sib = shell?.previousElementSibling;
+      while (sib) {
+        headerObserver.observe(sib as Element);
+        sib = sib.previousElementSibling;
+      }
+    } catch { /* ResizeObserver unavailable: resize listener still covers window changes */ }
+    onDestroy(() => {
+      window.removeEventListener('resize', measureShell);
+      headerObserver?.disconnect();
+    });
+
     // Phase v21: read ?display= and ?date= from the URL on mount so the
     // calendar is deep-linkable. URL params win over localStorage (which
     // is the persisted default). This mirrors postiz-app's calendar URL sync.
@@ -692,12 +725,22 @@
 </div>
 
 <style>
-  /* The height the calendar card gets: the viewport minus the app chrome
-     above it. `min-height` keeps an empty week grid from collapsing, and
-     `100dvh` tracks mobile URL bars. Below `sm` the page keeps its normal
-     document flow (the whole page scrolls; the card grows with content). */
+  /* The height the calendar card gets: from the card's own top edge
+     to the bottom of the viewport, MEASURED, not a magic rems constant.
+     The chrome above (TopBar + title row + CalendarHeader) WRAPS: the
+     filter row (channel + state selects + view toggles) reflows onto a
+     second line below 768px, and a fixed `calc(100dvh - Xrem)` then
+     overshoots the fold by the wrapped row's height — the page scrolls
+     instead of the grid (the regression the v28 review found at 768px
+     and 1440px alike). `100dvh` tracks mobile URL bars.
+
+     The shell is sized by a `top:`-anchored absolute-free trick: the
+     page sets `--cal-shell-top` from the element's own offsetTop on
+     mount and on resize, so the height follows whatever the header
+     does at any width. Below `sm` the page keeps normal document flow
+     (the whole page scrolls; the card grows with content). */
   .calendar-view-shell {
-    height: calc(100dvh - 168px);
+    height: calc(100dvh - var(--cal-shell-top, 218px));
     min-height: 420px;
     display: flex;
     flex-direction: column;
