@@ -1976,3 +1976,22 @@ Known issues: rubric-shots.mjs CDP websocket handshake times out
 against this browseros build (HTTP /json/version answers); the
 image rubric remains BLOCKED for want of image viewing and the CDP
 bridge.
+
+---
+Task ID: v27-red-team-3
+Agent: omp (glm-5.3)
+Task: Red-team iteration 3 - hunt visual defects in states the static gates never render, fix, re-verify.
+
+Work Log:
+- make audit (all 11 gate passes): 0 FAIL everywhere; remaining WARNs are dense calendar chips at 24px (WCAG 2.5.8 compliant, advisory).
+- Built frontend/scripts/state-hunt.mjs: drives 14 interactive states (composer + Schedule/AI/Preview/Tags/channel panels, post detail, kanban card, calendar day popover, media upload, search results, feed comments, channels connect, automation new-rule, webhook-new, signature-new) at 1440 and 375, measuring doc overflow, sub-24px targets, composited-background contrast, clipped text. Exemptions mirror the repo's gates (skip link, aria-hidden, truncate, 24px+ label/wrapper target).
+- Three false-instrument bugs found and fixed during the hunt (all documented in-session): a transparent-color regex miss (browseros probe), a channel-alpha typo ((1-l.g) for (1-l.a)) producing negative luminances and impossible ratios, and an opacity-0 hover-reveal label wrongly treated as hidden. Zero app colors changed on bad data.
+- Two real defects found and fixed:
+  - MediaUpload.svelte: upload label 199x20 (min-h-11 was on the hidden input) -> moved to the visible label.
+  - CommentsThread.svelte: comments-panel Hide close button 26x16 -> min-h-11 min-w-11 inline-flex.
+- Verified: pnpm build + cargo build --release, restarted the hand-started 6544 instance (make deploy is VPS-only; local is host-target binary), state-hunt 0 findings both widths, svelte-check 0/0, tailwind-class + hex-token gates pass, make audit exit 0.
+
+Stage Summary:
+- Commit 900ab2c pushed to github/master.
+- New permanent gate: state-hunt.mjs (usable standalone; candidate to wire into make audit).
+- All gates green on the rebuilt binary.
