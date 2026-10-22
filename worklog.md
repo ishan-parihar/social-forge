@@ -1848,3 +1848,60 @@ Stage Summary:
   reason.
 
 Known issues: none new.
+
+---
+Task ID: v27-red-team-1-gate-truth
+Agent: omp (goal session, 2026-10-22)
+Task: Exhaustive red-team iteration over the web dashboard: full gate
+suite baseline, then a real-browser (browseros-neo) sweep of every
+route and driven state, watching console errors and failed responses.
+
+Work Log:
+- Full `make audit` on the current binary: all five probe passes
+  FAIL: 0, targets/contrast/dialogs/analytics gates green. Two
+  signals investigated: 54 calendar tap-target WARNs (state filter
+  chips at 25px - inside WCAG 2.5.8's 24-44 warning band by design,
+  AGENTS.md 9.37, not a defect) and 8 console errors on the
+  logged-out /login pass.
+- The 8 console errors root-caused to the layout's documented session
+  probe: GET /api/auth/me answers 401 on every logged-out visit and
+  Chrome logs each as a console error. The APP is correct; the GATE
+  was burying real errors under expected noise ("8 errors ...
+  (7 more)").
+- Fix in probe.mjs: exempt the logged-out pass's 401 whose SOURCE URL
+  is /api/auth/me, reading msg.location().url because the console
+  text does not name the URL. First attempt exempted on text alone
+  and did not fire - caught by re-running the gate. Authenticated
+  passes still report every 401.
+- Real-browser sweep (browseros-neo MCP, authenticated profile):
+  - 22 static routes: all clean, zero console errors.
+  - 3 dynamic detail routes (post, campaign, analytics): clean.
+  - Driven states: calendar Month + Day views, composer opened and
+    typed into (live counter fired), reply modal, tags + automation
+    create modals, command palette (filter "cal" -> Enter navigated
+    to /calendar, dialog closed), notification panel, theme toggle,
+    research refresh, settings profile form, media upload input: all
+    clean.
+  - No horizontal overflow at the browser's width on dashboard,
+    calendar, posts, analytics, channels.
+  - SSE end-to-end proven on the real flow: post created + published
+    via API while the dashboard was open -> MutationObserver fired
+    and the post text appeared in the DOM WITHOUT reload; probe post
+    deleted after.
+- The palette landing URL /calendar?display=month&date=... is the
+  calendar's own deep-link state (Phase v21, replaceState sync) - not
+  a defect.
+- Visual rubric: BLOCKED this session (model build cannot view
+  images). Screenshots captured for operator review at
+  /tmp/bos/shot-{dashboard,calendar,analytics,research,posts,channels}.png.
+
+Stage Summary:
+- One fix landed: the login gate pass reports console errors: 0 on a
+  clean build (was 8), so a real error there can no longer hide.
+- Zero app defects found: every route, dynamic detail, modal,
+  palette, and the SSE realtime path render and behave clean against
+  the seeded instance.
+- Committed ca432bb, pushed to github/master.
+
+Known issues: visual rubric needs an image-capable pass over the
+saved screenshots (or any future session) - nothing else queued.
