@@ -111,7 +111,7 @@
     </h4>
     <button
       onclick={onclose}
-      class="text-muted hover:text-content text-xs transition-colors"
+      class="text-muted hover:text-content text-xs transition-colors inline-flex items-center justify-center min-h-11 min-w-11 px-1"
     >Hide</button>
   </div>
 
