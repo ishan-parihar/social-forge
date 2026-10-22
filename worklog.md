@@ -2017,3 +2017,20 @@ Stage Summary:
 - Commit b3bfc58 pushed to github/master.
 - make audit exit 0 with all 11 gates (probe, targets, contrast dark+light, dialogs, analytics, calendar-drag, 4 calendar states, logged-out login, state-hunt).
 - The contrast rule is now written once; a fourth copy would be a build-time-visible defect, not a silent drift.
+
+---
+Task ID: v28-calendar-stubs-cli
+Agent: omp (aroute/glm-5.3)
+Task: Red-team the web dashboard visually (browseros-neo + website-design skill), fix the calendar (scrollable multi-post grids, week default, postiz look), replace seed/stub accounts with real browser cookies, and build the CLI login surface for AI agents.
+
+Work Log:
+- Calendar (c7797ec): WeekView/DayView hour grids scroll INSIDE a viewport-height card (.calendar-view-shell, calc(100dvh-168px)); sticky weekday header; auto-scroll to first slot with a post; MonthView cells render ALL posts with per-cell scroll stacks; sticky weekday row; removed '+N more' cap.
+- Calendar (bd2dd03): week is the DEFAULT view at every breakpoint (mobile day-fallback removed); emoji removed from view switch + Generate Posts.
+- Credentials (278e742): is_credential_row treats seed tokens as non-credentials, so 'connect' can replace seed_demo.py rows; connect x/reddit purge the seed row on success; Reddit gains REDDIT_COOKIE_TOKEN env fallback (config.reddit_cookie_token); delete_seed_integrations query + .sqlx cache regen (sqlite3-applied migrations; 'cargo sqlx run' prints help and does nothing).
+- Operator DB surgery: X -> real _ishanparihar cookies (env), Reddit -> real d3vilzwrld session (env); 4 stub rows (bluesky/linkedin/threads/mastodon) + 50 seeded posts + empty analytics purged per operator decision (backup at /tmp/social-forge-backup-*.db). Killed the leftover /tmp/supervise-seed.sh supervisor that kept respawning the server against /tmp/sf-seed DB; server now runs on the repo DB.
+- CLI (fec5314): connect --wait [--timeout-secs N] — blocking agent login loop; emits auth_url/OTT code then polls every 2s until the real credential row lands. docs/platforms-and-cli.md documents the three provider shapes and the loop.
+
+Stage Summary:
+- Full make audit on the clean DB: FAIL 0 everywhere (probe 216 visits, targets, contrast x2 themes, dialogs, analytics 0 failures, e2e drag 0 failures, state-hunt, Month/List/Day/login probes). Only pre-existing 44px tap-target WARNs on filter chips.
+- Live proofs: connect x -> _ishanparihar; connect reddit -> d3vilzwrld; x timeline 113 entries; posts publish authenticated to X's API (X answered quota-344, a real-account-only response). connect linkedin --wait detected a credential landing at 8s end-to-end.
+- Known issues: X account is at its daily tweet limit (publish auth proven, live tweet deferred); LinkedIn OAuth app redirect_uri registered for a different port (6543 vs 6544) — fix in the LinkedIn developer console or run on the registered port; reddit browse hits Reddit's www-edge bot policy (User-Agent policy, credential itself valid).
