@@ -286,11 +286,11 @@ impl SocialProvider for MediumProvider {
             .as_array()
             .map(|arr| {
                 arr.iter()
-                    .map(|p| {
+                    .filter_map(|p| {
+                        // Skip undated items rather than stamp "now" on them.
                         let created_at = p["createdAt"]
                             .as_u64()
-                            .and_then(|ts| chrono::DateTime::from_timestamp(ts as i64 / 1000, 0))
-                            .unwrap_or_else(chrono::Utc::now);
+                            .and_then(|ts| chrono::DateTime::from_timestamp(ts as i64 / 1000, 0))?;
                         let mut media = Vec::new();
                         // Medium v1 API doesn't provide post images directly,
                         // but some response formats include imageUrl or virtuals.previewImage
@@ -314,7 +314,7 @@ impl SocialProvider for MediumProvider {
                                 poster_url: None,
                             });
                         }
-                        ExternalPostData {
+Some(                        ExternalPostData {
                             platform_post_id: p["id"].as_str().unwrap_or("").to_string(),
                             text: p["content"]
                                 .as_str()
@@ -336,7 +336,7 @@ impl SocialProvider for MediumProvider {
                                 "responses": p["responses"],
                                 "publication_id": p["publicationId"],
                             })),
-                        }
+                        })
                     })
                     .collect()
             })

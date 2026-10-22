@@ -193,6 +193,85 @@ async fn engagement_reports_the_users_own_published_posts() {
     );
 }
 
+/// A CUMULATIVE series is read at its LAST point, never summed. The
+/// provider series (X, YouTube, TikTok) are running totals: a post with
+/// 34, 38 and 42 likes has 42 likes, not 114. Every reader used to SUM
+/// the points, inflating the same post ~10x on /research and the
+/// calendar badge while /analytics showed the true value. This test is
+/// the regression pin for that: multi-point series, exact last value.
+#[tokio::test]
+async fn engagement_reads_the_last_point_of_a_cumulative_series() {
+    let state = state().await;
+    let user_id = fresh_user(&state).await;
+    let now = chrono::Utc::now().timestamp();
+
+    // A multi-point CUMULATIVE series per metric, the shape the live
+    // providers emit. The old SUM read 114 likes / 15 comments / 18
+    // shares / 2200 impressions; the true current values are below.
+    let post_id = Uuid::new_v4();
+    let platform_post_id = "qa-cumulative-1";
+    let integration_id = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO integrations (id, user_id, provider_identifier, provider_name, internal_id)
+         VALUES (?, ?, 'x', 'X', 'qa-cumulative')",
+    )
+    .bind(integration_id)
+    .bind(user_id)
+    .execute(&state.db)
+    .await
+    .expect("seed integration");
+    let published_at = now - 86_400;
+    sqlx::query(
+        "INSERT INTO posts (id, user_id, integration_id, state, content, platform_post_id,
+                            published_at, idempotency_key)
+         VALUES (?, ?, ?, 'published', 'cumulative series post', ?, ?, ?)",
+    )
+    .bind(post_id)
+    .bind(user_id)
+    .bind(integration_id)
+    .bind(platform_post_id)
+    .bind(published_at)
+    .bind(format!("seed-{post_id}"))
+    .execute(&state.db)
+    .await
+    .expect("seed post");
+    let data = r#"[{"label":"Likes","data":[{"total":34},{"total":38},{"total":42}]},
+                  {"label":"Comments","data":[{"total":4},{"total":5}]},
+                  {"label":"Shares","data":[{"total":6},{"total":9},{"total":18}]}]"#;
+    sqlx::query(
+        "INSERT INTO analytics_cache (id, user_id, provider, platform_post_id, data, expires_at, cached_at)
+         VALUES (?, ?, 'x', ?, ?, ?, ?)",
+    )
+    .bind(Uuid::new_v4())
+    .bind(user_id)
+    .bind(platform_post_id)
+    .bind(data)
+    .bind(i64::MAX)
+    .bind(published_at)
+    .execute(&state.db)
+    .await
+    .expect("seed cache");
+
+    let (status, body) = get(&state, user_id, "/api/analytics/engagement?days=30").await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert!(
+        body.contains("\"total_likes\":42"),
+        "the LAST point of a cumulative Likes series is 42, not the SUM 114: {body}"
+    );
+    assert!(
+        body.contains("\"total_comments\":5"),
+        "the LAST point of a cumulative Comments series is 5, not the SUM 9: {body}"
+    );
+    assert!(
+        body.contains("\"total_shares\":18"),
+        "the LAST point of a cumulative Shares series is 18, not the SUM 33: {body}"
+    );
+    assert!(
+        !body.contains("\"total_likes\":114"),
+        "the SUM of a cumulative series must never surface: {body}"
+    );
+}
+
 /// The per-day breakdown carries the same numbers, keyed by the day the
 /// post was published - the sparkline reads it.
 ///

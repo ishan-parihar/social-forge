@@ -205,14 +205,19 @@
               <CalendarEvent {event} {onDuplicate} {onStats} {onDelete} />
             </div>
           {/each}
-          <!-- Phase 2: ghost slots - per-channel posting time presets -->
+          <!-- Phase 2: ghost slots - per-channel posting time presets.
+               v26: 44px target (was min-h-6 = 24px, under the 2.5.8 floor
+               once padding shrank the label further) and text-xs so the
+               channel name is readable; an aria-label because the visual
+               label is a truncated icon+name. -->
           {#each (ghostsByHour.get(hourStr) || []) as ghost}
             <button
-              class="flex items-center gap-1 border border-dashed border-line rounded px-1 min-h-6 opacity-50 hover:opacity-100 transition-opacity cursor-pointer"
+              class="flex items-center gap-1 border border-dashed border-line rounded px-1 min-h-11 opacity-50 hover:opacity-100 transition-opacity cursor-pointer"
               onclick={() => onDateClick?.(key, ghost.hour)}
               title="{ghost.integrationName} usually posts at {ghost.hour} - click to create"
+              aria-label="Create a post at {ghost.hour} like {ghost.integrationName} usually does"
             >
-              <span class="text-[10px] text-muted truncate">⏰ {ghost.integrationName}</span>
+              <span class="text-xs text-muted truncate">⏰ {ghost.integrationName}</span>
             </button>
           {/each}
         </div>

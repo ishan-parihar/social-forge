@@ -215,7 +215,7 @@ def main() -> int:
          "The 3am test: if your tool needs a database server to run, "
          "it is not a tool, it is a platform you have to babysit.",
          "The 3am test for tools", 5, 8, "content", ["buildinpublic"], [],
-         "{}", "", "https://linkedin.com/feed/update/urn:li:activity:729500112", None, None, 0),
+         "{}", "urn:li:activity:729500112", "https://linkedin.com/feed/update/urn:li:activity:729500112", None, None, 0),
         ("published", "bluesky",
          "New: the composer now counts characters the way the "
          "server does, so the number you see is the number the server enforces.",

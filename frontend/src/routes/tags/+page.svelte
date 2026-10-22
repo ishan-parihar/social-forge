@@ -152,11 +152,16 @@
             bind:value={newColor}
             class="min-h-11 min-w-11 shrink-0 w-9 h-9 p-0 rounded cursor-pointer bg-transparent border-0"
           />
-          <div class="flex flex-wrap gap-0.5">
+          <div class="flex flex-wrap gap-1">
             {#each presetColors as c}
+              <!-- 24px target = the WCAG 2.5.8 floor. The previous min-h-11/min-w-11
+                   forced each 20px swatch into a 44px box: 13 of them = a 590px row
+                   that dwarfed the form (the "tag management has incorrect
+                   scaling" report). The button IS the swatch: 24px circle,
+                   painted edge to edge. -->
               <button
                 onclick={() => newColor = c}
-                class="w-5 h-5 rounded-full border border-line {newColor === c ? 'ring-2 ring-accent' : ''} min-h-11 min-w-11 p-2.5 bg-clip-content"
+                class="w-6 h-6 rounded-full border border-line {newColor === c ? 'ring-2 ring-accent' : ''}"
                 style="background: {c}"
                 title={c}
                 aria-label="Select color {c}"
@@ -199,11 +204,11 @@
                 class="min-h-11 flex-1 px-2 py-1 bg-background-input border border-line rounded text-sm focus:border-accent outline-none"
               />
               <div class="flex items-center gap-1">
-                <input type="color" bind:value={editColor} class="min-h-11 w-7 h-7 p-0 rounded cursor-pointer bg-transparent border-0" />
+                <input type="color" bind:value={editColor} class="min-h-11 min-w-11 w-11 h-11 p-0 rounded cursor-pointer bg-transparent border-0" />
                 {#each presetColors as c}
                   <button
                     onclick={() => editColor = c}
-                    class="w-5 h-5 rounded-full border border-line {editColor === c ? 'ring-2 ring-accent' : ''} min-h-11 min-w-11 p-2.5 bg-clip-content"
+                    class="w-6 h-6 rounded-full border border-line {editColor === c ? 'ring-2 ring-accent' : ''}"
                     style="background: {c}"
                     aria-label="Select color {c}"
                   ></button>

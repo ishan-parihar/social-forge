@@ -736,10 +736,13 @@ impl SocialProvider for LinkedInPageProvider {
                     .and_then(|c| c["text"].as_str())
                     .unwrap_or("")
                     .to_string();
-                let created_at = element["createdAt"]
+                // Skip undated items rather than stamp "now" on them.
+                let Some(created_at) = element["createdAt"]
                     .as_i64()
                     .and_then(chrono::DateTime::from_timestamp_millis)
-                    .unwrap_or_else(chrono::Utc::now);
+                else {
+                    continue;
+                };
 
                 // Extract media from the post content
                 let mut media = Vec::new();

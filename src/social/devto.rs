@@ -291,12 +291,11 @@ impl SocialProvider for DevtoProvider {
             .as_array()
             .map(|arr| {
                 arr.iter()
-                    .map(|article| {
+                    .filter_map(|article| {
+                        // Skip undated items rather than stamp "now" on them.
                         let created_at = article["published_at"]
                             .as_str()
-                            .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
-                            .map(|dt| dt.with_timezone(&chrono::Utc))
-                            .unwrap_or_else(chrono::Utc::now);
+                            .and_then(crate::social::common::parse_timestamp_opt)?;
                         let tags: Vec<String> = article["tag_list"]
                             .as_array()
                             .map(|t| {
@@ -316,7 +315,7 @@ impl SocialProvider for DevtoProvider {
                                 });
                             }
                         }
-                        ExternalPostData {
+Some(                        ExternalPostData {
                             platform_post_id: article["id"]
                                 .as_u64()
                                 .map(|id| id.to_string())
@@ -337,7 +336,7 @@ impl SocialProvider for DevtoProvider {
                                 "comments_count": article["comments_count"],
                                 "positive_reactions": article["positive_reactions_count"],
                             })),
-                        }
+                        })
                     })
                     .collect()
             })

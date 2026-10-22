@@ -1323,11 +1323,14 @@ impl XProvider {
                     continue;
                 }
                 let text = item["text"].as_str().unwrap_or("").to_string();
-                let created_at = item["created_at"]
+                // No fabricated "now": an undated item is skipped, not
+                // shown as just-posted.
+                let Some(created_at) = item["created_at"]
                     .as_str()
-                    .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
-                    .map(|dt| dt.with_timezone(&chrono::Utc))
-                    .unwrap_or_else(chrono::Utc::now);
+                    .and_then(crate::social::common::parse_timestamp_opt)
+                else {
+                    continue;
+                };
 
                 let author_id = item["author_id"].as_str();
                 let author_name = author_id
@@ -1391,6 +1394,24 @@ impl XProvider {
                         Some(l) => l,
                         None => continue,
                     };
+                    // The timeline mixes the account's own tweets with RETWEETS
+                    // and pinned-promoted entries. A retweet's author is the
+                    // ORIGINAL poster, so importing it shows a stranger's post
+                    // under the founder's feed. Skip both.
+                    if legacy
+                        .get("retweeted_status_result")
+                        .is_some_and(|r| r.get("result").is_some())
+                    {
+                        continue;
+                    }
+                    if result
+                        .get("itemContent")
+                        .and_then(|c| c.get("tweetDisplayType"))
+                        .and_then(|v| v.as_str())
+                        == Some("SelfThread")
+                    {
+                        continue;
+                    }
                     let id = result["rest_id"].as_str().unwrap_or("").to_string();
                     if id.is_empty() {
                         continue;
@@ -1400,11 +1421,16 @@ impl XProvider {
                         .or_else(|| legacy["text"].as_str())
                         .unwrap_or("")
                         .to_string();
+                    // No fabricated "now": an undated item is skipped, not
+                    // shown as just-posted.
                     let created_at_str = legacy["created_at"].as_str().unwrap_or("");
                     let created_at =
                         chrono::DateTime::parse_from_str(created_at_str, "%a %b %d %H:%M:%S %z %Y")
-                            .map(|dt| dt.with_timezone(&chrono::Utc))
-                            .unwrap_or_else(|_| chrono::Utc::now());
+                            .ok()
+                            .map(|dt| dt.with_timezone(&chrono::Utc));
+                    let Some(created_at) = created_at else {
+                        continue;
+                    };
                     let user = &result["core"]["user_results"]["result"]["legacy"];
                     let author_name = user["name"].as_str().map(String::from);
                     let author_handle = user["screen_name"].as_str().map(String::from);
@@ -1472,9 +1498,20 @@ impl XProvider {
                         }
                     }
                     if media.is_empty() {
-                        let qt_legacy = legacy
-                            .pointer("/quoted_status_result/result/result/legacy")
-                            .or_else(|| legacy.pointer("/quoted_status_result/result/legacy"));
+                        // The quote's media lives at the TOP level of the
+                        // tweet result (`result.quoted_status_result`), with
+                        // a legacy nesting only on older payload shapes.
+                        let qt_legacy = result
+                            .get("quoted_status_result")
+                            .and_then(|q| q.pointer("/result/legacy"))
+                            .or_else(|| {
+                                result
+                                    .get("quoted_status_result")
+                                    .and_then(|q| q.pointer("/result/result/legacy"))
+                            })
+                            .or_else(|| {
+                                legacy.pointer("/quoted_status_result/result/legacy")
+                            });
                         if let Some(qt) = qt_legacy {
                             Self::extract_media_from_legacy(qt, &mut media);
                         }

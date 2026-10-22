@@ -694,13 +694,22 @@ pub async fn get_engagement(
     let cutoff = now - window;
     let prev_cutoff = cutoff - window;
 
-    // Current period totals.
+    // Current period totals. v26: the windows are DISJOINT - `until` is an
+    // explicit upper bound. The previous window used to run [now-2*days,
+    // now], which CONTAINS the current one, so percent_change could never
+    // be positive and a founder whose engagement doubled read "-50%".
     let current =
-        crate::db::queries::own_post_engagement_totals(&state.db, auth.user_id, cutoff).await?;
+        crate::db::queries::own_post_engagement_totals(&state.db, auth.user_id, cutoff, now)
+            .await?;
 
-    // Previous period totals (for delta calculation).
-    let prev = crate::db::queries::own_post_engagement_totals(&state.db, auth.user_id, prev_cutoff)
-        .await?;
+    // Previous period totals (for delta calculation): [now-2*days, cutoff).
+    let prev = crate::db::queries::own_post_engagement_totals(
+        &state.db,
+        auth.user_id,
+        prev_cutoff,
+        cutoff,
+    )
+    .await?;
 
     // Per-day breakdown for the sparkline, keyed by the day each post
     // was published.

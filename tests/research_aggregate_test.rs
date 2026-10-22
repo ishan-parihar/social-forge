@@ -293,6 +293,67 @@ async fn fixture() -> Fixture {
     Fixture { pool, user_id }
 }
 
+/// A CUMULATIVE series is read at its LAST point, never summed. The
+/// provider series are running totals: a post whose Likes series reads
+/// 34, 38, 42 has engagement likes = 42 - not 114. Every reader used to
+/// SUM the points, so the SAME post showed 42 on /analytics and 114+ on
+/// /research and the calendar badge. This pin targets
+/// `top_own_posts_by_engagement` (the research ranking), which reads
+/// through `metric_value_expr` - the ONE implementation every reader
+/// shares - so it fails if any copy of the rule regresses to a SUM.
+#[tokio::test]
+async fn cumulative_series_ranking_reads_the_last_point_not_the_sum() {
+    let f = fixture().await;
+    let id = Uuid::new_v4();
+    let integration_id = integration(&f.pool, f.user_id, "x").await;
+    let platform_post_id = format!("pp-{id}");
+    sqlx::query(
+        "INSERT INTO posts (id, user_id, integration_id, state, content, idempotency_key,
+                            platform_post_id, published_at)
+         VALUES (?, ?, ?, 'published', 'cumulative series post', ?, ?, ?)",
+    )
+    .bind(id)
+    .bind(f.user_id)
+    .bind(integration_id)
+    .bind(Uuid::new_v4())
+    .bind(&platform_post_id)
+    .bind(at(1, 12).timestamp())
+    .execute(&f.pool)
+    .await
+    .expect("seed own post");
+    // Multi-point CUMULATIVE series, the shape the live providers emit:
+    // the LAST point is the current total; the SUM (114+9+33=156) is the
+    // wrong answer the old reader produced.
+    let data = serde_json::json!([
+        { "label": "Likes",    "data": [{ "total": "34" }, { "total": "38" }, { "total": "42" }] },
+        { "label": "Comments", "data": [{ "total": "4" }, { "total": "5" }] },
+        { "label": "Shares",   "data": [{ "total": "6" }, { "total": "9" }, { "total": "18" }] },
+    ]);
+    sqlx::query(
+        "INSERT INTO analytics_cache (id, user_id, provider, platform_post_id, data)
+         VALUES (?, ?, 'x', ?, ?)",
+    )
+    .bind(Uuid::new_v4())
+    .bind(f.user_id)
+    .bind(&platform_post_id)
+    .bind(data.to_string())
+    .execute(&f.pool)
+    .await
+    .expect("seed analytics cache");
+
+    let rows = top_own_posts_by_engagement(&f.pool, f.user_id, at(1, 0), 10)
+        .await
+        .expect("own posts");
+    let cumulative = rows
+        .iter()
+        .find(|r| r.content == "cumulative series post")
+        .expect("the cumulative post ranks");
+    assert_eq!(
+        cumulative.engagement, 65,
+        "LAST points: 42 likes + 5 comments + 18 shares = 65, not the SUM 156"
+    );
+}
+
 #[tokio::test]
 async fn own_posts_rank_by_engagement_and_carry_provider() {
     let f = fixture().await;
@@ -419,9 +480,19 @@ async fn timing_histogram_respects_the_window_and_averages_per_post() {
     let all = engagement_histogram_by_slot(&f.pool, f.user_id, None, None)
         .await
         .expect("histogram");
+    // The function returns one row per (provider, epoch): the
+    // WEEKDAYxHOUR fold is the CALLER's job (a zone-aware fold cannot be
+    // expressed in SQLite). Fold here with chrono, the way the research
+    // handler does: weekday is %w (0=Sunday..6=Saturday).
     let by_slot: std::collections::HashMap<(i32, i32), (i64, i64)> = all
         .into_iter()
-        .map(|(_, wd, h, posts, eng)| ((wd, h), (posts, eng)))
+        .map(|(provider, epoch, posts, eng)| {
+            let dt = chrono::DateTime::from_timestamp(epoch, 0).expect("epoch");
+            let wd = dt.format("%w").to_string().parse::<i32>().expect("weekday");
+            let h = dt.format("%H").to_string().parse::<i32>().expect("hour");
+            let _ = provider;
+            ((wd, h), (posts, eng))
+        })
         .collect();
     // Weekdays are SQLite's %w (0=Sunday..6=Saturday) over the platform
     // post timestamp: 2026-10-14 is a Wednesday (3) at 18:00, and every

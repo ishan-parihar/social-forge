@@ -588,12 +588,11 @@ impl SocialProvider for WordPressProvider {
             .as_array()
             .map(|arr| {
                 arr.iter()
-                    .map(|p| {
+                    .filter_map(|p| {
+                        // Skip undated items rather than stamp "now" on them.
                         let created_at = p["date_gmt"]
                             .as_str()
-                            .and_then(|t| chrono::DateTime::parse_from_rfc3339(t).ok())
-                            .map(|dt| dt.with_timezone(&chrono::Utc))
-                            .unwrap_or_else(chrono::Utc::now);
+                            .and_then(crate::social::common::parse_timestamp_opt)?;
                         let _content_text = p["content"]["rendered"]
                             .as_str()
                             .map(common::strip_html_tags)
@@ -617,7 +616,7 @@ impl SocialProvider for WordPressProvider {
                                 poster_url: None,
                             });
                         }
-                        ExternalPostData {
+Some(                        ExternalPostData {
                             platform_post_id: p["id"]
                                 .as_u64()
                                 .map(|id| id.to_string())
@@ -641,7 +640,7 @@ impl SocialProvider for WordPressProvider {
                                 "post_type": p["type"],
                                 "sticky": p["sticky"],
                             })),
-                        }
+                        })
                     })
                     .collect()
             })

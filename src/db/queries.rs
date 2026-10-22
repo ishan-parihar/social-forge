@@ -995,29 +995,24 @@ pub async fn list_posts_search(
     });
 
     let sql: String = if sort == "engagement" {
-        // The label set comes from `metric_label_matches` - the one place
-        // the provider vocabulary is mapped - so an X post's "Retweets"
-        // counts towards the sort.
-        let engagement_labels = format!(
-            "{} OR {} OR {}",
-            metric_label_matches(METRIC_LIKES),
-            metric_label_matches(METRIC_COMMENTS),
-            metric_label_matches(METRIC_SHARES),
-        );
         // Engagement sort.
         //
         // The engagement of the user's OWN posts lives in `analytics_cache`,
         // keyed by (user_id, platform_post_id) - the payload is a list of
-        // {label, data:[{total}]} series. The old query joined
-        // `post_engagement pe ON pe.post_id = p.id`, but that table's
-        // `post_id` FK targets `external_posts`, so the join matched
-        // NOTHING for the user's own posts and every row scored zero: the
-        // sort was a no-op that looked like it worked.
+        // {label, data:[{total}]} CUMULATIVE series, so each metric's current
+        // value is its LAST point (v26: this used to SUM the points, which
+        // inflated the sort score ~10x while /analytics showed the true value
+        // - the same post ranked differently on the two pages).
         //
-        // The label set comes from `metric_label_matches` - the one place
-        // the provider vocabulary is mapped - so an X post's "Retweets"
-        // counts towards the sort.
-        //
+        // The metric expressions come from `metric_value_expr` - the ONE
+        // implementation - so an X post's "Retweets" counts and no reader
+        // can disagree with another.
+        let engagement_score = format!(
+            "COALESCE({likes}, 0) + COALESCE({comments}, 0) + COALESCE({shares}, 0)",
+            likes = metric_value_expr(METRIC_LIKES, "p"),
+            comments = metric_value_expr(METRIC_COMMENTS, "p"),
+            shares = metric_value_expr(METRIC_SHARES, "p"),
+        );
         // SQLite has no uuid[] arrays: the id lists are bound as JSON
         // text and expanded with json_each(...). `? IS NULL` is how the
         // optional filters are skipped, and ILIKE becomes LIKE with an
@@ -1042,14 +1037,8 @@ pub async fn list_posts_search(
                SELECT post_id FROM post_tags WHERE tag_id IN (SELECT unhex(replace(value, '-', '')) FROM json_each(?))
              ))
              AND (? IS NULL OR p.campaign_id = ?)
-           ORDER BY (SELECT COALESCE(SUM(json_extract(point.value, '$.total')), 0)
-                       FROM analytics_cache ac, json_each(ac.data) AS series,
-                            json_each(json_extract(series.value, '$.data')) AS point
-                      WHERE ac.user_id = p.user_id
-                        AND ac.platform_post_id = p.platform_post_id
-                        AND ({engagement_labels})) DESC
+           ORDER BY ({engagement_score}) DESC
            LIMIT ? OFFSET ?"#,
-            engagement_labels = engagement_labels,
         )
     } else {
         format!(
@@ -2028,42 +2017,25 @@ pub async fn get_calendar_posts_with_metrics(
            -- hold a row for a `posts` row. These four columns used to be
            -- hard-coded NULL, which made every engagement badge on the
            -- calendar permanently absent. The payload is a list of
-           -- {{label, data:[{{total}}]}} series; sum the points of the series
-           -- whose label matches, case-insensitively. A post with no cached
-           -- analytics keeps NULL (unknown), not 0.
-           (SELECT SUM(json_extract(point.value, '$.total'))
-              FROM analytics_cache ac, json_each(ac.data) AS series,
-                   json_each(json_extract(series.value, '$.data')) AS point
-             WHERE ac.user_id = p.user_id
-               AND ac.platform_post_id = p.platform_post_id
-               AND {likes}) AS likes,
-           (SELECT SUM(json_extract(point.value, '$.total'))
-              FROM analytics_cache ac, json_each(ac.data) AS series,
-                   json_each(json_extract(series.value, '$.data')) AS point
-             WHERE ac.user_id = p.user_id
-               AND ac.platform_post_id = p.platform_post_id
-               AND {comments}) AS comments,
-           (SELECT SUM(json_extract(point.value, '$.total'))
-              FROM analytics_cache ac, json_each(ac.data) AS series,
-                   json_each(json_extract(series.value, '$.data')) AS point
-             WHERE ac.user_id = p.user_id
-               AND ac.platform_post_id = p.platform_post_id
-               AND {shares}) AS shares,
-           (SELECT SUM(json_extract(point.value, '$.total'))
-              FROM analytics_cache ac, json_each(ac.data) AS series,
-                   json_each(json_extract(series.value, '$.data')) AS point
-             WHERE ac.user_id = p.user_id
-               AND ac.platform_post_id = p.platform_post_id
-               AND {impressions}) AS impressions
+           -- {{label, data:[{{total}}]}} series; the provider series are
+           -- CUMULATIVE, so the current value is the LAST point of the
+           -- matching series (v26: this used to SUM the points, which
+           -- multiplied a running total by the sample count - a post with
+           -- 70 likes read as 520 on the badge while /analytics showed 70).
+           -- A post with no cached analytics keeps NULL (unknown), not 0.
+           {likes} AS likes,
+           {comments} AS comments,
+           {shares} AS shares,
+           {impressions} AS impressions
          FROM posts p
          LEFT JOIN integrations i ON p.integration_id = i.id
          WHERE {where_sql}
          ORDER BY
            CASE WHEN p.state = 'published' THEN p.published_at ELSE p.scheduled_at END ASC"#,
-        likes = metric_label_matches(METRIC_LIKES),
-        comments = metric_label_matches(METRIC_COMMENTS),
-        shares = metric_label_matches(METRIC_SHARES),
-        impressions = metric_label_matches(METRIC_IMPRESSIONS),
+        likes = metric_value_expr(METRIC_LIKES, "p"),
+        comments = metric_value_expr(METRIC_COMMENTS, "p"),
+        shares = metric_value_expr(METRIC_SHARES, "p"),
+        impressions = metric_value_expr(METRIC_IMPRESSIONS, "p"),
     );
 
     // Epoch INTEGER columns: a bare DateTime binds as TEXT, which SQLite
@@ -3150,9 +3122,23 @@ pub async fn get_engagement_summary(
     cutoff: Option<DateTime<Utc>>,
 ) -> Result<EngagementSummary, sqlx::Error> {
     // Phase 2: add cutoff filter for date-range analytics.
+    //
+    // v26: the feed import pulls the CONNECTED account's own posts, so a post
+    // published through Forge lands in BOTH `posts` (scored from
+    // analytics_cache by /api/analytics/engagement) and `external_posts`
+    // (scored here). The headline cards ADD the two sums, so the same post
+    // counted twice - the "hallucinated metrics" report. Exclude imported
+    // rows whose platform_post_id matches one of the user's own published
+    // posts: the own-post side already scores them.
+    let exclude_own = r#"AND ep.platform_post_id NOT IN (
+               SELECT p.platform_post_id FROM posts p
+               WHERE p.user_id = ep.user_id
+                 AND p.state = 'published'
+                 AND p.platform_post_id != '')"#;
     if let Some(provider) = provider {
         sqlx::query_as::<_, EngagementSummary>(
-            r#"SELECT
+            &format!(
+                r#"SELECT
                SUM(pe.likes) AS total_likes,
                SUM(pe.comments) AS total_comments,
                SUM(pe.shares) AS total_shares,
@@ -3164,8 +3150,10 @@ pub async fn get_engagement_summary(
                COUNT(pe.id) AS posts_with_engagement
              FROM external_posts ep
              INNER JOIN post_engagement pe ON pe.post_id = ep.id
-             WHERE ep.user_id = ? AND ep.provider = ?
-               AND (? IS NULL OR ep.created_at >= ?)"#,
+              WHERE ep.user_id = ? AND ep.provider = ?
+                AND (? IS NULL OR ep.created_at >= ?)
+                {exclude_own}"#
+            ),
         )
         .bind(user_id)
         .bind(provider)
@@ -3175,7 +3163,8 @@ pub async fn get_engagement_summary(
         .await
     } else {
         sqlx::query_as::<_, EngagementSummary>(
-            r#"SELECT
+            &format!(
+                r#"SELECT
                SUM(pe.likes) AS total_likes,
                SUM(pe.comments) AS total_comments,
                SUM(pe.shares) AS total_shares,
@@ -3187,8 +3176,10 @@ pub async fn get_engagement_summary(
                COUNT(pe.id) AS posts_with_engagement
              FROM external_posts ep
              INNER JOIN post_engagement pe ON pe.post_id = ep.id
-             WHERE ep.user_id = ?
-               AND (? IS NULL OR ep.created_at >= ?)"#,
+              WHERE ep.user_id = ?
+                AND (? IS NULL OR ep.created_at >= ?)
+                {exclude_own}"#
+            ),
         )
         .bind(user_id)
         .bind(cutoff.map(EpochUtc::from))
@@ -4654,6 +4645,7 @@ pub async fn own_post_engagement_totals(
     pool: &SqlitePool,
     user_id: Uuid,
     cutoff: DateTime<Utc>,
+    until: DateTime<Utc>,
 ) -> Result<OwnPostEngagementTotals, sqlx::Error> {
     // The `json_each` label match is case-insensitive, and the last point
     // of the series is read with `ORDER BY key DESC LIMIT 1` - the
@@ -4705,7 +4697,8 @@ pub async fn own_post_engagement_totals(
               WHERE p.user_id = ?
                 AND p.deleted_at IS NULL
                 AND p.state = 'published'
-                AND p.published_at >= ?)"#,
+                AND p.published_at >= ?
+                AND p.published_at < ?)"#,
         likes = metric_label_matches(METRIC_LIKES),
         comments = metric_label_matches(METRIC_COMMENTS),
         shares = metric_label_matches(METRIC_SHARES),
@@ -4714,6 +4707,7 @@ pub async fn own_post_engagement_totals(
     sqlx::query_as::<_, OwnPostEngagementTotals>(&sql)
         .bind(user_id)
         .bind(EpochUtc::from(cutoff))
+        .bind(EpochUtc::from(until))
         .fetch_one(pool)
         .await
 }
@@ -4761,19 +4755,26 @@ pub fn metric_label_matches(metric: &str) -> String {
     }
 }
 
-/// The SQL expression summing the points of the series that belong to
-/// `metric` for one post.
+/// The SQL expression reading the CURRENT value of the series that
+/// belongs to `metric` for one post: the LAST point of the series.
 ///
-/// Shared by every own-post engagement query so they cannot disagree
-/// about which labels mean what.
-pub fn metric_sum_expr(metric: &str, post_alias: &str) -> String {
+/// The provider series (X, YouTube, TikTok) are CUMULATIVE running
+/// totals, so the current value is the last point - NOT the SUM of the
+/// points, which multiplies a running total by the number of samples
+/// (a post with 70 likes read as 520 across 10 points). This is the
+/// ONE implementation every own-post engagement reader uses, so they
+/// cannot disagree about which labels mean what or which point is
+/// "current". It returns NULL when the post has no cached series -
+/// "not measured" must stay NULL, not 0.
+pub fn metric_value_expr(metric: &str, post_alias: &str) -> String {
     format!(
-        "(SELECT SUM(json_extract(point.value, '$.total'))
+        "(SELECT json_extract(point.value, '$.total')
            FROM analytics_cache ac, json_each(ac.data) AS series,
                 json_each(json_extract(series.value, '$.data')) AS point
           WHERE ac.user_id = {post_alias}.user_id
             AND ac.platform_post_id = {post_alias}.platform_post_id
-            AND {})",
+            AND {}
+          ORDER BY point.key DESC LIMIT 1)",
         metric_label_matches(metric)
     )
 }
@@ -4920,9 +4921,9 @@ pub async fn top_own_posts_by_engagement(
          WHERE engagement > 0
          ORDER BY engagement DESC, published_at DESC
          LIMIT ?"#,
-        likes = metric_sum_expr(METRIC_LIKES, "p"),
-        comments = metric_sum_expr(METRIC_COMMENTS, "p"),
-        shares = metric_sum_expr(METRIC_SHARES, "p"),
+        likes = metric_value_expr(METRIC_LIKES, "p"),
+        comments = metric_value_expr(METRIC_COMMENTS, "p"),
+        shares = metric_value_expr(METRIC_SHARES, "p"),
     );
     sqlx::query_as::<_, OwnPostEngagement>(&sql)
         .bind(user_id)

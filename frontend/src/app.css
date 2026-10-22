@@ -153,6 +153,12 @@
            declared in both blocks alongside --radius for the same reason:
            this file is the single place a token may be defined. */
         --overlay: rgb(0 0 0 / 0.6);
+        /* v26: heavy scrim for large ("fullScreen") modals. The composer
+           previously painted an OPAQUE bg-surface backdrop - the founder
+           lost all page context behind every modal open (the "modals make
+           everything opaque" report). This wash hides the detail but keeps
+           the page recognisably behind the dialog. */
+        --overlay-strong: rgb(0 0 0 / 0.85);
         --focus-ring: rgb(99 102 241 / 0.35);
         --focus-ring-width: 2px;
         --focus-ring-gap: 2px;
@@ -282,6 +288,7 @@
         --hue-neutral-rgb: 97 112 135;    /* 4.59:1 */
         /* - chrome - */
         --overlay: rgb(15 23 42 / 0.45);
+        --overlay-strong: rgb(15 23 42 / 0.75);
         --focus-ring: rgb(79 70 229 / 0.35);
         --focus-ring-width: 2px;
         --focus-ring-gap: 2px;

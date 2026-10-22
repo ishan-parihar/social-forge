@@ -732,11 +732,13 @@ impl SocialProvider for GithubProvider {
 
         if let Some(repos_arr) = repos.as_array() {
             for repo in repos_arr {
-                let created_at = repo["created_at"]
+                // Skip undated items rather than stamp "now" on them.
+                let Some(created_at) = repo["created_at"]
                     .as_str()
-                    .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
-                    .map(|dt| dt.with_timezone(&chrono::Utc))
-                    .unwrap_or_else(chrono::Utc::now);
+                    .and_then(crate::social::common::parse_timestamp_opt)
+                else {
+                    continue;
+                };
                 let repo_avatar = repo["owner"]["avatar_url"].as_str().map(String::from);
                 let mut media = Vec::new();
                 if let Some(avatar) = &repo_avatar {
@@ -772,11 +774,13 @@ impl SocialProvider for GithubProvider {
 
         if let Some(gists_arr) = gists.as_array() {
             for gist in gists_arr {
-                let created_at = gist["created_at"]
+                // Skip undated items rather than stamp "now" on them.
+                let Some(created_at) = gist["created_at"]
                     .as_str()
-                    .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
-                    .map(|dt| dt.with_timezone(&chrono::Utc))
-                    .unwrap_or_else(chrono::Utc::now);
+                    .and_then(crate::social::common::parse_timestamp_opt)
+                else {
+                    continue;
+                };
                 let files: Vec<String> = gist["files"]
                     .as_object()
                     .map(|obj| obj.keys().cloned().collect())

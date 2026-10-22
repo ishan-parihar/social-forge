@@ -587,10 +587,14 @@ impl SocialProvider for FacebookProvider {
                 } else {
                     message
                 };
-                let created_time = item["created_time"]
+                // Facebook always sends created_time; skip the item when absent
+                // rather than stamping "now" on it.
+                let Some(created_time) = item["created_time"]
                     .as_str()
-                    .map(crate::social::common::parse_timestamp)
-                    .unwrap_or_else(chrono::Utc::now);
+                    .and_then(crate::social::common::parse_timestamp_opt)
+                else {
+                    continue;
+                };
 
                 // Build media vector — for video attachments, make a separate API call
                 // to get the actual playable video URL instead of the thumbnail.

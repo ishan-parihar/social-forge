@@ -626,10 +626,13 @@ impl SocialProvider for InstagramProvider {
             for item in data {
                 let media_id = item["id"].as_str().unwrap_or("").to_string();
                 let caption = item["caption"].as_str().unwrap_or("").to_string();
-                let created_at = item["timestamp"]
+                // Skip undated items rather than stamp "now" on them.
+                let Some(created_at) = item["timestamp"]
                     .as_str()
-                    .map(crate::social::common::parse_timestamp)
-                    .unwrap_or_else(chrono::Utc::now);
+                    .and_then(crate::social::common::parse_timestamp_opt)
+                else {
+                    continue;
+                };
                 let permalink = item["permalink"].as_str().map(String::from);
                 let media_url = item["media_url"].as_str().map(String::from);
 

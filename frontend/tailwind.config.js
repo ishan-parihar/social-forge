@@ -105,6 +105,14 @@ export default {
         // v25 F1: scrim token. `bg-black/60` is a pure-black overlay that
         // swallows detail on a light page; this tints with the theme instead.
         overlay: "var(--overlay)",
+        // v26: heavy scrim for large ("fullScreen") modals. The bare-var
+        // `overlay` above cannot take an alpha modifier (Tailwind emits
+        // NOTHING for `bg-overlay/80` given a bare var), so the heavier
+        // wash is its own token. fullScreen modals previously used an
+        // OPAQUE bg-surface backdrop - the founder lost all page context
+        // behind every composer open (the "modals make everything opaque"
+        // report).
+        "overlay-strong": "var(--overlay-strong)",
       },
       // v25 F1: the shadow scale reads from the theme, so shadows tint with the
       // surface instead of leaving a pure-black smear on a white page.

@@ -632,8 +632,23 @@ impl SocialProvider for BlueskyProvider {
 
         let mut posts = Vec::new();
         for item in &feed {
+            // The author feed mixes three item kinds: the author's own posts,
+            // reposts, and reply-context posts. Only the author's OWN posts
+            // belong in the feed: a repost's `post.author` is the ORIGINAL
+            // author, so importing every item showed strangers' posts under
+            // the founder's account - the exact "hallucinated feed" report.
+            if item.get("reason").is_some_and(|r| {
+                r["$type"].as_str() == Some("app.bsky.feed.defs#reasonRepost")
+            }) {
+                continue;
+            }
             let post = &item["post"];
             let record = &post["record"];
+
+            // A reply to someone else is also not the author's own content.
+            if record["reply"].is_object() {
+                continue;
+            }
 
             let cid = post["cid"].as_str().unwrap_or("").to_string();
             if cid.is_empty() {
@@ -641,11 +656,16 @@ impl SocialProvider for BlueskyProvider {
             }
 
             let text = record["text"].as_str().unwrap_or("").to_string();
-            let created_at = record["createdAt"]
+            // A missing/unparseable date must not fabricate a "posted just
+            // now" timestamp - that reads as a fake post. Skip the item
+            // instead; the feed only ever shows posts with a real date.
+            let created_at = match record["createdAt"]
                 .as_str()
                 .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
-                .map(|dt| dt.with_timezone(&chrono::Utc))
-                .unwrap_or_else(chrono::Utc::now);
+            {
+                Some(dt) => dt.with_timezone(&chrono::Utc),
+                None => continue,
+            };
 
             let author = &post["author"];
             let author_name = author["displayName"].as_str().map(String::from);

@@ -680,12 +680,11 @@ impl SocialProvider for MastodonProvider {
             .as_array()
             .map(|arr| {
                 arr.iter()
-                    .map(|s| {
+                    .filter_map(|s| {
+                        // Skip undated items rather than stamp "now" on them.
                         let created_at = s["created_at"]
                             .as_str()
-                            .and_then(|t| chrono::DateTime::parse_from_rfc3339(t).ok())
-                            .map(|dt| dt.with_timezone(&chrono::Utc))
-                            .unwrap_or_else(chrono::Utc::now);
+                            .and_then(crate::social::common::parse_timestamp_opt)?;
                         let media_urls: Vec<String> = s["media_attachments"]
                             .as_array()
                             .map(|ma| {
@@ -703,7 +702,7 @@ impl SocialProvider for MastodonProvider {
                                 poster_url: None,
                             })
                             .collect();
-                        ExternalPostData {
+Some(                        ExternalPostData {
                             platform_post_id: s["id"].as_str().unwrap_or("").to_string(),
                             text: s["content"].as_str().unwrap_or("").to_string(),
                             author_name: s["account"]["display_name"].as_str().map(String::from),
@@ -720,7 +719,7 @@ impl SocialProvider for MastodonProvider {
                                 "sensitive": s["sensitive"],
                                 "spoiler_text": s["spoiler_text"],
                             })),
-                        }
+                        })
                     })
                     .collect()
             })

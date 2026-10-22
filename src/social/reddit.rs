@@ -1141,9 +1141,14 @@ impl RedditProvider {
                 format!("{title}\n\n{selftext}")
             };
 
-            let created_utc = data["created_utc"].as_f64().unwrap_or(0.0);
-            let created_at = chrono::DateTime::from_timestamp(created_utc as i64, 0)
-                .unwrap_or_else(chrono::Utc::now);
+            // Reddit always sends created_utc; 0.0/None means a malformed
+            // item - skip rather than stamp "now" on it.
+            let Some(created_utc) = data["created_utc"].as_f64().filter(|t| *t > 0.0) else {
+                continue;
+            };
+            let Some(created_at) = chrono::DateTime::from_timestamp(created_utc as i64, 0) else {
+                continue;
+            };
 
             let permalink = data["permalink"].as_str().unwrap_or("").to_string();
             let url = if permalink.is_empty() {

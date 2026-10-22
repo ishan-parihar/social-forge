@@ -37,9 +37,20 @@ pub fn generate_state() -> String {
 /// Handles RFC3339 and common non-standard formats like `+0000` (missing colon).
 /// Returns `Utc::now()` as fallback on parse failure.
 pub fn parse_timestamp(s: &str) -> chrono::DateTime<chrono::Utc> {
+    // Legacy infallible form kept for non-feed callers (DMs, comments) that
+    // already had a "now" fallback. Feed imports must use
+    // parse_timestamp_opt and SKIP undated items instead.
+    parse_timestamp_opt(s).unwrap_or_else(chrono::Utc::now)
+}
+
+/// Parse a provider timestamp, returning None when unparseable.
+///
+/// A fabricated "now" for a missing date reads as a fake fresh post in
+/// the feed (the "hallucinated feed" report), so every feed-import
+/// caller must SKIP the item when this returns None rather than stamp
+/// it with the import time.
+pub fn parse_timestamp_opt(s: &str) -> Option<chrono::DateTime<chrono::Utc>> {
     let s = s.trim();
-    // Normalize non-standard offsets like "+0000" → "+00:00" (insert colon before last 2 digits)
-    // Only applies to the trailing ±HHMM pattern (5 chars: sign + 4 digits)
     let normalized = if s.len() >= 6 {
         let (prefix, offset) = s.split_at(s.len() - 5);
         let offset_chars: Vec<char> = offset.chars().collect();
@@ -61,12 +72,12 @@ pub fn parse_timestamp(s: &str) -> chrono::DateTime<chrono::Utc> {
     chrono::DateTime::parse_from_rfc3339(&normalized)
         .or_else(|_| chrono::DateTime::parse_from_rfc3339(s))
         .map(|d| d.with_timezone(&chrono::Utc))
-        .unwrap_or_else(|_| {
-            // Final fallback: try basic ISO 8601 without timezone
+        .or_else(|_| {
             chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S")
                 .map(|d| d.and_utc())
-                .unwrap_or_else(|_| chrono::Utc::now())
+                .map_err(|_| ())
         })
+        .ok()
 }
 
 /// Does this string contain HTML the stripper should remove?

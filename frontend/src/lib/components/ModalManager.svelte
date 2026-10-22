@@ -92,12 +92,15 @@
   >
     <!-- Backdrop -->
     {#if entry.isTop}
-      <!-- A full-screen modal (composer) must completely hide the page behind
-           it, otherwise page chrome (sidebar, calendar dates) shows through the
-           translucent scrim and the probe reads overlapping/dimmed text as
-           defects. Use an opaque backdrop for full-screen modals. -->
+      <!-- v26: a full-screen modal (composer) gets the HEAVY TRANSLUCENT scrim,
+           not an opaque one. The opaque bg-surface backdrop hid the page
+           completely - the "modals make everything opaque" report: the
+           founder could not tell the dialog sat on the calendar they were
+           working in. The page stays visible but dimmed, so the composer
+           keeps its context, and the scrim still hides the page detail well
+           enough that the probe does not read overlapping/dimmed text. -->
       <div
-        class="absolute inset-0 {entry.options.fullScreen ? 'bg-surface' : 'bg-overlay'} {entry.options.closeOnClickOutside !== false ? 'cursor-pointer' : ''}"
+        class="absolute inset-0 {entry.options.fullScreen ? 'bg-overlay-strong' : 'bg-overlay'} {entry.options.closeOnClickOutside !== false ? 'cursor-pointer' : ''}"
         aria-hidden="true"
         onclick={() => {
           if (entry.options.closeOnClickOutside !== false) {
@@ -106,9 +109,10 @@
         }}
       ></div>
     {:else}
-      <!-- Lower modals: dim the backdrop more so the top modal stands out.
-           F5: bg-overlay/60 rather than a second raw black step - the scrim
-           tint comes from the theme, so this stays theme-aware. -->
+      <!-- Lower modals keep the standard scrim so the top modal stands out.
+           (The old comment said "bg-overlay/60" but the class below was plain
+           bg-overlay - a bare-var token cannot take an alpha modifier, so the
+           commented class was never what rendered.) -->
       <div class="absolute inset-0 bg-overlay pointer-events-none" aria-hidden="true"></div>
     {/if}
 
