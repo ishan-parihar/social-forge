@@ -1217,6 +1217,80 @@ fn is_credential_row(i: &crate::db::models::Integration) -> bool {
     true
 }
 
+/// The --wait login loop for AI agents (Command::Connect --wait).
+///
+/// 1. Run the one-shot connect: for cookie providers (x/reddit) this
+///    IS the whole flow — it imports, validates and returns.
+/// 2. For OAuth/one-time-token providers the one-shot emits an auth_url
+///    (or the /connect code instructions). This loop then polls the
+///    integration list every 2s until the provider gains a REAL
+///    credential row (seed tokens do not count — `is_credential_row`),
+///    or the timeout elapses.
+///
+/// Agent loop, end to end:
+///   social-forge connect linkedin --wait --pretty
+///   -> read the auth_url from stdout
+///   -> drive a browser to it, complete the platform's login
+///   -> the callback creates the integration row
+///   -> this command prints `status: connected` and exits 0.
+async fn handle_connect_wait(
+    state: &AppState,
+    provider: &str,
+    timeout_secs: u64,
+) -> anyhow::Result<()> {
+    use std::time::{Duration, Instant};
+
+    let user_id = resolve_user(state).await?;
+
+    // Step 1: the one-shot connect (import or URL emission). Its output
+    // already told the agent what to do; swallow it here and re-report.
+    let started = Instant::now();
+    let _ = handle_connect_with_state(state, provider).await;
+
+    // Already done? (cookie import landed, or the provider was
+    // already_connected with a real credential)
+    if crate::db::queries::list_integrations(&state.db, user_id)
+        .await?
+        .iter()
+        .any(|i| i.provider_identifier == provider && is_credential_row(i))
+    {
+        return Ok(());
+    }
+
+    // Step 2: poll until the credential row appears or the timeout hits.
+    let deadline = started + Duration::from_secs(timeout_secs);
+    loop {
+        if Instant::now() >= deadline {
+            output_json(&serde_json::json!({
+                "status": "timeout",
+                "provider": provider,
+                "waited_secs": started.elapsed().as_secs(),
+                "hint": "No credential landed before --timeout-secs. Open the auth_url from the connect output in a browser and complete the login, then run again.",
+            }));
+            return Ok(());
+        }
+        tokio::time::sleep(Duration::from_secs(2)).await;
+        let connected: Vec<_> = crate::db::queries::list_integrations(&state.db, user_id)
+            .await?
+            .into_iter()
+            .filter(|i| i.provider_identifier == provider && is_credential_row(i))
+            .collect();
+        if !connected.is_empty() {
+            output_json(&serde_json::json!({
+                "status": "connected",
+                "provider": provider,
+                "waited_secs": started.elapsed().as_secs(),
+                "accounts": connected.iter().map(|i| serde_json::json!({
+                    "name": i.profile_name,
+                    "internal_id": i.internal_id,
+                    "type": i.provider_identifier,
+                })).collect::<Vec<_>>(),
+            }));
+            return Ok(());
+        }
+    }
+}
+
 async fn handle_connect_with_state(state: &AppState, provider: &str) -> anyhow::Result<()> {
     let user_id = resolve_user(state).await?;
 
@@ -3831,7 +3905,17 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
             handle_mcp_tools_with_state(&state, pretty, toolset.as_deref()).await
         }
         Command::Audit => handle_audit_with_state(&state).await,
-        Command::Connect { provider } => handle_connect_with_state(&state, &provider).await,
+        Command::Connect {
+            provider,
+            wait,
+            timeout_secs,
+        } => {
+            if wait {
+                handle_connect_wait(&state, &provider, timeout_secs).await
+            } else {
+                handle_connect_with_state(&state, &provider).await
+            }
+        }
         Command::Doctor => handle_doctor_with_state(&state).await,
         Command::Setup => handle_setup().await,
         Command::ConnectAll => handle_connect_all_with_state(&state).await,

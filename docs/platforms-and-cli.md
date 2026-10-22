@@ -38,6 +38,31 @@ take the lock. `social-forge audit` reports the live `journal_mode` /
 
 Full detail: [`docs/planning/TARGETING_AND_WRITER_DISCIPLINE.md`](docs/planning/TARGETING_AND_WRITER_DISCIPLINE.md).
 
+### Logging a provider in (for AI agents)
+
+`social-forge connect <provider>` is the one entry point. Three shapes:
+
+|Provider kind|What `connect` does|What the agent does next|
+|---|---|---|
+|Cookie (x, reddit)|Imports browser cookies, then falls back to `X_AUTH_TOKEN`+`X_CT0` / `REDDIT_COOKIE_TOKEN` env; validates against the live API; writes the row|Nothing — it either prints `connected` or names what is missing|
+|OAuth (linkedin, facebook, instagram, …)|Prints an `auth_url`|Opens the URL in a browser, completes the platform login; the callback writes the row|
+|One-time-token (telegram-bot)|Prints the code + instructions|Sends the code to the bot|
+
+**The wait loop.** `connect <provider> --wait [--timeout-secs N]` (default
+300) turns the OAuth/OTT shapes into a single blocking command: it prints
+the URL (or code), then polls every 2s and exits the moment the credential
+row lands — `status: connected` and exit 0. Agent loop, end to end:
+
+```sh
+social-forge connect linkedin --wait &     # emits auth_url, polls
+# drive a browser to the auth_url, complete the login
+# -> the CLI prints: status: connected, accounts: [...]
+```
+
+Seed rows never count as connected: a `seed-token` placeholder (from
+`scripts/seed_demo.py`) is treated as absent, so `connect` re-imports and
+replaces it instead of answering `already_connected` forever.
+
 ---
 
 ### Supported Platforms

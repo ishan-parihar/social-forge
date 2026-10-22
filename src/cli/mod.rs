@@ -75,6 +75,16 @@ pub enum Command {
     Connect {
         /// Provider name (x, reddit, linkedin, facebook, instagram, bluesky, github)
         provider: String,
+        /// For OAuth/one-time-token providers: poll until the login
+        /// completes (the callback lands or the code is redeemed), then
+        /// print the resulting account. Designed for AI-agent loops:
+        /// run with --wait, drive a browser to the auth_url, and the
+        /// command exits 0 the moment the credential lands.
+        #[arg(long)]
+        wait: bool,
+        /// Seconds to wait with --wait before giving up (default 300).
+        #[arg(long, default_value_t = 300)]
+        timeout_secs: u64,
     },
 
     /// Check health of all connected providers and report status
