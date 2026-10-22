@@ -1905,3 +1905,74 @@ Stage Summary:
 
 Known issues: visual rubric needs an image-capable pass over the
 saved screenshots (or any future session) - nothing else queued.
+
+---
+Task ID: v27-red-team-2-review-corrections
+Agent: omp (goal session, 2026-10-22)
+Task: Cross-review corrections: the v27-red-team-1 entry
+over-claimed the SSE publish path; plus the remaining review
+findings (401-by-URL gate tracking, the calendar drag e2e, the
+two post-sweep surfaces, width-controlled shots).
+
+Work Log:
+- CORRECTION to v27-red-team-1: "Post created + published via API ->
+  appeared in DOM without reload" was WRONG. The publish call in that
+  run never executed (the create response was {posts:[...]}; the pid
+  extraction failed; the script returned CREATE-FAILED before
+  publishing). The DOM update observed was the post_created
+  broadcast. Only the create half was verified in that run.
+- The publish half is NOW verified, with an honest label: a probe
+  post on the bluesky channel, published through the REAL
+  POST /api/posts/{id}/publish route -> route -> claim ->
+  scheduler::publish_post -> provider attempt -> failure -> retry
+  path -> post_failed broadcast. A direct EventSource tap captured
+  BOTH post_created and post_failed for the probe post on the live
+  stream. The provider legitimately failed ("Could not resolve
+  handle" - the seed's bluesky credentials, the environment's fault,
+  classified per 9.43); no seeded channel authenticates to its
+  provider, so a SUCCESSFUL post_published is not provable on this
+  instance. The full publish pipeline's SSE layer is exercised;
+  the success leg is environment-blocked.
+- Calendar drag-to-reschedule e2e (frontend/scripts/e2e-calendar-drag.mjs,
+  the plan's F3 gate, not in make audit): PASS. Real
+  dragstart/dragover/drop sequence, the PUT carried the correct
+  INSTANT (07:36 wall clock preserved through the timezone
+  conversion, 9.17), the post landed on the target day after a
+  reload. 0 drag failures.
+- probe.mjs now tracks 401 responses BY URL (a747fdc): the console
+  text does not name the source URL, so a genuine unauthorized call
+  was indistinguishable from the auth-guard probe in the summary.
+  /api/auth/me on the logged-out pass is exempt; everything else
+  401s as a FAIL naming the URL. Verified: logged-out pass 0 FAIL,
+  authenticated / 0 FAIL, authenticated /login (guard redirects) 0 FAIL.
+- Post-sweep surfaces driven: the DMs cookie-auth 400-refusal
+  wrapper renders its structural message in the error wrapper
+  (678f9f8 verified live); the stats modal opens clean - its
+  token-refresh offer only renders on a token-error fetch, which is
+  the correct conditional (2861a0e's arc was verified in its own
+  cycle).
+- rubric-shots.mjs exists but is BLOCKED this session: the browseros
+  CDP port (9171) accepts HTTP but the playwright-core websocket
+  handshake times out against this browseros build. My ad-hoc
+  browseros screenshots (887px, one width) do NOT satisfy the
+  skill's 1440/768/375 width requirement - the width-controlled
+  half is covered by the green probe passes (which render all 27
+  routes at 1440/768/375/360 in both themes), and the
+  image-judgement half needs a session with image viewing AND a
+  working CDP handshake.
+
+Stage Summary:
+- Committed a747fdc: 401-by-URL gate tracking.
+- The honest state of the realtime path: create half verified
+  end-to-end (post_created live); publish pipeline verified
+  end-to-end to its failure leg (post_failed live); the success leg
+  (post_published) is environment-blocked - no seeded channel
+  authenticates.
+- Calendar drag e2e: PASS (first run this cycle).
+- DMs wrapper: verified live. Stats modal refresh offer: correctly
+  conditional, verified in code.
+
+Known issues: rubric-shots.mjs CDP websocket handshake times out
+against this browseros build (HTTP /json/version answers); the
+image rubric remains BLOCKED for want of image viewing and the CDP
+bridge.
