@@ -55,6 +55,13 @@ check: vendor-pins
 	cd frontend && node scripts/check-hex-tokens.mjs
 	cd frontend && node scripts/check-tailwind-classes.mjs
 	python3 scripts/check_status_contrast.py
+	# The CONTRAST_CORE value test: pins the shared composited-contrast
+	# arithmetic (wash-over-opaque, opacity-group) against hand-computed
+	# numbers, via the same new Function serialization the gates use.
+	# The 2026-10-22 instrument bug (a channel-alpha typo producing
+	# negative luminances) passed every syntax check; only a VALUE test
+	# catches that class.
+	cd frontend && node scripts/test-contrast-core.mjs
 
 # ── Visual + a11y audits (AGENTS.md §12) ───────────────────────
 #
