@@ -14,14 +14,14 @@ matched exactly**:
 
 ```bash
 # Exact names only — no double drafts
-social-forge post "hello" --platforms instagram
+switchpost post "hello" --platforms instagram
 
 # Name a suffixed variant explicitly to include it
-social-forge post "hello" --platforms instagram,instagram-standalone
+switchpost post "hello" --platforms instagram,instagram-standalone
 
 # Or skip name resolution entirely and pick exact accounts
-social-forge providers                                   # get integration UUIDs
-social-forge stage "hello" --integrations 6f1c...-...     # mutually exclusive with --platforms
+switchpost providers                                   # get integration UUIDs
+switchpost stage "hello" --integrations 6f1c...-...     # mutually exclusive with --platforms
 ```
 
 `telegram` still fans out to `telegram-bot` and `telegram-user`, because no
@@ -33,14 +33,14 @@ SQLite admits one writer per file. `serve` and `mcp` both run the publish
 scheduler, so exactly one long-lived process may own a given `DATABASE_URL` —
 the second one fails at boot on an exclusive lock file rather than silently
 double-publishing. Short CLI reads (`providers`, `posts list`, `audit`) never
-take the lock. `social-forge audit` reports the live `journal_mode` /
+take the lock. `switchpost audit` reports the live `journal_mode` /
 `busy_timeout` alongside the disabled-integration inventory.
 
 Full detail: [`docs/planning/TARGETING_AND_WRITER_DISCIPLINE.md`](docs/planning/TARGETING_AND_WRITER_DISCIPLINE.md).
 
 ### Logging a provider in (for AI agents)
 
-`social-forge connect <provider>` is the one entry point. Three shapes:
+`switchpost connect <provider>` is the one entry point. Three shapes:
 
 |Provider kind|What `connect` does|What the agent does next|
 |---|---|---|
@@ -66,7 +66,7 @@ the URL (or code), then polls every 2s and exits the moment the credential
 row lands — `status: connected` and exit 0. Agent loop, end to end:
 
 ```sh
-social-forge connect linkedin --wait &     # emits auth_url, polls
+switchpost connect linkedin --wait &     # emits auth_url, polls
 # drive a browser to the auth_url, complete the login
 # -> the CLI prints: status: connected, accounts: [...]
 ```
@@ -79,7 +79,7 @@ never has to run the command twice.
 registered is in the CLI's own output — no guessing:
 
 ```sh
-social-forge connect linkedin --json
+switchpost connect linkedin --json
 # {"status":"not_connected","auth_url":"https://www.linkedin.com/oauth/v2/authorization?...",
 #  "redirect_uri":"https://localhost:6544/api/auth/callback", ...}
 ```
