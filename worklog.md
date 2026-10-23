@@ -2269,3 +2269,85 @@ One-command handoff for the user, when ready:
 That completes the rename end to end. Every badge, image and CI badge URL in the
 README already points at ishan-parihar/switchpost, so they resolve the moment the
 rename lands; until then they 404, and that is the ONLY outstanding breakage.
+
+---
+Task ID: deeper-validation-2026-10-23
+Agent: Jcode
+Task: Validate the rename work further, without trusting a green run.
+
+Work Log:
+1. Ran the FULL suite (`cargo test`), not just `--lib`, and it found a real
+   defect that `--lib` cannot see: `tests/streak_unification_test.rs` failed,
+   "three consecutive days is a 3-day streak for """ with left=5, right=3.
+   Deterministic across 3 runs. A run of `--lib` alone (496 green) had reported
+   this project healthy, which is the point of the extra pass.
+
+2. Root cause was NOT the streak logic. It was the test's own isolation: the
+   scratch DB is per-BINARY, not per-RUN, so it accumulates. Measured:
+   `sqlite3 target/test-data/streak_unification_test.db` held published posts on
+   5 distinct UTC days (Oct 19, 20, 21, 22, 23) - each earlier run seeded
+   "0/1/2 days ago" and those rows stayed. Today's 3 seeds read back against
+   5 days. Both endpoints agreed (5 and 5), so the bug was in the fixture, not
+   the measure. Fixed by clearing this file's published rows before seeding.
+   The operator's real DB was checked too (0 published posts) to rule out the
+   shared-file failure mode AGENTS.md 9.42 warns about - this one is a different
+   shape: correct isolation per binary, no isolation per run.
+
+3. Mutation-verified the fix in both directions, so it can be believed:
+   - Mutation A: seed 4 days instead of 3 -> FAILED, left: 4, right: 3. The
+     test still measures what it claims.
+   - Mutation B: break the increment (add then subtract) -> FAILED, left: 1,
+     right: 3. The test pins the streak loop itself.
+   - Baseline restored: 3/3 pass, twice consecutively (no dependence on
+     accumulated rows now).
+
+4. Ran `make install-skill` for real and inspected the result on disk, since the
+   test only reads the Makefile's SOURCE side:
+   - SKILL.md + all 4 reference docs installed, including quick-reference.md
+     (the one the old hardcoded list silently dropped).
+   - All 5 files byte-identical to the repo source (cmp).
+   - All 4 links SKILL.md promises resolve on disk, and nothing references a
+     file that is not installed.
+
+5. PAGE-INDEX check: DECISION_RENAME_2026-10-23.md has a LIVE row
+   (docs/PAGE-INDEX.md:23). Two false alarms of my own, worth recording as
+   method: the first grep pattern `](filename)` did not match rows that carry a
+   directory prefix, so it reported 16 "missing" rows that were present; and the
+   4 archived OUTLINEs looked like broken links ("tombstone says archive/, file
+   is in planning/") when in fact BOTH exist by policy - the real file under
+   docs/archive/ and a redirecting tombstone at the old path. Neither was a
+   defect.
+
+6. Live server validated, and it took several tries to get the measurement right:
+   - The old server (PID 2078588) had exited during the session; nothing was
+     listening on 6544. Restarted `./target/release/switchpost serve --port 6544`.
+   - `http://127.0.0.1:6544/health` returned 000 ("connection refused") and this
+     was NOT a proxy and NOT a port clash - it is HTTPS only. Over TLS:
+     /health 200 {"status":"ok","version":"0.3.0"}, /ready 200
+     {"status":"ok","database":true}, /api/posts 401 unauthenticated,
+     /api/events 401 unauthenticated. DB trio intact: integrity ok, 2 posts,
+     3 integrations, 1 user.
+   - THE TITLE GAVE IT AWAY: `/` served <title>Social Forge</title>. The source
+     app.html said `Switchpost`, so this was a STALE BUILD - frontend/build/ was
+     from an old session and the release binary embeds it via rust-embed. A
+     rename that is "complete" in the tree can still ship the old name at
+     runtime, which is why the served page and not the source is the check.
+
+7. Second stale-artifact find in the same family: RedditPreview.svelte had a
+   hardcoded demo subreddit `r/socialforge` (next to fake 1.2k votes and "2h"),
+   which frontend/src had otherwise forgotten. Changed to r/switchpost and
+   rebuilt; the old string was still present in a lazily-loaded chunk
+   (`_app/immutable/nodes/0.CQ_5cgVY.js`) until a clean rebuild, which is the
+   same lesson again: the chunk, not the source, is what the browser runs.
+
+Stage Summary:
+- Fixed 1 real defect (the streak fixture's accumulating scratch DB) with the
+  mutation evidence above, plus 1 stale-brand bug in the served UI (title) and
+  1 in a preview mockup (r/socialforge).
+- Full suite and frontend must both be re-run green AFTER these edits before
+  this is claimed as done; the results of that run are the last thing in this
+  file if they exist, and their absence means it is not yet done.
+- Method notes carried forward: `--lib` green is not a green suite; a scratch DB
+  keyed per binary is not isolated per run; the served page beats the source;
+  and a grep that reports many hits is worth re-checking before believing any
+  of them.

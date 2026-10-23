@@ -34,6 +34,9 @@
 
 Complete CLI commands and MCP tools for every supported provider. Grouped by task.
 
+The MCP surface is 389 MCP tools (389 tools total across the registry), mirrored by the
+CLI so an agent never has to fall back to HTTP.
+
 ---
 
 ## Post to a platform

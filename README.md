@@ -10,7 +10,7 @@ Every document in `docs/` is listed with the question it answers in [docs/PAGE-I
 
 **Social posting infrastructure that runs on your own hardware. One Rust binary, 26 platforms, and your AI agent can drive it.**
 
-Not a SaaS you rent — a service you own. No Docker required, no Redis, no Postgres, no per-seat pricing. One ~15MB binary, one SQLite file, and three interfaces into the same engine: a CLI for shell and agent use, a REST API with a real-time dashboard, and an MCP server with 389 tools for Claude, Cursor, Codex and friends.
+Not a SaaS you rent — a service you own. No Docker required, no Redis, no Postgres, no per-seat pricing. One ~15MB binary, one SQLite file, and three interfaces into the same engine: a CLI for shell and agent use, a REST API with a real-time dashboard, and an MCP server with 389 MCP tools for Claude, Cursor, Codex and friends.
 
 **Pick your path:**
 

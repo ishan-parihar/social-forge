@@ -265,7 +265,7 @@ impl SwitchpostMcpServer {
     // ── Calendar Tools ──────────────────────────────────────
 
     #[tool(
-        description = "Get posts grouped by LOCAL day for a date range, matching the web calendar. Pass start and end as RFC3339, and tz as the founder's IANA zone name (e.g. America/New_York) so the day keys match the calendar the founder sees, DST-correct. Legacy: tz_offset in seconds."
+        description = "Get posts grouped by LOCAL day for a date range, matching the web calendar. start/end are RFC3339; tz is the founder's IANA zone (e.g. America/New_York) so day keys match the calendar they see, DST-correct. Legacy: tz_offset in seconds."
     )]
     async fn calendar_get(
         &self,

@@ -1250,6 +1250,55 @@ never seen its own failure proves nothing. A real rebuild of the lib
 takes seconds; the mutated run must PANIC (`TimeDelta::seconds out of
 bounds`), not pass.
 
+### 9.52 A scratch DB keyed per BINARY is not isolated per RUN
+
+`config::test_database_url()` names the file from the test binary's own
+exe stem, and nothing deletes it. So a test that asserts an ABSOLUTE
+value against data it seeds is reading its OWN previous runs' rows too.
+
+`streak_unification_test` seeded "0, 1 and 2 days ago" and asserted a
+3-day streak. It returned 5, deterministically, because the same binary
+had run on Oct 19, 20, 21 and 22 and those rows were still there:
+`sqlite3 target/test-data/streak_unification_test.db` showed published
+posts on five distinct days. Both endpoints agreed on 5, which is what
+made it a fixture bug and not a logic bug - the measure was consistent,
+the input was not controlled.
+
+The fix is to delete the test's own rows before seeding them, and the
+operator's real DB must be checked separately (`SELECT COUNT(*) ...
+WHERE state='published'` returned 0 here) to tell this shape apart from
+the shared-file mode in 9.42, which is the one that "database is locked"
+warns about.
+
+Two traps in this one bug. `cargo test --lib` was 496/496 green
+throughout - the suite is where it lived, so `--lib` alone is not a green
+project. And restoring a mutated file from a `/tmp` backup that had
+silently never been written left the mutation live and produced a second
+failure in `resolve_local_user_test` that was only a build-lock race from
+parallel cargo runs; `git checkout -- <file>` is the restore that cannot
+lie.
+
+### 9.53 The release binary embeds the frontend, so a rename can ship the old name
+
+`src/api/mod.rs` pulls `frontend/build` in with `rust-embed` at compile
+time. The source can be renamed perfectly and the SERVED page can still
+say the old name, because what the browser runs is a chunk that was built
+before the edit.
+
+This bit twice in one pass. `frontend/src/app.html` said `Switchpost`
+while `curl https://127.0.0.1:6544/` returned `<title>Social Forge</title>`
+- `frontend/build/` was from an old session, and the release binary had
+embedded it. Then a hardcoded demo subreddit (`r/socialforge`, next to
+fake "1.2k" votes and "2h") survived in a lazily-loaded chunk after a
+rebuild, because the source edit landed after `pnpm build` had read it.
+Only a clean rebuild cleared it.
+
+So the check is the SERVED page over TLS, not the source: grep `app.html`
+for the title, grep `frontend/build/` for the old literal AFTER a clean
+`rm -rf build && pnpm build`, and only then rebuild the release binary so
+it embeds the new assets. A rename is not complete until the running
+process serves the new name.
+
 ---
 
 ## 10. Environment Variables

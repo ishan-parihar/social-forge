@@ -136,6 +136,19 @@ fn days_ago_at_midday(n: i64) -> i64 {
 #[tokio::test]
 async fn the_badge_and_the_cadence_card_show_the_same_streak() {
     let state = state().await;
+    // The scratch DB persists across runs (it is per-BINARY, not per-run), so
+    // previous runs' seeds are still in it: an earlier pass seeded Oct 19-22 and
+    // this test then measured a 5-day streak against its own 3 new days and
+    // failed. Delete this file's own published rows first, so the assertion
+    // below is about the 3 days this test means to seed.
+    sqlx::query(
+        "DELETE FROM posts WHERE user_id = ? AND deleted_at IS NULL AND state = 'published'",
+    )
+    .bind(DEFAULT_USER_ID)
+    .execute(&state.db)
+    .await
+    .expect("clear scratch published rows");
+
     // Three consecutive midday UTC days ending today, so both a UTC day
     // and a New York day (midday UTC is morning in NY) count them.
     for d in 0..3 {

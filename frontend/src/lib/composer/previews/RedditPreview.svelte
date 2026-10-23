@@ -38,7 +38,7 @@
     <div class="flex-1 p-3">
       <div class="flex items-center gap-1 text-xs text-gray-500 mb-1">
         <span class="w-5 h-5 rounded-full bg-orange-500 flex items-center justify-center text-white text-[8px] font-bold">r/</span>
-        <span class="font-medium text-gray-700">r/socialforge</span>
+        <span class="font-medium text-gray-700">r/switchpost</span>
         <span>· 2h ·</span>
         <span>Posted by u/{handle}</span>
       </div>
