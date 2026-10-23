@@ -170,8 +170,22 @@ Score bands, not fake precision (atlas convention): **strong / adequate / weak /
 | Available: GitHub exact | **strong** (1 repo, 1★) | **strong** (3, top 1★) | strong (0) | strong (0) | strong (0) | adequate (37 fuzzy) | weak (50 fuzzy) | **fatal** (6 exact, 1 is an org) |
 | Available: PyPI | **strong** (free) | **strong** (free) | strong | strong | strong | strong | strong | strong (free) |
 
-**How availability was measured — and where that is thin.** The PyPI check used a resolvable GET (`pypi.org/pypi/<name>/json`), so "free" there is a measured fact: the name returns 404. The domain check was NOT resolvable at this scope — no RDAP response and no WHOIS output was captured — so the com/dev/io verdicts above are INFERENCE, not measurement, and the correct reading is "no registration observed", which is strictly weaker than "unregistered". The crates.io check is the counter-example of doing this properly: every `crates.io/api/v1/crates/<name>` request returned HTTP 403, so it is recorded as **UNKNOWN** and is excluded from the scoring above instead of being read as "available". Re-measure the domains with `whois`/RDAP before paying for any of them; the same register-and-pay step is still open in §9, step 2, and its risk cancels the inference's cost — a squat claim is recorded as a named falsifier above.
-| Available: `the_name` domains (com/dev/io) | **strong** (com/dev/io: none observed, unmeasured — see below) | **strong** (com/dev/io: none observed, unmeasured — see below) | strong | strong | strong | adequate | strong | n/a |
+**Availability measured 2026-10-23 (this supersedes any earlier verdict, including this doc's own original "all free"):**
+
+| Name | Registry evidence | DNS verdict | Honest reading |
+|---|---|---|---|
+| `switchpost.com` | **RDAP record**: Verisign `handle 1648085867_DOMAIN_COM-VRSN`, `ldhName SWITCHPOST.COM`, registered **2011-03-29**, expires **2027-03-29**, status `client transfer prohibited` | resolves to AWS/CloudFront | **TAKEN, and not for sale cheaply.** A 2011 registration with a transfer prohibition is an owner, not a squatter's drop-catch. Do not budget for it. |
+| `switchpost.dev` | none retrieved (the Google RDAP endpoint returned an empty body) | resolves to `207.207.210.107/.229` | **Probably taken.** A name that resolves has DNS, and DNS is only useful to someone who controls the zone — but this is inference, and the registry query that would settle it did not answer. |
+| `switchpost.io` | none (rdap.org replies `errorCode 404: No RDAP service is available`) | resolves to `34.160.104.44` | **Probably taken**, same inference as `.dev`. |
+| crate `switchpost` (crates.io) | `GET /api/v1/crates/switchpost` -> **HTTP 404** | n/a | **FREE. Measured, not inferred.** |
+| crate `switch` (crates.io) | -> **HTTP 200** (exists) | n/a | **TAKEN**, which is the cost recorded against the rejected alternative. |
+
+Commands that produced these: `curl https://rdap.verisign.com/com/v1/domain/switchpost.com`, `python3 socket.getaddrinfo(<name>, 443)`, and `curl -o /dev/null -w '%{http_code}' https://crates.io/api/v1/crates/<name>`.
+
+**The trap that makes this worth writing down.** The first availability pass here reported "com/dev/io all free" from a `dig` run whose own control failed: `dig +short NS github.com` returned NOTHING, because `dig` is not installed and the sandbox swallowed the error. A probe whose control does not pass measures nothing, and a name it calls available may be registered. Re-run the control before believing any availability claim — including this table's DNS rows, which are the weaker half.
+
+**Consequence for the decision.** This does NOT reverse the choice: `switchpost.com` was never load-bearing (the project is local-first, self-hosted, with no marketing site; §6), and the crate name — the one thing a user actually types — is free. It DOES cancel the "all free" row in the name-scoring table above, which must now be read as: the .com/.dev/.io web real estate is gone, the crate is open. Every use in the docs, the README, the systemd unit and the CLI should therefore be `github.com/ishan-parihar/switchpost` and the crates.io path, never a bare `switchpost.com`, or the links will point at a stranger's site.
+| Available: `the_name` domains (com/dev/io) | **weak** (com RDAP-registered 2011, dev/io resolve but unconfirmed — see below) | unmeasured (never resolved) | strong | strong | strong | adequate | strong | n/a |
 | Reads as developer-owned infrastructure | **strong** | **strong** | weak | weak | weak | weak | weak | adequate |
 | Contains contested `post*` prefix | no | no | **fatal** | no | no | no | no | no |
 | Contains contested `-ency`/`agency` | no | no | no | **fatal** | **fatal** | **fatal** | no | no |
@@ -182,10 +196,10 @@ Score bands, not fake precision (atlas convention): **strong / adequate / weak /
 | Differentiation vs Postiz's claimed phrase | **strong** | **strong** | **fatal** | weak | weak | weak | adequate | adequate |
 | **Overall** | **RECOMMENDED** | **ALTERNATIVE** | reject | reject | reject | reject | reject | **not neutral** |
 
-crates.io could not be verified: every query to `crates.io/api/v1` returned **HTTP 403** on
-2026-10-23 (rate-limited / bot-blocked from this environment). This is an UNKNOWN, recorded as
-such rather than assumed. Any chosen name must have its crate availability confirmed before
-execution, and `herald`, `patchbay`, `towncrier`, `dispatch`, `conduit`, `outpost` and
+crates.io COULD be verified, and it cleared, on a re-run the same day: `GET
+`/api/v1/crates/switchpost` -> **HTTP 404**, i.e. the name is unclaimed. The earlier 403s were
+Cloudflare throttling a headless client from this environment (the same requests now succeed),
+and they are recorded here because the lesson generalises: **a 403 from a probe is an UNKNOWN, not an absence.** Any chosen name must have its crate availability confirmed before execution, and `herald`, `patchbay`, `towncrier`, `dispatch`, `conduit`, `outpost` and
 `signalbox` were additionally rejected on GitHub-collision grounds (see §6). npm returned 200
 for all dictionary-word candidates, which is expected and irrelevant to a Rust binary.
 
@@ -211,8 +225,13 @@ Why it beats the alternative and the field:
   switchpost" are all sentences a person says without correcting themselves.
 - **It cannot be confused with the incumbent.** Postiz owns "agentic social media
   scheduling". Nothing in `switchpost` sits in that phrase.
-- **It is cheap to own.** 1 exact GitHub repo at 1 star, PyPI free, `switchpost.com`,
-  `switchpost.dev` and `switchpost.io` all unregistered.
+- **It is cheap to own.** 1 exact GitHub repo at 1 star, and the crates.io name is free
+  (`GET /api/v1/crates/switchpost` -> 404, measured 2026-10-23). The DOMAIN half is
+  **not** cheap: `switchpost.com` is registered (RDAP, since 2011, transfer-prohibited)
+  and `.dev`/`.io` resolve to live IPs, so all three web properties are effectively gone.
+  This does not cost the decision anything, because a local-first single binary has no
+  marketing site to point a domain at — the GitHub path is the address, and the repo
+  rename is the one handle that is both free and worth owning.
 - **The 10-year test.** One binary on one machine routing content to 26 platforms, in 2036,
   still reads correctly. "frogso" does not. "pogency" does not.
 
@@ -269,9 +288,9 @@ against this tree:
 | Scripts / systemd / Makefile / service | 81 occurrences | flat |
 | Installed skill directory | 413 occurrences in `skills/`, and the directory name `skills/switchpost-agent/` | **grows with every skill revision** |
 | `.env.example` / config defaults / DB path / config dir | 26 occurrences of the old name; `~/.social-forge/.env` and `data/social-forge.db` are **operator-visible paths that a live install has on disk** | **the one lock that silently breaks a live deployment** — resolved by the direct rename plus the ordered data move in §9.2 |
-| Crates.io package name | UNKNOWN (403) | grows only once published |
+| Crates.io package name | **FREE** (`/api/v1/crates/switchpost` -> 404, measured) | grows only once published |
 | npm name | 200 for every dictionary word tested (i.e. taken); irrelevant unless we publish JS | flat |
-| Trademark | Unmeasured: USPTO TESS needs a key. Both finalists are unregistered on GitHub/PyPI/domains, which is the observable proxy | **the cheapest moment to file is before launch** |
+| Trademark | Unmeasured: USPTO TESS needs a key. The observable proxies are clean for `switchpost` on the assets that matter (GitHub exact repo, PyPI, crates.io) and NOT clean on the ones that do not (`.com`/`.dev`/`.io` are registered to others) | **the cheapest moment to file is before launch** |
 
 **The verdict the card produces.** Two locks are zero-cost now and grow forever: adoption
 links, and the installed-skill surface. Two locks are permanent costs that exist no matter
@@ -291,12 +310,17 @@ The correct sequencing is a rename *before* the launch push, not after.
 
 Atlas discipline: the falsifier that would prove the selection wrong.
 
-1. **If `switchpost.com` or the GitHub handle is claimed by squatters within the week**,
-   `.com` is the weakest of the three domains anyway; the recommendation survives on `.dev`
-   plus the GitHub handle, and the name is not invalidated.
-2. **If crates.io shows `switchpost` occupied when the 403 clears**, the name is still valid
-   as a project name (the binary ships via `brew` / release tarballs / the installer, not
-   crates.io), but the package-name asset is lost. Re-run the screen, switch to `forgeway`.
+1. ~~If `switchpost.com` ... is claimed by squatters~~ — **RESOLVED, not a risk: already
+   happened.** `switchpost.com` has a registry record from 2011 and a transfer prohibition,
+   and `.dev`/`.io` both resolve to live IPs. None of the three domains is obtainable, which
+   removes the domain asset from the recommendation entirely rather than invalidating the
+   name — the project has no marketing site to point a domain at (§6), so the only real
+   address is `github.com/ishan-parihar/switchpost`, and the repo rename is still free.
+2. ~~If crates.io shows `switchpost` occupied when the 403 clears~~ — **RESOLVED: it is FREE.**
+   `GET https://crates.io/api/v1/crates/switchpost` -> **HTTP 404**, measured 2026-10-23. The
+   403s were Cloudflare throttling a headless client, not a rate limit on the name, so the
+   `forgeway` fallback this item reserved is NOT needed. `switch` itself IS taken (200), which
+   is the recorded cost of the rejected alternative.
 3. **If a >1k-star tool named anything containing "switch" ships in this category in the next
    quarter**, the central prototype becomes contested and the prototype-theory half of the
    selection is wrong. Re-run §3's blend screen from a different first input (`relay`,
@@ -316,8 +340,13 @@ Ordered so that nothing irreversible happens before the reversible work is verif
 is a separate commit, per AGENTS.md §4.1. The user approved this sequence on 2026-10-23 with
 one deviation from the original recommendation, recorded in §9.1.
 
-1. **Claim the handles first** (reversible, cheap): `switchpost.com` + `.dev` + GitHub org or
-   repo rename, and confirm crates.io now that the 403 has cleared. *Nothing in the tree yet.*
+1. **Claim the handles first** (reversible, cheap): **GitHub repo rename**
+   `ishan-parihar/social-forge` -> `ishan-parihar/switchpost` (GitHub redirects the old path,
+   so nothing breaks and stale links keep working). crates.io is ALREADY confirmed free.
+   **Skip `switchpost.com`/`.dev`/`.io`** — measured 2026-10-23, all three are taken (the
+   .com has a registry record from 2011), so there is nothing to claim and no budget worth
+   spending against a stranger's asking price. *The repo rename is still not done; nothing
+   else in this step is.*
 2. **Code + config pass** in one commit, and the config paths move **directly, with no legacy
    fallback**: `Cargo.toml` (crate name, `[[bin]]`, description, repository, homepage,
    keywords), the `switchpost` crate identifier across `src/`, `SwitchpostMcpServer`, clap's
@@ -544,7 +573,7 @@ Deliberately out of scope, recorded so it is not re-litigated:
   the rename is running and this line is kept only as the record of what it used to say.
 - **No trademark filing.** USPTO TESS requires a key; the observable proxies are clean for both
   finalists, but a filing decision is legal advice and stays with the user.
-- **No rename of the crate unless crates.io confirms availability** once the 403 clears.
+- ~~No rename of the crate unless crates.io confirms availability~~ — **CONFIRMED FREE** (404), so the rename proceeded and this guard is discharged.
 - **No team/multi-user angle in the new positioning**, ever. AGENTS.md §0.5.1 makes it a
   non-negotiable preference, and it is one of the four candidates' fatal flaws.
 - **No adoption of the phrase "agentic social media scheduling"** as our own headline. The
@@ -552,6 +581,9 @@ Deliberately out of scope, recorded so it is not re-litigated:
 
 ---
 
-*Written 2026-10-23. Every measurement above names the command that produced it; re-run them
-before acting on this file, because two of them (crates.io, USPTO) are UNKNOWNs and one (the
-incumbent's star count) moves daily.*
+*Written 2026-10-23, updated the same day after a verification pass.* Every measurement above
+names the command that produced it; re-run them before acting on this file. Status per open item,
+after that pass: **crates.io is RESOLVED (FREE, a 404)**, the **domains are RESOLVED (TAKEN, so
+no longer a factor)**, **USPTO is still UNKNOWN** (TESS needs a key), and the incumbent's star
+count moves daily. Re-run especially the two DNS rows, which are the weaker half of the table —
+they resolve, which is evidence of a zone owner, but no registry record confirmed them.*

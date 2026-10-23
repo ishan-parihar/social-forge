@@ -2193,3 +2193,63 @@ re-attached after strip_prefix; and clippy denies `&PathBuf` for a parameter.
 Left for the operator (unchanged, named in §9 step 1): claim switchpost.com/.dev and
 rename the GitHub repo ishan-parihar/social-forge -> switchpost; crates.io returned 403
 throughout, so crate-name availability remains UNKNOWN rather than free.
+
+---
+Task ID: rename-verify-2026-10-23-b
+Agent: Jcode
+Task: Verify the rename landed correctly; correct any claim that outruns its evidence.
+
+Work Log:
+1. Adversarial mutation testing of the new `tests/skill_install_test.rs`, taken to six
+   cases rather than the two already recorded. One finding: the test read only the
+   SOURCE side of every `cp`, so a target that installed the right files into the
+   WRONG place still passed. Mutation 4 (`$(SKILL_DEST)/refernces/`) and mutation 5
+   (a flat `$(SKILL_DEST)/`) both passed on the old test. Added a destination
+   assertion that the final path element of every references copy is `references`.
+   All six now fail the test, and the restored baseline passes 2/2.
+2. Also recorded near-misses, because they are the reason to distrust a green run:
+   `cargo test every_reference -- --exact` matched NOTHING and so reported
+   "ok. 0 passed" for two mutations that should have failed - a vacuous pass, not a
+   signal. And an earlier "coupling" between the two tests was a substring-filter
+   artifact of my own reading, not a real dependency: run by exact name they are
+   independent and both green.
+3. Corrected two overstated claims in `docs/planning/DECISION_RENAME_2026-10-23.md`
+   that the evidence does not support:
+   - "migrations: 0 occurrences of the literal name" cannot be true. The name is in
+     one migration comment and sqlx checksums migration files, so removing it fails
+     every boot. The row now says that, which is the same conclusion trying it reached.
+   - "com/dev/io all unregistered" was unmeasured. It has been replaced by real
+     measurements, which reverse it.
+4. Ran the availability checks that the earlier pass got blocked on, with controls:
+   - crates.io `/api/v1/crates/switchpost` -> **HTTP 404 = the name is FREE**. The
+     403s were Cloudflare throttling this client, not a rate limit on the name.
+     crates.io `/switch` -> **200**, confirming the rejected alternative's cost.
+   - `switchpost.com` is **TAKEN**: an RDAP record from Verisign
+     (`1648085867_DOMAIN_COM-VRSN`), registered 2011-03-29, expires 2027-03-29,
+     status `client transfer prohibited`. `.dev` and `.io` both resolve to live IPs.
+   - So the earlier "all free" verdict was wrong by three domains, and the crate
+     verdict was wrong the other way (recorded as UNKNOWN when it was actually free).
+5. Wrote down WHY the first pass was wrong, because that is the reusable part. It
+   used `dig`, and its own control failed: `dig +short NS github.com` returned
+   nothing because `dig` is not installed and the sandbox swallowed the error. A
+   probe whose control does not pass measures nothing, and a name it calls available
+   may be registered. `switchpost.com` is the direct example.
+6. Updated every downstream claim to match: the name-scoring row, the migration-lock
+   row, the two falsifiers (both struck through as RESOLVED), the "cheap to own"
+   bullet, the open-features list, the crates.io guard, and the closing summary.
+
+Stage Summary:
+- Artifact: `0c2e889` on github/master - "harden the skill-install test (six-mutation
+  sweep) and correct two overstated claims in the rename decision doc". The domain
+  and crates.io corrections in this entry are NOT yet committed.
+- Availability is now measured, not assumed: `switchpost.com/.dev/.io` are all taken
+  (~0 of 3 obtainable); the crates.io name `switchpost` is free.
+- No shipping link uses a `switchpost.com` address - only the decision doc and this
+  worklog, which is provenance and correct. The README, systemd unit, CLI and docs
+  all use `github.com/ishan-parihar/switchpost`, so nothing points at a stranger's
+  site.
+- Known defect: the repo `ishan-parihar/social-forge` is still named `social-forge`,
+  so every README badge URL 404s until the user renames it. `gh` is authenticated
+  here with `repo`/`workflow` scopes, so the rename is available but not authorised.
+- Method note carried forward: an availability claim is worthless without its
+  control, and UNKNOWN is the honest value for a probe that returned an error.
